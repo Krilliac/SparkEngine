@@ -93,6 +93,10 @@ namespace Assert
     {
         bool shouldLog = ShouldLogSite(file, line);
 
+        // Declared out here so the fatal path below can put the same text into
+        // the crash report it writes immediately before abort().
+        char fullMsg[4096] = {};
+
         if (shouldLog)
         {
             // Timestamp. std::localtime returns a pointer to a shared static std::tm,
@@ -124,7 +128,6 @@ namespace Assert
             std::string traceStr = stackTrace.ToString("    ");
 
             // Build the full assertion text
-            char fullMsg[4096];
             std::snprintf(fullMsg, sizeof(fullMsg),
                           "===== ASSERTION FAILED =====\n"
                           "Time       : %s\n"
@@ -169,6 +172,15 @@ namespace Assert
             return;
         }
 
+        // The process dies here. abort() raises no SEH exception and Windows
+        // installs no SIGABRT handler, so the unhandled-exception filter never
+        // runs, and TriggerCrashHandler() is gated off in production — without
+        // an unconditional report a fatal assertion leaves nothing on disk.
+        // When the developer toggle IS on, the TriggerCrashHandler() call above
+        // already reported: crash reporting is one-per-process, so this second
+        // call returns without writing a duplicate.
+        TriggerCrashReport(fullMsg[0] ? fullMsg : expr);
+
         DEBUG_BREAK();
         std::abort();
     }
@@ -176,6 +188,9 @@ namespace Assert
     void FailHResult(const char* expr, const char* file, int line, long hr, const char* fmt, ...)
     {
         bool shouldLog = ShouldLogSite(file, line);
+
+        // See Fail(): the fatal path needs this text after the logging block.
+        char fullMsg[4096] = {};
 
         if (shouldLog)
         {
@@ -191,7 +206,6 @@ namespace Assert
             auto stackTrace = Spark::StackTrace::Capture(2);
             std::string traceStr = stackTrace.ToString("    ");
 
-            char fullMsg[4096];
             std::snprintf(fullMsg, sizeof(fullMsg),
                           "===== HRESULT FAILED =====\n"
                           "Expression : %s returned 0x%08lX\n"
@@ -232,6 +246,15 @@ namespace Assert
             }
             return;
         }
+
+        // The process dies here. abort() raises no SEH exception and Windows
+        // installs no SIGABRT handler, so the unhandled-exception filter never
+        // runs, and TriggerCrashHandler() is gated off in production — without
+        // an unconditional report a fatal assertion leaves nothing on disk.
+        // When the developer toggle IS on, the TriggerCrashHandler() call above
+        // already reported: crash reporting is one-per-process, so this second
+        // call returns without writing a duplicate.
+        TriggerCrashReport(fullMsg[0] ? fullMsg : expr);
 
         DEBUG_BREAK();
         std::abort();

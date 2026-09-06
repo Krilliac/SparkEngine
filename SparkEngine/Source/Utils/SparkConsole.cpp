@@ -1,4 +1,5 @@
 #include "SparkConsole.h"
+#include "ConsoleProcessManager.h"
 #include "ScopeGuard.h"
 #include "SecureMemory.h"
 #include "../Core/Platform.h"
@@ -249,22 +250,35 @@ namespace Spark
 
     void SimpleConsole::Log(const std::string& message, const std::string& type)
     {
-        std::lock_guard<std::mutex> lock(m_logMutex);
-
-        LogEntry entry;
-        entry.message = message;
-        entry.type = type;
-        entry.timestamp = GetTimestamp();
-        entry.severity = StringToConsoleSeverity(type);
-        entry.sequenceNumber = m_logSequence.fetch_add(1, std::memory_order_relaxed);
-
-        m_logHistory.push_back(entry);
-        if (m_logHistory.size() > MaxLogHistory)
         {
-            m_logHistory.pop_front();
+            std::lock_guard<std::mutex> lock(m_logMutex);
+
+            LogEntry entry;
+            entry.message = message;
+            entry.type = type;
+            entry.timestamp = GetTimestamp();
+            entry.severity = StringToConsoleSeverity(type);
+            entry.sequenceNumber = m_logSequence.fetch_add(1, std::memory_order_relaxed);
+
+            m_logHistory.push_back(entry);
+            if (m_logHistory.size() > MaxLogHistory)
+            {
+                m_logHistory.pop_front();
+            }
+
+            m_totalLogsWritten.fetch_add(1, std::memory_order_relaxed);
         }
 
-        m_totalLogsWritten.fetch_add(1, std::memory_order_relaxed);
+        // Mirror to the external SparkConsole.exe window. Outside the log lock:
+        // the pipe queue has its own mutex, and ConsoleProcessManager never logs
+        // back through SimpleConsole, so this cannot recurse.
+        //
+        // Both are function-local statics and ConsoleProcessManager is
+        // constructed second (SparkEngine.cpp), so it is destroyed FIRST: a
+        // SPARK_LOG_* during static teardown reaches this line with the manager
+        // already gone, and GetInstance() would hand back the destroyed object.
+        if (ConsoleProcessManager::IsInstanceAlive())
+            ConsoleProcessManager::GetInstance().QueueEngineLog(message, type);
     }
 
     void SimpleConsole::Log(ConsoleSeverity severity, const std::string& message)
@@ -305,62 +319,92 @@ namespace Spark
     // Command System
     // ============================================================================
 
-    void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
-                                        const std::string& category, const std::string& usage)
+    bool SimpleConsole::RegisterCommandInternal(const std::string& name, CommandHandler handler,
+                                                const std::string& description, const std::string& category,
+                                                const std::string& usage, CommandPermission permission,
+                                                const std::string& ownerId, bool sensitive)
     {
         std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
-        if (!m_initialized.load(std::memory_order_acquire))
-            return;
         std::lock_guard<std::mutex> lock(m_commandMutex);
+        if (sensitive)
+        {
+            // Remember the classification even if lifecycle state rejects the
+            // handler registration. A later unknown-command attempt must still
+            // never put these arguments into history.
+            m_sensitiveCommandNames.insert(name);
+        }
+        if (!m_initialized.load(std::memory_order_acquire))
+            return false;
+
+        CommandPermission effectivePermission = permission;
+        if (auto existing = m_commands.find(name); existing != m_commands.end())
+        {
+            if (existing->second.ownerId != ownerId)
+            {
+                // Modules share the host console. Letting a second registrant
+                // take a live name would silently replace the handler — and with
+                // the default permission, downgrade an Admin command to Player.
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "Console command '%s' is already owned by '%s'; registration from '%s' refused",
+                               name.c_str(),
+                               existing->second.ownerId.empty() ? "engine" : existing->second.ownerId.c_str(),
+                               ownerId.empty() ? "engine" : ownerId.c_str());
+                return false;
+            }
+            if (effectivePermission < existing->second.requiredPermission)
+            {
+                // Same owner re-registering (re-init or hot reload): keep the
+                // stricter level so a re-register can never widen access.
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "Console command '%s' re-registered at %s; keeping the existing %s requirement",
+                               name.c_str(), CommandPermissionToString(effectivePermission),
+                               CommandPermissionToString(existing->second.requiredPermission));
+                effectivePermission = existing->second.requiredPermission;
+            }
+        }
+
         CommandInfo info;
         info.handler = std::move(handler);
         info.description = description;
         info.category = category;
         info.usage = usage;
         info.nameHash = FNV1a64(name);
+        info.requiredPermission = effectivePermission;
+        info.ownerId = ownerId;
         m_commands[name] = std::move(info);
         m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
+        return true;
     }
 
-    void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
+    bool SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
+                                        const std::string& category, const std::string& usage)
+    {
+        return RegisterCommandInternal(name, std::move(handler), description, category, usage,
+                                       CommandPermission::Player, std::string{}, /*sensitive=*/false);
+    }
+
+    bool SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
                                         const std::string& category, const std::string& usage,
                                         CommandPermission permission)
     {
-        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
-        if (!m_initialized.load(std::memory_order_acquire))
-            return;
-        std::lock_guard<std::mutex> lock(m_commandMutex);
-        CommandInfo info;
-        info.handler = std::move(handler);
-        info.description = description;
-        info.category = category;
-        info.usage = usage;
-        info.nameHash = FNV1a64(name);
-        info.requiredPermission = permission;
-        m_commands[name] = std::move(info);
-        m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
+        return RegisterCommandInternal(name, std::move(handler), description, category, usage, permission,
+                                       std::string{}, /*sensitive=*/false);
     }
 
-    void SimpleConsole::RegisterSensitiveCommand(const std::string& name, CommandHandler handler,
+    bool SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
+                                        const std::string& category, const std::string& usage,
+                                        CommandPermission permission, const std::string& ownerId)
+    {
+        return RegisterCommandInternal(name, std::move(handler), description, category, usage, permission, ownerId,
+                                       /*sensitive=*/false);
+    }
+
+    bool SimpleConsole::RegisterSensitiveCommand(const std::string& name, CommandHandler handler,
                                                  const std::string& description, const std::string& category,
                                                  const std::string& usage)
     {
-        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
-        std::lock_guard<std::mutex> lock(m_commandMutex);
-        // Remember the classification even if lifecycle state rejects the
-        // handler registration. A later unknown-command attempt must still
-        // never put these arguments into history.
-        m_sensitiveCommandNames.insert(name);
-        if (!m_initialized.load(std::memory_order_acquire))
-            return;
-        CommandInfo info;
-        info.handler = std::move(handler);
-        info.description = description;
-        info.category = category;
-        info.usage = usage;
-        info.nameHash = FNV1a64(name);
-        m_commands[name] = std::move(info);
-        m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
+        return RegisterCommandInternal(name, std::move(handler), description, category, usage,
+                                       CommandPermission::Player, std::string{}, /*sensitive=*/true);
     }
 
     bool SimpleConsole::UnregisterCommand(const std::string& name)
@@ -372,6 +416,37 @@ namespace Spark
         bool removed = m_commands.erase(name) > 0;
         m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
         return removed;
+    }
+
+    size_t SimpleConsole::UnregisterCommandsByOwner(const std::string& ownerId)
+    {
+        if (ownerId.empty())
+        {
+            // The empty token is the engine's own (CommandInfo::ownerId), so an
+            // unset module id would sweep away every host command instead of
+            // nothing. Refuse it here, exactly as RegisterCommandInternal
+            // refuses a cross-owner takeover.
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "UnregisterCommandsByOwner refused: an empty owner token is the engine's own and would "
+                           "remove every host command");
+            return 0;
+        }
+
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        if (!m_initialized.load(std::memory_order_acquire))
+            return 0;
+        std::lock_guard<std::mutex> lock(m_commandMutex);
+        const size_t removed =
+            std::erase_if(m_commands, [&ownerId](const auto& entry) { return entry.second.ownerId == ownerId; });
+        m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
+        return removed;
+    }
+
+    std::string SimpleConsole::GetCommandOwner(const std::string& name) const
+    {
+        std::lock_guard<std::mutex> lock(m_commandMutex);
+        auto it = m_commands.find(name);
+        return it == m_commands.end() ? std::string{} : it->second.ownerId;
     }
 
     bool SimpleConsole::HasCommand(const std::string& name) const

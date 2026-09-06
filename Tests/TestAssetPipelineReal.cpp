@@ -218,3 +218,65 @@ TEST(AssetPipelineReal_AssetCacheClear)
     cache.Clear();
     EXPECT_EQ(cache.GetCurrentMemory(), size_t(0));
 }
+
+// ---------------------------------------------------------------------------
+// AssetCache budget enforcement (production AddAsset / EvictLRU path)
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    /// Minimal Asset with a fixed, device-free footprint so AddAsset's budget
+    /// loop can be exercised without a D3D device.
+    class FixedSizeAsset final : public Asset
+    {
+      public:
+        FixedSizeAsset(const std::string& path, size_t bytes) : Asset(path, AssetType::Mesh), m_bytes(bytes) {}
+        HRESULT Load(ID3D11Device*) override
+        {
+            m_loaded = true;
+            return S_OK;
+        }
+        void Unload() override { m_loaded = false; }
+        size_t GetMemoryUsage() const override { return m_bytes; }
+
+      private:
+        size_t m_bytes;
+    };
+} // namespace
+
+TEST(AssetPipelineReal_AssetCacheAddAssetDoesNotRelockItsMutex)
+{
+    // AddAsset holds the cache mutex and then enforces the budget. It used to do
+    // that through the public GetCurrentMemory()/EvictLRU(), which take the same
+    // non-recursive mutex: MSVC's STL reports the re-lock as
+    // system_error(resource_deadlock_would_occur), so the very first AddAsset
+    // threw out of AssetPipeline::LoadAsset. Two adds under budget must simply
+    // succeed and both stay resident.
+    AssetCache cache(1);
+    cache.AddAsset(std::make_shared<FixedSizeAsset>("test://a", 100));
+    cache.AddAsset(std::make_shared<FixedSizeAsset>("test://b", 100));
+    EXPECT_TRUE(cache.GetAsset("test://a") != nullptr);
+    EXPECT_TRUE(cache.GetAsset("test://b") != nullptr);
+    EXPECT_EQ(cache.GetCurrentMemory(), size_t(200));
+}
+
+TEST(AssetPipelineReal_AssetCacheEvictsDownToBudgetOnAdd)
+{
+    // 1 MB budget, two 600 KB assets: the second add must evict exactly one.
+    // Access stamps are millisecond-granular, so which one goes is not asserted.
+    constexpr size_t kAssetBytes = 600 * 1024;
+    AssetCache cache(1);
+    cache.AddAsset(std::make_shared<FixedSizeAsset>("test://first", kAssetBytes));
+    cache.AddAsset(std::make_shared<FixedSizeAsset>("test://second", kAssetBytes));
+    const bool firstPresent = cache.GetAsset("test://first") != nullptr;
+    const bool secondPresent = cache.GetAsset("test://second") != nullptr;
+    EXPECT_TRUE(firstPresent != secondPresent);
+    EXPECT_EQ(cache.GetCurrentMemory(), kAssetBytes);
+
+    // A single asset larger than the whole budget is evicted immediately and the
+    // eviction loop terminates on the empty cache instead of spinning.
+    AssetCache tiny(0);
+    tiny.AddAsset(std::make_shared<FixedSizeAsset>("test://oversized", 1));
+    EXPECT_TRUE(tiny.GetAsset("test://oversized") == nullptr);
+    EXPECT_EQ(tiny.GetCurrentMemory(), size_t(0));
+}

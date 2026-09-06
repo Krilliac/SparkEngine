@@ -230,6 +230,15 @@ TEST(ModuleABI_FailedGameInitializationIsNotReportedAsUsable)
     SetFailOnLoadEnvironment(false);
     SetGameKindEnvironment(false);
     EXPECT_TRUE(manager.GetInitializedGameModuleName().empty());
+
+    // The failed entry survives only to keep its DLL mapped. It must not be
+    // reported as the process's game module (that refused every replacement)
+    // and must not make the windowed loop take the module branch, which skips
+    // both the module's rendering and the engine-only present path.
+    EXPECT_TRUE(manager.GetGameModuleName().empty());
+    EXPECT_FALSE(manager.HasInitializedModules());
+    EXPECT_TRUE(manager.HasModules());
+
     manager.UnloadAll();
 }
 

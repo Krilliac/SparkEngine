@@ -155,10 +155,54 @@ namespace SparkEditor
         std::vector<PrefabInstance> GetInstances(const std::string& prefabName) const;
 
         /**
-         * @brief Apply changes from the prefab template to all its instances
+         * @brief Apply the prefab template's transform to all its instances
+         *
+         * Only properties an instance has NOT overridden are re-applied. Instances whose scene object is
+         * gone, and every instance when no scene is set, are not counted as updated.
+         *
+         * SceneObject stores only a Transform plus a list of component types, so this syncs the transform;
+         * per-component property sync needs per-component storage in SceneObject (see PrefabManager docs).
+         *
          * @param prefabName Prefab name whose instances should be updated
+         * @return Number of instances actually written to
          */
-        void ApplyPrefabToInstances(const std::string& prefabName);
+        int ApplyPrefabToInstances(const std::string& prefabName);
+
+        /**
+         * @brief Record that an instance property differs from its template
+         *
+         * ApplyPrefabToInstances skips every property recorded here, which is what makes a per-instance edit
+         * survive a template change.
+         *
+         * @param entityId Entity ID of the instance
+         * @param componentType Component the property belongs to (e.g. "Transform")
+         * @param propertyName Property that now differs (e.g. "position")
+         * @param value The instance's value
+         * @return true if the instance was found
+         */
+        bool SetInstanceOverride(uint64_t entityId, const std::string& componentType, const std::string& propertyName,
+                                 const PrefabPropertyValue& value);
+
+        /**
+         * @brief Drop an instance's overrides and restore it to the template
+         *
+         * Returns true once the instance was found and its overrides were cleared — that state change
+         * is irreversible, so it must not be reported as a failure. A template transform that could not
+         * be written back (no Transform component, nothing stored, missing SceneObject) is logged.
+         *
+         * @param entityId Entity ID of the instance
+         * @return true if the instance was found and its overrides were cleared
+         */
+        bool RevertInstance(uint64_t entityId);
+
+        /**
+         * @brief Drop a single overridden property on an instance and restore that property
+         * @param entityId Entity ID of the instance
+         * @param componentType Component the property belongs to (e.g. "Transform")
+         * @param propertyName Property to revert (e.g. "position")
+         * @return true if a matching override was found and removed
+         */
+        bool RevertProperty(uint64_t entityId, const std::string& componentType, const std::string& propertyName);
 
         /**
          * @brief Set callback for when prefab list changes
@@ -176,6 +220,14 @@ namespace SparkEditor
         SceneFile* m_scene = nullptr; ///< Non-owning pointer to the active scene
 
         void NotifyPrefabsChanged();
+
+        /**
+         * @brief Write a prefab template's transform onto one scene object
+         * @param prefab Source template
+         * @param instance Instance record (its overrides are respected)
+         * @return true if the instance's scene object was found and written
+         */
+        bool ApplyTemplateTransform(const PrefabAsset& prefab, const PrefabInstance& instance);
 
         /**
          * @brief Create sample prefabs for demonstration

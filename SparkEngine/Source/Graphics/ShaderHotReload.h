@@ -33,6 +33,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -119,6 +120,7 @@ namespace Spark::Graphics
         void Initialize(std::string_view shaderDirectory)
         {
             m_watchDirectories.clear();
+            m_watchDirectorySet.clear();
             m_watchedFiles.clear();
             {
                 std::scoped_lock lock(m_compiledShaderMutex);
@@ -136,6 +138,7 @@ namespace Spark::Graphics
         {
             m_watchedFiles.clear();
             m_watchDirectories.clear();
+            m_watchDirectorySet.clear();
             m_reloadCallbacks.clear();
             {
                 std::scoped_lock lock(m_compiledShaderMutex);
@@ -176,10 +179,16 @@ namespace Spark::Graphics
 
         /**
          * @brief Add an additional directory to watch.
+         *
+         * Directories are de-duplicated by canonical path: every shader loader
+         * registers its parent directory, so N shaders from one folder must not
+         * trigger N recursive scans or N watch entries.
          * @param dir Directory path to add.
          */
         void AddWatchDirectory(std::string_view dir)
         {
+            if (!m_watchDirectorySet.insert(CanonicalWatchKey(dir)).second)
+                return;
             m_watchDirectories.emplace_back(dir);
             ScanDirectory(m_watchDirectories.back());
         }
@@ -192,6 +201,7 @@ namespace Spark::Graphics
         {
             std::string target(dir);
             std::erase(m_watchDirectories, target);
+            m_watchDirectorySet.erase(CanonicalWatchKey(dir));
         }
 
         // -- Actions --
@@ -233,6 +243,20 @@ namespace Spark::Graphics
             return m_compiledShaders.contains(std::string(shaderName));
         }
 
+        /**
+         * @brief Copy of the compiled blob stored for shaderName (empty when none).
+         *
+         * Lets callers and tests assert that a successful reload stored real
+         * bytecode (DXBC on Windows) rather than source text.
+         */
+        [[nodiscard]] std::vector<uint8_t> GetCompiledShader(std::string_view shaderName) const
+        {
+            std::scoped_lock lock(m_compiledShaderMutex);
+            if (auto it = m_compiledShaders.find(std::string(shaderName)); it != m_compiledShaders.end())
+                return it->second;
+            return {};
+        }
+
         /** @brief Returns monotonically increasing successful swap count for shaderName. */
         [[nodiscard]] uint64_t GetShaderSwapGeneration(std::string_view shaderName) const
         {
@@ -250,6 +274,18 @@ namespace Spark::Graphics
 
         /** @brief Check if hot-reload is enabled. */
         [[nodiscard]] bool IsEnabled() const { return m_enabled; }
+
+        /**
+         * @brief Graphics backend reloads are compiled for.
+         *
+         * Auto (the default) lets RHI::CompileShader infer the target from the
+         * source language. The graphics engine sets the running backend at init so
+         * the HLSL profile matches the device (D3D11 -> SM 5.0, D3D12 -> SM 5.1).
+         */
+        void SetTargetBackend(Spark::RHI::GraphicsBackend backend) { m_targetBackend = backend; }
+
+        /** @brief Backend passed to RHI::CompileShader for reloads. */
+        [[nodiscard]] Spark::RHI::GraphicsBackend GetTargetBackend() const { return m_targetBackend; }
 
         // -- Callbacks --
 
@@ -366,27 +402,104 @@ namespace Spark::Graphics
             return Spark::RHI::ShaderLanguage::Auto;
         }
 
-        /** @brief Scan a directory for shader files and populate m_watchedFiles. */
+        /** @brief Canonical de-duplication key for a watch directory. */
+        static std::string CanonicalWatchKey(std::string_view dir)
+        {
+            std::error_code ec;
+            const auto canon = std::filesystem::weakly_canonical(std::filesystem::path(dir), ec);
+            return ec ? std::string(dir) : canon.string();
+        }
+
+        /// Directory names never descended into during a scan: user data, temp
+        /// output and build trees can be huge and contain no engine shaders.
+        static bool IsDeniedScanDirectory(const std::filesystem::path& dirName)
+        {
+            const std::string name = dirName.string();
+            return name == "Saves" || name == "Temp" || name == "LivePackages" || name.rfind("build", 0) == 0;
+        }
+
+        /** @brief Scan a directory (bounded depth, deny-listed subtrees skipped) for shader files. */
         void ScanDirectory(const std::string& directory)
         {
             std::error_code ec;
             if (!std::filesystem::exists(directory, ec))
                 return;
 
-            for (const auto& entry : std::filesystem::recursive_directory_iterator(directory, ec))
+            constexpr int kMaxScanDepth = 6;
+            auto it = std::filesystem::recursive_directory_iterator(directory, ec);
+            const std::filesystem::recursive_directory_iterator end;
+            if (ec)
             {
-                if (!entry.is_regular_file(ec) || !IsShaderFile(entry.path()))
-                    continue;
+                Spark::SimpleConsole::GetInstance().LogWarning("Shader scan could not open '" + directory +
+                                                               "': " + ec.message());
+                return;
+            }
 
-                ShaderFileInfo info;
-                info.path = entry.path().string();
-                info.shaderName = entry.path().stem().string();
-                info.shaderType = ClassifyShader(entry.path());
+            while (it != end)
+            {
+                // Per-entry queries use their own error_code. Sharing one with the
+                // loop condition made a single unreadable entry (permission denied,
+                // broken reparse point) end the whole walk, silently truncating the
+                // watch list with no diagnostic. A bad entry is skipped instead.
+                std::error_code entryEc;
+                const std::filesystem::path entryPath = it->path();
 
-                auto ftime = std::filesystem::last_write_time(entry.path(), ec);
-                info.lastWriteTime = static_cast<uint64_t>(ftime.time_since_epoch().count());
+                if (it->is_directory(entryEc))
+                {
+                    if (it.depth() >= kMaxScanDepth || IsDeniedScanDirectory(entryPath.filename()))
+                    {
+                        it.disable_recursion_pending();
+                    }
+                    else
+                    {
+                        // Probe before descending. recursive_directory_iterator reports an
+                        // unreadable subtree from increment(), and implementations answer
+                        // that by moving to the end iterator — which would drop every
+                        // shader after it. Skipping the subtree keeps the scan going.
+                        std::error_code probeEc;
+                        (void)std::filesystem::directory_iterator(entryPath, probeEc);
+                        if (probeEc)
+                        {
+                            Spark::SimpleConsole::GetInstance().LogWarning(
+                                "Shader scan skipped unreadable directory '" + entryPath.string() +
+                                "': " + probeEc.message());
+                            it.disable_recursion_pending();
+                        }
+                    }
+                }
+                else if (!entryEc && it->is_regular_file(entryEc) && IsShaderFile(entryPath))
+                {
+                    std::error_code timeEc;
+                    const auto ftime = std::filesystem::last_write_time(entryPath, timeEc);
+                    if (timeEc)
+                    {
+                        // No baseline timestamp means CheckForChanges could not tell a
+                        // change from a stat failure; leave the file unwatched and say so.
+                        Spark::SimpleConsole::GetInstance().LogWarning("Shader scan skipped '" + entryPath.string() +
+                                                                       "': " + timeEc.message());
+                    }
+                    else
+                    {
+                        ShaderFileInfo info;
+                        info.path = entryPath.string();
+                        info.shaderName = entryPath.stem().string();
+                        info.shaderType = ClassifyShader(entryPath);
+                        info.lastWriteTime = static_cast<uint64_t>(ftime.time_since_epoch().count());
 
-                m_watchedFiles[info.shaderName] = std::move(info);
+                        m_watchedFiles[info.shaderName] = std::move(info);
+                    }
+                }
+
+                it.increment(ec);
+                if (ec)
+                {
+                    // Report the subtree we could not walk rather than treating the
+                    // failure as end-of-scan. The iterator either advanced past the
+                    // bad entry (loop continues) or reached the end (loop exits).
+                    Spark::SimpleConsole::GetInstance().LogWarning("Shader scan error under '" + directory +
+                                                                   "': " + ec.message());
+                    ec.clear();
+                }
             }
         }
 
@@ -484,8 +597,10 @@ namespace Spark::Graphics
             options.sourceCode = sourceCode;
             options.entryPoint = "main";
             options.sourceLanguage = DetermineSourceLanguage(std::filesystem::path(info.path));
-            options.targetLanguage = options.sourceLanguage;
-            options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+            // Leave targetLanguage Auto: RHI::CompileShader derives it from the
+            // backend (D3D -> DXBC via d3dcompiler) and falls back to the source
+            // language only when the backend is unknown.
+            options.targetBackend = m_targetBackend;
 
             const Spark::RHI::ShaderCompileResult compileResult = Spark::RHI::CompileShader(options);
             event.success = compileResult.success;
@@ -534,13 +649,15 @@ namespace Spark::Graphics
         }
 
         // -- State --
-        std::map<std::string, ShaderFileInfo> m_watchedFiles;                         ///< Shader name -> file info.
-        std::vector<std::string> m_watchDirectories;                                  ///< Watched root directories.
-        float m_pollInterval = 0.5f;                                                  ///< Seconds between polls.
-        float m_timeSinceLastPoll = 0.0f;                                             ///< Accumulator for polling.
-        std::vector<std::function<void(const ShaderReloadEvent&)>> m_reloadCallbacks; ///< Reload event subscribers.
-        bool m_enabled = false;                                                       ///< Whether polling is active.
-        uint32_t m_reloadCount = 0;                                                   ///< Total successful reloads.
+        std::map<std::string, ShaderFileInfo> m_watchedFiles; ///< Shader name -> file info.
+        std::vector<std::string> m_watchDirectories;          ///< Watched root directories.
+        std::set<std::string> m_watchDirectorySet;            ///< Canonical keys of the above.
+        Spark::RHI::GraphicsBackend m_targetBackend = Spark::RHI::GraphicsBackend::Auto; ///< Reload compile target.
+        float m_pollInterval = 0.5f;                                                     ///< Seconds between polls.
+        float m_timeSinceLastPoll = 0.0f;                                                ///< Accumulator for polling.
+        std::vector<std::function<void(const ShaderReloadEvent&)>> m_reloadCallbacks;    ///< Reload event subscribers.
+        bool m_enabled = false;                                                          ///< Whether polling is active.
+        uint32_t m_reloadCount = 0;                                                      ///< Total successful reloads.
         mutable std::mutex m_compiledShaderMutex;                      ///< Protects compiled shader maps.
         std::map<std::string, std::vector<uint8_t>> m_compiledShaders; ///< Active compiled binaries.
         std::map<std::string, uint64_t> m_shaderSwapGenerations;       ///< Atomic swap generation counter.

@@ -35,6 +35,14 @@ namespace Spark
 
     void FreezeDetector::Start()
     {
+#if defined(SPARK_BUILD_SHIPPING)
+        // SPARK_HEARTBEAT() compiles to a no-op in shipping builds, so a running
+        // watchdog would observe zero heartbeats and _Exit(1) the game after
+        // crashThresholdSec. Refuse here rather than at every call site: the
+        // watchdog is only meaningful where the main loop can report liveness.
+        SPARK_LOG_INFO(Spark::LogCategory::Core,
+                       "FreezeDetector::Start — no-op in shipping builds (heartbeats are compiled out)");
+#else
         if (!m_config.enabled)
         {
             SPARK_LOG_INFO(Spark::LogCategory::Core, "FreezeDetector::Start — disabled by config");
@@ -59,6 +67,7 @@ namespace Spark
         SimpleConsole::GetInstance().LogInfo(
             std::format("FreezeDetector watchdog started (warn={:.1f}s, recover={:.1f}s, crash={:.1f}s)",
                         m_config.warningThresholdSec, m_config.recoveryThresholdSec, m_config.crashThresholdSec));
+#endif
     }
 
     void FreezeDetector::Stop()
@@ -211,7 +220,18 @@ namespace Spark
         {
             std::fprintf(stderr, "[FreezeDetector] Generating crash dump...\n");
             std::string msg = std::format("Freeze detected: main loop unresponsive for {:.1f}s", elapsed);
-            TriggerCrashHandler(msg.c_str());
+            // Not TriggerCrashHandler: that path is gated on the assert toggle,
+            // which production leaves off, and the _Exit below raises no
+            // exception for the unhandled-exception filter to catch. Without an
+            // unconditional report this freeze would leave nothing on disk.
+            //
+            // The unattended variant, because this runs on the watchdog thread
+            // with the main loop hung and nobody at the keyboard: the interactive
+            // path would block on consent/description dialogs and an upload
+            // before the terminate below, so terminateOnFreeze would stop
+            // terminating. Artifacts are written here; transport is the crash
+            // reporter's job, or the next launch's pending-manifest sweep.
+            TriggerCrashReportUnattended(msg.c_str());
         }
 
         if (m_config.terminateOnFreeze)

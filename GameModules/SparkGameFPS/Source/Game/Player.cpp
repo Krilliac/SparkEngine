@@ -11,9 +11,9 @@
 #include "Projectiles/WeaponStats.h"
 #include "Projectiles/ProjectilePool.h"
 #include "Utils/MathUtils.h"
-#include "Game/Console.h"
 #include "Utils/ConsoleProcessManager.h"
 #include "Game/Model.h"
+#include "FPSAssetPaths.h"
 #include "Graphics/GraphicsEngine.h"
 #include <algorithm>
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -75,14 +75,21 @@ HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, S
                            InputManager* input)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Player::Initialize called.", L"OPERATION");
-    ASSERT_NOT_NULL(device);
-    ASSERT_NOT_NULL(context);
     ASSERT_NOT_NULL(camera);
     ASSERT_NOT_NULL(input);
 
     m_camera = camera;
     m_input = input;
     SetVisible(false);
+
+    // A device-less host (NullRHI / headless smoke) still needs a live player for
+    // the gameplay loop; only GPU resource creation is skipped.
+    if (device == nullptr || context == nullptr)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Player initialized without a D3D11 device - weapon models and mesh skipped",
+                                 L"WARNING");
+        return S_OK;
+    }
 
     // Initialize weapon models
     m_pistolModel = std::make_unique<Model>();
@@ -93,32 +100,32 @@ HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, S
 
     // Load weapon models from assets
     HRESULT hr = S_OK;
-    hr = m_pistolModel->LoadObj(L"../Assets/Models/pistol.obj", device);
+    hr = m_pistolModel->LoadObj(Spark::FPSAssets::Resolve(L"Models/pistol.obj"), device);
     if (FAILED(hr))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load pistol model", L"WARNING");
     }
 
-    hr = m_rifleModel->LoadObj(L"../Assets/Models/rifle.obj", device);
+    hr = m_rifleModel->LoadObj(Spark::FPSAssets::Resolve(L"Models/rifle.obj"), device);
     if (FAILED(hr))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load rifle model", L"WARNING");
     }
 
     // For weapons without specific models, we'll use pistol as fallback
-    hr = m_shotgunModel->LoadObj(L"../Assets/Models/rifle.obj", device);
+    hr = m_shotgunModel->LoadObj(Spark::FPSAssets::Resolve(L"Models/rifle.obj"), device);
     if (FAILED(hr))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load shotgun model (using rifle fallback)", L"WARNING");
     }
 
-    hr = m_rocketModel->LoadObj(L"../Assets/Models/rifle.obj", device);
+    hr = m_rocketModel->LoadObj(Spark::FPSAssets::Resolve(L"Models/rifle.obj"), device);
     if (FAILED(hr))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load rocket launcher model (using rifle fallback)", L"WARNING");
     }
 
-    hr = m_grenadeModel->LoadObj(L"../Assets/Models/rifle.obj", device);
+    hr = m_grenadeModel->LoadObj(Spark::FPSAssets::Resolve(L"Models/rifle.obj"), device);
     if (FAILED(hr))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Failed to load grenade launcher model (using rifle fallback)", L"WARNING");
@@ -298,7 +305,11 @@ void Player::TakeDamage(float dmg)
     // Death check — bypassing prevents player death (god mode exploit)
     SPARK_BRANCH_GUARD_BEGIN("fps_player_death_check")
     if (m_health <= 0.0f)
+    {
         SetActive(false);
+        if (m_deathCallback)
+            m_deathCallback();
+    }
     SPARK_BRANCH_GUARD_END("fps_player_death_check")
 
     // Reset shield recharge timer on any damage

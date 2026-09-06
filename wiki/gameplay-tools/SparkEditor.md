@@ -1,6 +1,6 @@
 # SparkEditor
 
-SparkEditor is a required Windows build product and authoring surface in the blocked and uncertified `stable-v1` profile. Its source inventory contains 65 `*Panel.h` classes; registration and default visibility are separate metrics. Rotate/scale gizmo application and complete undo/redo coverage remain open under `EDT-210`. Collaboration, visual scripting, plugin breadth, and non-Windows editor paths remain experimental or outside the profile.
+SparkEditor is a required Windows build product and authoring surface in the blocked and uncertified `stable-v1` profile. Its source inventory contains 65 `*Panel.h` classes; registration and default visibility are separate metrics. All three transform gizmos (translate, rotate, scale) now apply to `World` entities through one `CommandHistory` entry per drag, and World-document create/delete/duplicate/reparent/rename/transform/inspector edits are command-backed; `EDT-210` remains open for the asset browse/drag/assign path, the author-to-installed-runtime round trip, and the still-unwired crash-recovery pipeline. Collaboration, visual scripting, plugin breadth, and non-Windows editor paths remain experimental or outside the profile.
 
 ![SparkEditor default layout](../../docs/screenshots/editor-overview.png)
 
@@ -52,17 +52,16 @@ EditorApplication
   |     +-- EditorLayoutManager   (dock positions, panel visibility, layout save/load)
   |     +-- EditorTheme           (color palette, rounding, spacing, font config)
   |     +-- EditorPanel* panels[] (registered panel set)
-  |     +-- GizmoSystem           (transform modes through the platform render path)
+  |     +-- SceneViewPanel gizmos  (translate/rotate/scale, one value via EditorUI::SetTransformTool)
   |     +-- UndoRedoManager       (command history stack)
   |     +-- CommandPalette        (Ctrl+P quick-command search)
   |
   +-- EditorPluginManager         (built-in + DLL plugin lifecycle)
   +-- SceneManager                (scene load/save/serialize)
-  +-- AssetDatabase               (file-system asset indexing)
   +-- PrefabManager               (prefab asset CRUD)
-  +-- VersionControlSystem        (optional VCS integration)
+  +-- VersionControlSystem        (optional git integration; git runs from an argument vector, no shell)
   +-- BuildCookPanel               (cook, package, deploy)
-  +-- PerformanceProfiler         (CPU/GPU timing, memory)
+  +-- PerformanceProfiler         (frame time, FPS, percentiles; CPU samples only from imported captures)
 ```
 
 ### EditorApplication
@@ -104,7 +103,7 @@ public:
 Each frame executes the following steps:
 
 1. `ProcessMessages()` -- Win32 message pump or the Linux SDL2 event loop
-2. `Update(deltaTime)` -- tick all panels, gizmo system, profiler
+2. `Update(deltaTime)` -- tick all panels, the Scene View gizmo interaction, profiler
 3. `Render()` -- begin the platform ImGui frame, render visible panels, and present through DX11 or swap the SDL/OpenGL window
 
 ## EditorPanel Base Class
@@ -175,13 +174,18 @@ The generated inventory below tracks source `*Panel.h` headers rather than a fix
 - Camera controls (orbit, pan, fly-through)
 - Grid and axis overlays
 
-### Gizmos (GizmoSystem)
+### Gizmos (Scene View)
 
-The currently wired Scene View runtime path renders and applies a translation
-gizmo for selected `World` entities on Windows, including grid snapping. The
-`GizmoSystem` contains rotate/scale enum and helper surfaces, but their Scene
-View interaction path is incomplete and not release evidence. Gizmo edits also
-do not establish complete editor-wide undo/redo coverage (`EDT-210`).
+The Scene View ships all three transform gizmos for selected `World` entities on
+Windows: translate arrows, rotate rings, and scale box handles. Each drag commits
+exactly one `CommandHistory` entry (`SceneEditTools::CommitEntityRotation` /
+`CommitEntityScale` / translation), so a gizmo edit is a single undo step. Grid snap
+applies 15 degrees to rotation and 0.1 to scale when snapping is enabled. The
+toolbar buttons, the `W`/`E`/`R` hotkeys, the command palette, and the Scene View
+toolbar all drive one value (`EditorUI::SetTransformTool`); previously they only
+changed a status-bar label. The separate `Gizmos/GizmoSystem` class was deleted
+as a duplicate of this path (see [Stub and Abandoned Features](../advanced/Stub-and-Abandoned-Features.md)).
+Regression coverage: `Tests/TestEditorGizmoTransformReal.cpp`.
 
 ### Asset Browser (see [Asset Pipeline](Asset-Pipeline.md))
 
@@ -199,10 +203,9 @@ do not establish complete editor-wide undo/redo coverage (`EDT-210`).
 
 ### Animation Timeline
 
-- Keyframe editing on a timeline
-- State machine visualization
-- Blend tree configuration
-- Animation clip preview
+Removed. The `SparkEditor/Source/Animation/` timeline, clip manager, curve, and
+playback classes had no production caller and were deleted rather than completed.
+Sprite animation authoring lives in the [Sprite Animation Editor Panel](#sprite-animation-editor-panel).
 
 ### Terrain Editor (see [Terrain and Procedural Generation](Terrain-and-Procedural-Generation.md))
 
@@ -210,12 +213,13 @@ do not establish complete editor-wide undo/redo coverage (`EDT-210`).
 - Texture splatting brush
 - Object placement brush via `ObjectPlacementPanel`
 - Terrain configuration (size, resolution, LOD)
+- Save writes `.sparkterrain` v2 to an editable project-relative path (default `Assets/Terrains/<name>.sparkterrain`, overwrite confirmation, directory created); texture layers have Diffuse/Normal fields and detail meshes a Mesh Path field
 
 ### Weapon Editor (see [Gameplay Systems](Gameplay-Systems.md))
 
-- Weapon property configuration
-- Projectile type selection
-- Fire rate, damage, spread tuning
+A balance calculator: DPS chart and comparison table over weapon stats (damage,
+fire rate, spread, reload). Edits are session-only -- the panel cannot save, the
+no-op "Save All" button was removed, and no game module reads its values.
 
 ### Node Graph (imnodes)
 
@@ -225,19 +229,24 @@ do not establish complete editor-wide undo/redo coverage (`EDT-210`).
 
 ### Profiler Panel
 
-- CPU and GPU timing breakdown via `PerformanceProfiler`
-- Per-system performance graphs
+- Frame time, FPS, and frame-time percentiles (measured live)
+- CPU sample hierarchy and draw-call/triangle counters are populated **only from an imported capture file**; `ProfileScope`/`PROFILE_SCOPE` were deleted and no panel is instrumented, so there is no live CPU sample producer
 - Memory usage tracking
 - Frame time history
 
 ### Console Panel
 
-Full-featured debug console with real-time log streaming, severity filtering, and command execution.
+Debug console with real-time log streaming (the panel subscribes to `Spark::Logger`), severity filtering, and command execution.
 
 - Real-time log output with color-coded severity (Info, Warning, Error, Fatal)
-- Command input with auto-completion and history
-- Text search and regex filtering across log output
-- Export logs to txt, csv, or json formats
+- Command input with Tab auto-completion and Up/Down history
+- Case-insensitive text search across log output (substring match, not regex)
+
+The Version Control panel launches git from an argument vector with no shell, so commit
+messages, branch names, and paths containing spaces, quotes, ampersands, or semicolons are
+accepted verbatim; the former "File path contains unsafe characters" guard is gone, commit
+messages are no longer mangled, and commit subjects no longer carry a trailing quote.
+- Export logs to txt or csv
 - Configurable scroll behavior (auto-scroll, pause on hover)
 
 **Source:** `SparkEditor/Source/Panels/ConsolePanel.cpp` (821 lines)
@@ -249,7 +258,7 @@ Full-featured debug console with real-time log streaming, severity filtering, an
 - Orbit, pan, and fly-through camera modes
 - Grid overlay with configurable spacing
 - Multiple render modes (lit, wireframe, unlit, normals)
-- Translation-gizmo rendering for selected entities (Windows path)
+- Translate/rotate/scale gizmo rendering and interaction for selected entities (Windows path)
 - Click-to-select entities via raycasting
 
 **Source:** `SparkEditor/Source/Panels/SceneViewPanel.cpp` (404 lines)
@@ -278,29 +287,38 @@ Build configuration and packaging pipeline.
 
 **Source:** `SparkEditor/Source/Panels/BuildCookPanel.cpp` (591 lines)
 
+### Workflow Panel
+
+Runs the project's build workflows from inside the editor.
+
+- Build workflows configure with the host preset (`windows-release` on the stable-v1 platform) rather than `linux-gcc-release`
+- **Clean & Rebuild** requires an explicit confirmation, deletes only the open project's build directory, and fails with a clear message when no project is open
+- Running a workflow still blocks the editor UI for the duration of the process
+
+**Source:** `SparkEditor/Source/Panels/WorkflowPanel.h`
+
 ### Dedicated Server Panel
 
-Server management for multiplayer testing and deployment.
+Launch and monitor a `SparkServer` process from the editor.
 
-- Server cook settings and map rotation configuration
-- PIE server launch for local testing
-- LAN server browser with auto-discovery
-- RCON console for remote administration
-- Player list with kick/ban controls
+- Server cook settings and launch configuration for the single launch map (the Maps tab is a pick-list for that map)
+- Local server launch for testing; the browser lists only the server launched from this editor (there is no discovery transport)
+- Join is disabled until an editor client transport exists
+- Monitoring shows uptime plus the player count parsed from SparkServer's health report
 
-**Source:** `SparkEditor/Source/Panels/DedicatedServerPanel.cpp` (999 lines)
+There is no LAN auto-discovery, no RCON console, and no kick/ban player list.
+
+**Source:** `SparkEditor/Source/Panels/DedicatedServerPanel.cpp`
 
 ### Debug Visualizer Panel
 
-Toggle debug overlays for various engine subsystems.
+**Preview - not connected.** The grid, wireframe, collider, physics-contact,
+navmesh, light-radius, and audio-range toggles are authored in the panel, but no
+renderer consumes them yet and the panel reports no debug-draw counts. It is
+listed in [Stub and Abandoned Features](../advanced/Stub-and-Abandoned-Features.md)
+until `SceneViewPanel` reads it.
 
-- Grid, wireframe, and collider visualization
-- Physics contacts and constraint rendering
-- Navigation mesh overlay
-- Light radius and attenuation spheres
-- Audio source range indicators
-
-**Source:** `SparkEditor/Source/Panels/DebugVisualizerPanel.cpp` (245 lines)
+**Source:** `SparkEditor/Source/Panels/DebugVisualizerPanel.cpp`
 
 ### Event Monitor Panel
 
@@ -338,38 +356,38 @@ Specialized tools for first-person shooter level design and balancing.
 
 ### Scene Statistics Panel
 
-Real-time performance and scene metrics dashboard.
+Live scene metrics dashboard, reading the open scene's `World`.
 
-- Entity and component counts by type
-- Render statistics: draw calls, triangles, batches
-- Physics statistics: rigid bodies, contacts, constraints
-- Memory usage breakdown
+- Entity and component counts by type (from the open scene's World)
+- Render statistics: draw calls and batches as reported by the scene viewport (only while it reports stats); triangle/vertex/shader/texture-VRAM figures are not measured
+- Physics statistics: rigid bodies, contacts, constraints -- only while a game session runs
+- Memory: the editor process working set (there is no per-asset mesh/texture/audio breakdown)
 - Per-frame performance graphs with history
 
-**Source:** `SparkEditor/Source/Panels/SceneStatisticsPanel.cpp` (391 lines)
+**Source:** `SparkEditor/Source/Panels/SceneStatisticsPanel.cpp`
 
 ### Search Panel
 
-Global fuzzy search across the entire project.
+Fuzzy search over the open scene and the project asset root.
 
-- Search entities by name, tag, or component type
-- Search assets by filename or type
-- Search components by property values
-- Result filtering and sorting
+- Search entities by name and by the reflected component types on those entities
+- Search file names under the project asset root
+- Selecting an entity result selects it in the editor; asset results report their path
 - Search history with recent queries
 
-**Source:** `SparkEditor/Source/Panels/SearchPanel.cpp` (435 lines)
+Property-value search does not exist.
+
+**Source:** `SparkEditor/Source/Panels/SearchPanel.cpp`
 
 ### Object Placement Panel
 
-Level editing tools for placing and arranging objects in the scene.
+Creates real, undoable entities from the editor's entity templates.
 
-- Placement modes: Single, Brush, Line, Grid, Scatter
-- Grid and surface snapping
-- Prefab library with drag-and-drop
-- Randomization controls (rotation, scale jitter)
+- **Quick Place** and **Place Selected** create entities through `CommandHistory`
+- Entity template list (there is no drag-and-drop and no `PrefabManager` lookup)
+- Brush, line, grid, and scatter modes, align mode, and snap settings are authored in the panel but **not yet read by the viewport** -- they are not working placement modes
 
-**Source:** `SparkEditor/Source/Panels/ObjectPlacementPanel.cpp` (364 lines)
+**Source:** `SparkEditor/Source/Panels/ObjectPlacementPanel.cpp`
 
 ### Prefab Editor Panel
 
@@ -406,17 +424,12 @@ Visual [particle system](../subsystems/Rendering-and-Graphics.md) authoring.
 
 **Source:** `SparkEditor/Source/Panels/ParticleEditorPanel.cpp` (147 lines)
 
-### Post-Processing Panel
+### Post-Processing (Inspector)
 
-[Post-processing](../subsystems/Rendering-and-Graphics.md) effect configuration.
-
-- Bloom intensity and threshold
-- Tonemapping operator selection
-- Fog density, color, and falloff
-- Sky and atmospheric parameters
-- Wind direction and strength
-
-**Source:** `SparkEditor/Source/Panels/PostProcessingPanel.cpp` (166 lines)
+The separate `PostProcessingPanel` was removed: it edited a `SceneFile`-backed
+document model the editor no longer builds. Add a **Post-Process Volume**
+component to an entity and edit bloom, tonemapping, fog, and related settings in
+the [Inspector](#inspector).
 
 ### Localization Panel
 
@@ -431,14 +444,14 @@ String table editor for [multi-language support](../subsystems/Localization.md).
 
 ### Save System Panel
 
-[Save/Load](Save-System.md) slot manager.
+[Save/Load](Save-System.md) slot manager over the real save directory.
 
-- View save slot metadata (timestamp, playtime, level)
-- Create and delete save slots
-- Autosave interval configuration
-- Save file location management
+- Lists the `.spark_save` files in the save directory with their metadata (timestamp, playtime, level)
+- Rename and delete slots
+- **Load** requires a running game session (a live `World` in the engine context) *and* at least one enumerated slot; it is disabled otherwise
+- Export/Import were removed
 
-**Source:** `SparkEditor/Source/Panels/SaveSystemPanel.cpp` (141 lines)
+**Source:** `SparkEditor/Source/Panels/SaveSystemPanel.cpp`
 
 ### Region Map Editor
 
@@ -465,15 +478,15 @@ the live lattice.
 
 ### Weather & Fog Panel
 
-[Weather](Day-Night-Cycle-and-Weather.md) preset editor.
+Applies the engine's own weather presets to the running [WeatherSystem](Day-Night-Cycle-and-Weather.md).
 
-- Preset types: Clear, Rain, Snow, Storm
-- Precipitation intensity and particle density
-- Wind speed and direction
-- Fog distance and color
-- Lighting adjustments per weather type
+- Shows the engine's weather-type presets read-only
+- Applies a selected type, intensity, and transition time to the running `WeatherSystem`
+- With no game session the panel shows **Preview - not connected**
 
-**Source:** `SparkEditor/Source/Panels/WeatherFogPanel.cpp` (184 lines)
+Custom presets, per-field authoring, and preset persistence do not exist.
+
+**Source:** `SparkEditor/Source/Panels/WeatherFogPanel.cpp`
 
 ### Undo History Panel
 
@@ -559,15 +572,12 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 
 ### Game View Panel
 
-Full game viewport with FPS HUD preview.
+Game viewport with a **simulated** FPS HUD preview.
 
-- Crosshair rendering with customizable styles
-- Health and armor bar overlays
-- Ammo counter and magazine display
-- Minimap with configurable zoom
-- Kill feed, damage indicators, and scoreboard
+- The HUD overlay (crosshair, health/armor bars, ammo, minimap, kill feed, scoreboard) is generated by the editor and labelled on screen as `SIMULATED HUD - not game data`; it is not connected to `SparkGameFPS` state
+- The Game View fly camera no longer moves the scene's authored camera
 
-**Source:** `SparkEditor/Source/Panels/GameViewPanel.cpp` (1,163 lines)
+**Source:** `SparkEditor/Source/Panels/GameViewPanel.cpp`
 
 ## Collaborative Editing
 
@@ -583,7 +593,17 @@ Source: `SparkEditor/Source/Communication/CollaborativeEditSession.h`
 
 ## Undo/Redo System
 
-The `UndoRedoManager` (`UndoRedo/UndoRedoManager.h`) maintains command stacks used by participating operations. Complete editor-wide coverage is not implemented or certified (`EDT-210`):
+The `UndoRedoManager` (`UndoRedo/UndoRedoManager.h`) maintains command stacks. For the World document the following mutations are all command-backed and undoable (regression coverage in `Tests/TestEditorUndoHierarchyReal.cpp` and `Tests/TestEditorGizmoTransformReal.cpp`):
+
+| Operation | Entry points |
+|---|---|
+| Create / delete / duplicate entity | Hierarchy context menu, `Ctrl+D`, `Delete` key |
+| Rename entity | `F2`, double-click, context menu, toolbar |
+| Reparent | Hierarchy drag-and-drop |
+| Translate / rotate / scale | Scene View gizmos (one command per drag) |
+| Inspector property edits | Reflected component fields |
+
+Editor-wide certification is still open under `EDT-210` because the asset drag/assign path and the author-to-package round trip are not yet gated:
 
 ```cpp
 class UndoRedoManager
@@ -609,7 +629,7 @@ public:
 };
 ```
 
-Operations that opt into the command path use `ExecuteCommand()` and implement `EditorCommand::Execute()` / `Undo()`. Some scene mutations bypass or incompletely implement that path. Executing a new command clears the redo stack, and `UndoHistoryPanel` exposes the recorded command history.
+Operations use `ExecuteCommand()` and implement `EditorCommand::Execute()` / `Undo()`. Executing a new command clears the redo stack, and `UndoHistoryPanel` exposes the recorded command history.
 
 ## Theme System
 
@@ -725,18 +745,18 @@ Plugins implement the `IEditorPlugin` interface and are loaded at startup or dyn
 ## Building with the Editor
 
 ```powershell
-# Windows PowerShell
-.\build.ps1 -config Release -editor
+# Windows (preferred): CMake presets
+cmake --preset windows-release
+cmake --build --preset windows-release
 
-# Or via CMake
-cmake -B build -DENABLE_EDITOR=ON
-cmake --build build --config Release
+# build.ps1 remains supported; ENABLE_EDITOR defaults ON, and -editor only forces it ON
+.\build.ps1 -config Release -editor
 ```
 
 ## Performance Considerations
 
 - All panel rendering uses immediate-mode ImGui; no retained scene graph overhead.
-- The `PerformanceProfiler` tracks per-panel render time to identify bottlenecks.
+- The `PerformanceProfiler` reports frame time, FPS, and percentiles; it has no per-panel or CPU-sample producer (`PROFILE_SCOPE` was deleted), so bottleneck hunting needs an imported capture or an external profiler.
 - Gizmo rendering uses dedicated DX11 vertex/pixel shaders with minimal draw calls.
 - The `EditorApplication` frame loop targets 60 FPS; the editor can optionally cap to lower rates when idle.
 
@@ -762,9 +782,17 @@ cmake --build build --config Release
 
 ### Gizmo does not respond to clicks
 
-1. Ensure the `GizmoSystem::HandleMouseInput()` is receiving mouse events before ImGui consumes them.
-2. Check that `GizmoSystem::IsVisible()` returns true.
-3. Verify at least one object is selected in the hierarchy.
+1. Ensure the Scene View panel has focus so it receives mouse events before ImGui consumes them.
+2. Check the active transform tool (`W`/`E`/`R` or the toolbar) -- all surfaces drive `EditorUI::SetTransformTool`.
+3. Verify at least one `World` entity is selected in the hierarchy.
+
+### Editor crashed -- where is the dump?
+
+`SparkEditor` installs a Windows unhandled-exception filter at startup and
+restores the previous filter on shutdown. Dumps and logs are written under the
+per-user editor data directory (not a CWD-relative `Crashes/`). The recovery
+dialog and `RecordOperation` journaling are still unwired (`EDT-210`), so a crash
+leaves a dump but does not offer scene recovery.
 
 ### Theme colors look wrong
 
@@ -869,7 +897,6 @@ cmake --build build --config Release
 | `Physics2DPanel` | `SparkEditor/Source/Panels/Physics2DPanel.h` |
 | `Physics3DPanel` | `SparkEditor/Source/Panels/Physics3DPanel.h` |
 | `PlayModeToolbarPanel` | `SparkEditor/Source/Panels/PlayModeToolbarPanel.h` |
-| `PostProcessingPanel` | `SparkEditor/Source/Panels/PostProcessingPanel.h` |
 | `PrefabEditorPanel` | `SparkEditor/Source/Panels/PrefabEditorPanel.h` |
 | `ProjectBrowserPanel` | `SparkEditor/Source/Panels/ProjectBrowserPanel.h` |
 | `ProjectSettingsPanel` | `SparkEditor/Source/Panels/ProjectSettingsPanel.h` |

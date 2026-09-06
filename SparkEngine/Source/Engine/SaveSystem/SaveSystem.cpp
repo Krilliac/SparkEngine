@@ -143,9 +143,45 @@ namespace Spark
 #endif
         }
 
+        /// Suffix of the retained last-good copy written next to each slot file.
+        constexpr const char* kSaveBackupSuffix = ".bak";
+
         bool IsSupportedSaveVersion(uint32_t version)
         {
             return version >= kOldestSupportedSaveVersion && version <= kCurrentSaveVersion;
+        }
+
+        /// @brief Locate the single Transform record of a serialized entity, if any.
+        const SerializedComponent* FindTransformRecord(const SerializedEntity& entity)
+        {
+            for (const SerializedComponent& component : entity.components)
+            {
+                if (component.typeName == "Transform")
+                    return &component;
+            }
+            return nullptr;
+        }
+
+        /// @brief Decode a serialized Transform's parent as a saved-entity index.
+        ///
+        /// An absent property decodes as -1 (root), which is how every pre-v3 save and
+        /// every hand-built snapshot reads.
+        ///
+        /// @return false when the property is present but is not a decimal index >= -1.
+        bool ParseTransformParentIndex(const SerializedComponent& transform, long long& outIndex)
+        {
+            outIndex = -1;
+            const auto it = transform.properties.find(kTransformParentProperty);
+            if (it == transform.properties.end())
+                return true;
+
+            const std::string& value = it->second;
+            long long parsed = 0;
+            const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), parsed);
+            if (error != std::errc{} || end != value.data() + value.size() || parsed < -1)
+                return false;
+            outIndex = parsed;
+            return true;
         }
 
         void LogUnsupportedSaveVersion(const std::string& filepath, uint32_t version, const char* operation)
@@ -375,6 +411,40 @@ namespace Spark
                                        component.typeName.c_str());
                         return false;
                     }
+                }
+            }
+
+            // Hierarchy edges travel as the Transform record's parent property, encoded
+            // as an index into data.entities. A parent must be a distinct saved entity
+            // that itself carries a Transform, otherwise the edge cannot be rebuilt.
+            std::vector<const SerializedComponent*> transforms;
+            transforms.reserve(data.entities.size());
+            for (const SerializedEntity& entity : data.entities)
+                transforms.push_back(FindTransformRecord(entity));
+
+            for (size_t entityIndex = 0; entityIndex < transforms.size(); ++entityIndex)
+            {
+                if (!transforms[entityIndex])
+                    continue;
+
+                long long parentIndex = -1;
+                if (!ParseTransformParentIndex(*transforms[entityIndex], parentIndex))
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: entity %zu has a malformed Transform parent index",
+                                   operation, entityIndex);
+                    return false;
+                }
+                if (parentIndex < 0)
+                    continue;
+
+                const auto parent = static_cast<size_t>(parentIndex);
+                if (parent >= transforms.size() || parent == entityIndex || !transforms[parent])
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                   "%s: entity %zu references parent index %lld, which is not a distinct saved "
+                                   "entity with a Transform",
+                                   operation, entityIndex, parentIndex);
+                    return false;
                 }
             }
             return true;
@@ -857,6 +927,10 @@ namespace Spark
         auto& typeRegistry = Spark::TypeRegistry::Get();
         auto& factory = Spark::ComponentFactory::Get();
 
+        // Types that cannot be represented as strings are reported once instead of
+        // being registered with a serializer that would fail on every load.
+        std::string unrepresentableTypes;
+
         for (const auto& typeName : factory.GetRegisteredNames())
         {
             // Skip types that already have hand-written serializers
@@ -866,6 +940,18 @@ namespace Spark
             const auto* typeInfo = typeRegistry.FindTypeByName(typeName);
             if (!typeInfo || typeInfo->fields.empty())
                 continue;
+
+            // GetFieldAsString/SetFieldFromString have no representation for Custom or
+            // Unknown fields. Registering such a type would make SerializeWorld emit a
+            // record that its own deserializer rejects, failing the whole load.
+            const bool roundTrippable = std::all_of(
+                typeInfo->fields.begin(), typeInfo->fields.end(), [](const Spark::FieldInfo& field)
+                { return field.type != Spark::FieldType::Custom && field.type != Spark::FieldType::Unknown; });
+            if (!roundTrippable)
+            {
+                unrepresentableTypes += unrepresentableTypes.empty() ? typeName : ", " + typeName;
+                continue;
+            }
 
             // Capture the type name and field list for the lambdas
             std::string capturedName = typeName;
@@ -910,6 +996,14 @@ namespace Spark
                                                      "' has an invalid serialized value");
                     }
                 });
+        }
+
+        if (!unrepresentableTypes.empty())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Save,
+                           "These registered component types have fields with no string representation and are "
+                           "excluded from saves: %s",
+                           unrepresentableTypes.c_str());
         }
     }
 
@@ -990,10 +1084,20 @@ namespace Spark
             return false;
         EventBus::Global().Publish<LoadBeginEvent>({slotName});
         SaveData data;
-        if (!ReadFromFile(GetSavePath(slotName), data))
+        const std::string savePath = GetSavePath(slotName);
+        if (!ReadFromFile(savePath, data))
         {
-            EventBus::Global().Publish<LoadCompleteEvent>({slotName, false});
-            return false;
+            // A corrupt or interrupted write must not cost the player the slot: fall
+            // back to the copy retained by the previous successful Save.
+            const std::string backupPath = savePath + kSaveBackupSuffix;
+            std::error_code backupError;
+            if (!std::filesystem::exists(backupPath, backupError) || backupError || !ReadFromFile(backupPath, data))
+            {
+                EventBus::Global().Publish<LoadCompleteEvent>({slotName, false});
+                return false;
+            }
+            SPARK_LOG_WARN(Spark::LogCategory::Save,
+                           "Load: slot '%s' was unreadable; recovered the retained last-good copy", slotName.c_str());
         }
         if (customStateValidator && !customStateValidator(data.customState))
         {
@@ -1068,9 +1172,21 @@ namespace Spark
         try
         {
             std::string path = GetSavePath(slotName);
-            if (path.empty() || !fs::exists(path))
+            if (path.empty())
                 return true;
-            return fs::remove(path);
+
+            // Remove the primary file first. Removing the retained last-good copy first
+            // would destroy the only recoverable revision even when the primary remove
+            // fails (locked file, permission denied) and DeleteSave reports "nothing was
+            // deleted".
+            if (fs::exists(path) && !fs::remove(path))
+                return false;
+
+            // The primary is gone, so the retained copy must go too: Load() would
+            // otherwise recover a slot the player just deleted.
+            std::error_code backupError;
+            fs::remove(path + kSaveBackupSuffix, backupError);
+            return true;
         }
         catch (const std::exception& e)
         {
@@ -1089,18 +1205,47 @@ namespace Spark
         std::vector<SaveMetadata> slots;
         try
         {
+            std::vector<fs::path> retainedCopies;
             for (const auto& entry : fs::directory_iterator(m_saveDirectory))
             {
-                if (entry.path().extension() == ".spark_save")
+                const fs::path& entryPath = entry.path();
+                if (entryPath.extension() == ".spark_save")
                 {
                     // Metadata-only read: parse just the header + metadata block and stop
                     // before the (potentially large) entity data. Enumerating N save slots
                     // must not cost O(total bytes of all saves).
                     SaveMetadata meta;
-                    if (ReadMetadataOnly(entry.path().string(), meta))
+                    if (ReadMetadataOnly(entryPath.string(), meta))
                     {
-                        slots.push_back(meta);
+                        // Carry the slot identifier so a listed entry can be passed
+                        // straight back to Load()/DeleteSave()/GetSaveMetadata().
+                        meta.slotName = entryPath.stem().string();
+                        slots.push_back(std::move(meta));
                     }
+                }
+                else if (entryPath.extension() == kSaveBackupSuffix && entryPath.stem().extension() == ".spark_save")
+                {
+                    retainedCopies.push_back(entryPath);
+                }
+            }
+
+            // A slot whose primary file is missing or unreadable is still loadable from
+            // its retained last-good copy: Load() and SaveExists() both recover it. Not
+            // listing it here is what makes a recoverable slot disappear from the save UI.
+            for (const fs::path& retained : retainedCopies)
+            {
+                std::string slotName = retained.stem().stem().string();
+                const bool alreadyListed =
+                    std::any_of(slots.begin(), slots.end(),
+                                [&slotName](const SaveMetadata& listed) { return listed.slotName == slotName; });
+                if (alreadyListed)
+                    continue;
+
+                SaveMetadata meta;
+                if (ReadMetadataOnly(retained.string(), meta))
+                {
+                    meta.slotName = std::move(slotName);
+                    slots.push_back(std::move(meta));
                 }
             }
         }
@@ -1122,23 +1267,39 @@ namespace Spark
     bool SaveSystem::GetSaveMetadata(const std::string& slotName, SaveMetadata& outMetadata) const
     {
         // Fast path: read only the metadata header, not the full entity payload.
-        return ReadMetadataOnly(GetSavePath(slotName), outMetadata);
+        if (!ReadMetadataOnly(GetSavePath(slotName), outMetadata))
+            return false;
+        outMetadata.slotName = slotName;
+        return true;
+    }
+
+    void SaveSystem::MarkComponentTransient(const std::string& typeName)
+    {
+        SPARK_REQUIRE_MSG(Spark::LogCategory::Save, !typeName.empty(),
+                          "SaveSystem::MarkComponentTransient — typeName must not be empty");
+        if (typeName.empty() || IsComponentTransient(typeName))
+            return;
+        m_transientComponentTypes.push_back(typeName);
+    }
+
+    bool SaveSystem::IsComponentTransient(const std::string& typeName) const
+    {
+        return std::find(m_transientComponentTypes.begin(), m_transientComponentTypes.end(), typeName) !=
+               m_transientComponentTypes.end();
     }
 
     bool SaveSystem::SaveExists(const std::string& slotName) const
     {
-        return fs::exists(GetSavePath(slotName));
-    }
+        const std::string path = GetSavePath(slotName);
+        if (fs::exists(path))
+            return true;
 
-    template <typename T>
-    static void TrySerialize(World& world, entt::entity entity, const ComponentSerializerRegistry& reg,
-                             const char* typeName, std::vector<SerializedComponent>& out)
-    {
-        if (auto* comp = world.GetComponent<T>(entity))
-        {
-            if (reg.HasSerializer(typeName))
-                out.push_back(reg.Serialize(typeName, comp));
-        }
+        // A slot whose primary file was lost but whose retained last-good copy is
+        // still present is loadable: Load() recovers from the .bak file. Reporting
+        // it as missing here would hide a recoverable slot from the save UI and from
+        // every SaveExists()-gated quickload.
+        std::error_code backupError;
+        return fs::exists(path + kSaveBackupSuffix, backupError) && !backupError;
     }
 
     SaveData SaveSystem::SerializeWorld(World& world, const SaveMetadata& metadata) const
@@ -1152,7 +1313,16 @@ namespace Spark
 
         auto& registry = world.GetRegistry();
         const auto& serializerRegistry = ComponentSerializerRegistry::GetInstance();
+        const auto& componentFactory = Spark::ComponentFactory::Get();
 
+        // Drive the snapshot from the component registry instead of a hard-coded type
+        // list: every type that owns both factory operations and a serializer is saved,
+        // including the ones a game module registers at runtime. Sorting the names keeps
+        // the emitted component order stable between runs of the same build.
+        std::vector<std::string> componentTypes = componentFactory.GetRegisteredNames();
+        std::sort(componentTypes.begin(), componentTypes.end());
+
+        std::unordered_map<uint32_t, size_t> entityIndices;
         auto&& entityStorage = registry.storage<entt::entity>();
         for (auto&& [entity] : entityStorage.each())
         {
@@ -1162,25 +1332,54 @@ namespace Spark
             auto* name = world.GetComponent<NameComponent>(entity);
             se.name = name ? name->name : "";
 
-            TrySerialize<Transform>(world, entity, serializerRegistry, "Transform", se.components);
-            TrySerialize<MeshRenderer>(world, entity, serializerRegistry, "MeshRenderer", se.components);
-            TrySerialize<HealthComponent>(world, entity, serializerRegistry, "HealthComponent", se.components);
-            TrySerialize<LightComponent>(world, entity, serializerRegistry, "LightComponent", se.components);
-            TrySerialize<AudioSourceComponent>(world, entity, serializerRegistry, "AudioSourceComponent",
-                                               se.components);
-            TrySerialize<Camera>(world, entity, serializerRegistry, "Camera", se.components);
-            TrySerialize<Script>(world, entity, serializerRegistry, "Script", se.components);
-            TrySerialize<RigidBodyComponent>(world, entity, serializerRegistry, "RigidBodyComponent", se.components);
-            TrySerialize<ColliderComponent>(world, entity, serializerRegistry, "ColliderComponent", se.components);
-            TrySerialize<ParticleEmitterComponent>(world, entity, serializerRegistry, "ParticleEmitterComponent",
-                                                   se.components);
-            TrySerialize<AnimationController>(world, entity, serializerRegistry, "AnimationController", se.components);
-            TrySerialize<NetworkIdentity>(world, entity, serializerRegistry, "NetworkIdentity", se.components);
-            TrySerialize<TagComponent>(world, entity, serializerRegistry, "TagComponent", se.components);
-            TrySerialize<ActiveComponent>(world, entity, serializerRegistry, "ActiveComponent", se.components);
+            for (const std::string& typeName : componentTypes)
+            {
+                // NameComponent has exactly one wire representation: SerializedEntity::name.
+                if (typeName == "NameComponent" || !serializerRegistry.HasSerializer(typeName))
+                    continue;
 
-            if (!se.components.empty())
-                data.entities.push_back(se);
+                // Runtime-only components are rebuilt by their owning system; persisting
+                // them would widen every save with per-frame state.
+                if (IsComponentTransient(typeName))
+                    continue;
+
+                const Spark::ComponentOps* operations = componentFactory.GetOperations(typeName);
+                if (!operations || !operations->has || !operations->getRaw || !operations->has(&world, se.entityID))
+                    continue;
+
+                if (const void* component = operations->getRaw(&world, se.entityID))
+                    se.components.push_back(serializerRegistry.Serialize(typeName, component));
+            }
+
+            // Named entities are kept even without a serializable component: they remain
+            // addressable on reload and can still anchor a saved hierarchy edge.
+            if (!se.components.empty() || !se.name.empty())
+            {
+                entityIndices.emplace(se.entityID, data.entities.size());
+                data.entities.push_back(std::move(se));
+            }
+        }
+
+        // Encode each hierarchy edge as the parent's index in data.entities. An edge
+        // whose parent was not serialized degrades to a root instead of a dangling
+        // reference, so the snapshot is always self-consistent.
+        for (SerializedEntity& serializedEntity : data.entities)
+        {
+            const auto transform =
+                std::find_if(serializedEntity.components.begin(), serializedEntity.components.end(),
+                             [](const SerializedComponent& component) { return component.typeName == "Transform"; });
+            if (transform == serializedEntity.components.end())
+                continue;
+
+            std::string encodedParent = kTransformParentNone;
+            const auto* live = world.GetComponent<Transform>(static_cast<EntityID>(serializedEntity.entityID));
+            if (live && live->parent != entt::null)
+            {
+                const auto parentIndex = entityIndices.find(static_cast<uint32_t>(live->parent));
+                if (parentIndex != entityIndices.end())
+                    encodedParent = std::to_string(parentIndex->second);
+            }
+            transform->properties[kTransformParentProperty] = std::move(encodedParent);
         }
 
         return data;
@@ -1203,6 +1402,20 @@ namespace Spark
                 // therefore empty, even if a caller manually populated a v1 struct.
                 migrated.metadata.screenshotPath.clear();
                 migrated.metadata.version = 2;
+                break;
+            case 2:
+                // v2 had no way to express a hierarchy edge, so every Transform it
+                // carried was a root. Materialize that exact value rather than relying
+                // on the absent-property default.
+                for (SerializedEntity& entity : migrated.entities)
+                {
+                    for (SerializedComponent& component : entity.components)
+                    {
+                        if (component.typeName == "Transform")
+                            component.properties[kTransformParentProperty] = kTransformParentNone;
+                    }
+                }
+                migrated.metadata.version = 3;
                 break;
             default:
                 return false;
@@ -1289,6 +1502,32 @@ namespace Spark
                     }
 
                     serializerRegistry.Deserialize(component.typeName, candidateWorld, entity, component);
+                }
+            }
+
+            // Rebuild hierarchy edges inside the candidate now that every Transform has
+            // been materialized. Candidate identifiers are exactly the identifiers the
+            // live world adopts after the payload swap, so the restored parent/children
+            // links are already correct at commit time. SetParent only rewrites existing
+            // Transform values, so candidate storage topology is unchanged. A rejected
+            // edge (cycle or self-parent) fails the whole restore.
+            for (size_t entityIndex = 0; entityIndex < migratedData.entities.size(); ++entityIndex)
+            {
+                const SerializedComponent* transform = FindTransformRecord(migratedData.entities[entityIndex]);
+                if (!transform)
+                    continue;
+
+                long long parentIndex = -1;
+                if (!ParseTransformParentIndex(*transform, parentIndex))
+                    throw std::runtime_error("serialized Transform carries a malformed parent index");
+                if (parentIndex < 0)
+                    continue;
+
+                if (static_cast<size_t>(parentIndex) >= incomingEntities.size() ||
+                    !candidateWorld.SetParent(incomingEntities[entityIndex],
+                                              incomingEntities[static_cast<size_t>(parentIndex)]))
+                {
+                    throw std::runtime_error("serialized hierarchy edge could not be restored");
                 }
             }
 
@@ -1492,6 +1731,22 @@ namespace Spark
                 return false;
             }
 
+            // SetSaveDirectory() promises the directory is created on the next Save.
+            // Without this the temp-file open failed and every Save returned false with
+            // a misleading "cannot open temp file" error.
+            const std::filesystem::path outputPath(filepath);
+            if (outputPath.has_parent_path())
+            {
+                std::error_code directoryError;
+                std::filesystem::create_directories(outputPath.parent_path(), directoryError);
+                if (!std::filesystem::is_directory(outputPath.parent_path()))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Save, "WriteToFile: cannot create save directory '%s': %s",
+                                    outputPath.parent_path().string().c_str(), directoryError.message().c_str());
+                    return false;
+                }
+            }
+
             // Write to temp file first, then rename for atomic save (prevents corruption on crash)
             std::string tmpPath = filepath + ".tmp";
             std::ofstream file(tmpPath, std::ios::binary);
@@ -1589,6 +1844,29 @@ namespace Spark
                 return false;
             }
 
+            // Retain the previous revision as the last-good copy before the destination
+            // is overwritten, so an interrupted or corrupted write never leaves the slot
+            // without usable data. Load() falls back to this file.
+            //
+            // The retention is a copy, never a rename: renaming the live slot away first
+            // opens a window in which the slot file does not exist at all. A failing
+            // replace below - or a crash in that window - would then delete the slot from
+            // SaveExists()/GetSaveSlots() even though the data survived in the .bak file.
+            // Copying leaves a valid slot file on disk at every step of the write.
+            std::error_code backupError;
+            if (std::filesystem::exists(filepath, backupError) && !backupError)
+            {
+                std::error_code rotateError;
+                std::filesystem::copy_file(filepath, filepath + kSaveBackupSuffix,
+                                           std::filesystem::copy_options::overwrite_existing, rotateError);
+                if (rotateError)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                   "WriteToFile: could not retain the last-good copy of '%s': %s", filepath.c_str(),
+                                   rotateError.message().c_str());
+                }
+            }
+
             // Replace the destination atomically. std::filesystem::rename does not
             // replace an existing file on Windows, which broke every second save to
             // the same slot (including QuickSave).
@@ -1601,10 +1879,12 @@ namespace Spark
                 return false;
             }
 
-            // Invalidate any cached copy so future reads see the new data
+            // Invalidate any cached copy so future reads see the new data. The retained
+            // last-good copy was rewritten too, so its cache entry is stale as well.
             if (m_fileCache)
             {
                 m_fileCache->Invalidate(filepath);
+                m_fileCache->Invalidate(filepath + kSaveBackupSuffix);
             }
 
             return true;
@@ -2039,8 +2319,8 @@ namespace Spark
         ss << "=== Save Slots (" << slots.size() << ") ===\n";
         for (const auto& slot : slots)
         {
-            ss << "  " << slot.saveName << " [" << slot.sceneName << ", HP:" << slot.playerHealth
-               << ", Time:" << slot.playTime << "s]\n";
+            ss << "  " << slot.slotName << " — " << slot.saveName << " [" << slot.sceneName
+               << ", HP:" << slot.playerHealth << ", Time:" << slot.playTime << "s]\n";
         }
         return ss.str();
     }

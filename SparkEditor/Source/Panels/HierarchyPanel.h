@@ -232,6 +232,12 @@ namespace SparkEditor
      */
         void RenderWorldToolbar();
 
+        /// @brief Start inline renaming of a World entity (F2 / Rename button).
+        void BeginWorldEntityRename(::EntityID entity);
+
+        /// @brief Apply an undoable rename to a World entity's NameComponent.
+        void RenameWorldEntity(::EntityID entity, const std::string& newName);
+
         /**
      * @brief Render the live ECS entity list for World-backed mode (Unit C2).
      *
@@ -408,6 +414,10 @@ namespace SparkEditor
         // Rename state
         ObjectID m_renamingObject = INVALID_OBJECT_ID; ///< Object being renamed
         char m_renameBuffer[256] = {};                 ///< Rename input buffer
+        ::EntityID m_renamingWorldEntity = entt::null; ///< World entity being renamed inline (World mode)
+        /// One-shot: focus the inline rename box on the first frame only. Calling SetKeyboardFocusHere()
+        /// every frame keeps the widget permanently active, so the focus-loss exit can never fire.
+        bool m_renameFocusPending = false;
 
         // Callbacks
         std::function<void(const std::vector<ObjectID>&)> m_selectionCallback;       ///< Selection change callback

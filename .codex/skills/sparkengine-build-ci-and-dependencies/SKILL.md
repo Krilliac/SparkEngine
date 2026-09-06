@@ -293,8 +293,10 @@ If the export set is broken (e.g. SDL2 dropped out of it), the failure appears a
 
 ## CI matrix (`.github/workflows/build.yml`, verified at HEAD)
 
-Triggers: push to `main`/`develop`/`Working`/`feature/**`/`claude/**`, PRs to
-`main`/`develop`/`Working`, manual dispatch. Concurrency cancels superseded runs.
+Triggers: push to `main`/`develop`/`Working`/`release/**`, PRs to
+`main`/`develop`/`Working`, manual dispatch. Topic branches (`claude/**`,
+`codex/**`, `feature/**`) run through the PR trigger only, so a push no longer
+queues the matrix twice. Concurrency cancels superseded PR runs; pushed SHAs are kept.
 
 | Job | What / gate |
 |---|---|

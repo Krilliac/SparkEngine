@@ -9,6 +9,8 @@
 
 #include <imgui.h>
 #include <cstring>
+#include <filesystem>
+#include <string>
 
 using namespace DirectX;
 namespace SparkEditor
@@ -92,11 +94,41 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_FOLDER_OPEN " Load Existing");
         ImGui::Spacing();
 
-        static char loadPath[256] = "Assets/Terrains/terrain.sparkterrain";
-        ImGui::InputText("##terrainpath", loadPath, sizeof(loadPath));
+        if (m_loadPathBuffer[0] == '\0')
+        {
+            RefreshPathBuffers();
+        }
+        ImGui::InputText("##terrainpath", m_loadPathBuffer, sizeof(m_loadPathBuffer));
         if (ImGui::Button(ICON_FA_FOLDER_OPEN " Load Terrain File", ImVec2(-1, 32)))
         {
-            LoadTerrain(loadPath);
+            if (!LoadTerrain(m_loadPathBuffer))
+            {
+                m_terrainIoMessage = std::string("Failed to load terrain from: ") + m_loadPathBuffer;
+            }
+            else
+            {
+                m_terrainIoMessage.clear();
+            }
+        }
+        if (!m_terrainIoMessage.empty())
+        {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", m_terrainIoMessage.c_str());
+        }
+    }
+
+    void TerrainEditor::RefreshPathBuffers()
+    {
+        const std::string terrainName = m_currentTerrain ? m_currentTerrain->name : std::string("terrain");
+        const std::string suggested = m_terrainFilePath.empty() ? DefaultTerrainPath(terrainName) : m_terrainFilePath;
+
+        std::strncpy(m_savePathBuffer, suggested.c_str(), sizeof(m_savePathBuffer) - 1);
+        m_savePathBuffer[sizeof(m_savePathBuffer) - 1] = '\0';
+
+        if (m_loadPathBuffer[0] == '\0')
+        {
+            const std::string defaultLoad = DefaultTerrainPath("terrain");
+            std::strncpy(m_loadPathBuffer, defaultLoad.c_str(), sizeof(m_loadPathBuffer) - 1);
+            m_loadPathBuffer[sizeof(m_loadPathBuffer) - 1] = '\0';
         }
     }
 
@@ -263,9 +295,56 @@ namespace SparkEditor
             ImGui::Checkbox("Generate Collider", &m_currentTerrain->generateCollider);
 
             ImGui::Separator();
+
+            // Save target. Defaults to the same project-relative location the Load field starts from, so a
+            // saved terrain is findable; the field is editable and an existing file must be confirmed.
+            if (m_savePathBuffer[0] == '\0')
+            {
+                RefreshPathBuffers();
+            }
+            ImGui::InputText("Save Path", m_savePathBuffer, sizeof(m_savePathBuffer));
+
+            // SaveTerrain() refuses a terrain the readers would reject; that verdict must reach the user
+            // instead of leaving the button looking like it worked.
+            const auto saveNow = [this]()
+            {
+                if (SaveTerrain(m_savePathBuffer))
+                {
+                    m_terrainIoMessage.clear();
+                }
+                else
+                {
+                    m_terrainIoMessage = std::string("Failed to save terrain to: ") + m_savePathBuffer;
+                }
+            };
+
             if (ImGui::Button(ICON_FA_SAVE " Save Terrain", ImVec2(-1, 28)))
             {
-                SaveTerrain("terrain.sparkterrain");
+                std::error_code existsError;
+                if (std::filesystem::exists(m_savePathBuffer, existsError))
+                    ImGui::OpenPopup("Overwrite Terrain?");
+                else
+                    saveNow();
+            }
+
+            if (ImGui::BeginPopupModal("Overwrite Terrain?", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::TextWrapped("%s already exists. Overwrite it?", m_savePathBuffer);
+                ImGui::Separator();
+                if (ImGui::Button("Overwrite", ImVec2(120, 0)))
+                {
+                    saveNow();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel", ImVec2(120, 0)))
+                    ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
+            }
+
+            if (!m_terrainIoMessage.empty())
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", m_terrainIoMessage.c_str());
             }
 
             ImGui::Unindent(8.0f);
@@ -281,8 +360,17 @@ namespace SparkEditor
 
         if (ImGui::Button(ICON_FA_PLUS " Add Layer"))
         {
-            m_currentTerrain->AddTextureLayer("New Layer");
-            SetModified(true);
+            // AddTextureLayer refuses past the .sparkterrain layer limit; a silently dead button would
+            // look identical to a layer that was added.
+            if (m_currentTerrain->AddTextureLayer("New Layer") != nullptr)
+            {
+                m_terrainIoMessage.clear();
+                SetModified(true);
+            }
+            else
+            {
+                m_terrainIoMessage = "Cannot add another texture layer: the .sparkterrain limit was reached.";
+            }
         }
 
         ImGui::BeginChild("##TextureLayers", ImVec2(0, 150), true);
@@ -326,6 +414,25 @@ namespace SparkEditor
         {
             auto& layer = m_currentTerrain->textureLayers[static_cast<size_t>(m_selectedTextureLayer)];
             ImGui::Separator();
+
+            // Texture bindings. Without these the layer only ever had a display name, so nothing the
+            // runtime could resolve was ever authored, saved or synced.
+            char diffuseBuffer[256] = {};
+            std::strncpy(diffuseBuffer, layer->diffuseTexture.c_str(), sizeof(diffuseBuffer) - 1);
+            if (ImGui::InputText("Diffuse Texture", diffuseBuffer, sizeof(diffuseBuffer)))
+            {
+                layer->diffuseTexture = diffuseBuffer;
+                SetModified(true);
+            }
+
+            char normalBuffer[256] = {};
+            std::strncpy(normalBuffer, layer->normalTexture.c_str(), sizeof(normalBuffer) - 1);
+            if (ImGui::InputText("Normal Texture", normalBuffer, sizeof(normalBuffer)))
+            {
+                layer->normalTexture = normalBuffer;
+                SetModified(true);
+            }
+
             ImGui::DragFloat2("Tiling", &layer->tiling.x, 0.1f, 0.01f, 100.0f);
             ImGui::DragFloat("Opacity", &layer->opacity, 0.01f, 0.0f, 1.0f, "%.2f");
             ImGui::DragFloat("Metallic", &layer->metallic, 0.01f, 0.0f, 1.0f, "%.2f");
@@ -377,6 +484,15 @@ namespace SparkEditor
         if (m_selectedDetailMesh >= 0 && m_selectedDetailMesh < static_cast<int>(m_currentTerrain->detailMeshes.size()))
         {
             auto& detail = m_currentTerrain->detailMeshes[static_cast<size_t>(m_selectedDetailMesh)];
+
+            char meshPathBuffer[256] = {};
+            std::strncpy(meshPathBuffer, detail->meshPath.c_str(), sizeof(meshPathBuffer) - 1);
+            if (ImGui::InputText("Mesh Path", meshPathBuffer, sizeof(meshPathBuffer)))
+            {
+                detail->meshPath = meshPathBuffer;
+                SetModified(true);
+            }
+
             ImGui::DragFloat("Density", &detail->density, 0.1f, 0.1f, 10.0f);
             ImGui::DragFloat("View Distance", &detail->viewDistance, 1.0f, 10.0f, 500.0f);
             ImGui::DragFloat2("Scale Range", &detail->scaleRange.x, 0.05f, 0.1f, 5.0f);

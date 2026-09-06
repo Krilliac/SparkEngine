@@ -46,12 +46,13 @@ namespace Spark::Graphics
         L"Shaders/HLSL/RayTracing/DXRGI.cso",
     };
 
-    // Shader entry-point names exactly as they appear in the .hlsl files.
-    // Each PSO has its own DXIL library subobject, so reusing the same
-    // export names across PSOs does not collide.
-    static const wchar_t* k_rayGenName = L"RayGen";
-    static const wchar_t* k_missName = L"Miss";
-    static const wchar_t* k_closestHitName = L"ClosestHit";
+    // Shader entry-point names exactly as they appear in the .hlsl files,
+    // indexed in the same order as k_dxilPaths. They differ per library
+    // (DXRShadows exports ShadowRayGen/ShadowMiss and has no closest hit), so
+    // a single shared name set would leave three of the four PSOs unresolved.
+    static const wchar_t* k_rayGenNames[] = {L"RayGen", L"ShadowRayGen", L"AORayGen", L"GIRayGen"};
+    static const wchar_t* k_missNames[] = {L"Miss", L"ShadowMiss", L"AOMiss", L"GIMiss"};
+    static const wchar_t* k_closestHitNames[] = {L"ClosestHit", nullptr, L"AOClosestHit", L"GIClosestHit"};
     static const wchar_t* k_hitGroupNames[] = {L"ReflectionHitGroup", L"ShadowHitGroup", L"AOHitGroup", L"GIHitGroup"};
 
     // Shader table record alignment required by DXR spec
@@ -585,18 +586,16 @@ namespace Spark::Graphics
             // global root signature, pipeline config.
             D3D12_STATE_SUBOBJECT subobjects[5] = {};
 
-            // Export the three entry points by name. Each .hlsl file uses
-            // the same names (`RayGen`, `ClosestHit`, `Miss`); each PSO
-            // has its own DXIL library so collisions are not possible.
-            // Shadow library has no closest-hit shader, so we only
-            // export raygen+miss for it.
+            // Export this library's own entry points by name. Each PSO has its
+            // own DXIL library, so names never collide across PSOs. The shadow
+            // library is visibility-only and exports no closest hit.
             D3D12_EXPORT_DESC exportDescs[3] = {};
             UINT exportCount = 0;
-            exportDescs[exportCount++] = {k_rayGenName, nullptr, D3D12_EXPORT_FLAG_NONE};
-            exportDescs[exportCount++] = {k_missName, nullptr, D3D12_EXPORT_FLAG_NONE};
-            const bool hasClosestHit = (i != 1); // Shadows are visibility-only
+            exportDescs[exportCount++] = {k_rayGenNames[i], nullptr, D3D12_EXPORT_FLAG_NONE};
+            exportDescs[exportCount++] = {k_missNames[i], nullptr, D3D12_EXPORT_FLAG_NONE};
+            const bool hasClosestHit = (k_closestHitNames[i] != nullptr);
             if (hasClosestHit)
-                exportDescs[exportCount++] = {k_closestHitName, nullptr, D3D12_EXPORT_FLAG_NONE};
+                exportDescs[exportCount++] = {k_closestHitNames[i], nullptr, D3D12_EXPORT_FLAG_NONE};
 
             D3D12_DXIL_LIBRARY_DESC libDesc = {};
             libDesc.DXILLibrary.pShaderBytecode = s_dxrState->dxilBlobs[i].data();
@@ -609,7 +608,7 @@ namespace Spark::Graphics
             D3D12_HIT_GROUP_DESC hitGroupDesc = {};
             hitGroupDesc.HitGroupExport = k_hitGroupNames[i];
             hitGroupDesc.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-            hitGroupDesc.ClosestHitShaderImport = hasClosestHit ? k_closestHitName : nullptr;
+            hitGroupDesc.ClosestHitShaderImport = k_closestHitNames[i];
             subobjects[1].Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
             subobjects[1].pDesc = &hitGroupDesc;
 
@@ -673,8 +672,8 @@ namespace Spark::Graphics
                 return rec;
             };
 
-            auto rayGenRec = buildRecord(k_rayGenName);
-            auto missRec = buildRecord(k_missName);
+            auto rayGenRec = buildRecord(k_rayGenNames[i]);
+            auto missRec = buildRecord(k_missNames[i]);
             auto hitGroupRec = buildRecord(k_hitGroupNames[i]);
 
             s_dxrState->rayGenTables[i] =

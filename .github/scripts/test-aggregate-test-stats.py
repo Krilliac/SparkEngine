@@ -54,6 +54,8 @@ class AggregateTestStatsTests(unittest.TestCase):
         failures: int = 0,
         errors: int = 0,
         skipped: int = 0,
+        flaky: int = 0,
+        empty: int = 0,
         directory: str = "results",
     ) -> Path:
         path = self.root / directory / f"test-stats-{lane}.json"
@@ -67,6 +69,8 @@ class AggregateTestStatsTests(unittest.TestCase):
                     "failures": failures,
                     "errors": errors,
                     "skipped": skipped,
+                    "flaky": flaky,
+                    "empty": empty,
                     "durationSeconds": 1.25,
                 }
             ),
@@ -83,9 +87,16 @@ class AggregateTestStatsTests(unittest.TestCase):
 
     @staticmethod
     def ratchet_entry(
-        *, minimum_recorded: object = 7, minimum_executed: object = 5, maximum_skipped: object = 2
+        *,
+        minimum_recorded: object = 7,
+        minimum_executed: object = 5,
+        maximum_skipped: object = 2,
+        maximum_flaky: object = 2,
+        maximum_empty: object = 2,
     ) -> dict[str, object]:
         return {
+            "maximumFlaky": maximum_flaky,
+            "maximumEmpty": maximum_empty,
             "minimumRecorded": minimum_recorded,
             "minimumExecuted": minimum_executed,
             "maximumSkipped": maximum_skipped,
@@ -204,6 +215,44 @@ class AggregateTestStatsTests(unittest.TestCase):
         report = MODULE.markdown(evidence)
         self.assertIn("Recorded floor", report)
         self.assertIn("Skipped cap", report)
+
+    def test_ratchet_rejects_more_waived_flaky_cases_than_the_ceiling(self) -> None:
+        path = self.write_ratchet({"linux-release": self.ratchet_entry(maximum_flaky=1)})
+        ratchet = MODULE.validate_ratchet(path, ["linux-release"])
+        with self.assertRaisesRegex(ValueError, "2 waived flaky cases.*at most 1"):
+            MODULE.aggregate(
+                [self.write_lane("linux-release", tests=7, passed=5, flaky=2)],
+                expected_lanes=["linux-release"],
+                minimum_tests=5,
+                repository_metrics=self.metrics,
+                commit="abc123",
+                ratchet=ratchet,
+            )
+
+    def test_ratchet_rejects_more_assertionless_cases_than_the_ceiling(self) -> None:
+        path = self.write_ratchet({"linux-release": self.ratchet_entry(maximum_empty=1)})
+        ratchet = MODULE.validate_ratchet(path, ["linux-release"])
+        with self.assertRaisesRegex(ValueError, "3 cases ran zero assertions.*at most 1"):
+            MODULE.aggregate(
+                [self.write_lane("linux-release", tests=7, passed=7, empty=3)],
+                expected_lanes=["linux-release"],
+                minimum_tests=5,
+                repository_metrics=self.metrics,
+                commit="abc123",
+                ratchet=ratchet,
+            )
+
+    def test_a_flaky_case_is_not_counted_as_passed(self) -> None:
+        # tests = passed + failures + errors + skipped + flaky. A report that
+        # still folds a waived failure into `passed` no longer balances.
+        with self.assertRaisesRegex(ValueError, r"\+ flaky \(8\) does not equal tests \(7\)"):
+            MODULE.aggregate(
+                [self.write_lane("linux-release", tests=7, passed=7, flaky=1)],
+                expected_lanes=["linux-release"],
+                minimum_tests=5,
+                repository_metrics=self.metrics,
+                commit="abc123",
+            )
 
     def test_ratchet_rejects_recorded_regression_above_generic_floor(self) -> None:
         path = self.write_ratchet(

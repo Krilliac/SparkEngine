@@ -34,14 +34,16 @@ The engine does not auto-load `SparkGameFPS`. Replace the placeholder with the p
 | Shift | Sprint |
 | Left Click | Fire (captures mouse) |
 | Esc | Release mouse |
-| ` (Backtick) | Toggle console |
-| F3 | Toggle FPS stats |
 
 ---
 
 ## Step 2: Open the Console
 
-Press **`** (backtick) to open the debug console. Try these commands:
+SparkGameFPS has no in-game console overlay (the unreachable one was removed) and
+binds neither backtick nor F3. Console commands are reached through the
+[SparkConsole](../gameplay-tools/SparkConsole.md) process that the Windows engine
+launches beside itself (engine logs are mirrored into it), or through the
+**Engine Console** panel in [SparkEditor](../gameplay-tools/SparkEditor.md). Try these commands there:
 
 ```
 help                    # List all available commands
@@ -50,7 +52,7 @@ render_stats            # Display rendering statistics
 physics_metrics         # Show physics performance
 ```
 
-The console supports tab-completion and command history (up/down arrows).
+Both console surfaces support tab-completion and command history (up/down arrows).
 
 ---
 

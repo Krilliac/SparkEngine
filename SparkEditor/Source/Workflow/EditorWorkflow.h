@@ -96,11 +96,17 @@ namespace SparkEditor
         uint32_t GetStepCount() const { return static_cast<uint32_t>(m_steps.size()); }
         const std::vector<WorkflowStep>& GetSteps() const { return m_steps; }
 
+        /// @brief True when the workflow performs destructive work (deleting directories).
+        /// The Workflow panel requires an explicit confirmation before running these.
+        bool RequiresConfirmation() const { return m_requiresConfirmation; }
+        void SetRequiresConfirmation(bool requiresConfirmation) { m_requiresConfirmation = requiresConfirmation; }
+
       private:
         std::string m_name;
         std::string m_description;
         std::string m_category; ///< "Build", "Scene", "Asset", "Custom"
         std::vector<WorkflowStep> m_steps;
+        bool m_requiresConfirmation = false;
     };
 
     // ========================================================================

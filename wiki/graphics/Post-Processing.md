@@ -1,13 +1,12 @@
 # Post-Processing
 
-SparkEngine provides a configurable post-processing pipeline that chains 14 screen-space effects in a fixed order. Each effect is a self-contained pass with its own settings struct, enable/disable state, and per-pass performance metrics. The pipeline manages render target ping-ponging between passes automatically using two `R16G16B16A16_FLOAT` textures, and integrates with the editor through the **PostProcessingPanel**.
+SparkEngine provides a configurable post-processing pipeline that chains 14 screen-space effects in a fixed order. Each effect is a self-contained pass with its own settings struct, enable/disable state, and per-pass performance metrics. The pipeline manages render target ping-ponging between passes automatically using two `R16G16B16A16_FLOAT` textures, and is edited in SparkEditor through the Inspector's **Post-Process Volume** component (the former `PostProcessingPanel` was removed).
 
 **Source Files:**
 - `SparkEngine/Source/Graphics/PostProcessingPipeline.h` -- Pipeline class (pass orchestration, render target management)
 - `SparkEngine/Source/Graphics/PostProcessingPipeline.cpp` -- Pipeline implementation
 - `SparkEngine/Source/Graphics/PostProcessingTypes.h` -- All settings structs, enums, and metric types
 - `SparkEngine/Source/Graphics/PostProcessingEffects.h` -- Backward-compatibility re-export of types
-- `SparkEditor/Source/Panels/PostProcessingPanel.h` -- Editor panel for post-processing settings
 
 ## Pipeline Architecture
 
@@ -362,7 +361,7 @@ The `GetActivePassCount()` method returns how many passes were active in the las
 
 ## Editor Integration
 
-The **PostProcessingPanel** (`SparkEditor::PostProcessingPanel`) exposes bloom, tonemapping, fog, sky, and wind parameters through ImGui controls. It reads from and writes to the scene's `EnvironmentSettings`, which are serialized to scene files. The `LightingTools` panel also provides post-processing controls for tonemapping, exposure, bloom, contrast, saturation, and brightness as part of the lighting preset system.
+The former `PostProcessingPanel` was deleted in the 2026-09 sweep: it edited a `SceneFile`-backed document model the editor no longer builds. Post-processing is authored by adding a **Post-Process Volume** component to an entity and editing it in the Inspector (see the spatial volumes section above). `LightingTools`, which also exposed tonemapping/exposure/bloom controls, was deleted as well (no production caller).
 
 ## Source Files
 
@@ -372,9 +371,6 @@ The **PostProcessingPanel** (`SparkEditor::PostProcessingPanel`) exposes bloom, 
 | `SparkEngine/Source/Graphics/PostProcessingPipeline.cpp` | Pipeline implementation (pass execution, GPU resources) |
 | `SparkEngine/Source/Graphics/PostProcessingTypes.h` | All enums, settings structs, and metric types |
 | `SparkEngine/Source/Graphics/PostProcessingEffects.h` | Backward-compatibility re-export header |
-| `SparkEditor/Source/Panels/PostProcessingPanel.h` | Editor panel declaration |
-| `SparkEditor/Source/Panels/PostProcessingPanel.cpp` | Editor panel ImGui implementation |
-| `SparkEditor/Source/Lighting/LightingTools.cpp` | Lighting preset post-processing integration |
 | `GameModules/SparkGameFPS/Source/Console/AdvancedConsoleCommands.cpp` | Console command registration |
 
 ---
@@ -385,4 +381,4 @@ The **PostProcessingPanel** (`SparkEditor::PostProcessingPanel`) exposes bloom, 
 - [Render Graph](Render-Graph.md) -- Render graph pass scheduling system
 - [Shader Pipeline](../gameplay-tools/Shader-Pipeline.md) -- Shader compilation and management
 - [Camera System](../subsystems/Camera-System.md) -- Camera settings affecting depth of field
-- [Editor Panels](../gameplay-tools/SparkEditor.md) -- PostProcessingPanel and other editor UI
+- [Editor Panels](../gameplay-tools/SparkEditor.md) -- Inspector (Post-Process Volume component) and other editor UI

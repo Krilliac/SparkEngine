@@ -269,11 +269,13 @@ static constexpr QualityPreset kUltraPreset = {
 };
 ```
 
-The preset system automatically selects the best available upscaling mode at startup: DLSS if an NVIDIA RTX GPU is detected, XeSS on Intel Arc, and FSR as the universal fallback.
+No vendor upscaler SDK is linked: `IsFSR2Available()`, `GetDLSSFeatureInfo().isAvailable`, and `GetXeSSFeatureInfo().isAvailable` all report `false`, and selecting FSR2/DLSS/XeSS logs a warning once and runs the built-in SparkSR path instead. `Console_GetStatus` reports that availability truthfully.
+
+The substitution is now visible rather than implied: `UpscalingSystem::GetEffectiveMode()` returns the mode that actually runs, and the status line reads `Mode: DLSS (running SparkSR)`. Report the effective mode when you quote what is active — a requested mode is not evidence that a vendor upscaler ran.
 
 ## Integration with Render Pipeline
 
-The upscaling system is integrated as a post-processing step in the render pipeline, executed after tonemapping and before the final UI overlay:
+The upscaling system is **designed** as a post-processing step after tonemapping and before the final UI overlay. **It is not executed in the frame path today:** the only production uses of `UpscalingSystem` are `Initialize`/`Shutdown` in `GraphicsEngineWindowsInit.cpp` and `GraphicsEngineLinux.cpp`; nothing calls `Execute*` or `GetRenderResolution()` per frame. The diagram shows the intended placement:
 
 ```
 Scene Render (at render resolution)
@@ -288,44 +290,14 @@ Scene Render (at render resolution)
 
 The upscaling system manages its own intermediate render targets (history buffer, EASU output) and only requires the caller to provide the tonemapped colour SRV and an output UAV at display resolution.
 
-## ECS Integration (UpscalingSettings Component)
+## ECS Integration and Editor UI (not implemented)
 
-The ECS exposes upscaling configuration through a dedicated component that can be attached to a camera entity:
-
-```cpp
-// In Components.h
-struct UpscalingSettingsComponent
-{
-    UpscalingMode mode          = UpscalingMode::FSR1;
-    UpscalingQuality quality    = UpscalingQuality::Quality;
-    float rcasAttenuation       = 0.25f;
-    bool enableDynamicRes       = false;
-    float drsTargetFrameTimeMs  = 16.67f;
-};
-
-// Attach to the main camera entity
-registry.emplace<UpscalingSettingsComponent>(cameraEntity,
-    UpscalingMode::FSR2, UpscalingQuality::Balanced, 0.25f, true, 16.67f);
-```
-
-The `RenderSystem` reads `UpscalingSettingsComponent` from the active camera each frame and applies it to the `UpscalingSystem` before executing the upscaling pass. This allows different cameras (e.g., a security camera rendering at lower quality) to use different upscaling settings.
-
-## Editor UI for Upscaling Settings
-
-The SparkEditor includes an **Upscaling** panel accessible from **Window > Rendering > Upscaling Settings**. The panel provides:
-
-- **Mode Selector:** Dropdown to choose between FSR 1.0, FSR 2.0, DLSS, XeSS, or None. Unavailable modes (e.g., DLSS on AMD hardware) are greyed out with a tooltip explaining the requirement.
-- **Quality Preset Selector:** Radio buttons for Ultra Performance through Native, with the calculated render resolution displayed beside each option.
-- **RCAS Sharpening Slider:** A 0.0-1.0 slider controlling `rcasAttenuation`, with a live preview of the sharpening effect on a small viewport thumbnail.
-- **Dynamic Resolution Toggle:** Checkbox to enable DRS, with min/max scale sliders and a target frame time spinner.
-- **Debug Visualisation:** Overlay modes to display motion vectors, disocclusion mask, jitter pattern, and the temporal history buffer.
-- **Statistics:** Real-time display of render resolution, upscaling pass GPU time, history buffer memory usage, and effective render scale when DRS is active.
-
-```cpp
-// Editor panel registration (in EditorPanelRegistry.cpp)
-EditorPanelRegistry::Register<UpscalingSettingsPanel>("Upscaling Settings",
-    EditorPanelCategory::Rendering);
-```
+> **Not implemented (verified 2026-09):** no `UpscalingSettingsComponent` exists in
+> `SparkEngine/Source`, `RenderSystem` does not read one, and SparkEditor has no `UpscalingSettingsPanel`
+> or "Upscaling Settings" window. Earlier revisions of this page described both as if they shipped.
+> Upscaling is configured only through the `UpscalingSystem` C++ API above, and that system is not
+> executed in the frame path (see "Integration with Render Pipeline"). Treat a per-camera component and
+> an editor panel as design intent, not as available features.
 
 ## Performance Tips
 

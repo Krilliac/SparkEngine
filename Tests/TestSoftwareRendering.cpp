@@ -86,24 +86,30 @@ TEST(SoftwareRender_BridgeOpenGLInit)
         return;
     }
 
+    // RHIBridge's documented contract (RHIBridge.cpp, "null windowHandle — forcing
+    // NullRHI backend"): a request without a presentation surface stays on the
+    // null backend no matter which backend was asked for, because Vulkan/OpenGL/
+    // D3D can fail or hang without one. This test used to assert a live OpenGL
+    // swap chain here and only ever passed on hosts where DISPLAY was unset (the
+    // guard above skipped it); with DISPLAY set it contradicted the bridge. It
+    // now asserts the contract the bridge actually implements. Real OpenGL
+    // device bring-up is covered by SoftwareRender_OpenGLDeviceInit above.
     Spark::RHI::RHIBridge bridge;
     bool ok = bridge.Initialize(nullptr, 800, 600, Spark::RHI::GraphicsBackend::OpenGL, false);
     EXPECT_TRUE(ok);
 
     if (ok)
     {
-        EXPECT_FALSE(bridge.IsHeadless());
+        EXPECT_TRUE(bridge.IsHeadless());
         EXPECT_TRUE(bridge.GetDevice() != nullptr);
-        EXPECT_TRUE(bridge.GetActiveBackend() == Spark::RHI::GraphicsBackend::OpenGL);
+        EXPECT_TRUE(bridge.GetActiveBackend() == Spark::RHI::GraphicsBackend::None);
 
-        // Swap chain exists (FBO-backed on Linux)
-        EXPECT_TRUE(bridge.GetSwapChain() != nullptr);
-        EXPECT_TRUE(bridge.GetBackBuffer() != nullptr);
-
-        // Frame lifecycle
+        // Headless: no swap chain or back buffer, and the frame lifecycle is a no-op
+        // that must not crash.
+        EXPECT_TRUE(bridge.GetSwapChain() == nullptr);
+        EXPECT_TRUE(bridge.GetBackBuffer() == nullptr);
         bridge.BeginFrame();
         bridge.EndFrame();
-        EXPECT_TRUE(bridge.Present(false));
 
         bridge.Shutdown();
     }

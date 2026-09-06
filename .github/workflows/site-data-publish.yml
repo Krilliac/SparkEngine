@@ -226,12 +226,26 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          # Strict validation, no waiver: every requiredCiJobs/testSelectors/glob
+          # reference in the contract must resolve. The --allow-legacy-contract
+          # waiver was retired once the contract validated strictly; never
+          # reintroduce it to get a publication through.
           python3 tools/site-data/validate.py
           python3 tools/site-data/validate.py --assets
           python3 tools/site-data/validate.py --docs
           python3 tools/site-data/validate.py --legal
           python3 tools/site-data/render_handoff.py --check
           COMMITTED_AT="$(git show -s --format=%cI "$SOURCE_COMMIT")"
+          # The proof has to run the same documentation-health mode as the
+          # published payload, or the block most likely to be nondeterministic
+          # (health regenerates the docs in an isolated worktree) is the one
+          # block the a/b diff cannot see. Health is regenerated once, by the
+          # first proof run, and the evidence is reused by the second run and by
+          # the publication payload below; three regenerations do not fit this
+          # job's budget, and skipping health here published an unproven block.
+          HEALTH_EVIDENCE="$RUNNER_TEMP/doc-health-evidence.json"
+          rm -f "$HEALTH_EVIDENCE"
+          HEALTH_ARGS=(--emit-doc-health-file "$HEALTH_EVIDENCE")
           for OUTPUT in "$RUNNER_TEMP/.site-data-proof-a" "$RUNNER_TEMP/.site-data-proof-b"; do
             python3 tools/site-data/generate.py \
               --output "$OUTPUT" \
@@ -241,10 +255,13 @@ jobs:
               --evidence-commit "$SOURCE_COMMIT" \
               --ci-conclusion "$NORMALIZED_EVIDENCE_CONCLUSION" \
               --exact-evidence-file "$RUNNER_TEMP/exact-ci-evidence.json" \
-              --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}"
+              --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}" \
+              "${HEALTH_ARGS[@]}"
             python3 tools/site-data/validate.py \
               --published "$OUTPUT" \
               --require-exact-evidence
+            test -s "$HEALTH_EVIDENCE"
+            HEALTH_ARGS=(--doc-health-file "$HEALTH_EVIDENCE")
           done
           diff --recursive --brief \
             "$RUNNER_TEMP/.site-data-proof-a" \
@@ -271,6 +288,28 @@ jobs:
           fi
           echo "remote_object=$REMOTE_OBJECT" >> "$GITHUB_OUTPUT"
 
+      - name: Fetch the exact-commit CTest report
+        if: steps.initial-head.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # generate.py publishes tests.executed/failed/skipped only when it is
+          # handed the CTest report for the exact commit being published. A missing
+          # artifact leaves those metrics absent, which is the honest outcome - it
+          # must not fail the publish, and it must never be substituted from
+          # another commit's run.
+          rm -rf "$RUNNER_TEMP/ctest-junit"
+          if gh run download "$EVIDENCE_RUN_ID" \
+               --repo "$GITHUB_REPOSITORY" \
+               --name "ctest-junit-$SOURCE_COMMIT" \
+               --dir "$RUNNER_TEMP/ctest-junit"; then
+            test -s "$RUNNER_TEMP/ctest-junit/ctest-junit.xml"
+          else
+            echo "::warning::no ctest-junit-$SOURCE_COMMIT artifact on run"\
+              " $EVIDENCE_RUN_ID; publishing without test metrics"
+          fi
+
       - name: Generate and validate the retained publication payload
         if: steps.initial-head.outputs.publish == 'true'
         env:
@@ -279,7 +318,19 @@ jobs:
         run: |
           set -euo pipefail
           COMMITTED_AT="$(git show -s --format=%cI "$SOURCE_COMMIT")"
+          CTEST_ARGS=()
+          if test -s "$RUNNER_TEMP/ctest-junit/ctest-junit.xml"; then
+            CTEST_ARGS=(--ctest-junit "$RUNNER_TEMP/ctest-junit/ctest-junit.xml")
+          fi
+          # Same health evidence the determinism proof above compared, so the
+          # published health block is the proven one rather than an unproven
+          # third regeneration. Missing evidence is a hard failure: falling back
+          # to a fresh regeneration would silently publish an unproven block.
+          HEALTH_EVIDENCE="$RUNNER_TEMP/doc-health-evidence.json"
+          test -s "$HEALTH_EVIDENCE"
           python3 tools/site-data/generate.py \
+            "${CTEST_ARGS[@]}" \
+            --doc-health-file "$HEALTH_EVIDENCE" \
             --output "$PUBLISH_DIR" \
             --preserve-existing \
             --retain 3 \

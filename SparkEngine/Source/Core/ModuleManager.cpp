@@ -92,6 +92,52 @@ namespace
         return sidecar;
     }
 
+    /**
+     * @brief Rewrite a module path into the shared-library form this host builds.
+     *
+     * spark.modules.json ships one path per module and every generated manifest
+     * writes the Windows form ("Blank3D.dll"), so a manifest launch resolved
+     * nothing on Linux/macOS where the artifact is "libBlank3D.so"/".dylib".
+     * The prefix/suffix pair is the same one DiscoverModuleCandidates applies.
+     *
+     * @return The host-native sibling path, or an empty path when @p modulePath
+     *         already carries the host's form or has no recognised module suffix.
+     */
+    std::filesystem::path HostNativeModulePath(const std::filesystem::path& modulePath)
+    {
+#ifdef _WIN32
+        constexpr std::string_view hostPrefix = "";
+        constexpr std::string_view hostSuffix = ".dll";
+#elif defined(__APPLE__)
+        constexpr std::string_view hostPrefix = "lib";
+        constexpr std::string_view hostSuffix = ".dylib";
+#else
+        constexpr std::string_view hostPrefix = "lib";
+        constexpr std::string_view hostSuffix = ".so";
+#endif
+        std::string extension = PathToUtf8(modulePath.extension());
+        std::transform(extension.begin(), extension.end(), extension.begin(),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        if (extension != ".dll" && extension != ".so" && extension != ".dylib")
+            return {};
+
+        std::string stem = PathToUtf8(modulePath.stem());
+        if (stem.empty())
+            return {};
+        // A POSIX manifest carries the "lib" prefix; strip it before re-applying
+        // the host's own prefix so the stem round-trips exactly. Windows names
+        // never carry it, so a module genuinely called "libraryModule.dll" is
+        // left alone.
+        if (extension != ".dll" && stem.starts_with("lib") && stem.size() > 3)
+            stem.erase(0, 3);
+
+        std::filesystem::path candidate = modulePath.parent_path();
+        candidate /= PathFromUtf8(std::string(hostPrefix) + stem + std::string(hostSuffix));
+        if (candidate == modulePath)
+            return {};
+        return candidate;
+    }
+
     template <typename FunctionType> FunctionType ResolveModuleExport(void* handle, const char* name)
     {
 #ifdef _WIN32
@@ -1054,6 +1100,21 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
         if (fullPath.is_relative())
             fullPath = manifestDir / fullPath;
 
+        // Manifests ship a single module path — every generated one writes the
+        // Windows ".dll" form — so retry the host's own shared-library naming
+        // before declaring the module missing. Without this, a template's own
+        // spark.modules.json resolves nothing on Linux/macOS.
+        if (!std::filesystem::exists(fullPath))
+        {
+            const std::filesystem::path hostPath = HostNativeModulePath(fullPath);
+            if (!hostPath.empty() && std::filesystem::exists(hostPath))
+            {
+                console.LogInfo("Module manifest path '" + PathToUtf8(fullPath) + "' resolved to host image '" +
+                                PathToUtf8(hostPath) + "'");
+                fullPath = hostPath;
+            }
+        }
+
         if (std::filesystem::exists(fullPath))
         {
             if (LoadModule(PathToUtf8(fullPath)))
@@ -1174,7 +1235,11 @@ std::string ModuleManager::GetGameModuleName() const
 {
     for (const auto& m : m_modules)
     {
-        if (m.kind == Spark::ModuleKind::Game)
+        // An entry whose OnLoad failed has already had its instance destroyed
+        // (see InitializeAll) and only survives to keep the DLL mapped. Counting
+        // it as "the loaded game module" made the single-game-module policy
+        // refuse every replacement for the rest of the process lifetime.
+        if (m.kind == Spark::ModuleKind::Game && m.instance)
             return m.name;
     }
     return {};
@@ -1395,6 +1460,15 @@ void ModuleManager::ShutdownAllAfterPreflight()
             it->instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
             it->initialized = false;
+            // Console handlers a module registered under its own id live in the
+            // host registry and outlive the DLL unless the host drops them. The
+            // module id is the owner token every SDK module registers with.
+            const size_t removed = console.UnregisterCommandsByOwner(it->name);
+            if (removed != 0)
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Core, "Removed %zu console command(s) owned by module '%s'", removed,
+                               it->name.c_str());
+            }
         }
     }
 }
@@ -1526,6 +1600,13 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
             }
         }
 
+        // Drop the outgoing module's console commands before the replacement's
+        // OnLoad runs. They are host-registry entries pointing into an image that
+        // the swap below unmaps, and doing it after the swap would delete the
+        // replacement's own registrations instead: it re-registers under the same
+        // owner token, so the two sets are indistinguishable by then.
+        const size_t removedCommands = console.UnregisterCommandsByOwner(name);
+
         // Initialize the replacement before touching the working instance. A
         // failed OnLoad is cleaned up by InitializeAll and leaves the old
         // module, including its in-memory state, intact.
@@ -1536,6 +1617,12 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         {
             stagedManager.UnloadAll();
             removeShadowFiles();
+            if (removedCommands != 0)
+            {
+                console.LogWarning("Console commands owned by '" + name +
+                                   "' were removed for the reload and the preserved module cannot re-register them; "
+                                   "reload again once the module is fixed");
+            }
             return failReload("Staged replacement initialization failed; preserving module: " + name);
         }
 
@@ -1591,6 +1678,10 @@ void ModuleManager::UnloadAll()
             ++entry;
             continue;
         }
+        // A module whose OnLoad failed after registering commands still has
+        // handlers in the host console; the image is about to be unmapped, so
+        // drop them before the code they point at disappears.
+        Spark::SimpleConsole::GetInstance().UnregisterCommandsByOwner(entry->name);
         UnloadEntry(*entry);
         entry = m_modules.erase(entry);
     }
@@ -1622,7 +1713,16 @@ size_t ModuleManager::GetInitializedModuleCount() const
 
 Spark::IModule* ModuleManager::GetPrimaryModule() const
 {
-    return m_modules.empty() ? nullptr : m_modules.front().instance;
+    // An entry whose OnLoad failed keeps its slot (so its DLL stays mapped) but
+    // its instance was already destroyed. Returning that null front entry made
+    // module_info drop its Primary line and module_reload answer "No primary
+    // module to reload" while a perfectly usable module sat behind it.
+    for (const auto& entry : m_modules)
+    {
+        if (entry.initialized && entry.instance)
+            return entry.instance;
+    }
+    return nullptr;
 }
 
 void ModuleManager::SortModules()

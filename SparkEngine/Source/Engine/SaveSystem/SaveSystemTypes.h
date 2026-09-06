@@ -21,7 +21,15 @@ namespace Spark
     inline constexpr uint32_t kOldestSupportedSaveVersion = 1;
 
     /// Save format emitted by every writer in this build.
-    inline constexpr uint32_t kCurrentSaveVersion = 2;
+    /// v3 persists the Transform hierarchy as the `parent` property of each
+    /// serialized Transform (saved-entity index, or "-1" for a root).
+    inline constexpr uint32_t kCurrentSaveVersion = 3;
+
+    /// Property key that carries a Transform's parent as a saved-entity index.
+    inline constexpr const char* kTransformParentProperty = "parent";
+
+    /// Value of kTransformParentProperty for an entity with no parent.
+    inline constexpr const char* kTransformParentNone = "-1";
 
     /// Shared structural limits for both disk-backed and in-memory saves.
     /// The binary format uses uint16 length/count fields below the entity and
@@ -143,6 +151,11 @@ namespace Spark
 
         /// Total player deaths accumulated up to this save point.
         int playerDeaths = 0;
+
+        /// Slot identifier this metadata was read from (e.g. "slot1"). Never written to
+        /// disk: slot-enumeration APIs populate it so a listed entry can be passed back
+        /// to Load()/DeleteSave(). Empty for metadata that a caller built by hand.
+        std::string slotName;
     };
 
     /// Serialized representation of a single component instance.

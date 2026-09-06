@@ -27,8 +27,8 @@ TEST(TimerManagerReal_InitializeShutdown)
 {
     auto& tm = Spark::TimerManager::GetInstance();
     tm.Shutdown();
-    tm.Initialize();
-    tm.Shutdown();
+    EXPECT_NO_THROW(tm.Initialize());
+    EXPECT_NO_THROW(tm.Shutdown());
     tm.Initialize();
 }
 

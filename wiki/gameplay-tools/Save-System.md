@@ -6,10 +6,11 @@ versioned `.spark_save` binary file. The supported reader window is explicit:
 | Contract | Version |
 |---|---:|
 | Oldest readable format | `kOldestSupportedSaveVersion` = 1 |
-| Format written by this build | `kCurrentSaveVersion` = 2 |
+| Format written by this build | `kCurrentSaveVersion` = 3 |
 
-Writers emit v2 only. Readers accept v1 and v2 only. A v1 file is migrated in
-memory and is never rewritten merely because it was loaded.
+Writers emit v3 only. Readers accept v1, v2, and v3. A v1 or v2 file is migrated
+in memory (`MigrateToCurrentVersion` runs real v1->v2 and v2->v3 steps) and is
+never rewritten merely because it was loaded.
 
 **Primary sources:**
 
@@ -29,9 +30,24 @@ component type name to its serializer and deserializer. `SaveData` contains:
 - `std::vector<SerializedEntity> entities`
 - `std::unordered_map<std::string, std::string> customState`
 
-The built-in component registrations cover the component types enumerated by
-`SaveSystem::SerializeWorld()`. A game module may register additional callbacks,
-but it must unregister module-owned callbacks before unloading its DLL.
+`SaveSystem::SerializeWorld()` saves every `ComponentFactory`-registered type that
+owns a serializer, so module-registered serializers (see below) are reachable
+without engine changes. `NameComponent` is the sole exception: it travels as
+`SerializedEntity::name`, and an entity with a name but no other serializable
+component is retained. A game module may register additional callbacks, but it
+must unregister module-owned callbacks before unloading its DLL.
+
+The opt-out is `SaveSystem::MarkComponentTransient(typeName)` /
+`IsComponentTransient(typeName)`. The default transient set is `ProjectileComponent` and
+`DecalComponent` — in-flight, regenerable state that should not be restored. Because coverage is
+now registry-driven rather than a fixed 14-type allowlist, a save written by this build carries
+more component types than one written before the change.
+
+### Hierarchy
+
+A serialized `Transform` carries a `parent` property holding the parent's index in
+the saved entity list, or `"-1"` for a root. Loading rebuilds the edges through
+`World::SetParent`. The v2->v3 migration marks every pre-v3 `Transform` as a root.
 
 ### Core API
 
@@ -135,7 +151,7 @@ migration entry point. It is transactional and idempotent:
 - v1 -> v2 sets `screenshotPath` to the defined empty value and updates the
   format version;
 - v2 -> v2 is a no-op;
-- versions below 1 or above 2 are rejected without changing the input.
+- versions below 1 or above 3 are rejected without changing the input.
 
 The v1 reader uses the v1 metadata layout before applying the migration. This
 ordering matters: treating a v1 timestamp line as a v2 screenshot line would
@@ -150,10 +166,20 @@ separate migration change and fixture.
 
 ### Saving
 
-`Save()` writes `<slot>.spark_save.tmp`, closes and durably flushes it, then
-atomically replaces the destination. A failed write removes the temporary file
-and leaves the previous slot in place. The local file cache is invalidated only
-after the replacement succeeds.
+`Save()` writes `<slot>.spark_save.tmp`, closes and durably flushes it, retains
+the previous revision as `<slot>.spark_save.bak`, then atomically replaces the
+destination. A failed write removes the temporary file and leaves the previous
+slot in place. The local file cache is invalidated only after the replacement
+succeeds. `SetSaveDirectory()` records the directory and the next `Save()` creates
+it on demand. `DeleteSave()` removes both the slot file and its `.bak`.
+
+`Load()` falls back to `<slot>.spark_save.bak` with a logged warning when the slot
+file is unreadable. There is no trailing payload checksum yet (tracked under
+`SAVE-230`).
+
+`SaveMetadata::slotName` is never written to disk; `GetSaveSlots()` and
+`GetSaveMetadata()` populate it from the file name so callers can address the
+slot they enumerated.
 
 ### Loading
 

@@ -96,7 +96,14 @@ namespace SparkEditor
 #else
             const std::filesystem::path serverExecutable = binaries / "SparkServer";
 #endif
-            ImGui::BeginDisabled(!hasProject);
+            // Configure()/Start() are both no-ops while the previous SparkOrchestrator
+            // invocation is alive, so the buttons must be disabled rather than silently
+            // dropping the command.
+            const bool orchestratorBusy = m_controller->Snapshot(TopologyService::Orchestrator).running;
+            if (orchestratorBusy)
+                ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.25f, 1.0f),
+                                   "Orchestrator busy - waiting for the previous command to finish.");
+            ImGui::BeginDisabled(!hasProject || orchestratorBusy);
             if (ImGui::Button("Define server"))
                 RunOrchestrator(ServiceTopologyController::OrchestratorDefineArguments(
                     m_daemonEndpoint, m_serverId, serverExecutable, project, {"--config", serverConfig.string()}));
@@ -121,6 +128,9 @@ namespace SparkEditor
                 RunOrchestrator(
                     ServiceTopologyController::OrchestratorMutationArguments(m_daemonEndpoint, "undefine", m_serverId));
             ImGui::EndDisabled();
+
+            if (!m_orchestratorNotice.empty())
+                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "%s", m_orchestratorNotice.c_str());
 
             ImGui::Separator();
             for (size_t index = 0; index < static_cast<size_t>(TopologyService::Count); ++index)
@@ -202,9 +212,20 @@ namespace SparkEditor
 #endif
         const std::filesystem::path project = ProjectManager::GetActiveProjectPath();
         if (project.empty())
+        {
+            m_orchestratorNotice = "Open a project before running orchestrator commands.";
             return;
+        }
         m_controller->Configure(TopologyService::Orchestrator,
                                 {executable, std::move(arguments), project, m_daemonEndpoint});
-        (void)m_controller->Start(TopologyService::Orchestrator);
+        if (m_controller->Start(TopologyService::Orchestrator))
+        {
+            m_orchestratorNotice.clear();
+            return;
+        }
+        // Start() refuses while the previous process is alive and when the spec is
+        // unusable; report it instead of dropping the click.
+        m_orchestratorNotice =
+            "Orchestrator command was not started: " + m_controller->Snapshot(TopologyService::Orchestrator).status;
     }
 } // namespace SparkEditor

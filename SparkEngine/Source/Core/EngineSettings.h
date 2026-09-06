@@ -15,9 +15,73 @@
 
 #include "Utils/ConfigParser.h"
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <functional>
+
+namespace Spark::UserPaths
+{
+    /**
+     * @brief Per-user writable root for this installation.
+     *
+     * Windows: %LOCALAPPDATA%/SparkEngine. POSIX: $XDG_DATA_HOME/SparkEngine,
+     * else $HOME/.local/share/SparkEngine. A game installed under Program Files
+     * (or any read-only prefix) cannot write beside its binaries, and an upgrade
+     * or uninstall deletes whatever lives there, so saves and user-modified
+     * settings must not be co-located with the executable.
+     *
+     * @return An empty path when the platform supplies no per-user location; the
+     *         caller then keeps its previous executable/CWD-relative behaviour.
+     */
+    std::filesystem::path GetUserDataDir();
+
+    /** @brief Per-user configuration directory (settings.ini). Empty when unavailable. */
+    std::filesystem::path GetUserConfigDir();
+
+    /** @brief Per-user save-game directory. Empty when unavailable. */
+    std::filesystem::path GetUserSavesDir();
+
+    /**
+     * @brief Whether @p directory can be created and written to.
+     *
+     * Probes with a real create + write because Windows ACLs, virtualisation and
+     * read-only install prefixes are not visible in the path itself.
+     */
+    bool IsDirectoryWritable(const std::filesystem::path& directory);
+
+    /**
+     * @brief A spelling of @p directory whose std::filesystem::path::string() is
+     *        reopenable by the engine's narrow file APIs.
+     *
+     * Logger's FileSink, SaveSystem and ConfigParser all take std::string paths,
+     * and Windows converts those with the active code page. %LOCALAPPDATA%
+     * contains the account name, so any non-ASCII profile outside a UTF-8 code
+     * page turns into a '?'-mangled name that no file API can open — the engine
+     * then runs with no log file and no save directory and says nothing. When the
+     * direct spelling is lossy the 8.3 alias is used instead: it is pure ASCII and
+     * names the same directory (the directory is created so Windows can produce
+     * it).
+     *
+     * @return @p directory itself when its narrow form round-trips, the alias when
+     *         one exists, or an empty path when neither does — the caller then
+     *         keeps its previous executable/CWD-relative behaviour.
+     */
+    std::filesystem::path NarrowSafeDirectory(const std::filesystem::path& directory);
+
+    /**
+     * @brief Save directory for SaveSystem::Initialize, migrating legacy saves once.
+     *
+     * Every build before the per-user relocation wrote to <cwd>/Saves. Pointing a
+     * new build at %LOCALAPPDATA% without moving those files makes an upgrading
+     * player's slots vanish with no error, so the legacy tree is copied across on
+     * first run and a marker file keeps it a one-time migration.
+     *
+     * @return Narrow per-user saves path, or "Saves" when no usable per-user
+     *         location exists (unchanged legacy behaviour).
+     */
+    std::string ResolveSaveDirectory();
+} // namespace Spark::UserPaths
 
 /// Flags indicating how a setting behaves at runtime.
 /// Used by the console, editor UI, and settings_list to annotate each value.
@@ -829,6 +893,16 @@ class EngineSettings
     /// Atomically save current settings to the loaded file path.
     bool Save() const;
 
+    /**
+     * @brief Resolve the settings.ini path this process should read and write.
+     *
+     * Prefers an existing per-user settings.ini, then a writable installed
+     * Resources/Config beside (or one level above) the executable — the
+     * development and portable-install layout — and otherwise falls back to the
+     * per-user config directory so a read-only install can still persist.
+     */
+    static std::string FindSettingsPath();
+
     /// Atomically save to a specific path without changing the loaded file path.
     bool SaveAs(const std::string& path) const;
 
@@ -1020,8 +1094,6 @@ class EngineSettings
     /// Populate the ConfigParser with sensible defaults.
     void PopulateDefaults();
 
-    /// Find settings.ini relative to executable.
-    std::string FindSettingsPath() const;
 
     /// Notify change listeners.
     void NotifyChanged(const std::string& section, const std::string& key) const;

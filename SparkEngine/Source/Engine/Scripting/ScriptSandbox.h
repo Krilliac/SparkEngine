@@ -23,7 +23,7 @@
 #include <vector>
 
 #ifdef SPARK_ANGELSCRIPT_SUPPORT
-struct asIScriptContext;
+class asIScriptContext; // angelscript.h declares it as a class (C4099 otherwise)
 #endif
 
 namespace Spark

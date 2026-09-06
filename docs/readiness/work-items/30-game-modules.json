@@ -200,7 +200,13 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "experimental-module-lifecycle"
+      ],
+      "plannedTestSelectors": [
+        "ExperimentalModuleLifecycle_*"
+      ]
     },
     {
       "id": "MOD-290",
@@ -285,7 +291,15 @@
       ],
       "profileApplicability": {
         "stable-v1": "shared"
-      }
+      },
+      "plannedCiJobs": [
+        "module-contract",
+        "module-package-smoke"
+      ],
+      "plannedTestSelectors": [
+        "ModuleKit_*",
+        "ModuleManifest_*"
+      ]
     },
     {
       "id": "MOD-295",
@@ -358,7 +372,13 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "prototype-module-kit"
+      ],
+      "plannedTestSelectors": [
+        "PrototypeModuleKit_*"
+      ]
     },
     {
       "id": "MOD-300",
@@ -437,7 +457,13 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "module-SparkGame"
+      ],
+      "plannedTestSelectors": [
+        "SparkGameShowcase_*"
+      ]
     },
     {
       "id": "MOD-310",
@@ -448,7 +474,7 @@
       "wave": 4,
       "area": "modules",
       "owner": "unassigned",
-      "rationale": "FPS has a local arena, input, combat, rendering, and AI foundation, but it is not yet an installed public-SDK-only single-player product with real-source lifecycle and package evidence.",
+      "rationale": "FPS has a local arena, input, combat, rendering, and AI foundation, but it is not yet an installed public-SDK-only single-player product with real-source lifecycle and package evidence. 2026-09-05 progress: the death -> respawn -> score loop is complete (RespawnSystem decoupled from Player so the real class is testable), quicksave/quickload persist FPSLocalProfile through the engine context's SaveSystem/World and report the real result, module assets resolve from one runtime-discovered root, the module initializes without a D3D11 device, and the unreachable in-game console overlay was removed. Still open: the module links SparkEngineLib with engine-source include paths (public-SDK-only requirement unmet), and no installed-package smoke exists.",
       "dependencies": [
         "MOD-290",
         "SDK-240",
@@ -495,7 +521,14 @@
       "testSelectors": [
         "FPSSinglePlayerSlice_*",
         "FPSPackage_*",
-        "FPSPublicSDK_*"
+        "FPSPublicSDK_*",
+        "FPSRespawn_*",
+        "FPSLocalProfile_*",
+        "FPSProgression_*",
+        "FPSAssets_*",
+        "FPSStateRules_*",
+        "FPSComponentsReal_*",
+        "WeaponMechanicsReal_*"
       ],
       "requiredCiJobs": [
         "module-FPS-singleplayer",
@@ -523,11 +556,21 @@
       ],
       "definitionOfDone": [
         "Installed single-player and public-SDK acceptance pass",
-        "Package, assets, save, docs, and evidence pass"
+        "Package, assets, save, docs, and evidence pass",
+        "Remaining: build against the installed SDK alone, D3D11 and NullRHI package smokes with the real module and assets, installed single-player acceptance"
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      }
+      },
+      "plannedCiJobs": [
+        "module-FPS-singleplayer",
+        "module-FPS-package-windows"
+      ],
+      "plannedTestSelectors": [
+        "FPSSinglePlayerSlice_*",
+        "FPSPackage_*",
+        "FPSPublicSDK_*"
+      ]
     },
     {
       "id": "MOD-315",
@@ -601,7 +644,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "module-FPS-multiplayer"
+      ],
+      "plannedTestSelectors": [
+        "FPSLAN_*",
+        "FPSMultiplayerProduction_*"
+      ]
     },
     {
       "id": "MOD-320",
@@ -689,7 +739,15 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "module-MMO-integration"
+      ],
+      "plannedTestSelectors": [
+        "MMOAccount_*",
+        "MMOWorld_*",
+        "MMOPersistence_*"
+      ]
     },
     {
       "id": "MOD-330",
@@ -772,7 +830,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "module-ARPG"
+      ],
+      "plannedTestSelectors": [
+        "ARPGDungeon_*",
+        "ARPGBoss_*"
+      ]
     },
     {
       "id": "MOD-340",
@@ -853,7 +918,13 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "module-Platformer"
+      ],
+      "plannedTestSelectors": [
+        "PlatformerCompletion_*"
+      ]
     },
     {
       "id": "MOD-350",
@@ -935,7 +1006,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "module-RPG"
+      ],
+      "plannedTestSelectors": [
+        "RPGQuestSlice_*",
+        "RPGPersistence_*"
+      ]
     },
     {
       "id": "MOD-360",
@@ -1019,7 +1097,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "module-OpenWorld"
+      ],
+      "plannedTestSelectors": [
+        "OpenWorldTraversal_*",
+        "OpenWorldPersistence_*"
+      ]
     },
     {
       "id": "MOD-370",
@@ -1101,7 +1186,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "module-RTS"
+      ],
+      "plannedTestSelectors": [
+        "RTSSkirmish_*",
+        "RTSSave_*"
+      ]
     },
     {
       "id": "MOD-380",
@@ -1183,7 +1275,13 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "module-Racing"
+      ],
+      "plannedTestSelectors": [
+        "RacingCompleteRace_*"
+      ]
     },
     {
       "id": "MOD-390",
@@ -1269,7 +1367,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "module-VisualScript"
+      ],
+      "plannedTestSelectors": [
+        "VisualScriptGameplay_*",
+        "VisualScriptDiagnostics_*"
+      ]
     },
     {
       "id": "TF-110",
@@ -1353,7 +1458,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "terrafront-multiclient",
+        "terrafront-soak"
+      ],
+      "plannedTestSelectors": [
+        "TerrafrontMultiClient_*"
+      ]
     },
     {
       "id": "TF-120",
@@ -1435,7 +1547,16 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "terrafront-migration",
+        "terrafront-recovery",
+        "terrafront-soak"
+      ],
+      "plannedTestSelectors": [
+        "TerrafrontMigration_*",
+        "TerrafrontRestart_*"
+      ]
     }
   ]
 }

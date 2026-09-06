@@ -10,9 +10,12 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include <atomic>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
+#include <system_error>
 
 // ============================================================================
 // Reflection registrations for settings structs.
@@ -795,7 +798,186 @@ EngineSettings& EngineSettings::GetInstance()
 // =============================================================================
 // Find settings path relative to executable
 // =============================================================================
-std::string EngineSettings::FindSettingsPath() const
+namespace Spark::UserPaths
+{
+    namespace
+    {
+        /// Environment-variable lookup that treats an empty value as unset.
+        std::filesystem::path EnvironmentDirectory(const char* name)
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            // _wgetenv keeps non-ASCII profile directories intact.
+            const std::wstring wideName(name, name + std::strlen(name));
+            const wchar_t* value = _wgetenv(wideName.c_str());
+#else
+            const char* value = std::getenv(name);
+#endif
+            if (!value || *value == 0)
+                return {};
+            return std::filesystem::path(value);
+        }
+
+        constexpr const char* ProductFolderName = "SparkEngine";
+    } // namespace
+
+    std::filesystem::path GetUserDataDir()
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        const std::filesystem::path root = EnvironmentDirectory("LOCALAPPDATA");
+        if (root.empty())
+            return {};
+        return root / ProductFolderName;
+#else
+        if (const std::filesystem::path xdg = EnvironmentDirectory("XDG_DATA_HOME"); !xdg.empty())
+            return xdg / ProductFolderName;
+        const std::filesystem::path home = EnvironmentDirectory("HOME");
+        if (home.empty())
+            return {};
+        return home / ".local" / "share" / ProductFolderName;
+#endif
+    }
+
+    std::filesystem::path GetUserConfigDir()
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        const std::filesystem::path data = GetUserDataDir();
+        return data.empty() ? data : data / "Config";
+#else
+        if (const std::filesystem::path xdg = EnvironmentDirectory("XDG_CONFIG_HOME"); !xdg.empty())
+            return xdg / ProductFolderName;
+        const std::filesystem::path home = EnvironmentDirectory("HOME");
+        if (home.empty())
+            return {};
+        return home / ".config" / ProductFolderName;
+#endif
+    }
+
+    std::filesystem::path GetUserSavesDir()
+    {
+        const std::filesystem::path data = GetUserDataDir();
+        return data.empty() ? data : data / "Saves";
+    }
+
+    bool IsDirectoryWritable(const std::filesystem::path& directory)
+    {
+        if (directory.empty())
+            return false;
+
+        std::error_code error;
+        std::filesystem::create_directories(directory, error);
+        if (!std::filesystem::is_directory(directory, error) || error)
+            return false;
+
+        const std::filesystem::path probe = directory / ".spark-write-probe";
+        {
+            std::ofstream stream(probe, std::ios::trunc);
+            if (!stream)
+                return false;
+            stream << 'x';
+            if (!stream)
+                return false;
+        }
+        std::filesystem::remove(probe, error);
+        return true;
+    }
+
+    std::filesystem::path NarrowSafeDirectory(const std::filesystem::path& directory)
+    {
+        if (directory.empty())
+            return {};
+
+        // path::string() and path(std::string) use the same narrow code page, so a
+        // value that survives the round trip is one every narrow file API reopens
+        // as this directory. Anything else has been replaced with '?' characters,
+        // which are not legal in a Windows filename.
+        const auto roundTrips = [](const std::filesystem::path& candidate)
+        {
+            try
+            {
+                return std::filesystem::path(candidate.string()) == candidate;
+            }
+            catch (const std::exception&)
+            {
+                return false;
+            }
+        };
+
+        if (roundTrips(directory))
+            return directory;
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        // The 8.3 alias is ASCII and names the same directory, but Windows only
+        // reports it for a path that exists.
+        std::error_code error;
+        std::filesystem::create_directories(directory, error);
+        if (!std::filesystem::is_directory(directory, error))
+            return {};
+
+        std::wstring shortForm(MAX_PATH, L'\0');
+        DWORD length = GetShortPathNameW(directory.c_str(), shortForm.data(), static_cast<DWORD>(shortForm.size()));
+        if (length >= shortForm.size())
+        {
+            shortForm.resize(length);
+            length = GetShortPathNameW(directory.c_str(), shortForm.data(), static_cast<DWORD>(shortForm.size()));
+        }
+        if (length == 0 || length >= shortForm.size())
+            return {};
+        shortForm.resize(length);
+
+        // 8.3 name generation can be disabled per volume, in which case Windows
+        // hands back the long name unchanged and there is nothing to fall back to.
+        const std::filesystem::path aliased(shortForm);
+        if (roundTrips(aliased))
+            return aliased;
+#endif
+        return {};
+    }
+
+    std::string ResolveSaveDirectory()
+    {
+        constexpr const char* LegacySaveDirectory = "Saves";
+
+        const std::filesystem::path userSaves = NarrowSafeDirectory(GetUserSavesDir());
+        if (userSaves.empty())
+            return LegacySaveDirectory;
+
+        std::error_code error;
+        std::filesystem::create_directories(userSaves, error);
+
+        // One-time migration. The marker means deleting a save does not resurrect
+        // it from the legacy tree on the next launch.
+        const std::filesystem::path marker = userSaves / ".migrated-from-working-directory";
+        if (std::filesystem::exists(marker, error))
+            return userSaves.string();
+
+        const std::filesystem::path legacy = std::filesystem::current_path(error) / LegacySaveDirectory;
+        if (error || !std::filesystem::is_directory(legacy, error) ||
+            std::filesystem::equivalent(legacy, userSaves, error))
+        {
+            std::ofstream(marker, std::ios::trunc) << "no legacy save directory\n";
+            return userSaves.string();
+        }
+
+        std::filesystem::copy(legacy, userSaves,
+                              std::filesystem::copy_options::recursive | std::filesystem::copy_options::skip_existing,
+                              error);
+        if (error)
+        {
+            // Leave the marker off so the next launch retries; the player's saves
+            // are still in the legacy directory and nothing has been lost.
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Could not migrate saves from '%s': %s", legacy.string().c_str(),
+                           error.message().c_str());
+            return userSaves.string();
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Migrated saves from '%s' to the per-user save directory",
+                       legacy.string().c_str());
+        std::ofstream(marker, std::ios::trunc) << "migrated\n";
+        return userSaves.string();
+    }
+} // namespace Spark::UserPaths
+
+std::string EngineSettings::FindSettingsPath()
 {
 #ifdef SPARK_PLATFORM_WINDOWS
     wchar_t exePath[MAX_PATH];
@@ -804,18 +986,62 @@ std::string EngineSettings::FindSettingsPath() const
 #else
     auto dir = std::filesystem::current_path();
 #endif
-    // Check Resources/Config/ first, then fall back to exe directory
+
+    // A settings.ini the player already owns always wins: it is the only copy
+    // that survives an upgrade or a reinstall.
+    const std::filesystem::path userConfigDir = Spark::UserPaths::GetUserConfigDir();
+    const std::filesystem::path narrowUserConfigDir = Spark::UserPaths::NarrowSafeDirectory(userConfigDir);
+    std::error_code error;
+    if (!narrowUserConfigDir.empty() && std::filesystem::exists(narrowUserConfigDir / "settings.ini", error) && !error)
+        return (narrowUserConfigDir / "settings.ini").string();
+
+    // Seed the per-user copy from a settings.ini the package shipped read-only.
+    // Save() writes wherever this returns, so returning the packaged copy on an
+    // installed build (Program Files) loses the player's options on every launch.
+    const auto adoptPackagedSettings = [&narrowUserConfigDir](const std::filesystem::path& packaged) -> std::string
+    {
+        if (narrowUserConfigDir.empty())
+            return {};
+        std::error_code copyError;
+        std::filesystem::create_directories(narrowUserConfigDir, copyError);
+        const std::filesystem::path userSettings = narrowUserConfigDir / "settings.ini";
+        std::filesystem::copy_file(packaged, userSettings, std::filesystem::copy_options::skip_existing, copyError);
+        if (!std::filesystem::exists(userSettings, copyError) || copyError)
+            return {};
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Seeded per-user settings from the read-only packaged copy '%s'",
+                       packaged.string().c_str());
+        return userSettings.string();
+    };
+
+    // Check Resources/Config/ first, then one level up (development builds).
+    // An in-tree copy only wins while the tree is writable: development and
+    // portable installs keep settings beside the binaries, an installed build
+    // cannot.
     auto configDir = dir / "Resources" / "Config";
-    if (std::filesystem::exists(configDir / "settings.ini"))
+    auto parentConfig = dir.parent_path() / "Resources" / "Config";
+    for (const auto& candidate : {configDir, parentConfig})
+    {
+        const std::filesystem::path settings = candidate / "settings.ini";
+        if (!std::filesystem::exists(settings, error) || error)
+            continue;
+        if (Spark::UserPaths::IsDirectoryWritable(candidate))
+            return settings.string();
+        if (std::string adopted = adoptPackagedSettings(settings); !adopted.empty())
+            return adopted;
+        // No per-user location either: return the packaged path so the caller
+        // reports one concrete failure instead of writing somewhere unexpected.
+        return settings.string();
+    }
+
+    // Nothing exists yet.
+    if (Spark::UserPaths::IsDirectoryWritable(configDir))
         return (configDir / "settings.ini").string();
 
-    // Check one level up (common in development builds)
-    auto parentConfig = dir.parent_path() / "Resources" / "Config";
-    if (std::filesystem::exists(parentConfig / "settings.ini"))
-        return (parentConfig / "settings.ini").string();
+    if (!narrowUserConfigDir.empty() && Spark::UserPaths::IsDirectoryWritable(narrowUserConfigDir))
+        return (narrowUserConfigDir / "settings.ini").string();
 
-    // Default: create in Resources/Config
-    std::filesystem::create_directories(configDir);
+    // Neither location accepted a write. Return the in-tree path so the caller
+    // reports one concrete failure instead of writing somewhere unexpected.
     return (configDir / "settings.ini").string();
 }
 

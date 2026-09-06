@@ -194,6 +194,19 @@ InstallCrashHandler(cfg);
 | `TriggerCrashHandler(const char* msg)` | Called by `Assert::Fail`; generates a report if `triggerCrashOnAssert` is true |
 | `SetAssertCrashBehavior(bool)` | Toggle assert-crash behavior at runtime without reinstalling |
 
+### Shipped behavior (2026-09 sweep)
+
+- Reports uploaded off the machine are **redacted**: user-profile paths collapse to `%USERPROFILE%`, `%LOCALAPPDATA%`, `%TEMP%`, and the machine name is masked before the account name it usually contains (`JANE-DESKTOP` -> `<machine>` before `jane` -> `<user>`). The local copy keeps full paths.
+- Uploads are bounded: 30 s per request, a 512 B / 15 s stall cut-off, and a 32 MB attachment cap.
+- Repeated crashes deduplicate onto one GitHub issue because the stack hash parses the engine's own frame format.
+- The redaction rules are **derived or the upload is refused**: when `USERPROFILE`/`LOCALAPPDATA`/`USERNAME` are absent (services, session 0, sanitized launchers) the context falls back to `SHGetFolderPathW`/`GetUserNameW`/`GetComputerNameW`, and if it is still empty the report stays local rather than going to a public tracker. Substitutions run longest token first, so the machine name is replaced before the account name it contains.
+- **One report per process.** `HandleCrashInternal` carries a once-guard, so an assertion that reaches both `TriggerCrashHandler` and `TriggerCrashReport` writes a single dump/log/manifest; any later trigger in the same process is ignored (a note goes to `OutputDebugString`).
+- `TriggerCrashReportUnattended()` (`CrashReportDelivery::ArtifactOnly`) writes dump/log/manifest with **no screenshot, no consent or description dialog and no in-process upload**. The freeze watchdog uses it so `terminateOnFreeze` really terminates; delivery of that report is left to the crash reporter or the next launch's pending-manifest sweep.
+- The crash path never blocks on the shared DbgHelp symbol lock: `SymStackTrace()` and `ThreadStacks()` both use a 500 ms bounded try-lock. When the lock is held elsewhere the report carries unsymbolized raw addresses (`*** STACK TRACE (unsymbolized: DbgHelp busy ...)`) and a `Skipped: DbgHelp busy` note in place of the other thread stacks — resolve those against the minidump.
+- A watchdog-detected freeze and a fatal assertion both leave a dump and manifest on disk. `SPARK_CRASH_ON_ASSERT=1` opts a run into assert-triggered crash reports.
+- `FreezeDetector::Start()` is a no-op under `SPARK_SHIPPING` end to end: `SPARK_HEARTBEAT()` compiles out there, and a running watchdog would otherwise `_Exit(1)` the game after `crashThresholdSec`.
+- `SparkEditor` installs its own Windows unhandled-exception filter, writes dumps/logs under the per-user editor data directory (not a CWD-relative `Crashes/`), and restores the previous filter on shutdown.
+
 Install the crash handler early in application startup, before graphics or audio initialization.
 
 ---

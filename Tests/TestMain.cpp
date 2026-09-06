@@ -13,6 +13,7 @@
  *   --shuffle [seed]       Randomize test execution order (seed for reproducibility)
  *   --retries N            Retry failed tests up to N times (for flaky test mitigation)
  *   --warn-is-error        Treat known-flaky test warnings as hard failures
+ *   --empty-is-error       Treat tests that execute zero assertions as failures
  *   --list-warnings        List all registered flaky test patterns and exit
  *   --help                 Show usage information
  *
@@ -70,6 +71,8 @@
 // Global test state (defined here, declared extern in TestFramework.h)
 int g_assertionsPassed = 0;
 int g_assertionsFailed = 0;
+int g_assertionsWaived = 0;
+int g_assertionsNoCrash = 0;
 int g_testsWarned = 0;
 std::string g_currentTest;
 
@@ -87,9 +90,13 @@ struct TestResult
     std::string name;
     double durationMs = 0.0;
     int assertions = 0;
+    int waived = 0;
     bool passed = true;
     bool warned = false;
     bool skipped = false;
+    // The test ran to completion without executing a single assertion, so the
+    // only way it could have failed was by crashing the process.
+    bool empty = false;
     std::string warningReason;
     std::string skipReason;
     std::string failureOutput;
@@ -416,19 +423,29 @@ static void WriteJUnitXml(const std::string& path, const std::vector<TestResult>
     int totalTests = static_cast<int>(results.size());
     int failures = 0;
     int skipped = 0;
+    int flaky = 0;
+    int empty = 0;
     for (const auto& r : results)
     {
-        if (r.warned || r.skipped)
+        // A waived (known-flaky) test is NOT a skip: it executed, it failed, and
+        // the failure was tolerated. Reporting it as <skipped> made a real
+        // failure indistinguishable from an unavailable environment capability.
+        if (r.skipped)
             ++skipped;
+        else if (r.warned)
+            ++flaky;
         else if (!r.passed)
             ++failures;
+        if (r.empty)
+            ++empty;
     }
 
     xml << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
     xml << "<testsuites tests=\"" << totalTests << "\" failures=\"" << failures << "\" skipped=\"" << skipped
-        << "\" time=\"" << (totalTimeMs / 1000.0) << "\">\n";
+        << "\" flaky=\"" << flaky << "\" empty=\"" << empty << "\" time=\"" << (totalTimeMs / 1000.0) << "\">\n";
     xml << "  <testsuite name=\"SparkEngine\" tests=\"" << totalTests << "\" failures=\"" << failures << "\" skipped=\""
-        << skipped << "\" time=\"" << (totalTimeMs / 1000.0) << "\">\n";
+        << skipped << "\" flaky=\"" << flaky << "\" empty=\"" << empty << "\" time=\"" << (totalTimeMs / 1000.0)
+        << "\">\n";
 
     for (const auto& r : results)
     {
@@ -439,21 +456,54 @@ static void WriteJUnitXml(const std::string& path, const std::vector<TestResult>
             xml << "      <skipped message=\"" << XmlEscape(r.skipReason) << "\"/>\n";
             xml << "    </testcase>\n";
         }
-        else if (r.passed && !r.warned)
-        {
-            xml << "/>\n";
-        }
         else if (r.warned)
         {
+            // <flakyFailure> (Surefire/Jenkins convention) keeps the failure
+            // visible without turning the lane red, and never inflates <skipped>.
             xml << ">\n";
-            xml << "      <skipped message=\"Known flaky: " << XmlEscape(r.warningReason) << "\">"
-                << XmlEscape(r.failureOutput) << "</skipped>\n";
+            xml << "      <properties>\n";
+            xml << "        <property name=\"flaky\" value=\"true\"/>\n";
+            xml << "        <property name=\"flaky-reason\" value=\"" << XmlEscape(r.warningReason) << "\"/>\n";
+            xml << "        <property name=\"waived-assertions\" value=\"" << r.waived << "\"/>\n";
+            if (r.empty)
+                xml << "        <property name=\"empty\" value=\"true\"/>\n";
+            xml << "      </properties>\n";
+            xml << "      <flakyFailure message=\"Known flaky: " << XmlEscape(r.warningReason) << "\">"
+                << XmlEscape(r.failureOutput) << "</flakyFailure>\n";
             xml << "    </testcase>\n";
+        }
+        else if (r.passed)
+        {
+            if (r.empty)
+            {
+                xml << ">\n";
+                xml << "      <properties>\n";
+                xml << "        <property name=\"empty\" value=\"true\"/>\n";
+                xml << "      </properties>\n";
+                xml << "    </testcase>\n";
+            }
+            else
+            {
+                xml << "/>\n";
+            }
         }
         else
         {
             xml << ">\n";
-            xml << "      <failure message=\"Test failed\">" << XmlEscape(r.failureOutput) << "</failure>\n";
+            // --empty-is-error promotes a zero-assertion test to a failure. The
+            // empty marker has to survive that promotion: without it the JUnit
+            // `empty` attribute would disagree with the emitted properties, and
+            // the consumer would read empty=0 for exactly the run configured to
+            // police empties.
+            if (r.empty)
+            {
+                xml << "      <properties>\n";
+                xml << "        <property name=\"empty\" value=\"true\"/>\n";
+                xml << "      </properties>\n";
+            }
+            const char* const failureMessage = r.empty ? "Executed no assertions (--empty-is-error)" : "Test failed";
+            xml << "      <failure message=\"" << failureMessage << "\">" << XmlEscape(r.failureOutput)
+                << "</failure>\n";
             xml << "    </testcase>\n";
         }
     }
@@ -497,6 +547,7 @@ static void PrintUsage(const char* argv0)
               << "  --shuffle [seed]       Randomize test order (optional integer seed)\n"
               << "  --retries <N>          Retry failed tests up to N times (default: 0)\n"
               << "  --warn-is-error        Treat known-flaky test warnings as hard failures\n"
+              << "  --empty-is-error       Treat tests that execute zero assertions as failures\n"
               << "  --list-warnings        List all registered flaky test patterns and exit\n"
               << "  --help                 Show this help message\n"
               << "\n"
@@ -538,6 +589,7 @@ int main(int argc, char** argv)
     unsigned int shuffleSeed = 0;
     int maxRetries = 0;
     bool warnIsError = false;
+    bool emptyIsError = false;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -573,6 +625,10 @@ int main(int argc, char** argv)
         else if (arg == "--warn-is-error")
         {
             warnIsError = true;
+        }
+        else if (arg == "--empty-is-error")
+        {
+            emptyIsError = true;
         }
         else if (arg == "--list-warnings")
         {
@@ -621,6 +677,7 @@ int main(int argc, char** argv)
     int failed = 0;
     int warned = 0;
     int skipped = 0;
+    int emptyTests = 0;
 
     // Shuffle test order if requested
     if (shuffle)
@@ -712,6 +769,7 @@ int main(int argc, char** argv)
         g_currentTest = test->name;
         int prevFailed = g_assertionsFailed;
         int prevPassed = g_assertionsPassed;
+        int prevWaived = g_assertionsWaived;
         bool skipRequested = false;
         std::string skipReason;
 
@@ -769,8 +827,9 @@ int main(int argc, char** argv)
 
         auto testEnd = std::chrono::steady_clock::now();
         double durationMs = std::chrono::duration<double, std::milli>(testEnd - testStart).count();
-        int testAssertions = (g_assertionsPassed - prevPassed) + (g_assertionsFailed - prevFailed);
-        bool testFailed = (g_assertionsFailed != prevFailed);
+        const int waivedThisTest = g_assertionsWaived - prevWaived;
+        int testAssertions = (g_assertionsPassed - prevPassed) + (g_assertionsFailed - prevFailed) + waivedThisTest;
+        const bool testFailed = (g_assertionsFailed != prevFailed);
 
         // Flush any captured stderr (assertion failure details) to both original stderr and file
         std::string capturedErrors;
@@ -788,10 +847,32 @@ int main(int argc, char** argv)
         std::string duration = FormatDuration(durationMs);
         std::string suffix = " (" + duration + ", " + std::to_string(testAssertions) + " assertions)";
 
-        // Check if a failing test matches a known-flaky warning pattern
-        const char* warnReason = testFailed ? GetTestWarningReason(test->name) : nullptr;
-        bool isWarning = warnReason != nullptr && !warnIsError;
-        const bool isSkipped = skipRequested && !testFailed;
+        // A failing test is tolerated ("warned") either because a per-assertion
+        // EXPECT_WARN_ONLY waiver fired — which leaves every other assertion in
+        // the test strict — or because its name matches a pattern in
+        // TestWarnings.h, which waives the WHOLE test. Prefer the former.
+        const char* patternReason = GetTestWarningReason(test->name);
+
+        TestOutcomeInputs outcomeInputs;
+        outcomeInputs.assertionsRun = testAssertions;
+        outcomeInputs.waivedAssertions = waivedThisTest;
+        outcomeInputs.hardFailure = testFailed;
+        outcomeInputs.skipRequested = skipRequested;
+        outcomeInputs.matchedWarningPattern = patternReason != nullptr;
+        outcomeInputs.warnIsError = warnIsError;
+        outcomeInputs.emptyIsError = emptyIsError;
+        const TestOutcome outcome = ClassifyTestOutcome(outcomeInputs);
+
+        const bool isSkipped = outcome == TestOutcome::Skipped;
+        const bool isWarning = outcome == TestOutcome::Warned;
+        // Zero assertions implies no failure and no waiver (both increment a
+        // counter), so the only other outcome an empty test can have is Skipped.
+        // It stays true under --empty-is-error — where the outcome is Failed —
+        // so the failure line and JUnit report can still name the reason.
+        const bool isEmpty = testAssertions == 0 && !isSkipped;
+        const bool countedFailed = outcome == TestOutcome::Failed;
+        const char* warnReason = isWarning ? patternReason : nullptr;
+        int waivedRecorded = waivedThisTest;
 
         if (isSkipped)
         {
@@ -799,37 +880,60 @@ int main(int argc, char** argv)
             out.Print("           " + skipReason + "\n");
             skipped++;
         }
-        else if (!testFailed)
-        {
-            out.Print("[   OK   ] " + g_currentTest + suffix + "\n");
-            passed++;
-        }
         else if (isWarning)
         {
+            const std::string reason =
+                warnReason ? std::string(warnReason) : std::string("per-assertion EXPECT_WARN_ONLY waiver");
             out.Print("[ WARN   ] " + g_currentTest + suffix + "\n");
-            out.Print("           Known flaky: " + std::string(warnReason) + "\n");
+            out.Print("           Known flaky: " + reason + "\n");
             // Emit GitHub Actions warning annotation (visible in CI summary)
             std::cout << "::warning title=Flaky test: " << g_currentTest << "::" << g_currentTest
-                      << " failed but is a known flaky test (" << warnReason << ")\n";
+                      << " failed but is a known flaky test (" << reason << ")\n";
             warned++;
             g_testsWarned++;
-            // Roll back the assertion failure count — warning tests don't count as failures
-            g_assertionsFailed = prevFailed;
+            if (warnReason != nullptr)
+            {
+                // A name-pattern entry waives the whole test. Move its failed
+                // assertions into the waived bucket rather than deleting them,
+                // so the suite summary still reports how many were hidden.
+                const int hidden = g_assertionsFailed - prevFailed;
+                g_assertionsFailed = prevFailed;
+                g_assertionsWaived += hidden;
+                waivedRecorded += hidden;
+            }
+        }
+        else if (countedFailed)
+        {
+            out.Print("[ FAILED ] " + g_currentTest + suffix + "\n", true);
+            if (isEmpty)
+                out.Print("           Executed no assertions (--empty-is-error)\n", true);
+            failed++;
+        }
+        else if (isEmpty)
+        {
+            out.Print("[ EMPTY  ] " + g_currentTest + suffix + "\n");
+            out.Print("           Executed no assertions - can only fail by crashing\n");
+            emptyTests++;
+            passed++;
         }
         else
         {
-            out.Print("[ FAILED ] " + g_currentTest + suffix + "\n", true);
-            failed++;
+            out.Print("[   OK   ] " + g_currentTest + suffix + "\n");
+            passed++;
         }
 
         TestResult result;
         result.name = test->name;
         result.durationMs = durationMs;
         result.assertions = testAssertions;
-        result.passed = (!testFailed && !isSkipped) || isWarning;
+        result.waived = waivedRecorded;
+        result.passed = !countedFailed && !isSkipped && !isWarning;
         result.warned = isWarning;
         result.skipped = isSkipped;
-        result.warningReason = warnReason ? warnReason : "";
+        result.empty = isEmpty;
+        result.warningReason = warnReason
+                                   ? std::string(warnReason)
+                                   : (isWarning ? std::string("per-assertion EXPECT_WARN_ONLY waiver") : std::string());
         result.skipReason = skipReason;
         result.failureOutput = capturedErrors;
         results.push_back(std::move(result));
@@ -844,7 +948,10 @@ int main(int argc, char** argv)
         std::vector<size_t> failedIndices;
         for (size_t i = 0; i < results.size(); ++i)
         {
-            if (!results[i].passed && !results[i].skipped)
+            // Warned tests already had their failure tolerated, and an empty
+            // test cannot be rescued by re-running it — retrying either would
+            // let the retry bookkeeping decrement a failure it never counted.
+            if (!results[i].passed && !results[i].skipped && !results[i].warned && !results[i].empty)
                 failedIndices.push_back(i);
         }
 
@@ -941,7 +1048,12 @@ int main(int argc, char** argv)
         out.PrintSummary(", " + std::to_string(skipped) + " skipped");
     out.PrintSummary(", " + std::to_string(passed + failed + warned + skipped) + " total\n");
     out.PrintSummary("Assertions: " + std::to_string(g_assertionsPassed) + " passed, " +
-                     std::to_string(g_assertionsFailed) + " failed\n");
+                     std::to_string(g_assertionsFailed) + " failed");
+    if (g_assertionsWaived > 0)
+        out.PrintSummary(", " + std::to_string(g_assertionsWaived) + " waived");
+    if (g_assertionsNoCrash > 0)
+        out.PrintSummary(", " + std::to_string(g_assertionsNoCrash) + " no-crash-only");
+    out.PrintSummary("\n");
     out.PrintSummary("Duration:   " + FormatDuration(totalMs) + "\n");
     if (filteredSelectionEmpty)
         out.PrintSummary("Error:      No tests matched the requested file/name filter\n");
@@ -957,6 +1069,12 @@ int main(int argc, char** argv)
     {
         out.PrintSummary("Warnings:   " + std::to_string(warned) +
                          " known flaky test(s) failed (not counted as errors)\n");
+    }
+    if (emptyTests > 0)
+    {
+        out.PrintSummary("Empty:      " + std::to_string(emptyTests) +
+                         " test(s) executed zero assertions and can only fail by crashing"
+                         " (use --empty-is-error to fail them)\n");
     }
     if (retriedPassed > 0)
     {

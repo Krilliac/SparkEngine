@@ -143,8 +143,12 @@ static std::vector<uint8_t> BuildConnectPacket(const std::string& name)
 
 static std::vector<uint8_t> BuildChatPacket(uint32_t senderID, const std::string& name, const std::string& text)
 {
+    // ChatMessage payload per docs/specs/networking-wire-format.md: sender name
+    // then text, both NetBuffer strings starting at payload offset 0. The server
+    // screens those text fields (PacketValidator's ChatMessage schema declares
+    // stringFieldOffset = 0), so a leading header byte here frame-shifts every
+    // length prefix and the packet is rejected as BadString before dispatch.
     NetBuffer payload;
-    payload.WriteUint8(1);
     payload.WriteString(name);
     payload.WriteString(text);
     return BuildPacket(MessageType::ChatMessage, ChannelType::ReliableOrdered, senderID, 0, 0.0f,
@@ -584,7 +588,7 @@ TEST(LiveServer_StatsAccumulate)
 
 TEST(LiveServer_Skipped)
 {
-    EXPECT_TRUE(true);
+    SKIP_TEST("ENABLE_NETWORKING is OFF in this configuration");
 }
 
 #endif // ENABLE_NETWORKING

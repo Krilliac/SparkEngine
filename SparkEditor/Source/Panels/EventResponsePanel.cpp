@@ -8,7 +8,10 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
+#include <type_traits>
+#include <variant>
 
 namespace SparkEditor
 {
@@ -63,6 +66,38 @@ namespace SparkEditor
         "Custom",
     };
     static constexpr int kConditionCount = static_cast<int>(std::size(kConditionNames));
+
+    // Text field <-> ConditionParam variant, using the same "number if it parses,
+    // string otherwise" rule the action parameters already use.
+    static Spark::Gameplay::ConditionParam ParseConditionParam(const char* text)
+    {
+        if (!text || text[0] == '\0')
+            return std::monostate{};
+        char* end = nullptr;
+        const double value = std::strtod(text, &end);
+        if (end != text && *end == '\0')
+            return value;
+        return std::string(text);
+    }
+
+    static void FormatConditionParam(const Spark::Gameplay::ConditionParam& param, char* out, size_t capacity)
+    {
+        out[0] = '\0';
+        std::visit(
+            [out, capacity](auto&& value)
+            {
+                using T = std::decay_t<decltype(value)>;
+                if constexpr (std::is_same_v<T, std::string>)
+                    std::snprintf(out, capacity, "%s", value.c_str());
+                else if constexpr (std::is_same_v<T, int64_t>)
+                    std::snprintf(out, capacity, "%lld", static_cast<long long>(value));
+                else if constexpr (std::is_same_v<T, double>)
+                    std::snprintf(out, capacity, "%.3f", value);
+                else if constexpr (std::is_same_v<T, uint32_t>)
+                    std::snprintf(out, capacity, "%u", value);
+            },
+            param);
+    }
 
     // How many parameter fields each action type needs
     static int GetActionParamCount(int typeIndex)
@@ -182,6 +217,12 @@ namespace SparkEditor
 
     void EventResponsePanel::Render()
     {
+        if (!BeginPanel())
+        {
+            EndPanel();
+            return;
+        }
+
         ImGui::Columns(2, "EventResponseColumns", true);
 
         // Left column: rule list
@@ -201,6 +242,8 @@ namespace SparkEditor
         }
 
         ImGui::Columns(1);
+
+        EndPanel();
     }
 
     void EventResponsePanel::Shutdown()
@@ -574,6 +617,22 @@ namespace SparkEditor
             re.enabled = er.enabled;
             re.oneShot = er.oneShot;
 
+            for (const auto& group : er.conditions.groups)
+            {
+                ConditionGroupUI groupUI;
+                groupUI.logic = group.logic == Spark::Gameplay::ConditionGroupLogic::Or ? 1 : 0;
+                for (const auto& condition : group.conditions)
+                {
+                    ConditionGroupUI::CondEntry entry;
+                    entry.typeIndex = static_cast<int>(condition.type);
+                    entry.negated = condition.negated;
+                    FormatConditionParam(condition.param1, entry.param1, sizeof(entry.param1));
+                    FormatConditionParam(condition.param2, entry.param2, sizeof(entry.param2));
+                    groupUI.conditions.push_back(entry);
+                }
+                re.conditionGroups.push_back(std::move(groupUI));
+            }
+
             for (const auto& act : er.actions)
             {
                 ActionEntry ae{};
@@ -619,6 +678,24 @@ namespace SparkEditor
             rule.triggerParam = re.triggerParam;
             rule.enabled = re.enabled;
             rule.oneShot = re.oneShot;
+
+            // Authored IF groups used to be dropped on the floor here.
+            for (const auto& groupUI : re.conditionGroups)
+            {
+                Spark::Gameplay::ConditionGroup group;
+                group.logic = groupUI.logic == 1 ? Spark::Gameplay::ConditionGroupLogic::Or
+                                                 : Spark::Gameplay::ConditionGroupLogic::And;
+                for (const auto& condUI : groupUI.conditions)
+                {
+                    Spark::Gameplay::Condition condition;
+                    condition.type = static_cast<Spark::Gameplay::ConditionType>(condUI.typeIndex);
+                    condition.param1 = ParseConditionParam(condUI.param1);
+                    condition.param2 = ParseConditionParam(condUI.param2);
+                    condition.negated = condUI.negated;
+                    group.conditions.push_back(std::move(condition));
+                }
+                rule.conditions.groups.push_back(std::move(group));
+            }
 
             for (const auto& ae : re.actions)
             {

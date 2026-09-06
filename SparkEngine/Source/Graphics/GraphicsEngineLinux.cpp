@@ -82,9 +82,10 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     // picking up an available GPU backend. Vulkan Lavapipe / OpenGL / etc.
     // can initialize successfully but then hang or misbehave without a
     // surface to present to, so headless tests and tools must stay on
-    // NullRHI. The backend fallback inside RHIBridge::Initialize still
-    // handles the case where the preferred GPU backend fails for a real
-    // window, falling through to NullRHI on its own.
+    // NullRHI. For a real window RHIBridge::Initialize still tries every
+    // GPU backend, but it now returns false rather than degrading to
+    // NullRHI — a windowed session that cannot render must not report
+    // success (see RHIBridge::Initialize allowHeadlessFallback).
     Spark::RHI::GraphicsBackend backend =
         (hWnd == nullptr) ? Spark::RHI::GraphicsBackend::None : Spark::RHI::RHIBridge::GetRecommendedBackend();
 
@@ -335,7 +336,6 @@ void GraphicsEngine::Shutdown()
     m_lightManager.reset();
     m_postProcessing.reset();
     m_temporalEffects.reset();
-    m_shader.reset();
 
     // Phase Q: tear down the denoiser on the Linux path too.
     if (m_denoiser)

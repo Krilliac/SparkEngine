@@ -130,6 +130,19 @@ namespace Spark
         void StopRecording();
         bool IsRecording() const;
         void RecordFrame(const std::vector<ReplayEntityState>& entities, float timestamp);
+
+        /**
+         * @brief Record a frame `deltaSeconds` after the previous one.
+         *
+         * The per-tick producer's entry point. The capture clock lives here and
+         * StartRecording resets it, so no caller keeps a second one: the engine
+         * lifecycle used to accumulate its own `EngineRuntime::replayCaptureTime`
+         * and re-derive "a new recording just started" from
+         * `GetFrameCount() == 0`, a second clock that could disagree with this
+         * system's own notion of when recording began.
+         */
+        void RecordFrameTick(const std::vector<ReplayEntityState>& entities, float deltaSeconds);
+
         void RecordEvent(const ReplayEvent& event);
         void SetMetadata(const std::string& mapName, const std::string& gameMode);
 
@@ -145,6 +158,15 @@ namespace Spark
         PlaybackState GetPlaybackState() const;
         float GetPlaybackTime() const;
         float GetDuration() const;
+
+        /**
+         * @brief Number of frames currently held by the system.
+         *
+         * Reports what recording actually captured (or what LoadFromFile read), so a
+         * UI can distinguish "recording armed" from "frames captured".
+         */
+        size_t GetFrameCount() const;
+
         const ReplayFrame* GetCurrentFrame() const;
         std::vector<ReplayEvent> GetEventsNearTime(float windowSeconds = 0.1f) const;
 
@@ -175,7 +197,8 @@ namespace Spark
         // Recording state
         bool m_recording = false;
         float m_recordInterval = 0.05f; // 20 fps default
-        float m_lastRecordTime = -1.0f;
+        float m_lastRecordTime = -1.0f; ///< Timestamp of the last stored frame; negative until the first.
+        float m_captureTime = 0.0f;     ///< RecordFrameTick's clock: seconds of gameplay since StartRecording.
         uint32_t m_frameCounter = 0;
 
         // Playback state

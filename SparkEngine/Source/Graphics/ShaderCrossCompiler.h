@@ -4,19 +4,23 @@
  * @author Spark Engine Team
  * @date 2025
  *
- * Manages shader compilation across different RHI backends. Inspired by
- * ShaderConductor's HLSL→SPIR-V→GLSL/MSL pipeline.
+ * Manages shader compilation across different RHI backends and caches the
+ * results per target.
  *
- * Pipeline: HLSL source → DXC (DXIL/SPIR-V) → SPIRV-Cross (GLSL/MSL)
- * Caches compiled artifacts per target to avoid recompilation.
+ * Only one target is actually compiled: DXBC, through
+ * Spark::RHI::CompileShader (d3dcompiler_47, Windows). DXIL, SPIR-V, GLSL and
+ * MSL have no compiler integrated — they report `success = false` with the
+ * missing dependency named in `errors`, and are never cached.
  *
  * @see Shader.h, ShaderVariantSystem.h, SparkShaderCompiler/
  *
- * @note **Intentional reusable graphics utility** — HLSL↔GLSL translation shim. A future asset cooker or runtime shader loader will call this when a backend needs a language the source is not authored in. May be superseded by `SlangShaderInterface.h` — a follow-up will decide.
+ * @note **Intentional reusable graphics utility** — multi-target compile cache. A future asset cooker or runtime shader loader will call this when a backend needs a language the source is not authored in. Only the DXBC target has a compiler behind it today; the rest fail closed. May be superseded by `SlangShaderInterface.h` — a follow-up will decide.
  *
  */
 
 #pragma once
+
+#include "RHI/RHIFactory.h"
 
 #include <atomic>
 #include <cstdint>
@@ -154,15 +158,19 @@ namespace Spark::Graphics
          * @brief Compile HLSL to a specific target format
          *
          * Checks cache first. If not cached, invokes the appropriate compiler.
-         * For D3D11, uses D3DCompile directly. For SPIR-V/GLSL/MSL, uses
-         * DXC→SPIR-V→SPIRV-Cross pipeline.
+         * DXBC goes to d3dcompiler_47 via Spark::RHI::CompileShader; DXIL,
+         * SPIR-V, GLSL and MSL have no compiler integrated and return a failed
+         * blob naming the missing dependency. Only successful blobs are cached.
          */
         CompiledShaderBlob Compile(const ShaderSource& source, ShaderTarget target)
         {
             if (!m_initialized)
                 return {};
 
-            // Check in-memory cache (thread-safe)
+            // Check in-memory cache (thread-safe). The statistics live under the
+            // same mutex: CompileAsync fans Compile() out to std::async threads, and
+            // the unlocked `misses++` that used to sit here was a data race
+            // ThreadSanitizer reported from the cross-compiler tests.
             uint64_t hash = HashSource(source);
             CrossCompileCacheKey cacheKey = {hash, target, source.stage};
             {
@@ -173,8 +181,8 @@ namespace Spark::Graphics
                     m_cacheStats.hits++;
                     return it->second;
                 }
+                m_cacheStats.misses++;
             }
-            m_cacheStats.misses++;
 
             // Compile (no lock held — compilation is the slow path)
             CompiledShaderBlob result;
@@ -188,16 +196,16 @@ namespace Spark::Graphics
                 result = CompileToDXBC(source);
                 break;
             case ShaderTarget::DXIL:
-                result = CompileToDXIL(source);
+                result = CompileNotIntegrated(source, target, "DXC (dxcompiler.dll)");
                 break;
             case ShaderTarget::SPIRV:
-                result = CompileToSPIRV(source);
+                result = CompileNotIntegrated(source, target, "DXC (dxcompiler.dll)");
                 break;
             case ShaderTarget::GLSL:
-                result = CompileToGLSL(source);
+                result = CompileNotIntegrated(source, target, "SPIRV-Cross");
                 break;
             case ShaderTarget::MSL:
-                result = CompileToMSL(source);
+                result = CompileNotIntegrated(source, target, "SPIRV-Cross");
                 break;
             default:
                 result.errors = "Unsupported target format";
@@ -278,7 +286,11 @@ namespace Spark::Graphics
             float hitRate() const { return (hits + misses > 0) ? static_cast<float>(hits) / (hits + misses) : 0.0f; }
         };
 
-        CacheStats GetCacheStats() const { return m_cacheStats; }
+        CacheStats GetCacheStats() const
+        {
+            std::lock_guard lock(m_cacheMutex);
+            return m_cacheStats;
+        }
 
         /** @brief Clear the compilation cache */
         void ClearCache()
@@ -297,8 +309,8 @@ namespace Spark::Graphics
 
         std::string Console_GetStatus() const
         {
-            return "ShaderCrossCompiler: " + std::to_string(m_cache.size()) + " cached compilations" +
-                   " (hit rate: " + std::to_string(m_cacheStats.hitRate() * 100.0f) + "%)\n";
+            return "ShaderCrossCompiler: " + std::to_string(GetCacheSize()) + " cached compilations" +
+                   " (hit rate: " + std::to_string(GetCacheStats().hitRate() * 100.0f) + "%)\n";
         }
 
       private:
@@ -321,51 +333,74 @@ namespace Spark::Graphics
             return hash;
         }
 
-        // Compilation functions — DXBC uses D3DCompile, others use DXC/SPIRV-Cross pipeline
+        /// Map to the RHI stage enum. Mesh/Amplification have no RHI stage, so
+        /// they are rejected by the caller rather than silently compiled as VS.
+        static bool ToRHIStage(ShaderStage stage, Spark::RHI::RHIShaderStage& outStage)
+        {
+            switch (stage)
+            {
+            case ShaderStage::Vertex:
+                outStage = Spark::RHI::RHIShaderStage::Vertex;
+                return true;
+            case ShaderStage::Pixel:
+                outStage = Spark::RHI::RHIShaderStage::Pixel;
+                return true;
+            case ShaderStage::Geometry:
+                outStage = Spark::RHI::RHIShaderStage::Geometry;
+                return true;
+            case ShaderStage::Hull:
+                outStage = Spark::RHI::RHIShaderStage::Hull;
+                return true;
+            case ShaderStage::Domain:
+                outStage = Spark::RHI::RHIShaderStage::Domain;
+                return true;
+            case ShaderStage::Compute:
+                outStage = Spark::RHI::RHIShaderStage::Compute;
+                return true;
+            default:
+                return false;
+            }
+        }
+
+        /// The one real path: HLSL -> DXBC through d3dcompiler_47.
         static CompiledShaderBlob CompileToDXBC(const ShaderSource& source)
         {
             CompiledShaderBlob blob;
             blob.target = ShaderTarget::DXBC;
             blob.stage = source.stage;
             blob.entryPoint = source.entryPoint;
-            // Real: D3DCompile(source.hlslCode, ..., source.entryPoint, model, ...)
-            blob.success = true;
+
+            Spark::RHI::ShaderCompileOptions options;
+            if (!ToRHIStage(source.stage, options.stage))
+            {
+                blob.errors = "DXBC compilation does not support mesh or amplification stages";
+                return blob;
+            }
+
+            options.sourceLanguage = Spark::RHI::ShaderLanguage::HLSL;
+            options.targetLanguage = Spark::RHI::ShaderLanguage::HLSL;
+            options.targetBackend = Spark::RHI::GraphicsBackend::D3D11;
+            options.entryPoint = source.entryPoint;
+            options.sourceCode = source.hlslCode;
+            options.defines = source.defines;
+
+            const Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
+            blob.bytecode = result.bytecode;
+            blob.errors = result.errorMessage;
+            blob.success = result.success;
             return blob;
         }
 
-        static CompiledShaderBlob CompileToDXIL(const ShaderSource& source)
+        /// Targets with no integrated compiler. They fail closed so no caller can
+        /// mistake an empty blob for a successful compilation.
+        static CompiledShaderBlob CompileNotIntegrated(const ShaderSource& source, ShaderTarget target,
+                                                       const char* missingDependency)
         {
             CompiledShaderBlob blob;
-            blob.target = ShaderTarget::DXIL;
+            blob.target = target;
             blob.stage = source.stage;
-            blob.success = true;
-            return blob;
-        }
-
-        static CompiledShaderBlob CompileToSPIRV(const ShaderSource& source)
-        {
-            CompiledShaderBlob blob;
-            blob.target = ShaderTarget::SPIRV;
-            blob.stage = source.stage;
-            blob.success = true;
-            return blob;
-        }
-
-        static CompiledShaderBlob CompileToGLSL(const ShaderSource& source)
-        {
-            CompiledShaderBlob blob;
-            blob.target = ShaderTarget::GLSL;
-            blob.stage = source.stage;
-            blob.success = true;
-            return blob;
-        }
-
-        static CompiledShaderBlob CompileToMSL(const ShaderSource& source)
-        {
-            CompiledShaderBlob blob;
-            blob.target = ShaderTarget::MSL;
-            blob.stage = source.stage;
-            blob.success = true;
+            blob.entryPoint = source.entryPoint;
+            blob.errors = std::string("compilation not implemented: requires ") + missingDependency;
             return blob;
         }
 

@@ -91,7 +91,17 @@
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      }
+      },
+      "plannedCiJobs": [
+        "installer-windows"
+      ],
+      "plannedTestSelectors": [
+        "Installer_Tamper",
+        "Installer_AtomicUpdate",
+        "Installer_Rollback",
+        "Installer_Interrupted",
+        "Installer_Uninstall"
+      ]
     },
     {
       "id": "GOV-400",
@@ -182,7 +192,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "shared"
-      }
+      },
+      "plannedCiJobs": [
+        "license-compliance"
+      ],
+      "plannedTestSelectors": [
+        "LicenseInventory_*",
+        "PublicWording_*"
+      ]
     },
     {
       "id": "DOC-410",
@@ -282,7 +299,11 @@
       ],
       "profileApplicability": {
         "stable-v1": "shared"
-      }
+      },
+      "plannedTestSelectors": [
+        "DocsGeneration_*",
+        "DocsLinks_*"
+      ]
     },
     {
       "id": "DOC-400",
@@ -293,7 +314,7 @@
       "wave": 6,
       "area": "website",
       "owner": "unassigned",
-      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves.",
+      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. site-runtime-contract and the runtime-side selectors remain planned.",
       "dependencies": [
         "RDY-000"
       ],
@@ -343,7 +364,8 @@
         "site-data-contract",
         "runtime-bundle-validation",
         "live-docs-parity",
-        "no-hardcoded-claims"
+        "no-hardcoded-claims",
+        "SparkVersionSingleSource"
       ],
       "requiredCiJobs": [
         "site-data-validate",
@@ -384,7 +406,16 @@
       ],
       "profileApplicability": {
         "stable-v1": "shared"
-      }
+      },
+      "plannedCiJobs": [
+        "site-runtime-contract"
+      ],
+      "plannedTestSelectors": [
+        "site-data-contract",
+        "runtime-bundle-validation",
+        "live-docs-parity",
+        "no-hardcoded-claims"
+      ]
     }
   ]
 }

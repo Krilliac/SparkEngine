@@ -5,6 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <cwctype>
 #include <fstream>
 #include <memory>
 #include <sstream>
@@ -146,10 +147,35 @@ namespace Spark::AssetPipeline
             uint64_t m_bitLength = 0;
         };
 
+        /// Comparison form for containment. Normalizing is what makes
+        /// lexically_relative trustworthy; case-folding is what makes it correct on
+        /// Windows, where path equality is case-sensitive but the filesystem is not,
+        /// so "C:/Build/Out" and "C:/build/out" would otherwise relativize to an
+        /// escaping "../../build/out" form and reject a legitimate target.
+        std::filesystem::path ComparisonForm(const std::filesystem::path& path)
+        {
+#if defined(_WIN32)
+            std::wstring text = path.lexically_normal().wstring();
+            std::transform(text.begin(), text.end(), text.begin(), [](wchar_t character)
+                           { return static_cast<wchar_t>(std::towlower(static_cast<std::wint_t>(character))); });
+            return std::filesystem::path(std::move(text));
+#else
+            return path.lexically_normal();
+#endif
+        }
+
+        /// Internal spelling of the public IsPathContained (see AssetCooker.h).
         bool IsContained(const std::filesystem::path& child, const std::filesystem::path& parent)
         {
-            const auto relative = child.lexically_relative(parent);
-            return !relative.empty() && !relative.is_absolute() && *relative.begin() != "..";
+            const auto relative = ComparisonForm(child).lexically_relative(ComparisonForm(parent));
+            if (relative.empty() || relative.is_absolute())
+                return false;
+            for (const auto& component : relative)
+            {
+                if (component == "..")
+                    return false;
+            }
+            return true;
         }
 
         bool IsLinkLike(const std::filesystem::path& path)
@@ -178,14 +204,15 @@ namespace Spark::AssetPipeline
         bool ValidateOutputTarget(const std::filesystem::path& target, const std::filesystem::path& outputRoot,
                                   std::string& error, std::string_view label)
         {
-            const auto relative = target.lexically_relative(outputRoot);
-            if (relative.empty() || relative.is_absolute() || *relative.begin() == "..")
+            const auto normalizedRoot = outputRoot.lexically_normal();
+            const auto relative = target.lexically_normal().lexically_relative(normalizedRoot);
+            if (!IsContained(target, outputRoot))
             {
                 error = std::string(label) + " escapes the output root";
                 return false;
             }
 
-            std::filesystem::path current = outputRoot;
+            std::filesystem::path current = normalizedRoot;
             for (const auto& component : relative)
             {
                 current /= component;
@@ -920,5 +947,9 @@ namespace Spark::AssetPipeline
             generationCleanup->Release();
         }
         return result;
+    }
+    bool IsPathContained(const std::filesystem::path& child, const std::filesystem::path& parent)
+    {
+        return IsContained(child, parent);
     }
 } // namespace Spark::AssetPipeline

@@ -58,6 +58,11 @@ namespace SparkEditor
     // the class scope (EditorApplication::s_instance).
     EditorApplication* EditorApplication::s_instance = nullptr;
 
+    std::string EditorApplication::WindowLayoutFilePath()
+    {
+        return ProjectManager::GetEditorDataDirectory() + "/window_layout.json";
+    }
+
     EditorApplication::EditorApplication()
         : m_startTime(std::chrono::high_resolution_clock::now()), m_lastFrameTime(m_startTime)
     {
@@ -133,6 +138,10 @@ namespace SparkEditor
         console.LogInfo("Initializing window manager...");
         m_windowManagerInitialized = true;
         EditorWindowManager::GetInstance().Initialize();
+        // Restore the layout persisted by the previous session. Missing on a first
+        // run, which is not an error — the defaults apply.
+        if (EditorWindowManager::GetInstance().LoadLayoutFromFile(WindowLayoutFilePath()))
+            console.LogSuccess("Window layout restored from disk");
         console.LogSuccess("Window manager initialized");
 
         // Initialize EditorUI (this creates all panels including console)

@@ -226,8 +226,15 @@ struct ShadowMap
     ComPtr<ID3D11DepthStencilView> dsv;   ///< Depth stencil view
     ComPtr<ID3D11ShaderResourceView> srv; ///< Shader resource view
     uint32_t size = 0;                    ///< Shadow map size
-    XMMATRIX lightMatrix;                 ///< Light projection matrix
-    XMMATRIX shadowMatrix;                ///< Shadow transformation matrix
+    /// Light-space view matrix. For directional lights this already holds the combined
+    /// view * projection produced by LightingSystem::CalculateLightMatrix.
+    /// Identity until UpdateShadowMaps fills it in: a shadow map can be created
+    /// (SetShadowsEnabled) and rendered before the first update, and a zeroed matrix
+    /// would collapse every caster to a point with nothing to show for it.
+    XMMATRIX lightMatrix = XMMatrixIdentity();
+    /// Light-space projection matrix, or identity when lightMatrix is already combined.
+    /// Invariant: lightMatrix * shadowMatrix is the light view-projection.
+    XMMATRIX shadowMatrix = XMMatrixIdentity();
 };
 
 /**

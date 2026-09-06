@@ -7,11 +7,15 @@
 
 #include "SearchPanel.h"
 #include "../Core/EditorIcons.h"
-#include "../../../SparkEngine/Source/Utils/Validate.h"
-#include <imgui.h>
+#include "Core/Reflection.h"
+#include "Engine/ECS/Components.h"
+#include "Utils/LogMacros.h"
+#include "Utils/Validate.h"
 #include <algorithm>
 #include <cctype>
-#include "Utils/LogMacros.h"
+#include <filesystem>
+#include <imgui.h>
+#include <utility>
 
 namespace SparkEditor
 {
@@ -22,12 +26,27 @@ namespace SparkEditor
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Search panel");
-        InitializeSampleData();
         m_isInitialized = true;
         return true;
     }
 
-    void SearchPanel::Update(float /*deltaTime*/) {}
+    void SearchPanel::Update(float deltaTime)
+    {
+        // Typing schedules a search instead of running one: PerformSearch() filters a cached asset
+        // index, but the index rebuild and the per-entity component probe are still far too heavy
+        // to run once per character.
+        if (m_searchCountdown < 0.0f)
+        {
+            return;
+        }
+
+        m_searchCountdown -= deltaTime;
+        if (m_searchCountdown <= 0.0f)
+        {
+            m_searchCountdown = -1.0f;
+            PerformSearch();
+        }
+    }
 
     void SearchPanel::Render()
     {
@@ -67,20 +86,26 @@ namespace SparkEditor
             ImGui::InputTextWithHint("##SearchInput", ICON_FA_SEARCH " Search entities, components, assets...",
                                      m_searchBuffer, sizeof(m_searchBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
 
-        if (changed || (ImGui::IsItemEdited()))
+        if (changed || ImGui::IsItemEdited())
         {
             m_currentQuery = m_searchBuffer;
-            if (!m_currentQuery.empty())
+            if (m_currentQuery.empty())
             {
+                m_searchCountdown = -1.0f;
+                m_results.clear();
+                m_selectedResult = -1;
+            }
+            else if (changed)
+            {
+                // Enter: search now.
+                m_searchCountdown = -1.0f;
                 PerformSearch();
-                if (changed)
-                {
-                    AddToRecentSearches(m_currentQuery);
-                }
+                AddToRecentSearches(m_currentQuery);
             }
             else
             {
-                m_results.clear();
+                // Still typing: restart the debounce window, Update() runs the search.
+                m_searchCountdown = kSearchDebounceSeconds;
             }
         }
 
@@ -138,6 +163,7 @@ namespace SparkEditor
     void SearchPanel::RenderResults()
     {
         ImGui::Text("%zu results for \"%s\"", m_results.size(), m_currentQuery.c_str());
+        RenderSourceStatus();
         ImGui::Spacing();
 
         ImGui::BeginChild("SearchResults", ImVec2(0, 0), false);
@@ -188,8 +214,46 @@ namespace SparkEditor
         ImGui::EndChild();
     }
 
+    void SearchPanel::RenderSourceStatus()
+    {
+        if (!m_world)
+        {
+            ImGui::TextDisabled("Preview - not connected: no World is wired in, so entity and");
+            ImGui::TextDisabled("component results have no source.");
+        }
+        if (m_assetRoot.empty())
+        {
+            ImGui::TextDisabled("No project asset root is set, so asset results have no source.");
+            return;
+        }
+
+        if (m_assetIndexValid)
+        {
+            ImGui::TextDisabled("Asset index: %zu files", m_assetIndex.size());
+        }
+        else
+        {
+            ImGui::TextDisabled("Asset index: not built yet");
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Rescan"))
+        {
+            RefreshAssetIndex();
+            if (!m_currentQuery.empty())
+            {
+                PerformSearch();
+            }
+        }
+
+        if (!m_assetScanError.empty())
+        {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", m_assetScanError.c_str());
+        }
+    }
+
     void SearchPanel::RenderRecentSearches()
     {
+        RenderSourceStatus();
         if (m_recentSearches.empty())
         {
             ImGui::TextDisabled("Start typing to search across the scene and project");
@@ -224,6 +288,64 @@ namespace SparkEditor
         }
     }
 
+    void SearchPanel::Search(const std::string& query)
+    {
+        m_currentQuery = query;
+        PerformSearch();
+    }
+
+    void SearchPanel::RefreshAssetIndex()
+    {
+        namespace fs = std::filesystem;
+
+        m_assetIndex.clear();
+        m_assetScanError.clear();
+        m_assetIndexValid = true;
+
+        if (m_assetRoot.empty())
+        {
+            return;
+        }
+
+        std::error_code ec;
+        if (!fs::exists(m_assetRoot, ec) || ec)
+        {
+            m_assetScanError = "Asset root does not exist: " + m_assetRoot;
+            return;
+        }
+
+        // An explicit iterator with the error_code increment. The range-for form uses the THROWING
+        // operator++, so an I/O error mid-walk escaped as filesystem_error out of the render path,
+        // while the `if (ec) break;` inside the loop body only ever re-read the constructor's status.
+        const fs::directory_options options = fs::directory_options::skip_permission_denied;
+        fs::recursive_directory_iterator it(m_assetRoot, options, ec);
+        if (ec)
+        {
+            m_assetScanError = "Failed to open asset root '" + m_assetRoot + "': " + ec.message();
+            return;
+        }
+
+        const fs::recursive_directory_iterator end;
+        for (; !ec && it != end; it.increment(ec))
+        {
+            std::error_code entryEc;
+            if (!it->is_regular_file(entryEc) || entryEc)
+                continue;
+
+            m_assetIndex.push_back(it->path().string());
+        }
+
+        // A failed increment leaves the iterator equal to end, so the error must be read after the
+        // loop; checking it only inside the body reported nothing.
+        if (ec)
+        {
+            m_assetScanError = "Asset scan stopped: " + ec.message();
+        }
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Indexed %zu asset files under '%s'", m_assetIndex.size(),
+                        m_assetRoot.c_str());
+    }
+
     void SearchPanel::PerformSearch()
     {
         m_results.clear();
@@ -238,63 +360,90 @@ namespace SparkEditor
         std::string lowerQuery = m_currentQuery;
         std::transform(lowerQuery.begin(), lowerQuery.end(), lowerQuery.begin(), ::tolower);
 
-        // Search entities
-        if (m_filter == SearchFilter::All || m_filter == SearchFilter::Entities)
+        const bool wantEntities = (m_filter == SearchFilter::All || m_filter == SearchFilter::Entities);
+        const bool wantComponents = (m_filter == SearchFilter::All || m_filter == SearchFilter::Components);
+
+        // Entities and components come from the live document World.
+        if (m_world && (wantEntities || wantComponents))
         {
-            for (const auto& entity : m_sampleEntities)
+            entt::registry& registry = m_world->GetRegistry();
+
+            // Only component types whose NAME matches can ever produce a result, so score the names
+            // once here instead of scoring (and probing) every registered type on every entity.
+            std::vector<std::pair<std::string, float>> matchingTypes;
+            if (wantComponents)
             {
-                float score = CalculateRelevance(entity.name, lowerQuery);
-                if (score > 0.0f)
+                for (const std::string& typeName : Spark::ComponentFactory::Get().GetRegisteredNames())
                 {
-                    SearchResult result;
-                    result.type = SearchResultType::Entity;
-                    result.name = entity.name;
-                    result.description = entity.hierarchyPath;
-                    result.entityId = entity.id;
-                    result.relevanceScore = score;
-                    m_results.push_back(std::move(result));
+                    const float score = CalculateRelevance(typeName, lowerQuery);
+                    if (score > 0.0f)
+                    {
+                        matchingTypes.emplace_back(typeName, score);
+                    }
                 }
             }
-        }
 
-        // Search components
-        if (m_filter == SearchFilter::All || m_filter == SearchFilter::Components)
-        {
-            for (const auto& entity : m_sampleEntities)
+            for (auto&& [entity] : registry.storage<entt::entity>().each())
             {
-                for (const auto& comp : entity.components)
+                const ::NameComponent* nameComponent = m_world->GetComponent<::NameComponent>(entity);
+                const std::string entityName =
+                    (nameComponent && !nameComponent->name.empty()) ? nameComponent->name : std::string("Entity");
+
+                if (wantEntities)
                 {
-                    float score = CalculateRelevance(comp, lowerQuery);
+                    const float score = CalculateRelevance(entityName, lowerQuery);
                     if (score > 0.0f)
                     {
                         SearchResult result;
-                        result.type = SearchResultType::Component;
-                        result.name = comp;
-                        result.description = "on " + entity.name;
-                        result.entityId = entity.id;
+                        result.type = SearchResultType::Entity;
+                        result.name = entityName;
+                        result.description = "Entity " + std::to_string(static_cast<uint32_t>(entity));
+                        result.entityId = static_cast<uint64_t>(static_cast<uint32_t>(entity));
                         result.relevanceScore = score;
                         m_results.push_back(std::move(result));
                     }
                 }
-            }
-        }
 
-        // Search assets
-        if (m_filter == SearchFilter::All || m_filter == SearchFilter::Assets)
-        {
-            for (const auto& asset : m_sampleAssets)
-            {
-                float score = CalculateRelevance(asset.name, lowerQuery);
-                if (score > 0.0f)
+                for (const auto& [typeName, score] : matchingTypes)
                 {
+                    if (!Spark::ComponentFactory::Get().HasComponent(typeName, m_world, static_cast<uint32_t>(entity)))
+                    {
+                        continue;
+                    }
+
                     SearchResult result;
-                    result.type = SearchResultType::Asset;
-                    result.name = asset.name;
-                    result.description = asset.type + " - " + asset.path;
-                    result.path = asset.path;
+                    result.type = SearchResultType::Component;
+                    result.name = typeName;
+                    result.description = "on " + entityName;
+                    result.entityId = static_cast<uint64_t>(static_cast<uint32_t>(entity));
                     result.relevanceScore = score;
                     m_results.push_back(std::move(result));
                 }
+            }
+        }
+
+        // Assets come from the cached index, which is walked on demand rather than per keystroke.
+        if ((m_filter == SearchFilter::All || m_filter == SearchFilter::Assets) && !m_assetRoot.empty())
+        {
+            if (!m_assetIndexValid)
+            {
+                RefreshAssetIndex();
+            }
+
+            for (const std::string& assetPath : m_assetIndex)
+            {
+                const std::string fileName = std::filesystem::path(assetPath).filename().string();
+                const float score = CalculateRelevance(fileName, lowerQuery);
+                if (score <= 0.0f)
+                    continue;
+
+                SearchResult result;
+                result.type = SearchResultType::Asset;
+                result.name = fileName;
+                result.path = assetPath;
+                result.description = assetPath;
+                result.relevanceScore = score;
+                m_results.push_back(std::move(result));
             }
         }
 
@@ -370,69 +519,25 @@ namespace SparkEditor
 
     void SearchPanel::NavigateToResult(const SearchResult& result)
     {
-        // In a full implementation, this would:
-        // - Entity: Select entity in hierarchy, focus scene view on it
-        // - Component: Select entity, expand component in inspector
-        // - Asset: Navigate to asset in asset browser, preview it
-    }
+        if (result.type == SearchResultType::Asset)
+        {
+            // Asset results carry the real path; the editor has no asset-browser
+            // navigation entry point, so the path is logged rather than pretending
+            // to reveal it in another panel.
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "SearchPanel: asset '%s'", result.path.c_str());
+            return;
+        }
 
-    void SearchPanel::InitializeSampleData()
-    {
-        // Sample entities for search demonstration
-        m_sampleEntities.clear();
-        // clang-format off
-        auto e = [&](std::string name, uint64_t id, std::vector<std::string> components, std::string path) {
-            m_sampleEntities.push_back(SampleEntity{std::move(name), id, std::move(components), std::move(path)});
-        };
-        e("Player", 1, {"Transform", "Camera", "RigidBody", "Collider", "AudioSource"}, "Root/Player");
-        e("MainCamera", 2, {"Transform", "Camera"}, "Root/MainCamera");
-        e("DirectionalLight", 3, {"Transform", "Light"}, "Root/Lighting/DirectionalLight");
-        e("PointLight_01", 4, {"Transform", "Light"}, "Root/Lighting/PointLight_01");
-        e("PointLight_02", 5, {"Transform", "Light"}, "Root/Lighting/PointLight_02");
-        e("SpotLight_01", 6, {"Transform", "Light"}, "Root/Lighting/SpotLight_01");
-        e("Ground", 7, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Ground");
-        e("Wall_North", 8, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_North");
-        e("Wall_South", 9, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_South");
-        e("Wall_East", 10, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_East");
-        e("Wall_West", 11, {"Transform", "MeshRenderer", "Collider"}, "Root/Environment/Walls/Wall_West");
-        e("Crate_01", 12, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_01");
-        e("Crate_02", 13, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Crate_02");
-        e("Barrel_01", 14, {"Transform", "MeshRenderer", "RigidBody", "Collider"}, "Root/Props/Barrel_01");
-        e("WeaponPickup", 15, {"Transform", "MeshRenderer", "Collider", "AudioSource"}, "Root/Pickups/WeaponPickup");
-        e("HealthPack", 16, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/HealthPack");
-        e("AmmoBox", 17, {"Transform", "MeshRenderer", "Collider"}, "Root/Pickups/AmmoBox");
-        e("SpawnPoint_A", 18, {"Transform"}, "Root/GameLogic/SpawnPoint_A");
-        e("SpawnPoint_B", 19, {"Transform"}, "Root/GameLogic/SpawnPoint_B");
-        e("TriggerZone", 20, {"Transform", "Collider"}, "Root/GameLogic/TriggerZone");
-        e("ParticleSmoke", 21, {"Transform", "ParticleSystem"}, "Root/Effects/ParticleSmoke");
-        e("ParticleFire", 22, {"Transform", "ParticleSystem", "Light"}, "Root/Effects/ParticleFire");
-        e("AmbientSound", 23, {"Transform", "AudioSource"}, "Root/Audio/AmbientSound");
-        e("MusicPlayer", 24, {"Transform", "AudioSource"}, "Root/Audio/MusicPlayer");
-        // clang-format on
+        if (!m_selectionHandler || !m_world)
+        {
+            return;
+        }
 
-        m_sampleAssets = {
-            {"PlayerModel.fbx", "Model", "Assets/Models/PlayerModel.fbx"},
-            {"Crate.fbx", "Model", "Assets/Models/Crate.fbx"},
-            {"Barrel.fbx", "Model", "Assets/Models/Barrel.fbx"},
-            {"WeaponPickup.fbx", "Model", "Assets/Models/WeaponPickup.fbx"},
-            {"Ground.fbx", "Model", "Assets/Models/Ground.fbx"},
-            {"Wall.fbx", "Model", "Assets/Models/Wall.fbx"},
-            {"concrete_diffuse.png", "Texture", "Assets/Textures/concrete_diffuse.png"},
-            {"concrete_normal.png", "Texture", "Assets/Textures/concrete_normal.png"},
-            {"metal_diffuse.png", "Texture", "Assets/Textures/metal_diffuse.png"},
-            {"wood_diffuse.png", "Texture", "Assets/Textures/wood_diffuse.png"},
-            {"skybox_hdr.hdr", "Texture", "Assets/Textures/skybox_hdr.hdr"},
-            {"gunshot.wav", "Audio", "Assets/Audio/gunshot.wav"},
-            {"explosion.wav", "Audio", "Assets/Audio/explosion.wav"},
-            {"footstep.wav", "Audio", "Assets/Audio/footstep.wav"},
-            {"ambient_wind.ogg", "Audio", "Assets/Audio/ambient_wind.ogg"},
-            {"music_combat.ogg", "Audio", "Assets/Audio/music_combat.ogg"},
-            {"PBR_Standard.hlsl", "Shader", "Assets/Shaders/PBR_Standard.hlsl"},
-            {"PostProcess.hlsl", "Shader", "Assets/Shaders/PostProcess.hlsl"},
-            {"ParticleShader.hlsl", "Shader", "Assets/Shaders/ParticleShader.hlsl"},
-            {"MainScene.spark", "Scene", "Assets/Scenes/MainScene.spark"},
-            {"TestScene.spark", "Scene", "Assets/Scenes/TestScene.spark"},
-        };
+        const auto entityId = static_cast<uint32_t>(result.entityId);
+        if (m_world->GetRegistry().valid(static_cast<::EntityID>(entityId)))
+        {
+            m_selectionHandler(entityId);
+        }
     }
 
 } // namespace SparkEditor

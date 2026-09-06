@@ -6,6 +6,15 @@
 # attest that evidence and publish the exact-source status.
 name: "Build Matrix Verifier"
 
+# Each source attempt triggers this workflow twice and the two trigger types run
+# disjoint jobs, so a run conclusion never says what the run did: an in_progress
+# run only invalidates the prior status ("Verify and attest build-matrix
+# evidence" is skipped) and still concludes success.  Only the commit status
+# that the verify job publishes is evidence -- never a run conclusion or the
+# workflow badge.  Do NOT add run-name here to tell the two apart: GitHub then
+# returns the rendered run-name as the run's API "name", and
+# verify-exact-required-gate.py requires that field to equal the workflow name
+# exactly, so a run-name would fail every publication gate closed.
 on:
   workflow_run:
     workflows: ["Build SparkEngine"]

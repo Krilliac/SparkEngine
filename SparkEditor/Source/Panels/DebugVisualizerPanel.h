@@ -14,21 +14,16 @@
 namespace SparkEditor
 {
 
-    /** @brief Editor panel for toggling debug visualization overlays (wireframe, colliders, nav mesh, etc.). */
+    /**
+     * @brief Preview panel holding debug-overlay settings (grid, wireframe, colliders, nav mesh).
+     *
+     * The settings are authored here but no renderer consumes them yet, so toggling
+     * them does not change what the viewport draws. The panel states this on screen
+     * and reports no debug-draw counts.
+     */
     class DebugVisualizerPanel : public EditorPanel
     {
       public:
-        /// Per-frame count of debug draw primitives rendered.
-        struct DebugDrawStats
-        {
-            int gridLines = 0;       ///< Grid lines drawn.
-            int colliderShapes = 0;  ///< Collider shapes drawn.
-            int boundingBoxes = 0;   ///< AABB bounding boxes drawn.
-            int navMeshPolygons = 0; ///< NavMesh polygons drawn.
-            int lightGizmos = 0;     ///< Light radius/direction gizmos drawn.
-            int audioSources = 0;    ///< Audio source radius gizmos drawn.
-        };
-
         DebugVisualizerPanel();
         ~DebugVisualizerPanel() override;
 
@@ -50,7 +45,6 @@ namespace SparkEditor
         bool AreCameraFrustaVisible() const { return m_showCameraFrusta; }
         float GetGridSize() const { return m_gridSize; }
         float GetGridSpacing() const { return m_gridSpacing; }
-        const DebugDrawStats& GetStats() const { return m_stats; }
 
       private:
         void RenderGridSettings();
@@ -112,9 +106,6 @@ namespace SparkEditor
         bool m_showFPS = true;
         bool m_showDrawCalls = false;
         bool m_showTriangleCount = false;
-
-        // Stats
-        DebugDrawStats m_stats;
     };
 
 } // namespace SparkEditor

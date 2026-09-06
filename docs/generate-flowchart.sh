@@ -17,6 +17,12 @@
 
 set -e
 
+# Deterministic output on every host: `sort`, `grep` and friends collate by
+# locale, and en_US.UTF-8 (case-insensitive) orders `Test_x` before `TestA`
+# while CI's C.UTF-8 does the opposite, so the same tree produced different
+# generated files and the wiki freshness check failed. Pin the C locale.
+export LC_ALL=C
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 WIKI_DIR="$PROJECT_ROOT/wiki"

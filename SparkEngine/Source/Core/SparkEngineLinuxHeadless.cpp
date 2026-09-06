@@ -141,7 +141,7 @@ int RunHeadlessLinux(int argc, char* argv[])
         Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
         SPARK_GUARDED_UPDATE("Modules", "Core", {
-            if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules())
+            if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules())
             {
                 GetEngineRuntime().moduleManager->UpdateAll(dt);
                 auto& fixedAcc = Spark::FixedTimestepAccumulator::GetInstance();

@@ -372,10 +372,10 @@ class UpscalingSystem
      */
     static Resolution GetRecommendedRenderSize(uint32_t displayWidth, uint32_t displayHeight, UpscalingQuality quality);
 
-    /** @brief Check if FSR 1.0 is available (always true — shader-based) */
-    bool IsFSR1Available() const noexcept { return true; }
+    /** @brief Check if FSR 1.0 is available (engine-owned EASU/RCAS compute shaders) */
+    bool IsFSR1Available() const noexcept { return m_shadersCompiled; }
 
-    /** @brief Check if FSR 2.0 is available (requires compute shader support) */
+    /** @brief Check if FSR 2.0 is available (false until the FidelityFX SDK is linked) */
     bool IsFSR2Available() const noexcept { return m_fsr2Available; }
 
     /** @brief Check if compute shaders were compiled successfully */
@@ -383,32 +383,54 @@ class UpscalingSystem
 
     // ---- Console Integration ----
 
+    /** @brief Human-readable name of an upscaling mode. */
+    static const char* ModeName(UpscalingMode mode) noexcept
+    {
+        switch (mode)
+        {
+        case UpscalingMode::FSR1:
+            return "FSR 1.0";
+        case UpscalingMode::FSR2:
+            return "FSR 2.0";
+        case UpscalingMode::DLSS:
+            return "DLSS";
+        case UpscalingMode::XeSS:
+            return "XeSS";
+        case UpscalingMode::SparkSR:
+            return "SparkSR";
+        default:
+            return "None";
+        }
+    }
+
+    /**
+     * @brief The upscaler Execute() actually runs, which is not always the
+     *        requested mode.
+     *
+     * ExecuteFSR2 / ExecuteDLSS / ExecuteXeSS forward to ExecuteSparkSR whenever the
+     * vendor SDK is not linked (see UpscalingSystemWindowsExecute.cpp), so a caller
+     * that reads only GetMode() would believe a vendor upscaler is running while
+     * SparkSR produces every pixel.
+     */
+    UpscalingMode GetEffectiveMode() const noexcept
+    {
+        switch (m_settings.mode)
+        {
+        case UpscalingMode::FSR2:
+            return IsFSR2Available() ? UpscalingMode::FSR2 : UpscalingMode::SparkSR;
+        case UpscalingMode::DLSS:
+            return m_dlssFeatureInfo.isAvailable ? UpscalingMode::DLSS : UpscalingMode::SparkSR;
+        case UpscalingMode::XeSS:
+            return m_xessFeatureInfo.isAvailable ? UpscalingMode::XeSS : UpscalingMode::SparkSR;
+        default:
+            return m_settings.mode;
+        }
+    }
+
     /** @brief Get a summary string of upscaling state */
     std::string Console_GetStatus() const
     {
         std::string status = "Upscaling System:\n";
-
-        const char* modeStr = "None";
-        switch (m_settings.mode)
-        {
-        case UpscalingMode::FSR1:
-            modeStr = "FSR 1.0";
-            break;
-        case UpscalingMode::FSR2:
-            modeStr = "FSR 2.0";
-            break;
-        case UpscalingMode::DLSS:
-            modeStr = "DLSS";
-            break;
-        case UpscalingMode::XeSS:
-            modeStr = "XeSS";
-            break;
-        case UpscalingMode::SparkSR:
-            modeStr = "SparkSR";
-            break;
-        default:
-            break;
-        }
 
         const char* qualityStr = "Native";
         switch (m_settings.quality)
@@ -433,7 +455,16 @@ class UpscalingSystem
             break;
         }
 
-        status += "  Mode: " + std::string(modeStr) + "\n";
+        // Report the requested mode and, when they differ, the one that actually
+        // runs. A status line that says "DLSS" while SparkSR renders every pixel is
+        // exactly the reassuring value that hides a missing dependency.
+        const UpscalingMode effectiveMode = GetEffectiveMode();
+        status += "  Mode: " + std::string(ModeName(m_settings.mode));
+        if (effectiveMode != m_settings.mode)
+        {
+            status += " (running " + std::string(ModeName(effectiveMode)) + " - vendor SDK not linked)";
+        }
+        status += "\n";
         status += "  Quality: " + std::string(qualityStr) + "\n";
         status += "  Sharpness: " + std::to_string(m_settings.sharpness) + "\n";
         status += "  Render: " + std::to_string(m_renderWidth) + "x" + std::to_string(m_renderHeight) + "\n";
@@ -441,6 +472,8 @@ class UpscalingSystem
         status += "  Scale: " + std::to_string(static_cast<int>(GetCurrentRenderScale() * 100.0f)) + "%\n";
 
         // Feature availability
+        status += "  FSR 1.0 available: " + std::string(IsFSR1Available() ? "YES" : "NO") + "\n";
+        status += "  FSR 2.0 available: " + std::string(IsFSR2Available() ? "YES" : "NO") + "\n";
         status += "  DLSS available: " + std::string(m_dlssFeatureInfo.isAvailable ? "YES" : "NO") + "\n";
         status += "  XeSS available: " + std::string(m_xessFeatureInfo.isAvailable ? "YES" : "NO") + "\n";
         status += "  SparkSR available: " + std::string(IsSparkSRAvailable() ? "YES" : "NO") + "\n";

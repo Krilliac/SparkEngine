@@ -1,12 +1,12 @@
 # Audio
 
-SparkEngine provides a comprehensive audio system built on **XAudio2** (Windows) with **OpenAL Soft** as a cross-platform fallback for Linux/macOS. It supports 2D and 3D spatial audio with Doppler effects, distance attenuation, efficient source pooling, mix buses, reverb zones, audio occlusion, dynamic music, and procedural sound generation.
+SparkEngine provides a comprehensive audio system built on **XAudio2** (Windows) with **OpenAL Soft** as a cross-platform fallback for Linux/macOS. It supports 2D and 3D spatial audio with Doppler effects, distance attenuation, efficient source pooling, mix-bus volume/mute/solo, physics-driven occlusion (only when a `PhysicsSystem` is attached to the mixer), dynamic music, and procedural sound generation. Reverb zones and per-bus DSP chains exist as authoring data only; they are not rendered into the playback path.
 
 **Source Files:**
 - `SparkEngine/Source/Audio/AudioEngine.h` -- Core audio engine (XAudio2)
 - `SparkEngine/Source/Audio/OpenALAudioEngine.h` -- Cross-platform backend (OpenAL Soft)
 - `SparkEngine/Source/Audio/SoundEffect.h` -- WAV loading and procedural sound generation
-- `SparkEngine/Source/Audio/AudioMixer.h` -- Mix buses, reverb zones, DSP effects, occlusion
+- `SparkEngine/Source/Audio/AudioMixer.h` -- Mix buses (volume/mute/solo applied), occlusion (applied when physics is attached), reverb zones and DSP effect chains (stored, not applied)
 - `SparkEngine/Source/Audio/MusicManager.h` -- Music playback, playlists, dynamic music
 - `SparkEngine/Source/Audio/HRTFProcessor.h` -- Binaural HRTF approximation (ITD + ILD + head shadow) for headphone listeners
 
@@ -49,22 +49,29 @@ SoundEffect (WAV data)
        v
 AudioSource (IXAudio2SourceVoice)
        │
-       ├── Volume: source * bus * master
-       ├── 3D: distance attenuation + Doppler + panning
-       └── Occlusion: low-pass filter + volume reduction
+       ├── Per-source gain: request * category volume (SFX/Music/...) *
+       │                    mix-bus effective volume (mute/solo and the parent-bus chain)
+       ├── 3D: inverse-distance attenuation clamped between the source's
+       │       minDistance and maxDistance, Doppler, panning
+       └── Occlusion volume scale (only while a PhysicsSystem is attached to AudioMixer)
        │
        v
-IXAudio2SubmixVoice (per mix bus: SFX, Music, Voice, Ambient, UI)
-       │
-       ├── Bus DSP Effects (EQ, Compressor, Delay, Chorus)
-       └── Reverb Zone processing
-       │
-       v
-IXAudio2MasteringVoice (final output)
+IXAudio2MasteringVoice (master volume applied exactly once here)
        │
        v
 Hardware Audio Output
 ```
+
+There are **no submix voices** in the playback path, and no XAPO DSP or reverb
+rendering: `AddBusEffect` and reverb zones are bookkeeping that nothing applies to
+a voice. Master volume is applied only on the mastering voice (it was previously
+applied twice, once per source and once on the master).
+
+XAudio2 device loss (headphones unplugged, default device changed) is detected
+from `XAUDIO2_E_DEVICE_INVALIDATED`; `AudioEngine::Update` rebuilds the mastering
+voice at most once per second, and `IAudioBackend::IsAvailable()` /
+`AudioEngine::IsAvailable()` report that live state rather than a platform
+constant.
 
 ## Initialization
 
@@ -172,7 +179,7 @@ Three independent volume channels with multiplicative stacking:
 |---------|-------------|---------|
 | Master | Overall volume multiplier applied to all output | 1.0 |
 | SFX | Sound effects volume | 1.0 |
-| Music | Background music volume | 1.0 |
+| Music | Background music volume. The `AudioCategory::Music` volume chain works, but no shipped call site requests that category yet (the Sequencer still plays every cue through `IAudioBackend` as SFX) | 1.0 |
 
 ```cpp
 audio.SetMasterVolume(1.0f);
@@ -351,7 +358,7 @@ struct AudioSettings
 
 ## Audio Mixer
 
-The `AudioMixer` (in `Spark::Audio` namespace) provides mix buses, reverb zones, DSP effects, audio occlusion, and mixer snapshots.
+The `AudioMixer` (in `Spark::Audio` namespace) provides mix buses (volume, mute, solo -- applied to live sources through `AudioEngine::SetMixer`), audio occlusion (applied when a `PhysicsSystem` is attached), mixer snapshots, and reverb-zone / DSP-effect *authoring data* that is stored but not applied to any voice.
 
 ### Mix Buses
 
@@ -388,7 +395,9 @@ struct MixBus
 
 ### DSP Effects
 
-Per-bus effect chains for audio processing:
+Per-bus effect chains. **Stored, not applied:** `AddBusEffect` records the chain on
+the bus, but no XAPO or software DSP consumes it, so these settings have no audible
+effect today (see [Stub and Abandoned Features](../advanced/Stub-and-Abandoned-Features.md)).
 
 ```cpp
 enum class DSPEffectType
@@ -425,7 +434,9 @@ mixer.ClearBusEffects("SFX");  // Remove all effects from a bus
 
 ### Reverb Zones
 
-Spatial volumes that apply reverb to sounds within them:
+Spatial volumes that describe reverb for a region. **Authoring data only:**
+`GetReverbAtPosition` returns the blended parameters, but no reverb effect is
+rendered into the playback path.
 
 ```cpp
 enum class ReverbPreset
@@ -479,7 +490,13 @@ OcclusionResult result = mixer.CalculateOcclusion(listenerPos, sourcePos);
 // result.wallCount:       number of walls between listener and source
 ```
 
-Occlusion requires the PhysicsSystem for raycasting. Falls back to unobstructed if physics is unavailable.
+Occlusion is real only after `AudioMixer::SetPhysics()` has been given the engine's
+`PhysicsSystem` (the gameplay lifecycle does this). It counts `WorldStatic` hits
+between listener and source and applies `volumeScale` to the source voice.
+`AudioMixer::IsOcclusionAvailable()` reports whether occlusion is enabled *and*
+physics is attached; when it is false, an "unoccluded" result means **not
+measured**, not "clear line of sight". `lowPassCutoff` is reported but is not yet
+applied as a filter.
 
 ### Mixer Snapshots
 
@@ -731,9 +748,9 @@ audio_sources        # Show active audio source count and details
 
 | Platform | Backend | 3D Audio | Mixer | Music | Status |
 |----------|---------|----------|-------|-------|--------|
-| Windows | XAudio2 | Full | Full | Full | Production |
-| Linux | OpenAL Soft | Full | Full | Full | Supported |
-| macOS | OpenAL Soft | Full | Full | Full | Experimental |
+| Windows | XAudio2 | Implemented; the listener follows the `EngineContext` camera each frame via `AudioEngine::SetListenerFromCamera` | Bus volume/mute/solo applied; occlusion applied when physics is attached; reverb zones and per-bus DSP are authoring data only | Volume chain works; no shipped caller routes cues to `AudioCategory::Music` yet | In `stable-v1`, blocked and uncertified |
+| Linux | OpenAL Soft | Implemented | Same mixer limits as Windows | Same as Windows | Experimental, outside `stable-v1` |
+| macOS | OpenAL Soft | Implemented | Same mixer limits as Windows | Same as Windows | Experimental, outside `stable-v1` |
 
 ## Troubleshooting
 
@@ -741,7 +758,7 @@ audio_sources        # Show active audio source count and details
 |---------|-------|----------|
 | No sound output | Initialize not called or failed | Check `Initialize()` return value |
 | Silent after scene change | `StopAllSounds` called, new sounds not started | Re-trigger sounds in new scene |
-| 3D audio sounds flat | Listener not updated | Call `SetListenerPosition/Orientation` each frame |
+| 3D audio sounds flat | Listener not updated (the gameplay lifecycle calls `SetListenerFromCamera` each frame; standalone hosts must do so themselves) | Call `SetListenerPosition/Orientation` or `SetListenerFromCamera` each frame |
 | Audio crackling | Too many sources or update not called | Reduce sources; ensure `Update(dt)` every frame |
 | Music crossfade glitch | `MusicManager::Update` not called | Call `music.Update(deltaTime)` every frame |
 | Reverb not applying | Listener outside reverb zone | Check zone radii and position |

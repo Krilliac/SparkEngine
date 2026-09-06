@@ -4,13 +4,15 @@
  * @author Spark Engine Team
  * @date 2025
  *
- * Provides a comprehensive UI for:
- * - Configuring dedicated server settings (port, max players, tick rate, game mode)
- * - Map rotation management (add/remove/reorder maps)
+ * Provides a UI for:
+ * - Configuring dedicated server settings (port, max players, tick rate)
+ * - Maintaining the map pick-list used for the launch map (SparkServer runs one map)
  * - Cooking and packaging standalone dedicated server executables
- * - Launching a local dedicated server window from PIE for testing
- * - Server browser for discovering LAN servers
- * - Live server monitoring (stats, player list, RCON console)
+ * - Launching a local dedicated server process from the editor for testing
+ * - Listing the locally launched server (there is no LAN discovery transport, and
+ *   joining is disabled until an editor client transport exists)
+ * - Server monitoring from the health report SparkServer publishes (uptime, player
+ *   count); RCON and per-player kick/ban are not available.
  */
 
 #pragma once
@@ -163,6 +165,12 @@ namespace SparkEditor
         void RefreshServerBrowser();
         void ConnectToServer(const DiscoveredServer& server);
 
+        /**
+         * @brief Player count read from the server's health JSON.
+         * @return The reported count, or -1 when no health report has been read yet.
+         */
+        int GetReportedPlayerCount() const;
+
         // -- Monitor helpers --
         void RenderPlayerList();
         void RenderRconConsole();
@@ -199,10 +207,12 @@ namespace SparkEditor
         std::unique_ptr<DedicatedServerProcessController> m_serverProcess;
         char m_pieRconInputBuf[512] = {};
 
+        /// Result of the last connect attempt, shown under the Direct Connect field so a refused
+        /// connect is visible rather than silent.
+        std::string m_connectStatus;
+
         // Server browser
         std::vector<DiscoveredServer> m_discoveredServers;
-        bool m_isScanning = false;
-        float m_scanTimer = 0.0f;
 
         // Monitor / RCON
         char m_rconInputBuf[512] = {};

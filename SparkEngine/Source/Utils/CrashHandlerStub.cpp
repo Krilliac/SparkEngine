@@ -22,6 +22,12 @@ void TriggerCrashHandler(const char* assertMsg)
         std::fprintf(stderr, "Assert (no crash handler): %s\n", assertMsg);
 }
 
+void TriggerCrashReport(const char* reason)
+{
+    if (reason)
+        std::fprintf(stderr, "Crash report (no crash handler): %s\n", reason);
+}
+
 void SetAssertCrashBehavior(bool /*shouldCrash*/)
 {
     // No-op without crash handler

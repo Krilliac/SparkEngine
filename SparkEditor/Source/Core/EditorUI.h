@@ -30,7 +30,6 @@
 #include "../Prefabs/PrefabManager.h"
 #include "../Search/CommandPalette.h"
 #include "Engine/Editor/PlayModeManager.h"
-#include "../Gizmos/GizmoSystem.h"
 #include "../Communication/CollaborativeEditSession.h"
 #include "../Communication/LiveEditBridge.h"
 #include "Engine/ECS/Components.h"
@@ -157,7 +156,6 @@ namespace SparkEditor
         UndoRedoManager* GetUndoRedoManager() { return &UndoRedoManager::GetInstance(); }
         PrefabManager* GetPrefabManager() { return m_prefabManager.get(); }
         CommandPalette* GetCommandPalette() { return m_commandPalette.get(); }
-        GizmoSystem* GetGizmoSystem() { return m_gizmoSystem.get(); }
         CollaborativeEditSession* GetCollabSession() { return m_collabSession.get(); }
         LiveEditBridge* GetLiveEditBridge() { return m_liveEditBridge.get(); }
 
@@ -187,6 +185,19 @@ namespace SparkEditor
         bool RequestOpenProject(const std::string& projectPath);
         bool RequestCreateProject(const std::string& projectName, const std::string& parentDirectory,
                                   ProjectTemplate templateType, const std::string& description);
+
+        /// @brief Active viewport transform tool. The main toolbar, the W/E/R
+        /// hotkeys, the command palette and the Scene View toolbar all publish
+        /// through SetTransformTool(), which is what the viewport gizmo reads.
+        enum class TransformTool
+        {
+            Move,
+            Rotate,
+            Scale
+        };
+
+        /// @brief Select the transform tool and push it to the Scene View gizmo.
+        void SetTransformTool(TransformTool tool);
 
         /// Document operations shared by menus, shortcuts, command palette,
         /// and World-backed panels. These are the only scene model the editor
@@ -364,12 +375,6 @@ namespace SparkEditor
         /// @brief Play-in-editor manager (scene snapshot, time control, subsystem toggles)
         Spark::Editor::PlayModeManager m_playModeManager;
 
-        enum class TransformTool
-        {
-            Move,
-            Rotate,
-            Scale
-        };
         TransformTool m_currentTool = TransformTool::Move;
 
         enum class TransformSpace
@@ -381,9 +386,6 @@ namespace SparkEditor
 
         bool m_snapEnabled = false;
         float m_snapValue = 1.0f;
-
-        // Gizmo system — 3D object manipulation overlays
-        std::unique_ptr<GizmoSystem> m_gizmoSystem;
 
         // The single live ECS World being edited (the document). Panels that
         // display/manipulate scene content (SceneView, Hierarchy, Inspector)

@@ -12,10 +12,12 @@
 
 #include "RenderPipeline.h"
 #include "GraphicsEngine.h"
+#include "GraphicsRenderPipelinesShadowPass.h"
+#include "LightingSystem.h"
 #include "RenderGraph/RenderGraphBuilder.h"
-#include "ShadowAtlas.h"
 #include "../Utils/Validate.h"
 #include <algorithm>
+#include <vector>
 
 namespace Spark::Graphics
 {
@@ -155,50 +157,60 @@ namespace Spark::Graphics
         // ================================================================
         // Shadow pass — generates the shadow atlas / cascade maps
         // ================================================================
-        RegisterPass("ShadowPass", PassPhase::Shadow,
-                     [this](RenderGraph& graph)
-                     {
-                         graph.AddPass(
-                             "ShadowPass", RenderGraphPassType::Graphics,
-                             [&graph](RenderGraphBuilder& builder)
-                             {
-                                 auto& data = graph.GetBlackboard().Add<ShadowPassData>();
+        RegisterPass(
+            "ShadowPass", PassPhase::Shadow,
+            [this](RenderGraph& graph)
+            {
+                graph.AddPass(
+                    "ShadowPass", RenderGraphPassType::Graphics,
+                    [&graph](RenderGraphBuilder& builder)
+                    {
+                        auto& data = graph.GetBlackboard().Add<ShadowPassData>();
 
-                                 // Create shadow atlas depth target
-                                 RenderGraphTextureDesc shadowDesc{};
-                                 shadowDesc.width = 2048;
-                                 shadowDesc.height = 2048;
-                                 shadowDesc.depth = 1;
-                                 shadowDesc.arraySize = 3; // 3 cascades
-                                 shadowDesc.mipLevels = 1;
-                                 shadowDesc.sampleCount = 1;
-                                 shadowDesc.format = RenderTargetFormat::D32_FLOAT;
-                                 shadowDesc.usage = RenderTargetUsage::DepthStencil | RenderTargetUsage::ShaderResource;
-                                 shadowDesc.clearDepth = 1.0f;
+                        // Create shadow atlas depth target
+                        RenderGraphTextureDesc shadowDesc{};
+                        shadowDesc.width = 2048;
+                        shadowDesc.height = 2048;
+                        shadowDesc.depth = 1;
+                        shadowDesc.arraySize = 3; // 3 cascades
+                        shadowDesc.mipLevels = 1;
+                        shadowDesc.sampleCount = 1;
+                        shadowDesc.format = RenderTargetFormat::D32_FLOAT;
+                        shadowDesc.usage = RenderTargetUsage::DepthStencil | RenderTargetUsage::ShaderResource;
+                        shadowDesc.clearDepth = 1.0f;
 
-                                 data.shadowAtlas = builder.Create("ShadowAtlas", shadowDesc);
-                                 data.shadowAtlas = builder.Write(data.shadowAtlas);
-                                 data.cascadeCount = 3;
+                        data.shadowAtlas = builder.Create("ShadowAtlas", shadowDesc);
+                        data.shadowAtlas = builder.Write(data.shadowAtlas);
+                        data.cascadeCount = 3;
 
-                                 // Side-effect: even without downstream readers, shadows
-                                 // are consumed by the GPU lighting shader directly.
-                                 builder.SideEffect();
-                             },
-                             [this](const RenderGraphResourceRegistry& /*resources*/)
-                             {
-                                 if (!m_graphicsEngine)
-                                     return;
+                        // Side-effect: even without downstream readers, shadows
+                        // are consumed by the GPU lighting shader directly.
+                        builder.SideEffect();
+                    },
+                    [this](const RenderGraphResourceRegistry& /*resources*/)
+                    {
+                        if (!m_graphicsEngine)
+                            return;
 
-                                 // ShadowAtlas tile updates are driven by the lighting system.
-                                 // The atlas itself is a persistent resource managed by GraphicsEngine;
-                                 // this pass ensures the graph accounts for shadow work ordering.
-                                 auto* shadowAtlas = m_graphicsEngine->GetShadowAtlas();
-                                 if (shadowAtlas)
-                                 {
-                                     shadowAtlas->BeginFrame();
-                                 }
-                             });
-                     });
+                        // Rasterize the shadow casters from each shadow-casting
+                        // light's point of view. This has to happen here rather
+                        // than in GraphicsEngine::LightingPass: the geometry pass
+                        // drains the ECS draw list, so by the Lighting phase there
+                        // are no casters left to draw.
+                        //
+                        // The shadow atlas frame counter is advanced once per frame
+                        // by GraphicsEngine::BeginFrame — advancing it again here
+                        // made every atlas tile look one frame staler than it was.
+                        LightingSystem* lightingSystem = m_graphicsEngine->GetLightingSystem();
+                        if (!lightingSystem)
+                            return;
+
+                        const std::vector<GraphicsEngine::MeshDrawCommand> drawList = m_graphicsEngine->GetDrawList();
+                        lightingSystem->RenderShadowMaps(
+                            [this, &drawList](const DirectX::XMMATRIX& lightView, const DirectX::XMMATRIX& lightProj)
+                            { RenderShadowCasterDepth(*m_graphicsEngine, drawList, lightView, lightProj); });
+                    });
+            });
 
         // ================================================================
         // Geometry pass — fills the G-buffer (deferred) or renders

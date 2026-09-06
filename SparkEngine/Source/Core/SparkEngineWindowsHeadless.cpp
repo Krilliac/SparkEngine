@@ -33,6 +33,7 @@
 #include "EngineConsoleCommands.h"
 #include "EngineContext.h"
 #include "EngineRuntime.h"
+#include "EngineSettings.h"
 #include "EngineSetup.h"
 #include "FaultIsolation.h"
 #include "FixedTimestepAccumulator.h"
@@ -222,7 +223,9 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     // Progress breadcrumbs via Logger (SimpleConsole.LogInfo only writes
     // to an in-memory buffer and is invisible to terminal Wine runs).
     SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: SaveSystem::Initialize");
-    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    // Same per-user location (and same one-time legacy-saves migration) as the
+    // windowed entry point so both paths share saves.
+    if (!Spark::SaveSystem::GetInstance().Initialize(Spark::UserPaths::ResolveSaveDirectory()))
         Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
     SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: SaveSystem initialized");
 
@@ -330,7 +333,7 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
         SPARK_GUARDED_UPDATE("Modules", "Core", {
-            if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules())
+            if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules())
             {
                 GetEngineRuntime().moduleManager->UpdateAll(dt);
                 auto& fixedAcc = Spark::FixedTimestepAccumulator::GetInstance();
@@ -372,6 +375,20 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     // in reverse creation order, NOT at static teardown - the C runtime exit
     // path otherwise AVs in ~UIPanel (dead ImGui/graphics) and then hangs
     // inside the crash handler.
+    //
+    // Deregister them from EngineContext FIRST. Module OnUnload runs later,
+    // inside ShutdownEngineAfterPreflight, and a module that unregisters what
+    // it installed in OnLoad reaches these systems through ctx->GetUI() /
+    // GetDialogue() / GetWeather() / GetModSystem(). Leaving the slots set
+    // handed that module freed memory; clearing them makes the getters return
+    // null, which the documented contract allows.
+    if (EngineContext* shutdownContext = EngineContext::Get())
+    {
+        shutdownContext->SetModSystem(nullptr);
+        shutdownContext->SetDialogue(nullptr);
+        shutdownContext->SetUI(nullptr);
+        shutdownContext->SetWeather(nullptr);
+    }
     g_modSystem.reset();
     g_dialogueSystem.reset();
     g_uiSystem.reset();

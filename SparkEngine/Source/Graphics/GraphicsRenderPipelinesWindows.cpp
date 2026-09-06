@@ -12,6 +12,7 @@
 
 #include "GraphicsEngine.h"
 #include "LightingSystem.h"
+#include "Mesh.h"
 #include "TerrainRenderer.h"
 #include "../Game/GameObject.h"
 #include "../Utils/LogMacros.h"
@@ -72,8 +73,11 @@ void GraphicsEngine::RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& p
             {
                 obj->Render(viewMatrix, projMatrix);
                 drawCalls++;
-                triangles += 12;
-                vertices += 36;
+                if (const Mesh* mesh = obj->GetMesh())
+                {
+                    triangles += mesh->GetIndexCount() / 3;
+                    vertices += mesh->GetVertexCount();
+                }
             }
             catch (const std::exception& e)
             {
@@ -137,24 +141,16 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
         return;
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Starting deferred rendering pass", L"INFO");
-
     // Phase 1: Fill G-Buffer
     FillGBuffer(objects, viewMatrix, projMatrix);
 
     // Phase 2: Lighting pass
     LightingPass(viewMatrix, projMatrix);
 
-    // Phase 2.5: Hybrid ray tracing (SDFGI or DXR) — after lighting, before
-    // transparents. Shared across Windows/Linux/macOS; per-platform texture
-    // wrapping lives in AcquireHybridRTBindings().
-#ifdef SPARK_HYBRID_RT
-    if (m_rhiBridge)
-        DispatchHybridRTPass(m_rhiBridge->GetCommandList(), viewMatrix, projMatrix);
-#endif
-
     // Phase 3: Forward rendering for transparent objects
     uint32_t transparentDrawCalls = 0;
+    uint32_t transparentTriangles = 0;
+    uint32_t transparentVertices = 0;
     for (auto* obj : objects)
     {
         if (obj && obj->IsActive() && obj->IsVisible())
@@ -163,6 +159,11 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
             {
                 obj->Render(viewMatrix, projMatrix);
                 transparentDrawCalls++;
+                if (const Mesh* mesh = obj->GetMesh())
+                {
+                    transparentTriangles += mesh->GetIndexCount() / 3;
+                    transparentVertices += mesh->GetVertexCount();
+                }
             }
             catch (const std::exception& e)
             {
@@ -187,11 +188,9 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         m_statistics.drawCalls += transparentDrawCalls;
-        m_statistics.triangles += transparentDrawCalls * 12;
-        m_statistics.vertices += transparentDrawCalls * 36;
+        m_statistics.triangles += transparentTriangles;
+        m_statistics.vertices += transparentVertices;
     }
-
-    LOG_TO_CONSOLE_IMMEDIATE(L"Deferred rendering pass complete", L"INFO");
 }
 
 void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
@@ -202,8 +201,6 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
         SPARK_LOG_WARN(Spark::LogCategory::Graphics, "RenderForwardPlus: device context is null, skipping");
         return;
     }
-
-    LOG_TO_CONSOLE_IMMEDIATE(L"Starting Forward+ rendering pass", L"INFO");
 
     // Phase 1: Depth pre-pass
     uint32_t depthDrawCalls = 0;
@@ -234,8 +231,11 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
             {
                 obj->Render(viewMatrix, projMatrix);
                 shadingDrawCalls++;
-                triangles += 12;
-                vertices += 36;
+                if (const Mesh* mesh = obj->GetMesh())
+                {
+                    triangles += mesh->GetIndexCount() / 3;
+                    vertices += mesh->GetVertexCount();
+                }
             }
             catch (const std::exception& e)
             {
@@ -265,8 +265,6 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
         m_statistics.triangles = triangles;
         m_statistics.vertices = vertices;
     }
-
-    LOG_TO_CONSOLE_IMMEDIATE(L"Forward+ rendering pass complete", L"INFO");
 }
 
 

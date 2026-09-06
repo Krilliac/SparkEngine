@@ -15,6 +15,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterable
 
+from assets import validate_assets
 from common import (
     METRIC_IDS,
     REPO_ROOT,
@@ -25,6 +26,7 @@ from common import (
     load_json,
     read_bytes_stable,
 )
+from contract_selectors import resolve_ci_job, resolve_test_selector
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 
 
@@ -163,7 +165,6 @@ REQUIRED_NULLRHI_CONFLICTS = {
 # Deliberate outputs of unfinished work items. A missing path not listed here is
 # a contract error, not a soft warning.
 FUTURE_ACCEPTANCE_PATHS = {
-    "GameModules/*/module.json",
     "GameModules/SparkGame/README.md",
     "GameModules/SparkGameARPG/README.md",
     "GameModules/SparkGameFPS/README.md",
@@ -211,6 +212,13 @@ WORK_ITEM_LIST_KEYS = {
     "acceptanceCriteria", "commands", "testSelectors", "requiredCiJobs",
     "performanceBudgets", "documentationUpdates", "readinessChanges", "websiteImpact",
     "risks", "outOfScope", "definitionOfDone",
+}
+# Declared, reviewable debt: a named CI job or test selector that intentionally
+# does not exist yet. Each entry must also appear in the required list it
+# excuses, and must stop resolving to nothing once the job or test lands.
+WORK_ITEM_PLANNED_KEYS = {
+    "requiredCiJobs": "plannedCiJobs",
+    "testSelectors": "plannedTestSelectors",
 }
 
 
@@ -915,12 +923,37 @@ def validate_public_claim_text(
 
 
 class Validator:
-    def __init__(self, contract: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        contract: dict[str, Any],
+        *,
+        allow_legacy_contract: bool = False,
+        max_legacy_contract: int | None = None,
+    ) -> None:
         self.contract = contract
         self.errors: list[str] = []
+        self.allow_legacy_contract = allow_legacy_contract
+        # A waiver with no ceiling also accepts references added after it was
+        # granted, which turns "debt being paid down" into "debt no longer
+        # measured". The ceiling is a ratchet: it never blocks the count going
+        # down, only its going up.
+        self.max_legacy_contract = max_legacy_contract
+        self.legacy: list[str] = []
 
     def error(self, location: str, message: str) -> None:
         self.errors.append(f"{location}: {message}")
+
+    def legacy_error(self, location: str, message: str) -> None:
+        """Report a reference class that predates its own validation.
+
+        Default behaviour is a hard error. ``--allow-legacy-contract`` keeps the
+        run alive while the contract is corrected, but every downgraded entry is
+        printed: silence is what let these references accumulate.
+        """
+        if self.allow_legacy_contract:
+            self.legacy.append(f"{location}: {message}")
+            return
+        self.error(location, message)
 
     def require(self, condition: bool, location: str, message: str) -> None:
         if not condition:
@@ -950,11 +983,54 @@ class Validator:
         if path.is_absolute() or ".." in path.parts or "\\" in value:
             self.error(location, f"invalid repository-relative path {value!r}")
             return
+        if any(character in value for character in "*?["):
+            # A pattern that is only ever compared against its own text is
+            # permanently satisfied, so expand it and demand a real match.
+            if any(REPO_ROOT.glob(value)):
+                return
+            self.legacy_error(location, f"path pattern matches no file: {value}")
+            return
         if (REPO_ROOT / path).exists():
             return
         if allow_future and self.is_future_path(value):
             return
         self.error(location, f"referenced path does not exist: {value}")
+
+    def validate_selectors(self, item: dict[str, Any], location: str) -> None:
+        """Resolve requiredCiJobs and testSelectors, or require declared debt."""
+        resolvers = {
+            "requiredCiJobs": (resolve_ci_job, "no workflow job is defined with this id"),
+            "testSelectors": (resolve_test_selector, "no CTest test, label, or SparkTests definition matches"),
+        }
+        for key, (resolves, reason) in resolvers.items():
+            planned_key = WORK_ITEM_PLANNED_KEYS[key]
+            planned = item.get(planned_key, [])
+            if not isinstance(planned, list):
+                self.error(f"{location}.{planned_key}", "must be an array")
+                planned = []
+            declared = item.get(key, [])
+            if not isinstance(declared, list):
+                continue
+            for index, value in enumerate(planned):
+                entry_location = f"{location}.{planned_key}[{index}]"
+                if not isinstance(value, str) or not value:
+                    self.error(entry_location, "must be a non-empty string")
+                    continue
+                if value not in declared:
+                    self.error(entry_location, f"{value!r} is not declared in {key}")
+                elif resolves(value):
+                    self.error(entry_location, f"{value!r} now exists and must be promoted out of {planned_key}")
+            for index, value in enumerate(declared):
+                entry_location = f"{location}.{key}[{index}]"
+                if not isinstance(value, str) or not value:
+                    self.error(entry_location, "must be a non-empty string")
+                    continue
+                if value in planned or resolves(value):
+                    continue
+                self.legacy_error(
+                    entry_location,
+                    f"{value!r} resolves to nothing: {reason}; fix the name or declare it in {planned_key}",
+                )
 
     def validate_schema_versions(self) -> None:
         for name in ("content", "readiness", "docsCatalog"):
@@ -1036,6 +1112,7 @@ class Validator:
             for key in ("entryPoints", "documentationUpdates"):
                 for index, target_path in enumerate(item.get(key, [])):
                     self.require_path(target_path, f"{location}.{key}[{index}]", allow_future=True)
+            self.validate_selectors(item, location)
 
         visiting: set[str] = set()
         visited: set[str] = set()
@@ -1941,6 +2018,14 @@ class Validator:
         self.require((REPO_ROOT / "Assets").is_dir(), "Assets", "asset root does not exist")
         self.require((REPO_ROOT / "Shaders").is_dir(), "Shaders", "shader root does not exist")
         self.require((REPO_ROOT / "SparkEngine" / "Source" / "Graphics" / "AssetPipeline.cpp").is_file(), "asset pipeline", "primary asset-pipeline source is absent")
+        for location, message in validate_assets():
+            # Every asset finding, absent manifest included, is a hard error. A
+            # missing manifest is the headline condition the asset-integrity job
+            # exists to catch (RDY-020); routing it through the legacy waiver
+            # made that job structurally incapable of failing for it, while the
+            # job still has to pass the waiver for the unrelated
+            # contract-reference debt the whole validator walks.
+            self.error(location, message)
 
     def validate_docs_surface(self) -> None:
         catalog = self.contract["docsCatalog"]
@@ -2025,6 +2110,21 @@ class Validator:
                 "globalRelease.state",
                 "release is not ready",
             )
+        if self.legacy:
+            detail = "\n".join(f"  - {message}" for message in sorted(self.legacy))
+            print(
+                f"warning: {len(self.legacy)} legacy contract reference(s) accepted by "
+                f"--allow-legacy-contract:\n{detail}",
+                file=sys.stderr,
+            )
+        if self.max_legacy_contract is not None and len(self.legacy) > self.max_legacy_contract:
+            self.error(
+                "--max-legacy-contract",
+                f"{len(self.legacy)} legacy contract reference(s) exceed the ceiling of "
+                f"{self.max_legacy_contract}: a reference added under the waiver is not waived. "
+                "Fix the new reference (or declare it in plannedCiJobs/plannedTestSelectors) "
+                "instead of raising the ceiling",
+            )
         if self.errors:
             detail = "\n".join(f"  - {message}" for message in self.errors)
             raise SiteDataError(f"site-data validation failed with {len(self.errors)} error(s):\n{detail}")
@@ -2038,9 +2138,15 @@ def validate_contract(
     legal: bool = False,
     docs: bool = False,
     capability: str | None = None,
+    allow_legacy_contract: bool = False,
+    max_legacy_contract: int | None = None,
 ) -> dict[str, Any]:
     contract = load_contract()
-    Validator(contract).validate(
+    Validator(
+        contract,
+        allow_legacy_contract=allow_legacy_contract,
+        max_legacy_contract=max_legacy_contract,
+    ).validate(
         require_ready=require_ready,
         modules=modules,
         assets=assets,
@@ -2198,6 +2304,23 @@ def validate_published_bundle(root: Path, *, require_exact_evidence: bool = Fals
         raise SiteDataError(f"published bundle validation failed with {len(errors)} error(s):\n{detail}")
 
 
+LEGACY_CONTRACT_FLAG_DEPRECATION = (
+    "--allow-legacy-contract is DEPRECATED and no longer used by any workflow. The "
+    "contract validates strictly at this tree, so the waiver can only hide a NEW "
+    "unresolvable requiredCiJobs / testSelectors / path reference. It survives solely "
+    "because Tests/Tools/test_site_data_contract.py drives the downgrade path directly, "
+    "and it will be deleted with those fixtures. Fix the reference (or declare it in "
+    "plannedCiJobs / plannedTestSelectors) instead of passing this flag."
+)
+
+
+def warn_legacy_contract_flag_deprecated(command: str) -> None:
+    """Print an unmissable banner when the retired waiver flag is used."""
+
+    rule = "=" * 78
+    print(f"{rule}\n{command}: {LEGACY_CONTRACT_FLAG_DEPRECATION}\n{rule}", file=sys.stderr)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--require-ready", action="store_true")
@@ -2212,7 +2335,34 @@ def main() -> int:
         action="store_true",
         help="require a canonical durable build-matrix and CodeQL evidence manifest in published output",
     )
+    parser.add_argument(
+        "--allow-legacy-contract",
+        action="store_true",
+        help=(
+            "DEPRECATED, retired waiver: downgrade unresolvable requiredCiJobs, "
+            "testSelectors, and path patterns to printed warnings. The contract "
+            "validates strictly, so this flag can only hide a new unresolvable "
+            "reference. Asset-manifest absence is never downgraded"
+        ),
+    )
+    parser.add_argument(
+        "--max-legacy-contract",
+        type=int,
+        metavar="N",
+        help=(
+            "fail when --allow-legacy-contract downgrades more than N references. Bounds "
+            "the waiver to the debt that already exists, so a newly added unresolvable "
+            "reference is still a hard error"
+        ),
+    )
     args = parser.parse_args()
+    if args.allow_legacy_contract:
+        warn_legacy_contract_flag_deprecated("validate.py")
+    if args.max_legacy_contract is not None:
+        if not args.allow_legacy_contract:
+            parser.error("--max-legacy-contract requires --allow-legacy-contract")
+        if args.max_legacy_contract < 0:
+            parser.error("--max-legacy-contract must not be negative")
     try:
         contract = validate_contract(
             require_ready=args.require_ready,
@@ -2221,6 +2371,8 @@ def main() -> int:
             legal=args.legal,
             docs=args.docs,
             capability=args.capability,
+            allow_legacy_contract=args.allow_legacy_contract,
+            max_legacy_contract=args.max_legacy_contract,
         )
         if args.published:
             validate_published_bundle(

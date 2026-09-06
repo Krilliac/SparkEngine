@@ -32,8 +32,8 @@ TEST(EventResponseSystemPhaseEE_InitializeShutdown)
 {
     auto& ers = Spark::Gameplay::EventResponseSystem::GetInstance();
     ers.Shutdown();
-    ers.Initialize();
-    ers.Shutdown();
+    EXPECT_NO_THROW(ers.Initialize());
+    EXPECT_NO_THROW(ers.Shutdown());
     ers.Initialize();
 }
 

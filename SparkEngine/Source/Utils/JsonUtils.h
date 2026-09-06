@@ -53,6 +53,29 @@ namespace Spark::Json
 {
 
     /**
+     * @brief Input budget applied to every parse.
+     *
+     * The parser is recursive-descent, so nesting depth is native stack depth: an
+     * untrusted document of 65,000 '[' characters overflows the stack, and a stack
+     * overflow is not a catchable C++ exception, so a caller's `catch (...)` does
+     * not save the process. maxDepth is therefore a hard safety bound, not a
+     * policy knob. maxBytes and maxNodes bound the memory a document can demand
+     * before any field is inspected.
+     *
+     * Defaults are far above anything the engine's own data files contain; call
+     * ParseBounded with a tighter budget for untrusted manifests.
+     */
+    struct JsonLimits
+    {
+        /// Maximum input length in bytes.
+        size_t maxBytes = 32u * 1024u * 1024u;
+        /// Maximum array/object nesting depth.
+        uint32_t maxDepth = 128u;
+        /// Maximum number of JSON values the document may produce.
+        size_t maxNodes = 4000000u;
+    };
+
+    /**
      * @brief JSON value type discriminator.
      */
     enum class Type : uint8_t
@@ -309,10 +332,84 @@ namespace Spark::Json
     namespace Detail
     {
 
+        /**
+         * @brief Non-recursive pre-scan enforcing JsonLimits on raw text.
+         *
+         * Runs before any backend touches the input, so the bound holds for the
+         * built-in recursive-descent parser and for the nlohmann backend alike
+         * (both recurse once per nesting level and neither bounds itself).
+         *
+         * Node accounting is an upper bound: each value is counted once, at the
+         * token that introduces it -- the root, the '[' or '{' opening its
+         * container (which introduces that container's first element or member),
+         * or the ',' introducing the next sibling. A ':' introduces nothing new:
+         * the member value after it was already counted by the '{' or ',' that
+         * introduced the member, so counting ':' too would charge every object
+         * member twice. Empty containers overcount by one, which only makes the
+         * bound more conservative.
+         */
+        inline bool ScanWithinLimits(std::string_view json, const JsonLimits& limits, const char** outError)
+        {
+            const auto fail = [outError](const char* msg)
+            {
+                if (outError)
+                    *outError = msg;
+                return false;
+            };
+
+            if (json.size() > limits.maxBytes)
+                return fail("input exceeds maximum size");
+
+            uint32_t depth = 0;
+            size_t nodes = 1;
+            bool inString = false;
+            bool escaped = false;
+
+            for (const char c : json)
+            {
+                if (inString)
+                {
+                    if (escaped)
+                        escaped = false;
+                    else if (c == '\\')
+                        escaped = true;
+                    else if (c == '"')
+                        inString = false;
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    inString = true;
+                }
+                else if (c == '[' || c == '{')
+                {
+                    ++depth;
+                    if (depth > limits.maxDepth)
+                        return fail("maximum nesting depth exceeded");
+                    ++nodes;
+                }
+                else if (c == ']' || c == '}')
+                {
+                    if (depth > 0)
+                        --depth;
+                }
+                else if (c == ',')
+                {
+                    ++nodes;
+                }
+
+                if (nodes > limits.maxNodes)
+                    return fail("maximum node count exceeded");
+            }
+
+            return true;
+        }
+
         class Parser
         {
           public:
-            explicit Parser(std::string_view input) : m_input(input), m_pos(0) {}
+            Parser(std::string_view input, const JsonLimits& limits) : m_input(input), m_pos(0), m_limits(limits) {}
 
             Value Parse()
             {
@@ -364,9 +461,26 @@ namespace Spark::Json
           private:
             std::string_view m_input;
             size_t m_pos;
+            JsonLimits m_limits;
+            uint32_t m_depth = 0;
             bool m_failed = false;
             const char* m_errorMsg = "";
             size_t m_errorPos = 0;
+
+            /// Balances m_depth across every exit path of ParseArray/ParseObject.
+            class DepthGuard
+            {
+              public:
+                explicit DepthGuard(Parser& parser) : m_parser(parser) { ++m_parser.m_depth; }
+                ~DepthGuard() { --m_parser.m_depth; }
+                DepthGuard(const DepthGuard&) = delete;
+                DepthGuard& operator=(const DepthGuard&) = delete;
+
+                [[nodiscard]] bool Exceeded() const { return m_parser.m_depth > m_parser.m_limits.maxDepth; }
+
+              private:
+                Parser& m_parser;
+            };
 
             /// Record the first failure (message + offset). First error wins — it
             /// carries the most useful position for nested constructs.
@@ -573,30 +687,67 @@ namespace Spark::Json
                 return Fail("unterminated string");
             }
 
-            std::string ParseUnicodeEscape()
+            /// Read exactly 4 hex digits into @p outCodepoint. Records an error and
+            /// returns false on anything else.
+            bool ReadHex4(uint32_t& outCodepoint)
             {
-                // Read 4 hex digits for BMP codepoint
-                uint32_t codepoint = 0;
+                outCodepoint = 0;
                 for (int i = 0; i < 4; ++i)
                 {
                     char c = Advance();
-                    codepoint <<= 4;
+                    outCodepoint <<= 4;
                     if (c >= '0' && c <= '9')
-                        codepoint |= (c - '0');
+                        outCodepoint |= static_cast<uint32_t>(c - '0');
                     else if (c >= 'a' && c <= 'f')
-                        codepoint |= (c - 'a' + 10);
+                        outCodepoint |= static_cast<uint32_t>(c - 'a' + 10);
                     else if (c >= 'A' && c <= 'F')
-                        codepoint |= (c - 'A' + 10);
+                        outCodepoint |= static_cast<uint32_t>(c - 'A' + 10);
                     else
                     {
                         // Lenient path keeps the historical '?' replacement; the
                         // strict path reports the recorded error instead.
                         RecordError("invalid \\u escape (expected 4 hex digits)");
-                        return "?";
+                        return false;
                     }
                 }
+                return true;
+            }
 
-                // Simple UTF-8 encoding for BMP
+            std::string ParseUnicodeEscape()
+            {
+                uint32_t codepoint = 0;
+                if (!ReadHex4(codepoint))
+                    return "?";
+
+                if (codepoint >= 0xD800 && codepoint <= 0xDBFF)
+                {
+                    // High surrogate: RFC 8259 requires the matching low-surrogate
+                    // escape. Encoding the halves separately produces WTF-8, which is
+                    // not valid UTF-8 and corrupts every downstream consumer
+                    // (ImGui text, log formatting, filenames).
+                    if (m_pos + 1 >= m_input.size() || m_input[m_pos] != '\\' || m_input[m_pos + 1] != 'u')
+                    {
+                        RecordError("invalid \\u escape (unpaired high surrogate)");
+                        return "?";
+                    }
+                    m_pos += 2;
+
+                    uint32_t low = 0;
+                    if (!ReadHex4(low))
+                        return "?";
+                    if (low < 0xDC00 || low > 0xDFFF)
+                    {
+                        RecordError("invalid \\u escape (high surrogate not followed by a low surrogate)");
+                        return "?";
+                    }
+                    codepoint = 0x10000u + ((codepoint - 0xD800u) << 10) + (low - 0xDC00u);
+                }
+                else if (codepoint >= 0xDC00 && codepoint <= 0xDFFF)
+                {
+                    RecordError("invalid \\u escape (unpaired low surrogate)");
+                    return "?";
+                }
+
                 std::string result;
                 if (codepoint <= 0x7F)
                 {
@@ -607,9 +758,16 @@ namespace Spark::Json
                     result += static_cast<char>(0xC0 | (codepoint >> 6));
                     result += static_cast<char>(0x80 | (codepoint & 0x3F));
                 }
-                else
+                else if (codepoint <= 0xFFFF)
                 {
                     result += static_cast<char>(0xE0 | (codepoint >> 12));
+                    result += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+                    result += static_cast<char>(0x80 | (codepoint & 0x3F));
+                }
+                else
+                {
+                    result += static_cast<char>(0xF0 | (codepoint >> 18));
+                    result += static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
                     result += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
                     result += static_cast<char>(0x80 | (codepoint & 0x3F));
                 }
@@ -618,6 +776,10 @@ namespace Spark::Json
 
             Value ParseArray()
             {
+                const DepthGuard guard(*this);
+                if (guard.Exceeded())
+                    return Fail("maximum nesting depth exceeded");
+
                 Advance(); // consume '['
                 SkipWhitespace();
 
@@ -652,6 +814,10 @@ namespace Spark::Json
 
             Value ParseObject()
             {
+                const DepthGuard guard(*this);
+                if (guard.Exceeded())
+                    return Fail("maximum nesting depth exceeded");
+
                 Advance(); // consume '{'
                 SkipWhitespace();
 
@@ -814,9 +980,20 @@ namespace Spark::Json
      * When SPARK_HAS_NLOHMANN_JSON is defined, uses nlohmann/json for parsing
      * (more robust, handles edge cases, Unicode escapes). Otherwise falls back
      * to the built-in recursive-descent parser.
+     *
+     * The default JsonLimits budget is enforced first, so no backend can be driven
+     * into unbounded recursion by untrusted input. Use ParseBounded to tighten the
+     * budget for a manifest-sized document.
      */
-    [[nodiscard]] inline Value Parse(std::string_view json)
+    [[nodiscard]] inline Value Parse(std::string_view json, const JsonLimits& limits = {})
     {
+        const char* limitError = nullptr;
+        if (!Detail::ScanWithinLimits(json, limits, &limitError))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Parse rejected input: %s", limitError);
+            return {};
+        }
+
 #if SPARK_HAS_NLOHMANN_JSON
         try
         {
@@ -829,9 +1006,50 @@ namespace Spark::Json
             return {};
         }
 #else
-        Detail::Parser parser(json);
+        Detail::Parser parser(json, limits);
         return parser.Parse();
 #endif
+    }
+
+    /**
+     * @brief Strict parse under an explicit input budget.
+     *
+     * Same acceptance rules as ParseStrict below, plus a caller-chosen JsonLimits
+     * budget so an untrusted manifest can be held to manifest-sized bounds (a few
+     * KB, shallow nesting) instead of the permissive engine-wide default. The
+     * budget is checked against the raw text before a single value is constructed,
+     * so an oversized or over-nested document costs one linear scan and no
+     * allocation.
+     *
+     * @param json     Input text.
+     * @param limits   Budget to enforce.
+     * @param outValue Receives the parsed value on success, Null on failure. May be nullptr.
+     * @param outError Receives the failure reason. May be nullptr.
+     * @return true when the input is exactly one well-formed JSON value within budget.
+     */
+    [[nodiscard]] inline bool ParseBounded(std::string_view json, const JsonLimits& limits, Value* outValue,
+                                           std::string* outError = nullptr)
+    {
+        if (outValue)
+            *outValue = Value();
+
+        const char* limitError = nullptr;
+        if (!Detail::ScanWithinLimits(json, limits, &limitError))
+        {
+            if (outError)
+                *outError = limitError;
+            return false;
+        }
+
+        Value localValue;
+        std::string localError;
+        Detail::Parser parser(json, limits);
+        const bool ok = parser.ParseStrictRoot(localValue, localError);
+        if (outValue)
+            *outValue = std::move(localValue);
+        if (!ok && outError)
+            *outError = std::move(localError);
+        return ok;
     }
 
     /**
@@ -866,15 +1084,7 @@ namespace Spark::Json
      */
     [[nodiscard]] inline bool ParseStrict(std::string_view json, Value* outValue, std::string* outError = nullptr)
     {
-        Value localValue;
-        std::string localError;
-        Detail::Parser parser(json);
-        const bool ok = parser.ParseStrictRoot(localValue, localError);
-        if (outValue)
-            *outValue = std::move(localValue);
-        if (!ok && outError)
-            *outError = std::move(localError);
-        return ok;
+        return ParseBounded(json, JsonLimits{}, outValue, outError);
     }
 
     namespace Detail
@@ -926,8 +1136,23 @@ namespace Spark::Json
             out += '"';
         }
 
-        inline void StringifyImpl(std::string& out, const Value& val)
+        /// Serializer recursion bound, set above the parse depth limit so any
+        /// parsed document always round-trips. Value owns its children by value,
+        /// so a cyclic Value cannot be constructed and this bound cannot observe
+        /// one. What it actually bounds is a programmatically built Value nested
+        /// deeper than the serializer can safely recurse: past the bound the
+        /// subtree is emitted as `null` instead of overflowing the stack, so the
+        /// output is truncated rather than the process being killed.
+        inline constexpr int kMaxSerializeDepth = 256;
+
+        inline void StringifyImpl(std::string& out, const Value& val, int depth)
         {
+            if (depth > kMaxSerializeDepth)
+            {
+                out += "null";
+                return;
+            }
+
             switch (val.GetType())
             {
             case Type::Null:
@@ -960,7 +1185,7 @@ namespace Spark::Json
                 {
                     if (i > 0)
                         out += ',';
-                    StringifyImpl(out, val[i]);
+                    StringifyImpl(out, val[i], depth + 1);
                 }
                 out += ']';
                 break;
@@ -977,7 +1202,7 @@ namespace Spark::Json
                     first = false;
                     EscapeString(out, key);
                     out += ':';
-                    StringifyImpl(out, val[key]);
+                    StringifyImpl(out, val[key], depth + 1);
                 }
                 out += '}';
                 break;
@@ -987,6 +1212,12 @@ namespace Spark::Json
 
         inline void PrettyImpl(std::string& out, const Value& val, int indent, int depth)
         {
+            if (depth > kMaxSerializeDepth)
+            {
+                out += "null";
+                return;
+            }
+
             std::string pad(static_cast<size_t>(depth * indent), ' ');
             std::string innerPad(static_cast<size_t>((depth + 1) * indent), ' ');
 
@@ -1068,7 +1299,7 @@ namespace Spark::Json
     [[nodiscard]] inline std::string Stringify(const Value& val)
     {
         std::string out;
-        Detail::StringifyImpl(out, val);
+        Detail::StringifyImpl(out, val, 0);
         return out;
     }
 

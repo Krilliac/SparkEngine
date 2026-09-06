@@ -60,6 +60,16 @@ namespace Spark::Graphics
         m_trackedResources[handle] = std::move(info);
     }
 
+    void RHIValidationLayer::UntrackResource(uint64_t handle)
+    {
+        if (!m_initialized)
+        {
+            return;
+        }
+
+        m_trackedResources.erase(handle);
+    }
+
     void RHIValidationLayer::SetResourceState(uint64_t handle, ResourceState state)
     {
         if (!m_initialized)

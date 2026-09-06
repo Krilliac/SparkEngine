@@ -25,8 +25,7 @@
 
 TEST(AssetPipeline_ConstructDestruct_DoesNotCrash)
 {
-    // Linux constructor creates cache in constructor
-    AssetPipeline pipeline;
+    EXPECT_NO_THROW(AssetPipeline pipeline);
 }
 
 TEST(AssetPipeline_InitializeShutdown_Linux_Succeeds)
@@ -42,7 +41,7 @@ TEST(AssetPipeline_DoubleShutdown_DoesNotCrash)
     AssetPipeline pipeline;
     pipeline.Initialize(nullptr, nullptr);
     pipeline.Shutdown();
-    pipeline.Shutdown(); // Second shutdown should be safe
+    EXPECT_NO_THROW(pipeline.Shutdown());
 }
 
 TEST(AssetPipeline_UpdateWithoutInit_DoesNotCrash)
@@ -51,7 +50,7 @@ TEST(AssetPipeline_UpdateWithoutInit_DoesNotCrash)
     pipeline.Initialize(nullptr, nullptr);
     // Update with no assets loaded should be safe
     for (int i = 0; i < 10; ++i)
-        pipeline.Update(0.016f);
+        EXPECT_NO_THROW(pipeline.Update(0.016f));
     pipeline.Shutdown();
 }
 

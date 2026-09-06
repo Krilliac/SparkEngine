@@ -7,7 +7,7 @@ namespace Spark::Core::Lifecycle
     {
       public:
         std::string_view Name() const override { return "InitDebug"; }
-        LifecycleOrder Order() const override { return LifecycleOrder::Lifecycle; }
+        LifecycleOrder Order() const override { return LifecycleOrder::Diagnostics; }
         LifecycleThreadAffinity ThreadAffinity() const override { return LifecycleThreadAffinity::MainThread; }
         bool SupportsInitialize() const override { return true; }
 

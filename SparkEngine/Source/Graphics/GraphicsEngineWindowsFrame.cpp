@@ -87,9 +87,10 @@ void GraphicsEngine::BeginFrame()
     if (m_vramBudgetMonitor)
         m_vramBudgetMonitor->Update();
 
-    // Shader hot-reload: check for modified .hlsl files each frame.
-    // m_shader is never instantiated, so calling via HotReloadShaders()
-    // would be dead code. Pump the singleton directly instead.
+    // Shader hot-reload: poll the watched .hlsl directories that the shader
+    // compilation path registers (ShaderCompilationWindows.cpp). Update() is a
+    // no-op until ShaderHotReload::Initialize() enables the watcher, which no
+    // production code does yet — see the shader pipeline notes.
     Spark::Graphics::ShaderHotReload::GetInstance().Update(1.0f / 60.0f);
 
     ASSERT(m_context && m_renderTargetView && m_depthStencilView);
@@ -289,54 +290,16 @@ void GraphicsEngine::EndFrame()
 }
 
 // ============================================================================
-// HybridRT GBuffer binding — Windows wraps D3D11 textures as RHI handles
+// HybridRT GBuffer binding
 // ============================================================================
-// The shared GraphicsEngine::DispatchHybridRTPass (in GraphicsEngineHybridRT.cpp)
-// calls this; Linux/macOS has its own stub implementation that returns empty
-// bindings (the RHI bridge does not yet expose GBuffer textures on those
-// platforms).
+// The shared GraphicsEngine::DispatchHybridRTPass (in GraphicsEngineHybridRT
+// .cpp) calls this. The Windows renderer drives D3D11 directly and has no RHI
+// device to wrap its GBuffer textures with, so the bindings stay empty and the
+// pass never dispatches here (HybridRT is outside stable-v1).
 
 Spark::Graphics::HybridRTBindings GraphicsEngine::AcquireHybridRTBindings()
 {
-    Spark::Graphics::HybridRTBindings bindings;
-    if (!m_rhiBridge)
-        return bindings;
-    auto* device = m_rhiBridge->GetDevice();
-    if (!device)
-        return bindings;
-
-    // Helper — wrap a D3D11 ComPtr texture into an RHI texture, stash the
-    // wrapper in `bindings.owned` to extend its lifetime past this call,
-    // and return the raw pointer for bindings.{normals,depth,albedo,lighting}.
-    auto wrap = [&](void* nativeHandle, Spark::RHI::PixelFormat format, Spark::RHI::RHITextureUsage usage,
-                    const char* name) -> Spark::RHI::IRHITexture*
-    {
-        if (!nativeHandle)
-            return nullptr;
-        Spark::RHI::RHITextureDesc desc;
-        desc.width = m_width;
-        desc.height = m_height;
-        desc.format = format;
-        desc.usage = usage;
-        desc.debugName = name;
-        auto wrapped = device->WrapNativeTexture(nativeHandle, desc);
-        auto* raw = wrapped.get();
-        if (wrapped)
-            bindings.owned.push_back(std::move(wrapped));
-        return raw;
-    };
-
-    // GBuffer layout: [0]=Albedo, [1]=Normal, [2]=Material, [3]=Motion
-    bindings.normals = wrap(m_gBufferTextures[1].Get(), Spark::RHI::PixelFormat::R16G16B16A16_FLOAT,
-                            Spark::RHI::RHITextureUsage::ShaderResource, "GBuffer_Normals_Wrapped");
-    bindings.depth = wrap(m_depthStencilTexture.Get(), Spark::RHI::PixelFormat::D24_UNORM_S8_UINT,
-                          Spark::RHI::RHITextureUsage::ShaderResource, "Depth_Wrapped");
-    bindings.albedo = wrap(m_gBufferTextures[0].Get(), Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
-                           Spark::RHI::RHITextureUsage::ShaderResource, "GBuffer_Albedo_Wrapped");
-    bindings.lighting = wrap(m_hdrTexture.Get(), Spark::RHI::PixelFormat::R16G16B16A16_FLOAT,
-                             Spark::RHI::RHITextureUsage::ShaderResource | Spark::RHI::RHITextureUsage::UnorderedAccess,
-                             "HDR_Lighting_Wrapped");
-    return bindings;
+    return Spark::Graphics::HybridRTBindings{};
 }
 
 // ============================================================================
@@ -414,17 +377,30 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
         break;
     }
 
-    // Apply ray tracing effects (reflections, shadows, GI, AO)
-#ifdef SPARK_HARDWARE_RT
-    if (m_hybridRT)
+    // Drain the per-frame ECS draw list. The render-graph pipeline does this in
+    // its GeometryPass; every other pipeline must do it here, or SubmitMeshForRendering
+    // accumulates without bound and the shadow depth pass re-draws stale commands.
+    if (m_currentPipeline != RenderingPipeline::RenderGraphBased || !m_renderPipeline)
     {
-        XMMATRIX invView = XMMatrixInverse(nullptr, viewMatrix);
-        XMFLOAT3 cameraPos;
-        XMStoreFloat3(&cameraPos, invView.r[3]);
+        ProcessDrawList(viewMatrix, projMatrix);
+    }
 
+    // Apply ray tracing effects (reflections, shadows, GI, AO).
+    //
+    // These are DXRManager dispatches and have nothing to do with
+    // HybridRTManager: this block used to sit behind `if (m_hybridRT)`, which is
+    // never constructed on Windows, so hardware ray tracing was silently disabled
+    // by an unrelated null pointer. DXRManager::IsAvailable() is the honest gate —
+    // it is false unless a DXR-capable device was initialized.
+#ifdef SPARK_HARDWARE_RT
+    {
         auto& dxr = Spark::Graphics::DXRManager::GetInstance();
         if (dxr.IsAvailable())
         {
+            const XMMATRIX invView = XMMatrixInverse(nullptr, viewMatrix);
+            XMFLOAT3 cameraPos;
+            XMStoreFloat3(&cameraPos, invView.r[3]);
+
             XMMATRIX viewProj = viewMatrix * projMatrix;
 
             // Rebuild TLAS each frame for dynamic objects

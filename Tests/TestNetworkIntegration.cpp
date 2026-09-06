@@ -477,8 +477,7 @@ TEST(NetworkManager_ClientInputSerialization)
     nm.SendClientInput(input);
     nm.SendClientInput(input);
 
-    // Verify input is queued (in outgoing) — exercised via Update
-    nm.Update(0.016f);
+    EXPECT_NO_THROW(nm.Update(0.016f));
 
     ResetNetworkManager();
 }
@@ -804,8 +803,7 @@ TEST(NetworkManager_SendFullEntitySyncDoesNotCrashWithoutClients)
         nm.RegisterReplicatedEntity(entity);
     }
 
-    // SendFullEntitySync to a nonexistent client — should not crash
-    nm.SendFullEntitySync(999);
+    EXPECT_NO_THROW(nm.SendFullEntitySync(999));
 
     ResetNetworkManager();
 }
@@ -816,8 +814,7 @@ TEST(NetworkManager_SendFullEntitySyncNotServerNoop)
     auto& nm = NetworkManager::GetInstance();
     nm.Connect("127.0.0.1", 27015, "Client");
 
-    // As a client, SendFullEntitySync should be a no-op
-    nm.SendFullEntitySync(1);
+    EXPECT_NO_THROW(nm.SendFullEntitySync(1));
 
     ResetNetworkManager();
 }
@@ -870,7 +867,7 @@ TEST(NetworkManager_RapidStartStopCycles)
     {
         ResetNetworkManager();
         nm.Initialize();
-        nm.Update(0.016f);
+        EXPECT_NO_THROW(nm.Update(0.016f));
         nm.Shutdown();
     }
 

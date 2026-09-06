@@ -9,10 +9,18 @@
  * - Progressive (0-to-target progress bar)
  * - Tiered (bronze/silver/gold thresholds)
  * - Hidden (description revealed on unlock)
- * - Cumulative (persisted across sessions)
+ * - Cumulative (progress accumulates across play sessions once the game persists it)
  *
- * Integrates with BinaryWriter/BinaryReader for save/load and exposes
- * a callback for unlock notifications (e.g. toast popups).
+ * Exposes a callback for unlock notifications (e.g. toast popups).
+ *
+ * ## Persistence
+ *
+ * All progress lives in memory for the lifetime of the process. The engine never
+ * writes it to disk on its own: like QuestSystem's Capture/RestoreEntityState, the
+ * game owns persistence. Serialize progress with SaveToWriter() and put the resulting
+ * bytes in your save payload (for example a SaveSystem customState entry), then call
+ * LoadFromReader() after the achievement definitions have been registered again.
+ * Without that, every run starts from a clean slate.
  *
  * ## Usage
  * @code
@@ -67,7 +75,7 @@ namespace Spark::Gameplay
         Progressive, ///< Tracks 0 -> targetValue
         Tiered,      ///< Multiple thresholds (bronze/silver/gold)
         Hidden,      ///< Description hidden until unlocked
-        Cumulative   ///< Progress persisted across sessions
+        Cumulative   ///< Progress the game is expected to carry between sessions; see "Persistence"
     };
 
     // =========================================================================

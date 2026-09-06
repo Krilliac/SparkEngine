@@ -285,28 +285,9 @@ namespace SparkEditor
         bool highlightBottlenecks = true;  ///< Highlight detected bottlenecks
     };
 
-    /**
- * @brief RAII profiling scope helper
- */
-    class ProfileScope
-    {
-      public:
-        ProfileScope(const std::string& name, const std::string& category = "General");
-        ~ProfileScope();
-
-        void End();
-
-      private:
-        std::string m_name;
-        std::chrono::high_resolution_clock::time_point m_startTime;
-        bool m_ended = false;
-    };
-
-/**
- * @brief Profiling macros for easy instrumentation
- */
-#define PROFILE_SCOPE(name) ProfileScope _profile_scope(name)
-#define PROFILE_SCOPE_CATEGORY(name, category) ProfileScope _profile_scope(name, category)
-#define PROFILE_FUNCTION() PROFILE_SCOPE(__FUNCTION__)
+    // ProfileScope / PROFILE_SCOPE were removed: End() discarded the captured start time without submitting
+    // anything, the macros had no call site anywhere in SparkEditor or SparkEngine, and a scope helper that
+    // records nothing reads as CPU instrumentation that exists. If scoped CPU sampling is wanted, add it
+    // together with the call sites that feed FrameProfileData::cpuSamples.
 
 } // namespace SparkEditor

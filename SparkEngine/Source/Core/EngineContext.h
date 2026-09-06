@@ -297,6 +297,19 @@ class EngineContext : public Spark::IEngineContext
     const Spark::Audio::MusicManager* GetMusic() const override { return GetSystem<Spark::Audio::MusicManager>(); }
     Spark::VirtualFileSystem* GetVFS() override { return GetSystem<Spark::VirtualFileSystem>(); }
     const Spark::VirtualFileSystem* GetVFS() const override { return GetSystem<Spark::VirtualFileSystem>(); }
+    Spark::InvalidStateDetector* GetInvalidStateDetector() override { return GetSystem<Spark::InvalidStateDetector>(); }
+    const Spark::InvalidStateDetector* GetInvalidStateDetector() const override
+    {
+        return GetSystem<Spark::InvalidStateDetector>();
+    }
+    Spark::ComponentSerializerRegistry* GetComponentSerializers() override
+    {
+        return GetSystem<Spark::ComponentSerializerRegistry>();
+    }
+    const Spark::ComponentSerializerRegistry* GetComponentSerializers() const override
+    {
+        return GetSystem<Spark::ComponentSerializerRegistry>();
+    }
 
     bool IsHeadless() const override;
 
@@ -346,6 +359,11 @@ class EngineContext : public Spark::IEngineContext
     }
     void SetMusic(Spark::Audio::MusicManager* m) { RegisterSystem<Spark::Audio::MusicManager>(m); }
     void SetVFS(Spark::VirtualFileSystem* v) { RegisterSystem<Spark::VirtualFileSystem>(v); }
+    void SetInvalidStateDetector(Spark::InvalidStateDetector* d) { RegisterSystem<Spark::InvalidStateDetector>(d); }
+    void SetComponentSerializers(Spark::ComponentSerializerRegistry* r)
+    {
+        RegisterSystem<Spark::ComponentSerializerRegistry>(r);
+    }
 
     // =========================================================================
     // Generic system registry (R1.1 — single source of truth)

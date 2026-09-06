@@ -114,17 +114,21 @@ only; it does not initialize the device or retry another backend. The higher-lev
 `RHIBridge::Initialize()` adds runtime failover: it orders the compiled/available
 GPU candidates with the requested backend first, tries device initialization and
 swap-chain creation for each, and continues after either failure. If every GPU
-candidate fails, the bridge creates `NullRHIDevice` and enters headless mode.
-That resilience mechanism is not release certification for the fallback backend
-or host.
+candidate fails, the bridge creates `NullRHIDevice` and enters headless mode
+**only** when the caller passed `allowHeadlessFallback = true` or the request was
+already headless (no window). A windowed request whose GPU candidates all fail now
+fails `Initialize()` instead of silently degrading to a no-render device. D3D11
+requires feature level 11_0 (Shader Model 5.0); adapters below that floor are
+rejected. That resilience mechanism is not release certification for the fallback
+backend or host.
 
 ### NullRHIDevice Selection and Bridge Failover
 
 When `GraphicsBackend::None` is selected, `RHIFactory::CreateDevice()` returns a
 `NullRHIDevice` instead of `nullptr`. `RHIBridge::Initialize()` also reaches the
-same device when its window handle forces the no-render path or every GPU
-candidate fails. The bridge then enters **headless mode**, skipping swap-chain
-and depth-buffer creation:
+same device when its window handle forces the no-render path, or when every GPU
+candidate fails *and* the caller opted in with `allowHeadlessFallback`. The bridge
+then enters **headless mode**, skipping swap-chain and depth-buffer creation:
 
 ```cpp
 // RHIBridge automatically enters headless mode when NullRHIDevice is active
@@ -221,7 +225,7 @@ Represents vertex buffers, index buffers, constant buffers, structured buffers, 
 
 - **`size`** -- total size in bytes.
 - **`stride`** -- per-element stride (used for vertex and structured buffers).
-- **`usage`** -- bitmask of `RHIBufferUsage` flags (`Vertex`, `Index`, `Constant`, `Structured`, `IndirectArgs`, `Storage`, `CopySrc`, `CopyDst`).
+- **`usage`** -- bitmask of `RHIBufferUsage` flags (`Vertex`, `Index`, `Constant`, `Structured`, `IndirectArgs`, `Storage`, `CopySrc`, `CopyDst`). On D3D11, `Structured` and `IndirectArgs` buffers are created with `D3D11_RESOURCE_MISC_BUFFER_STRUCTURED` / `D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS` and receive SRV/UAV views, and indirect draws refuse an argument buffer that lacks `IndirectArgs`. **Gap:** `IRHICommandList` still has no overload that binds an `IRHIBuffer` as a shader resource, so a structured buffer cannot yet be read by a shader through the RHI.
 - **`access`** -- `Static` (GPU-only), `Dynamic` (CPU-write per frame), `Staging` (CPU read/write), `ReadBack` (GPU-write, CPU-read).
 
 ### IRHITexture
@@ -260,7 +264,7 @@ Represents a complete graphics pipeline state combining:
 `IRHICommandList` records GPU commands for later execution. The device provides two kinds:
 
 - **Immediate command list** (`GetImmediateCommandList()`) -- executes commands immediately on the GPU timeline.
-- **Deferred command list** (`CreateDeferredCommandList()`) -- records commands for later submission via `ExecuteCommandList()`.
+- **Deferred command list** (`CreateDeferredCommandList()`) -- records commands for later submission via `ExecuteCommandList()`. On D3D11 this is now real: `End()` calls `FinishCommandList` and `ExecuteCommandList()` replays it on the immediate context (previously the deferred context dangled and submit was a no-op).
 
 ### Command categories
 

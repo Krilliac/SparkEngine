@@ -102,7 +102,7 @@ The duplicate editor `VisualScriptingSystem` is gone.
 
 ## 4. Dead Code and Orphaned Systems
 
-The original audit's "dead headers" (ChromeTracing, MemoryDebugger, FrameInspector, Tween, DebugDraw, DebugOverlay, FileLogger) were wired into the startup/loop paths in March 2026 and are no longer dead.
+The original audit's "dead headers" (ChromeTracing, MemoryDebugger, FrameInspector, Tween, DebugDraw, DebugOverlay) were wired into the startup/loop paths in March 2026 and are no longer dead. **`FileLogger` is the exception:** it still has zero writers -- its two lifecycle calls were removed in the 2026-09 sweep. Engine log files come from `Spark::FileSink`, installed by `Logger::InstallDefaultSinks` (per-user `Logs/SparkEngine_<timestamp>.log`), and the `SPARK_FILE_LOG*` macros have no production caller. Where `FileLogger.h` is still present it is covered only by `Tests/TestDebugTools.cpp` and is pending a wire-it-in-or-delete decision.
 
 For systems the original audit flagged as orphaned (DecalSystem, NavMesh, Sequencer, MeshLOD, etc.), a current reference scan shows each is now referenced from multiple engine `.cpp` files (DecalSystem: 6, NavMesh: 7, Sequencer: 3, MeshLOD: 3), indicating they have been wired in or are at least integrated into other systems. A definitive wired-in audit should use `tools/check-wiring.sh`, which is the maintained source of truth for "Initialize() exists ⇒ called."
 

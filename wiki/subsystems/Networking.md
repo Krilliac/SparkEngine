@@ -150,6 +150,30 @@ struct NetworkMessage
 };
 ```
 
+### Packet String Screening (`PacketValidator`)
+
+`PacketValidator::ValidateStringFields` is enforced, not merely declared (2026-09 sweep). A
+`MessageSchema` states *where* its text lives through `stringFieldOffset`, a byte offset into the
+payload at which a `NetBuffer` length-prefixed string begins; `Spark::Net::NO_STRING_FIELDS` marks the
+payload as opaque binary that is never screened. The former `sanitizeStrings` bool was removed. The
+built-in `ChatMessage` wire format is `NetBuffer` strings (sender name, then text) starting at payload
+offset 0. Text is validated as UTF-8 (the signed-`char` defect that rejected any byte above 0x7F is
+fixed). The `string: N` counter printed by `packet.stats` is a real count -- before the sweep it was a
+permanent zero printed as if the check had run and passed.
+
+A module whose payload prepends its own header must register its **own** `MessageType` in the
+`UserDefined` range (1000+) rather than re-registering the built-in type's schema: `RegisterSchema`
+replaces a shared, process-wide entry that is never restored on module shutdown, so every other user
+of that type — the engine included, after the module unloads — would keep validating against the
+module's layout. `GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.cpp` follows this rule:
+`kMMOChatMessageType = MessageType::UserDefined + 1` with `stringFieldOffset = 1` for its
+`uint8 channel` header, and the built-in `MessageType::ChatMessage` schema is left untouched.
+
+`PacketValidator::ValidateStringFields` is public, but the screen is applied by the
+receive path; no in-tree handler calls it a second time on a decoded payload. Tests:
+`Tests/TestPacketValidator.cpp` and `Tests/TestPacketValidatorReal.cpp` execute the shipped
+validator.
+
 ## NetBuffer -- Serialization
 
 The `NetBuffer` class provides type-safe binary serialization for network payloads:

@@ -196,14 +196,20 @@ true stripped/headless configuration.
 ### Windows (PowerShell)
 
 ```powershell
-.\build.ps1 -config Release -editor -angelscript
+# Preferred: CMake presets
+cmake --preset windows-release
+cmake --build --preset windows-release
+
+# Supported alternative (uses /m:1 with Visual Studio generators)
+.\build.ps1 -config Release
 ```
 
 Options:
 - `-config Debug|Release` -- Build configuration
-- `-editor` -- Include the [SparkEditor](../gameplay-tools/SparkEditor.md)
-- `-console` -- Include [SparkConsole](../gameplay-tools/SparkConsole.md)
-- `-angelscript` -- Include AngelScript scripting
+- `-editor` -- Force `ENABLE_EDITOR=ON` (already the default; the switch is additive only)
+- `-angelscript` -- Force `ENABLE_ANGELSCRIPT=ON` (already the default)
+
+There is no `-console` switch and no `ENABLE_CONSOLE` CMake option; SparkConsole is always built as a separate target.
 
 ### Linux / macOS
 
@@ -214,7 +220,6 @@ Options:
 Options:
 - `-g Ninja` -- Use Ninja generator (faster)
 - `-E` -- Disable editor
-- `-C` -- Disable console
 
 ### Using CMake Directly
 
@@ -322,6 +327,31 @@ Example:
 ./SparkEngine -game MyGame.dll -scene Assets/Scenes/Level01.scene -window-size 1920x1080
 ```
 
+**Working-directory anchoring.** The host re-anchors the working directory to the executable
+directory unless a **relative** `-game`, `-manifest` or `-scene` was passed. (Previously *any* such
+flag suppressed anchoring.) An absolute `-game`/`-manifest`/`-scene` therefore re-anchors — which is
+what lets a packaged runtime find `Data/*.spk` and keep `Logs/`/`Saves/` together — so a CI or
+tooling invocation that passes an absolute module path and expects its *other* relative paths to
+resolve against its own working directory needs checking.
+
+**Environment switches.** `SPARK_CRASH_ON_ASSERT=1` (exact string `1`) makes `CrashHandler` treat a
+surviving assertion as a crash and write a dump/report. Do not set it in a shipping configuration:
+every tolerated assertion then looks like a crash in crash-rate telemetry.
+
+
+### Where runtime data goes
+
+`Spark::UserPaths` anchors the runtime's writable data per user. `Saves/`, `Logs/`
+(rotating `SparkEngine_<timestamp>.log`), `spark_trace.json`, and `ShaderCache/`
+live under `%LOCALAPPDATA%/SparkEngine` (POSIX: `$XDG_DATA_HOME` or
+`~/.local/share/SparkEngine`); `settings.ini` falls back to
+`%LOCALAPPDATA%/SparkEngine/Config/` (`$XDG_CONFIG_HOME` or
+`~/.config/SparkEngine`) whenever a per-user copy exists or the install tree's
+`Resources/Config` is not writable. `Data/*.spk` is resolved beside the executable
+first and the working directory second. A development run with no per-user
+directory falls back to the old CWD-relative locations. Engine logs are also
+mirrored into `SparkConsole.exe` once `Logger::InstallDefaultSinks` runs.
+
 ## Default Controls
 
 | Input | Action |
@@ -375,7 +405,7 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
 ```
 
-The generated source inventory currently records 6,952 GoogleTest definitions across 575 test-bearing implementation files; that inventory is not a CTest verdict. Use the command's exit status and final CTest summary to determine the actual result. See [Testing](../advanced/Testing.md) for details.
+The generated source inventory records SparkTests `TEST`/`TEST_F` definitions (the harness is the in-tree `Tests/TestFramework.h`, not GoogleTest; the current count is published in README.md by `docs/update-readme-badges.sh`); that inventory is not a CTest verdict. Use the command's exit status and final CTest summary to determine the actual result. See [Testing](../advanced/Testing.md) for details.
 
 ## SparkBuild Tool
 

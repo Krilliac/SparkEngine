@@ -31,14 +31,56 @@ record_violation() {
     VIOLATIONS=$((VIOLATIONS + 1))
 }
 
+# ripgrep is not installed on Windows Git Bash or on plain CI images, and every
+# search below swallowed failures with `|| true`. A missing rg therefore made
+# each boundary check log success on an empty result, while the negated
+# `if ! rg -q` module checks turned exit 127 into a violation for every module.
+# Resolve the searcher once and fail closed when neither tool exists.
+if command -v rg >/dev/null 2>&1; then
+    SPARK_SEARCHER=rg
+elif command -v grep >/dev/null 2>&1; then
+    SPARK_SEARCHER=grep
+else
+    log_error "Neither rg nor grep is available; cross-utilization checks cannot run"
+    exit 2
+fi
+
+# spark_search <pattern> <sources|cpp> <path>...
+# Patterns are POSIX ERE so both searchers accept them verbatim.
+spark_search() {
+    local pattern="$1"
+    local include_spec="$2"
+    shift 2
+    if [ "$SPARK_SEARCHER" = "rg" ]; then
+        if [ "$include_spec" = "cpp" ]; then
+            rg -n --no-heading --color never "$pattern" "$@" --glob '*.cpp' || true
+        else
+            rg -n --no-heading --color never "$pattern" "$@" --glob '*.[ch]pp' --glob '*.h' || true
+        fi
+    else
+        if [ "$include_spec" = "cpp" ]; then
+            grep -rnE --include='*.cpp' -- "$pattern" "$@" || true
+        else
+            grep -rnE --include='*.cpp' --include='*.hpp' --include='*.h' -- "$pattern" "$@" || true
+        fi
+    fi
+}
+
+# spark_file_matches <pattern> <file>
+spark_file_matches() {
+    if [ "$SPARK_SEARCHER" = "rg" ]; then
+        rg -q "$1" "$2"
+    else
+        grep -qE -- "$1" "$2"
+    fi
+}
+
 check_game_modules_boundary() {
     log_info "Checking GameModules include boundaries..."
 
     local result
-    result=$(rg -n --no-heading --color never \
-        '#include\s*[<"]SparkEngine/Source/' \
-        "$PROJECT_ROOT/GameModules" \
-        --glob '*.[ch]pp' --glob '*.h' || true)
+    result=$(spark_search '#include[[:space:]]*[<"]SparkEngine/Source/' sources \
+        "$PROJECT_ROOT/GameModules")
 
     if [ -n "$result" ]; then
         while IFS= read -r line; do
@@ -56,10 +98,8 @@ check_deprecated_globals() {
     allowlist='SparkEngine/Source/Core/SparkEngine.cpp|SparkEngine/Source/Core/SparkEngineLinux.cpp|SparkEngine/Source/Core/SparkEngineWindows.cpp|SparkEngine/Source/Core/GameplaySystemLifecycle.cpp'
 
     local result
-    result=$(rg -n --no-heading --color never \
-        '\bg_(graphics|input|audio|physics|network|scripting|resource|timer|eventBus)\b' \
-        "$PROJECT_ROOT/SparkEngine" "$PROJECT_ROOT/SparkEditor" "$PROJECT_ROOT/GameModules" \
-        --glob '*.[ch]pp' --glob '*.h' || true)
+    result=$(spark_search '\bg_(graphics|input|audio|physics|network|scripting|resource|timer|eventBus)\b' sources \
+        "$PROJECT_ROOT/SparkEngine" "$PROJECT_ROOT/SparkEditor" "$PROJECT_ROOT/GameModules")
 
     if [ -n "$result" ]; then
         while IFS= read -r line; do
@@ -92,15 +132,15 @@ check_subsystem_lateral_includes() {
         for target_domain in "${domains[@]}"; do
             [ "$target_domain" = "$source_domain" ] && continue
             if [ "$first" = true ]; then
-                regex="(#include\\s*[<\"]Engine/${target_domain}/)"
+                regex="(#include[[:space:]]*[<\"]Engine/${target_domain}/)"
                 first=false
             else
-                regex+="|(#include\\s*[<\"]Engine/${target_domain}/)"
+                regex+="|(#include[[:space:]]*[<\"]Engine/${target_domain}/)"
             fi
         done
 
         local result
-        result=$(rg -n --no-heading --color never "$regex" "$source_path" --glob '*.[ch]pp' --glob '*.h' || true)
+        result=$(spark_search "$regex" sources "$source_path")
         if [ -n "$result" ]; then
             while IFS= read -r line; do
                 [ -n "$line" ] && record_violation "Lateral domain include in Engine/$source_domain: ${line#$PROJECT_ROOT/}"
@@ -123,9 +163,7 @@ check_ecs_system_direct_calls() {
     fi
 
     local result
-    result=$(rg -n --no-heading --color never \
-        '(GetSystem\(|->GetSystem\()' \
-        "$ecs_systems" --glob '*.cpp' || true)
+    result=$(spark_search '(GetSystem\(|->GetSystem\()' cpp "$ecs_systems")
 
     if [ -n "$result" ]; then
         while IFS= read -r line; do
@@ -152,13 +190,13 @@ check_module_abi_contract() {
         [ -z "$file" ] && continue
         local rel="${file#$PROJECT_ROOT/}"
 
-        if ! rg -q 'CreateModule\s*\(|SPARK_IMPLEMENT_MODULE\s*\(' "$file"; then
+        if ! spark_file_matches 'CreateModule[[:space:]]*\(|SPARK_IMPLEMENT_MODULE[[:space:]]*\(' "$file"; then
             record_violation "Missing CreateModule export (or SPARK_IMPLEMENT_MODULE) in $rel"
         fi
-        if ! rg -q 'DestroyModule\s*\(|SPARK_IMPLEMENT_MODULE\s*\(' "$file"; then
+        if ! spark_file_matches 'DestroyModule[[:space:]]*\(|SPARK_IMPLEMENT_MODULE[[:space:]]*\(' "$file"; then
             record_violation "Missing DestroyModule export (or SPARK_IMPLEMENT_MODULE) in $rel"
         fi
-        if ! rg -q 'SPARK_SDK_VERSION' "$file"; then
+        if ! spark_file_matches 'SPARK_SDK_VERSION' "$file"; then
             record_violation "Missing SPARK_SDK_VERSION usage in $rel"
         fi
     done <<< "$module_mains"

@@ -63,9 +63,7 @@ TEST(MemoryMonitor_GlobalBudget)
     mm.Initialize();
 
     mm.SetGlobalBudget(256 * 1024 * 1024); // 256 MB
-
-    // The global budget is just stored, tested via health checks
-    mm.Shutdown();
+    EXPECT_NO_THROW(mm.Shutdown());
 }
 
 // =============================================================================
@@ -177,6 +175,11 @@ TEST(MemoryMonitor_DoubleFreeAnomalyDetection)
     md.Reset();
     md.SetEnabled(true);
     md.SetLogDoubleFreeWarnings(false); // test intentionally exercises this path
+    // MemoryMonitor is a process-wide singleton and Initialize() is a no-op once
+    // initialized. Engine-lifecycle tests leave it initialized with a stale
+    // double-free baseline, and md.Reset() above drops the debugger's count below
+    // that baseline, so the new double-free would never register. Start fresh.
+    mm.Shutdown();
     mm.Initialize();
     mm.SetEnabled(true);
 

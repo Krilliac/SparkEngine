@@ -28,6 +28,7 @@ class GameObject;
 
 namespace Spark
 {
+    class EventBus;
 
     /**
  * @brief Environmental damage zone
@@ -154,6 +155,14 @@ namespace Spark
         bool Initialize();
         void Update(float deltaTime);
 
+        /**
+     * @brief Connect the engine event bus so respawns publish PlayerRespawnEvent.
+     *
+     * Without a bus the system still scores and times respawns, but nothing can
+     * observe them, so callers should wire this during initialization.
+     */
+        void SetEventBus(EventBus* bus) { m_eventBus = bus; }
+
         // === Spawn Points ===
 
         int AddSpawnPoint(const RespawnPoint& point);
@@ -170,14 +179,34 @@ namespace Spark
         // === Respawn Logic ===
 
         /**
-     * @brief Handle player death
+     * @brief Record a player death: scores it and arms the respawn timer.
+     *
+     * The player object itself is not touched here. Reactivating the player is
+     * driven by the PlayerRespawnEvent published from RespawnPlayer(), which
+     * keeps this system independent of the renderer-owned Player class.
      */
-        void OnPlayerDeath(Player* player, const std::string& killerName, const std::string& weapon, bool headshot);
+        void OnPlayerDeath(const std::string& killerName, const std::string& weapon, bool headshot);
 
         /**
-     * @brief Respawn the player
+     * @brief Arm the respawn countdown without scoring a death.
+     *
+     * Used when a session is restored from a save taken while the player was dead:
+     * the death was scored when it happened, so OnPlayerDeath() would double-count it,
+     * but the countdown still has to be armed or the restored player can never revive.
      */
-        void RespawnPlayer(Player* player);
+        void ArmRespawn();
+
+        /**
+     * @brief Respawn now: picks a spawn point and publishes PlayerRespawnEvent.
+     * @return false when no death is pending (nothing to respawn from) or when no
+     *         event bus is attached. Publishing the event is the only thing that
+     *         revives the player, so without a bus the pending death is deliberately
+     *         kept: reporting success would strand the player dead forever.
+     */
+        bool RespawnPlayer();
+
+        /** @brief True while a death has been recorded and no respawn has happened yet. */
+        bool IsWaitingForRespawn() const { return m_waitingForRespawn; }
 
         /**
      * @brief Check if respawn is ready
@@ -185,7 +214,7 @@ namespace Spark
         bool IsRespawnReady() const { return m_respawnTimer <= 0.0f; }
 
         /**
-     * @brief Get remaining respawn time
+     * @brief Get remaining respawn time (clamped at zero, never negative)
      */
         float GetRespawnTimeRemaining() const { return m_respawnTimer; }
 
@@ -217,7 +246,8 @@ namespace Spark
         float m_respawnTimer = 0.0f;
         bool m_autoRespawn = true;
         bool m_waitingForRespawn = false;
-        Player* m_deadPlayer = nullptr;
+        bool m_missingBusReported = false; ///< One-shot guard for the no-event-bus warning.
+        EventBus* m_eventBus = nullptr;    ///< Engine event bus (not owned).
 
         KillTrackerScore m_playerScore;
         std::vector<KillRecord> m_killHistory;

@@ -12,6 +12,11 @@
 TEST(ChromeTracing_StartStop)
 {
     auto& tracer = Spark::ChromeTracing::GetInstance();
+    // The tracer is process-wide and the production debug stage starts it, so a
+    // test that initialized the lifecycle earlier in a shuffled run leaves it
+    // active (both sanitizer lanes hit this). Establish the precondition with
+    // Stop() instead of assuming it; the toggle below is what this test proves.
+    tracer.Stop();
     tracer.Clear();
 
     EXPECT_FALSE(tracer.IsActive());

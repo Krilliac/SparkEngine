@@ -12,6 +12,7 @@
 #include "SelectionManager.h"
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 
@@ -20,6 +21,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorUI.h"
 #include "../CommandHistory.h"
+#include "../Gizmos/SceneEditTools.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/EntityPresetManager.h"
 #include "Utils/ContainerUtils.h"
@@ -429,13 +431,13 @@ namespace SparkEditor
     }
 
     // ============================================================================
-    // World-backed mode (Unit C2)
+    // World-backed mode
     //
-    // Undo/redo for entity create/delete is deferred (out of scope for C2) —
-    // unlike the legacy SceneFile path above, those mutate m_world directly
-    // without going through CommandHistory. Rename is also deferred (skipped
-    // to keep C2 to create/delete/select). Reparenting (W9) IS undoable: it
-    // routes through CommandHistory via ReparentWorldEntity.
+    // Every mutation on this path is undoable: create/delete go through
+    // EditorUI::CreateDocumentEntity / DeleteSelectedDocumentEntity (World
+    // snapshot LambdaCommands), reparent through ReparentWorldEntity,
+    // duplicate through SceneEditTools::DuplicateEntity, and rename through
+    // RenameWorldEntity — all of which execute on CommandHistory.
     // ============================================================================
 
     void HierarchyPanel::RenderWorldToolbar()
@@ -461,8 +463,39 @@ namespace SparkEditor
             if (m_selectionSink)
                 m_selectionSink->DeleteSelectedDocumentEntity();
         }
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_COPY " Duplicate"))
+        {
+            SceneEditTools::DuplicateEntity(*m_world, selected);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_EDIT " Rename"))
+        {
+            BeginWorldEntityRename(selected);
+        }
         if (!hasValidSelection)
             ImGui::EndDisabled();
+    }
+
+    void HierarchyPanel::BeginWorldEntityRename(::EntityID entity)
+    {
+        if (!m_world || entity == entt::null || !m_world->GetRegistry().valid(entity))
+            return;
+        m_renamingWorldEntity = entity;
+        m_renameFocusPending = true;
+        const ::NameComponent* nc = m_world->GetComponent<::NameComponent>(entity);
+        const std::string current = (nc && !nc->name.empty()) ? nc->name : std::string("Entity");
+        std::snprintf(m_renameBuffer, sizeof(m_renameBuffer), "%s", current.c_str());
+    }
+
+    void HierarchyPanel::RenameWorldEntity(::EntityID entity, const std::string& newName)
+    {
+        if (!m_world)
+            return;
+
+        // Same undo surface as reparent/duplicate: a CommandHistory entry that
+        // captures the entity id, never a component pointer.
+        SceneEditTools::CommitEntityRename(*m_world, entity, newName);
     }
 
     namespace
@@ -521,6 +554,35 @@ namespace SparkEditor
         }
 
         entt::registry& registry = m_world->GetRegistry();
+
+        // An entity destroyed elsewhere while its rename box was open must not leave the panel stuck
+        // in rename mode: that state disables every keyboard shortcut below for the rest of the session.
+        if (m_renamingWorldEntity != entt::null && !registry.valid(m_renamingWorldEntity))
+        {
+            m_renamingWorldEntity = entt::null;
+            m_renameFocusPending = false;
+        }
+
+        // Keyboard parity with the legacy path: Delete removes, F2 renames and
+        // Ctrl+D duplicates the selected entity. Every one of them is undoable.
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && m_renamingWorldEntity == entt::null)
+        {
+            const ::EntityID selected = m_selectionSink ? m_selectionSink->GetSelectedEntity() : entt::null;
+            const bool hasSelection = selected != entt::null && registry.valid(selected);
+            if (hasSelection && ImGui::IsKeyPressed(ImGuiKey_Delete))
+            {
+                m_selectionSink->DeleteSelectedDocumentEntity();
+            }
+            else if (hasSelection && ImGui::IsKeyPressed(ImGuiKey_F2))
+            {
+                BeginWorldEntityRename(selected);
+            }
+            else if (hasSelection && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D))
+            {
+                SceneEditTools::DuplicateEntity(*m_world, selected);
+            }
+        }
+
         // Non-const overload of entt::registry::storage<Type>() returns a
         // reference (the const overload used by ReflectedSceneSerializer
         // returns a pointer) — use '.' here, not '->'.
@@ -591,11 +653,67 @@ namespace SparkEditor
         if (entity == selected)
             flags |= ImGuiTreeNodeFlags_Selected;
 
+        if (m_renamingWorldEntity == entity)
+        {
+            ImGui::SetNextItemWidth(-1.0f);
+            // Focus once, on the frame the rename starts. Re-focusing every frame pins the widget
+            // active forever, which is what made the focus-loss exit below impossible.
+            const bool justFocused = m_renameFocusPending;
+            if (m_renameFocusPending)
+            {
+                ImGui::SetKeyboardFocusHere();
+                m_renameFocusPending = false;
+            }
+
+            const bool committed =
+                ImGui::InputText("##WorldRename", m_renameBuffer, sizeof(m_renameBuffer),
+                                 ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+            const bool cancelled = ImGui::IsKeyPressed(ImGuiKey_Escape);
+            if (committed)
+            {
+                RenameWorldEntity(entity, m_renameBuffer);
+                m_renamingWorldEntity = entt::null;
+            }
+            else if (cancelled)
+            {
+                m_renamingWorldEntity = entt::null;
+            }
+            else if (!justFocused && !ImGui::IsItemActive())
+            {
+                // Clicked away without Enter: commit, matching the legacy scene-object path. Without
+                // this branch the rename could only be left with Enter or Escape, and an entity that
+                // became unreachable left m_renamingWorldEntity set for the rest of the session,
+                // disabling the panel's Delete / F2 / Ctrl+D shortcuts.
+                RenameWorldEntity(entity, m_renameBuffer);
+                m_renamingWorldEntity = entt::null;
+            }
+
+            // The node's children must keep rendering while its label is being edited, so recurse
+            // under a plain indent instead of returning early.
+            if (hasChildren)
+            {
+                ImGui::Indent();
+                for (::EntityID child : children)
+                {
+                    RenderWorldEntityNode(child);
+                }
+                ImGui::Unindent();
+            }
+
+            ImGui::PopID();
+            return;
+        }
+
         const bool nodeOpen = ImGui::TreeNodeEx(label, flags);
 
         if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen() && m_selectionSink)
         {
             m_selectionSink->SetSelectedEntity(entity);
+        }
+
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+        {
+            BeginWorldEntityRename(entity);
         }
 
         // Drag source: carry the raw entity id.
@@ -639,6 +757,15 @@ namespace SparkEditor
             }
             if (!canParentToSelection)
                 ImGui::EndDisabled();
+            ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_EDIT " Rename", "F2"))
+            {
+                BeginWorldEntityRename(entity);
+            }
+            if (ImGui::MenuItem(ICON_FA_COPY " Duplicate", "Ctrl+D"))
+            {
+                SceneEditTools::DuplicateEntity(*m_world, entity);
+            }
             ImGui::EndPopup();
         }
 

@@ -49,13 +49,11 @@ void GraphicsEngine::BeginFrame()
     if (m_vramBudgetMonitor)
         m_vramBudgetMonitor->Update();
 
-    // Phase U: pump the Spark::Graphics::ShaderHotReload singleton each
-    // frame so runtime shader hot-reload runs on Linux and headless
-    // builds. The singleton has its own poll-interval gating (default
-    // 0.5 s) so a fixed nominal delta is both safe and cheap. Previously
-    // guarded by `if (m_shader)`, but m_shader is never instantiated on
-    // either platform — calling the singleton directly bypasses the
-    // dead member and actually runs the file watcher.
+    // Pump the Spark::Graphics::ShaderHotReload singleton each frame. The
+    // singleton has its own poll-interval gating (default 0.5 s) so a fixed
+    // nominal delta is both safe and cheap. Update() returns immediately
+    // until ShaderHotReload::Initialize() enables the watcher, which no
+    // production code does yet — see the shader pipeline notes.
     Spark::Graphics::ShaderHotReload::GetInstance().Update(1.0f / 60.0f);
 
     // Per-frame subsystem updates. These advance async load queues,

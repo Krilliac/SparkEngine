@@ -336,7 +336,15 @@ SparkPak is an MPQ-inspired binary archive format for bundling assets into singl
 - **Per-file deflate compression** via miniz (skipped when savings < 5%)
 - **TOC at end of file** (like ZIP central directory) — streaming-friendly
 - **Priority layering** via VFS — patch archives override base archives
-- **Auto-mount** — `.spk` files in `Data/` directory are mounted at startup
+- **Auto-mount** — `.spk` files in `Data/` directory are mounted at startup (resolved beside the executable first, then the working directory)
+- **Per-entry decompression budget** — checked in `SparkPakReader::ReadFile` (`SparkEngine/Source/Core/SparkPak.cpp`), not at `Open`.
+  A compressed entry is refused when it declares more than `kMaxDecompressedEntryBytes` (256 MB) of output, when it
+  declares a non-zero `originalSize` from a zero-byte payload, or when `originalSize` exceeds `compressedSize` *
+  `kMaxCompressionRatio` (100000). `Stored` entries skip the check. A violating entry fails on its own — `Open()` still
+  succeeds, `ReadFile()` returns an empty buffer and logs at ERROR, and every other entry in the archive stays
+  readable. The 100000:1 factor sits deliberately above deflate's ~1032:1 ceiling so legitimately compressible cooked
+  content (zero-filled lightmaps, padded heightmaps) still loads; the 256 MB ceiling bounds the buffer any single
+  entry can demand. Callers must treat an empty `ReadFile` result as a failure, not as an empty asset.
 
 ### Usage
 

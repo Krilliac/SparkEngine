@@ -10,6 +10,7 @@
 #include "TerrainSystem.h"
 #include "../../../Core/Platform.h"
 #include "../../../Graphics/ClipmapTerrain.h"
+#include "../../../Graphics/TerrainRenderer.h"
 #include "../../../Utils/LogMacros.h"
 #include "Utils/Validate.h"
 
@@ -26,6 +27,22 @@ namespace Spark::ECS
         m_activeTerrainCount = 0;
 
         auto& clipmap = Spark::Graphics::ClipmapTerrain::GetInstance();
+
+        // A new World restarts entity ids at zero, so attempts recorded against the
+        // previous one would silently veto this scene's terrain loads.
+        if (m_assetLoadWorld != &world)
+        {
+            m_assetLoadAttempted.clear();
+            m_assetLoadWorld = &world;
+        }
+        else
+        {
+            // Bound the map to entities that still exist: a destroyed terrain must
+            // not keep an entry alive for the rest of the process.
+            const auto& registry = world.GetRegistry();
+            std::erase_if(m_assetLoadAttempted, [&registry](const auto& attempt)
+                          { return !registry.valid(static_cast<EntityID>(attempt.first)); });
+        }
 
         // Feed camera position to the clipmap system so it can update LOD centers
         clipmap.Update(m_cameraPosition);
@@ -66,6 +83,20 @@ namespace Spark::ECS
             }
             selectedLOD = std::min(selectedLOD, terrain.lodLevels - 1);
             terrain.selectedLOD = static_cast<uint32_t>(selectedLOD);
+
+            // An authored .sparkterrain asset with no heightmap yet: load it once per
+            // entity *and* asset, so a missing or corrupt file cannot spam the log
+            // every frame while a reloaded scene (or a re-authored path) still loads.
+            if (terrain.heightmap.empty() && !terrain.terrainAssetPath.empty())
+            {
+                auto [attempt, inserted] =
+                    m_assetLoadAttempted.try_emplace(static_cast<uint32_t>(entity), terrain.terrainAssetPath);
+                if (inserted || attempt->second != terrain.terrainAssetPath)
+                {
+                    attempt->second = terrain.terrainAssetPath;
+                    Spark::Graphics::TerrainRenderer::LoadSparkTerrain(terrain.terrainAssetPath, terrain);
+                }
+            }
 
             // If the terrain has heightmap data and is dirty, feed it to the clipmap system
             if (terrain.dirty && !terrain.heightmap.empty())

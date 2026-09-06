@@ -458,6 +458,7 @@ class FPSStarterModule final : public Spark::IModule
 
         auto& factory = Spark::ComponentFactory::Get();
         const std::vector<std::string> componentTypes = factory.GetRegisteredNames();
+        std::vector<std::string> skippedFields;
         for (EntityID sourceEntity : sourceEntities)
         {
             const auto destinationIt = entityRemap.find(ToRawEntity(sourceEntity));
@@ -481,8 +482,23 @@ class FPSStarterModule final : public Spark::IModule
 
                 for (const Spark::FieldInfo& field : typeInfo->fields)
                 {
-                    if (!field.serialized || !IsReflectedSceneFieldType(field.type))
+                    if (!field.serialized)
                         continue;
+                    if (!IsReflectedSceneFieldType(field.type))
+                    {
+                        // A silently partial copy is indistinguishable from a faithful one, so
+                        // say which field was dropped once per (component, field) per load.
+                        std::string skipped = type + "." + field.fieldName;
+                        if (std::ranges::find(skippedFields, skipped) == skippedFields.end())
+                        {
+                            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                           "FPSStarter did not copy reflected field %s (field type %d is outside the "
+                                           "scene-append whitelist); the appended copy differs from the scene",
+                                           skipped.c_str(), static_cast<int>(field.type));
+                            skippedFields.push_back(std::move(skipped));
+                        }
+                        continue;
+                    }
                     if (!Spark::SetFieldFromString(destinationComponent, field,
                                                    Spark::GetFieldAsString(sourceComponent, field)))
                     {
@@ -542,7 +558,8 @@ class FPSStarterModule final : public Spark::IModule
             }
 
             m_projectRoot = root;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "FPSStarter loaded scene '%s'", PathUtf8(candidate).c_str());
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "FPSStarter loaded scene '%s' with %zu owned entities",
+                           PathUtf8(candidate).c_str(), m_ownedEntities.size());
             return true;
         }
 

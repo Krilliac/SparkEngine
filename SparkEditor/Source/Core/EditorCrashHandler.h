@@ -176,6 +176,7 @@ namespace SparkEditor
         // Exception handling
 #ifdef _WIN32
         LPTOP_LEVEL_EXCEPTION_FILTER m_previousFilter = nullptr;
+        bool m_filterInstalled = false; ///< True while our unhandled-exception filter is installed.
 #endif
         static EditorCrashHandler* s_instance;
     };

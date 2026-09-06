@@ -58,6 +58,7 @@ namespace SparkEditor
 
         int m_activeTab = 0;
         bool m_modified = false;
+        std::string m_saveError; ///< Non-empty when the last Save() attempt failed.
     };
 
 } // namespace SparkEditor

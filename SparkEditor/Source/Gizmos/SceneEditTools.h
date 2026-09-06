@@ -25,6 +25,8 @@
 
 #include "Engine/ECS/Components.h"
 
+#include <string>
+
 namespace SparkEditor::SceneEditTools
 {
 
@@ -62,6 +64,34 @@ namespace SparkEditor::SceneEditTools
      * @return true if the entity moved (a command was executed).
      */
     bool AlignEntityToGround(::World& world, ::EntityID entity);
+
+    /**
+     * @brief Execute an undoable local-rotation change (Euler degrees).
+     *
+     * Applies newRotation and records a command that restores oldRotation on
+     * undo. Used by the viewport rotate gizmo to turn a whole drag into a
+     * single history entry. Entity ids are captured, never component pointers.
+     *
+     * @return true when a command was executed (values differ and the entity has a Transform).
+     */
+    bool CommitEntityRotation(::World& world, ::EntityID entity, const DirectX::XMFLOAT3& oldRotation,
+                              const DirectX::XMFLOAT3& newRotation);
+
+    /**
+     * @brief Execute an undoable local-scale change. Mirrors CommitEntityRotation.
+     */
+    bool CommitEntityScale(::World& world, ::EntityID entity, const DirectX::XMFLOAT3& oldScale,
+                           const DirectX::XMFLOAT3& newScale);
+
+    /**
+     * @brief Execute an undoable rename of an entity's NameComponent.
+     *
+     * Adds the component when missing. Used by the World-backed Hierarchy so
+     * renames land on the same undo surface as create/delete/reparent.
+     *
+     * @return true when a command was executed (name actually changes).
+     */
+    bool CommitEntityRename(::World& world, ::EntityID entity, const std::string& newName);
 
     /**
      * @brief Convert a world-space translation delta into the local space of

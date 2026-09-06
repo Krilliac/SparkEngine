@@ -1,6 +1,14 @@
 /**
  * @file VersionControlGitOps.cpp
  * @brief Git operations: staging, committing, pushing, pulling, branching, history, and diffs
+ *
+ * Every git invocation here is built as an argument vector and handed straight to the process builder.
+ * No shell is involved, so nothing on this path needs quoting or metacharacter filtering: a commit message
+ * with spaces and apostrophes, or a path under "C:/Rock & Roll/", reaches git as a single argv element.
+ *
+ * Removing the shell does not remove git's own option parsing. A branch, remote or path that begins with
+ * '-' is still read as an option (e.g. "--upload-pack=<program>"), so every user-supplied operand is
+ * screened with IsOptionLike() and pathspecs are closed off with a "--" separator.
  */
 
 #include "VersionControlSystem.h"
@@ -8,31 +16,6 @@
 
 namespace SparkEditor
 {
-
-    // ============================================================================
-    // Shell safety helper
-    // ============================================================================
-
-    static bool ContainsShellMetachars(const std::string& str)
-    {
-        for (char c : str)
-        {
-            switch (c)
-            {
-            case ';':
-            case '|':
-            case '&':
-            case '$':
-            case '`':
-            case '\n':
-            case '\r':
-                return true;
-            default:
-                break;
-            }
-        }
-        return false;
-    }
 
     // ============================================================================
     // Staging and Committing
@@ -46,15 +29,10 @@ namespace SparkEditor
         VCSOperationResult lastResult;
         for (const auto& file : filePaths)
         {
-            if (ContainsShellMetachars(file))
-            {
-                lastResult.success = false;
-                lastResult.errorMessage = "File path contains unsafe characters: " + file;
-                lastResult.exitCode = -1;
-                return lastResult;
-            }
-            std::string cmd = "git add \"" + file + "\"";
-            lastResult = ExecuteCommand(cmd, m_repositoryInfo->path);
+            if (IsOptionLike(file))
+                return {false, "File path may not start with '-': " + file, "", -1, 0.0f, {}};
+
+            lastResult = ExecuteGit({"add", "--", file}, m_repositoryInfo->path);
             if (!lastResult.success)
             {
                 return lastResult;
@@ -72,15 +50,10 @@ namespace SparkEditor
         VCSOperationResult lastResult;
         for (const auto& file : filePaths)
         {
-            if (ContainsShellMetachars(file))
-            {
-                lastResult.success = false;
-                lastResult.errorMessage = "File path contains unsafe characters: " + file;
-                lastResult.exitCode = -1;
-                return lastResult;
-            }
-            std::string cmd = "git reset HEAD \"" + file + "\"";
-            lastResult = ExecuteCommand(cmd, m_repositoryInfo->path);
+            if (IsOptionLike(file))
+                return {false, "File path may not start with '-': " + file, "", -1, 0.0f, {}};
+
+            lastResult = ExecuteGit({"reset", "HEAD", "--", file}, m_repositoryInfo->path);
             if (!lastResult.success)
             {
                 return lastResult;
@@ -95,30 +68,18 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
-        // Escape single quotes in message
-        std::string escapedMsg = message;
-        std::string::size_type pos = 0;
-        while ((pos = escapedMsg.find('\'', pos)) != std::string::npos)
-        {
-            escapedMsg.replace(pos, 1, "'\\''");
-            pos += 4;
-        }
+        if (message.empty())
+            return {false, "Commit message is empty", "", -1, 0.0f, {}};
 
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Committing with message: '%s'", message.c_str());
-        std::string cmd = "git commit -m '" + escapedMsg + "'";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Committing with message: %s", message.c_str());
+        std::vector<std::string> args = {"commit", "-m", message};
         if (!description.empty())
         {
-            std::string escapedDesc = description;
-            pos = 0;
-            while ((pos = escapedDesc.find('\'', pos)) != std::string::npos)
-            {
-                escapedDesc.replace(pos, 1, "'\\''");
-                pos += 4;
-            }
-            cmd += " -m '" + escapedDesc + "'";
+            args.push_back("-m");
+            args.push_back(description);
         }
 
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        VCSOperationResult result = ExecuteGit(args, m_repositoryInfo->path);
         if (result.success)
         {
             RefreshStatus();
@@ -136,14 +97,14 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
+        if (IsOptionLike(remoteName) || IsOptionLike(branchName))
+            return {false, "Remote and branch names may not start with '-'", "", -1, 0.0f, {}};
+
         std::string branch = branchName.empty() ? m_repositoryInfo->currentBranch.name : branchName;
-        if (ContainsShellMetachars(remoteName) || ContainsShellMetachars(branch))
-            return {false, "Remote or branch name contains unsafe characters", "", -1, 0.0f, {}};
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Pushing to %s/%s", remoteName.c_str(), branch.c_str());
-        std::string cmd = "git push " + remoteName + " " + branch;
         if (progressCallback)
             progressCallback(0.0f);
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        VCSOperationResult result = ExecuteGit({"push", remoteName, branch}, m_repositoryInfo->path);
         if (progressCallback)
             progressCallback(1.0f);
         return result;
@@ -155,14 +116,14 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
+        if (IsOptionLike(remoteName) || IsOptionLike(branchName))
+            return {false, "Remote and branch names may not start with '-'", "", -1, 0.0f, {}};
+
         std::string branch = branchName.empty() ? m_repositoryInfo->currentBranch.name : branchName;
-        if (ContainsShellMetachars(remoteName) || ContainsShellMetachars(branch))
-            return {false, "Remote or branch name contains unsafe characters", "", -1, 0.0f, {}};
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Pulling from %s/%s", remoteName.c_str(), branch.c_str());
-        std::string cmd = "git pull " + remoteName + " " + branch;
         if (progressCallback)
             progressCallback(0.0f);
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        VCSOperationResult result = ExecuteGit({"pull", remoteName, branch}, m_repositoryInfo->path);
         if (progressCallback)
             progressCallback(1.0f);
         if (result.success)
@@ -178,10 +139,10 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
-        if (ContainsShellMetachars(remoteName))
-            return {false, "Remote name contains unsafe characters", "", -1, 0.0f, {}};
-        std::string cmd = "git fetch " + remoteName;
-        return ExecuteCommand(cmd, m_repositoryInfo->path);
+        if (IsOptionLike(remoteName))
+            return {false, "Remote name may not start with '-'", "", -1, 0.0f, {}};
+
+        return ExecuteGit({"fetch", remoteName}, m_repositoryInfo->path);
     }
 
     // ============================================================================
@@ -193,18 +154,22 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
-        if (ContainsShellMetachars(branchName) || ContainsShellMetachars(baseBranch))
-            return {false, "Branch name contains unsafe characters", "", -1, 0.0f, {}};
-        std::string cmd;
+        if (branchName.empty())
+            return {false, "Branch name is empty", "", -1, 0.0f, {}};
+
+        if (IsOptionLike(branchName) || IsOptionLike(baseBranch))
+            return {false, "Branch name may not start with '-'", "", -1, 0.0f, {}};
+
+        std::vector<std::string> args;
         if (baseBranch.empty())
         {
-            cmd = "git branch " + branchName;
+            args = {"branch", branchName};
         }
         else
         {
-            cmd = "git checkout -b " + branchName + " " + baseBranch;
+            args = {"checkout", "-b", branchName, baseBranch};
         }
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        VCSOperationResult result = ExecuteGit(args, m_repositoryInfo->path);
         if (result.success)
         {
             RefreshStatus();
@@ -217,10 +182,13 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
-        if (ContainsShellMetachars(branchName))
-            return {false, "Branch name contains unsafe characters", "", -1, 0.0f, {}};
-        std::string cmd = "git checkout " + branchName;
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        if (branchName.empty())
+            return {false, "Branch name is empty", "", -1, 0.0f, {}};
+
+        if (IsOptionLike(branchName))
+            return {false, "Branch name may not start with '-'", "", -1, 0.0f, {}};
+
+        VCSOperationResult result = ExecuteGit({"checkout", branchName}, m_repositoryInfo->path);
         if (result.success)
         {
             m_repositoryInfo->currentBranch.name = branchName;
@@ -234,10 +202,13 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
-        if (ContainsShellMetachars(branchName))
-            return {false, "Branch name contains unsafe characters", "", -1, 0.0f, {}};
-        std::string cmd = "git merge " + branchName;
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        if (branchName.empty())
+            return {false, "Branch name is empty", "", -1, 0.0f, {}};
+
+        if (IsOptionLike(branchName))
+            return {false, "Branch name may not start with '-'", "", -1, 0.0f, {}};
+
+        VCSOperationResult result = ExecuteGit({"merge", branchName}, m_repositoryInfo->path);
         if (result.success)
         {
             RefreshStatus();
@@ -251,9 +222,13 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
-        std::string flag = force ? "-D" : "-d";
-        std::string cmd = "git branch " + flag + " " + branchName;
-        return ExecuteCommand(cmd, m_repositoryInfo->path);
+        if (branchName.empty())
+            return {false, "Branch name is empty", "", -1, 0.0f, {}};
+
+        if (IsOptionLike(branchName))
+            return {false, "Branch name may not start with '-'", "", -1, 0.0f, {}};
+
+        return ExecuteGit({"branch", force ? "-D" : "-d", "--", branchName}, m_repositoryInfo->path);
     }
 
     // ============================================================================
@@ -265,15 +240,19 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {};
 
-        std::string cmd =
-            "git log --format='COMMIT_SEP%nHash:%H%nShortHash:%h%nAuthor:%an%nEmail:%ae%nDate:%aI%nMessage:%s'";
-        cmd += " -n " + std::to_string(maxCommits);
+        // The format string is a single argv element; it must not carry shell quotes, or git emits them
+        // verbatim as part of the record separator and appends a stray quote to every commit subject.
+        std::vector<std::string> args = {
+            "log", "--format=COMMIT_SEP%nHash:%H%nShortHash:%h%nAuthor:%an%nEmail:%ae%nDate:%aI%nMessage:%s", "-n",
+            std::to_string(maxCommits)};
         if (!branchName.empty())
         {
-            cmd += " " + branchName;
+            if (IsOptionLike(branchName))
+                return {};
+            args.push_back(branchName);
         }
 
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        VCSOperationResult result = ExecuteGit(args, m_repositoryInfo->path);
         if (result.success)
         {
             m_commitHistory = ParseGitLog(result.output);
@@ -288,21 +267,22 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return "";
 
-        std::string cmd;
-        if (!commitHash1.empty() && !commitHash2.empty())
-        {
-            cmd = "git diff " + commitHash1 + " " + commitHash2 + " -- \"" + filePath + "\"";
-        }
-        else if (!commitHash1.empty())
-        {
-            cmd = "git diff " + commitHash1 + " -- \"" + filePath + "\"";
-        }
-        else
-        {
-            cmd = "git diff -- \"" + filePath + "\"";
-        }
+        if (IsOptionLike(filePath) || IsOptionLike(commitHash1) || IsOptionLike(commitHash2))
+            return "";
 
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        std::vector<std::string> args = {"diff"};
+        if (!commitHash1.empty())
+        {
+            args.push_back(commitHash1);
+            if (!commitHash2.empty())
+            {
+                args.push_back(commitHash2);
+            }
+        }
+        args.push_back("--");
+        args.push_back(filePath);
+
+        VCSOperationResult result = ExecuteGit(args, m_repositoryInfo->path);
         return result.success ? result.output : "";
     }
 
@@ -311,8 +291,10 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
-        std::string cmd = "git checkout -- \"" + filePath + "\"";
-        VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
+        if (IsOptionLike(filePath))
+            return {false, "File path may not start with '-': " + filePath, "", -1, 0.0f, {}};
+
+        VCSOperationResult result = ExecuteGit({"checkout", "--", filePath}, m_repositoryInfo->path);
         if (result.success)
         {
             RefreshStatus();

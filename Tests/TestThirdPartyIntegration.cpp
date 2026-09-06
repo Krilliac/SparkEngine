@@ -72,8 +72,7 @@ TEST(Cgltf_ParseFile_NonExistent)
 
 TEST(Cgltf_Free_Null)
 {
-    // Freeing null should not crash
-    cgltf_free(nullptr);
+    EXPECT_NO_THROW(cgltf_free(nullptr));
 }
 
 TEST(Cgltf_Parse_InvalidJson)
@@ -256,8 +255,7 @@ TEST(TinyExr_LoadExrNonExistent)
 
 TEST(TinyExr_FreeNull)
 {
-    // Freeing null error message should not crash
-    FreeEXRErrorMessage(nullptr);
+    EXPECT_NO_THROW(FreeEXRErrorMessage(nullptr));
 }
 
 #endif // SPARK_HAS_TINYEXR

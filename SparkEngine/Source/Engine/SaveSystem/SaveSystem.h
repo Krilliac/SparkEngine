@@ -36,6 +36,13 @@
  * String fields use `uint16` length prefixes; the writer rejects (rather than
  * truncates) any string that would overflow that prefix.
  *
+ * ## Hierarchy (v3)
+ *
+ * A serialized `Transform` carries a `parent` property holding the parent's index in
+ * the saved entity list, or `-1` for a root. Loading rebuilds the parent/children
+ * edges through `World::SetParent`. Saves written before v3 had no way to express an
+ * edge, so migration marks every one of their transforms as a root.
+ *
  * ## Component registration
  *
  * Each engine component type must register a serialize/deserialize function pair
@@ -54,6 +61,10 @@
  * Custom types that can appear in loaded snapshots also require matching
  * ComponentFactory storage-transaction operations; built-in registrations add
  * these automatically.
+ *
+ * SerializeWorld() saves every ComponentFactory-registered type that has a
+ * serializer, so a module component is persisted as soon as it is registered on both
+ * sides. `NameComponent` is the one exception: it travels as `SerializedEntity::name`.
  *
  * ## Save slot naming
  *
@@ -169,7 +180,7 @@ namespace Spark
      * @param entity  The entity to attach the component to.
      * @param data    SerializedComponent containing the string properties to parse.
      */
-        using DeserializeFunc = std::function<void(World& world, EntityID entity, const SerializedComponent& data)>;
+        using DeserializeFunc = std::function<void(::World& world, EntityID entity, const SerializedComponent& data)>;
 
       private:
         struct Registration
@@ -284,7 +295,7 @@ namespace Spark
      *
      * @pre HasSerializer(typeName) must be true.
      */
-        void Deserialize(const std::string& typeName, World& world, EntityID entity,
+        void Deserialize(const std::string& typeName, ::World& world, EntityID entity,
                          const SerializedComponent& data) const;
 
         /**
@@ -429,7 +440,9 @@ namespace Spark
      *
      * Serializes all entities and components in `world`, attaches `metadata`,
      * and writes the binary result to `<saveDirectory>/<slotName>.spark_save`.
-     * If a file already exists for this slot it is overwritten atomically.
+     * The save directory is created if it does not exist. If a file already exists
+     * for this slot it is retained as `<slotName>.spark_save.bak` and then replaced
+     * atomically, so an interrupted write never destroys the last good state.
      *
      * @param slotName  Unique slot identifier (file-system-safe string, e.g. "slot1").
      *                  Must not be empty or contain path separators.
@@ -440,7 +453,7 @@ namespace Spark
      * @return          `true` if the file was written successfully; `false` on any error
      *                  (serialization failure, disk full, permission denied, etc.).
      */
-        bool Save(const std::string& slotName, World& world, const SaveMetadata& metadata);
+        bool Save(const std::string& slotName, ::World& world, const SaveMetadata& metadata);
 
         /**
          * @brief Save ECS state plus module-owned opaque key/value state in one atomic file.
@@ -448,7 +461,7 @@ namespace Spark
          * Use this overload for orchestration state that is not naturally represented by
          * ECS components (for example a template's active encounter or session cursor).
          */
-        bool Save(const std::string& slotName, World& world, const SaveMetadata& metadata,
+        bool Save(const std::string& slotName, ::World& world, const SaveMetadata& metadata,
                   const std::unordered_map<std::string, std::string>& customState);
 
         /**
@@ -458,6 +471,10 @@ namespace Spark
      * in `world`, and applies any version migrations if the save format version is
      * older than the current engine version. Saves written by a newer format version
      * are rejected (the load fails) rather than misinterpreted.
+     *
+     * If the slot file cannot be read or parsed, the retained last-good copy
+     * (`<slotName>.spark_save.bak`) is loaded instead and a warning is logged. The
+     * load only fails once both copies are unusable.
      *
      * @warning A successful load replaces the provided `world`. Ensure no raw pointers
      *          to world entities are held by callers before invoking this method.
@@ -475,14 +492,14 @@ namespace Spark
      * @throws           Storage-preparation exceptions after the live-registry boundary,
      *                   and lifecycle-observer exceptions during or after retirement.
      */
-        bool Load(const std::string& slotName, World& world);
+        bool Load(const std::string& slotName, ::World& world);
 
         /**
          * @brief Load ECS state and return the module-owned opaque state from the same snapshot.
          *
          * @param outCustomState Replaced only after the save parses and the world restores successfully.
          */
-        bool Load(const std::string& slotName, World& world,
+        bool Load(const std::string& slotName, ::World& world,
                   std::unordered_map<std::string, std::string>& outCustomState);
 
         /**
@@ -491,7 +508,7 @@ namespace Spark
          * The validator runs after the complete file has parsed but before DeserializeWorld().
          * Returning false leaves both @p world and @p outCustomState unchanged.
          */
-        bool Load(const std::string& slotName, World& world,
+        bool Load(const std::string& slotName, ::World& world,
                   std::unordered_map<std::string, std::string>& outCustomState,
                   const CustomStateValidator& customStateValidator);
 
@@ -506,7 +523,7 @@ namespace Spark
      *                  automatically if left empty.
      * @return          `true` on success; `false` on error.
      */
-        bool QuickSave(World& world, const SaveMetadata& metadata);
+        bool QuickSave(::World& world, const SaveMetadata& metadata);
 
         /**
      * @brief Restore the game state from the dedicated quicksave slot.
@@ -517,7 +534,7 @@ namespace Spark
      * @param world  The ECS World to restore into. Existing state is cleared.
      * @return       `true` if quicksave was found and loaded; `false` otherwise.
      */
-        bool QuickLoad(World& world);
+        bool QuickLoad(::World& world);
 
         /**
      * @brief Save to a rotating autosave slot.
@@ -530,14 +547,15 @@ namespace Spark
      * @param metadata  Metadata to embed; `saveName` is typically set to "Auto Save".
      * @return          `true` on success; `false` on error.
      */
-        bool AutoSave(World& world, const SaveMetadata& metadata);
+        bool AutoSave(::World& world, const SaveMetadata& metadata);
 
         /**
      * @brief Delete the save file for the specified slot.
      *
-     * Removes `<saveDirectory>/<slotName>.spark_save` from the file system. A no-op if the
-     * file does not exist (returns `true`). Returns `false` only if the file exists
-     * but could not be deleted (e.g. permission denied).
+     * Removes `<saveDirectory>/<slotName>.spark_save` and its retained last-good copy
+     * from the file system, so a deleted slot cannot be recovered by a later Load().
+     * A no-op if the file does not exist (returns `true`). Returns `false` only if the
+     * file exists but could not be deleted (e.g. permission denied).
      *
      * @param slotName  Slot to delete.
      * @return          `true` if the file was deleted (or didn't exist); `false` on error.
@@ -552,7 +570,10 @@ namespace Spark
      * sorted by `timestamp` descending (most recent first).
      *
      * Use this to populate the save-slot selection UI without the overhead of
-     * loading full save files.
+     * loading full save files. Every returned entry carries its `slotName`, so a
+     * listed slot can be passed straight to Load(), GetSaveMetadata() or DeleteSave().
+     * A slot that survives only as its retained last-good copy (`*.spark_save.bak`)
+     * is listed under its own slot name, because Load() recovers it.
      *
      * @return  Vector of SaveMetadata, one per discovered save file. Empty if the
      *          directory contains no valid save files.
@@ -576,11 +597,41 @@ namespace Spark
      * @brief Check whether a save file exists for the given slot name.
      *
      * Performs a simple file-existence check without opening or parsing the file.
+     * The retained last-good copy counts: Load() recovers a slot whose primary file
+     * was lost, so reporting it missing here would hide a loadable slot.
      *
      * @param slotName  Slot identifier to check.
-     * @return          `true` if `<saveDirectory>/<slotName>.spark_save` exists on disk.
+     * @return          `true` if `<saveDirectory>/<slotName>.spark_save` or its
+     *                  `.bak` companion exists on disk.
      */
         bool SaveExists(const std::string& slotName) const;
+
+        /**
+     * @brief Exclude a component type from every world snapshot.
+     *
+     * SerializeWorld() captures every ComponentFactory-registered type that owns a
+     * serializer, including the reflection-generated ones. That is the right default
+     * for authored state, but it would also widen saves with runtime-only components
+     * that their owning system rebuilds anyway (an in-flight projectile, a spawned
+     * impact decal). Marking such a type transient keeps it out of save files without
+     * removing its serializer, so the editor's play-mode snapshot and any other
+     * ComponentSerializerRegistry consumer still round-trip it.
+     *
+     * Call during single-threaded initialization, before the first Save().
+     *
+     * @param typeName  Component type name as registered with ComponentFactory.
+     *
+     * @note [game thread] A game module may mark its own runtime-only components.
+     */
+        void MarkComponentTransient(const std::string& typeName);
+
+        /**
+     * @brief Whether a component type is excluded from world snapshots.
+     *
+     * @param typeName  Component type name as registered with ComponentFactory.
+     * @return          `true` when SerializeWorld() skips this type.
+     */
+        [[nodiscard]] bool IsComponentTransient(const std::string& typeName) const;
 
         /**
      * @brief Serialize the world to a SaveData without writing to disk.
@@ -589,20 +640,25 @@ namespace Spark
      * for implementing background disk-writes by serializing on the main thread and
      * offloading WriteToFile() to a worker thread.
      *
+     * Every ComponentFactory-registered type that owns a serializer is captured, except
+     * the ones marked with MarkComponentTransient(), along with each entity's hierarchy edge. Entities with a name but no serializable
+     * component are kept so they stay addressable and can anchor a saved edge.
+     *
      * @param world     The ECS World to snapshot.
      * @param metadata  Metadata to embed in the returned SaveData.
      * @return          A fully populated SaveData snapshot of the current world state.
      */
-        SaveData SerializeWorld(World& world, const SaveMetadata& metadata) const;
+        SaveData SerializeWorld(::World& world, const SaveMetadata& metadata) const;
 
         /**
          * @brief Migrate an in-memory save snapshot to kCurrentSaveVersion.
          *
          * The supported compatibility window is exactly
          * kOldestSupportedSaveVersion..kCurrentSaveVersion. The v1-to-v2 step adds
-         * the previously unpersisted screenshot field with its defined empty value.
-         * Calling this function again after success is a no-op. Unsupported versions
-         * return false without changing @p data.
+         * the previously unpersisted screenshot field with its defined empty value; the
+         * v2-to-v3 step marks every serialized Transform as a hierarchy root, which is
+         * the only edge a pre-v3 save could represent. Calling this function again after
+         * success is a no-op. Unsupported versions return false without changing @p data.
          *
          * @param data Parsed or manually constructed save data to migrate in place.
          * @return true when data is current after the call; false when its source
@@ -613,11 +669,13 @@ namespace Spark
         /**
      * @brief Restore world state from a SaveData without reading from disk.
      *
-     * Reconstructs all entities and components in a fresh candidate World, then retires
-     * old entities, swaps validated storage payloads into the existing live registry,
-     * and emits explicit reactive rebind notifications for incoming components.
+     * Reconstructs all entities and components in a fresh candidate World, rebuilds the
+     * saved parent/child hierarchy inside that candidate, then retires old entities,
+     * swaps validated storage payloads into the existing live registry, and emits
+     * explicit reactive rebind notifications for incoming components.
      * Unknown/duplicate component types, unsupported versions, representation-limit
-     * failures, incomplete type-erased operations, candidate topology mismatches, live
+     * failures, incomplete type-erased operations, unrestorable hierarchy edges
+     * (malformed, self-referencing, or cyclic parent indices), candidate topology mismatches, live
      * hierarchy-plan allocation failures, and candidate-deserializer failures (including
      * a callback that omits its declared component or creates undeclared state) return
      * `false` without changing exact registry topology, hierarchy, entity/component state,
@@ -633,7 +691,7 @@ namespace Spark
      *               not begun. Lifecycle-observer exceptions during/after retirement
      *               also propagate and may leave the caller's World partially committed.
      */
-        bool DeserializeWorld(const SaveData& data, World& world) const;
+        bool DeserializeWorld(const SaveData& data, ::World& world) const;
 
         // -------------------------------------------------------------------------
         // Configuration
@@ -663,6 +721,18 @@ namespace Spark
      * @param dir  New save directory path (relative or absolute).
      */
         void SetSaveDirectory(const std::string& dir) { m_saveDirectory = dir; }
+
+        /**
+     * @brief Directory currently used to store save files.
+     *
+     * A tool (the editor's save panel) that only knows how to *set* the
+     * directory has to overwrite it on every refresh, which silently retargets a
+     * live game session's saves. With the getter it can adopt the engine's
+     * directory instead of forcing its own.
+     *
+     * @return The save directory path.
+     */
+        const std::string& GetSaveDirectory() const noexcept { return m_saveDirectory; }
 
         /** @brief Set the file cache for save I/O (non-owning). */
         void SetFileCache(LocalFileCache* cache) { m_fileCache = cache; }
@@ -775,6 +845,16 @@ namespace Spark
 
         /** @brief Optional file cache for save file I/O (non-owning). */
         LocalFileCache* m_fileCache = nullptr;
+
+        /**
+     * @brief Component types SerializeWorld() never writes.
+     *
+     * Seeded with the engine's runtime-only components so that driving the snapshot
+     * from the component registry cannot silently promote per-frame state to
+     * persistent save data. Extend with MarkComponentTransient(); the list is short
+     * and searched linearly once per component type per save.
+     */
+        std::vector<std::string> m_transientComponentTypes{"ProjectileComponent", "DecalComponent"};
     };
 
 } // namespace Spark

@@ -7,6 +7,7 @@
 #include "Utils/Process.h"
 #include "Utils/SparkError.h"
 #include "Utils/ConsoleProcessManager.h"
+#include "Utils/StackTrace.h"
 #include "Validate.h"
 
 // Only include CURL when libcurl is available (detected by CMake)
@@ -562,6 +563,26 @@ static bool WriteExclusiveFileUtf8(const std::string& path, const std::string& c
 static std::string g_manifestDir; // Private artifact root created during InstallCrashHandler
 static bool g_reporterLaunched = false;
 
+/// One crash report per process.
+///
+/// TriggerCrashHandler(), TriggerCrashReport(), TriggerCrashReportUnattended()
+/// and the unhandled-exception filter all funnel into one report writer, and a
+/// single fatal assertion reaches it through two of them (Assert::Fail calls the
+/// gated entry point and then the ungated one) — which produced two minidumps,
+/// two archives, two upload attempts and six modal dialogs for one failure.
+///
+/// Exchanged BEFORE the report lock is taken, so a fault raised inside the crash
+/// path returns immediately instead of self-deadlocking on the non-recursive
+/// g_lock.
+static std::atomic<bool> g_crashReported{false};
+
+/// How a report leaves this process.
+enum class CrashReportDelivery
+{
+    Interactive, ///< May prompt for consent and upload from this process
+    ArtifactOnly ///< Dump/log/manifest only: no dialogs, no screenshot, no upload
+};
+
 static std::filesystem::path GetCrashArtifactPrefix()
 {
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -817,7 +838,7 @@ extern ID3D11DeviceContext* GetD3DContext();
 
 // Forward declarations
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep);
-static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg);
+static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, CrashReportDelivery delivery);
 static bool WriteMiniDump(const std::wstring& path, EXCEPTION_POINTERS* ep);
 static std::wstring MakeTimeStamp();
 static std::wstring SymStackTrace(EXCEPTION_POINTERS* ep);
@@ -995,6 +1016,11 @@ void TriggerCrashHandler(const char* assertMsg)
         return;
     }
 
+    TriggerCrashReport(assertMsg);
+}
+
+static void TriggerCrashReportWithDelivery(const char* reason, CrashReportDelivery delivery)
+{
     EXCEPTION_RECORD rec{};
     rec.ExceptionCode = STATUS_FATAL_APP_EXIT;
     rec.ExceptionFlags = EXCEPTION_NONCONTINUABLE;
@@ -1009,7 +1035,17 @@ void TriggerCrashHandler(const char* assertMsg)
     RtlCaptureContext(&ctx);
 
     EXCEPTION_POINTERS ep{&rec, &ctx};
-    HandleCrashInternal(&ep, assertMsg);
+    HandleCrashInternal(&ep, reason, delivery);
+}
+
+void TriggerCrashReport(const char* reason)
+{
+    TriggerCrashReportWithDelivery(reason, CrashReportDelivery::Interactive);
+}
+
+void TriggerCrashReportUnattended(const char* reason)
+{
+    TriggerCrashReportWithDelivery(reason, CrashReportDelivery::ArtifactOnly);
 }
 
 void SetAssertCrashBehavior(bool shouldCrash)
@@ -1036,12 +1072,21 @@ void SetAssertCrashBehavior(bool shouldCrash)
 
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
 {
-    HandleCrashInternal(ep, nullptr);
+    HandleCrashInternal(ep, nullptr, CrashReportDelivery::Interactive);
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg)
+static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, CrashReportDelivery delivery)
 {
+    // Before g_lock: see g_crashReported. A second report for the same failure
+    // is duplicate noise; a report raised from inside this function would wedge
+    // on the non-recursive lock below.
+    if (g_crashReported.exchange(true, std::memory_order_acq_rel))
+    {
+        OutputDebugStringA("[SPARK ENGINE] Crash report already written for this process; duplicate ignored.\n");
+        return;
+    }
+
     std::lock_guard<std::mutex> guard(g_lock);
     if (!ep)
         return;
@@ -1184,21 +1229,31 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg)
                                                                   : static_cast<DWORD>(STATUS_FATAL_APP_EXIT));
     }
 
-    const bool screenshotWritten = g_cfg.captureScreenshot && SaveScreenshot(shot);
+    // No screenshot in ArtifactOnly mode: the only caller is the freeze watchdog,
+    // and presenting the swap chain from a watchdog thread while the render
+    // thread is hung is exactly the wedge this report is about.
+    const bool screenshotWritten =
+        delivery == CrashReportDelivery::Interactive && g_cfg.captureScreenshot && SaveScreenshot(shot);
 
     PinnedFile dumpProbe = dumpReady ? OpenPinnedInputFile(WideToUtf8(dump)) : PinnedFile{};
     PinnedFile logProbe = logReady ? OpenPinnedInputFile(WideToUtf8(logFile)) : PinnedFile{};
     PinnedFile screenshotProbe = screenshotWritten ? OpenPinnedInputFile(WideToUtf8(shot)) : PinnedFile{};
     const bool screenshotAvailable = screenshotProbe.stream != nullptr;
 
-    // Reporter launch success is the ownership switch. The engine emits only
-    // raw artifacts plus a manifest and never performs its own consent,
-    // archive, or upload path in this mode.
-    if (g_reporterLaunched)
+    // Two ways this process writes artifacts and stops:
+    //   - the out-of-process reporter launched, and owns consent/archive/upload;
+    //   - ArtifactOnly delivery (the freeze watchdog), where there is no user to
+    //     answer a consent dialog and the caller is about to _Exit(). Blocking
+    //     that thread on a modal prompt plus a 30 s upload is what stopped
+    //     terminateOnFreeze from terminating. Transport is left to the reporter
+    //     or to the pending-manifest sweep on a later launch.
+    if (g_reporterLaunched || delivery == CrashReportDelivery::ArtifactOnly)
     {
         if (logProbe.stream)
         {
-            const std::string crashTitle = assertMsg ? "Assertion Failure" : "Crash Detected";
+            const std::string crashTitle = delivery == CrashReportDelivery::ArtifactOnly
+                                               ? "Unattended Failure (watchdog)"
+                                               : (assertMsg ? "Assertion Failure" : "Crash Detected");
             WriteCrashManifest(reportId, dumpProbe.stream ? WideToUtf8(dump) : std::string{}, WideToUtf8(logFile),
                                screenshotAvailable ? WideToUtf8(shot) : std::string{}, "", crashTitle);
         }
@@ -1289,17 +1344,36 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg)
                 (void)descResult;
             }
 
-            std::string logUtf8 = WideToUtf8(log.str());
-            if (!userDesc.empty())
-                logUtf8 = "=== User Description ===\n" + userDesc + "\n\n" + logUtf8;
+            // Redact only the copy that leaves the machine. The local artifact
+            // written above keeps its full paths for the developer who owns it.
+            const auto redactionContext = Spark::CrashHandlerDetail::MakeCrashRedactionContext();
+            if (!Spark::CrashHandlerDetail::HasRedactionRules(redactionContext))
+            {
+                // Neither the environment nor the OS could tell us what to
+                // remove, so RedactCrashText() would return the log verbatim —
+                // profile path and account name included — to a public issue
+                // tracker. Keep the local artifact, refuse the transport.
+                // OutputDebugStringA, not SPARK_LOG_*: the logger's sinks are not
+                // safe to re-enter from the fault path.
+                OutputDebugStringA("[SPARK ENGINE] Crash upload skipped: no redaction rules could be derived, and an "
+                                   "unredacted report must not leave this machine.\n");
+                ok = false;
+            }
+            else
+            {
+                std::string logUtf8 =
+                    Spark::CrashHandlerDetail::RedactCrashText(WideToUtf8(log.str()), redactionContext);
+                if (!userDesc.empty())
+                    logUtf8 = "=== User Description ===\n" + userDesc + "\n\n" + logUtf8;
 
-            // Copy config and attach user description
-            CrashConfig uploadCfg = g_cfg;
-            uploadCfg.userDescription = userDesc;
-            const std::string archivePath = WideToUtf8(zipFile);
-            const std::string approvedArchive =
-                g_cfg.zipBeforeUpload && archiveReady ? StableUploadPath(archivePin, archivePath) : std::string{};
-            ok = UploadCrashReport(uploadCfg, logUtf8, approvedArchive);
+                // Copy config and attach user description
+                CrashConfig uploadCfg = g_cfg;
+                uploadCfg.userDescription = userDesc;
+                const std::string archivePath = WideToUtf8(zipFile);
+                const std::string approvedArchive =
+                    g_cfg.zipBeforeUpload && archiveReady ? StableUploadPath(archivePin, archivePath) : std::string{};
+                ok = UploadCrashReport(uploadCfg, logUtf8, approvedArchive);
+            }
         }
     }
 
@@ -1340,10 +1414,63 @@ static std::wstring MakeTimeStamp()
     return buf;
 }
 
+/// Acquire the shared DbgHelp lock without ever blocking the fault path.
+///
+/// DbgHelp is single-threaded, so the crash path shares StackTrace's one
+/// process-wide lock (and its one SymInitialize) instead of running a private
+/// SymInitialize/SymCleanup pair that tore down the symbol handler for everyone
+/// else the moment it returned. But StackTrace::ResolveSymbols() holds that same
+/// non-recursive lock across its whole resolve loop, and the synchronous Logger
+/// runs that on whichever thread logs an Error. A fault raised inside DbgHelp on
+/// such a thread re-enters this filter on the same thread, where a lock_guard
+/// wedges the process for good: no dump, no log, no exit code. Bounded try-lock;
+/// every caller must have an unsymbolized fallback.
+///
+/// @return true when @p lock owns the mutex on return.
+[[nodiscard]] static bool TryAcquireSymbolLock(std::unique_lock<std::mutex>& lock)
+{
+    constexpr int kSymbolLockAttempts = 50;
+    constexpr DWORD kSymbolLockSleepMs = 10; // 50 x 10 ms = 500 ms ceiling
+    for (int attempt = 0; attempt < kSymbolLockAttempts && !lock.owns_lock(); ++attempt)
+    {
+        if (lock.try_lock())
+            break;
+        Sleep(kSymbolLockSleepMs);
+    }
+    return lock.owns_lock();
+}
+
 static std::wstring SymStackTrace(EXCEPTION_POINTERS* ep)
 {
-    SymInitialize(GetCurrentProcess(), nullptr, TRUE);
+    // Never block on the shared DbgHelp lock here: fall back to unsymbolized
+    // frames instead — the raw addresses still resolve offline against the
+    // minidump. See TryAcquireSymbolLock().
+    std::unique_lock<std::mutex> symbolLock(Spark::StackTrace::SymbolLock(), std::defer_lock);
+    (void)TryAcquireSymbolLock(symbolLock);
+
     std::wstringstream out;
+    if (!symbolLock.owns_lock())
+    {
+        // Deliberately unsymbolized: something else is inside DbgHelp and every
+        // Sym*/StackWalk64 call here would race it. CaptureStackBackTrace
+        // touches no DbgHelp state, and this filter runs on the faulting thread.
+        out << L"*** STACK TRACE (unsymbolized: DbgHelp busy — resolve against the dump) ***\n";
+        void* frames[32] = {};
+        const USHORT captured = CaptureStackBackTrace(0, 32, frames, nullptr);
+        for (USHORT i = 0; i < captured; ++i)
+        {
+            out << L"  " << kStackFrameMarkerW << L"0x" << std::hex << reinterpret_cast<uintptr_t>(frames[i])
+                << std::dec << L"\n";
+        }
+        if (captured == 0 && ep->ExceptionRecord)
+        {
+            out << L"  " << kStackFrameMarkerW << L"0x" << std::hex
+                << reinterpret_cast<uintptr_t>(ep->ExceptionRecord->ExceptionAddress) << std::dec << L"\n";
+        }
+        return out.str();
+    }
+
+    Spark::StackTrace::EnsureSymbolsInitialized();
     out << L"*** STACK TRACE ***\n";
 
     CONTEXT& ctx = *ep->ContextRecord;
@@ -1376,14 +1503,13 @@ static std::wstring SymStackTrace(EXCEPTION_POINTERS* ep)
         DWORD64 disp = 0;
         if (SymFromAddr(GetCurrentProcess(), frame.AddrPC.Offset, &disp, sym))
         {
-            out << L" " << sym->Name << L" +0x" << std::hex << disp << std::dec << L"\n";
+            out << L"  " << kStackFrameMarkerW << sym->Name << L" +0x" << std::hex << disp << std::dec << L"\n";
         }
         else
         {
-            out << L" 0x" << std::hex << frame.AddrPC.Offset << std::dec << L"\n";
+            out << L"  " << kStackFrameMarkerW << L"0x" << std::hex << frame.AddrPC.Offset << std::dec << L"\n";
         }
     }
-    SymCleanup(GetCurrentProcess());
     return out.str();
 }
 
@@ -1427,7 +1553,24 @@ static std::wstring SystemInfo()
 
 static std::wstring ThreadStacks(DWORD skipThreadId)
 {
-    SymInitialize(GetCurrentProcess(), nullptr, TRUE);
+    // Same shared DbgHelp lock as SymStackTrace, and the same refusal to block
+    // on it. This runs on ThreadStacksBounded's helper thread, so a wedge here
+    // does not hang the process — but the crashing thread is the likeliest
+    // holder of the lock (it is parked in ThreadStacksBounded's wait), and
+    // blocking would burn the full 5 s timeout and then force the truncated
+    // "capture timed out" path that terminates the process early. There is no
+    // unsymbolized fallback worth writing: StackWalk64 is DbgHelp too.
+    //
+    // These lines deliberately carry no frame marker: only the faulting thread's
+    // stack feeds the crash hash.
+    std::unique_lock<std::mutex> symbolLock(Spark::StackTrace::SymbolLock(), std::defer_lock);
+    if (!TryAcquireSymbolLock(symbolLock))
+    {
+        return L"*** THREAD STACKS ***\nSkipped: DbgHelp busy (symbol lock held elsewhere) — "
+               L"resolve the other threads against the dump\n";
+    }
+
+    Spark::StackTrace::EnsureSymbolsInitialized();
     DWORD pid = GetCurrentProcessId();
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (snap == INVALID_HANDLE_VALUE)
@@ -1495,7 +1638,6 @@ static std::wstring ThreadStacks(DWORD skipThreadId)
         CloseHandle(th);
     }
     CloseHandle(snap);
-    SymCleanup(GetCurrentProcess());
     return out.str();
 }
 
@@ -1630,17 +1772,17 @@ static std::string CaptureStackTraceString()
                 char* demangled = abi::__cxa_demangle(mangled.c_str(), nullptr, nullptr, &status);
                 if (status == 0 && demangled)
                 {
-                    out << "  " << demangled << " " << sym.substr(end) << "\n";
+                    out << "  " << kStackFrameMarker << demangled << " " << sym.substr(end) << "\n";
                     free(demangled);
                 }
                 else
                 {
-                    out << "  " << sym << "\n";
+                    out << "  " << kStackFrameMarker << sym << "\n";
                 }
             }
             else
             {
-                out << "  " << sym << "\n";
+                out << "  " << kStackFrameMarker << sym << "\n";
             }
         }
         free(symbols);
@@ -2013,7 +2155,20 @@ void TriggerCrashHandler(const char* assertMsg)
         return;
     }
 
-    // Generate crash report from assert
+    TriggerCrashReport(assertMsg);
+}
+
+void TriggerCrashReport(const char* reason)
+{
+    // See g_crashReported: Assert::Fail reaches this through both the gated and
+    // the ungated entry point, and one failure must leave exactly one report.
+    if (g_crashReported.exchange(true, std::memory_order_acq_rel))
+    {
+        WriteStderr("[SPARK ENGINE] Crash report already written for this process; duplicate ignored.\n");
+        return;
+    }
+
+    // Generate the on-disk report for a failure the process will not survive
     const std::string reportId = MakeCrashReportId();
     const std::string timestamp = MakeTimeStampUtf8();
     const std::string artifactSuffix = "_" + reportId;
@@ -2032,9 +2187,9 @@ void TriggerCrashHandler(const char* assertMsg)
     log << "Timestamp  : " << timestamp << "\n";
     log << "Process ID : " << getpid() << "\n\n";
 
-    if (assertMsg)
+    if (reason)
     {
-        log << "*** ASSERTION FAILURE ***\n" << assertMsg << "\n\n";
+        log << "*** ASSERTION FAILURE ***\n" << reason << "\n\n";
     }
 
     log << CaptureStackTraceString();
@@ -2063,6 +2218,13 @@ void TriggerCrashHandler(const char* assertMsg)
     }
 
     std::cerr << "\n[SPARK ENGINE] ASSERTION FAILURE\n" << log.str() << "\n";
+}
+
+void TriggerCrashReportUnattended(const char* reason)
+{
+    // This path already writes artifacts only — no dialog, no upload — so the
+    // watchdog needs nothing beyond the shared once-guard above.
+    TriggerCrashReport(reason);
 }
 
 void SetAssertCrashBehavior(bool shouldCrash)
@@ -2100,6 +2262,17 @@ void TriggerCrashHandler(const char* assertMsg)
 {
     if (assertMsg)
         std::cerr << "Assert: " << assertMsg << "\n";
+}
+
+void TriggerCrashReport(const char* reason)
+{
+    if (reason)
+        std::cerr << "Crash report (stub platform): " << reason << "\n";
+}
+
+void TriggerCrashReportUnattended(const char* reason)
+{
+    TriggerCrashReport(reason);
 }
 
 void SetAssertCrashBehavior(bool shouldCrash)

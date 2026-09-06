@@ -134,8 +134,13 @@ static std::vector<uint8_t> MakeConnectPacket(const std::string& playerName)
 
 static std::vector<uint8_t> MakeChatPacket(uint32_t senderID, const std::string& name, const std::string& text)
 {
+    // ChatMessage payload per docs/specs/networking-wire-format.md: sender name
+    // then text, both NetBuffer strings starting at payload offset 0, which is
+    // what PacketValidator's ChatMessage schema screens (stringFieldOffset = 0).
+    // A private leading channel byte (as SparkGameMMO's chat system uses) shifts
+    // every length prefix and is rejected as BadString unless that producer
+    // registers its own schema declaring the offset.
     NetBuffer payload;
-    payload.WriteUint8(1); // Global channel
     payload.WriteString(name);
     payload.WriteString(text);
     return MakePacket(MessageType::ChatMessage, ChannelType::ReliableOrdered, senderID, 0, 0.0f,
@@ -809,7 +814,7 @@ TEST(MMOIntegration_FullStackStress)
 
 TEST(MMOIntegration_Skipped)
 {
-    EXPECT_TRUE(true);
+    SKIP_TEST("ENABLE_NETWORKING is OFF in this configuration");
 }
 
 #endif // ENABLE_NETWORKING

@@ -31,7 +31,7 @@ TEST(RHIBridge_InitializeWithNoneBackend_CreatesHeadlessDevice)
 TEST(RHIBridge_ShutdownWithoutInit_DoesNotCrash)
 {
     RHIBridge bridge;
-    bridge.Shutdown(); // Should be safe to call on uninitialized bridge
+    EXPECT_NO_THROW(bridge.Shutdown());
 }
 
 TEST(RHIBridge_DoubleInitialize_ReinitializesCleanly)
@@ -189,7 +189,8 @@ TEST(RHIBridge_NullDeviceAccessorsDoNotCrash)
     EXPECT_TRUE(bridge.CreateVertexBuffer(nullptr, 0, 0) == nullptr);
     EXPECT_TRUE(bridge.CreateIndexBuffer(nullptr, 0, 0) == nullptr);
     EXPECT_TRUE(bridge.CreateConstantBuffer(0) == nullptr);
-    EXPECT_TRUE(bridge.CreateTexture2D(1, 1, PixelFormat::R8G8B8A8_UNORM, RHITextureUsage::ShaderResource, nullptr) == nullptr);
+    EXPECT_TRUE(bridge.CreateTexture2D(1, 1, PixelFormat::R8G8B8A8_UNORM, RHITextureUsage::ShaderResource, nullptr) ==
+                nullptr);
     EXPECT_TRUE(bridge.CreateDepthBuffer(1, 1, PixelFormat::D24_UNORM_S8_UINT) == nullptr);
     EXPECT_TRUE(bridge.CreateRenderTarget(1, 1, PixelFormat::R8G8B8A8_UNORM) == nullptr);
     EXPECT_TRUE(bridge.CreateSamplerLinearWrap() == nullptr);

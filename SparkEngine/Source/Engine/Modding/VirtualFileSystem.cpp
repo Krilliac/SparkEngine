@@ -7,15 +7,79 @@
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <string_view>
+#include <system_error>
 #include <unordered_set>
 
 namespace fs = std::filesystem;
 
 namespace Spark
 {
+
+    namespace
+    {
+        /// Win32 resolves these names as devices regardless of the directory
+        /// prefix, ignoring an extension and any trailing spaces or dots.
+        bool IsReservedDeviceName(std::string_view component)
+        {
+            const size_t dot = component.find('.');
+            std::string stem(component.substr(0, dot == std::string_view::npos ? component.size() : dot));
+            while (!stem.empty() && (stem.back() == ' ' || stem.back() == '.'))
+                stem.pop_back();
+            for (char& c : stem)
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+
+            if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL")
+                return true;
+            if (stem.size() == 4 && (stem.starts_with("COM") || stem.starts_with("LPT")) && stem[3] >= '0' &&
+                stem[3] <= '9')
+            {
+                return true;
+            }
+            return false;
+        }
+
+        /// Containment decided on already-normalized paths: @p child must sit under
+        /// @p parent without climbing out of it.
+        bool IsContainedIn(const fs::path& child, const fs::path& parent)
+        {
+            const fs::path relative = child.lexically_relative(parent);
+            return !relative.empty() && !relative.is_absolute() && *relative.begin() != "..";
+        }
+    } // namespace
+
+    bool IsVirtualPathSafe(const std::string& virtualPath)
+    {
+        if (virtualPath.empty())
+            return false;
+
+        // ':' is never legitimate in a mount-relative path and carries two Windows
+        // escapes at once: "C:evil" (drive-relative) and "logo.png:secret" (NTFS
+        // alternate data stream).
+        if (virtualPath.find(':') != std::string::npos)
+            return false;
+
+        if (virtualPath.front() == '/' || virtualPath.front() == '\\')
+            return false;
+
+        const fs::path candidate = fs::path(virtualPath).lexically_normal();
+        if (candidate.is_absolute() || candidate.has_root_name() || candidate.has_root_directory())
+            return false;
+
+        for (const auto& component : candidate)
+        {
+            const std::string text = component.string();
+            if (text == "..")
+                return false;
+            if (IsReservedDeviceName(text))
+                return false;
+        }
+        return true;
+    }
 
     // =========================================================================
     // LocalFileProvider
@@ -28,24 +92,63 @@ namespace Spark
         {
             m_rootPath += '/';
         }
+
+        m_root = fs::path(m_rootPath).lexically_normal();
+        if (m_root.filename().empty())
+            m_root = m_root.parent_path();
+        if (m_root.empty())
+            m_root = fs::path(".");
+
+        // Resolve the root's own links once so per-path containment compares like
+        // with like. A root that does not exist yet keeps its lexical form.
+        std::error_code ec;
+        m_canonicalRoot = fs::weakly_canonical(m_root, ec);
+        if (ec || m_canonicalRoot.empty())
+            m_canonicalRoot = m_root;
     }
 
     std::string LocalFileProvider::ResolvePath(const std::string& virtualPath) const
     {
-        // Reject path traversal attempts — return empty so Exists/ReadFile fail cleanly
-        // instead of silently substituting the sandbox root (which used to mask attacker intent).
-        if (virtualPath.find("..") != std::string::npos)
+        // Return empty so Exists/ReadFile fail cleanly instead of silently
+        // substituting the sandbox root (which used to mask attacker intent).
+        if (!IsVirtualPathSafe(virtualPath))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: rejected path traversal attempt '%s'", virtualPath.c_str());
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: rejected unsafe virtual path '%s'", virtualPath.c_str());
             return {};
         }
-        // Reject absolute paths
-        if (!virtualPath.empty() && (virtualPath[0] == '/' || virtualPath[0] == '\\'))
+
+        const fs::path full = (m_root / fs::path(virtualPath)).lexically_normal();
+        if (!IsContainedIn(full, m_root))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: rejected absolute path '%s'", virtualPath.c_str());
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: rejected path escaping mount root '%s'",
+                           virtualPath.c_str());
             return {};
         }
-        return m_rootPath + virtualPath;
+
+        // Lexical containment cannot see a symlink or junction placed INSIDE the
+        // mount, which is the standard way out of a sandbox whose only check is
+        // textual. Resolve links across the part of the path that exists and
+        // confirm the result is still under the equally-resolved root.
+        // A resolver that cannot answer is not an answer: treating an error as
+        // "no link found" switches the guard off for exactly the paths an
+        // attacker controls (an unopenable reparse point, a path past MAX_PATH,
+        // a dead network mount). Unknown is not safe — reject and say so.
+        std::error_code ec;
+        const fs::path resolved = fs::weakly_canonical(full, ec);
+        if (ec || resolved.empty())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: rejected unresolvable path '%s': %s", virtualPath.c_str(),
+                           ec ? ec.message().c_str() : "empty canonical form");
+            return {};
+        }
+        if (!IsContainedIn(resolved, m_canonicalRoot))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: rejected link escaping mount root '%s'",
+                           virtualPath.c_str());
+            return {};
+        }
+
+        return full.string();
     }
 
     bool LocalFileProvider::Exists(const std::string& virtualPath) const
@@ -99,7 +202,9 @@ namespace Spark
                                                           const std::string& extension) const
     {
         std::vector<std::string> results;
-        std::string fullDir = ResolvePath(directory);
+        // An empty directory means the mount root itself, which is not a path the
+        // containment policy is asked about.
+        std::string fullDir = directory.empty() ? m_root.string() : ResolvePath(directory);
 
         if (!fs::exists(fullDir) || !fs::is_directory(fullDir))
         {
@@ -211,6 +316,9 @@ namespace Spark
 
     bool VirtualFileSystem::Exists(const std::string& virtualPath) const
     {
+        if (!IsVirtualPathSafe(virtualPath))
+            return false;
+
         std::lock_guard<std::mutex> lock(m_mutex);
         for (const auto* mp : GetSortedMounts())
         {
@@ -224,48 +332,42 @@ namespace Spark
 
     std::vector<uint8_t> VirtualFileSystem::ReadFile(const std::string& virtualPath) const
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        auto sorted = GetSortedMounts();
-        for (size_t i = 0; i < sorted.size(); ++i)
+        // Decide the policy once, here. Letting each provider reject the path and
+        // then continuing the walk re-offers a rejected path to every lower-priority
+        // mount, one of which (an archive provider) does no containment check at all.
+        if (!IsVirtualPathSafe(virtualPath))
         {
-            if (sorted[i]->provider->Exists(virtualPath))
-            {
-                auto data = sorted[i]->provider->ReadFile(virtualPath);
-                if (!data.empty())
-                    return data;
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: refusing to read unsafe path '%s'", virtualPath.c_str());
+            return {};
+        }
 
-                // File exists but read failed — try next mount
-                if (i + 1 < sorted.size())
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core,
-                                   "VFS: '%s' read failed in [%s], falling back to next mount", virtualPath.c_str(),
-                                   sorted[i]->name.c_str());
-                }
-            }
+        std::lock_guard<std::mutex> lock(m_mutex);
+        for (const auto* mp : GetSortedMounts())
+        {
+            // The first mount that HAS the file wins, empty or not. Treating an
+            // empty read as a failure and falling through silently inverted the
+            // priority order for zero-byte files, so a mod that blanks a config by
+            // shipping an empty override still got the engine's original.
+            if (mp->provider->Exists(virtualPath))
+                return mp->provider->ReadFile(virtualPath);
         }
         return {};
     }
 
     std::string VirtualFileSystem::ReadTextFile(const std::string& virtualPath) const
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        auto sorted = GetSortedMounts();
-        for (size_t i = 0; i < sorted.size(); ++i)
+        if (!IsVirtualPathSafe(virtualPath))
         {
-            if (sorted[i]->provider->Exists(virtualPath))
-            {
-                auto text = sorted[i]->provider->ReadTextFile(virtualPath);
-                if (!text.empty())
-                    return text;
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: refusing to read unsafe path '%s'", virtualPath.c_str());
+            return {};
+        }
 
-                // File exists but read failed — try next mount
-                if (i + 1 < sorted.size())
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core,
-                                   "VFS: '%s' text read failed in [%s], falling back to next mount",
-                                   virtualPath.c_str(), sorted[i]->name.c_str());
-                }
-            }
+        std::lock_guard<std::mutex> lock(m_mutex);
+        for (const auto* mp : GetSortedMounts())
+        {
+            // First mount that HAS the file wins — see ReadFile above.
+            if (mp->provider->Exists(virtualPath))
+                return mp->provider->ReadTextFile(virtualPath);
         }
         return {};
     }
@@ -297,6 +399,9 @@ namespace Spark
 
     std::string VirtualFileSystem::ResolveProvider(const std::string& virtualPath) const
     {
+        if (!IsVirtualPathSafe(virtualPath))
+            return {};
+
         std::lock_guard<std::mutex> lock(m_mutex);
         for (const auto* mp : GetSortedMounts())
         {

@@ -7,15 +7,61 @@
 
 #include "SceneStatisticsPanel.h"
 #include "../Core/EditorIcons.h"
-#include "../../../SparkEngine/Source/Utils/Validate.h"
-#include <imgui.h>
-#include <algorithm>
-#include <cmath>
-#include <numeric>
+#include "Core/EngineContext.h"
+#include "Core/Reflection.h"
+#include "Engine/ECS/Components.h"
+#include "Physics/PhysicsSystem.h"
 #include "Utils/LogMacros.h"
+#include "Utils/Validate.h"
+#include <algorithm>
+#include <imgui.h>
+#include <string>
+
+#ifdef _WIN32
+#include <windows.h>
+// psapi.h must follow windows.h
+#include <psapi.h>
+#if defined(_MSC_VER)
+#pragma comment(lib, "psapi.lib")
+#endif
+#else
+#include <cstdio>
+#include <unistd.h>
+#endif
 
 namespace SparkEditor
 {
+
+    namespace
+    {
+        /// Resident/working-set size of this process in megabytes; 0 when unavailable.
+        float QueryProcessMemoryMB()
+        {
+#ifdef _WIN32
+            PROCESS_MEMORY_COUNTERS counters = {};
+            counters.cb = sizeof(counters);
+            if (GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters)))
+            {
+                return static_cast<float>(counters.WorkingSetSize) / (1024.0f * 1024.0f);
+            }
+            return 0.0f;
+#else
+            long residentPages = 0;
+            if (FILE* statm = std::fopen("/proc/self/statm", "r"))
+            {
+                long totalPages = 0;
+                const int read = std::fscanf(statm, "%ld %ld", &totalPages, &residentPages);
+                std::fclose(statm);
+                if (read != 2)
+                    return 0.0f;
+            }
+            const long pageSize = sysconf(_SC_PAGESIZE);
+            if (residentPages <= 0 || pageSize <= 0)
+                return 0.0f;
+            return static_cast<float>(residentPages) * static_cast<float>(pageSize) / (1024.0f * 1024.0f);
+#endif
+        }
+    } // namespace
 
     SceneStatisticsPanel::SceneStatisticsPanel() : EditorPanel("Scene Statistics", "SceneStats") {}
 
@@ -26,36 +72,6 @@ namespace SparkEditor
         m_fpsHistory.fill(0.0f);
         m_frameTimeHistory.fill(0.0f);
         m_drawCallHistory.fill(0.0f);
-        m_memoryHistory.fill(0.0f);
-
-        // Initialize with sample data for demonstration
-        m_entityStats.totalEntities = 142;
-        m_entityStats.activeEntities = 128;
-        m_entityStats.inactiveEntities = 14;
-        m_entityStats.componentCounts = {{"Transform", 142}, {"MeshRenderer", 87},   {"Light", 12},
-                                         {"Camera", 3},      {"RigidBody", 45},      {"Collider", 52},
-                                         {"AudioSource", 8}, {"SpriteRenderer", 15}, {"ParticleSystem", 6}};
-
-        m_renderStats.drawCalls = 256;
-        m_renderStats.triangleCount = 145000;
-        m_renderStats.vertexCount = 87000;
-        m_renderStats.shaderCount = 24;
-        m_renderStats.textureMemoryMB = 384.5f;
-        m_renderStats.renderTargetCount = 6;
-        m_renderStats.batchCount = 48;
-
-        m_physicsStats.activeRigidBodies = 45;
-        m_physicsStats.staticBodies = 87;
-        m_physicsStats.collisionPairs = 23;
-        m_physicsStats.raycastsPerFrame = 12;
-        m_physicsStats.simulationTimeMs = 2.3f;
-
-        m_memoryStats.totalSceneMemoryMB = 512.0f;
-        m_memoryStats.meshMemoryMB = 128.0f;
-        m_memoryStats.textureMemoryMB = 256.0f;
-        m_memoryStats.audioMemoryMB = 64.0f;
-        m_memoryStats.assetCacheMemoryMB = 48.0f;
-        m_memoryStats.scriptMemoryMB = 16.0f;
 
         m_isInitialized = true;
         return true;
@@ -63,14 +79,58 @@ namespace SparkEditor
 
     void SceneStatisticsPanel::Update(float deltaTime)
     {
-        m_simulationTime += deltaTime;
         m_frameCounter++;
 
         if (m_frameCounter >= m_updateInterval)
         {
             m_frameCounter = 0;
+            CollectStats();
             UpdateHistoryBuffers(deltaTime);
         }
+    }
+
+    void SceneStatisticsPanel::CollectStats()
+    {
+        // --- Entities and components: measured from the document World ---
+        m_totalEntities = 0;
+        m_componentCounts.clear();
+        if (m_world)
+        {
+            auto& registry = m_world->GetRegistry();
+            const std::vector<std::string> typeNames = Spark::ComponentFactory::Get().GetRegisteredNames();
+
+            for (auto&& [entity] : registry.storage<entt::entity>().each())
+            {
+                ++m_totalEntities;
+                for (const std::string& typeName : typeNames)
+                {
+                    if (Spark::ComponentFactory::Get().HasComponent(typeName, m_world, static_cast<uint32_t>(entity)))
+                    {
+                        ++m_componentCounts[typeName];
+                    }
+                }
+            }
+        }
+
+        // --- Physics: only from a running PhysicsSystem ---
+        m_hasPhysicsStats = false;
+        if (auto* context = ::EngineContext::Get())
+        {
+            if (auto* physics = context->GetPhysics())
+            {
+                const PhysicsSystem::PhysicsMetrics metrics = physics->GetMetrics();
+                m_physicsStats.activeRigidBodies = static_cast<int>(metrics.activeRigidBodies);
+                m_physicsStats.totalRigidBodies = static_cast<int>(metrics.totalRigidBodies);
+                m_physicsStats.collisionPairs = static_cast<int>(metrics.collisionPairs);
+                m_physicsStats.raycastsPerFrame = static_cast<int>(metrics.raycastCount);
+                m_physicsStats.simulationTimeMs = metrics.simulationTime;
+                m_hasPhysicsStats = true;
+            }
+        }
+
+        // --- Memory: reported by the OS for this process ---
+        m_processMemoryMB = QueryProcessMemoryMB();
+        m_hasProcessMemory = m_processMemoryMB > 0.0f;
     }
 
     void SceneStatisticsPanel::Render()
@@ -86,7 +146,6 @@ namespace SparkEditor
             return;
         }
 
-        // Update interval control
         ImGui::SliderInt("Update Interval", &m_updateInterval, 1, 60, "%d frames");
         ImGui::Separator();
 
@@ -108,27 +167,23 @@ namespace SparkEditor
         {
             m_showEntitySection = true;
 
+            if (!IsWorldConnected())
+            {
+                ImGui::TextDisabled("Preview - not connected: no World is wired to this panel.");
+                ImGui::Spacing();
+                return;
+            }
+
             ImGui::Columns(2, "EntityStatsColumns", false);
             ImGui::SetColumnWidth(0, 180.0f);
 
             ImGui::TextDisabled("Total Entities");
             ImGui::NextColumn();
-            ImGui::Text("%d", m_entityStats.totalEntities);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Active");
-            ImGui::NextColumn();
-            ImGui::TextColored(ImVec4(0.3f, 0.8f, 0.3f, 1.0f), "%d", m_entityStats.activeEntities);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Inactive");
-            ImGui::NextColumn();
-            ImGui::TextColored(ImVec4(0.8f, 0.5f, 0.3f, 1.0f), "%d", m_entityStats.inactiveEntities);
+            ImGui::Text("%d", m_totalEntities);
             ImGui::NextColumn();
 
             ImGui::Columns(1);
 
-            // Component breakdown table
             if (ImGui::TreeNode("Component Breakdown"))
             {
                 ImGui::BeginChild("ComponentTable", ImVec2(0, 200), true);
@@ -141,7 +196,7 @@ namespace SparkEditor
                 ImGui::NextColumn();
                 ImGui::Separator();
 
-                for (const auto& [type, count] : m_entityStats.componentCounts)
+                for (const auto& [type, count] : m_componentCounts)
                 {
                     ImGui::Text("%s", type.c_str());
                     ImGui::NextColumn();
@@ -169,46 +224,35 @@ namespace SparkEditor
         {
             m_showRenderSection = true;
 
+            if (!m_hasRenderStats)
+            {
+                ImGui::TextDisabled("Preview - not connected: the viewport has not reported render");
+                ImGui::TextDisabled("statistics to this panel.");
+                ImGui::Spacing();
+                return;
+            }
+
             ImGui::Columns(2, "RenderStatsColumns", false);
             ImGui::SetColumnWidth(0, 180.0f);
 
             ImGui::TextDisabled("Draw Calls");
             ImGui::NextColumn();
-            ImGui::Text("%d", m_renderStats.drawCalls);
+            ImGui::Text("%u", m_renderStats.drawn);
             ImGui::NextColumn();
 
-            ImGui::TextDisabled("Triangles");
+            ImGui::TextDisabled("Candidates");
             ImGui::NextColumn();
-            ImGui::Text("%s", (m_renderStats.triangleCount > 1000)
-                                  ? (std::to_string(m_renderStats.triangleCount / 1000) + "K").c_str()
-                                  : std::to_string(m_renderStats.triangleCount).c_str());
+            ImGui::Text("%u", m_renderStats.candidates);
             ImGui::NextColumn();
 
-            ImGui::TextDisabled("Vertices");
+            ImGui::TextDisabled("Visible");
             ImGui::NextColumn();
-            ImGui::Text("%s", (m_renderStats.vertexCount > 1000)
-                                  ? (std::to_string(m_renderStats.vertexCount / 1000) + "K").c_str()
-                                  : std::to_string(m_renderStats.vertexCount).c_str());
+            ImGui::Text("%u", m_renderStats.visible);
             ImGui::NextColumn();
 
-            ImGui::TextDisabled("Shaders");
+            ImGui::TextDisabled("Rejected");
             ImGui::NextColumn();
-            ImGui::Text("%d", m_renderStats.shaderCount);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Texture Memory");
-            ImGui::NextColumn();
-            ImGui::Text("%.1f MB", m_renderStats.textureMemoryMB);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Render Targets");
-            ImGui::NextColumn();
-            ImGui::Text("%d", m_renderStats.renderTargetCount);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Batches");
-            ImGui::NextColumn();
-            ImGui::Text("%d", m_renderStats.batchCount);
+            ImGui::Text("%u", m_renderStats.rejected);
             ImGui::NextColumn();
 
             ImGui::Columns(1);
@@ -227,6 +271,14 @@ namespace SparkEditor
         {
             m_showPhysicsSection = true;
 
+            if (!m_hasPhysicsStats)
+            {
+                ImGui::TextDisabled("Preview - not connected: no PhysicsSystem is running in this");
+                ImGui::TextDisabled("process.");
+                ImGui::Spacing();
+                return;
+            }
+
             ImGui::Columns(2, "PhysicsStatsColumns", false);
             ImGui::SetColumnWidth(0, 180.0f);
 
@@ -235,9 +287,9 @@ namespace SparkEditor
             ImGui::Text("%d", m_physicsStats.activeRigidBodies);
             ImGui::NextColumn();
 
-            ImGui::TextDisabled("Static Bodies");
+            ImGui::TextDisabled("Total Rigid Bodies");
             ImGui::NextColumn();
-            ImGui::Text("%d", m_physicsStats.staticBodies);
+            ImGui::Text("%d", m_physicsStats.totalRigidBodies);
             ImGui::NextColumn();
 
             ImGui::TextDisabled("Collision Pairs");
@@ -271,38 +323,15 @@ namespace SparkEditor
         {
             m_showMemorySection = true;
 
-            // Total memory bar
-            ImGui::Text("Total Scene Memory: %.1f MB", m_memoryStats.totalSceneMemoryMB);
-
-            // Breakdown bars
-            float total = m_memoryStats.totalSceneMemoryMB;
-            if (total > 0.0f)
+            if (m_hasProcessMemory)
             {
-                ImGui::TextDisabled("Meshes");
-                ImGui::SameLine(120);
-                ImGui::ProgressBar(m_memoryStats.meshMemoryMB / total, ImVec2(-1, 0),
-                                   (std::to_string(static_cast<int>(m_memoryStats.meshMemoryMB)) + " MB").c_str());
-
-                ImGui::TextDisabled("Textures");
-                ImGui::SameLine(120);
-                ImGui::ProgressBar(m_memoryStats.textureMemoryMB / total, ImVec2(-1, 0),
-                                   (std::to_string(static_cast<int>(m_memoryStats.textureMemoryMB)) + " MB").c_str());
-
-                ImGui::TextDisabled("Audio");
-                ImGui::SameLine(120);
-                ImGui::ProgressBar(m_memoryStats.audioMemoryMB / total, ImVec2(-1, 0),
-                                   (std::to_string(static_cast<int>(m_memoryStats.audioMemoryMB)) + " MB").c_str());
-
-                ImGui::TextDisabled("Asset Cache");
-                ImGui::SameLine(120);
-                ImGui::ProgressBar(
-                    m_memoryStats.assetCacheMemoryMB / total, ImVec2(-1, 0),
-                    (std::to_string(static_cast<int>(m_memoryStats.assetCacheMemoryMB)) + " MB").c_str());
-
-                ImGui::TextDisabled("Scripts");
-                ImGui::SameLine(120);
-                ImGui::ProgressBar(m_memoryStats.scriptMemoryMB / total, ImVec2(-1, 0),
-                                   (std::to_string(static_cast<int>(m_memoryStats.scriptMemoryMB)) + " MB").c_str());
+                ImGui::Text("Editor process memory: %.1f MB", m_processMemoryMB);
+                ImGui::TextDisabled("Reported by the OS for this process. Per-asset memory");
+                ImGui::TextDisabled("breakdowns are not instrumented yet.");
+            }
+            else
+            {
+                ImGui::TextDisabled("Process memory is unavailable on this platform.");
             }
 
             ImGui::Spacing();
@@ -320,21 +349,20 @@ namespace SparkEditor
         {
             m_showPerformanceSection = true;
 
-            // FPS display
             ImGui::Text("FPS: %.1f (avg: %.1f, min: %.1f, max: %.1f)", m_currentFps, m_averageFps, m_minFps, m_maxFps);
 
-            // FPS graph
             ImGui::PlotLines("##FPSGraph", m_fpsHistory.data(), static_cast<int>(HISTORY_SIZE),
                              static_cast<int>(m_historyIndex), "FPS", 0.0f, 120.0f, ImVec2(0, 60));
 
-            // Frame time graph
             ImGui::Text("Frame Time: %.2f ms", m_currentFrameTime * 1000.0f);
             ImGui::PlotLines("##FrameTimeGraph", m_frameTimeHistory.data(), static_cast<int>(HISTORY_SIZE),
                              static_cast<int>(m_historyIndex), "Frame Time (ms)", 0.0f, 33.3f, ImVec2(0, 60));
 
-            // Draw calls graph
-            ImGui::PlotHistogram("##DrawCallsGraph", m_drawCallHistory.data(), static_cast<int>(HISTORY_SIZE),
-                                 static_cast<int>(m_historyIndex), "Draw Calls", 0.0f, 500.0f, ImVec2(0, 40));
+            if (m_hasRenderStats)
+            {
+                ImGui::PlotHistogram("##DrawCallsGraph", m_drawCallHistory.data(), static_cast<int>(HISTORY_SIZE),
+                                     static_cast<int>(m_historyIndex), "Draw Calls", 0.0f, 500.0f, ImVec2(0, 40));
+            }
 
             ImGui::Spacing();
         }
@@ -346,48 +374,38 @@ namespace SparkEditor
 
     void SceneStatisticsPanel::UpdateHistoryBuffers(float deltaTime)
     {
-        if (deltaTime > 0.0f)
+        // Measured frame delta only — a sample with no elapsed time is not recorded
+        // rather than being replaced with an invented one.
+        if (deltaTime <= 0.0f)
         {
-            m_currentFrameTime = deltaTime;
-            m_currentFps = 1.0f / deltaTime;
-        }
-        else
-        {
-            m_currentFrameTime = 0.016f;
-            m_currentFps = 60.0f;
+            return;
         }
 
-        // Add some realistic variation for demonstration
-        float variation = std::sin(m_simulationTime * 0.5f) * 5.0f;
-        float demoFps = 60.0f + variation + std::sin(m_simulationTime * 2.3f) * 3.0f;
+        m_currentFrameTime = deltaTime;
+        m_currentFps = 1.0f / deltaTime;
 
-        m_fpsHistory[m_historyIndex] = demoFps;
-        m_frameTimeHistory[m_historyIndex] = 1000.0f / demoFps;
-        m_drawCallHistory[m_historyIndex] = static_cast<float>(m_renderStats.drawCalls) + variation * 5.0f;
-        m_memoryHistory[m_historyIndex] = m_memoryStats.totalSceneMemoryMB + std::sin(m_simulationTime) * 2.0f;
+        m_fpsHistory[m_historyIndex] = m_currentFps;
+        m_frameTimeHistory[m_historyIndex] = m_currentFrameTime * 1000.0f;
+        m_drawCallHistory[m_historyIndex] = static_cast<float>(m_renderStats.drawn);
 
         m_historyIndex = (m_historyIndex + 1) % HISTORY_SIZE;
 
-        // Update min/max/avg FPS
         float sum = 0.0f;
-        m_minFps = 999.0f;
-        m_maxFps = 0.0f;
+        float minFps = 0.0f;
+        float maxFps = 0.0f;
         int validCount = 0;
         for (size_t i = 0; i < HISTORY_SIZE; ++i)
         {
-            if (m_fpsHistory[i] > 0.0f)
-            {
-                sum += m_fpsHistory[i];
-                m_minFps = std::min(m_minFps, m_fpsHistory[i]);
-                m_maxFps = std::max(m_maxFps, m_fpsHistory[i]);
-                ++validCount;
-            }
+            if (m_fpsHistory[i] <= 0.0f)
+                continue;
+            sum += m_fpsHistory[i];
+            minFps = (validCount == 0) ? m_fpsHistory[i] : std::min(minFps, m_fpsHistory[i]);
+            maxFps = std::max(maxFps, m_fpsHistory[i]);
+            ++validCount;
         }
         m_averageFps = (validCount > 0) ? sum / static_cast<float>(validCount) : 0.0f;
-        if (m_minFps > 900.0f)
-        {
-            m_minFps = 0.0f;
-        }
+        m_minFps = minFps;
+        m_maxFps = maxFps;
     }
 
 } // namespace SparkEditor

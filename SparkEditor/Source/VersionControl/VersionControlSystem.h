@@ -377,12 +377,30 @@ namespace SparkEditor
         void ProcessOperationQueue();
 
         /**
-     * @brief Execute VCS command
-     * @param command Command to execute
-     * @param workingDirectory Working directory
+     * @brief True when a user-supplied operand would be parsed by git as an option
+     *
+     * Building an argv removes the shell, so spaces, quotes and metacharacters are harmless. It does not
+     * remove git's own option parsing: a branch, remote, URL or path that begins with '-' — for example
+     * "--upload-pack=calc.exe" — still makes git run an arbitrary program. Every caller that forwards a
+     * value the user typed must reject it here before it reaches ExecuteGit.
+     *
+     * @param value Operand supplied by the user
+     * @return true when the value starts with '-' and must be refused
+     */
+        static bool IsOptionLike(const std::string& value);
+
+        /**
+     * @brief Execute a git invocation from an explicit argument vector
+     *
+     * Arguments are handed to the process builder verbatim, so a commit message, branch name or path may
+     * contain spaces, quotes or any other character without escaping. There is no shell in this path.
+     * A leading '-' is still meaningful to git itself; see IsOptionLike().
+     *
+     * @param args Git arguments, excluding the "git" executable itself
+     * @param workingDirectory Repository directory, passed to git as -C
      * @return Operation result
      */
-        VCSOperationResult ExecuteCommand(const std::string& command, const std::string& workingDirectory = "");
+        VCSOperationResult ExecuteGit(const std::vector<std::string>& args, const std::string& workingDirectory = "");
 
         /**
      * @brief Parse Git status output

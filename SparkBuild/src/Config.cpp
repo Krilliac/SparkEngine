@@ -255,6 +255,15 @@ namespace SparkBuild
                                   "Include dev commands in Shipping builds", false, false, OptionCategory::Shipping});
         config.options.push_back({"STRIP_DEBUG_SYMBOLS", "Strip Debug Symbols", "Strip debug symbols from binaries",
                                   false, false, OptionCategory::Shipping});
+        // Every option() the root CMakeLists declares must appear here with the
+        // same default: Tools/buildmatrix/check_parity.py reports a cmake-only
+        // option as a blocking finding and build-windows-shipping fails on it.
+        config.options.push_back({"ENABLE_LTO", "Link-Time Optimization",
+                                  "Enable link-time optimization in Release/MinSizeRel builds", true, true,
+                                  OptionCategory::Shipping});
+        config.options.push_back({"SPARK_REQUIRE_WINDOWS_INSTALLERS", "Require Windows Installers",
+                                  "Fail configuration when the NSIS or WiX toolchain is missing", false, false,
+                                  OptionCategory::Shipping});
 
         // Experimental and out-of-profile products
         config.options.push_back({"ENABLE_NETWORKING", "Networking", "Build UDP networking features", true, true,

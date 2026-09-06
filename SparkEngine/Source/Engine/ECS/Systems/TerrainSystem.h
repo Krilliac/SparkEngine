@@ -8,6 +8,10 @@
 #include "ECSystems.h"
 #include "../Components/TerrainComponents.h"
 
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+
 namespace Spark::ECS
 {
 
@@ -37,6 +41,14 @@ namespace Spark::ECS
       private:
         int m_activeTerrainCount = 0;
         XMFLOAT3 m_cameraPosition = {0, 0, 0};
+        /// World the attempt map below belongs to. Entity ids restart from zero in
+        /// a freshly created World, so a map carried across a scene reload would
+        /// suppress the new scene's terrain loads.
+        const World* m_assetLoadWorld = nullptr;
+        /// Entity -> the .sparkterrain path already attempted for it. Keyed by the
+        /// asset as well as the entity so a recycled id (or a re-authored path) is
+        /// retried instead of being mistaken for an attempt that already happened.
+        std::unordered_map<uint32_t, std::string> m_assetLoadAttempted;
     };
 
 } // namespace Spark::ECS

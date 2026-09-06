@@ -23,9 +23,12 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
 
+import assets as site_data_assets  # noqa: E402
 import common as site_data_common  # noqa: E402
 from common import SiteDataError, load_contract  # noqa: E402
+import contract_selectors  # noqa: E402
 import exact_evidence  # noqa: E402
+import generate as site_data_generate  # noqa: E402
 import render_handoff  # noqa: E402
 import validate as site_data_validate  # noqa: E402
 
@@ -108,6 +111,8 @@ class ReleaseProfileShapeTests(ContractTestCase):
     """Frozen case 1: the one intended stable product shape is exact."""
 
     def test_repository_contract_validates(self) -> None:
+        # Strict: the legacy-contract waiver is retired, so this must pass with
+        # no downgrade of unresolvable CI job, test selector or path references.
         site_data_validate.Validator(copy.deepcopy(self.contract)).validate()
 
     def test_stable_v1_shape_is_exact(self) -> None:
@@ -349,7 +354,7 @@ class WorkItemApplicabilityTests(ContractTestCase):
         self.items_of(discovery)["RDY-010"]["commands"].append(
             "ctest --show-only=json-v1"
         )
-        site_data_validate.Validator(discovery).validate()
+        site_data_validate.Validator(discovery, allow_legacy_contract=True).validate()
 
         masked = copy.deepcopy(self.contract)
         self.items_of(masked)["RDY-010"]["commands"].append(
@@ -415,7 +420,9 @@ class ReadyPromotionTests(ContractTestCase):
         self.assertEqual(gates["G12"]["state"], "blocked")
         self.assertEqual(items["MOD-315"]["status"], "open")
         self.assertEqual(items["NET-100"]["status"], "open")
-        site_data_validate.Validator(self.mutable).validate(require_ready=True)
+        site_data_validate.Validator(self.mutable, allow_legacy_contract=True).validate(
+            require_ready=True
+        )
 
     def test_a_required_gate_still_blocks_ready(self) -> None:
         self.promote_ready(self.mutable)
@@ -1871,6 +1878,172 @@ class AtomicPublicationTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(SiteDataError, "verified temporary file"):
                     site_data_common.write_bytes_atomic(output, b"payload")
+
+
+
+class SelectorResolutionTests(ContractTestCase):
+    """requiredCiJobs and testSelectors must name something that exists."""
+
+    def selectors_of(self, item: dict[str, Any], *, legacy: bool = False) -> tuple[list[str], list[str]]:
+        validator = site_data_validate.Validator(self.mutable, allow_legacy_contract=legacy)
+        validator.validate_selectors(item, "workItems.PROBE")
+        return validator.errors, validator.legacy
+
+    def test_resolvable_job_and_selector_pass(self) -> None:
+        resolvable_job = sorted(contract_selectors.workflow_job_ids())[0]
+        resolvable_test = sorted(contract_selectors.test_selector_targets())[0]
+        errors, legacy = self.selectors_of(
+            {"requiredCiJobs": [resolvable_job], "testSelectors": [resolvable_test]}
+        )
+        self.assertEqual([], errors)
+        self.assertEqual([], legacy)
+
+    def test_unresolvable_job_is_an_error_by_default(self) -> None:
+        errors, legacy = self.selectors_of(
+            {"requiredCiJobs": ["no-such-workflow-job"], "testSelectors": []}
+        )
+        self.assertEqual([], legacy)
+        self.assertEqual(1, len(errors))
+        self.assertIn("no workflow job is defined with this id", errors[0])
+
+    def test_unresolvable_selector_is_an_error_by_default(self) -> None:
+        errors, _ = self.selectors_of(
+            {"requiredCiJobs": [], "testSelectors": ["NoSuchTestFamily_*"]}
+        )
+        self.assertEqual(1, len(errors))
+        self.assertIn("no CTest test, label, or SparkTests definition matches", errors[0])
+
+    def test_legacy_flag_downgrades_but_never_hides(self) -> None:
+        errors, legacy = self.selectors_of(
+            {"requiredCiJobs": ["no-such-workflow-job"], "testSelectors": []}, legacy=True
+        )
+        self.assertEqual([], errors)
+        self.assertEqual(1, len(legacy))
+        self.assertIn("no-such-workflow-job", legacy[0])
+
+    # A synthetic id, never a real workflow job: these two cases are about a job
+    # that does not exist YET, so naming a real one makes the fixture stop testing
+    # what it claims the moment that job is added (as happened with asset-integrity).
+    PLANNED_JOB_ID = "planned-future-gate-that-does-not-exist"
+
+    def test_planned_debt_excuses_only_what_it_declares(self) -> None:
+        errors, legacy = self.selectors_of(
+            {
+                "requiredCiJobs": [self.PLANNED_JOB_ID],
+                "plannedCiJobs": [self.PLANNED_JOB_ID],
+                "testSelectors": [],
+            }
+        )
+        self.assertEqual([], errors)
+        self.assertEqual([], legacy)
+
+    def test_planned_entry_must_be_declared_as_required(self) -> None:
+        errors, _ = self.selectors_of(
+            {"requiredCiJobs": [], "plannedCiJobs": [self.PLANNED_JOB_ID], "testSelectors": []}
+        )
+        self.assertEqual(1, len(errors))
+        self.assertIn("is not declared in requiredCiJobs", errors[0])
+
+    def test_planned_entry_that_now_exists_must_be_promoted(self) -> None:
+        existing = sorted(contract_selectors.workflow_job_ids())[0]
+        errors, _ = self.selectors_of(
+            {
+                "requiredCiJobs": [existing],
+                "plannedCiJobs": [existing],
+                "testSelectors": [],
+            }
+        )
+        self.assertEqual(1, len(errors))
+        self.assertIn("must be promoted out of plannedCiJobs", errors[0])
+
+    def test_glob_entry_point_must_match_a_real_file(self) -> None:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.require_path("GameModules/*/module.json", "probe.entryPoints[0]", allow_future=True)
+        self.assertEqual(1, len(validator.errors))
+        self.assertIn("path pattern matches no file", validator.errors[0])
+
+    def test_glob_entry_point_that_resolves_is_accepted(self) -> None:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.require_path("Templates/*/Assets/manifest.json", "probe.entryPoints[0]")
+        self.assertEqual([], validator.errors)
+
+
+class LegacyContractDebtTests(ContractTestCase):
+    """The contract's unresolved references are a ledger that may only shrink."""
+
+    # The ledger reached zero: every requiredCiJobs, testSelectors and glob entry
+    # point in the contract now resolves, the workflows dropped
+    # --allow-legacy-contract, and the flag survives only to drive the downgrade
+    # path from these tests. A rise means a new unresolvable reference was
+    # written. Never raise this ceiling to make a run green.
+    DEBT_CEILING = 0
+
+    def test_legacy_debt_does_not_grow(self) -> None:
+        validator = site_data_validate.Validator(self.mutable, allow_legacy_contract=True)
+        validator.validate()
+        self.assertEqual([], validator.errors)
+        self.assertLessEqual(len(validator.legacy), self.DEBT_CEILING)
+
+    def test_every_downgraded_entry_names_its_reference_class(self) -> None:
+        validator = site_data_validate.Validator(self.mutable, allow_legacy_contract=True)
+        validator.validate()
+        recognized = (
+            "no workflow job is defined with this id",
+            "no CTest test, label, or SparkTests definition matches",
+            "path pattern matches no file",
+        )
+        unrecognized = [
+            entry for entry in validator.legacy if not any(reason in entry for reason in recognized)
+        ]
+        self.assertEqual([], unrecognized)
+
+    def test_strict_default_accepts_the_current_contract(self) -> None:
+        """The debt is paid: no waiver, no downgrade, no error."""
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate()
+        self.assertEqual([], validator.errors)
+        self.assertEqual([], validator.legacy)
+
+    # RED proof for the pair above: strict validation still has to REFUSE an
+    # unresolvable reference. Without these, "strict passes" would also be true
+    # of a validator that stopped resolving anything at all.
+    def test_strict_default_refuses_an_unresolvable_required_ci_job(self) -> None:
+        item = self.mutable["workItems"][0]
+        item["requiredCiJobs"] = ["no-such-workflow-job"]
+        item.pop("plannedCiJobs", None)
+        self.assert_rejected(self.mutable, "no workflow job is defined with this id")
+
+    def test_strict_default_refuses_an_unresolvable_test_selector(self) -> None:
+        item = self.mutable["workItems"][0]
+        item["testSelectors"] = ["NoSuchTestFamily_*"]
+        item.pop("plannedTestSelectors", None)
+        self.assert_rejected(
+            self.mutable, "no CTest test, label, or SparkTests definition matches"
+        )
+
+
+class PublishedMetricTests(unittest.TestCase):
+    """One definition of the public source and test counts, bound to the commit."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.metrics = {
+            row["id"]: row
+            for row in site_data_generate.collect_metrics(1, site_data_generate.module_statistics())
+        }
+
+    def test_counts_match_the_readme_generator(self) -> None:
+        inventory = site_data_generate.codebase_metrics_module().collect()
+        self.assertEqual(inventory["test_definitions"], self.metrics["tests.definitions"]["value"])
+        self.assertEqual(inventory["test_files"], self.metrics["tests.files"]["value"])
+        self.assertEqual(inventory["total_lines"], self.metrics["code.totalLines"]["value"])
+        self.assertEqual(inventory["file_count"], self.metrics["code.files"]["value"])
+
+    def test_test_metric_names_the_harness_the_repository_uses(self) -> None:
+        label = self.metrics["tests.definitions"]["label"]
+        self.assertNotIn("GoogleTest", label)
+        self.assertIn("SparkTests", label)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -44,6 +44,26 @@ class ConsoleApp
     /** @brief Enter the main event loop; blocks until exit is requested. */
     void Run();
 
+#ifdef SPARK_PLATFORM_WINDOWS
+    /**
+     * @brief Handle for everything a human reads — never the engine channel.
+     *
+     * In engine-pipe mode STD_OUTPUT_HANDLE is the command pipe back to the
+     * engine: WriteConsoleW against it fails outright, and std::wcout against it
+     * makes the engine execute the banner text as console commands. This opens
+     * CONOUT$ instead (allocating a console first, because the engine that
+     * launched us is a GUI process that owns none), so stdout stays reserved for
+     * commands. Falls back to STD_OUTPUT_HANDLE only if no console can be had.
+     */
+    static HANDLE DisplayHandle();
+
+    /** @brief Write human-facing text to DisplayHandle(). */
+    static void WriteDisplay(const std::wstring& text);
+
+    /** @brief Clear the display console buffer (replaces a `system("cls")`). */
+    static void ClearDisplay();
+#endif // SPARK_PLATFORM_WINDOWS
+
   private:
     // --- Thread entry points ---
     void ReadEngineInput(); ///< Background thread: reads log messages from engine pipe.

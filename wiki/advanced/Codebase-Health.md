@@ -16,7 +16,7 @@ Historical legend: **DONE** = the 2026-03-26 audit marked an implementation pres
 
 | System | Status | Notes |
 |--------|:------:|-------|
-| Engine initialization (EngineContext) | **DONE** | Service locator with dependency-aware init/shutdown |
+| Engine initialization (EngineContext) | **DONE** | Service locator; the production init/shutdown order is `LifecycleCompositionRoot` (the `InitDebug` stage, `LifecycleOrder::Diagnostics`, runs first). `EngineContext::InitializeAll`/`ShutdownAll` (R1.2) is **not** the production path -- it is kept only because `Tests/harden/Test_tests_enginecontext_real.cpp` and six other test files exercise it |
 | Module system (IModule, DLL loading) | **DONE** | Dynamic loading, discovery, load ordering |
 | Error handling (Result, CrashHandler) | **DONE** | Minidump generation, stack traces, HTTP upload |
 | Logging (project logger + SimpleConsole) | **DONE** | Historical audit found the custom logging path present; no spdlog dependency is tracked |
@@ -164,7 +164,7 @@ Historical legend: **DONE** = the 2026-03-26 audit marked an implementation pres
 
 - **Modular service locator** — EngineContext provides clean subsystem access with dependency-aware initialization
 - **ECS source breadth** — Current source inventory finds 79 component structs across 17 component headers
-- **Test source inventory** — 6,952 test definitions across 575 test-bearing files; these counts do not establish execution or pass results
+- **Test source inventory** — the generated counts live in README.md and [Codebase Statistics](Codebase-Statistics.md) (`docs/update-codebase-stats.sh`); these counts do not establish execution or pass results
 - **Consistent code style** — clang-format enforced in CI, Allman braces, 120-col limit
 - **RHI abstraction** — Clean backend selection via factory pattern
 

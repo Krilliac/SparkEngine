@@ -29,6 +29,7 @@
 #include "Game/PlaneObject.h"
 #include "Game/SphereObject.h"
 #include "ModelObject.h"
+#include "FPSAssetPaths.h"
 #include "Enemy.h"
 #include "Player.h"
 #include "Projectiles/ProjectilePool.h"
@@ -445,7 +446,7 @@ std::vector<std::string> Game::GetAvailableScenes() const
     std::vector<std::string> scenes;
 
     // Scan common scene directories for .scene / .xml / .json files
-    const std::string sceneDirs[] = {"../Assets/Scenes", "../Scenes", "Scenes"};
+    const std::string sceneDirs[] = {Spark::FPSAssets::ResolveUtf8("Scenes"), "Scenes"};
     for (const auto& dir : sceneDirs)
     {
         try
@@ -528,7 +529,7 @@ namespace
                     ID3D11DeviceContext* context, std::vector<std::unique_ptr<GameObject>>& objects,
                     XMFLOAT3 scale = {1.0f, 1.0f, 1.0f})
     {
-        auto obj = std::make_unique<ModelObject>(modelPath);
+        auto obj = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(modelPath));
         HRESULT hr = obj->Initialize(device, context);
         if (FAILED(hr))
             return;
@@ -574,78 +575,77 @@ void Game::CreateCombatArena()
     }
 
     // === ALPHA BASE (south, z = -70) ===
-    PlaceModel(L"../Assets/Models/building_small.obj", "Alpha_HQ", {-8.0f, 0.0f, -70.0f}, device, context,
-               m_gameObjects);
+    PlaceModel(L"Models/building_small.obj", "Alpha_HQ", {-8.0f, 0.0f, -70.0f}, device, context, m_gameObjects);
     for (int i = -1; i <= 1; ++i)
     {
-        PlaceModel(L"../Assets/Models/barrier.obj", "Alpha_Barrier_" + std::to_string(i + 2), {i * 15.0f, 0.0f, -65.0f},
-                   device, context, m_gameObjects);
+        PlaceModel(L"Models/barrier.obj", "Alpha_Barrier_" + std::to_string(i + 2), {i * 15.0f, 0.0f, -65.0f}, device,
+                   context, m_gameObjects);
     }
-    PlaceModel(L"../Assets/Models/crate.obj", "Alpha_Crate_1", {-5.0f, 0.0f, -68.0f}, device, context, m_gameObjects);
-    PlaceModel(L"../Assets/Models/crate.obj", "Alpha_Crate_2", {5.0f, 0.0f, -68.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/crate.obj", "Alpha_Crate_1", {-5.0f, 0.0f, -68.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/crate.obj", "Alpha_Crate_2", {5.0f, 0.0f, -68.0f}, device, context, m_gameObjects);
 
     // === BRAVO BASE (north, z = 70) ===
-    PlaceModel(L"../Assets/Models/building_small.obj", "Bravo_HQ", {8.0f, 0.0f, 70.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/building_small.obj", "Bravo_HQ", {8.0f, 0.0f, 70.0f}, device, context, m_gameObjects);
     for (int i = -1; i <= 1; ++i)
     {
-        PlaceModel(L"../Assets/Models/barrier.obj", "Bravo_Barrier_" + std::to_string(i + 2), {i * 15.0f, 0.0f, 65.0f},
-                   device, context, m_gameObjects);
+        PlaceModel(L"Models/barrier.obj", "Bravo_Barrier_" + std::to_string(i + 2), {i * 15.0f, 0.0f, 65.0f}, device,
+                   context, m_gameObjects);
     }
-    PlaceModel(L"../Assets/Models/crate.obj", "Bravo_Crate_1", {-5.0f, 0.0f, 68.0f}, device, context, m_gameObjects);
-    PlaceModel(L"../Assets/Models/crate.obj", "Bravo_Crate_2", {5.0f, 0.0f, 68.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/crate.obj", "Bravo_Crate_1", {-5.0f, 0.0f, 68.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/crate.obj", "Bravo_Crate_2", {5.0f, 0.0f, 68.0f}, device, context, m_gameObjects);
 
     // === CENTER OBJECTIVE (z = 0) ===
-    PlaceModel(L"../Assets/Models/building_small.obj", "Center_Building", {0.0f, 0.0f, 0.0f}, device, context,
-               m_gameObjects, {1.2f, 1.0f, 1.2f});
+    PlaceModel(L"Models/building_small.obj", "Center_Building", {0.0f, 0.0f, 0.0f}, device, context, m_gameObjects,
+               {1.2f, 1.0f, 1.2f});
     {
         const float coverPos[][3] = {
             {-8.0f, 0.0f, -3.0f}, {8.0f, 0.0f, 3.0f}, {-3.0f, 0.0f, 8.0f}, {3.0f, 0.0f, -8.0f}};
-        PlaceModelsAt(L"../Assets/Models/barrier.obj", "Center_Barrier_", coverPos, device, context, m_gameObjects);
+        PlaceModelsAt(L"Models/barrier.obj", "Center_Barrier_", coverPos, device, context, m_gameObjects);
 
         const float cratePos[][3] = {
             {-3.0f, 0.0f, 5.0f}, {3.0f, 0.0f, -5.0f}, {-6.0f, 0.0f, -6.0f}, {6.0f, 0.0f, 6.0f}};
-        PlaceModelsAt(L"../Assets/Models/crate.obj", "Center_Crate_", cratePos, device, context, m_gameObjects);
+        PlaceModelsAt(L"Models/crate.obj", "Center_Crate_", cratePos, device, context, m_gameObjects);
     }
 
     // === WEST OUTPOST (x = -45) ===
-    PlaceModel(L"../Assets/Models/watchtower.obj", "West_Tower", {-45.0f, 0.0f, 0.0f}, device, context, m_gameObjects);
-    PlaceModel(L"../Assets/Models/barrier.obj", "West_Cover_1", {-40.0f, 0.0f, -5.0f}, device, context, m_gameObjects);
-    PlaceModel(L"../Assets/Models/barrier.obj", "West_Cover_2", {-40.0f, 0.0f, 5.0f}, device, context, m_gameObjects);
-    PlaceModel(L"../Assets/Models/crate.obj", "West_Crate_1", {-48.0f, 0.0f, -2.0f}, device, context, m_gameObjects);
-    PlaceModel(L"../Assets/Models/crate.obj", "West_Crate_2", {-48.0f, 0.0f, 2.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/watchtower.obj", "West_Tower", {-45.0f, 0.0f, 0.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/barrier.obj", "West_Cover_1", {-40.0f, 0.0f, -5.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/barrier.obj", "West_Cover_2", {-40.0f, 0.0f, 5.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/crate.obj", "West_Crate_1", {-48.0f, 0.0f, -2.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/crate.obj", "West_Crate_2", {-48.0f, 0.0f, 2.0f}, device, context, m_gameObjects);
 
     // === EAST OUTPOST (x = 45) ===
-    PlaceModel(L"../Assets/Models/watchtower.obj", "East_Tower", {45.0f, 0.0f, 0.0f}, device, context, m_gameObjects);
-    PlaceModel(L"../Assets/Models/barrier.obj", "East_Cover_1", {40.0f, 0.0f, -5.0f}, device, context, m_gameObjects);
-    PlaceModel(L"../Assets/Models/barrier.obj", "East_Cover_2", {40.0f, 0.0f, 5.0f}, device, context, m_gameObjects);
-    PlaceModel(L"../Assets/Models/crate.obj", "East_Crate_1", {48.0f, 0.0f, -2.0f}, device, context, m_gameObjects);
-    PlaceModel(L"../Assets/Models/crate.obj", "East_Crate_2", {48.0f, 0.0f, 2.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/watchtower.obj", "East_Tower", {45.0f, 0.0f, 0.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/barrier.obj", "East_Cover_1", {40.0f, 0.0f, -5.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/barrier.obj", "East_Cover_2", {40.0f, 0.0f, 5.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/crate.obj", "East_Crate_1", {48.0f, 0.0f, -2.0f}, device, context, m_gameObjects);
+    PlaceModel(L"Models/crate.obj", "East_Crate_2", {48.0f, 0.0f, 2.0f}, device, context, m_gameObjects);
 
     // === MID-FIELD COVER (scattered barriers and crates) ===
     {
         const float barrierPos[][3] = {{-25.0f, 0.0f, -30.0f}, {25.0f, 0.0f, -30.0f}, {-25.0f, 0.0f, 30.0f},
                                        {25.0f, 0.0f, 30.0f},   {-20.0f, 0.0f, 0.0f},  {20.0f, 0.0f, 0.0f},
                                        {0.0f, 0.0f, -35.0f},   {0.0f, 0.0f, 35.0f}};
-        PlaceModelsAt(L"../Assets/Models/barrier.obj", "Field_Barrier_", barrierPos, device, context, m_gameObjects);
+        PlaceModelsAt(L"Models/barrier.obj", "Field_Barrier_", barrierPos, device, context, m_gameObjects);
 
         const float cratePos[][3] = {{-15.0f, 0.0f, -15.0f}, {15.0f, 0.0f, -15.0f},  {-15.0f, 0.0f, 15.0f},
                                      {15.0f, 0.0f, 15.0f},   {-30.0f, 0.0f, -50.0f}, {30.0f, 0.0f, -50.0f},
                                      {-30.0f, 0.0f, 50.0f},  {30.0f, 0.0f, 50.0f}};
-        PlaceModelsAt(L"../Assets/Models/crate.obj", "Field_Crate_", cratePos, device, context, m_gameObjects);
+        PlaceModelsAt(L"Models/crate.obj", "Field_Crate_", cratePos, device, context, m_gameObjects);
     }
 
     // === TARGET PRACTICE AREA (west side) ===
     for (int i = 0; i < 5; ++i)
     {
-        PlaceModel(L"../Assets/Models/target.obj", "Target_" + std::to_string(i + 1), {-55.0f, 0.0f, -10.0f + i * 5.0f},
-                   device, context, m_gameObjects);
+        PlaceModel(L"Models/target.obj", "Target_" + std::to_string(i + 1), {-55.0f, 0.0f, -10.0f + i * 5.0f}, device,
+                   context, m_gameObjects);
     }
 
     // === CHARACTER MODELS (NPCs / bots placeholder) ===
     {
         const float npcPos[][3] = {
             {0.0f, 0.0f, 20.0f}, {10.0f, 0.0f, -20.0f}, {-10.0f, 0.0f, 30.0f}, {20.0f, 0.0f, -40.0f}};
-        PlaceModelsAt(L"../Assets/Models/character.obj", "NPC_", npcPos, device, context, m_gameObjects);
+        PlaceModelsAt(L"Models/character.obj", "NPC_", npcPos, device, context, m_gameObjects);
     }
 
     // === DECORATIVE SPHERES (control point markers) ===
@@ -665,9 +665,8 @@ void Game::CreateCombatArena()
 
     // === WEAPON DISPLAYS (at spawn) ===
     {
-        const wchar_t* weaponModels[] = {L"../Assets/Models/rifle.obj", L"../Assets/Models/sniper.obj",
-                                         L"../Assets/Models/lmg.obj", L"../Assets/Models/shotgun.obj",
-                                         L"../Assets/Models/pistol.obj"};
+        const wchar_t* weaponModels[] = {L"Models/rifle.obj", L"Models/sniper.obj", L"Models/lmg.obj",
+                                         L"Models/shotgun.obj", L"Models/pistol.obj"};
         const char* weaponNames[] = {"Rifle_Display", "Sniper_Display", "LMG_Display", "Shotgun_Display",
                                      "Pistol_Display"};
         for (int i = 0; i < 5; ++i)

@@ -24,6 +24,11 @@ set(RHI_SOURCES
     # NullRHIDevice under gVisor. See
     # .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md action item #4.
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Utils/WineDetection.cpp"
+    # D3D11Device.cpp reports resource tracking and draw-call validation to
+    # RHIValidationLayer. In Release the layer is header-inline no-ops, but in
+    # Debug (#ifndef NDEBUG) the methods live in this .cpp; without it the Debug
+    # link of this standalone tool failed with LNK2019 (build-windows-vs2022 Debug).
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/RHIValidationLayer.cpp"
 )
 
 # Backend implementation files (needed by RHIFactory::CreateDevice)

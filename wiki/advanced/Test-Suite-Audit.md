@@ -56,7 +56,7 @@ The audit's "MEDIUM" tier was already marked resolved in the source document at 
 
 These categories were the original audit's standing weak spots and remain the most likely places to find untested code:
 
-- **Editor systems (`SparkEditor/Source`, 126 headers):** Historically ~4% tested. The most testable-without-GPU targets remain `UndoRedoManager`, `CommandPalette`, `AssetDatabase`, `PrefabManager`, `SceneSerializer`, `EditorLayoutManager`, `VersionControlSystem`, `LevelStreamingSystem`, and gizmo transform math.
+- **Editor systems (`SparkEditor/Source`, 126 headers):** Historically ~4% tested. The most testable-without-GPU targets remain `UndoRedoManager`, `CommandPalette`, `PrefabManager` (now covered by `Tests/TestEditorSubsystemsReal.cpp`), `SceneSerializer`, `EditorLayoutManager`, `VersionControlSystem` (`Tests/TestVersionControlSystemGitReal.cpp`), `LevelStreamingSystem`, and gizmo transform math (`Tests/TestEditorGizmoTransformReal.cpp`); `AssetDatabase` was deleted (no production caller).
 - **Game modules (115 headers across 10 modules):** Per-module mechanic tests are uneven. FPS and MMO have coverage; RPG/ARPG/RTS/Racing/Platformer/OpenWorld/VisualScript modules are lighter.
 - **RHI backend implementations** (`D3D11Device`, `D3D12Device`, `VulkanDevice`, `MetalDevice`, `OpenGLDevice`): require hardware; tested implicitly via NullRHI and standalone logic tests.
 

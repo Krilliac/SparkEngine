@@ -43,5 +43,5 @@
   "enginePrimitives": [
     "__spark_primitive_Sphere.obj"
   ],
-  "notes": "The editable Default scene remains intentionally empty. Graphical game runs select RuntimePreview, which uses a repository-authored stage and multi-color origin guide plus an engine-owned sphere so successful rendering is unambiguous."
+  "notes": "The editable Default scene remains intentionally empty and is not a runtime scene candidate. Every game run, graphical or headless, selects RuntimePreview, which uses a repository-authored stage and multi-color origin guide plus an engine-owned sphere so successful rendering is unambiguous."
 }

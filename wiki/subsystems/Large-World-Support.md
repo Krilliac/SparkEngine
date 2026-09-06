@@ -158,6 +158,23 @@ Integration with [Area Server Architecture](Area-Server-Architecture.md) enables
 | `SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h` | Seamless area manager |
 | `SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.cpp` | Seamless area implementation |
 | `SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h` | Async storage/loading |
+| `SparkEngine/Source/Engine/Streaming/SceneManifest.h` | Area manifest parsing and its budgets |
+| `SparkEngine/Source/Engine/Streaming/AreaAssetLoader.h` | Consumption point for manifest asset paths |
+
+### Manifest parsing budgets and path containment (2026-09 sweep)
+
+- `ParseFromString` and `ParseFromFile` both enforce `MAX_SCENE_MANIFEST_BYTES` (8 MB).
+  `ParseFromFile` **fails closed** when `std::filesystem::file_size` reports an error — a path that
+  can be opened but not stat'd yields an empty manifest rather than an unbounded read.
+- `MAX_SCENE_MANIFEST_ENTRIES` (100000) truncation is logged once instead of dropping silently.
+- Path containment for streamed assets is enforced at the **consumption point**,
+  `AreaAssetLoader::BeginAreaLoad`, not in the parser: a `SceneManifest` can be built in code
+  (`SeamlessAreaManager` does) and handed to `SetManifest` without ever passing through
+  `ParseFromString`, so the parser's `IsVirtualPathSafe` filter is defence in depth only.
+- When every declared path is rejected the area still **completes** — the callback fires — rather
+  than hanging on a completion count that can never be reached.
+- `SceneManifest.h` includes `Engine/Modding/VirtualFileSystem.h`, so `AreaAssetLoader.h`,
+  `SeamlessAreaManager.h` and the OpenWorld game module carry a link dependency on the Modding TU.
 
 ## Origin Rebasing Implementation Details
 

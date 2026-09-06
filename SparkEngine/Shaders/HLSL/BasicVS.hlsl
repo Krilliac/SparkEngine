@@ -1,3 +1,13 @@
+// Legacy copy - superseded by <repo>/Shaders/HLSL/BasicVS.hlsl.
+//
+// The cbuffer below is the old World/View/Projection block at b1; the engine
+// binds PerObjectConstants at b0 (Graphics/Shader.h), so this source does not
+// match what the renderer writes. No in-tree code path loads it: Windows
+// compiles the source embedded in GraphicsDeviceResourcesWindowsShaders.cpp,
+// and the Linux RHI bridge registers "Shaders/HLSL/BasicVS.hlsl", which CMake
+// stages from the repo-root Shaders/HLSL tree. This file is staged to
+// bin/Shaders/BasicVS.hlsl, where nothing reads it. Edit the repo-root copy.
+
 cbuffer ConstantBuffer : register(b1)
 {
     matrix World;

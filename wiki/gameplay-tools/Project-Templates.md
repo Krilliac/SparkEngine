@@ -171,7 +171,10 @@ private:
 
 ### EmptyProject
 
-The minimal starting point. Contains only the `IModule` interface with stub lifecycle methods.
+The minimal starting point. It ships an empty authoring scene (`Scenes/Default.sparkscene`)
+plus an explicit 8-entity runtime preview (`Scenes/RuntimePreview.sparkscene`) and one HUD
+sprite, so it exercises the same scene/render lifecycle as the gameplay packages (including in
+headless hosts) without shipping gameplay; it is the one package that does not read input.
 
 **Features:** `minimal`
 
@@ -331,6 +334,28 @@ Template packages and in-tree `GameModules/` directories are independent targets
 ### With the SparkSDK
 
 Templates include `<Spark/SparkSDK.h>` which provides access to the `IModule` interface, `IEngineContext`, `ModuleInfo`, and `SPARK_SDK_VERSION`. The SDK headers are installed as part of the engine installation.
+
+**Header-surface contract (decision record for `SDK-240`, option (a)):** the supported installed-SDK
+surface for templates and game modules is `SparkSDK/Include/Spark` (ABI-stable) **plus** the engine
+headers the installer stages under `include/SparkEngine` (source-compatible per engine version:
+`Game/TemplateRuntime.h`, `Core/Reflection.h`, `Engine/ECS/Components.h`, `Graphics/GraphicsEngine.h`,
+`Graphics/WorldBasicRenderer.h`, `Input/InputManager.h`, `SceneManager/ReflectedSceneSerializer.h`,
+`Utils/LogMacros.h`). Only `SparkSDK/Include/Spark` carries the ABI promise; a module that includes
+`include/SparkEngine` headers must be rebuilt against the SDK it ships with. This matches
+`Templates/README.md`; any "public SDK surface alone" wording elsewhere means this two-part surface.
+
+**Other contract facts:** `template.json` is the source of truth and the editor registry is gated
+against it by `ProjectMaterialization_EditorRegistryMatchesEveryPackageTemplateJson`. A scene
+contract requires only the entities a module cannot run without (camera and, where present, the
+player); a missing decorative prop logs one warning instead of failing the load. `OnLoad(nullptr)`
+is construction-only -- it proves nothing about scene loading -- and
+`TemplateRuntimeScene::LastLoadResult()` (`Deterministic` / `Loaded` / `Failed`) distinguishes the
+cases for the eight packages that share it (`FPSStarter` carries its own copy).
+`Tools/normalize_template_runtime_sheets.py` (needs Pillow) regenerates the 3x3 runtime sheets and
+`Tools/validate_template_runtime_sheets.py` is the CI validator (`SparkTemplateRuntimeSheets`).
+`spark.modules.json` may keep the `.dll` form: `LoadModulesFromManifest` retries a `.dll` path as
+`lib<Name>.so` / `lib<Name>.dylib` on POSIX (an extension-less stem is not accepted). All nine
+`Assets/manifest.json` provenance/SHA-256 records are enforced by `tools/site-data/validate.py --assets`.
 
 ### With AngelScript
 

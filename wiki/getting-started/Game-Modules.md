@@ -11,15 +11,15 @@ SparkEngine contains **11 in-tree game-module directories** with differing proto
 | Module | LOC | Genre / focus | Key engine subsystems wired |
 |--------|-----|---------------|------------------------------|
 | [SparkGame](#sparkgame)                     | ~870   | Base / showcase — a bit of everything | All core subsystems |
-| [SparkGameFPS](#sparkgamefps)               | ~22.7K | First-person shooter | Weapons, player controller, multiplayer, AI |
+| [SparkGameFPS](#sparkgamefps)               | ~22.7K | First-person shooter | Weapons, player controller, death->respawn->score loop, quicksave profile, AI (LAN path experimental) |
 | [SparkGameMMO](#sparkgamemmo)               | ~10.0K | Massively multiplayer online | AreaServer, WorldServer, persistence, dialogue |
 | [SparkGameMMOFPS](#sparkgamemmofps)         | —      | MMOFPS / Terrafront | Combined-arms MMOFPS systems |
 | [SparkGameRPG](#sparkgamerpg)               | ~5.1K  | RPG mechanics | Save, animation, AI, cinematic, quest, dialogue |
 | [SparkGameARPG](#sparkgamearpg)             | ~3.3K  | Diablo-style action RPG | Combat, loot, abilities, dungeon generation |
 | [SparkGameOpenWorld](#sparkgameopenworld)   | ~4.9K  | Large-world exploration | Seamless streaming, origin rebasing, weather |
 | [SparkGamePlatformer](#sparkgameplatformer) | ~4.1K  | 3D platformer | Player controller, destruction, audio, save |
-| [SparkGameRTS](#sparkgamerts)               | ~3.3K  | Real-time strategy | AI director, events, audio, destruction |
-| [SparkGameRacing](#sparkgameracing)         | ~3.8K  | Vehicle racing | Vehicle physics, camera, audio, cinematic |
+| [SparkGameRTS](#sparkgamerts)               | ~5.0K  | Real-time strategy | Unit roster, selection and move/stop/hold commands, buildings, economy, fog; no acting AI opponent and no damage resolution yet |
+| [SparkGameRacing](#sparkgameracing)         | ~3.8K  | Vehicle racing | Kinematic showcase vehicles (no Jolt), WASD input, waypoint AI, camera, audio, cinematic |
 | [SparkGameVisualScript](#sparkgamevisualscript) | ~370 | Script-only module | Visual scripting graphs, zero C++ game logic |
 
 The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled (ON by default); this target inventory is not a claim that every module is playable or release-ready.
@@ -38,7 +38,7 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 **Purpose:** first-person shooter implementation showcase and the blocked stable-v1 vertical-slice candidate. It is not yet a certified or released product.
 
 - **Source:** `GameModules/SparkGameFPS/Source/`
-- **Notable:** `Game/Player.h` (~800 LOC), `Game/Game.h` (~660 LOC), weapon system, multiplayer integration.
+- **Notable:** `Game/Player.h` (~800 LOC), `Game/Game.h` (~660 LOC), weapon system, the completed death -> respawn -> score loop (`Game/GameMechanicsRespawn.cpp`), real `quicksave`/`quickload` of the local profile, one runtime-discovered asset root. The in-game console overlay was removed (commands register into the engine `SimpleConsole`). The LAN/multiplayer path (`Game/MultiplayerSystem.cpp`) is experimental and outside `stable-v1` (`MOD-315`); it is not part of the single-player slice claim.
 - **Wires:** [Input](../subsystems/Input-System.md), [Camera](../subsystems/Camera-System.md), [Physics](../subsystems/Physics.md), [Networking](../subsystems/Networking.md), [Audio](../subsystems/Audio.md), [AI](../subsystems/AI-and-Navigation.md).
 
 ## SparkGameMMO
@@ -91,11 +91,11 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 
 - **Source:** `GameModules/SparkGameRTS/Source/`
 - **Wires:** [AI](../subsystems/AI-and-Navigation.md) (flocking + director), [Event System](../subsystems/Event-System.md), [Audio](../subsystems/Audio.md), weather, [Destruction System](../subsystems/Destruction-System.md).
-- **Playable loop:** selection is backed by the live unit roster, while move/stop/hold commands and queued waypoints drive unit state and deterministic map-space movement.
+- **Playable loop:** selection is backed by the live unit roster, while move/stop/hold commands and queued waypoints drive unit state and straight-line map-space movement (no NavMesh path query). **Not yet:** there is no AI director -- the Swarm faction is flagged AI but no controller issues it commands; attack commands set state but apply no damage, so no unit dies and a match cannot end; the RTS Battlefield ImGui panel is compiled out because `ENABLE_EDITOR` is never a compile definition; simulation runs in `OnUpdate` with variable `dt` (`OnFixedUpdate` is empty).
 
 ## SparkGameRacing
 
-**Purpose:** vehicle racing — wheeled/tracked/motorcycle vehicles from Jolt.
+**Purpose:** systems-first circuit racing with one player car and five waypoint-following AI opponents. Vehicles are **kinematic showcase vehicles** (hand-rolled speed/heading integration, radius-check checkpoints) -- Jolt vehicle physics is not used; the camera system's output is internal and is not pushed to the renderer; the ImGui HUD/minimap is compiled out (`ENABLE_EDITOR` is never defined). WASD/nitro/drift input is real.
 
 - **Source:** `GameModules/SparkGameRacing/Source/`
 - **Wires:** [Physics](../subsystems/Physics.md) (vehicle subsystem), [Camera System](../subsystems/Camera-System.md) (chase/cockpit), [Audio](../subsystems/Audio.md), [Cinematic Sequencer](../gameplay-tools/Cinematic-Sequencer.md).

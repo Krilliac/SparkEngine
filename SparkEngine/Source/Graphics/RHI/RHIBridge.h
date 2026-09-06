@@ -57,13 +57,31 @@ namespace Spark
             };
 
             void RegisterShader(const std::string& name, const ShaderEntry& entry);
+
+            /**
+             * @brief Borrow a cached shader.
+             *
+             * The returned pointer is owned by the cache and is invalidated by
+             * Clear()/ReloadAll() (e.g. the `shader.reload` console command).
+             * Anything that outlives a reload — a pipeline state object, for
+             * instance — must pin the shader with GetShaderShared() instead.
+             */
             IRHIShader* GetShader(const std::string& name, IRHIDevice* device);
+
+            /**
+             * @brief Load (or fetch) a shader and share ownership with the caller.
+             *
+             * A pinned shader stays alive after ReloadAll() replaces the cache
+             * entry, so long-lived consumers never observe a freed shader.
+             */
+            std::shared_ptr<IRHIShader> GetShaderShared(const std::string& name, IRHIDevice* device);
+
             void Clear(IRHIDevice* device);
             void ReloadAll(IRHIDevice* device);
 
           private:
             std::unordered_map<std::string, ShaderEntry> m_entries;
-            std::unordered_map<std::string, std::unique_ptr<IRHIShader>> m_loadedShaders;
+            std::unordered_map<std::string, std::shared_ptr<IRHIShader>> m_loadedShaders;
         };
 
         // ============================================================================
@@ -83,10 +101,16 @@ namespace Spark
      * @param height Initial window height
      * @param backend Graphics backend to use (Auto = best available)
      * @param enableDebug Enable GPU debug/validation layers
+     * @param allowHeadlessFallback Permit a silent NullRHIDevice fallback for a windowed
+     *        request. Defaults to false: when a window handle is supplied and every GPU
+     *        backend fails, Initialize() returns false instead of reporting success with
+     *        a device that can never draw. A null window handle (or an explicit
+     *        GraphicsBackend::None) is a headless request and always allows the fallback.
      * @return true on success
      */
             bool Initialize(void* windowHandle, uint32_t width, uint32_t height,
-                            GraphicsBackend backend = GraphicsBackend::Auto, bool enableDebug = false);
+                            GraphicsBackend backend = GraphicsBackend::Auto, bool enableDebug = false,
+                            bool allowHeadlessFallback = false);
 
             /**
      * @brief Shutdown and release all RHI resources

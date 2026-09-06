@@ -340,8 +340,16 @@ namespace Spark::Animation
      * @brief Registry singleton for loaded skeletons and animation clips.
      *
      * @note **Intentional demand-driven registry** — `AnimationManager` has
-     *       no `Initialize()` / `Update()` / `Shutdown()` lifecycle and is
-     *       intentionally not wired into `GameplayLifecycleShared.cpp`.
+     *       no `Initialize()` / `Update()` / `Shutdown()` lifecycle of its own,
+     *       but it *is* wired in: `GameplayLifecycleShared.cpp` publishes the
+     *       singleton on the `EngineContext` with
+     *       `ctx->SetAnimation(&AnimationManager::GetInstance())` and clears it
+     *       with `SetAnimation(nullptr)` at teardown, so game modules reach it
+     *       through `EngineContext::GetAnimation()` (the alias
+     *       `Animation::AnimationSystem` below is that handle's type) and
+     *       `EngineSetup.h` registers it as a subsystem depending on `Timer`.
+     *       What stays demand-driven is the *content*: nothing ticks or
+     *       populates the registry on a schedule.
      *       The ECS `AnimationUpdateSystem` (registered at
      *       `EngineSetup.h:187`, `Phase::Animation`) calls into
      *       `GetClip()` / `GetSkeleton()` on demand each frame to drive

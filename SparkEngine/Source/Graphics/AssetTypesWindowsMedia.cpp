@@ -266,11 +266,19 @@ void AssetCache::SetMaxMemory(size_t maxMemoryMB)
 size_t AssetCache::GetCurrentMemory() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    return CurrentMemoryLocked();
+}
+
+size_t AssetCache::CurrentMemoryLocked() const
+{
     size_t totalMemory = 0;
 
     for (const auto& pair : m_cache)
     {
-        totalMemory += pair.second.asset->GetMemoryUsage();
+        if (pair.second.asset)
+        {
+            totalMemory += pair.second.asset->GetMemoryUsage();
+        }
     }
 
     return totalMemory;
@@ -278,6 +286,11 @@ size_t AssetCache::GetCurrentMemory() const
 
 void AssetCache::AddAsset(std::shared_ptr<Asset> asset)
 {
+    if (!asset)
+    {
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(m_mutex);
 
     CacheEntry entry;
@@ -289,10 +302,15 @@ void AssetCache::AddAsset(std::shared_ptr<Asset> asset)
 
     m_cache[asset->GetPath()] = entry;
 
-    // Evict if over budget
-    while (GetCurrentMemory() > m_maxMemory)
+    // Evict if over budget. m_mutex is held here, so this must not go through
+    // the public GetCurrentMemory()/EvictLRU(): std::mutex is non-recursive and
+    // MSVC's STL throws system_error(resource_deadlock_would_occur) on the
+    // re-lock, which made every synchronous LoadAsset() that reached the cache
+    // throw out of AssetPipeline. The empty check bounds the loop when a single
+    // asset is larger than the whole budget.
+    while (!m_cache.empty() && CurrentMemoryLocked() > m_maxMemory)
     {
-        EvictLRU();
+        EvictLRULocked();
     }
 }
 
@@ -325,6 +343,12 @@ void AssetCache::RemoveAsset(const std::string& path)
 }
 
 void AssetCache::EvictLRU()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    EvictLRULocked();
+}
+
+void AssetCache::EvictLRULocked()
 {
     if (m_cache.empty())
         return;

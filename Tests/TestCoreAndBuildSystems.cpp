@@ -420,14 +420,14 @@ TEST(Reflection_TypeRegistryCount)
     auto& reg = Spark::TypeRegistry::Get();
     // Registry exists and has some count (may be zero or populated by static init)
     size_t count = reg.GetTypeCount();
-    (void)count; // confirms no crash
+    EXPECT_GE(count, static_cast<size_t>(0));
 }
 
 TEST(Reflection_ComponentFactoryCount)
 {
     auto& factory = Spark::ComponentFactory::Get();
     size_t count = factory.GetRegisteredCount();
-    (void)count; // confirms no crash
+    EXPECT_GE(count, static_cast<size_t>(0));
 }
 
 TEST(Reflection_ComponentFactoryGetNames)

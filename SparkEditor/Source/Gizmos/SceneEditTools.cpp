@@ -253,6 +253,128 @@ namespace SparkEditor::SceneEditTools
     }
 
     // ========================================================================
+    // Single-value undoable commits (viewport gizmos, hierarchy rename)
+    // ========================================================================
+
+    bool CommitEntityRotation(::World& world, ::EntityID entity, const XMFLOAT3& oldRotation,
+                              const XMFLOAT3& newRotation)
+    {
+        entt::registry& registry = world.GetRegistry();
+        if (entity == entt::null || !registry.valid(entity) || !registry.try_get<::Transform>(entity))
+        {
+            return false;
+        }
+        if (oldRotation.x == newRotation.x && oldRotation.y == newRotation.y && oldRotation.z == newRotation.z)
+        {
+            return false;
+        }
+
+        ::World* worldPtr = &world;
+        Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+            [worldPtr, entity, newRotation]()
+            {
+                entt::registry& reg = worldPtr->GetRegistry();
+                if (reg.valid(entity))
+                {
+                    if (::Transform* transform = reg.try_get<::Transform>(entity))
+                        transform->rotation = newRotation;
+                }
+            },
+            [worldPtr, entity, oldRotation]()
+            {
+                entt::registry& reg = worldPtr->GetRegistry();
+                if (reg.valid(entity))
+                {
+                    if (::Transform* transform = reg.try_get<::Transform>(entity))
+                        transform->rotation = oldRotation;
+                }
+            },
+            "Rotate Entity"));
+        return true;
+    }
+
+    bool CommitEntityScale(::World& world, ::EntityID entity, const XMFLOAT3& oldScale, const XMFLOAT3& newScale)
+    {
+        entt::registry& registry = world.GetRegistry();
+        if (entity == entt::null || !registry.valid(entity) || !registry.try_get<::Transform>(entity))
+        {
+            return false;
+        }
+        if (oldScale.x == newScale.x && oldScale.y == newScale.y && oldScale.z == newScale.z)
+        {
+            return false;
+        }
+
+        ::World* worldPtr = &world;
+        Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+            [worldPtr, entity, newScale]()
+            {
+                entt::registry& reg = worldPtr->GetRegistry();
+                if (reg.valid(entity))
+                {
+                    if (::Transform* transform = reg.try_get<::Transform>(entity))
+                        transform->scale = newScale;
+                }
+            },
+            [worldPtr, entity, oldScale]()
+            {
+                entt::registry& reg = worldPtr->GetRegistry();
+                if (reg.valid(entity))
+                {
+                    if (::Transform* transform = reg.try_get<::Transform>(entity))
+                        transform->scale = oldScale;
+                }
+            },
+            "Scale Entity"));
+        return true;
+    }
+
+    bool CommitEntityRename(::World& world, ::EntityID entity, const std::string& newName)
+    {
+        entt::registry& registry = world.GetRegistry();
+        if (entity == entt::null || !registry.valid(entity) || newName.empty())
+        {
+            return false;
+        }
+
+        const ::NameComponent* existing = registry.try_get<::NameComponent>(entity);
+        const std::string oldName = existing ? existing->name : std::string{};
+        if (oldName == newName)
+        {
+            return false;
+        }
+
+        ::World* worldPtr = &world;
+        const bool hadComponent = existing != nullptr;
+        Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+            [worldPtr, entity, newName]()
+            {
+                entt::registry& reg = worldPtr->GetRegistry();
+                if (!reg.valid(entity))
+                    return;
+                if (::NameComponent* name = reg.try_get<::NameComponent>(entity))
+                    name->name = newName;
+                else
+                    reg.emplace<::NameComponent>(entity, ::NameComponent{newName});
+            },
+            [worldPtr, entity, oldName, hadComponent]()
+            {
+                entt::registry& reg = worldPtr->GetRegistry();
+                if (!reg.valid(entity))
+                    return;
+                if (!hadComponent)
+                {
+                    reg.remove<::NameComponent>(entity);
+                    return;
+                }
+                if (::NameComponent* name = reg.try_get<::NameComponent>(entity))
+                    name->name = oldName;
+            },
+            "Rename Entity"));
+        return true;
+    }
+
+    // ========================================================================
     // AlignEntityToGround
     // ========================================================================
 

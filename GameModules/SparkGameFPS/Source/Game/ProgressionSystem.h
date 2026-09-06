@@ -80,6 +80,17 @@ namespace Spark
         void Initialize();
 
         /**
+         * @brief Restore persisted progression from a save file.
+         *
+         * The level, bonuses and unlock set are re-derived from @p totalXP using
+         * the same curve AwardXP uses, so a restored profile is indistinguishable
+         * from one earned in play. Level-up and unlock callbacks are suppressed.
+         *
+         * @param totalXP Accumulated XP read back from the save (negative is clamped to 0).
+         */
+        void RestoreProgress(int totalXP);
+
+        /**
          * @brief Award XP from various sources
          * @param amount Base XP amount (modified by multiplier)
          * @param source Description for logging ("kill", "wave_clear", "quest")
@@ -132,6 +143,7 @@ namespace Spark
         std::string Console_GetStatus() const;
 
       private:
+        void ResetToDefaults();
         void CheckLevelUp();
         void RecalculateBonuses();
         void BuildUnlockTable();

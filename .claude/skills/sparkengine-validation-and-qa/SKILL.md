@@ -75,9 +75,22 @@ Layout facts (verified):
   `GameModules/SparkGameMMOFPS` persistence/account/validation sources, FPS `GameMode.cpp`).
   When your test needs a module .cpp that isn't in the engine lib, add that .cpp explicitly —
   the file has many precedents with comments.
-- CTest sees **one test**: `add_test(NAME SparkEngineTests COMMAND SparkTests)`. So
-  `ctest -R SparkEngineTests` runs the whole suite; per-test selection is done via
-  SparkTests selectors (§3), not ctest.
+- The executed-test population is the **union of two ctest lanes**, both driving the same
+  `SparkTests` binary through `cmake/RunSparkTests.cmake`:
+  `SparkEngineTests` (runs with `SPARK_TEST_EXCLUDE=LoadTest_,DeepStress_`, report
+  `SparkTests-junit.xml`) and `SparkEngineLoadTests` (labels `load;slow`, `RUN_SERIAL`,
+  `SPARK_TEST_FILE=TestEngineLoadTest.cpp` with `SPARK_TEST_EXPECT_COUNT` so the split cannot
+  become a lane that silently runs nothing, report `SparkTests-load-junit.xml`). A doc or a CI
+  summary that quotes one `SparkTests-junit.xml` as the whole population is wrong. Other
+  registered ctest entries (`SparkSaveCompatibilityTests`, `TelemetrySpool`,
+  `SparkCollabProcessSmoke`, …) drive the same binary with their own arguments.
+- **Per-configuration timeouts**: `SPARK_TEST_TIMEOUT_SECONDS` is a generator expression —
+  `SPARK_TEST_TIMEOUT_DEBUG` (900) vs `SPARK_TEST_TIMEOUT_OPTIMIZED` (240), and
+  `SPARK_TEST_LOAD_TIMEOUT_DEBUG` (900) vs `SPARK_TEST_LOAD_TIMEOUT_OPTIMIZED` (300) for the load
+  lane. The wrapper's inner timeout always fires before ctest's own `TIMEOUT`
+  (`_spark_ctest_inner_max + SPARK_TEST_CTEST_MARGIN_SECONDS`), so a hang is reported as a test
+  timeout with output rather than as a bare ctest kill.
+- Per-test selection is done via SparkTests selectors (§3), not ctest.
 - Feature gating: `SPARK_TEST_HAS_IMGUI / _NETWORKING / _PHYSICS / _VULKAN / _OPENGL / _MOBILE`
   compile definitions are set from CMake options; tests `#ifdef` on them. ImGui availability
   additionally pulls in the 7 game-module test source groups.
@@ -92,9 +105,13 @@ bash tools/check-test-registration.sh
 
 Verified behavior and **limits**:
 
-- Globs **only top-level** `Tests/Test*.cpp`. Files under `Tests/harden/` and
-  `Tests/Integration/` are NOT covered — a new file there can still silently drop out.
-- Opt-out: a file containing the comment `// test-registration: ignore` is skipped.
+- Globs **only top-level** `Tests/Test*.cpp` (plus `Test*.mm` and `*Probe.cpp`). Files under
+  `Tests/harden/` and `Tests/Integration/` are NOT covered — a new file there can still silently
+  drop out.
+- Opt-out marker: a file containing the comment `// test-registration: ignore` is skipped. Use it
+  deliberately — it is exactly the shape of a check that stops checking.
+- It also reports **conditionally registered** files (sources added inside an `if()` block); those
+  are notices, not failures, and mean the file may compile in some configurations only.
 - **Not wired into CI or `tools/validate-all.sh`** (verified: no workflow references it, and
   `validate-all.sh` does not call it). Running it is a manual, pre-commit discipline.
   Wiring it into CI/validate-all is an `open` improvement (see the retired `HARDEN_FLEET_HANDOFF.md` (git history only since 2026-09-03)).
@@ -124,7 +141,22 @@ CLI flags (all verified in `TestMain.cpp`):
 --retries <N>          re-run failed tests up to N times
 --warn-is-error        promote known-flaky warnings to hard failures
 --list-warnings        print the flaky-pattern registry and exit
+--empty-is-error       promote a test that executed zero assertions to a failure
 ```
+
+**`[ EMPTY ]` and `EXPECT_WARN_ONLY`.** A test that executes no assertions prints
+`[ EMPTY  ]` and is counted in the run's `empty` total; it is a *pass* unless
+`--empty-is-error` is passed, which turns it into a failure reading
+`Executed no assertions (--empty-is-error)`. `EXPECT_WARN_ONLY` waives a **single assertion**
+(every other assertion in that test still counts), where `Tests/TestWarnings.h` waives the whole
+test by name pattern. Both are how a green run can be hiding work — check the `empty` and flaky
+counts in the summary before believing a pass.
+
+**JUnit shape** (`--junit-xml`): a waived known-flaky test is **not** `<skipped>` — it executed and
+failed, and the report emits `<flakyFailure>` (Surefire/Jenkins convention) plus `flaky` /
+`flaky-reason` properties, with `flaky=` and `empty=` counts on `<testsuites>`/`<testsuite>`.
+`<skipped>` means genuinely skipped. Anything counting `<skipped>` as "flaky tolerated" is
+mis-reading the report.
 
 **Footgun — the empty-selection green run.** A filter that matches nothing runs 0 tests and
 exits 0. Before believing a filtered pass, confirm the summary line shows the expected count
@@ -283,11 +315,23 @@ asserts `ENABLE_VULKAN:BOOL=ON` in the CMake cache — renaming those tests brea
 Verified 2026-08-23 against the working tree of branch
 `claude/whole-nine-yards-20260823` (uncommitted changes ahead of `34ee7ab7`/`0e1fe7e7`)
 by reading/running the sources below — not by a full-suite or CI run at this exact
-tree. Re-verify:
+tree.
+
+**Updated 2026-09-05** against the uncommitted working tree of branch
+`claude/release-readiness-sweep-20260904`: the `SparkEngineTests` / `SparkEngineLoadTests` lane
+split and its per-configuration timeout budgets, `--empty-is-error` and the `[ EMPTY ]` outcome,
+the per-assertion `EXPECT_WARN_ONLY` waiver next to the whole-test `TestWarnings.h` registry, the
+`<flakyFailure>`-not-`<skipped>` JUnit shape, and the `// test-registration: ignore` opt-out plus
+conditional-registration notices. Read from source; no suite or CI run at this tree.
+
+Re-verify:
 
 ```bash
 git status --short && git log -1 --format=%h                  # note the exact tree you re-verify against
 bash tools/check-test-registration.sh                         # guard still passes / exists
+grep -n 'add_test(' Tests/CMakeLists.txt                      # the ctest lanes (expect both SparkEngineTests and SparkEngineLoadTests)
+grep -n 'SPARK_TEST_TIMEOUT_DEBUG\|SPARK_TEST_LOAD_TIMEOUT' Tests/CMakeLists.txt   # per-config budgets
+grep -n 'empty-is-error\|EXPECT_WARN_ONLY\|flakyFailure' Tests/TestMain.cpp        # empty/waiver/JUnit shape
 grep -n "add_test" Tests/CMakeLists.txt                       # still single CTest entry
 grep -n "continue-on-error" .github/workflows/build.yml       # advisory-job set drift
 grep -n "coverage-report.sh" .github/workflows/build.yml      # '|| true' still neuters thresholds?

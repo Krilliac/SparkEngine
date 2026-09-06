@@ -3479,10 +3479,33 @@ class OptionActivationTests(unittest.TestCase):
         findings = check_parity.check_sparkbuild_vs_cmake(check_parity._active_options(effective), [], [])
         self.assertEqual(findings, [])
 
-    def test_live_enable_lto_is_platform_inactive(self) -> None:
-        options = {item["name"]: item for item in inventory.build_inventory()["cmakeOptions"]}
-        self.assertEqual(options["ENABLE_LTO"]["status"], "platform-inactive")
+    def test_live_enable_lto_is_active_for_every_toolchain(self) -> None:
+        # ENABLE_LTO used to be declared only inside
+        # `elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")`,
+        # so on Windows/MSVC it was a branch this context never takes. The
+        # release-readiness sweep moved the declaration to CMakeLists.txt:357 at
+        # top level and made MSVC gate /GL and /LTCG on it
+        # (CMakeLists.txt:369 and :381), because installed-SDK consumers need a
+        # toolset-portable SparkEngineLib.lib built with ENABLE_LTO=OFF. It is
+        # therefore real Windows configuration surface now and must be compared
+        # against SparkBuild instead of excused as platform-inactive.
+        data = inventory.build_inventory()
+        options = {item["name"]: item for item in data["cmakeOptions"]}
+        self.assertEqual(options["ENABLE_LTO"]["status"], "active")
         self.assertEqual(options["ENABLE_LTO"]["declarationCount"], 1)
+        self.assertEqual(options["ENABLE_LTO"]["activeDeclarationCount"], 1)
+        # Active because it is unconditional, not because a condition was
+        # guessed: the single declaration carries no frame and no function scope.
+        declaration = next(
+            item for item in data["allCmakeOptionDeclarations"] if item["name"] == "ENABLE_LTO"
+        )
+        self.assertEqual(declaration["conditionFrames"], [])
+        self.assertEqual(declaration["definitionScope"], [])
+        # And it really does reach the SparkBuild comparison it used to skip.
+        self.assertIn(
+            "ENABLE_LTO",
+            {item["name"] for item in check_parity._active_options(data["cmakeOptions"])},
+        )
 
     def test_active_branch_option_is_still_compared(self) -> None:
         effective = self.effective(

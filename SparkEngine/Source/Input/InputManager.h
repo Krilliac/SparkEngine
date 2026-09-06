@@ -19,7 +19,7 @@
 #include <unordered_map>
 #include <functional>
 #include <mutex>
-#include <thread>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -81,9 +81,23 @@ class InputManager
     std::atomic<float> m_totalMouseDistance{0.0f};         ///< Total mouse movement distance
     std::vector<std::pair<int, bool>> m_recentInputEvents; ///< Recent input events for debugging
 
-    mutable std::mutex m_inputMutex;                ///< Thread safety for input access
-    std::function<void()> m_stateCallback;          ///< Callback for state changes
-    std::vector<std::thread> m_pendingTimedThreads; ///< Timed key release threads to join on destruction
+    mutable std::mutex m_inputMutex;       ///< Thread safety for input access
+    std::function<void()> m_stateCallback; ///< Callback for state changes
+
+    /// @brief A console-simulated key press waiting for its release deadline.
+    struct TimedKeyRelease
+    {
+        int virtualKey;                                  ///< Key to release
+        std::chrono::steady_clock::time_point releaseAt; ///< Deadline after which Update() releases it
+    };
+    /// Timed releases queued by Console_SimulateKeyPress. They are applied on the
+    /// input thread by Update() (or ApplyDueTimedKeyReleases), never by a worker
+    /// thread: the key-state maps are read without a lock by the frame code, so a
+    /// background writer was a data race. Console_SimulateKeyPress itself, like
+    /// every other key-state writer, must run on the input thread; only the
+    /// release is deferred. The queue is guarded by m_inputMutex so the pending
+    /// count can be read from any thread.
+    std::vector<TimedKeyRelease> m_pendingTimedReleases;
 
   public:
     /**
@@ -339,9 +353,25 @@ class InputManager
     /**
      * @brief Simulate a key press via console
      * @param keyName Key name or code to simulate
-     * @param duration Duration to hold key in milliseconds (0 = single press)
+     * @param duration Duration to hold key in milliseconds (0 = single press).
+     *        A timed press is released by the first Update() (or
+     *        ApplyDueTimedKeyReleases()) on or after the deadline, on the calling
+     *        thread; no background thread touches the key state.
      */
     void Console_SimulateKeyPress(const std::string& keyName, int duration = 0);
+
+    /**
+     * @brief Release every console-simulated key whose hold duration has elapsed
+     *
+     * Called by Update() each frame. Exposed so headless callers (tests, tools
+     * without a window) can advance simulated presses without a frame tick.
+     */
+    void ApplyDueTimedKeyReleases();
+
+    /**
+     * @brief Number of console-simulated presses still waiting for their release deadline
+     */
+    size_t GetPendingTimedKeyReleaseCount() const;
 
     /**
      * @brief Clear all input states via console

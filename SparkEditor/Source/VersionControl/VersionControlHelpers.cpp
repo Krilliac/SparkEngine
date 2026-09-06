@@ -310,12 +310,12 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return false;
 
-        VCSOperationResult result = ExecuteCommand("git lfs install", m_repositoryInfo->path);
+        VCSOperationResult result = ExecuteGit({"lfs", "install"}, m_repositoryInfo->path);
         if (result.success)
         {
             m_repositoryInfo->hasLFS = true;
             // Re-check version
-            VCSOperationResult verResult = ExecuteCommand("git lfs version", m_repositoryInfo->path);
+            VCSOperationResult verResult = ExecuteGit({"lfs", "version"}, m_repositoryInfo->path);
             if (verResult.success)
             {
                 std::string ver = verResult.output;

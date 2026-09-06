@@ -11,6 +11,14 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 cmake_policy(SET CMP0091 NEW)  # Enable MSVC_RUNTIME_LIBRARY support
 cmake_policy(SET CMP0141 NEW)  # Select MSVC debug-information format through CMake
 
+# /Z7 embeds CodeView data in object files, allowing sccache to cache Debug
+# builds while link-time /DEBUG still emits PDBs. This must be set BEFORE
+# project(): the compiler-identification try-compiles run inside project(),
+# and with CMAKE_CXX_COMPILER_LAUNCHER=sccache the default /Zi makes them fail.
+# Non-MSVC toolchains ignore the variable, so it is set unconditionally (the
+# MSVC variable is not defined until the compiler is identified anyway).
+set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
+
 # Note: CMAKE_MSVC_RUNTIME_LIBRARY is set after project() below,
 # because the MSVC variable is not defined until the compiler is identified.
 
@@ -88,9 +96,8 @@ if(MSVC)
         message(FATAL_ERROR "SparkEngine requires MSVC 19.36 or newer (Visual Studio 2022 17.6+)")
     endif()
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-    # /Z7 embeds CodeView data in object files, allowing sccache to cache
-    # Debug builds while link-time /DEBUG still emits PDBs.
-    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
+    # CMAKE_MSVC_DEBUG_INFORMATION_FORMAT is set before project() (see above) so
+    # that compiler identification also runs with /Z7.
 endif()
 
 # ---------------------------------------------------------------------
@@ -222,6 +229,16 @@ endforeach()
 # 6) Compiler options (platform-specific)
 # ---------------------------------------------------------------------
 if(MSVC)
+    # /MP stays: SparkEngineLib alone is ~1000 translation units, and MSBuild's
+    # /m only parallelises across projects, so removing /MP would compile the
+    # dominant project serially. The oversubscription problem (MSBuild /m nodes
+    # x /MP compilers = N^2 cl.exe processes) is therefore fixed at the build
+    # invocation instead: build.ps1 passes --parallel 1 (/m:1) for Visual Studio
+    # generators and lets /MP schedule, and keeps --parallel for Ninja.
+    if(CMAKE_GENERATOR MATCHES "Visual Studio")
+        message(STATUS "Build    : /MP active; build with --parallel 1 so MSBuild /m does not multiply it")
+    endif()
+
     # Note: /GS (buffer security check) is enabled by default in MSVC — no explicit flag needed.
     add_compile_options(
         /W3 /MP /bigobj
@@ -233,7 +250,14 @@ if(MSVC)
     )
     # /DEBUG linker flag embeds PDB reference in the executable so SymFromAddr
     # can locate symbols at runtime. Does not affect binary performance.
-    add_link_options(/DEBUG)
+    # STRIP_DEBUG_SYMBOLS (windows-shipping) means exactly this: no PDB, and no
+    # PDB reference in the image. Emitting it unconditionally made the option a
+    # no-op and shipped symbol paths in the Shipping product set.
+    if(STRIP_DEBUG_SYMBOLS)
+        message(STATUS "Build    : /DEBUG suppressed (STRIP_DEBUG_SYMBOLS=ON, no PDBs emitted)")
+    else()
+        add_link_options(/DEBUG)
+    endif()
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS SPARK_PLATFORM_WINDOWS)
 
     # Conformance improvements available in VS 2017+ — enforce __cplusplus macro and
@@ -325,6 +349,13 @@ endif()
 # --- Option: native architecture tuning (OFF for distributed builds) ---
 option(SPARK_NATIVE_ARCH "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries." OFF)
 
+# --- Option: link-time optimization ---
+# Declared for every toolchain, not only GNU/Clang. On MSVC this drives /GL and
+# /LTCG; those objects are only linkable by the exact compiler build that
+# produced them (C1047), so a consumer that needs a toolset-portable
+# SparkEngineLib.lib out of the installed SDK configures with ENABLE_LTO=OFF.
+option(ENABLE_LTO "Enable link-time optimization in Release/MinSizeRel builds" ON)
+
 if(MSVC)
     # ── Release / RelWithDebInfo / MinSizeRel (all optimized configs) ──
     add_compile_options(
@@ -335,7 +366,7 @@ if(MSVC)
         # Shipping (MinSizeRel) also gets speed — /O2 is better than /O1 for games
         $<$<CONFIG:MinSizeRel>:/O2>
         # Whole-program optimization (enables cross-TU inlining via LTCG at link time)
-        $<$<NOT:$<CONFIG:Debug>>:/GL>
+        $<$<AND:$<BOOL:${ENABLE_LTO}>,$<NOT:$<CONFIG:Debug>>>:/GL>
         # Favor 64-bit code generation (branch prediction, register allocation)
         $<$<NOT:$<CONFIG:Debug>>:/favor:AMD64>
         # String pooling — merge identical string literals
@@ -347,7 +378,7 @@ if(MSVC)
     # ── Release / Shipping linker optimizations ──
     add_link_options(
         # Link-Time Code Generation — cross-TU inlining, devirtualization (pairs with /GL)
-        $<$<NOT:$<CONFIG:Debug>>:/LTCG>
+        $<$<AND:$<BOOL:${ENABLE_LTO}>,$<NOT:$<CONFIG:Debug>>>:/LTCG>
         # Remove unreferenced functions/data (dead code elimination)
         $<$<NOT:$<CONFIG:Debug>>:/OPT:REF>
         # Fold identical COMDATs (identical functions/constants merged)
@@ -382,8 +413,14 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
         $<$<NOT:$<CONFIG:Debug>>:-fstrict-aliasing>
     )
 
-    # LTO for Release and MinSizeRel (not RelWithDebInfo — it bloats debug info)
-    option(ENABLE_LTO "Enable link-time optimization in Release/MinSizeRel builds" ON)
+    # linux-shipping asks for STRIP_DEBUG_SYMBOLS the same way windows-shipping
+    # does; -s is the ELF equivalent of suppressing /DEBUG.
+    if(STRIP_DEBUG_SYMBOLS AND NOT APPLE)
+        add_link_options($<$<NOT:$<CONFIG:Debug>>:-s>)
+    endif()
+
+    # LTO for Release and MinSizeRel (not RelWithDebInfo — it bloats debug info).
+    # ENABLE_LTO is declared once for every toolchain above.
     if(ENABLE_LTO)
         if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
             add_compile_options(
@@ -1704,12 +1741,18 @@ endif()
 file(GLOB_RECURSE ENGINE_SHADER_FILES "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/HLSL/*.hlsl")
 set(_SPARK_SHADER_STAGE_COMMANDS
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Shaders")
+# The relative path is preserved, not flattened: GraphicsDeviceResourcesLinux.cpp
+# registers "Shaders/ForwardPlus/{DepthPrepass,LightCull,Shading}.hlsl", and those
+# three files exist only under SparkEngine/Shaders/HLSL/ForwardPlus/. Flattening
+# collapsed them to Shaders/*.hlsl, where the subdirectory-qualified path could
+# never resolve. Files directly under HLSL/ keep landing in Shaders/ as before.
 foreach(SHADER_FILE ${ENGINE_SHADER_FILES})
-    get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
+    file(RELATIVE_PATH SHADER_RELATIVE_PATH
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/HLSL" "${SHADER_FILE}")
     list(APPEND _SPARK_SHADER_STAGE_COMMANDS
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${SHADER_FILE}"
-            "$<TARGET_FILE_DIR:SparkEngine>/Shaders/${SHADER_NAME}")
+            "$<TARGET_FILE_DIR:SparkEngine>/Shaders/${SHADER_RELATIVE_PATH}")
 endforeach()
 
 # Also stage the top-level Shaders/HLSL/ tree (DXR ray-tracing shaders,
@@ -1960,6 +2003,7 @@ if(WIN32 AND NOT MINGW)
             "FoliageImpostorBake.hlsl|PSMain|ps_5_0"
         )
 
+        set(FOLIAGE_CSO_OUTPUTS "")
         foreach(TARGET_SPEC ${FOLIAGE_FXC_TARGETS})
             string(REPLACE "|" ";" TARGET_PARTS ${TARGET_SPEC})
             list(GET TARGET_PARTS 0 SHADER_FILE)
@@ -1981,6 +2025,7 @@ if(WIN32 AND NOT MINGW)
                 COMMENT "FXC: ${SHADER_FILE} [${ENTRY_POINT}/${PROFILE}] -> ${SHADER_BASE}_${ENTRY_POINT}.cso"
                 VERBATIM
             )
+            list(APPEND FOLIAGE_CSO_OUTPUTS "${SHADER_OUTPUT}")
         endforeach()
     else()
         message(STATUS "SparkEngine: fxc not found — foliage shaders will only be validated at runtime")
@@ -2391,9 +2436,8 @@ endif()
 if(ENABLE_DEVCOMMANDS_IN_SHIPPING)
     list(APPEND FEATURE_DEFINITIONS "SPARK_DEVCOMMANDS_IN_SHIPPING")
 endif()
-if(STRIP_DEBUG_SYMBOLS)
-    list(APPEND FEATURE_DEFINITIONS "SPARK_STRIP_DEBUG_SYMBOLS")
-endif()
+# STRIP_DEBUG_SYMBOLS is a link-time decision (see the /DEBUG and -s handling in
+# section 6); it had no compile-time consumer, so the define is not emitted.
 
 # Per-configuration build profile definitions
 # These allow code to branch on build type at compile time:
@@ -2706,34 +2750,48 @@ if(TARGET SparkCrashReporter)
     )
 endif()
 
-# Match the normal post-build layout: engine HLSL files are flattened directly
-# into Shaders/, while the repo-root shader tree remains under Shaders/HLSL/.
-# Keeping the layouts distinct also avoids overwriting the differently authored
-# BasicVS/DebugUtils/GaussianBlur/PBRSurface/Water variants shared by both trees.
+# Match the normal post-build layout: the engine HLSL tree keeps its structure
+# under Shaders/ (so Shaders/ForwardPlus/*.hlsl resolves), while the repo-root
+# shader tree remains under Shaders/HLSL/. Keeping the layouts distinct also
+# avoids overwriting the differently authored BasicVS/BasicPS/DebugUtils/
+# GaussianBlur/PBRSurface/Water variants shared by both trees.
 if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/HLSL")
     spark_install_tracked_directory(
         SOURCE SparkEngine/Shaders/HLSL
         DESTINATION bin/Shaders
         COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
         INCLUDE_REGEXES "\\.hlsl$"
-        FLATTEN
     )
 endif()
-if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders/Compiled")
-    spark_install_tracked_directory(
-        SOURCE SparkEngine/Shaders/Compiled
-        DESTINATION bin/Shaders
-        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
-        INCLUDE_REGEXES "\\.cso$"
-        FLATTEN
-    )
-endif()
+# There is deliberately no rule for prebuilt .cso blobs: the four Basic*.cso
+# files that used to ship here were compiled from a superseded BasicVS/BasicPS
+# pair, and a stale bytecode blob installed beside its own disagreeing source is
+# worse than none. Compiled shaders reach the package from the dxc/fxc
+# POST_BUILD outputs below.
 if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders")
     spark_install_tracked_directory(
         SOURCE Shaders
         DESTINATION bin/Shaders
         COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
     )
+endif()
+
+# The tracked-directory rules above ship source HLSL only. The DXIL/DXBC blobs
+# that dxc and fxc write beside SparkEngine at POST_BUILD live in the build
+# tree, so without these rules a packaged build carried no compiled shader and
+# DXRSupport degraded every trace dispatch to a no-op. OPTIONAL because the
+# POST_BUILD steps exist only when the compilers were found at configure time.
+if(DXR_CSO_OUTPUTS)
+    install(FILES ${DXR_CSO_OUTPUTS}
+        DESTINATION bin/Shaders/HLSL/RayTracing
+        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+        OPTIONAL)
+endif()
+if(FOLIAGE_CSO_OUTPUTS)
+    install(FILES ${FOLIAGE_CSO_OUTPUTS}
+        DESTINATION bin/Shaders/HLSL
+        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+        OPTIONAL)
 endif()
 
 # Mirror the runtime asset set copied beside SparkEngine after a normal build.
@@ -3192,9 +3250,33 @@ set(CPACK_PACKAGE_VERSION_MINOR "${PROJECT_VERSION_MINOR}")
 set(CPACK_PACKAGE_VERSION_PATCH "${PROJECT_VERSION_PATCH}")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "SparkEngine")
 
+# ZIP/TGZ need no external tooling and must always be producible. The native
+# Windows installers are appended only when their toolchain is actually present:
+# cpack runs every configured generator, so listing an absent one failed the
+# whole package run - including the archive - on any machine without both.
 set(CPACK_GENERATOR "ZIP")
 if(WIN32)
-    list(APPEND CPACK_GENERATOR "NSIS" "WIX")
+    # The release pipeline must never silently drop an installer because its
+    # toolchain was installed after configure, so it configures with
+    # SPARK_REQUIRE_WINDOWS_INSTALLERS=ON and gets a hard failure instead.
+    option(SPARK_REQUIRE_WINDOWS_INSTALLERS
+        "Fail configuration when the NSIS or WiX toolchain is missing" OFF)
+    find_program(SPARK_MAKENSIS_EXECUTABLE NAMES makensis)
+    if(SPARK_MAKENSIS_EXECUTABLE)
+        list(APPEND CPACK_GENERATOR "NSIS")
+    elseif(SPARK_REQUIRE_WINDOWS_INSTALLERS)
+        message(FATAL_ERROR "SPARK_REQUIRE_WINDOWS_INSTALLERS=ON but makensis was not found")
+    else()
+        message(STATUS "CPack   : NSIS generator disabled (makensis not found)")
+    endif()
+    find_program(SPARK_WIX_CANDLE_EXECUTABLE NAMES candle HINTS "$ENV{WIX}/bin")
+    if(SPARK_WIX_CANDLE_EXECUTABLE)
+        list(APPEND CPACK_GENERATOR "WIX")
+    elseif(SPARK_REQUIRE_WINDOWS_INSTALLERS)
+        message(FATAL_ERROR "SPARK_REQUIRE_WINDOWS_INSTALLERS=ON but the WiX candle executable was not found")
+    else()
+        message(STATUS "CPack   : WIX generator disabled (WiX candle not found)")
+    endif()
 else()
     list(APPEND CPACK_GENERATOR "TGZ")
 endif()

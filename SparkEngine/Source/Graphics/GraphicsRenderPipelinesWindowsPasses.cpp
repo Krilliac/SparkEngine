@@ -11,7 +11,9 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "GraphicsEngine.h"
+#include "GraphicsRenderPipelinesShadowPass.h"
 #include "LightingSystem.h"
+#include "Mesh.h"
 #include "PostProcessingPipeline.h"
 #include "TemporalEffects.h"
 #include "../Game/GameObject.h"
@@ -46,8 +48,6 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
         return;
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Filling G-Buffer for deferred rendering", L"INFO");
-
     // Bind G-Buffer render targets for the geometry pass
     ID3D11RenderTargetView* gBufferRTVs[4] = {m_gBufferRTVs[0].Get(), m_gBufferRTVs[1].Get(), m_gBufferRTVs[2].Get(),
                                               m_gBufferRTVs[3].Get()};
@@ -70,8 +70,11 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
             {
                 obj->Render(viewMatrix, projMatrix);
                 gBufferDrawCalls++;
-                totalTriangles += 12;
-                totalVertices += 36;
+                if (const Mesh* mesh = obj->GetMesh())
+                {
+                    totalTriangles += mesh->GetIndexCount() / 3;
+                    totalVertices += mesh->GetVertexCount();
+                }
             }
             catch (const std::exception& e)
             {
@@ -100,14 +103,11 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
         m_statistics.vertices += totalVertices;
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"G-Buffer fill complete with " + std::to_wstring(gBufferDrawCalls) + L" draw calls",
-                             L"INFO");
+    SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "G-Buffer fill complete with %u draw calls", gBufferDrawCalls);
 }
 
 void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Starting deferred lighting pass", L"INFO");
-
     auto lightingStartTime = std::chrono::high_resolution_clock::now();
 
     if (m_context && m_renderTargetView)
@@ -122,21 +122,38 @@ void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& pr
             // Bind lighting data to shaders
             m_lightingSystem->BindLightingData(m_context.Get());
 
-            // Update lighting system with current frame parameters
-            m_lightingSystem->Update(0.016f, viewMatrix, projMatrix);
+            // Update lighting system with the real frame delta (RenderPostProcessing
+            // does the same); a hard-coded 16 ms desynchronises every time-based
+            // lighting term from the actual frame rate. m_statistics is written under
+            // m_metricsMutex (see the drawCalls update below), so snapshot the value
+            // under the same lock rather than racing the writer.
+            float frameTimeMs = 0.0f;
+            {
+                std::lock_guard<std::mutex> lock(m_metricsMutex);
+                frameTimeMs = m_statistics.frameTime;
+            }
+            const float deltaTime = std::clamp(frameTimeMs / 1000.0f, 0.0f, 1.0f);
+            m_lightingSystem->Update(deltaTime, viewMatrix, projMatrix);
 
-            // Render shadow maps if shadows are enabled
-            if (m_settings.shadows)
+            // Render shadow casters into each light's depth target. Under the
+            // render-graph pipeline this work belongs to (and runs in) the
+            // ShadowPass, which executes before the geometry pass drains the
+            // draw list — running it again here would draw an empty list.
+            if (m_settings.shadows && m_currentPipeline != RenderingPipeline::RenderGraphBased)
             {
                 try
                 {
+                    const std::vector<MeshDrawCommand> shadowDrawList = GetDrawList();
+                    uint32_t shadowDrawCalls = 0;
                     m_lightingSystem->RenderShadowMaps(
-                        [this](const XMMATRIX& lightView, const XMMATRIX& lightProj)
+                        [this, &shadowDrawList, &shadowDrawCalls](const XMMATRIX& lightView, const XMMATRIX& lightProj)
                         {
-                            LOG_TO_CONSOLE_IMMEDIATE(L"Rendering shadow map for light", L"INFO");
-                            // Here we would render shadow casters from the light's perspective
-                            // The callback provides the light's view and projection matrices
+                            shadowDrawCalls +=
+                                Spark::Graphics::RenderShadowCasterDepth(*this, shadowDrawList, lightView, lightProj);
                         });
+
+                    std::lock_guard<std::mutex> lock(m_metricsMutex);
+                    m_statistics.drawCalls += shadowDrawCalls;
                 }
                 catch (const std::exception& e)
                 {
@@ -189,16 +206,17 @@ void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& pr
                 LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Could not retrieve lighting metrics: " +
                                              std::wstring(e.what(), e.what() + strlen(e.what())),
                                          L"WARNING");
-                // Use timing-based fallback
-                m_statistics.activeLights = 3;
-                m_statistics.shadowUpdates = m_settings.shadows ? 1 : 0;
+                // Metrics unavailable — report nothing rather than a plausible
+                // constant: a fabricated count cannot detect a regression.
+                m_statistics.activeLights = 0;
+                m_statistics.shadowUpdates = 0;
                 m_statistics.lightCullingTime = lightingTime.count() / 1000.0f;
             }
             catch (...)
             {
                 LOG_TO_CONSOLE_IMMEDIATE(L"Warning: Could not retrieve lighting metrics - unknown error", L"WARNING");
-                m_statistics.activeLights = 3;
-                m_statistics.shadowUpdates = m_settings.shadows ? 1 : 0;
+                m_statistics.activeLights = 0;
+                m_statistics.shadowUpdates = 0;
                 m_statistics.lightCullingTime = lightingTime.count() / 1000.0f;
             }
         }
@@ -211,8 +229,8 @@ void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& pr
         }
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(
-        L"Deferred lighting pass complete in " + std::to_wstring(lightingTime.count() / 1000.0f) + L"ms", L"INFO");
+    SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "Deferred lighting pass complete in %.3f ms",
+                    static_cast<double>(lightingTime.count()) / 1000.0);
 }
 
 void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix,

@@ -17,7 +17,11 @@
 // interface changes in a binary-incompatible way.
 // v2: Added 7 subsystem getters, IModule lifecycle hooks, ILogger, math/input/event types
 // v3: Added IModule::CanUnload() as a non-destructive unload/hot-reload veto.
-#define SPARK_SDK_VERSION 3
+// v4: Appended IEngineContext::GetInvalidStateDetector()/GetComponentSerializers()
+//     (four vtable slots). IsSDKCompatible is exact equality, so a module built
+//     against v4 must not be accepted by a v3 host: the host's vtable is shorter
+//     and the call would run off the end of it.
+#define SPARK_SDK_VERSION 4
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

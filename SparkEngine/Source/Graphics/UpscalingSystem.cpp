@@ -429,14 +429,30 @@ namespace Spark
 
 void UpscalingSystem::DetectFeatures()
 {
-    // DLSS detection — requires NVIDIA GPU + runtime DLL
-    m_dlssFeatureInfo.isAvailable = Spark::Graphics::UpscalingUtils::DetectDLSSAvailability();
+    // No vendor upscaling SDK is linked into this build: there is no FidelityFX
+    // (FSR 2), NVIDIA NGX (DLSS) or Intel XeSS import library, so ExecuteFSR2 /
+    // ExecuteDLSS / ExecuteXeSS cannot run a vendor upscaler no matter what the
+    // machine has installed. Reporting them as "available" made the settings UI
+    // and Console_GetStatus advertise upscalers that silently resolve to the
+    // engine's own SparkSR temporal path — a false positive, not a capability.
+    //
+    // The runtime probes below stay: knowing that a DLSS/XeSS runtime is present
+    // is useful diagnostics for whoever links the SDK, but presence of a DLL is
+    // not availability of the feature.
+    const bool dlssRuntimePresent = Spark::Graphics::UpscalingUtils::DetectDLSSAvailability();
+    const bool xessRuntimePresent = Spark::Graphics::UpscalingUtils::DetectXeSSAvailability();
 
-    // XeSS detection — works on any DP4a GPU, accelerated on Intel Arc
-    m_xessFeatureInfo.isAvailable = Spark::Graphics::UpscalingUtils::DetectXeSSAvailability();
+    if (dlssRuntimePresent || xessRuntimePresent)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "Vendor upscaler runtime detected (DLSS: %s, XeSS: %s) but no vendor SDK is linked — "
+                       "reporting DLSS/XeSS/FSR2 as unavailable",
+                       dlssRuntimePresent ? "yes" : "no", xessRuntimePresent ? "yes" : "no");
+    }
 
-    // FSR 2.0 is a software solution that works on any GPU (no DLL required)
-    m_fsr2Available = true;
+    m_dlssFeatureInfo.isAvailable = false;
+    m_xessFeatureInfo.isAvailable = false;
+    m_fsr2Available = false;
 }
 
 // =============================================================================

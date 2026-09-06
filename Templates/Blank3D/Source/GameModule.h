@@ -39,19 +39,27 @@ class Blank3DModule final : public Spark::IModule
         if (!m_runtime.Load(context, "Blank3D", {"Startup.sparkscene", "Scenes/Default.sparkscene"},
                             [this](const Spark::Templates::TemplateRuntimeScene& scene)
                             {
+                                // Required: the fly camera. The authored props and the fill light are
+                                // composition guides an author may rename or delete, so a missing one
+                                // warns and degrades the preview instead of refusing the load.
                                 m_cameraEntity = scene.Find("Main Camera");
-                                const auto hasVisual = [&scene](const char* name)
+                                if (!scene.Get<Transform>(m_cameraEntity) || !scene.Get<Camera>(m_cameraEntity))
+                                    return false;
+
+                                for (const char* prop : {"Starter Cube", "Scale Study - Tall", "Scale Study - Wide",
+                                                         "Composition Arch - Left", "Composition Arch - Right",
+                                                         "Composition Arch - Lintel"})
                                 {
-                                    const uint32_t entity = scene.Find(name);
-                                    return scene.Get<Transform>(entity) && scene.Get<MeshRenderer>(entity);
-                                };
+                                    const uint32_t entity = scene.Find(prop);
+                                    if (!scene.Get<Transform>(entity) || !scene.Get<MeshRenderer>(entity))
+                                        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                                       "Blank3D scene has no usable '%s' composition prop", prop);
+                                }
                                 const uint32_t fillLight = scene.Find("Composition Fill Light");
-                                return scene.Get<Transform>(m_cameraEntity) && scene.Get<Camera>(m_cameraEntity) &&
-                                       hasVisual("Starter Cube") && hasVisual("Scale Study - Tall") &&
-                                       hasVisual("Scale Study - Wide") && hasVisual("Composition Arch - Left") &&
-                                       hasVisual("Composition Arch - Right") &&
-                                       hasVisual("Composition Arch - Lintel") && scene.Get<Transform>(fillLight) &&
-                                       scene.Get<LightComponent>(fillLight);
+                                if (!scene.Get<Transform>(fillLight) || !scene.Get<LightComponent>(fillLight))
+                                    SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                                   "Blank3D scene has no usable 'Composition Fill Light'");
+                                return true;
                             }))
             return false;
         if (m_runtime.IsActive() && m_runtime.GetGraphics())
@@ -88,9 +96,7 @@ class Blank3DModule final : public Spark::IModule
         if (!std::isfinite(forward) || !std::isfinite(right) || !std::isfinite(vertical) || !std::isfinite(deltaTime) ||
             deltaTime <= 0.0f)
             return;
-        m_camera.z += forward * m_camera.moveSpeed * deltaTime;
-        m_camera.x += right * m_camera.moveSpeed * deltaTime;
-        m_camera.y += vertical * m_camera.moveSpeed * deltaTime;
+        IntegrateMove(forward, right, vertical, deltaTime);
     }
 
     void Look(float yawDeltaDegrees, float pitchDeltaDegrees)
@@ -113,6 +119,15 @@ class Blank3DModule final : public Spark::IModule
     [[nodiscard]] float GetElapsedSeconds() const { return m_elapsedSeconds; }
 
   private:
+    /** Yaw-relative fly integration shared by the public Move() and the live input path. */
+    void IntegrateMove(float forward, float right, float vertical, float deltaTime)
+    {
+        const float yaw = DirectX::XMConvertToRadians(m_camera.yawDegrees);
+        m_camera.x += (forward * std::sin(yaw) + right * std::cos(yaw)) * m_camera.moveSpeed * deltaTime;
+        m_camera.z += (forward * std::cos(yaw) - right * std::sin(yaw)) * m_camera.moveSpeed * deltaTime;
+        m_camera.y += vertical * m_camera.moveSpeed * deltaTime;
+    }
+
     void UpdateRuntimeInput(float deltaTime)
     {
         InputManager* input = m_runtime.GetInput();
@@ -142,10 +157,7 @@ class Blank3DModule final : public Spark::IModule
             right /= length;
             vertical /= length;
         }
-        const float yaw = DirectX::XMConvertToRadians(m_camera.yawDegrees);
-        m_camera.x += (forward * std::sin(yaw) + right * std::cos(yaw)) * m_camera.moveSpeed * deltaTime;
-        m_camera.z += (forward * std::cos(yaw) - right * std::sin(yaw)) * m_camera.moveSpeed * deltaTime;
-        m_camera.y += vertical * m_camera.moveSpeed * deltaTime;
+        IntegrateMove(forward, right, vertical, deltaTime);
 
         if (input->IsMouseButtonDown(1))
         {

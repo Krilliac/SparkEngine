@@ -15,6 +15,8 @@
 
 #include "UpscalingSystemWindowsInternal.h"
 
+#include "../Utils/LogMacros.h"
+
 #include <d3d11.h>
 #include "Core/Platform.h"
 #include <windows.h>
@@ -72,14 +74,18 @@ void UpscalingSystem::ExecuteFSR1(ID3D11ShaderResourceView* inputColorSRV, ID3D1
 
 void UpscalingSystem::ExecuteFSR2(const FSR2DispatchDescription& desc)
 {
-    // FSR 2.0 requires the FidelityFX SDK which is not yet linked.
-    // Fall through to the built-in temporal upscaler as a placeholder.
     if (!m_context || !desc.colorSRV || !desc.outputUAV)
     {
         return;
     }
 
-    // Use SparkSR temporal path as FSR2 fallback
+    // FSR 2.0 needs the FidelityFX SDK, which this build does not link
+    // (IsFSR2Available() reports false for the same reason). Say so instead of
+    // silently presenting SparkSR output as FSR 2.
+    SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                   "FSR 2.0 requested but the FidelityFX SDK is not linked — running SparkSR temporal upscaling "
+                   "instead");
+
     ExecuteSparkSR(desc.colorSRV, desc.depthSRV, desc.motionVectorsSRV, desc.exposureSRV, desc.reactiveMaskSRV,
                    desc.outputUAV, desc.jitterOffset, desc.resetAccumulation);
 }
@@ -88,12 +94,15 @@ void UpscalingSystem::ExecuteDLSS(ID3D11ShaderResourceView* colorSRV, ID3D11Shad
                                   ID3D11ShaderResourceView* motionVectorsSRV, ID3D11ShaderResourceView* exposureSRV,
                                   ID3D11UnorderedAccessView* outputUAV, const XMFLOAT2& jitterOffset, bool resetHistory)
 {
-    // DLSS requires the NVIDIA NGX SDK which is not yet linked.
-    // Fall through to SparkSR temporal upscaler as a placeholder.
     if (!m_context || !colorSRV || !outputUAV)
     {
         return;
     }
+
+    // DLSS needs the NVIDIA NGX SDK, which this build does not link
+    // (GetDLSSFeatureInfo().isAvailable reports false for the same reason).
+    SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                   "DLSS requested but the NVIDIA NGX SDK is not linked — running SparkSR temporal upscaling instead");
 
     ExecuteSparkSR(colorSRV, depthSRV, motionVectorsSRV, exposureSRV, nullptr, outputUAV, jitterOffset, resetHistory);
 }
@@ -102,12 +111,15 @@ void UpscalingSystem::ExecuteXeSS(ID3D11ShaderResourceView* colorSRV, ID3D11Shad
                                   ID3D11ShaderResourceView* motionVectorsSRV, ID3D11ShaderResourceView* exposureSRV,
                                   ID3D11UnorderedAccessView* outputUAV, const XMFLOAT2& jitterOffset)
 {
-    // XeSS requires the Intel XeSS SDK which is not yet linked.
-    // Fall through to SparkSR temporal upscaler as a placeholder.
     if (!m_context || !colorSRV || !outputUAV)
     {
         return;
     }
+
+    // XeSS needs the Intel XeSS SDK, which this build does not link
+    // (GetXeSSFeatureInfo().isAvailable reports false for the same reason).
+    SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                   "XeSS requested but the Intel XeSS SDK is not linked — running SparkSR temporal upscaling instead");
 
     ExecuteSparkSR(colorSRV, depthSRV, motionVectorsSRV, exposureSRV, nullptr, outputUAV, jitterOffset);
 }

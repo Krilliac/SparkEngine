@@ -65,7 +65,6 @@ namespace SparkEditor
         RegisterPanelToggle("SceneStats", "Scene Statistics");
         RegisterPanelToggle("PrefabEditor", "Prefab Editor");
         RegisterPanelToggle("Search", "Search");
-        RegisterPanelToggle("PostProcessing", "Post Processing");
 
         // Domain-specific panels
         RegisterPanelToggle("DialogueEditor", "Dialogue Editor");
@@ -175,11 +174,11 @@ namespace SparkEditor
 
         // Transform tool commands
         m_commandPalette->RegisterAction(
-            "Tool: Move", "Command", [this]() { m_currentTool = TransformTool::Move; }, "W");
+            "Tool: Move", "Command", [this]() { SetTransformTool(TransformTool::Move); }, "W");
         m_commandPalette->RegisterAction(
-            "Tool: Rotate", "Command", [this]() { m_currentTool = TransformTool::Rotate; }, "E");
+            "Tool: Rotate", "Command", [this]() { SetTransformTool(TransformTool::Rotate); }, "E");
         m_commandPalette->RegisterAction(
-            "Tool: Scale", "Command", [this]() { m_currentTool = TransformTool::Scale; }, "R");
+            "Tool: Scale", "Command", [this]() { SetTransformTool(TransformTool::Scale); }, "R");
 
         m_commandPalette->RegisterAction("Toggle Snap", "Command", [this]() { m_snapEnabled = !m_snapEnabled; });
     }

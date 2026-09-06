@@ -641,7 +641,10 @@ TEST(ReliablePerPeer_TwoClientsSameSequences_BothDispatched)
 
     // Both clients number their reliable streams identically from 1 — the
     // exact collision that server-wide receive state silently dropped.
-    const std::vector<uint8_t> chat{'h', 'i'};
+    // A well-formed ChatMessage payload: one NetBuffer string (uint16 LE length,
+    // then the bytes). A bare binary blob is rejected by the ChatMessage schema's
+    // text screening before it can reach the reliable channel under test.
+    const std::vector<uint8_t> chat{0x02, 0x00, 'h', 'i'};
     for (Net::SequenceNumber seq = 1; seq <= 3; ++seq)
     {
         clientA.Send(Net::MessageType::ChatMessage, Net::ChannelType::Reliable, seq, chat);

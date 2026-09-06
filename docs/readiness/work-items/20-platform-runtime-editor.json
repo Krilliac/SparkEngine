@@ -83,7 +83,13 @@
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      }
+      },
+      "plannedCiJobs": [
+        "windows-certification"
+      ],
+      "plannedTestSelectors": [
+        "WindowsCertification_*"
+      ]
     },
     {
       "id": "PLT-210",
@@ -164,7 +170,13 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "linux-certification"
+      ],
+      "plannedTestSelectors": [
+        "LinuxCertification_*"
+      ]
     },
     {
       "id": "PLT-220",
@@ -248,7 +260,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "macos-certification",
+        "macos-notarization"
+      ],
+      "plannedTestSelectors": [
+        "MacCertification_*"
+      ]
     },
     {
       "id": "PLT-230",
@@ -321,7 +340,13 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "mobile-certification"
+      ],
+      "plannedTestSelectors": [
+        "MobileLifecycle_*"
+      ]
     },
     {
       "id": "PLT-240",
@@ -397,7 +422,15 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "openxr-certification"
+      ],
+      "plannedTestSelectors": [
+        "OpenXR_Lifecycle",
+        "OpenXR_Render",
+        "OpenXR_Input"
+      ]
     },
     {
       "id": "PLT-250",
@@ -512,7 +545,11 @@
       "testSelectors": [
         "D3D11_Golden_*",
         "D3D11_Resource_*",
-        "D3D11_DeviceLoss_*"
+        "D3D11_DeviceLoss_*",
+        "D3D11DeviceReal_*",
+        "RHIBridgeReal_*",
+        "ShaderCompilerReal_*",
+        "ShadowPass_*"
       ],
       "requiredCiJobs": [
         "golden-d3d11",
@@ -544,7 +581,16 @@
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      }
+      },
+      "plannedCiJobs": [
+        "golden-d3d11",
+        "d3d11-stress"
+      ],
+      "plannedTestSelectors": [
+        "D3D11_Golden_*",
+        "D3D11_Resource_*",
+        "D3D11_DeviceLoss_*"
+      ]
     },
     {
       "id": "RHI-220",
@@ -621,7 +667,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "metal-golden",
+        "metal-stress"
+      ],
+      "plannedTestSelectors": [
+        "Metal_*"
+      ]
     },
     {
       "id": "RHI-225",
@@ -699,7 +752,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "d3d12-golden",
+        "d3d12-stress"
+      ],
+      "plannedTestSelectors": [
+        "D3D12_*"
+      ]
     },
     {
       "id": "RHI-230",
@@ -780,7 +840,15 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "vulkan-lavapipe",
+        "vulkan-hardware"
+      ],
+      "plannedTestSelectors": [
+        "VulkanGolden_*",
+        "VulkanValidation_*"
+      ]
     },
     {
       "id": "RHI-240",
@@ -859,7 +927,15 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "opengl-hardware",
+        "opengl-llvmpipe"
+      ],
+      "plannedTestSelectors": [
+        "OpenGL_*",
+        "ShaderTranslation_*"
+      ]
     },
     {
       "id": "ENG-220",
@@ -870,7 +946,7 @@
       "wave": 5,
       "area": "rendering",
       "owner": "unassigned",
-      "rationale": "The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable-v1 first-party slice, and D3D11 lacks one canonical packaged-content contract.",
+      "rationale": "The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable-v1 first-party slice, and D3D11 lacks one canonical packaged-content contract. 2026-09-05: the Tests/TestAssetDatabase.cpp entry point was a decoy that included no production header and was deleted; the glTF loader test is Tests/TestGLTFStaticMeshLoader.cpp.",
       "dependencies": [
         "RDY-020",
         "RHI-210"
@@ -888,7 +964,7 @@
       ],
       "entryPoints": [
         "SparkEngine/Source/Graphics/AssetPipelineWindows.cpp",
-        "Tests/TestAssetDatabase.cpp"
+        "Tests/TestGLTFStaticMeshLoader.cpp"
       ],
       "implementationScope": [
         "Import skin, joint, weight, and animation data",
@@ -942,7 +1018,16 @@
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      }
+      },
+      "plannedCiJobs": [
+        "asset-interoperability-windows",
+        "golden-d3d11"
+      ],
+      "plannedTestSelectors": [
+        "GLTF_Skinning_*",
+        "GLTF_Animation_*",
+        "CanonicalScene_*"
+      ]
     },
     {
       "id": "HEAD-220",
@@ -953,7 +1038,7 @@
       "wave": 2,
       "area": "runtime",
       "owner": "unassigned",
-      "rationale": "NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS module/assets/save, shutdown, leak, soak, and no-GPU evidence without inheriting production-service operations.",
+      "rationale": "NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS module/assets/save, shutdown, leak, soak, and no-GPU evidence without inheriting production-service operations. 2026-09-05 progress: Saves/, Logs/ (rotating SparkEngine_*.log), spark_trace.json and ShaderCache/ resolve through Spark::UserPaths under %LOCALAPPDATA%/SparkEngine (POSIX: $XDG_DATA_HOME or ~/.local/share/SparkEngine), Data/*.spk is resolved beside the executable first, and settings.ini falls back to a per-user directory on read-only installs (Tests/TestUserDataPathsReal.cpp). RHIBridge::Initialize no longer degrades a windowed request to NullRHIDevice silently (headless needs a headless request or allowHeadlessFallback). No packaged Windows 11 x64 no-GPU boot/soak evidence exists yet; the item stays open.",
       "dependencies": [
         "BLD-100",
         "RDY-010",
@@ -967,7 +1052,9 @@
       "sourceContext": [
         "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h",
         "GameModules/SparkGameFPS",
-        "SparkEngine/Source/Engine/SaveSystem"
+        "SparkEngine/Source/Engine/SaveSystem",
+        "Tests/TestUserDataPathsReal.cpp",
+        "SparkEngine/Source/Core/EngineSettings.h"
       ],
       "entryPoints": [
         "SparkEngine/Source/Graphics/RHI/NullRHIDevice.h",
@@ -992,7 +1079,8 @@
       "testSelectors": [
         "NullRHI_Windows_*",
         "FPSHeadlessPackage_*",
-        "HeadlessShutdown_*"
+        "HeadlessShutdown_*",
+        "RHIBridgeReal_*"
       ],
       "requiredCiJobs": [
         "headless-windows-package",
@@ -1025,7 +1113,16 @@
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      }
+      },
+      "plannedCiJobs": [
+        "headless-windows-package",
+        "headless-windows-soak"
+      ],
+      "plannedTestSelectors": [
+        "NullRHI_Windows_*",
+        "FPSHeadlessPackage_*",
+        "HeadlessShutdown_*"
+      ]
     },
     {
       "id": "LIFE-200",
@@ -1036,7 +1133,7 @@
       "wave": 2,
       "area": "runtime",
       "owner": "unassigned",
-      "rationale": "A fully ready engine needs deterministic initialization/teardown and safe partial-failure behavior across context services, modules, jobs, assets, render, audio, physics, scripts, editor, daemon, and tools.",
+      "rationale": "A fully ready engine needs deterministic initialization/teardown and safe partial-failure behavior across context services, modules, jobs, assets, render, audio, physics, scripts, editor, daemon, and tools. 2026-09-05 progress: a failed module OnLoad no longer blocks a replacement game module or freezes the windowed present path; engine teardown runs module OnUnload before gameplay/debug system shutdown; the InitDebug stage runs first (LifecycleOrder::Diagnostics) and ten never-fed lifecycle registrations were removed (Tests/TestModuleLifecycleReal.cpp, Tests/TestEngineWiringReal.cpp). Still open (core-29): module hot reload silently drops the reloaded module's console commands and InvalidStateDetector rules; EngineContext::InitializeAll/ShutdownAll is not the production init path and is kept only for tests.",
       "dependencies": [
         "RDY-010",
         "BLD-100"
@@ -1049,7 +1146,10 @@
       "sourceContext": [
         "SparkEngine/Source/Core",
         "SparkEngine/Source/Engine",
-        "SparkEngine/Source/Core/ModuleManager.cpp"
+        "SparkEngine/Source/Core/ModuleManager.cpp",
+        "Tests/TestModuleLifecycleReal.cpp",
+        "Tests/TestEngineWiringReal.cpp",
+        "SparkEngine/Source/Core/GameplaySystemLifecycle.cpp"
       ],
       "entryPoints": [
         "SparkEngine/Source/Core/EngineContext.h",
@@ -1075,7 +1175,9 @@
       "testSelectors": [
         "EngineLifecycle_*",
         "ModuleReload_*",
-        "PartialInit_*"
+        "PartialInit_*",
+        "ModuleLifecycle_*",
+        "EngineWiring_*"
       ],
       "requiredCiJobs": [
         "lifecycle-asan",
@@ -1106,7 +1208,14 @@
       ],
       "profileApplicability": {
         "stable-v1": "shared"
-      }
+      },
+      "plannedCiJobs": [
+        "lifecycle-asan",
+        "lifecycle-tsan"
+      ],
+      "plannedTestSelectors": [
+        "ModuleReload_*"
+      ]
     },
     {
       "id": "EDT-210",
@@ -1117,7 +1226,7 @@
       "wave": 2,
       "area": "editor",
       "owner": "unassigned",
-      "rationale": "Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate.",
+      "rationale": "Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate. 2026-09-05 progress: World-document create/delete/duplicate/reparent/rename/translate/rotate/scale and inspector edits are command-backed (one CommandHistory entry per gizmo drag); all three transform gizmos ship. Still open: asset browse/drag/assign path, author-to-installed-runtime round trip, and the crash-recovery pipeline (RecoveryCallback, RecordOperation callers, recovery dialog remain unwired; do not claim crash recovery works).",
       "dependencies": [
         "RDY-010",
         "RDY-020",
@@ -1158,7 +1267,8 @@
         "EditorUndo_*",
         "EditorGizmo_*",
         "EditorAssetDrag_*",
-        "EditorCookPackage_*"
+        "EditorCookPackage_*",
+        "EditorUndoHierarchy_*"
       ],
       "requiredCiJobs": [
         "editor-integration",
@@ -1192,7 +1302,16 @@
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      }
+      },
+      "plannedCiJobs": [
+        "editor-integration",
+        "editor-package-roundtrip"
+      ],
+      "plannedTestSelectors": [
+        "EditorUndo_*",
+        "EditorAssetDrag_*",
+        "EditorCookPackage_*"
+      ]
     },
     {
       "id": "ASSET-220",
@@ -1284,7 +1403,15 @@
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      }
+      },
+      "plannedCiJobs": [
+        "package-consumer-linux",
+        "package-consumer-windows"
+      ],
+      "plannedTestSelectors": [
+        "PackageConsumer_*",
+        "CLI_*"
+      ]
     },
     {
       "id": "SAVE-230",
@@ -1295,7 +1422,7 @@
       "wave": 2,
       "area": "compatibility",
       "owner": "unassigned",
-      "rationale": "A release engine must preserve or explicitly migrate user projects and game state across versions; several modules still contain placeholder serialization.",
+      "rationale": "A release engine must preserve or explicitly migrate user projects and game state across versions; several modules still contain placeholder serialization. 2026-09-05 progress: .spark_save v3 persists the Transform hierarchy, retains <slot>.spark_save.bak and falls back to it on an unreadable slot, creates the save directory on demand, and covers every ComponentFactory-registered serializer; the in-memory v2->v3 migration and the v1 disk fixture are tested. Not yet: a v2 disk fixture, a payload checksum, scene/asset migration fixtures. AchievementSystem persistence remains a game-module responsibility.",
       "dependencies": [
         "RDY-000",
         "RDY-010",
@@ -1337,7 +1464,9 @@
         "SaveMigration_*",
         "SceneMigration_*",
         "AssetMigration_*",
-        "AtomicWrite_*"
+        "AtomicWrite_*",
+        "SaveSystemRoundTripReal_*",
+        "SparkSaveCompatibilityTests"
       ],
       "requiredCiJobs": [
         "build-windows-vs2022"
@@ -1371,7 +1500,11 @@
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      }
+      },
+      "plannedTestSelectors": [
+        "SceneMigration_*",
+        "AtomicWrite_*"
+      ]
     },
     {
       "id": "SDK-240",
@@ -1461,7 +1594,16 @@
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      }
+      },
+      "plannedCiJobs": [
+        "sdk-consumer-linux",
+        "sdk-consumer-windows",
+        "module-compatibility"
+      ],
+      "plannedTestSelectors": [
+        "SDKConsumer_*",
+        "ModuleVersion_*"
+      ]
     },
     {
       "id": "ENG-200",
@@ -1547,7 +1689,16 @@
       ],
       "profileApplicability": {
         "stable-v1": "outside"
-      }
+      },
+      "plannedCiJobs": [
+        "scripting-integration",
+        "visual-script-package"
+      ],
+      "plannedTestSelectors": [
+        "ScriptLifecycle_*",
+        "ScriptBindings_*",
+        "VisualScriptRuntime_*"
+      ]
     }
   ]
 }

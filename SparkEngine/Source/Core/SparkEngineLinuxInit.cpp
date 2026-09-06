@@ -16,6 +16,7 @@
 #include "EngineRuntime.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
+#include "EngineSettings.h"
 #include "FaultIsolation.h" // SPARK_GUARDED_UPDATE / SubsystemFaultIsolator (mirrors SparkEngineWindows.cpp)
 #include "EngineConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
@@ -161,7 +162,7 @@ void TickFrame(float dt)
             GetEngineRuntime().input->Update();
     });
 
-    if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules())
+    if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules())
     {
         SPARK_GUARDED_UPDATE("Modules", "Core", {
             GetEngineRuntime().moduleManager->UpdateAll(dt);
@@ -268,7 +269,9 @@ void InitLinuxCoreSubsystems(bool registerGameplay)
         SPARK_LOG_INFO(Spark::LogCategory::Core, "-no-jobsystem: JobSystem worker threads skipped");
     }
 
-    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+    // Same per-user location (and same one-time legacy-saves migration) as the
+    // Windows entry points so all paths share saves.
+    if (!Spark::SaveSystem::GetInstance().Initialize(Spark::UserPaths::ResolveSaveDirectory()))
     {
         Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
     }

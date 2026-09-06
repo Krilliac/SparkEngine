@@ -13,10 +13,22 @@ static std::string CreateTempShaderDir()
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
 
-    // Create a few dummy shader files
-    std::ofstream(dir + "/BasicVS.hlsl") << "// vertex shader stub";
-    std::ofstream(dir + "/BasicPS.hlsl") << "// pixel shader stub";
-    std::ofstream(dir + "/ShadowGS.hlsl") << "// geometry shader stub";
+    // These files are really compiled now: the reload path invokes the shader
+    // compiler and GetReloadCount() only advances on a successful compile, so a
+    // comment-only body would have no entry point and the reload-count
+    // assertions below would go red. ShaderHotReload::ClassifyShader defaults
+    // all three stems to Vertex (none of them ends in _VS/_PS/_GS), so every
+    // file carries the same vs_5_0-compatible body with a "main" entry point.
+    static constexpr const char* kVertexShaderSource = "struct VSOutput { float4 position : SV_Position; };\n"
+                                                       "VSOutput main(float3 position : POSITION)\n"
+                                                       "{\n"
+                                                       "    VSOutput output;\n"
+                                                       "    output.position = float4(position, 1.0f);\n"
+                                                       "    return output;\n"
+                                                       "}\n";
+    std::ofstream(dir + "/BasicVS.hlsl") << kVertexShaderSource;
+    std::ofstream(dir + "/BasicPS.hlsl") << kVertexShaderSource;
+    std::ofstream(dir + "/ShadowGS.hlsl") << kVertexShaderSource;
 
     return dir;
 }
@@ -118,9 +130,18 @@ TEST(ShaderHotReload_ForceReloadAll)
     hr.ForceReloadAll();
     uint32_t reloadsAfter = hr.GetReloadCount();
 
-    // Each shader file should have been reloaded
+#ifdef _WIN32
+    // Each shader file is really compiled (D3DCompile) and counted as a reload.
     EXPECT_GT(reloadsAfter, reloadsBefore);
     EXPECT_EQ(reloadsAfter - reloadsBefore, hr.GetWatchedShaderCount());
+#else
+    // Only the DXBC target has a compiler behind RHI::CompileShader; every other
+    // target fails closed. A forced reload here must therefore count zero
+    // successes: counting one would be exactly the silent "reload" the
+    // fail-closed change removed, so this asserts the absence, not a skip.
+    EXPECT_EQ(reloadsAfter, reloadsBefore);
+    EXPECT_EQ(hr.GetWatchedShaderCount(), 3u);
+#endif
 
     hr.Shutdown();
     CleanupTempShaderDir(dir);

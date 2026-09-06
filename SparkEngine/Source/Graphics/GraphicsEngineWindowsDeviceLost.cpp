@@ -104,9 +104,21 @@ bool GraphicsEngine::RecoverFromDeviceLost()
     SPARK_LOG_WARN(Spark::LogCategory::Graphics, "DEVICE LOST RECOVERY: Attempt %u/%u — recreating D3D11 device",
                    m_deviceLostRecoveryAttempts, MAX_DEVICE_RECOVERY);
 
+    // Recovery needs the window the swap chain was created for. Bail out before
+    // tearing anything down rather than releasing every resource and then failing
+    // CreateSwapChain with a null OutputWindow.
+    HWND hwnd = static_cast<HWND>(m_hwnd);
+    if (!hwnd)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                        "DEVICE LOST RECOVERY: no window handle (device-attach mode) — cannot recreate the "
+                        "swap chain");
+        SPARK_DEBUG_HOOK_SYSTEM(DeviceLostFallback, "Graphics", 0.0);
+        return false;
+    }
+
     ReleaseAllDeviceResources();
 
-    HWND hwnd = static_cast<HWND>(m_hwnd);
     HRESULT hr = CreateDeviceAndSwapChain(hwnd);
     if (FAILED(hr))
     {
@@ -134,20 +146,19 @@ bool GraphicsEngine::RecoverFromDeviceLost()
         return false;
     }
 
-    CreateAdvancedRenderTargets();
-    CreateRenderStates();
-    SetViewport();
-    ApplyGraphicsState();
-
-    // Re-initialize subsystems with new device
-    if (m_textureSystem)
-        m_textureSystem->Initialize(m_device.Get(), m_context.Get());
-    if (m_materialSystem)
-        m_materialSystem->Initialize(m_device.Get(), m_context.Get());
-    if (m_lightingSystem)
-        m_lightingSystem->Initialize(m_device.Get(), m_context.Get());
-    if (m_assetPipeline)
-        m_assetPipeline->Initialize(m_device.Get(), m_context.Get());
+    // Recreate every device-dependent resource ReleaseAllDeviceResources() tore
+    // down — render targets and states, the device-backed subsystems, the
+    // renderer-integration caches and the basic shader pipeline. Re-running only
+    // a handful of them used to leave the renderer with null shaders and an
+    // uninitialized constant-buffer ring while reporting a successful recovery.
+    hr = CreateDeviceDependentResources();
+    if (FAILED(hr))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                        "DEVICE LOST RECOVERY: CreateDeviceDependentResources failed (HR=0x%08lX)",
+                        static_cast<long>(hr));
+        return false;
+    }
 
     m_deviceLostRecoveryAttempts = 0; // Reset on success
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DEVICE LOST RECOVERY: Successfully recreated D3D11 device");

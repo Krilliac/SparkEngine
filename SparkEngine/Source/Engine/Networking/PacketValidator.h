@@ -1,10 +1,15 @@
 /**
  * @file PacketValidator.h
- * @brief Network packet validation and sanitization layer
+ * @brief Network packet validation layer
  *
  * Validates incoming network packets against per-message-type schemas before
- * they reach game logic. Enforces maximum payload sizes, string sanitization,
- * and directional constraints (client-only vs server-only messages).
+ * they reach game logic. Enforces maximum payload sizes, text-field acceptance
+ * rules, and directional constraints (client-only vs server-only messages).
+ *
+ * The receive path REJECTS a packet whose text fields fail the acceptance rule;
+ * it does not rewrite them. SanitizeString is an opt-in helper for a caller that
+ * wants to clean a string it owns (an editor field, a locally composed message)
+ * and is not part of ValidatePacket — see its declaration below.
  *
  * Sits between raw packet deserialization and message dispatch in
  * NetworkManager::ProcessIncoming().
@@ -51,6 +56,9 @@ namespace Spark::Net
         std::string reason;
     };
 
+    /// stringFieldOffset value meaning "this payload carries no text fields".
+    inline constexpr size_t NO_STRING_FIELDS = static_cast<size_t>(-1);
+
     /**
      * @brief Per-message-type validation schema
      */
@@ -61,7 +69,20 @@ namespace Spark::Net
         bool requiresAuth = false;     ///< Sender must be an authenticated client
         bool allowedFromClient = true; ///< Clients may send this message type
         bool allowedFromServer = true; ///< Server may send this message type
-        bool sanitizeStrings = false;  ///< Strip control characters from string payloads
+
+        /**
+         * @brief Byte offset at which the payload's length-prefixed text fields begin.
+         *
+         * NO_STRING_FIELDS (the default) means the payload is opaque binary and no
+         * text validation is performed. Any other value declares that from that
+         * offset to the end of the payload the bytes are a sequence of NetBuffer
+         * strings (uint16 little-endian length, then that many bytes), which
+         * ValidatePacket walks and passes through ValidateString. Only the schema
+         * author knows the layout, which is why this is a schema field and not a
+         * bool: a producer with a leading binary header must register its own
+         * schema with the matching offset.
+         */
+        size_t stringFieldOffset = NO_STRING_FIELDS;
     };
 
     /**
@@ -131,7 +152,28 @@ namespace Spark::Net
         [[nodiscard]] bool ValidateString(const std::string& str) const;
 
         /**
+         * @brief Validate the length-prefixed text fields of a payload.
+         *
+         * Walks NetBuffer string fields from @p offset to the end of @p payload and
+         * runs ValidateString on each. ValidatePacket is the only in-tree caller;
+         * it is public so a message handler that has already decoded a payload can
+         * apply the same acceptance rule, and so the rule is directly testable.
+         *
+         * @param payload Raw packet payload.
+         * @param offset  Byte offset of the first length prefix.
+         * @return true when every field is well-formed, in-bounds, and safe.
+         */
+        [[nodiscard]] bool ValidateStringFields(const std::vector<uint8_t>& payload, size_t offset) const;
+
+        /**
          * @brief Sanitize a string by removing control characters
+         *
+         * NOT used by the receive path: ValidatePacket rejects a packet with
+         * unacceptable text rather than rewriting it, because a mutated payload no
+         * longer matches what the sender signed or what the peer believes it sent.
+         * This is a helper for a caller that owns the string and wants it cleaned
+         * (locally composed text, an editor field). It has no in-tree caller today.
+         *
          * @param str The string to sanitize (modified in place)
          */
         void SanitizeString(std::string& str) const;

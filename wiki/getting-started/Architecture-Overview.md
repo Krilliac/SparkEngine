@@ -204,6 +204,8 @@ ctx->ShutdownAll();
 
 `InitializeAll()` performs a topological sort of subsystem entries based on declared dependencies. It returns `false` if a dependency cycle is detected or any subsystem fails to initialize.
 
+> **Not the production init path.** `EngineContext::InitializeAll`/`ShutdownAll` (the R1.2 dependency-ordered registry) is kept because `Tests/harden/Test_tests_enginecontext_real.cpp` and six other test files exercise it. The production order is `LifecycleCompositionRoot` (`Core/Lifecycle/`), whose `InitDebug` stage now sorts first (`LifecycleOrder::Diagnostics`); the gameplay lifecycle registers the engine-lifetime services on `EngineContext` and nulls them at shutdown.
+
 #### Concrete EngineContext API Summary
 
 This table describes host-internal construction and teardown, not the public

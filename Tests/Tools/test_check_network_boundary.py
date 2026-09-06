@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -576,6 +577,125 @@ void Added() {
         self.assertIn("tools/nested/gvisor-wine-shim.c", paths)
         self.assertNotIn("Tools/shipped.cpp", paths)
         self.assertNotIn("Tools/gvisor-wine-shim.c", paths)
+
+    def make_git_repository(self, root: Path) -> bool:
+        """Initialise a throwaway checkout at *root*; False when git is unusable."""
+
+        commands = (
+            ("git", "init", "--quiet", str(root)),
+            ("git", "-C", str(root), "config", "user.email", "guard@example.invalid"),
+            ("git", "-C", str(root), "config", "user.name", "Guard Test"),
+        )
+        for command in commands:
+            try:
+                completed = subprocess.run(command, capture_output=True, timeout=60, check=False)
+            except (OSError, subprocess.SubprocessError):
+                return False
+            if completed.returncode != 0:
+                return False
+        return True
+
+    def git_add(self, root: Path, relative: str) -> None:
+        subprocess.run(["git", "-C", str(root), "add", "--", relative],
+                       capture_output=True, timeout=60, check=True)
+
+    def test_inventory_coverage_ignores_untracked_working_directory_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            if not self.make_git_repository(root):
+                self.skipTest("git is unavailable for the tracked-inventory test")
+            shipped_root = root / "Tools"
+            shipped_root.mkdir()
+            (shipped_root / "shipped.cpp").write_text("int shipped;\n", encoding="utf-8")
+            self.git_add(root, "Tools/shipped.cpp")
+
+            stray_root = root / "build-local-flake" / "Source"
+            stray_root.mkdir(parents=True)
+            (stray_root / "Stray.cpp").write_text(
+                "void Added() { (void)::socket(AF_INET, SOCK_DGRAM, 0); }\n", encoding="utf-8")
+            live_root = root / "LiveProjects" / "Demo" / "Source"
+            live_root.mkdir(parents=True)
+            (live_root / "GameModule.cpp").write_text("int live;\n", encoding="utf-8")
+
+            with mock.patch.object(boundary, "SOURCE_ROOTS", (shipped_root,)):
+                findings = boundary.scan_raw_socket_inventory(root, allowances=())
+
+        messages = [finding.message for finding in findings]
+        self.assertNotIn("first-party source is outside the explicit network inventory", messages)
+
+    def test_inventory_coverage_still_fails_on_tracked_source_outside_the_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            if not self.make_git_repository(root):
+                self.skipTest("git is unavailable for the tracked-inventory test")
+            shipped_root = root / "Tools"
+            shipped_root.mkdir()
+            (shipped_root / "shipped.cpp").write_text("int shipped;\n", encoding="utf-8")
+            self.git_add(root, "Tools/shipped.cpp")
+
+            new_root = root / "SparkNewService" / "src"
+            new_root.mkdir(parents=True)
+            (new_root / "Listener.cpp").write_text("int listener;\n", encoding="utf-8")
+            self.git_add(root, "SparkNewService/src/Listener.cpp")
+
+            with mock.patch.object(boundary, "SOURCE_ROOTS", (shipped_root,)):
+                findings = boundary.scan_raw_socket_inventory(root, allowances=())
+
+        paths = {
+            finding.path.relative_to(root).as_posix()
+            for finding in findings
+            if finding.message == "first-party source is outside the explicit network inventory"
+        }
+        self.assertEqual(paths, {"SparkNewService/src/Listener.cpp"})
+
+    def test_inventory_coverage_fails_when_git_lists_no_tracked_files(self) -> None:
+        """An empty tracked listing must be an error, never a clean inventory.
+
+        A sparse checkout, a wrong --work-tree, or a git that stops enumerating
+        all produce `git ls-files` success with no output. Judging that as
+        "nothing outside the roots" reports the reassuring answer without ever
+        having looked at a file.
+        """
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            if not self.make_git_repository(root):
+                self.skipTest("git is unavailable for the tracked-inventory test")
+            shipped_root = root / "Tools"
+            shipped_root.mkdir()
+            (shipped_root / "shipped.cpp").write_text("int shipped;\n", encoding="utf-8")
+            # Deliberately never `git add`ed: the index stays empty while a
+            # shipped-looking source sits outside the explicit roots.
+            stray_root = root / "SparkNewService" / "src"
+            stray_root.mkdir(parents=True)
+            (stray_root / "Listener.cpp").write_text("int listener;\n", encoding="utf-8")
+
+            self.assertEqual(boundary._tracked_inventory_candidates(root), [])
+            with mock.patch.object(boundary, "SOURCE_ROOTS", (shipped_root,)):
+                findings = boundary.scan_raw_socket_inventory(root, allowances=())
+
+        self.assert_finding(findings, "git listed no tracked files")
+
+    def test_inventory_coverage_falls_back_to_the_walk_without_a_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assertFalse((root / ".git").exists())
+            shipped_root = root / "Tools"
+            shipped_root.mkdir()
+            (shipped_root / "shipped.cpp").write_text("int shipped;\n", encoding="utf-8")
+            stray_root = root / "SparkNewService" / "src"
+            stray_root.mkdir(parents=True)
+            (stray_root / "Listener.cpp").write_text("int listener;\n", encoding="utf-8")
+
+            with mock.patch.object(boundary, "SOURCE_ROOTS", (shipped_root,)):
+                findings = boundary.scan_raw_socket_inventory(root, allowances=())
+
+        paths = {
+            finding.path.relative_to(root).as_posix()
+            for finding in findings
+            if finding.message == "first-party source is outside the explicit network inventory"
+        }
+        self.assertEqual(paths, {"SparkNewService/src/Listener.cpp"})
 
     def test_source_inventory_scans_inl_and_objective_cxx_files(self) -> None:
         self.assertTrue({".inl", ".mm"}.issubset(boundary.SOURCE_SUFFIXES))

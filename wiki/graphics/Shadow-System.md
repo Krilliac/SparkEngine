@@ -92,7 +92,19 @@ The `ShadowTile` struct stores:
 
 ### GPU Resources
 
-`CreateGPUResources(device)` allocates the atlas as an R32_FLOAT depth texture through the [RHI](RHI-Abstraction-Layer.md). `BindForShadowPass(cmdList, lightId)` sets the viewport to the tile region for a given light's shadow rendering pass. The atlas texture is then bound for sampling in the lighting shader via `GetAtlasTexture()`.
+`CreateGPUResources(device)` allocates the atlas as an R32_FLOAT depth texture through the [RHI](RHI-Abstraction-Layer.md). `BindForShadowPass(cmdList, lightId)` sets the viewport to the tile region for a given light's shadow rendering pass, and `GetAtlasTexture()` exposes the atlas for sampling.
+
+> **What actually ships (2026-09):** `ShadowAtlas::BindForShadowPass` and the GPU
+> atlas texture (`CreateGPUResources`) have **no production caller**. The real
+> shadow maps are per-light D32 depth textures in `LightingSystem::m_shadowMaps`,
+> rasterized by a depth-only pass (basic VS, no PS; `MeshDrawCommand::castShadows`
+> selects casters) on the Deferred path (via `LightingPass`) and the
+> RenderGraphBased path (via `ShadowPass`) for ECS-submitted meshes. The default
+> Forward pipeline has no shadow term, and neither pixel shader implements
+> PCF/VSM/PCSS filtering yet. `LightingSystem::Update` calls
+> `CachedShadowAtlas::RequestShadow` for every shadow-casting light and
+> `RenderShadowMaps` calls `MarkRendered`, so the cache bookkeeping below is live
+> while the atlas-backed *sampling* path described here is not.
 
 ### Atlas Metrics
 
@@ -276,6 +288,8 @@ for (const Light& light : activeLights)
 
 // Only the list returned here actually needs a depth pass this frame —
 // static lights whose state + caster hashes are unchanged are skipped.
+// NOTE: the engine's LightingSystem renders into per-light depth textures here;
+// BindForShadowPass / the atlas texture are not used by production code.
 for (uint32_t lightId : shadows.GetShadowsToRender())
 {
     shadows.BindForShadowPass(cmdList, lightId); // sets the tile viewport

@@ -76,6 +76,13 @@ namespace Spark::Gameplay
         [[nodiscard]] bool IsEmpty() const { return itemId == 0 || count == 0; }
     };
 
+    /** @brief Serializable per-entity inventory state (slot layout plus capacity). */
+    struct InventorySnapshot
+    {
+        uint32_t maxSlots = 0;            ///< Capacity at capture time. 0 = the entity had no inventory.
+        std::vector<InventorySlot> slots; ///< Slots in capture order, including empty ones.
+    };
+
     // ============================================================================
     // Inventory System
     // ============================================================================
@@ -141,6 +148,22 @@ namespace Spark::Gameplay
         /// @brief Move items from one entity's inventory to another
         /// @return true if the transfer succeeded
         bool TransferItem(uint32_t fromEntity, uint32_t toEntity, uint32_t itemId, uint32_t count = 1);
+
+        // -- Persistence --
+
+        /// @brief Capture all inventory state for one entity, including empty slots.
+        /// @return A snapshot with maxSlots == 0 when the entity owns no inventory state.
+        [[nodiscard]] InventorySnapshot CaptureEntityState(uint32_t entityId) const;
+
+        /// @brief Validate a snapshot against registered item definitions without changing live state.
+        [[nodiscard]] bool ValidateEntityState(const InventorySnapshot& snapshot) const;
+
+        /// @brief Atomically replace one entity's inventory after validating the snapshot.
+        /// @return false (leaving live state untouched) when the snapshot is invalid.
+        bool RestoreEntityState(uint32_t entityId, const InventorySnapshot& snapshot);
+
+        /// @brief Remove all inventory state owned by an entity that is being destroyed or replaced.
+        void ClearEntityState(uint32_t entityId);
 
         // -- Console --
 

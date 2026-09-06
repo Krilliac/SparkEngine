@@ -60,9 +60,18 @@ namespace Spark
 
         IRHIShader* ShaderCache::GetShader(const std::string& name, IRHIDevice* device)
         {
+            // Borrowed pointer: valid until the next Clear()/ReloadAll().
+            return GetShaderShared(name, device).get();
+        }
+
+        std::shared_ptr<IRHIShader> ShaderCache::GetShaderShared(const std::string& name, IRHIDevice* device)
+        {
+            if (!device)
+                return nullptr;
+
             auto cached = m_loadedShaders.find(name);
             if (cached != m_loadedShaders.end())
-                return cached->second.get();
+                return cached->second;
 
             auto entry = m_entries.find(name);
             if (entry == m_entries.end())
@@ -118,11 +127,10 @@ namespace Spark
                 desc.bytecode = buffer.data();
                 desc.bytecodeSize = size;
 
-                auto shader = device->CreateShader(desc);
-                IRHIShader* raw = shader.get();
+                std::shared_ptr<IRHIShader> shader = device->CreateShader(desc);
                 if (shader)
-                    m_loadedShaders[name] = std::move(shader);
-                return raw;
+                    m_loadedShaders[name] = shader;
+                return shader;
             }
             else
             {
@@ -133,11 +141,10 @@ namespace Spark
                 desc.sourceCode = std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
                 desc.filePath = filePath;
 
-                auto shader = device->CreateShader(desc);
-                IRHIShader* raw = shader.get();
+                std::shared_ptr<IRHIShader> shader = device->CreateShader(desc);
                 if (shader)
-                    m_loadedShaders[name] = std::move(shader);
-                return raw;
+                    m_loadedShaders[name] = shader;
+                return shader;
             }
         }
 
@@ -149,13 +156,15 @@ namespace Spark
 
         void ShaderCache::ReloadAll(IRHIDevice* device)
         {
-            // Destroy existing shaders
+            // Drop the cache's reference to every loaded shader. Consumers that
+            // pinned a shader via GetShaderShared() keep theirs alive, so a
+            // reload can never free a shader a pipeline state still points at.
             Clear(device);
 
             // Reload all registered shaders
             for (const auto& [name, entry] : m_entries)
             {
-                GetShader(name, device);
+                GetShaderShared(name, device);
             }
         }
 
@@ -171,7 +180,7 @@ namespace Spark
         }
 
         bool RHIBridge::Initialize(void* windowHandle, uint32_t width, uint32_t height, GraphicsBackend backend,
-                                   bool enableDebug)
+                                   bool enableDebug, bool allowHeadlessFallback)
         {
             SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
             SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RHIBridge::Initialize %ux%u", width, height);
@@ -318,6 +327,19 @@ namespace Spark
 
             if (!deviceReady)
             {
+                // A windowed request that cannot get a GPU must fail, not silently
+                // become headless: the caller would present an empty window and
+                // report a successful initialization.
+                const bool headlessRequested = (windowHandle == nullptr) || backend == GraphicsBackend::None;
+                if (!headlessRequested && !allowHeadlessFallback)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "All GPU backends failed for a windowed surface — refusing the silent headless "
+                                    "fallback (pass allowHeadlessFallback=true to opt in)");
+                    m_device.reset();
+                    return false;
+                }
+
                 SPARK_LOG_WARN(Spark::LogCategory::Graphics,
                                "All GPU backends failed — falling back to NullRHIDevice (headless)");
                 m_device = std::make_unique<NullRHIDevice>();

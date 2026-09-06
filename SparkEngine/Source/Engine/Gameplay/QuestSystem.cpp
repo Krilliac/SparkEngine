@@ -4,11 +4,15 @@
  */
 
 #include "QuestSystem.h"
+#include "InventorySystem.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/SparkConsole.h"
+#include "../Events/EventSystem.h"
 
 #include <algorithm>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace Spark::Gameplay
 {
@@ -267,12 +271,12 @@ namespace Spark::Gameplay
         return true;
     }
 
-    void QuestSystem::CompleteQuest(uint32_t entityId, uint32_t questId)
+    bool QuestSystem::CompleteQuest(uint32_t entityId, uint32_t questId)
     {
         auto entityIt = m_entityQuests.find(entityId);
         if (entityIt == m_entityQuests.end())
         {
-            return;
+            return false;
         }
 
         auto questIt = entityIt->second.find(questId);
@@ -280,22 +284,65 @@ namespace Spark::Gameplay
         {
             SPARK_LOG_WARN(Spark::LogCategory::Game, "QuestSystem: Cannot complete quest %u for entity %u — not active",
                            questId, entityId);
-            return;
+            return false;
+        }
+
+        const QuestDefinition* def = GetQuestDef(questId);
+
+        // Deliver the declared item rewards BEFORE the completion is committed. A quest
+        // can only be completed once, so a reward granted after the state flip is
+        // destroyed outright when the inventory is full — the quest can never be
+        // re-completed to collect it. Paying first lets a refused delivery leave the
+        // quest Active and retryable once the player frees a slot.
+        // XP stays policy-owned: the engine has no XP sink of its own.
+        if (def && !m_policy && !def->itemRewards.empty())
+        {
+            auto& inventory = InventorySystem::GetInstance();
+            std::vector<std::pair<uint32_t, uint32_t>> granted;
+            granted.reserve(def->itemRewards.size());
+
+            for (const auto& [itemId, count] : def->itemRewards)
+            {
+                if (inventory.AddItem(entityId, itemId, count))
+                {
+                    granted.emplace_back(itemId, count);
+                    continue;
+                }
+
+                // Undo the partial delivery so a refused completion never leaves a
+                // half-paid reward behind, then report the refusal to the caller.
+                for (const auto& [grantedItem, grantedCount] : granted)
+                {
+                    inventory.RemoveItem(entityId, grantedItem, grantedCount);
+                }
+
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "QuestSystem: Entity %u cannot receive reward item %u x%u from quest %u — quest stays "
+                               "active so the reward is not lost",
+                               entityId, itemId, count, questId);
+                return false;
+            }
         }
 
         questIt->second.state = QuestState::Completed;
 
-        const QuestDefinition* def = GetQuestDef(questId);
         if (def)
         {
             if (m_policy)
             {
                 m_policy->OnQuestCompleted(entityId, *def);
             }
+
             SPARK_LOG_INFO(Spark::LogCategory::Game,
                            "QuestSystem: Entity %u completed quest '%s' (id=%u, xp=%u, %zu item rewards)", entityId,
                            def->name.c_str(), questId, def->xpReward, def->itemRewards.size());
+
+            // Publish after the completion is committed so subscribers (for example the
+            // editor's OnQuestComplete event response trigger) observe the final state.
+            Spark::EventBus::Global().Publish<Spark::QuestCompletedEvent>({entityId, questId, def->name});
         }
+
+        return true;
     }
 
     // ============================================================================

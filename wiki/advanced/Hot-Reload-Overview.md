@@ -1,12 +1,12 @@
 # Hot Reload Overview
 
-SparkEngine supports hot-reloading across multiple subsystems: shaders, scripts, game modules, materials, and assets. This page provides a unified overview of all hot-reload capabilities, how they work, and how to use them during development.
+SparkEngine contains hot-reload code for several subsystems: shaders, scripts, game modules, materials, and assets. This page provides a unified overview of those capabilities, how they work, and which ones are actually driven by the shipped engine. **Shader hot reload is not active in production**: the `ShaderHotReload` watcher is never initialized or enabled by the engine (only registered during compilation), so its per-frame `Update()` is a no-op.
 
 **Relevant sources:**
 - `SparkEngine/Source/Graphics/ShaderHotReload.h` (dedicated shader hot-reload with file watcher)
 - `SparkEngine/Source/Graphics/Shader.h` (shader management and compilation)
 - `SparkEngine/Source/Engine/Scripting/ScriptHotReload.h` (script hot-reload)
-- `SparkEngine/Source/Core/ModuleHotReload.h` (module hot-reload)
+- `SparkEngine/Source/Core/ModuleHotReload.h` (module hot-reload: `Spark::ModuleHotReloadManager`, polled by the platform frame loops; the older `Engine/HotReload/ModuleHotReload` singleton is no longer in the lifecycle)
 - `SparkEngine/Source/Graphics/MaterialSystem.h` (material hot-reload)
 - `SparkEngine/Source/Graphics/AssetPipeline.h` (asset hot-reload)
 
@@ -61,7 +61,12 @@ Hot-reloading allows developers to modify assets, code, and data while the engin
 
 ## Shader Hot Reload
 
-Monitors shader source files (HLSL) for changes and recompiles them at runtime.
+**Not enabled in the shipped engine (`stable-v1`).** `ShaderHotReload::Initialize()` /
+`SetEnabled()` have no production caller; the watcher only registers directories
+while shaders are compiled. When driven by a host or test, a modified file is now
+really recompiled through `D3DCompile` (failures are reported instead of the old
+fake success), but no consumer yet recreates the D3D11 shader object from the
+reloaded bytecode. The description below is the intended flow, not shipped behavior.
 
 **How it works:**
 1. `Shader` tracks each shader file's `FILETIME` (last write time)
@@ -79,7 +84,7 @@ graphicsEngine.SetShaderHotReloadEnabled(true);
 graphicsEngine.HotReloadShaders();
 ```
 
-**State preservation:** Shader hot-reload is seamless — constant buffers, render targets, and pipeline state are unaffected. Only the compiled shader bytecode is swapped.
+**State preservation (design intent):** constant buffers, render targets, and pipeline state would be unaffected; only the compiled shader bytecode is swapped. Nothing in the shipped engine performs that swap today.
 
 ---
 
@@ -183,7 +188,7 @@ The `AssetPipeline` detects changes to source asset files and re-imports them.
 
 | System | Detection | Debounce | State Preserved | Latency |
 |--------|-----------|----------|-----------------|---------|
-| Shader | FILETIME polling | No | Full (seamless) | ~1 frame |
+| Shader | FILETIME polling (watcher not enabled in production) | No | n/a -- no device-shader swap implemented | n/a |
 | Script | File watcher | Yes (~200ms) | Partial (globals lost) | ~200ms + compile |
 | Module | DLL timestamp | No | None (re-initialize) | ~1s (DLL load) |
 | Material | File timestamp | No | Full (seamless) | ~1 frame + compile |
@@ -212,7 +217,7 @@ The `AssetPipeline` detects changes to source asset files and re-imports them.
 
 3. **Keep shader interfaces stable.** Changing constant buffer layouts requires all dependent code to update simultaneously. Add fields at the end of constant buffers when possible.
 
-4. **Test with hot-reload during development.** Enable shader and script hot-reload by default in debug builds. Discovering reload issues early is cheaper than fixing them later.
+4. **Test with hot-reload during development.** Script and module hot-reload can be exercised in debug builds; shader hot-reload has no production enable path yet.
 
 5. **Don't rely on script constructor order.** After script hot-reload, objects may initialize in a different order. Use explicit initialization functions instead.
 

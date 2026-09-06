@@ -144,7 +144,12 @@ namespace SparkEditor
         /// the project from the process working directory.
         static std::string GetActiveProjectPath();
 
-        void SetEngineRoot(const std::string& engineRoot) { m_engineRoot = engineRoot; }
+        void SetEngineRoot(const std::string& engineRoot)
+        {
+            m_engineRoot = engineRoot;
+            m_templateRootResolved = false;
+            m_resolvedTemplateRoot.clear();
+        }
         void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
 
         // --- Recent projects (thread-safe via m_recentProjectsMutex) ---
@@ -184,6 +189,10 @@ namespace SparkEditor
       private:
         bool LoadProjectFile(const std::string& sparkprojectPath);
         bool SaveProjectFile();
+
+        /// @brief Template package root for this session, resolved once and cached.
+        /// Empty when no template root could be located.
+        const std::string& ResolvedTemplateRoot() const;
         bool CreateProjectFromTemplateInternal(const std::string& projectName, const std::string& projectPath,
                                                const std::string& templateName, const std::string& description,
                                                const std::string& resolvedTemplateRoot);
@@ -208,6 +217,12 @@ namespace SparkEditor
         std::vector<RecentProject> m_recentProjects;
         mutable std::mutex m_recentProjectsMutex; ///< Protects m_recentProjects from concurrent access
         std::string m_engineRoot;
+        /// Cached result of ResolveTemplateRoot(m_engineRoot). That call walks up to eight ancestor
+        /// directories of the executable and runs a directory_iterator over each candidate; the template
+        /// root cannot change during a session, and SaveProjectFile() is on the hot path for every scene
+        /// open and save, so it is resolved once.
+        mutable std::string m_resolvedTemplateRoot;
+        mutable bool m_templateRootResolved = false;
         bool m_hasOpenProject = false;
         bool m_isInitialized = false;
 

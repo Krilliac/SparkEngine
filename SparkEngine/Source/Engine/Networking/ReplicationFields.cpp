@@ -100,16 +100,19 @@ namespace Spark::Net
         std::memcpy(buffer.data() + offset, &m_dirtyBits, sizeof(uint64_t));
     }
 
-    size_t ReplicatedFieldSet::ReadDirtyMask(const std::vector<uint8_t>& buffer, size_t readPos)
+    bool ReplicatedFieldSet::ReadDirtyMask(const std::vector<uint8_t>& buffer, size_t readPos)
     {
-        if (readPos + sizeof(uint64_t) > buffer.size())
+        // Subtraction form: `readPos + kDirtyMaskBytes` is an unchecked size_t
+        // addition, and the operand comes from a decode cursor.
+        if (buffer.size() < kDirtyMaskBytes || readPos > buffer.size() - kDirtyMaskBytes)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Network, "ReadDirtyMask: buffer too small (readPos: %zu, bufSize: %zu)",
                            readPos, buffer.size());
-            return 0;
+            // The mask is deliberately left untouched; the caller must abandon the packet.
+            return false;
         }
-        std::memcpy(&m_dirtyBits, buffer.data() + readPos, sizeof(uint64_t));
-        return sizeof(uint64_t);
+        std::memcpy(&m_dirtyBits, buffer.data() + readPos, kDirtyMaskBytes);
+        return true;
     }
 
     uint8_t ReplicatedFieldSet::GetFieldCount() const

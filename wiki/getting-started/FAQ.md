@@ -247,7 +247,7 @@ be linked elsewhere but is not the factory's cross-platform fallback.
 
 ### Does SparkEngine support mods?
 
-An experimental [Mod System](../subsystems/Mod-System.md) handles discovery, load order, dependency checks, and enable/disable toggling. The editor includes a Modding Panel, but mod delivery is outside `stable-v1`.
+An experimental [Mod System](../subsystems/Mod-System.md) handles discovery, load order, dependency checks, and enable/disable toggling. The editor's Modding Panel scans a mods directory, enables/disables mods, and reloads them through the engine `ModSystem` (it is no longer a placeholder), but mod delivery is outside `stable-v1`.
 
 ### What asset extensions does the pipeline recognize?
 
@@ -290,7 +290,10 @@ Check which job failed:
 The VS2026 and macOS jobs are job-level advisory. MinGW is a manual
 `workflow_dispatch` development lane rather than a required push gate. The
 `clang-tidy` job is a dependency of `required-ci-gate` (even though individual
-diagnostics may be advisory), so its job/configuration outcome is blocking. See
+diagnostics may be advisory), so its job/configuration outcome is blocking. Note
+that no branch protection or ruleset is active on `Working` today, so
+`required-ci-gate` is a post-hoc publication gate rather than a merge gate
+(`CI-100`). See
 [Contributing](../advanced/Contributing.md) for the full CI overview.
 
 ### Where do I get help?

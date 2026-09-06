@@ -1,6 +1,6 @@
 # Shader Pipeline
 
-SparkEngine supports HLSL and GLSL shader authoring with cross-compilation through the [RHI pipeline](../subsystems/Rendering-and-Graphics.md). The `SparkShaderCompiler` tool handles offline compilation. The runtime `Shader` class manages loading, compilation, variant management, constant buffers, and hot-reloading. The `ShaderCacheWarming` system precompiles shader permutations on background threads to eliminate runtime hitches.
+SparkEngine authors shaders in HLSL. On Windows the `SparkShaderCompiler` tool and the runtime compile HLSL to DXBC for real through `d3dcompiler_47` (`D3DCompile`); DXIL, SPIR-V, GLSL, and MSL targets are explicit not-integrated failures (no DXC or SPIRV-Cross is linked), not success-with-empty-bytecode. The runtime `Shader` class (loading, variants, constant buffers, hot reload) is not instantiated by the shipped engine: the `GraphicsEngine`-side member was deleted, and `ShaderHotReload` is never enabled in production, so runtime shader hot reload is **not active in `stable-v1`**. The `ShaderCacheWarming` system precompiles shader permutations on background threads.
 
 **Source:** `SparkEngine/Source/Graphics/Shader.h`, `SparkEngine/Source/Graphics/ShaderVariantSystem.h`, `SparkShaderCompiler/src/main.cpp`
 
@@ -56,7 +56,7 @@ SparkEngine supports HLSL and GLSL shader authoring with cross-compilation throu
 Shaders/
 +-- HLSL/           # DirectX shader source files
 +-- GLSL/           # OpenGL shader source files
-+-- Compiled/       # Pre-compiled DirectX bytecode (.cso)
++-- Compiled/       # Generated DXR/foliage bytecode (.cso); no prebuilt Basic*.cso is shipped any more
 ```
 
 ---
@@ -710,19 +710,19 @@ for each character c in (sourcePath + entryPoint + stage + defines):
 
 ### Overview
 
-The standalone offline shader compilation tool compiles HLSL/GLSL shaders for all supported backends using the RHI cross-compilation pipeline (`Spark::RHI::CompileShader`).
+The standalone offline shader compilation tool compiles HLSL to DXBC for `-backend d3d11` and `-backend d3d12` on Windows through `Spark::RHI::CompileShader` (`d3dcompiler_47`). Every other target fails closed with exit code 1: HLSL->SPIR-V reports `HLSL->SPIR-V cross-compilation requires DXC (dxcompiler.dll); not integrated`, and HLSL->GLSL reports that SPIRV-Cross is not integrated.
 
 ### Basic Usage
 
 ```bash
-# Compile HLSL to DirectX 11 bytecode
+# Compile HLSL to DirectX 11 bytecode (real D3DCompile; broken HLSL fails with exit code 1)
 SparkShaderCompiler BasicVS.hlsl -stage vertex -backend d3d11 -o BasicVS.cso
 
-# Cross-compile HLSL to SPIR-V for Vulkan
-SparkShaderCompiler PBR.hlsl -stage pixel -backend vulkan -o PBR.spv
+# Compile HLSL to DXBC for the D3D12 backend
+SparkShaderCompiler PBR.hlsl -stage pixel -backend d3d12 -o PBR.cso
 
-# Compile GLSL for OpenGL
-SparkShaderCompiler Water.glsl -stage vertex -backend opengl -o Water.glsl.spv
+# Not integrated: -backend vulkan / opengl / metal exit 1 with
+# "HLSL->SPIR-V cross-compilation requires DXC (dxcompiler.dll); not integrated"
 
 # Validate without producing output
 SparkShaderCompiler PBR.hlsl -stage pixel -validate
@@ -881,6 +881,14 @@ The engine supports embedded shaders compiled directly into the executable, elim
 
 ## Hot Reloading
 
+**Not active in `stable-v1`.** `ShaderHotReload` registers watch directories during
+shader compilation, but `Initialize()`/`SetEnabled()` are never called by the
+shipped engine, so its `Update()` is a no-op; the `Shader` class below is likewise
+not instantiated by `GraphicsEngine`. When the watcher *is* driven (tests, custom
+hosts), a change now compiles for real through `D3DCompile` -- broken HLSL fails
+and valid HLSL yields DXBC -- but nothing yet recreates the D3D11 shader object
+from the new blob and swaps it into the bound pipeline.
+
 The `Shader` class can monitor loaded shader files for modifications at runtime; this is not controlled by a root CMake option. Call `HotReloadShaders()` periodically (e.g., once per second) to check for changes and recompile:
 
 ```cpp
@@ -910,7 +918,7 @@ See [Asset Pipeline](Asset-Pipeline.md) for broader hot-reload details.
 - **Constant buffer updates**: Each `Update*Constants()` call performs a `Map`/`Unmap` on the GPU buffer. Batch updates by only calling when data actually changes.
 - **Shader variants**: Each variant is a separate compiled shader. Limit the number of active variants to avoid excessive GPU memory usage and binding overhead.
 - **Cache warming thread safety**: The `ShaderCacheWarming` class uses a `std::mutex` for all cache access and an `std::atomic<bool>` for the warming flag. The background thread compiles shaders but must acquire the lock to store results.
-- **Disk cache**: Loading bytecode from disk (via `LoadCacheFromDisk`) is significantly faster than recompilation. Use disk caching for shipping builds.
+- **Disk cache**: Loading bytecode from disk (via `LoadCacheFromDisk`) is significantly faster than recompilation. The Windows lookup path exists and a cache hit no longer re-stores the blob, but `ShaderDiskCache` is only initialized by `Shader::Initialize`, which the shipped engine never reaches -- it is not active in shipping builds.
 
 ---
 
@@ -920,8 +928,8 @@ See [Asset Pipeline](Asset-Pipeline.md) for broader hot-reload details.
 |--------------------------------------|-------------------------------------------|-------------------------------------------------|
 | `LoadVertexShader` returns E_FAIL    | HLSL syntax error or missing include      | Check `D3DCompile` error blob output in logs    |
 | Shader appears all black             | Constant buffer not updated               | Ensure `UpdatePerFrameConstants` is called      |
-| Hot reload not detecting changes     | Hot reload disabled                       | Call `Console_SetHotReload(true)`               |
-| Cross-compilation fails              | Missing SPIR-V tools or RHI backend       | Ensure Vulkan SDK is installed for SPIR-V       |
+| Hot reload not detecting changes     | Hot reload is not enabled in the shipped engine | Expected in `stable-v1`; see Hot Reloading above |
+| Cross-compilation fails              | DXC / SPIRV-Cross are not integrated      | Only `-backend d3d11`/`d3d12` compile on Windows |
 | Cache warming stalls                 | Background thread deadlock                | Check that `StopWarming()` is called in destructor |
 | Input layout mismatch               | Vertex shader signature changed            | Recreate input layout after recompilation       |
 | Batch compile reports failures       | Stage inference wrong for filename         | Use explicit `-stage` flag                      |

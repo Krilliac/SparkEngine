@@ -72,11 +72,20 @@ class ProjectilePool
 
     /**
      * @brief Initialize the projectile pool with DirectX resources
-     * @param device DirectX 11 device for projectile creation
-     * @param context DirectX 11 device context for rendering
+     * @param device DirectX 11 device for projectile creation, or nullptr on a
+     *               device-less (NullRHI / headless) host
+     * @param context DirectX 11 device context for rendering, or nullptr
      * @return HRESULT indicating success or failure
+     *
+     * The pool is populated either way, so firing, flight, collision and recycling
+     * behave identically on a headless host. Without a device the per-projectile GPU
+     * mesh is skipped and Render() is a no-op; HasRenderResources() reports which
+     * mode the pool is in.
      */
     HRESULT Initialize(ID3D11Device* device, ID3D11DeviceContext* context);
+
+    /** @brief Whether the pool owns GPU resources and can render its projectiles. */
+    [[nodiscard]] bool HasRenderResources() const noexcept { return m_hasRenderResources; }
 
     /**
      * @brief Update all active projectiles
@@ -181,4 +190,5 @@ class ProjectilePool
     ID3D11DeviceContext* m_context{nullptr};                ///< DirectX context reference
     std::vector<std::unique_ptr<Projectile>> m_projectiles; ///< All projectile objects
     std::queue<Projectile*> m_availableProjectiles;         ///< Queue of available projectiles
+    bool m_hasRenderResources{false};                       ///< True when the pool created GPU meshes
 };

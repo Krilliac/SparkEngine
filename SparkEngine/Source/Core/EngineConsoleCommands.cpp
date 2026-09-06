@@ -11,6 +11,7 @@
 #include "SubsystemConsoleCommands.h"
 #include "EngineDiagnostics.h"
 #include "EngineContext.h"
+#include "EngineRuntime.h"
 #include "AssetIntegration.h"
 #include "ModuleManager.h"
 #include "ModuleHotReload.h"
@@ -25,8 +26,10 @@
 
 #include "Utils/LogMacros.h"
 
+#include <filesystem>
 #include <sstream>
 #include <string>
+#include <system_error>
 
 namespace Spark
 {
@@ -42,15 +45,24 @@ namespace Spark
             "module_info",
             [moduleManager](const std::vector<std::string>&) -> std::string
             {
+                // HasModules(), not HasInitializedModules(): an entry whose OnLoad
+                // failed is exactly what the operator is trying to inspect, and it
+                // still holds a mapped DLL. Report both counts so a ghost entry is
+                // visible instead of passing for a usable module.
                 if (!moduleManager || !moduleManager->HasModules())
                     return "No modules loaded";
                 std::stringstream ss;
-                ss << "=== Loaded Modules (" << moduleManager->GetModuleCount() << ") ===\n";
+                ss << "=== Loaded Modules (" << moduleManager->GetInitializedModuleCount() << " initialized of "
+                   << moduleManager->GetModuleCount() << ") ===\n";
                 auto* primary = moduleManager->GetPrimaryModule();
                 if (primary)
                 {
                     auto info = primary->GetModuleInfo();
                     ss << "Primary: " << info.name << " v" << info.version << " (loadOrder=" << info.loadOrder << ")\n";
+                }
+                else
+                {
+                    ss << "Primary: none — no module completed OnLoad\n";
                 }
                 return ss.str();
             },
@@ -60,6 +72,9 @@ namespace Spark
             "module_reload",
             [moduleManager](const std::vector<std::string>& args) -> std::string
             {
+                // Reloading a module whose OnLoad failed is precisely what this
+                // command is for, so gate on entries rather than on usable
+                // instances; ReloadModule reports its own failure.
                 if (!moduleManager || !moduleManager->HasModules())
                     return "No modules loaded";
                 if (!EngineContext::Get())
@@ -70,12 +85,18 @@ namespace Spark
                 {
                     name = args[0];
                 }
+                else if (auto* primary = moduleManager->GetPrimaryModule())
+                {
+                    name = primary->GetModuleInfo().name;
+                }
                 else
                 {
-                    auto* primary = moduleManager->GetPrimaryModule();
-                    if (!primary)
+                    // Only failed entries remain: reload the first by entry name so a
+                    // rebuilt DLL can be picked up without restarting the process.
+                    const auto entries = moduleManager->GetModulePathsAndNames();
+                    if (entries.empty())
                         return "No primary module to reload";
-                    name = primary->GetModuleInfo().name;
+                    name = entries.front().first;
                 }
 
                 if (moduleManager->ReloadModule(name, EngineContext::Get()))
@@ -948,6 +969,35 @@ namespace Spark
     }
 
     // ============================================================================
+    // Log file
+    // ============================================================================
+
+    static void RegisterLogCommands(SimpleConsole& console)
+    {
+        console.RegisterCommand(
+            "log_path",
+            [](const std::vector<std::string>&) -> std::string
+            {
+                // The path InstallEngineLogSinksImpl opened. An operator (and the
+                // crash/bug-report flow that asks them for it) otherwise has to
+                // guess which per-user directory the run wrote to, and an empty
+                // path is the only visible symptom of file logging having failed.
+                const auto& runtime = GetEngineRuntime();
+                if (!runtime.logSinksInstalled || runtime.engineLogPath.empty())
+                    return "Engine file logging is unavailable: no log file could be opened this run";
+
+                std::error_code error;
+                const auto size = std::filesystem::file_size(runtime.engineLogPath, error);
+                std::stringstream ss;
+                ss << runtime.engineLogPath;
+                if (!error)
+                    ss << " (" << size << " bytes)";
+                return ss.str();
+            },
+            "Show the engine log file this run is writing to", "Core");
+    }
+
+    // ============================================================================
     // Public API — delegates to per-subsystem registrations
     // ============================================================================
 
@@ -966,6 +1016,7 @@ namespace Spark
         RegisterTimeOfDayCommands(console);
         RegisterMemoryMonitorCommands(console);
         RegisterPakCommands(console);
+        RegisterLogCommands(console);
         RegisterDiagnosticCommands(console);
         RegisterSubsystemConsoleCommands();
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine console commands registered successfully");

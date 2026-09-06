@@ -5,14 +5,23 @@
  * @date 2025
  *
  * @details
- * Extends the AudioEngine with professional audio mixing features:
- * - **Mix Buses**: Named volume groups (Master, SFX, Music, Voice, Ambient)
- *   with per-bus volume, mute, and solo controls.
- * - **Reverb Zones**: Spatial volumes that apply reverb presets to sounds
- *   played within them (cave, hall, room, outdoor).
- * - **Audio Occlusion**: Raycasted obstruction between listener and source,
- *   applying low-pass filtering and volume attenuation.
- * - **DSP Effects**: Per-bus effect chain (EQ, compressor, delay, chorus).
+ * What this class actually does, and what it only records:
+ * - **Mix Buses** (applied): named volume groups with per-bus volume, mute and
+ *   solo. AudioEngine::SetMixer() makes GetEffectiveBusVolume() scale the gain
+ *   of every source in the "SFX" / "Music" category, so bus changes are audible.
+ * - **Audio Occlusion** (applied when physics is attached): CalculateOcclusion()
+ *   traces listener -> source against the PhysicsSystem given to SetPhysics()
+ *   and AudioEngine applies the resulting volume scale to 3D sources. With no
+ *   physics system, IsOcclusionAvailable() is false and every query honestly
+ *   reports "unoccluded" rather than pretending to have traced.
+ * - **Reverb Zones** (data only): GetReverbAtPosition() blends authored zone
+ *   parameters for consumers to read. No reverb is rendered: there is no XAPO
+ *   reverb effect on any voice.
+ * - **DSP Effects** (data only): AddBusEffect() records an effect chain per bus
+ *   for tools and serialization. Nothing applies it to XAudio2 voices.
+ *
+ * @warning Do not present the reverb/DSP portions as audible processing. See
+ *          Console_GetStatus(), which labels them as configured-but-not-applied.
  */
 
 #pragma once
@@ -28,6 +37,8 @@
 #include <vector>
 #include <cstdint>
 #include <functional>
+
+class PhysicsSystem;
 
 namespace Spark::Audio
 {
@@ -192,11 +203,29 @@ namespace Spark::Audio
         void Initialize();
 
         /**
+     * @brief Release every bus, reverb zone and snapshot.
+     *
+     * Symmetric counterpart to Initialize(); call it from engine teardown so a
+     * re-initialized mixer does not inherit the previous session's buses.
+     */
+        void Shutdown();
+
+        /**
      * @brief Update the mixer (called once per frame).
      * @param listenerPos World-space listener position.
      * @param deltaTime   Frame time in seconds.
      */
         void Update(const DirectX::XMFLOAT3& listenerPos, float deltaTime);
+
+        /**
+     * @brief Attach the physics system used for occlusion traces.
+     *
+     * Until a physics system is attached, occlusion cannot be computed and
+     * CalculateOcclusion() reports unoccluded.
+     *
+     * @param physics Non-owning physics system, or nullptr to detach.
+     */
+        void SetPhysics(PhysicsSystem* physics);
 
         // --- Mix Buses ---
 
@@ -280,8 +309,8 @@ namespace Spark::Audio
      * @param sourcePos   Sound source world position.
      * @return Occlusion result with volume scale and filter settings.
      *
-     * @note Requires PhysicsSystem for raycasting. Falls back to
-     *       unobstructed if physics is unavailable.
+     * @note Requires a PhysicsSystem (see SetPhysics) for raycasting. Reports
+     *       unobstructed when occlusion is disabled or physics is unavailable.
      */
         OcclusionResult CalculateOcclusion(const DirectX::XMFLOAT3& listenerPos,
                                            const DirectX::XMFLOAT3& sourcePos) const;
@@ -291,6 +320,15 @@ namespace Spark::Audio
 
         /** @brief Check if occlusion is enabled. */
         bool IsOcclusionEnabled() const { return m_occlusionEnabled; }
+
+        /**
+     * @brief Whether an occlusion query can actually trace the world.
+     *
+     * True only when occlusion is enabled AND a physics system is attached.
+     * Callers must not treat an unoccluded result as "nothing is in the way"
+     * when this is false -- it means "not measured".
+     */
+        bool IsOcclusionAvailable() const { return m_occlusionEnabled && m_physics != nullptr; }
 
         // --- Snapshots ---
 
@@ -327,9 +365,19 @@ namespace Spark::Audio
             std::unordered_map<std::string, float> busVolumes;
         };
 
+        /**
+     * @brief Whether a bus survives the current solo selection.
+     *
+     * With no bus soloed everything is audible. Otherwise a bus is audible only
+     * if it is soloed, is an ancestor of a soloed bus (it has to pass that
+     * bus's audio through), or is a descendant of a soloed bus.
+     */
+        bool IsAudibleUnderSolo(const std::string& busName) const;
+
         std::unordered_map<std::string, BusState> m_buses;
         std::vector<ReverbZone> m_reverbZones;
         std::unordered_map<std::string, Snapshot> m_snapshots;
+        PhysicsSystem* m_physics = nullptr; ///< Non-owning; supplies occlusion traces
         bool m_occlusionEnabled = true;
         DirectX::XMFLOAT3 m_listenerPosition{0, 0, 0};
     };

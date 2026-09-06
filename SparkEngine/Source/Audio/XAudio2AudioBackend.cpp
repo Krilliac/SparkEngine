@@ -149,10 +149,8 @@ namespace Spark::Audio
 
     void XAudio2AudioBackend::SetListenerVelocity(float vx, float vy, float vz)
     {
-        (void)vx;
-        (void)vy;
-        (void)vz;
-        // AudioEngine calculates velocity from position delta internally
+        if (m_engine)
+            m_engine->SetListenerVelocity(XMFLOAT3{vx, vy, vz});
     }
 
     void XAudio2AudioBackend::Set3DEnabled(bool enabled)
@@ -163,7 +161,9 @@ namespace Spark::Audio
 
     bool XAudio2AudioBackend::IsAvailable() const
     {
-        return m_engine != nullptr && AudioEngine::IsAudioBackendAvailable();
+        // Reflects live device state, not just the platform: a lost output
+        // device makes every voice call fail until recovery succeeds.
+        return m_engine != nullptr && AudioEngine::IsAudioBackendAvailable() && m_engine->IsAvailable();
     }
 
 } // namespace Spark::Audio

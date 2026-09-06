@@ -571,6 +571,17 @@ class SPARK_GAME_API Player : public GameObject
     void Console_RegisterStateCallback(std::function<void(const PlayerState&)> callback);
 
     /**
+     * @brief Register the callback fired when health reaches zero.
+     *
+     * Invoked once per death, immediately after the player is deactivated, so
+     * the owning Game can score the death and start the respawn timer. Without
+     * it a death is terminal: Player::Update returns early forever.
+     *
+     * @param callback Death handler, or an empty function to clear it.
+     */
+    void SetDeathCallback(std::function<void()> callback) { m_deathCallback = std::move(callback); }
+
+    /**
      * @brief Apply physics settings from console
      * @param gravity Gravity force to apply
      * @param friction Friction coefficient for movement
@@ -660,6 +671,7 @@ class SPARK_GAME_API Player : public GameObject
 
     // Console callback system
     std::function<void(const PlayerState&)> m_stateCallback;
+    std::function<void()> m_deathCallback;     ///< Fired once when health reaches zero
     mutable std::recursive_mutex m_stateMutex; ///< Thread safety for state access
 
     // External references (not owned)

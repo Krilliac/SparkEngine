@@ -288,8 +288,13 @@ namespace Spark::Graphics
         }
     }
 
+#endif // SPARK_PLATFORM_WINDOWS
+
     // =========================================================================
     // .sparkterrain file loading (bridges editor output to engine runtime)
+    //
+    // Platform independent on purpose: the header declares LoadSparkTerrain unconditionally, and it is
+    // pure file I/O. The format is defined once in TerrainRenderer.h (namespace SparkTerrain).
     // =========================================================================
 
     bool TerrainRenderer::LoadSparkTerrain(const std::string& filepath, TerrainComponent& outComponent)
@@ -301,98 +306,145 @@ namespace Spark::Graphics
             return false;
         }
 
-        // Read and validate magic number (0x53504B54 = "SPKT")
+        SparkTerrain::Reader reader(file);
+
         uint32_t magic = 0;
-        file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-        if (magic != 0x53504B54)
+        uint32_t version = 0;
+        reader.ReadU32(magic);
+        reader.ReadU32(version);
+        if (reader.Failed() || magic != SparkTerrain::kMagic)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Invalid .sparkterrain magic: 0x%08X (expected 0x53504B54)",
-                            magic);
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Invalid .sparkterrain magic: 0x%08X (expected 0x%08X)",
+                            magic, SparkTerrain::kMagic);
+            return false;
+        }
+        if (version != SparkTerrain::kVersion)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Unsupported .sparkterrain version %u (expected %u): %s",
+                            version, SparkTerrain::kVersion, filepath.c_str());
             return false;
         }
 
-        // Read name
-        uint32_t nameLen = 0;
-        file.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
-        std::string name(nameLen, '\0');
-        if (nameLen > 0)
-            file.read(name.data(), nameLen);
+        std::string name;
+        reader.ReadString(name);
 
-        // Read terrain parameters
         float size = 0.0f;
         float posX = 0.0f, posY = 0.0f, posZ = 0.0f;
-        int lodLevels = 4;
+        int32_t lodLevels = 4;
         float lodBias = 1.0f;
-        int genCollider = 1;
+        uint8_t generateCollider = 1;
+        reader.ReadF32(size);
+        reader.ReadF32(posX);
+        reader.ReadF32(posY);
+        reader.ReadF32(posZ);
+        reader.ReadI32(lodLevels);
+        reader.ReadF32(lodBias);
+        reader.ReadU8(generateCollider);
 
-        file.read(reinterpret_cast<char*>(&size), sizeof(size));
-        file.read(reinterpret_cast<char*>(&posX), sizeof(posX));
-        file.read(reinterpret_cast<char*>(&posY), sizeof(posY));
-        file.read(reinterpret_cast<char*>(&posZ), sizeof(posZ));
-        file.read(reinterpret_cast<char*>(&lodLevels), sizeof(lodLevels));
-        file.read(reinterpret_cast<char*>(&lodBias), sizeof(lodBias));
-        file.read(reinterpret_cast<char*>(&genCollider), sizeof(genCollider));
+        int32_t hmWidth = 0, hmHeight = 0;
+        float hScale = 1.0f, hMin = 0.0f, hMax = 100.0f;
+        reader.ReadI32(hmWidth);
+        reader.ReadI32(hmHeight);
+        reader.ReadF32(hScale);
+        reader.ReadF32(hMin);
+        reader.ReadF32(hMax);
+        if (reader.Failed() || hmWidth < SparkTerrain::kMinHeightmapResolution ||
+            hmWidth > SparkTerrain::kMaxHeightmapResolution || hmHeight < SparkTerrain::kMinHeightmapResolution ||
+            hmHeight > SparkTerrain::kMaxHeightmapResolution)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Rejected .sparkterrain heightmap %dx%d in %s", hmWidth,
+                            hmHeight, filepath.c_str());
+            return false;
+        }
+
+        const uint64_t heightCount = static_cast<uint64_t>(hmWidth) * static_cast<uint64_t>(hmHeight);
+        if (heightCount * sizeof(float) > reader.Remaining())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Truncated .sparkterrain heightmap in %s", filepath.c_str());
+            return false;
+        }
+        std::vector<float> heights(static_cast<size_t>(heightCount));
+        reader.ReadBytes(heights.data(), heightCount * sizeof(float));
+
+        uint32_t layerCount = 0;
+        reader.ReadU32(layerCount);
+        if (reader.Failed() || layerCount > SparkTerrain::kMaxTextureLayers)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Rejected .sparkterrain layer count %u in %s", layerCount,
+                            filepath.c_str());
+            return false;
+        }
+
+        std::vector<std::string> layerDiffusePaths;
+        layerDiffusePaths.reserve(layerCount);
+        for (uint32_t i = 0; i < layerCount && !reader.Failed(); ++i)
+        {
+            std::string layerName, diffuseTexture, normalTexture, maskTexture;
+            reader.ReadString(layerName);
+            reader.ReadString(diffuseTexture);
+            reader.ReadString(normalTexture);
+            reader.ReadString(maskTexture);
+
+            // Per-layer material parameters have no TerrainComponent field yet; they are consumed so the
+            // cursor stays aligned with the writer.
+            float layerFloats[8] = {};
+            for (float& value : layerFloats)
+                reader.ReadF32(value);
+
+            layerDiffusePaths.push_back(std::move(diffuseTexture));
+        }
+        if (reader.Failed())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Truncated .sparkterrain texture layers in %s",
+                            filepath.c_str());
+            return false;
+        }
+
+        int32_t splatRes = 0;
+        reader.ReadI32(splatRes);
+        if (reader.Failed() || splatRes < 0 || splatRes > SparkTerrain::kMaxSplatmapResolution)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Rejected .sparkterrain splatmap resolution %d in %s",
+                            splatRes, filepath.c_str());
+            return false;
+        }
+        const uint64_t splatSize = static_cast<uint64_t>(splatRes) * static_cast<uint64_t>(splatRes) * 4u;
+        if (splatSize > reader.Remaining())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Truncated .sparkterrain splatmap in %s", filepath.c_str());
+            return false;
+        }
+        std::vector<uint8_t> splatmap(static_cast<size_t>(splatSize));
+        reader.ReadBytes(splatmap.data(), splatSize);
+
+        if (reader.Failed())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to parse .sparkterrain: %s", filepath.c_str());
+            return false;
+        }
+
+        // Detail meshes follow; the runtime has no consumer for them yet, so they are intentionally
+        // not read here. The splatmap is the last field this loader needs.
 
         outComponent.terrainAssetPath = filepath;
         outComponent.terrainSize = size;
         outComponent.lodLevels = lodLevels;
         outComponent.lodBias = lodBias;
-        outComponent.generateCollider = (genCollider != 0);
-
-        // Read heightmap
-        int hmWidth = 0, hmHeight = 0;
-        float hScale = 1.0f, hMin = 0.0f, hMax = 100.0f;
-        file.read(reinterpret_cast<char*>(&hmWidth), sizeof(hmWidth));
-        file.read(reinterpret_cast<char*>(&hmHeight), sizeof(hmHeight));
-        file.read(reinterpret_cast<char*>(&hScale), sizeof(hScale));
-        file.read(reinterpret_cast<char*>(&hMin), sizeof(hMin));
-        file.read(reinterpret_cast<char*>(&hMax), sizeof(hMax));
-
+        outComponent.generateCollider = (generateCollider != 0);
         outComponent.heightmapResolution = hmWidth;
         outComponent.heightScale = hScale;
         outComponent.minHeight = hMin;
         outComponent.maxHeight = hMax;
-
-        size_t heightmapSize = static_cast<size_t>(hmWidth) * hmHeight;
-        outComponent.heightmap.resize(heightmapSize);
-        if (heightmapSize > 0)
-        {
-            file.read(reinterpret_cast<char*>(outComponent.heightmap.data()),
-                      static_cast<std::streamsize>(heightmapSize * sizeof(float)));
-        }
-
-        // Read texture layers
-        int layerCount = 0;
-        file.read(reinterpret_cast<char*>(&layerCount), sizeof(layerCount));
-        outComponent.textureLayerPaths.resize(layerCount);
-        for (int i = 0; i < layerCount; ++i)
-        {
-            uint32_t pathLen = 0;
-            file.read(reinterpret_cast<char*>(&pathLen), sizeof(pathLen));
-            outComponent.textureLayerPaths[i].resize(pathLen);
-            if (pathLen > 0)
-                file.read(outComponent.textureLayerPaths[i].data(), pathLen);
-        }
-
-        // Read splatmap
-        int splatRes = 0;
-        file.read(reinterpret_cast<char*>(&splatRes), sizeof(splatRes));
+        outComponent.heightmap = std::move(heights);
+        outComponent.textureLayerPaths = std::move(layerDiffusePaths);
         outComponent.splatmapResolution = splatRes;
-        size_t splatSize = static_cast<size_t>(splatRes) * splatRes * 4;
-        outComponent.splatmap.resize(splatSize);
-        if (splatSize > 0)
-        {
-            file.read(reinterpret_cast<char*>(outComponent.splatmap.data()), static_cast<std::streamsize>(splatSize));
-        }
-
+        outComponent.splatmap = std::move(splatmap);
         outComponent.dirty = true;
 
         SPARK_LOG_INFO(Spark::LogCategory::Graphics,
-                       "Loaded .sparkterrain: '%s' (%dx%d heightmap, %d texture layers, %dx%d splatmap)", name.c_str(),
+                       "Loaded .sparkterrain: '%s' (%dx%d heightmap, %u texture layers, %dx%d splatmap)", name.c_str(),
                        hmWidth, hmHeight, layerCount, splatRes, splatRes);
         return true;
     }
-
-#endif // SPARK_PLATFORM_WINDOWS
 
 } // namespace Spark::Graphics

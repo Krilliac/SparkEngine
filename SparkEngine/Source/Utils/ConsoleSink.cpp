@@ -18,7 +18,11 @@ namespace Spark
 
     void ConsoleSink::Write(const LogMessage& msg)
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+        // No logging of any kind inside a sink. Logger::DispatchToSinks holds
+        // m_sinkMutex across this call, so a SPARK_LOG_* here (the debug-only
+        // SPARK_TRACE_ENTER that used to open this function) re-enters Logger::Log
+        // on the same thread and deadlocks on that non-recursive mutex — latent
+        // only for as long as nobody actually installed this sink.
         // Build the message: [Category] message (file:line)
         std::string formatted;
         formatted.reserve(msg.message.size() + 64);

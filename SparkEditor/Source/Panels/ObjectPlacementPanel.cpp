@@ -6,13 +6,12 @@
  */
 
 #include "ObjectPlacementPanel.h"
-#include <iostream>
 
 #include <imgui.h>
 
 #include "../Core/EditorIcons.h"
 #include "Utils/LogMacros.h"
-#include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/Validate.h"
 
 namespace SparkEditor
 {
@@ -155,6 +154,8 @@ namespace SparkEditor
     void ObjectPlacementPanel::RenderPlacementModeSelector()
     {
         ImGui::Text(ICON_FA_MOUSE_POINTER " Placement Mode");
+        ImGui::TextDisabled("Preview - the scene viewport does not read the mode, align, snap or");
+        ImGui::TextDisabled("brush settings below yet; Quick Place and Place Selected do work.");
         ImGui::Spacing();
 
         float btnWidth = (ImGui::GetContentRegionAvail().x - 16.0f) / 5.0f;
@@ -383,46 +384,72 @@ namespace SparkEditor
         }
         ImGui::EndChild();
 
+        const bool hasSelection = m_selectedPrefab >= 0 && m_selectedPrefab < static_cast<int>(m_prefabs.size());
+        ImGui::BeginDisabled(!hasSelection || !IsPlacementConnected());
+        if (ImGui::Button(ICON_FA_PLUS " Place Selected") && hasSelection)
+        {
+            PlaceTemplate(m_prefabs[static_cast<size_t>(m_selectedPrefab)].name);
+        }
+        ImGui::EndDisabled();
+
         ImGui::Unindent(8.0f);
+    }
+
+    bool ObjectPlacementPanel::PlaceTemplate(const std::string& templateName)
+    {
+        if (!m_entityCreator)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                           "ObjectPlacementPanel: not connected to the editor document; '%s' was not placed",
+                           templateName.c_str());
+            return false;
+        }
+
+        if (!m_entityCreator(templateName))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "ObjectPlacementPanel: '%s' is not a supported entity template",
+                           templateName.c_str());
+            return false;
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ObjectPlacementPanel: placed '%s'", templateName.c_str());
+        return true;
     }
 
     void ObjectPlacementPanel::RenderQuickPlace()
     {
         ImGui::Text(ICON_FA_BOLT " Quick Place");
+        if (!IsPlacementConnected())
+        {
+            ImGui::TextDisabled("Preview - not connected: this panel has no editor document to");
+            ImGui::TextDisabled("place into.");
+        }
         ImGui::Spacing();
 
-        float btnWidth = (ImGui::GetContentRegionAvail().x - 8.0f) / 3.0f;
-        ImVec2 btnSize(btnWidth, 28.0f);
+        const float btnWidth = (ImGui::GetContentRegionAvail().x - 8.0f) / 3.0f;
+        const ImVec2 btnSize(btnWidth, 28.0f);
+
+        ImGui::BeginDisabled(!IsPlacementConnected());
 
         if (ImGui::Button(ICON_FA_CUBE " Cube", btnSize))
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Cube primitive");
-        }
+            PlaceTemplate("Cube");
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_CIRCLE " Sphere", btnSize))
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Sphere primitive");
-        }
+            PlaceTemplate("Sphere");
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_VECTOR_SQUARE " Plane", btnSize))
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Plane primitive");
-        }
+            PlaceTemplate("Plane");
 
         if (ImGui::Button(ICON_FA_LIGHTBULB " Light", btnSize))
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Point Light");
-        }
+            PlaceTemplate("Point Light");
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_CAMERA " Camera", btnSize))
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Camera");
-        }
+            PlaceTemplate("Camera");
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_FLAG " Spawn", btnSize))
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Spawn Point");
-        }
+            PlaceTemplate("Spawn Point");
+
+        ImGui::EndDisabled();
     }
 
 } // namespace SparkEditor

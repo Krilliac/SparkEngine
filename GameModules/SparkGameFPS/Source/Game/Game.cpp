@@ -28,8 +28,8 @@
 #include "Game/SphereObject.h"
 #include "Game/WallObject.h"
 #include "ModelObject.h"
+#include "FPSAssetPaths.h"
 #include "Player.h"
-#include "Game/Console.h"
 #include "Projectiles/ProjectilePool.h"
 #include "SceneManager/SceneManager.h"
 #include "Utils/SparkConsole.h"
@@ -37,12 +37,7 @@
 #include "Engine/Events/EventSystem.h"
 #include "Audio/MusicManager.h"
 #include "Graphics/WeatherSystem.h"
-#include "Engine/Cinematic/Sequencer.h"
-#include "Engine/Replay/ReplaySystem.h"
 #include <filesystem>
-
-// Pull in game-specific globals defined in Main.cpp (SparkGame entry point)
-extern Console g_console;
 
 // Centralized logging macros (previously defined locally with inconsistent rate limits)
 #include "Utils/LogMacros.h"
@@ -77,9 +72,19 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_input = input;
     LOG_TO_CONSOLE_IMMEDIATE(L"Graphics and InputManager assigned.", L"INFO");
 
+    // A NullRHI / headless host supplies a GraphicsEngine without a D3D11 device.
+    // Gameplay state is still built in full; GPU resource creation and rendering
+    // are the only things skipped, so a package smoke can drive the real module.
+    m_renderingEnabled = (m_graphics->GetDevice() != nullptr) && (m_graphics->GetContext() != nullptr);
+    if (!m_renderingEnabled)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"No D3D11 device - running gameplay only (GPU resources and rendering disabled)",
+                                 L"WARNING");
+    }
+
     // SceneManager setup
     m_sceneManager = std::make_unique<SceneManager>(graphics, input);
-    bool sceneLoaded = m_sceneManager->LoadScene(L"Assets/Scenes/level1.scene");
+    bool sceneLoaded = m_sceneManager->LoadScene(Spark::FPSAssets::Resolve(L"Scenes/level1.scene"));
     std::wstring sceneMsg = L"SceneManager::LoadScene returned: " + std::wstring(sceneLoaded ? L"SUCCESS" : L"FAILURE");
     LOG_TO_CONSOLE_IMMEDIATE(sceneMsg, L"INFO");
 
@@ -112,7 +117,11 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_projectilePool = std::make_unique<ProjectilePool>(100);
     ASSERT(m_projectilePool);
 
-    HRESULT hr = m_projectilePool->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
+    // Initialize unconditionally: on a device-less host the pool populates itself
+    // without GPU meshes, so firing still spawns a real projectile. Skipping this call
+    // left the injected pool empty and turned every shot into a silent no-op.
+    HRESULT hr = m_projectilePool->Initialize(m_renderingEnabled ? m_graphics->GetDevice() : nullptr,
+                                              m_renderingEnabled ? m_graphics->GetContext() : nullptr);
     ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
     if (FAILED(hr))
     {
@@ -120,6 +129,7 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
         return hr;
     }
+    ASSERT_MSG(m_projectilePool->GetAvailableCount() > 0, "ProjectilePool initialized empty - firing would no-op");
 
     /* Player -----------------------------------------------*/
     m_player = std::make_unique<Player>();
@@ -143,13 +153,16 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     LOG_TO_CONSOLE_IMMEDIATE(L"Player class set to Scout (default)", L"SUCCESS");
 
     /* Scene objects - Enhanced combat arena ----------------*/
-    CreateCombatArena();
-
-    // Wire up graphics engine on all ModelObjects so they don't need the global
-    for (auto& obj : m_gameObjects)
+    if (m_renderingEnabled)
     {
-        if (auto* mo = dynamic_cast<ModelObject*>(obj.get()))
-            mo->SetGraphicsEngine(m_graphics);
+        CreateCombatArena();
+
+        // Wire up graphics engine on all ModelObjects so they don't need the global
+        for (auto& obj : m_gameObjects)
+        {
+            if (auto* mo = dynamic_cast<ModelObject*>(obj.get()))
+                mo->SetGraphicsEngine(m_graphics);
+        }
     }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Game initialization complete - class system & combat arena ready", L"SUCCESS");
@@ -276,6 +289,11 @@ void Game::SetEventBus(Spark::EventBus* bus)
     // callbacks connected. Clearing first also safely supports context swaps.
     m_eventSubscriptions.clear();
     m_eventBus = bus;
+
+    // The respawn system publishes PlayerRespawnEvent, so it needs the same bus.
+    if (m_respawnSystem)
+        m_respawnSystem->SetEventBus(bus);
+
     if (!bus)
         return;
 
@@ -334,7 +352,7 @@ void Game::SetEventBus(Spark::EventBus* bus)
         [this](const Spark::ItemPickedUpEvent& e)
         { Spark::InventoryOps::AddItem(m_playerInventory, m_itemRegistry, e.itemDefId, e.count); }));
 
-    // Player respawn → teleport to spawn point and reset HUD state
+    // Player respawn → restore the player, teleport to spawn point, reset HUD
     m_eventSubscriptions.emplace_back(bus->Subscribe<Spark::PlayerRespawnEvent>(
         [this](const Spark::PlayerRespawnEvent& e)
         {
@@ -345,7 +363,12 @@ void Game::SetEventBus(Spark::EventBus* bus)
             }
             if (m_player)
             {
+                // Restore before reactivating: Player::Update returns early while
+                // health is zero, so a respawn that only moves the player is inert.
+                m_player->Console_SetHealth(m_player->GetMaxHealth());
+                m_player->Console_SetArmor(0.0f);
                 m_player->Console_SetPosition(e.spawnX, e.spawnY, e.spawnZ);
+                m_player->SetActive(true);
             }
 
             // Reset HUD damage indicators on respawn
@@ -477,20 +500,9 @@ void Game::Update(float dt)
         }
     }
 
-    // Update cinematic sequencer via context
-    SPARK_GUARDED_UPDATE("Game:Cinematic", "Game", {
-        if (m_engineContext)
-        {
-            if (auto* cinematic = m_engineContext->GetCinematic())
-                cinematic->Update(dt);
-
-            if (auto* replay = m_engineContext->GetReplay())
-            {
-                if (replay->GetPlaybackState() == Spark::PlaybackState::Playing)
-                    replay->UpdatePlayback(dt);
-            }
-        }
-    });
+    // SequencerManager and ReplaySystem are engine-owned singletons ticked once
+    // per frame by the host lifecycle (GameplayLifecycleShared::UpdateExtendedSystems).
+    // Ticking them here as well advanced cutscenes and replay playback at 2x.
 
 #ifdef ENABLE_NETWORKING
     // Update networking - process incoming messages, send outgoing state
@@ -544,6 +556,8 @@ void Game::Render()
         LOG_TO_CONSOLE_IMMEDIATE(L"Graphics engine not available for rendering", L"ERROR");
         return;
     }
+    if (!m_renderingEnabled)
+        return; // Device-less host: nothing to draw, and BeginFrame would fail.
 
     // **CRITICAL: This is the ONLY place BeginFrame/EndFrame should be called**
     bool frameStarted = false;
@@ -616,12 +630,6 @@ void Game::Render()
         if (m_projectilePool)
         {
             m_projectilePool->Render(view, proj);
-        }
-
-        // **SOLUTION: Single console rendering location - this is the ONLY place console renders**
-        if (g_console.IsVisible())
-        {
-            g_console.Render(m_graphics->GetContext());
         }
     }
     catch (const std::exception& e)
@@ -722,6 +730,12 @@ void Game::HandleInput(float)
 --------------------------------------------------------------*/
 void Game::CreateTestObjects()
 {
+    if (!m_renderingEnabled)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Test objects need a D3D11 device - skipped on a device-less host", L"WARNING");
+        return;
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Creating test objects...", L"INFO");
 
     // Ground plane
@@ -786,7 +800,7 @@ void Game::CreateTestObjects()
     // **ENHANCED: Add model-based objects using our new .obj files**
     {
         // Target practice targets
-        auto target1 = std::make_unique<ModelObject>(L"../Assets/Models/target.obj");
+        auto target1 = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/target.obj"));
         ASSERT(target1);
         HRESULT hr = target1->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
@@ -801,7 +815,7 @@ void Game::CreateTestObjects()
             LOG_TO_CONSOLE_IMMEDIATE(L"Target 1 model creation failed", L"WARNING");
         }
 
-        auto target2 = std::make_unique<ModelObject>(L"../Assets/Models/target.obj");
+        auto target2 = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/target.obj"));
         ASSERT(target2);
         hr = target2->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
@@ -817,7 +831,7 @@ void Game::CreateTestObjects()
         }
 
         // Character model for testing
-        auto character = std::make_unique<ModelObject>(L"../Assets/Models/character.obj");
+        auto character = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/character.obj"));
         ASSERT(character);
         hr = character->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
@@ -833,7 +847,7 @@ void Game::CreateTestObjects()
         }
 
         // Weapon display (rifle on a stand)
-        auto weaponDisplay = std::make_unique<ModelObject>(L"../Assets/Models/rifle.obj");
+        auto weaponDisplay = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/rifle.obj"));
         ASSERT(weaponDisplay);
         hr = weaponDisplay->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))

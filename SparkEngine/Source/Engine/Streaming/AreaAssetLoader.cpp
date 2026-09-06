@@ -5,8 +5,12 @@
 
 #include "AreaAssetLoader.h"
 #include "../../Utils/LogMacros.h"
+#include "../Modding/VirtualFileSystem.h"
 
 #include <format>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace Spark::Streaming
 {
@@ -109,11 +113,42 @@ namespace Spark::Streaming
         }
 
         const auto& manifest = manifestIt->second;
-        auto allPaths = manifest.AllPaths();
+        const auto allPaths = manifest.AllPaths();
+
+        // Containment is decided here, at the point of consumption, not in the
+        // manifest parser: SetManifest accepts any caller-built SceneManifest
+        // (SeamlessAreaManager builds them in code, and a mod-supplied .sparkscene
+        // reaches us through the parser), and every path below is handed to
+        // DirectStorageLoader verbatim. Filtering here is the one gate all
+        // provenances pass through.
+        std::vector<std::string> safePaths;
+        safePaths.reserve(allPaths.size());
+        for (const auto& path : allPaths)
+        {
+            if (!IsVirtualPathSafe(path))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                               "AreaAssetLoader: area %u dropped out-of-root asset path '%s'", areaId, path.c_str());
+                continue;
+            }
+            safePaths.push_back(path);
+        }
+
+        // Every declared path was rejected — there is nothing to stream, and the
+        // caller must still be told the area is done rather than waiting forever
+        // on a completion count that can never be reached.
+        if (safePaths.empty())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                           "AreaAssetLoader: area %u has no loadable assets after path validation", areaId);
+            if (onComplete)
+                onComplete(areaId);
+            return;
+        }
 
         AreaLoadState state;
         state.manifest = manifest;
-        state.totalAssets = static_cast<uint32_t>(allPaths.size());
+        state.totalAssets = static_cast<uint32_t>(safePaths.size());
         state.completedAssets = 0;
         state.failedAssets = 0;
         state.onComplete = std::move(onComplete);
@@ -121,8 +156,8 @@ namespace Spark::Streaming
 
         auto& loader = DirectStorageLoader::GetInstance();
 
-        // Submit a load request for each asset
-        for (const auto& path : allPaths)
+        // Submit a load request for each validated asset
+        for (const auto& path : safePaths)
         {
             LoadRequest req;
             req.filePath = path;
@@ -152,7 +187,7 @@ namespace Spark::Streaming
         loader.Flush();
 
         SPARK_LOG_INFO(Spark::LogCategory::Scene, "AreaAssetLoader: began loading area %u (%u assets)", areaId,
-                       static_cast<uint32_t>(allPaths.size()));
+                       static_cast<uint32_t>(safePaths.size()));
     }
 
     void AreaAssetLoader::BeginAreaUnload(AreaID areaId, AreaLoadCompleteCallback onComplete)

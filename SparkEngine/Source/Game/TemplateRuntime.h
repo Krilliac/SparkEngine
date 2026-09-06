@@ -38,6 +38,14 @@
 
 namespace Spark::Templates
 {
+    /** Outcome of the most recent TemplateRuntimeScene::Load call. */
+    enum class TemplateLoadResult
+    {
+        Deterministic, ///< No engine context: construction-only test seam, nothing was loaded.
+        Loaded,        ///< A candidate scene deserialized, appended, and satisfied the contract.
+        Failed         ///< A context was supplied but no candidate scene could be loaded.
+    };
+
     class TemplateRuntimeScene final
     {
       public:
@@ -56,7 +64,10 @@ namespace Spark::Templates
 
         /**
          * [game thread] Load the first candidate that deserializes and satisfies
-         * the caller's scene contract. A null context is deterministic test mode.
+         * the caller's scene contract. A null context is the deterministic test
+         * seam: it loads nothing and still returns true, so callers that need to
+         * distinguish "constructed" from "loaded" must read LastLoadResult() or
+         * IsActive() instead of the bool.
          */
         template <typename Contract>
         bool Load(IEngineContext* context, std::string_view moduleName,
@@ -76,6 +87,7 @@ namespace Spark::Templates
                 SPARK_LOG_ERROR(LogCategory::Game, "%s requires an ECS world from IEngineContext",
                                 m_moduleName.c_str());
                 ClearReferences();
+                m_lastLoadResult = TemplateLoadResult::Failed;
                 return false;
             }
 
@@ -86,6 +98,7 @@ namespace Spark::Templates
                 SPARK_LOG_ERROR(LogCategory::Game, "%s could not resolve its project working directory",
                                 m_moduleName.c_str());
                 ClearReferences();
+                m_lastLoadResult = TemplateLoadResult::Failed;
                 return false;
             }
 
@@ -115,8 +128,9 @@ namespace Spark::Templates
                 if (m_graphics)
                     m_meshCache = std::make_unique<WorldMeshCache>();
                 m_runtimeActive = true;
-                SPARK_LOG_INFO(LogCategory::Game, "%s loaded scene '%s'", m_moduleName.c_str(),
-                               PathUtf8(candidate).c_str());
+                m_lastLoadResult = TemplateLoadResult::Loaded;
+                SPARK_LOG_INFO(LogCategory::Game, "%s loaded scene '%s' with %zu owned entities", m_moduleName.c_str(),
+                               PathUtf8(candidate).c_str(), m_ownedEntities.size());
                 return true;
             }
 
@@ -124,6 +138,7 @@ namespace Spark::Templates
                             m_moduleName.c_str(), PathUtf8(m_projectRoot).c_str());
             CleanupOwnedEntities();
             ClearReferences();
+            m_lastLoadResult = TemplateLoadResult::Failed;
             return false;
         }
 
@@ -133,6 +148,7 @@ namespace Spark::Templates
             m_meshCache.reset();
             CleanupOwnedEntities();
             ClearReferences();
+            m_lastLoadResult = TemplateLoadResult::Deterministic;
         }
 
         /** [render thread; currently the runtime main thread] */
@@ -175,6 +191,7 @@ namespace Spark::Templates
         }
 
         [[nodiscard]] bool IsActive() const { return m_runtimeActive; }
+        [[nodiscard]] TemplateLoadResult LastLoadResult() const { return m_lastLoadResult; }
         [[nodiscard]] World* GetWorld() { return m_world; }
         [[nodiscard]] const World* GetWorld() const { return m_world; }
         [[nodiscard]] GraphicsEngine* GetGraphics() { return m_graphics; }
@@ -313,6 +330,7 @@ namespace Spark::Templates
 
             auto& factory = ComponentFactory::Get();
             const std::vector<std::string> componentTypes = factory.GetRegisteredNames();
+            std::vector<std::string> skippedFields;
             for (EntityID sourceEntity : sourceEntities)
             {
                 const auto destinationIt = entityRemap.find(ToRawEntity(sourceEntity));
@@ -335,8 +353,23 @@ namespace Spark::Templates
                         continue;
                     for (const FieldInfo& field : typeInfo->fields)
                     {
-                        if (!field.serialized || !IsReflectedSceneFieldType(field.type))
+                        if (!field.serialized)
                             continue;
+                        if (!IsReflectedSceneFieldType(field.type))
+                        {
+                            // A silently partial copy is indistinguishable from a faithful one, so
+                            // say which field was dropped once per (component, field) per load.
+                            std::string skipped = type + "." + field.fieldName;
+                            if (std::ranges::find(skippedFields, skipped) == skippedFields.end())
+                            {
+                                SPARK_LOG_WARN(LogCategory::Game,
+                                               "%s did not copy reflected field %s (field type %d is outside the "
+                                               "scene-append whitelist); the appended copy differs from the scene",
+                                               m_moduleName.c_str(), skipped.c_str(), static_cast<int>(field.type));
+                                skippedFields.push_back(std::move(skipped));
+                            }
+                            continue;
+                        }
                         if (!SetFieldFromString(destinationComponent, field, GetFieldAsString(sourceComponent, field)))
                         {
                             SPARK_LOG_ERROR(LogCategory::Game, "%s could not copy reflected field %s.%s",
@@ -446,5 +479,6 @@ namespace Spark::Templates
         int m_viewportWidth = 1280;
         int m_viewportHeight = 720;
         bool m_runtimeActive = false;
+        TemplateLoadResult m_lastLoadResult = TemplateLoadResult::Deterministic;
     };
 } // namespace Spark::Templates

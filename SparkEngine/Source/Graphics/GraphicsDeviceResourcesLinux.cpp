@@ -201,15 +201,14 @@ void GraphicsEngine::SetupDeferredPipeline()
     if (!rhi.initialized)
         return;
 
-    // Register deferred shaders with the shader cache
-    rhi.bridge.RegisterShader("deferred_geometry_vs", Spark::RHI::RHIShaderStage::Vertex,
-                              "Shaders/Deferred/GeometryPass.hlsl", "Shaders/Deferred/GeometryPass.vert.glsl");
-    rhi.bridge.RegisterShader("deferred_geometry_ps", Spark::RHI::RHIShaderStage::Pixel,
-                              "Shaders/Deferred/GeometryPass.hlsl", "Shaders/Deferred/GeometryPass.frag.glsl");
-    rhi.bridge.RegisterShader("deferred_lighting_vs", Spark::RHI::RHIShaderStage::Vertex,
-                              "Shaders/Deferred/LightingPass.hlsl", "Shaders/Deferred/LightingPass.vert.glsl");
-    rhi.bridge.RegisterShader("deferred_lighting_ps", Spark::RHI::RHIShaderStage::Pixel,
-                              "Shaders/Deferred/LightingPass.hlsl", "Shaders/Deferred/LightingPass.frag.glsl");
+    // No deferred shader set ships: Shaders/Deferred/ does not exist in the
+    // repository or in any package, so the four registrations that used to
+    // stand here could never resolve. Registering names GetShader will always
+    // fail on makes a missing pipeline look configured, so this reports the
+    // gap instead. The G-Buffer targets below are still created — the render
+    // targets are real and other passes read them.
+    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                   "Deferred pipeline has no shaders: Shaders/Deferred/ ships in no package");
 
     // Create the G-Buffer render targets
     CreateAdvancedRenderTargets();
@@ -221,15 +220,19 @@ void GraphicsEngine::SetupForwardPlusPipeline()
     if (!rhi.initialized)
         return;
 
-    // Register forward+ shaders
+    // Register forward+ shaders. Only the HLSL half of this set was ever
+    // authored (SparkEngine/Shaders/HLSL/ForwardPlus/ -> bin/Shaders/ForwardPlus/);
+    // no ForwardPlus GLSL exists anywhere, so the GLSL slot stays empty and
+    // GetShader fails closed on an OpenGL or Vulkan device instead of naming a
+    // file that was never written.
     rhi.bridge.RegisterShader("forwardplus_depth_vs", Spark::RHI::RHIShaderStage::Vertex,
-                              "Shaders/ForwardPlus/DepthPrepass.hlsl", "Shaders/ForwardPlus/DepthPrepass.vert.glsl");
+                              "Shaders/ForwardPlus/DepthPrepass.hlsl", "");
     rhi.bridge.RegisterShader("forwardplus_light_cull_cs", Spark::RHI::RHIShaderStage::Compute,
-                              "Shaders/ForwardPlus/LightCull.hlsl", "Shaders/ForwardPlus/LightCull.comp.glsl");
+                              "Shaders/ForwardPlus/LightCull.hlsl", "");
     rhi.bridge.RegisterShader("forwardplus_shading_vs", Spark::RHI::RHIShaderStage::Vertex,
-                              "Shaders/ForwardPlus/Shading.hlsl", "Shaders/ForwardPlus/Shading.vert.glsl");
+                              "Shaders/ForwardPlus/Shading.hlsl", "");
     rhi.bridge.RegisterShader("forwardplus_shading_ps", Spark::RHI::RHIShaderStage::Pixel,
-                              "Shaders/ForwardPlus/Shading.hlsl", "Shaders/ForwardPlus/Shading.frag.glsl");
+                              "Shaders/ForwardPlus/Shading.hlsl", "");
 
     // Create depth pre-pass render target
     // Intentional: CreateDepthBuffer registers the resource internally; local handle unused

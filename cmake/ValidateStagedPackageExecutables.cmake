@@ -565,6 +565,10 @@ set(_spark_required_runtime_files
     LICENSE.txt
     THIRD_PARTY_NOTICES.txt
     bin/Shaders/BasicVS.hlsl
+    # Subdirectory-qualified engine shader: the install rule used to FLATTEN this
+    # tree, which collapsed Shaders/ForwardPlus/*.hlsl to Shaders/*.hlsl and left
+    # the path the Forward+ pipeline registers unresolvable in every package.
+    bin/Shaders/ForwardPlus/DepthPrepass.hlsl
     bin/Shaders/HLSL/BasicVS.hlsl
     bin/Shaders/HLSL/Compute/GPUCull.hlsl
     bin/Assets/MMOFPS/Data/continents.json

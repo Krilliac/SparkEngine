@@ -143,8 +143,7 @@ TEST(VersionControlPhaseAA_CloseRepositoryOnNoOpIsSafe)
 {
     SparkEditor::VersionControlSystem vc;
     vc.Initialize();
-    // Closing with no open repo must be a silent no-op.
-    vc.CloseRepository();
+    EXPECT_NO_THROW(vc.CloseRepository());
     vc.Shutdown();
 }
 
@@ -153,14 +152,14 @@ TEST(VersionControlPhaseAA_ShutdownIsIdempotent)
     SparkEditor::VersionControlSystem vc;
     vc.Initialize();
     vc.Shutdown();
-    vc.Shutdown();
+    EXPECT_NO_THROW(vc.Shutdown());
 }
 
 TEST(VersionControlPhaseAA_UpdateCallIsSafe)
 {
     SparkEditor::VersionControlSystem vc;
     vc.Initialize();
-    vc.Update(0.016f);
-    vc.Update(0.016f);
+    EXPECT_NO_THROW(vc.Update(0.016f));
+    EXPECT_NO_THROW(vc.Update(0.016f));
     vc.Shutdown();
 }

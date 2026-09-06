@@ -11,6 +11,15 @@
  * This file simply includes each template header so that the test binary fails
  * to build if a template's code ever rots. Instantiating each module class
  * and exercising its lifecycle makes sure the methods are real, not stubs.
+ *
+ * `OnLoad(nullptr)` below is the deterministic construction seam: it cannot
+ * fail, because TemplateRuntimeScene::Load returns before resolving a scene
+ * when there is no engine context. Read those `EXPECT_TRUE(mod.OnLoad(nullptr))`
+ * lines as "constructed and the gameplay rules below are reachable", never as
+ * "a scene loaded". Scene, ownership and cleanup evidence lives in the
+ * *_HeadlessRuntime* / *_GraphicalRuntime* cases here (which pass a real
+ * EngineContext) and in TestTemplateRuntimeReal.cpp, which asserts that the two
+ * outcomes are distinguishable through TemplateRuntimeScene::LastLoadResult().
  */
 
 #include "TestFramework.h"
@@ -33,6 +42,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <string>
 
 namespace
 {
@@ -66,6 +76,66 @@ namespace
     {
         return std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Templates" / name;
     }
+
+    /**
+     * A throwaway project root holding one staged scene, for the template modules
+     * that write files. TemplateRuntimeScene resolves its project root from the
+     * working directory, so a test that saves must never point that at the tracked
+     * template package: it would leave a save slot inside a shipped template.
+     */
+    class ScopedScratchTemplateProject
+    {
+      public:
+        ScopedScratchTemplateProject(const char* templateName, const std::filesystem::path& relativeScene)
+            : m_previous(std::filesystem::current_path()),
+              m_root(std::filesystem::temp_directory_path() /
+                     ("spark-template-scratch-" + std::string(templateName) + "-" +
+                      std::to_string(std::chrono::high_resolution_clock::now().time_since_epoch().count())))
+        {
+            std::filesystem::create_directories((m_root / relativeScene).parent_path());
+            std::filesystem::copy_file(TemplateProjectRoot(templateName) / relativeScene, m_root / relativeScene,
+                                       std::filesystem::copy_options::overwrite_existing);
+            std::filesystem::current_path(m_root);
+        }
+
+        ~ScopedScratchTemplateProject()
+        {
+            std::error_code ec;
+            std::filesystem::current_path(m_previous, ec);
+            std::filesystem::remove_all(m_root, ec);
+        }
+
+        ScopedScratchTemplateProject(const ScopedScratchTemplateProject&) = delete;
+        ScopedScratchTemplateProject& operator=(const ScopedScratchTemplateProject&) = delete;
+
+        [[nodiscard]] const std::filesystem::path& GetRoot() const { return m_root; }
+
+      private:
+        std::filesystem::path m_previous;
+        std::filesystem::path m_root;
+    };
+
+    /**
+     * True when `path` lives inside `root`. Walks the real parent directories and
+     * compares file identity rather than text, so drive-letter case and 8.3 names
+     * cannot make the answer wrong. This is the guard that keeps a template test
+     * from writing into the tracked source tree.
+     */
+    bool IsInsideDirectory(const std::filesystem::path& path, const std::filesystem::path& root)
+    {
+        std::error_code ec;
+        if (!std::filesystem::is_directory(root, ec) || ec)
+            return false;
+        for (std::filesystem::path current = path.parent_path(); !current.empty(); current = current.parent_path())
+        {
+            ec.clear();
+            if (std::filesystem::equivalent(current, root, ec) && !ec)
+                return true;
+            if (current == current.parent_path())
+                break;
+        }
+        return false;
+    }
 } // namespace
 
 TEST(Templates_EmptyProject_ConstructsAndReportsInfo)
@@ -87,8 +157,11 @@ TEST(Templates_EmptyProject_ConstructsAndReportsInfo)
     mod.OnUnload();
 }
 
-TEST(Templates_EmptyProject_HeadlessRuntimeKeepsWorldEmpty)
+TEST(Templates_EmptyProject_HeadlessRuntimeLoadsPreviewAndCleansOwnedEntities)
 {
+    // The runtime preview is the scene this module drives with or without a
+    // graphics device, so the headless path is real scene evidence and not a
+    // zero-entity load through an always-true contract.
     ScopedCurrentPath projectRoot(TemplateProjectRoot("EmptyProject"));
     World world;
     EngineContext context;
@@ -97,7 +170,8 @@ TEST(Templates_EmptyProject_HeadlessRuntimeKeepsWorldEmpty)
     EmptyProjectModule mod;
     EXPECT_TRUE(mod.OnLoad(&context));
     EXPECT_TRUE(mod.HasEngineContext());
-    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(0));
+    EXPECT_TRUE(mod.IsPreviewActive());
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(8));
     mod.OnUpdate(0.25f);
     EXPECT_EQ(mod.GetUpdateCount(), static_cast<uint64_t>(1));
     mod.OnUnload();
@@ -108,9 +182,13 @@ TEST(Templates_Blank3D_CameraControlsAndReset)
 {
     Blank3DModule mod;
     EXPECT_TRUE(mod.OnLoad(nullptr));
+    // Move() integrates along the camera's yaw, exactly like the WASD path, so
+    // from the authored -15 degree start a forward/left step moves both axes.
     mod.Move(1.0f, -1.0f, 0.5f, 1.0f);
     mod.Look(20.0f, 100.0f);
-    EXPECT_NEAR(mod.GetCameraState().z, -1.0f, 0.001f);
+    EXPECT_NEAR(mod.GetCameraState().x, -4.1237f, 0.001f);
+    EXPECT_NEAR(mod.GetCameraState().z, -2.4645f, 0.001f);
+    EXPECT_NEAR(mod.GetCameraState().y, 5.0f, 0.001f);
     EXPECT_NEAR(mod.GetCameraState().pitchDegrees, 89.0f, 0.001f);
     mod.ResetCamera();
     EXPECT_NEAR(mod.GetCameraState().z, -6.0f, 0.001f);
@@ -984,7 +1062,7 @@ TEST(Templates_RPGStarter_ConstructsAndRuns)
 
 TEST(Templates_RPGStarter_HeadlessRuntimeMovesSavesAndCleansScene)
 {
-    ScopedCurrentPath projectRoot(TemplateProjectRoot("RPGStarter"));
+    ScopedScratchTemplateProject project("RPGStarter", std::filesystem::path("Scenes") / "Village.sparkscene");
     World world;
     const EntityID hostEntity = world.CreateEntity("Host Sentinel");
     InputManager input;
@@ -1002,7 +1080,13 @@ TEST(Templates_RPGStarter_HeadlessRuntimeMovesSavesAndCleansScene)
     mod.OnUpdate(0.25f);
     input.HandleMessage(WM_KEYUP, 'W', 0);
     EXPECT_TRUE(mod.GetState().z > startZ);
-    mod.SaveToSlot();
+    EXPECT_TRUE(mod.SaveToSlot());
+    const std::filesystem::path savePath = mod.GetSaveFilePath();
+    EXPECT_TRUE(std::filesystem::is_regular_file(savePath));
+    // The slot belongs to the scratch project. If this ever resolves back into
+    // Templates/RPGStarter, the suite is mutating the package it validates.
+    EXPECT_TRUE(IsInsideDirectory(savePath, project.GetRoot()));
+    EXPECT_FALSE(IsInsideDirectory(savePath, TemplateProjectRoot("RPGStarter")));
     mod.NewGame();
     EXPECT_TRUE(mod.LoadFromSlot());
     EXPECT_TRUE(mod.GetState().z > startZ);
@@ -1026,7 +1110,7 @@ TEST(Templates_RPGStarter_RejectsNonFiniteControls)
 
 TEST(Templates_RPGStarter_SaveRestoresCombatCooldownAndFacing)
 {
-    ScopedCurrentPath projectRoot(TemplateProjectRoot("RPGStarter"));
+    ScopedScratchTemplateProject project("RPGStarter", std::filesystem::path("Scenes") / "Village.sparkscene");
     World world;
     EngineContext context;
     context.SetWorld(&world);
@@ -1041,7 +1125,9 @@ TEST(Templates_RPGStarter_SaveRestoresCombatCooldownAndFacing)
     const float savedHeroYaw = mod.GetHeroYawDegrees();
     const float savedWardenYaw = mod.GetWardenYawDegrees();
     EXPECT_TRUE(savedCooldown > 0.0f);
-    mod.SaveToSlot();
+    EXPECT_TRUE(mod.SaveToSlot());
+    EXPECT_TRUE(IsInsideDirectory(mod.GetSaveFilePath(), project.GetRoot()));
+    EXPECT_FALSE(IsInsideDirectory(mod.GetSaveFilePath(), TemplateProjectRoot("RPGStarter")));
 
     mod.Move(-1.0f, 0.0f, 0.5f);
     mod.OnUpdate(0.5f);

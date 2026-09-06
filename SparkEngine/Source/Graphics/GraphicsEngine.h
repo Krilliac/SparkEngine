@@ -124,12 +124,10 @@ namespace Spark::Graphics
         Spark::RHI::IRHITexture* albedo = nullptr;
         Spark::RHI::IRHITexture* lighting = nullptr;
 
-        /// Keeps wrapped textures alive for the lifetime of this
-        /// bindings object. Windows AcquireHybridRTBindings populates
-        /// this with the per-frame `WrapNativeTexture` results and
-        /// aliases the raw pointers above into these `unique_ptr`s.
-        /// Linux/macOS leaves it empty — the bridge registry owns the
-        /// textures long-term and the raw pointers reference directly.
+        /// Keeps wrapped textures alive for the lifetime of this bindings
+        /// object. Currently empty on every platform: Linux/macOS reads the
+        /// bridge registry (which owns the textures), and Windows has no RHI
+        /// device to wrap its D3D11 GBuffer with.
         std::vector<std::unique_ptr<Spark::RHI::IRHITexture>> owned;
 
         /// True if at least the four primary inputs (normals, depth,
@@ -321,10 +319,10 @@ class GraphicsEngine
 
     /**
      * @brief Acquire per-platform GBuffer/HDR texture handles for the
-     *        HybridRT pass. Windows wraps D3D11 `ComPtr<ID3D11Texture2D>`
-     *        via `IRHIDevice::WrapNativeTexture`; Linux/macOS returns
-     *        empty bindings for now (the RHI bridge does not yet expose
-     *        GBuffer textures — follow-up).
+     *        HybridRT pass. Linux/macOS reads the RHI bridge's render-target
+     *        registry; Windows renders through D3D11 with no RHI device and
+     *        returns empty bindings, so the pass never dispatches there
+     *        (HybridRT is outside stable-v1).
      */
     Spark::Graphics::HybridRTBindings AcquireHybridRTBindings();
 
@@ -370,28 +368,27 @@ class GraphicsEngine
     /**
      * @brief Get the RHI bridge for backend-agnostic rendering
      *
-     * The RHI bridge provides access to the abstract rendering hardware
-     * interface, enabling code to issue draw calls through IRHIDevice
-     * rather than directly using D3D11 APIs. This is the recommended
-     * path for new rendering code.
+     * On Linux/macOS this is the process-wide RHI bridge the renderer draws
+     * through. On Windows the renderer uses D3D11 directly and owns no RHI
+     * bridge, so this is always nullptr there.
      *
      * @return Pointer to the RHI bridge, or nullptr if not initialized
      */
-    Spark::RHI::RHIBridge* GetRHIBridge() const { return m_rhiBridge.get(); }
+    Spark::RHI::RHIBridge* GetRHIBridge() const;
 
     /**
      * @brief Get the active RHI device for resource creation
      *
-     * Convenience accessor that returns the underlying IRHIDevice from
-     * the RHI bridge. Returns nullptr if the bridge is not initialized.
+     * The IRHIDevice behind GetRHIBridge(); nullptr when there is no bridge
+     * (Windows) or it has not been initialized.
      */
     Spark::RHI::IRHIDevice* GetRHIDevice() const;
 
     /**
-     * @brief Check if RHI backend is available
-     * @return true if the RHI bridge has been initialized
+     * @brief Check if an RHI device is available
+     * @return true if GetRHIDevice() returns a live device
      */
-    bool IsRHIAvailable() const { return m_rhiBridge != nullptr; }
+    bool IsRHIAvailable() const { return GetRHIDevice() != nullptr; }
 
     // ========================================================================
     // RENDERER INTEGRATION SYSTEMS
@@ -606,6 +603,14 @@ class GraphicsEngine
      * @brief Get the DirectX 11 device context
      */
     ID3D11DeviceContext* GetContext() const;
+
+    /**
+     * @brief Window the swap chain was created for, or nullptr in device-attach mode.
+     *
+     * Device-lost recovery recreates the swap chain from this handle, so it must
+     * be non-null after a successful windowed Initialize().
+     */
+    Spark::NativeWindowHandle GetWindowHandle() const { return m_hwnd; }
 
     /**
      * @brief Get the current window width
@@ -933,7 +938,6 @@ class GraphicsEngine
     // ADVANCED RENDERING SUBSYSTEMS
     // ========================================================================
 
-    std::unique_ptr<Spark::RHI::RHIBridge> m_rhiBridge; ///< Optional RHI abstraction bridge
     std::unique_ptr<TextureSystem> m_textureSystem;
     std::unique_ptr<MaterialSystem> m_materialSystem;
     std::unique_ptr<LightingSystem> m_lightingSystem;
@@ -942,9 +946,6 @@ class GraphicsEngine
     std::unique_ptr<VRAMBudgetMonitor> m_vramBudgetMonitor;
     // Non-owning: PhysicsSystem lifetime managed by SparkEngine.cpp / EngineContext
     PhysicsSystem* m_physicsSystem = nullptr;
-
-    // Shader system
-    std::unique_ptr<class Shader> m_shader;
 
     // Render graph pipeline (DAG-based alternative to hardcoded render paths)
     std::unique_ptr<Spark::Graphics::RenderPipeline> m_renderPipeline;
@@ -958,6 +959,11 @@ class GraphicsEngine
     std::unique_ptr<Spark::Graphics::TerrainRenderer> m_terrainRenderer;
 
 #ifdef SPARK_HYBRID_RT
+    /// SDFGI/HybridRT manager. NOT constructed on any platform in stable-v1 — no
+    /// initialization path hands HybridRTManager an RHI device — so it is always
+    /// null and DispatchHybridRTPass() is a no-op. Kept (with the shared dispatch
+    /// in GraphicsEngineHybridRT.cpp) as the seam the feature will be wired into;
+    /// nothing may gate unrelated work on it being non-null.
     std::unique_ptr<Spark::Graphics::HybridRTManager> m_hybridRT;
 #endif
 
@@ -1195,6 +1201,17 @@ class GraphicsEngine
 
     // --- Device and resource creation (called once during Initialize) ---
     HRESULT CreateDeviceAndSwapChain(HWND hWnd); ///< Create D3D11 device, context, and DXGI swap chain.
+
+    /**
+     * @brief Create everything that depends on the D3D11 device (Windows).
+     *
+     * Runs after the device, swap chain, RTV and DSV exist: render targets and
+     * states, the device-backed subsystems, the renderer-integration caches and
+     * the basic shader pipeline. Initialize(hWnd) and RecoverFromDeviceLost()
+     * both call it, so a recovered device comes back with the same resources
+     * the first initialization created.
+     */
+    HRESULT CreateDeviceDependentResources();
     HRESULT CreateDevice(HWND hwnd, uint32_t width, uint32_t height, bool fullscreen);
     HRESULT CreateRenderTargetView();      ///< Create the back buffer RTV from the swap chain.
     HRESULT CreateDepthStencilView();      ///< Create the depth/stencil texture and DSV.

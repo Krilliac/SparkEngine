@@ -25,6 +25,9 @@
 #include "ShadowAtlas.h"
 #include "ScreenSpaceEffects.h"
 #include "TerrainRenderer.h"
+#include "ShaderDiskCache.h"
+#include "ShaderHotReload.h"
+#include "../Core/EngineSettings.h"
 using Spark::Graphics::PostProcessingPipeline;
 #ifdef SPARK_HYBRID_RT
 #include "HybridRT/HybridRTManager.h"
@@ -45,6 +48,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #endif // SPARK_PLATFORM_WINDOWS
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <utility>
@@ -69,6 +73,10 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         LOG_TO_CONSOLE_IMMEDIATE(L"Error: hWnd is null in GraphicsEngine::Initialize", L"ERROR");
         return E_INVALIDARG;
     }
+
+    // Remember the window: RecoverFromDeviceLost() recreates the swap chain from
+    // it, and a null OutputWindow makes that recovery fail every single time.
+    m_hwnd = hWnd;
 
     HWND hwnd = static_cast<HWND>(hWnd);
     RECT rc;
@@ -114,6 +122,90 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
         return hr;
     }
+
+    hr = CreateDeviceDependentResources();
+    if (FAILED(hr))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"CreateDeviceDependentResources failed", L"ERROR");
+        return hr;
+    }
+
+    if (m_physicsSystem)
+    {
+        hr = m_physicsSystem->Initialize();
+        if (FAILED(hr))
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize PhysicsSystem", L"ERROR");
+        }
+        else
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"PhysicsSystem initialized successfully", L"SUCCESS");
+        }
+    }
+
+    // Phase Q: activate the image denoiser. The default backend is
+    // SoftwareDenoiser (joint-bilateral filter), which works on every
+    // platform with no external SDK. A future pipeline can replace
+    // m_denoiser with an OIDN / OptiX instance before the first
+    // Execute() call. The initial settings have `enabled = false` so
+    // no CPU work happens until a real RT pass toggles it on.
+    m_denoiser = std::make_unique<Spark::Graphics::SoftwareDenoiser>();
+    Spark::Graphics::DenoiserSettings denoiserSettings;
+    denoiserSettings.backend = Spark::Graphics::DenoiserBackend::Software;
+    denoiserSettings.quality = Spark::Graphics::DenoiserQuality::Balanced;
+    m_denoiser->Initialize(denoiserSettings);
+
+    // Phase S: activate the procedural noise graph. Default output
+    // is a SimplexNode so the accessor is useful immediately; terrain
+    // / foliage / decoration systems can add more nodes via
+    // `GetProceduralNoise()->AddNode(...)` without rebuilding the
+    // engine.
+    m_proceduralNoise = std::make_unique<Spark::Graphics::NoiseGraph>();
+    {
+        auto defaultNode = std::make_unique<Spark::Graphics::SimplexNode>();
+        auto* nodePtr = m_proceduralNoise->AddNode(std::move(defaultNode));
+        m_proceduralNoise->SetOutputNode(nodePtr);
+    }
+
+    // Phase T: activate the voxel cone traced GI system with a
+    // small 32³ default grid (~130 KB) and `enabled = false`. A
+    // future GI render pass that wants full resolution can
+    // re-initialise via `GetVCTSystem()->Initialize({...})` with a
+    // 128³ grid. Keeping the default small avoids wasting ~9 MB
+    // per GraphicsEngine instance for a feature that is opt-in.
+    m_vctSystem = std::make_unique<Spark::Graphics::VCTSystem>();
+    {
+        Spark::Graphics::VCTSettings vctSettings;
+        vctSettings.enabled = false;
+        vctSettings.voxelResolution = 32;
+        vctSettings.worldExtent = 50.0f;
+        m_vctSystem->Initialize(vctSettings);
+    }
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine initialization complete - rendering ready.", L"SUCCESS");
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Graphics", 0.0);
+    return S_OK;
+}
+
+
+// ============================================================================
+// DEVICE-DEPENDENT RESOURCES
+// ============================================================================
+// Everything below needs a live ID3D11Device. Initialize(hWnd) runs it once at
+// startup and RecoverFromDeviceLost() runs it again after the device is
+// recreated, so a recovered device is not left without shaders, constant-buffer
+// rings, render targets or post-processing.
+
+HRESULT GraphicsEngine::CreateDeviceDependentResources()
+// NOTE: Intentionally exceeds 50-line guideline — linear initialization sequence
+{
+    if (!m_device || !m_context)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"CreateDeviceDependentResources called without a device", L"ERROR");
+        return E_FAIL;
+    }
+
+    HRESULT hr = S_OK;
 
     // Rasterizer (solid/wireframe), depth-stencil, and blend states are now
     // created together in CreateRenderStates() (called below) so the same
@@ -229,19 +321,6 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         }
     }
 
-    if (m_physicsSystem)
-    {
-        hr = m_physicsSystem->Initialize();
-        if (FAILED(hr))
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize PhysicsSystem", L"ERROR");
-        }
-        else
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"PhysicsSystem initialized successfully", L"SUCCESS");
-        }
-    }
-
     // Initialize renderer integration systems
     m_pipelineStateCache.Initialize(m_device.Get());
     m_renderTargetPool.Initialize(m_device.Get());
@@ -264,32 +343,8 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         }
     }
 
-    // Initialize hybrid ray tracing system (SDFGI software fallback or hardware DXR)
-#ifdef SPARK_HYBRID_RT
-    if (m_rhiBridge)
-    {
-        m_hybridRT = std::make_unique<Spark::Graphics::HybridRTManager>();
-        if (!m_hybridRT->Initialize(m_rhiBridge->GetDevice(), m_windowWidth, m_windowHeight))
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"HybridRT: Falling back to screen-space only", L"WARNING");
-            m_hybridRT.reset();
-        }
-        else
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"HybridRT initialized successfully", L"SUCCESS");
-#ifdef SPARK_HARDWARE_RT
-            if (m_hybridRT->GetActiveBackend() == Spark::RHI::RayTracingBackend::HardwareDXR)
-            {
-                auto& dxr = Spark::Graphics::DXRManager::GetInstance();
-                if (!dxr.IsAvailable())
-                {
-                    LOG_TO_CONSOLE_IMMEDIATE(L"HybridRT: DXR hardware backend selected", L"INFO");
-                }
-            }
-#endif
-        }
-    }
-#endif
+    // HybridRT (SDFGI / DXR) is not created on Windows: the renderer has no RHI
+    // device to hand HybridRTManager, and the feature is outside stable-v1.
 
     // Initialize post-processing pipeline with D3D11 device
     if (m_postProcessing)
@@ -353,7 +408,25 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         }
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine initialization complete - rendering ready.", L"SUCCESS");
+    // Shader disk cache: Shader::Initialize (which used to create it) is not
+    // reached in the shipped engine, so activate it here with a writable
+    // per-user directory before the first compile can Lookup/Store. The cache is
+    // also the object DaemonLifecycle hands a ShaderServiceClient to, so it has to
+    // exist whether or not a Shader object is ever constructed.
+    //
+    // Shader hot reload is NOT configured here. ShaderHotReload::m_enabled is only
+    // set by ShaderHotReload::Initialize(), which nothing in the shipped engine
+    // calls, so its per-frame Update() is a no-op and no reload ever compiles.
+    // Setting a target backend on it would have implied a live-reload capability
+    // that stable-v1 does not have.
+    {
+        auto& diskCache = Spark::Graphics::GetShaderDiskCache();
+        if (!diskCache.IsInitialized())
+        {
+            const std::filesystem::path userData = Spark::UserPaths::GetUserDataDir();
+            diskCache.Initialize(userData.empty() ? std::filesystem::path("ShaderCache") : userData / "ShaderCache");
+        }
+    }
 
     // Initialize basic shaders for rendering
     HRESULT shaderResult = InitializeBasicShaders();
@@ -366,46 +439,6 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         LOG_TO_CONSOLE_IMMEDIATE(L"Basic shaders initialized successfully", L"SUCCESS");
     }
 
-    // Phase Q: activate the image denoiser. The default backend is
-    // SoftwareDenoiser (joint-bilateral filter), which works on every
-    // platform with no external SDK. A future pipeline can replace
-    // m_denoiser with an OIDN / OptiX instance before the first
-    // Execute() call. The initial settings have `enabled = false` so
-    // no CPU work happens until a real RT pass toggles it on.
-    m_denoiser = std::make_unique<Spark::Graphics::SoftwareDenoiser>();
-    Spark::Graphics::DenoiserSettings denoiserSettings;
-    denoiserSettings.backend = Spark::Graphics::DenoiserBackend::Software;
-    denoiserSettings.quality = Spark::Graphics::DenoiserQuality::Balanced;
-    m_denoiser->Initialize(denoiserSettings);
-
-    // Phase S: activate the procedural noise graph. Default output
-    // is a SimplexNode so the accessor is useful immediately; terrain
-    // / foliage / decoration systems can add more nodes via
-    // `GetProceduralNoise()->AddNode(...)` without rebuilding the
-    // engine.
-    m_proceduralNoise = std::make_unique<Spark::Graphics::NoiseGraph>();
-    {
-        auto defaultNode = std::make_unique<Spark::Graphics::SimplexNode>();
-        auto* nodePtr = m_proceduralNoise->AddNode(std::move(defaultNode));
-        m_proceduralNoise->SetOutputNode(nodePtr);
-    }
-
-    // Phase T: activate the voxel cone traced GI system with a
-    // small 32³ default grid (~130 KB) and `enabled = false`. A
-    // future GI render pass that wants full resolution can
-    // re-initialise via `GetVCTSystem()->Initialize({...})` with a
-    // 128³ grid. Keeping the default small avoids wasting ~9 MB
-    // per GraphicsEngine instance for a feature that is opt-in.
-    m_vctSystem = std::make_unique<Spark::Graphics::VCTSystem>();
-    {
-        Spark::Graphics::VCTSettings vctSettings;
-        vctSettings.enabled = false;
-        vctSettings.voxelResolution = 32;
-        vctSettings.worldExtent = 50.0f;
-        m_vctSystem->Initialize(vctSettings);
-    }
-
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Graphics", 0.0);
     return S_OK;
 }
 

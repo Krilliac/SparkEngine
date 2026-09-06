@@ -18,28 +18,6 @@
 namespace SparkEditor
 {
 
-    // Shell metacharacter validation (matches VersionControlGitOps.cpp)
-    static bool ContainsShellMetachars(const std::string& str)
-    {
-        for (char c : str)
-        {
-            switch (c)
-            {
-            case ';':
-            case '|':
-            case '&':
-            case '$':
-            case '`':
-            case '\n':
-            case '\r':
-                return true;
-            default:
-                break;
-            }
-        }
-        return false;
-    }
-
     // ============================================================================
     // SceneMergeHandler
     // ============================================================================
@@ -208,7 +186,7 @@ namespace SparkEditor
                          "*.avi", "*.mov",   "*.sparkscene", "*.sparkmat", "*.sparkshader"};
 
         // Detect git availability
-        VCSOperationResult gitCheck = ExecuteCommand("git --version");
+        VCSOperationResult gitCheck = ExecuteGit({"--version"});
         if (!gitCheck.success)
         {
             m_isEnabled = false;
@@ -324,10 +302,19 @@ namespace SparkEditor
     // Repository Operations
     // ============================================================================
 
+    bool VersionControlSystem::IsOptionLike(const std::string& value)
+    {
+        return !value.empty() && value.front() == '-';
+    }
+
     VCSOperationResult VersionControlSystem::InitializeRepository(const std::string& directoryPath, VCSType vcsType)
     {
+        if (IsOptionLike(directoryPath))
+            return {false, "Repository path may not start with '-'", "", -1, 0.0f, {}};
+
+
         m_vcsType = vcsType;
-        VCSOperationResult result = ExecuteCommand("git init", directoryPath);
+        VCSOperationResult result = ExecuteGit({"init"}, directoryPath);
         if (result.success)
         {
             InitializeLFS();
@@ -340,15 +327,19 @@ namespace SparkEditor
                                                              const std::string& localPath,
                                                              std::function<void(float)> progressCallback)
     {
-        // Validate inputs to prevent command injection
-        if (ContainsShellMetachars(repositoryURL) || ContainsShellMetachars(localPath))
+        if (repositoryURL.empty() || localPath.empty())
         {
-            return {false, "Repository URL or local path contains unsafe characters", "", -1, 0.0f, {}};
+            return {false, "Repository URL and local path are required", "", -1, 0.0f, {}};
         }
-        std::string cmd = "git clone \"" + repositoryURL + "\" \"" + localPath + "\" --progress";
+        // git parses a leading '-' as an option even without a shell: "--upload-pack=<program>" as the URL
+        // makes clone execute that program. Refuse the value and close the operand list with "--".
+        if (IsOptionLike(repositoryURL) || IsOptionLike(localPath))
+        {
+            return {false, "Repository URL and local path may not start with '-'", "", -1, 0.0f, {}};
+        }
         if (progressCallback)
             progressCallback(0.0f);
-        VCSOperationResult result = ExecuteCommand(cmd);
+        VCSOperationResult result = ExecuteGit({"clone", "--progress", "--", repositoryURL, localPath});
         if (progressCallback)
             progressCallback(1.0f);
         if (result.success)
@@ -371,7 +362,7 @@ namespace SparkEditor
         m_repositoryInfo->type = VCSType::GIT;
 
         // Get remote URL
-        VCSOperationResult remoteResult = ExecuteCommand("git remote get-url origin", repositoryPath);
+        VCSOperationResult remoteResult = ExecuteGit({"remote", "get-url", "origin"}, repositoryPath);
         if (remoteResult.success)
         {
             std::string url = remoteResult.output;
@@ -381,7 +372,7 @@ namespace SparkEditor
         }
 
         // Get current branch
-        VCSOperationResult branchResult = ExecuteCommand("git branch --show-current", repositoryPath);
+        VCSOperationResult branchResult = ExecuteGit({"branch", "--show-current"}, repositoryPath);
         if (branchResult.success)
         {
             std::string branch = branchResult.output;
@@ -391,7 +382,7 @@ namespace SparkEditor
         }
 
         // Check LFS
-        VCSOperationResult lfsResult = ExecuteCommand("git lfs version", repositoryPath);
+        VCSOperationResult lfsResult = ExecuteGit({"lfs", "version"}, repositoryPath);
         m_repositoryInfo->hasLFS = lfsResult.success;
         if (lfsResult.success)
         {
@@ -427,7 +418,7 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return;
 
-        VCSOperationResult result = ExecuteCommand("git status --porcelain", m_repositoryInfo->path);
+        VCSOperationResult result = ExecuteGit({"status", "--porcelain"}, m_repositoryInfo->path);
         if (result.success)
         {
             auto changes = ParseGitStatus(result.output);

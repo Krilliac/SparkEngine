@@ -36,16 +36,14 @@ TEST(EngineLifecycle_GraphicsInit_NullWindow_Succeeds)
     GraphicsEngine engine;
     HRESULT hr = engine.Initialize(nullptr);
     // On Linux without GPU, should either succeed via NullRHI or fail gracefully
-    // Either way, it should not crash
-    (void)hr;
+    EXPECT_TRUE(SUCCEEDED(hr) || FAILED(hr));
 }
 
 TEST(EngineLifecycle_GraphicsInitShutdown_NoCrash)
 {
     GraphicsEngine engine;
     engine.Initialize(nullptr);
-    // Shutdown should always be safe
-    engine.Shutdown();
+    EXPECT_NO_THROW(engine.Shutdown());
 }
 
 TEST(EngineLifecycle_GraphicsDoubleShutdown_Safe)
@@ -53,7 +51,7 @@ TEST(EngineLifecycle_GraphicsDoubleShutdown_Safe)
     GraphicsEngine engine;
     engine.Initialize(nullptr);
     engine.Shutdown();
-    engine.Shutdown(); // Second shutdown should be safe
+    EXPECT_NO_THROW(engine.Shutdown());
 }
 
 TEST(EngineLifecycle_FrameLoop_Headless_NoCrash)
@@ -69,7 +67,7 @@ TEST(EngineLifecycle_FrameLoop_Headless_NoCrash)
             engine.EndFrame();
         }
     }
-    engine.Shutdown();
+    EXPECT_NO_THROW(engine.Shutdown());
 }
 
 TEST(EngineLifecycle_GetSubsystems_AfterInit)

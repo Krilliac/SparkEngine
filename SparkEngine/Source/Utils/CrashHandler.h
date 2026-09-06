@@ -109,6 +109,36 @@ void InstallCrashHandler(const CrashConfig& cfg);
 void TriggerCrashHandler(const char* assertMsg);
 
 /**
+ * @brief Write a crash report now, regardless of CrashConfig::triggerCrashOnAssert
+ *
+ * For failures the process does not survive and that raise no exception the
+ * unhandled-exception filter can see: a watchdog-detected freeze followed by
+ * _Exit(), and a fatal assertion followed by abort(). Those paths must leave a
+ * dump and manifest on disk, so they must not go through the assert toggle —
+ * that toggle only exists as a developer convenience for surviving asserts.
+ *
+ * @param reason Human-readable description recorded in the report
+ */
+void TriggerCrashReport(const char* reason);
+
+/**
+ * @brief Write a crash report with no user interaction and no upload
+ *
+ * For failures detected while nobody can answer a dialog and the caller is about
+ * to end the process anyway — the freeze watchdog is the case that matters: its
+ * whole purpose is to kill a hung game, so it must not wait on a consent prompt
+ * or a bounded-but-slow upload on its way to _Exit(). This writes the dump, the
+ * log and the manifest and returns; transport is left to the out-of-process
+ * reporter, or to the pending-manifest sweep on a later launch.
+ *
+ * Like TriggerCrashReport(), this is subject to the one-report-per-process rule:
+ * whichever entry point runs first owns the report.
+ *
+ * @param reason Human-readable description recorded in the report
+ */
+void TriggerCrashReportUnattended(const char* reason);
+
+/**
  * @brief Toggle whether assertion failures generate crash reports at runtime
  *
  * Allows runtime control over the CrashConfig::triggerCrashOnAssert setting

@@ -5,6 +5,7 @@
  * @brief Music system implementation — crossfading, playlists, dynamic music, reverb
  */
 
+#include "AudioMixer.h"
 #include "../Core/FaultIsolation.h"
 #include "../Utils/ContainerUtils.h"
 #include "../Utils/Validate.h"
@@ -439,12 +440,25 @@ namespace Spark::Audio
 
     MusicOcclusionResult MusicManager::ComputeOcclusion(const XMFLOAT3& sourcePos, const XMFLOAT3& listenerPos) const
     {
-        MusicOcclusionResult result{0.0f, 22000.0f};
+        constexpr float kUnoccludedCutoff = 22000.0f;
+        MusicOcclusionResult result{0.0f, kUnoccludedCutoff};
         if (!m_occlusionSettings.enabled)
             return result;
 
-        // In a full implementation, this would raycast against the physics world.
-        // For now, return no occlusion — the integration point is ready.
+        // Occlusion is traced once, by the shared AudioMixer, which owns the
+        // engine's physics reference (AudioMixer::SetPhysics). When no physics
+        // system is attached the mixer cannot measure anything, and reporting
+        // "unoccluded" here would be indistinguishable from a real clear line of
+        // sight — so bail out explicitly instead of pretending to have traced.
+        const AudioMixer& mixer = AudioMixer::GetInstance();
+        if (!mixer.IsOcclusionAvailable())
+            return result;
+
+        const OcclusionResult traced = mixer.CalculateOcclusion(listenerPos, sourcePos);
+        const float ceiling = std::clamp(m_occlusionSettings.maxOcclusionFactor, 0.0f, 1.0f);
+        result.occlusionFactor = std::clamp(traced.occlusionFactor, 0.0f, ceiling);
+        result.lowPassCutoff =
+            kUnoccludedCutoff + (m_occlusionSettings.lowPassWhenOccluded - kUnoccludedCutoff) * result.occlusionFactor;
         return result;
     }
 

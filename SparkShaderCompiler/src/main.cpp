@@ -4,8 +4,11 @@
  * @author Spark Engine Team
  * @date 2025
  *
- * Compiles HLSL/GLSL shaders for all supported backends using the
- * RHI cross-compilation pipeline (RHIFactory::CompileShader).
+ * Compiles HLSL to DirectX bytecode (DXBC, SM 5.0/5.1) through
+ * RHIFactory::CompileShader, which wraps d3dcompiler_47 on Windows. Backends
+ * whose compiler is not integrated (Vulkan/SPIR-V, OpenGL/GLSL from HLSL) are
+ * reported as failures with a non-zero exit status — the tool never writes an
+ * output file that is just a copy of its input.
  *
  * Usage:
  *   SparkShaderCompiler <input> [options]
@@ -76,16 +79,19 @@ static void PrintUsage(const char* programName)
               << "  -o <path>        Output file path\n"
               << "  -stage <stage>   Shader stage: vertex, pixel, geometry, hull, domain, compute,\n"
               << "                   raygen, closesthit, miss, anyhit, intersection, callable\n"
-              << "  -backend <api>   Target backend: d3d11, vulkan, opengl, auto (default: auto)\n"
+              << "  -backend <api>   Target backend: d3d11, d3d12, vulkan, opengl, auto (default: auto,\n"
+              << "                   inferred from the source extension; only d3d11/d3d12 have an\n"
+              << "                   integrated compiler)\n"
               << "  -entry <name>    Entry point (default: main)\n"
               << "  -D<DEFINE>       Add preprocessor define\n"
               << "  -I<path>         Add include search path\n"
               << "  -O               Enable optimization (default)\n"
               << "  -Od              Disable optimization\n"
               << "  -Zi              Enable debug info\n"
-              << "  -validate        Validate only, don't write output\n"
-              << "  -reflect         Print shader reflection data\n"
-              << "  -batch <dir>     Compile all shaders in directory\n"
+              << "  -validate        Run the compiler but write nothing; non-zero unless the\n"
+              << "                   backend has an integrated compiler and the shader compiles\n"
+              << "  -reflect         Print shader reflection data (SPIR-V output only)\n"
+              << "  -batch <dir>     Compile all shaders in directory (not with a positional input)\n"
               << "  -v               Verbose output\n"
               << "  -h, --help       Show this help\n"
               << "\n"
@@ -190,6 +196,54 @@ static std::string InferOutputPath(const std::string& inputFile, Spark::RHI::Gra
     return base + ext;
 }
 
+static std::string LowercaseExtension(const std::string& path)
+{
+    const size_t dotPos = path.find_last_of('.');
+    if (dotPos == std::string::npos)
+        return {};
+
+    std::string ext = path.substr(dotPos);
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return ext;
+}
+
+/// Turn `auto` into the backend implied by the source language, so the output
+/// extension and the compiler selection agree. Returns Auto when nothing can be
+/// inferred; the caller reports that as an error rather than guessing.
+static Spark::RHI::GraphicsBackend ResolveBackend(Spark::RHI::GraphicsBackend requested, const std::string& inputFile)
+{
+    if (requested != Spark::RHI::GraphicsBackend::Auto)
+        return requested;
+
+    const std::string ext = LowercaseExtension(inputFile);
+    if (ext == ".hlsl" || ext == ".fx")
+    {
+#ifdef _WIN32
+        return Spark::RHI::GraphicsBackend::D3D11;
+#else
+        return Spark::RHI::GraphicsBackend::Auto;
+#endif
+    }
+    if (ext == ".glsl" || ext == ".vert" || ext == ".frag" || ext == ".geom" || ext == ".comp")
+        return Spark::RHI::GraphicsBackend::OpenGL;
+
+    return Spark::RHI::GraphicsBackend::Auto;
+}
+
+/// True when a real compiler stands behind this backend. Only the Direct3D
+/// path is wired (d3dcompiler_47); everything else is a passthrough or a stub,
+/// which -validate must not report as a pass.
+static bool HasIntegratedCompiler(Spark::RHI::GraphicsBackend backend)
+{
+#ifdef _WIN32
+    return backend == Spark::RHI::GraphicsBackend::D3D11 || backend == Spark::RHI::GraphicsBackend::D3D12;
+#else
+    (void)backend;
+    return false;
+#endif
+}
+
 static Spark::RHI::RHIShaderStage InferStageFromFilename(const std::string& filename)
 {
     // Reduce to the bare stem (no directory, no extension) so unrelated path
@@ -260,11 +314,26 @@ static Spark::RHI::RHIShaderStage InferStageFromFilename(const std::string& file
 
 static int CompileSingleShader(const CompilerConfig& config)
 {
+    const Spark::RHI::GraphicsBackend backend = ResolveBackend(config.targetBackend, config.inputFile);
+    if (backend == Spark::RHI::GraphicsBackend::Auto)
+    {
+        std::cerr << "ERROR: Cannot infer a target backend for " << config.inputFile
+                  << ": pass -backend d3d11|d3d12|vulkan|opengl\n";
+        return 1;
+    }
+
+    if (config.validateOnly && !HasIntegratedCompiler(backend))
+    {
+        std::cout << config.inputFile << " - SKIPPED (no compiler backend integrated for "
+                  << Spark::RHI::GetBackendName(backend) << ")\n";
+        return 1;
+    }
+
     if (config.verbose)
     {
         std::cout << "Compiling: " << config.inputFile << "\n"
                   << "  Stage:   " << StageToString(config.stage) << "\n"
-                  << "  Backend: " << Spark::RHI::GetBackendName(config.targetBackend) << "\n"
+                  << "  Backend: " << Spark::RHI::GetBackendName(backend) << "\n"
                   << "  Entry:   " << config.entryPoint << "\n"
                   << "  Opt:     " << (config.optimization ? "on" : "off") << "\n"
                   << "  Debug:   " << (config.debugInfo ? "on" : "off") << "\n";
@@ -277,7 +346,7 @@ static int CompileSingleShader(const CompilerConfig& config)
     options.stage = config.stage;
     options.sourceFile = config.inputFile;
     options.entryPoint = config.entryPoint;
-    options.targetBackend = config.targetBackend;
+    options.targetBackend = backend;
     options.sourceLanguage = config.sourceLanguage;
     options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
     options.optimizationEnabled = config.optimization;
@@ -310,8 +379,16 @@ static int CompileSingleShader(const CompilerConfig& config)
         std::cout << "  Compiled in " << elapsed << " ms" << " (" << result.bytecode.size() << " bytes)\n";
     }
 
-    // Reflection
-    if (config.reflect && !result.bytecode.empty())
+    // Reflection. ReflectSPIRV only understands SPIR-V; printing its empty result
+    // for a DXBC blob would read as "this shader has no bindings".
+    const bool isSpirv = result.bytecode.size() >= 4 && result.bytecode[0] == 0x03 && result.bytecode[1] == 0x02 &&
+                         result.bytecode[2] == 0x23 && result.bytecode[3] == 0x07;
+    if (config.reflect && !isSpirv)
+    {
+        std::cout << "\nReflection unavailable for " << Spark::RHI::GetBackendName(backend)
+                  << " output (SPIR-V only; SPIRV-Reflect is not integrated)\n";
+    }
+    else if (config.reflect)
     {
         auto reflection = Spark::RHI::ReflectSPIRV(result.bytecode);
         std::cout << "\nShader Reflection:\n";
@@ -333,7 +410,15 @@ static int CompileSingleShader(const CompilerConfig& config)
     {
         std::string outputPath = config.outputFile;
         if (outputPath.empty())
-            outputPath = InferOutputPath(config.inputFile, config.targetBackend);
+            outputPath = InferOutputPath(config.inputFile, backend);
+
+        std::error_code pathEc;
+        if (std::filesystem::equivalent(outputPath, config.inputFile, pathEc))
+        {
+            std::cerr << "ERROR: Output would overwrite the input file (" << outputPath
+                      << "); pass -o to name a distinct output\n";
+            return 1;
+        }
 
         if (!Spark::RHI::SaveCompiledShader(outputPath, result.bytecode))
         {
@@ -459,6 +544,12 @@ static ParseResult ParseArgs(int argc, char* argv[], CompilerConfig& config)
         return ParseResult::Error;
     }
 
+    if (!config.inputFile.empty() && !config.batchDir.empty())
+    {
+        std::cerr << "Error: -batch cannot be combined with a positional input file\n";
+        return ParseResult::Error;
+    }
+
     return ParseResult::Success;
 }
 
@@ -548,16 +639,17 @@ int main(int argc, char* argv[])
             fileConfig.batchDir.clear(); // prevent recursion
             fileConfig.stage = InferStageFromFilename(shaderPath);
 
+            const Spark::RHI::GraphicsBackend fileBackend = ResolveBackend(fileConfig.targetBackend, shaderPath);
             if (fileConfig.outputFile.empty())
             {
-                fileConfig.outputFile = InferOutputPath(shaderPath, fileConfig.targetBackend);
+                fileConfig.outputFile = InferOutputPath(shaderPath, fileBackend);
             }
             else
             {
                 // In batch mode with -o, put output files in that directory
                 fs::path outDir(config.outputFile);
                 fs::path inputName = fs::path(shaderPath).filename();
-                std::string outName = InferOutputPath(inputName.string(), fileConfig.targetBackend);
+                std::string outName = InferOutputPath(inputName.string(), fileBackend);
                 fileConfig.outputFile = (outDir / outName).string();
             }
 

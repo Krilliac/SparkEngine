@@ -218,6 +218,11 @@ graph-contract tests with no GPU. Guard execute lambdas accordingly.
 
 ### Wiring truth (verify before relying)
 
+- **Shadows**: `LightingSystem::RenderShadowMaps` drives a real depth-only caster pass
+  (`Graphics/GraphicsRenderPipelinesShadowPass.h`, `RenderShadowCasterDepth`) shared by the D3D11
+  lighting pass and the render-graph shadow pass — per-light depth target, basic VS with the pixel
+  shader unbound, `MeshDrawCommand::castShadows` filtering, and a returned true draw count. What
+  ships is depth *generation*; do not read the filtering/quality table as certified sampling.
 - The live path is `RenderingPipeline::RenderGraphBased` in
   `Graphics/GraphicsEngineWindowsFrame.cpp` → `RenderPipeline::ExecuteFrame()`
   (`Graphics/RenderPipeline.cpp`), which **clears, rebuilds, compiles, and executes the
@@ -243,6 +248,13 @@ graph-contract tests with no GPU. Guard execute lambdas accordingly.
   `DXRSupport.h` claiming "no Tests/ files" predates this file and is stale. GPU-level
   certification is `open` (part of `RHI-225`/G09).
 
+**HybridRT does not run on Windows.** `GraphicsEngine::DispatchHybridRTPass` skips whenever
+`AcquireHybridRTBindings()` is not ready, and the Windows implementation
+(`GraphicsEngineWindowsFrame.cpp`) returns an empty `HybridRTBindings{}` — so the pass returns
+before `HybridRTManager::Execute` on the stable-v1 platform, whatever `SPARK_HYBRID_RT` says. The
+console commands still report manager state. Do not describe hybrid ray tracing as a shipped
+Windows feature.
+
 **HiZ occlusion culling** (`Graphics/GPUOcclusionCulling.h/.cpp`): previous-frame HiZ
 pyramid, coarse-to-fine bounding-box tests (Depth Prepass → Build HiZ → Cull → Draw).
 Has a CPU-side HiZ data path used by `Tests/TestOcclusionCulling.cpp`; the GPU/UAV path
@@ -257,6 +269,17 @@ Three layers — pick the right one:
 |---|---|---|
 | Runtime engine compile | `Graphics/ShaderCompilation{Windows,Linux}*.cpp`, `Shader.*` | Normal engine/editor operation; D3D11 HLSL on Windows, RHI cross-compile elsewhere |
 | Runtime services | `ShaderDiskCache.*` (bytecode cached by content-hash of source+defines+target), `ShaderHotReload.*` (dir watcher + auto recompile), `ShaderVariantSystem.h`, `ShaderDaemonBridge.*` (out-of-process compile service) | Iteration speed, avoiding recompiles, live editing |
+
+**Windows runtime compile is a real `D3DCompile`.** `ShaderCompilationWindows.cpp` calls
+`D3DCompile` / `D3DCompileFromFile` against `d3dcompiler_47` and produces real DXBC; there is no
+placeholder bytecode on this path. The other targets are not equally real — treat SPIR-V/DXIL/GLSL/
+MSL output as fail-closed rather than assuming a successful compile, and `SparkShaderCompiler`'s
+`-validate` only reports a pass for the backends `HasIntegratedCompiler` accepts (Direct3D).
+
+**Shader hot reload is not active in the shipped engine.** `ShaderHotReload::Initialize` has no
+production caller, so the per-frame `Update()` is a no-op and nothing ever recompiles from a file
+watch. The shader **disk cache** *is* initialized (per-user `ShaderCache/` directory) and is the
+object the shader daemon attaches to.
 | Offline tools | `SparkShaderCompiler` CLI (wraps `Spark::RHI::CompileShader`); `Shaders/compile_shaders.sh` / `.bat` (GLSL → SPIR-V via `glslangValidator`, optional `spirv-opt`) | Pre-baking `.cso`/`.spv`, CI, batch validation |
 
 Cross-compile matrix (`RHI/RHIFactory.h::CompileShader`): HLSL→DXBC (D3D11/12),
@@ -331,7 +354,13 @@ Wiki deep-dives (human-oriented, may lag code): `wiki/graphics/Render-Graph.md`,
 
 Facts verified 2026-08-23 against the working tree (uncommitted changes ahead of
 `0e1fe7e7`) by reading source and the generated readiness handoff — not by a full
-build/CI run at this exact tree. Python commands: `python3` on Linux, `python` / `py -3`
+build/CI run at this exact tree.
+
+**Updated 2026-09-05** against the uncommitted working tree of branch
+`claude/release-readiness-sweep-20260904`: the real `D3DCompile` Windows path (and the fail-closed
+other backends), the depth-only shadow-caster pass, shader hot reload having no production caller
+while the disk cache is initialized, and HybridRT being unreachable on Windows because
+`AcquireHybridRTBindings()` returns empty. Read from source; no build or GPU run at this tree. Python commands: `python3` on Linux, `python` / `py -3`
 on Windows. Re-verify before trusting:
 
 ```bash
@@ -351,6 +380,14 @@ grep -n "rendering.d3d11\|rendering.vulkan\|G09" docs/readiness/ENGINE_READINESS
 # StandardPipelineBuilder wiring status (unwired candidate as of 2026-08-23)
 grep -rln "StandardPipelineBuilder" SparkEngine SparkEditor Tests GameModules
 
+# Windows runtime compile is a real D3DCompile
+grep -n "D3DCompile\|d3dcompiler" SparkEngine/Source/Graphics/ShaderCompilationWindows.cpp | head
+# Shadow depth pass still shared by both pipelines
+grep -rn "RenderShadowCasterDepth" SparkEngine/Source/Graphics
+# HybridRT bindings on Windows (empty struct = pass never executes)
+grep -n "AcquireHybridRTBindings" -A 3 SparkEngine/Source/Graphics/GraphicsEngineWindowsFrame.cpp
+# Shader hot reload production callers (expect: none outside tests)
+grep -rn "ShaderHotReload" SparkEngine/Source SparkEditor/Source | grep -v "ShaderHotReload\."
 # DXR dxc post-build step and no-op-on-missing-cso behavior
 grep -n "DXC_EXECUTABLE\|lib_6_3" CMakeLists.txt
 

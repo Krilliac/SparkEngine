@@ -512,5 +512,61 @@ class PendingReceiptHandoffTests(unittest.TestCase):
                 verifier._verify_pending_receipt_handoff(root, expected)
 
 
+class ParityRejectionDiagnosticsTests(unittest.TestCase):
+    """A fail-closed gate that blocks publication must say what it observed."""
+
+    @staticmethod
+    def report(*messages: str) -> dict[str, Any]:
+        return {
+            "schemaVersion": 3,
+            "profile": "stable-v1",
+            "state": "clean",
+            "errorCount": 0,
+            "warningCount": len(messages),
+            "findings": [
+                {"id": f"finding-{index}", "severity": "warning", "message": message}
+                for index, message in enumerate(messages)
+            ],
+        }
+
+    def test_first_difference_names_the_first_changed_finding(self) -> None:
+        producer = self.report("same", "producer text")
+        trusted = self.report("same", "trusted text")
+        detail = verifier._difference_detail(producer, trusted)
+        self.assertIn("findings[1].message", detail)
+        self.assertIn("producer text", detail)
+        self.assertIn("trusted text", detail)
+
+    def test_first_difference_reports_finding_count_mismatch(self) -> None:
+        producer = self.report("a", "b")
+        trusted = self.report("a", "b")
+        del trusted["findings"][1]
+        detail = verifier._difference_detail(producer, trusted)
+        self.assertIn(".findings: producer has 2 entries, trusted has 1", detail)
+
+    def test_first_difference_reports_key_order_equality_cannot_see(self) -> None:
+        producer = {"errorCount": 0, "warningCount": 1}
+        trusted = {"warningCount": 1, "errorCount": 0}
+        self.assertEqual(producer, trusted)
+        self.assertIn("key order or membership differs", verifier._difference_detail(producer, trusted))
+
+    def test_difference_detail_is_bounded_and_single_line(self) -> None:
+        hostile = self.report("x" * 100_000 + "\n\r  ::error::spoofed")
+        detail = verifier._difference_detail(hostile, self.report("clean"))
+        self.assertLessEqual(len(detail), verifier.MAX_DIFFERENCE_DETAIL_CHARS)
+        self.assertNotIn("\n", detail)
+        self.assertNotIn("\r", detail)
+        self.assertNotIn(" ", detail)
+
+    def test_rendered_reports_expose_ordering_that_equality_accepts(self) -> None:
+        producer = {"schemaVersion": 3, "errorCount": 0, "findings": []}
+        trusted = {"errorCount": 0, "schemaVersion": 3, "findings": []}
+        self.assertEqual(producer, trusted)
+        self.assertNotEqual(
+            verifier.check_parity.render_report(producer),
+            verifier.check_parity.render_report(trusted),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

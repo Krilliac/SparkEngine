@@ -13,7 +13,6 @@
 
 #include "SparkGameFPS.h"
 #include "Game/Game.h"
-#include "Game/Console.h"
 #include "Game/GameMode.h"
 #include "Game/InventorySystem.h"
 #include "Game/QuestSystem.h"
@@ -21,6 +20,8 @@
 #include "Game/ProgressionSystem.h"
 #include "Game/LootSystem.h"
 #include "Game/Player.h"
+#include "Game/Enemy.h"
+#include "Game/FPSStateRules.h"
 #include "Core/EngineContext.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
@@ -35,9 +36,6 @@
 #include "Utils/InvalidStateDetector.h"
 #include <Spark/ModuleRegistry.h>
 #include "Engine/ECS/Components.h"
-#include "Engine/ECS/Components/GameplayComponents.h"
-#include "Engine/ECS/Components/AIComponents.h"
-#include "Engine/ECS/Components/PhysicsComponents.h"
 
 #include <utility>
 
@@ -67,9 +65,6 @@ namespace
 // game systems.  Owned by SparkGameModule; set during Initialize, cleared
 // during Shutdown.  Raw pointer avoids unique_ptr ABI mismatch across DLL boundary.
 SPARK_GAME_API Game* g_game = nullptr;
-
-// Global in-game console overlay used by Game::Render().
-Console g_console;
 
 #include <Spark/ModuleDllMain.h>
 
@@ -206,48 +201,55 @@ bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
         return false;
     }
 
-    // Initialize the in-game console overlay (global used by Game::Render)
-    g_console.Initialize(1280, 720);
-
     // Register game-specific console commands
     RegisterGameConsoleCommands();
 
-    // Register FPS-specific state validation rules
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+    // Register FPS-specific state validation rules on the HOST's detector.
+    // SparkEngineLib is linked statically into this DLL, so
+    // InvalidStateDetector::GetInstance() here is a module-local copy the host
+    // never ticks: rules registered on it would never run and the module would
+    // report validation it does not have.
+    Spark::InvalidStateDetector* hostDetector = m_context ? m_context->GetInvalidStateDetector() : nullptr;
+    if (!hostDetector)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                       "SparkGameFPS: host exposes no InvalidStateDetector; FPS state rules are not registered");
+        m_initialized = true;
+        console.LogSuccess("SparkGameFPS module initialized");
+        return true;
+    }
+    Spark::InvalidStateDetector& stateDetector = *hostDetector;
+
+    // The FPS actors are GameObjects with their own health, not ECS entities, so
+    // these rules inspect the module's own state. Rules are removed in Shutdown()
+    // before g_game is destroyed, so reading the global here stays safe.
+    stateDetector.AddRule({"FPS.DeadPlayerMoving", "FPS", Spark::StateViolationSeverity::Error, true,
+                           [](World&, std::vector<Spark::StateViolation>& out)
+                           {
+                               const Player* player = g_game ? g_game->GetPlayer() : nullptr;
+                               if (!player)
+                                   return;
+                               const DirectX::XMFLOAT3 velocity = player->GetVelocity();
+                               if (Spark::FPSStateRules::DeadActorIsMoving(player->GetHealth(), velocity.x, velocity.z))
+                               {
+                                   out.push_back({"FPS.DeadPlayerMoving", 0u, "Dead player still moving horizontally",
+                                                  Spark::StateViolationSeverity::Error});
+                               }
+                           }});
 
     stateDetector.AddRule(
-        {"FPS.DeadPlayerMoving", "FPS", Spark::StateViolationSeverity::Error, true,
-         [](World& w, std::vector<Spark::StateViolation>& out)
+        {"FPS.DeadEnemyActive", "FPS", Spark::StateViolationSeverity::Error, true,
+         [](World&, std::vector<Spark::StateViolation>& out)
          {
-             for (auto entity : w.GetEntitiesWith<HealthComponent, RigidBodyComponent>())
+             if (!g_game)
+                 return;
+             uint32_t index = 0;
+             for (const Enemy* enemy : g_game->GetEnemies())
              {
-                 auto* h = w.GetComponent<HealthComponent>(entity);
-                 auto* rb = w.GetComponent<RigidBodyComponent>(entity);
-                 if (!h || !rb || !h->isDead || rb->type != RigidBodyComponent::Type::Dynamic)
-                     continue;
-                 float speedSq =
-                     rb->linearVelocity.x * rb->linearVelocity.x + rb->linearVelocity.z * rb->linearVelocity.z;
-                 if (speedSq > 1.0f)
+                 const uint32_t id = index++;
+                 if (enemy && Spark::FPSStateRules::DeadActorStillActive(enemy->GetHealth(), enemy->IsActive()))
                  {
-                     out.push_back({"FPS.DeadPlayerMoving", static_cast<uint32_t>(entity),
-                                    "Dead entity moving horizontally (speedSq=" + std::to_string(speedSq) + ")",
-                                    Spark::StateViolationSeverity::Error});
-                 }
-             }
-         }});
-
-    stateDetector.AddRule(
-        {"FPS.DeadAICombat", "FPS", Spark::StateViolationSeverity::Error, true,
-         [](World& w, std::vector<Spark::StateViolation>& out)
-         {
-             for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
-             {
-                 auto* h = w.GetComponent<HealthComponent>(entity);
-                 auto* ai = w.GetComponent<AIComponent>(entity);
-                 if (h && ai && h->isDead &&
-                     (ai->state == AIComponent::State::Combat || ai->state == AIComponent::State::Alert))
-                 {
-                     out.push_back({"FPS.DeadAICombat", static_cast<uint32_t>(entity), "Dead AI in combat/alert state",
+                     out.push_back({"FPS.DeadEnemyActive", id, "Dead enemy was never deactivated",
                                     Spark::StateViolationSeverity::Error});
                  }
              }
@@ -272,7 +274,13 @@ void SparkGameModule::Shutdown()
         console.UnregisterCommand(commandName);
     }
     m_registeredConsoleCommands.clear();
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("FPS");
+    // Same instance the rules were added to; the module-local singleton would
+    // silently remove nothing and leave the host holding rules that reference
+    // g_game after it is deleted below.
+    if (Spark::InvalidStateDetector* hostDetector = m_context ? m_context->GetInvalidStateDetector() : nullptr)
+    {
+        hostDetector->RemoveRulesByCategory("FPS");
+    }
 
     if (g_game)
     {
@@ -305,8 +313,10 @@ void SparkGameModule::Render()
 
 void SparkGameModule::OnResize(int width, int height)
 {
-    if (width > 0 && height > 0)
-        g_console.Initialize(width, height);
+    // Rendering resolution is owned by the engine's GraphicsEngine; the module
+    // keeps no resolution-dependent state of its own.
+    (void)width;
+    (void)height;
 }
 
 void SparkGameModule::Pause()
@@ -407,6 +417,12 @@ void SparkGameModule::RegisterGameConsoleCommands()
         },
         "Spawn an object at coordinates");
 
+    // Cheat commands. The windows-shipping preset sets ENABLE_DEVCOMMANDS_IN_SHIPPING=OFF
+    // (so SPARK_DEVCOMMANDS_IN_SHIPPING is not defined) and MinSizeRel defines
+    // SPARK_BUILD_SHIPPING; until something consumed those macros, god/noclip shipped in
+    // the Shipping product. Registration is where the switch has to live: a command that
+    // is never registered cannot be typed.
+#if defined(SPARK_DEVCOMMANDS_IN_SHIPPING) || !defined(SPARK_BUILD_SHIPPING)
     console.RegisterCommand(
         "god",
         [game](const std::vector<std::string>& args) -> std::string
@@ -430,6 +446,7 @@ void SparkGameModule::RegisterGameConsoleCommands()
             return enable ? "Noclip enabled" : "Noclip disabled";
         },
         "Toggle noclip mode");
+#endif // dev commands
 
     console.RegisterCommand(
         "game_stats",
@@ -752,40 +769,41 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (!game)
                 return "Game not available";
-            auto& ss = Spark::SaveSystem::GetInstance();
-            Spark::SaveMetadata meta;
-            meta.saveName = "quicksave";
-            meta.sceneName = "combat_arena";
-            meta.playTime = 0;
-            auto slots = ss.GetSaveSlots();
-            return "Quick save: " + std::to_string(slots.size()) + " existing saves. Save system ready.";
+            std::string message;
+            game->QuickSaveProfile(message);
+            return message;
         },
         "Quick save current game state");
 
     console.RegisterCommand(
         "quickload",
-        [](const std::vector<std::string>&) -> std::string
+        [game](const std::vector<std::string>&) -> std::string
         {
-            auto& ss = Spark::SaveSystem::GetInstance();
-            auto slots = ss.GetSaveSlots();
-            if (slots.empty())
-                return "No saves found.";
-            return "Save system has " + std::to_string(slots.size()) + " save(s) available.";
+            if (!game)
+                return "Game not available";
+            std::string message;
+            game->QuickLoadProfile(message);
+            return message;
         },
         "Quick load last saved state");
 
     console.RegisterCommand(
         "save_list",
-        [](const std::vector<std::string>&) -> std::string
+        [game](const std::vector<std::string>&) -> std::string
         {
-            auto& ss = Spark::SaveSystem::GetInstance();
-            auto slots = ss.GetSaveSlots();
+            auto* context = game ? game->GetEngineContext() : nullptr;
+            auto* saveSystem = context ? context->GetSaveSystem() : nullptr;
+            if (!saveSystem)
+                return "Save system unavailable";
+            auto slots = saveSystem->GetSaveSlots();
             if (slots.empty())
                 return "No save files found.";
             std::string result = "=== Save Slots ===\n";
             for (const auto& slot : slots)
             {
-                result += slot.saveName + " - " + slot.sceneName + "\n";
+                // The slot id is what load/delete accept, so the listing is only
+                // actionable when it is printed alongside the display name.
+                result += slot.slotName + " - " + slot.saveName + " - " + slot.sceneName + "\n";
             }
             return result;
         },

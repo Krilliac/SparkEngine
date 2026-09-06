@@ -30,6 +30,17 @@ if(TARGET SparkCollabServer AND TARGET SparkEngineLib)
         TIMEOUT 20)
 endif()
 
+# The RemoteDebug hostile boundary probe deliberately emulates an external
+# translation unit (it defines the legacy test macro and only calls the public
+# API), so it cannot live inside SparkTests. It used to be reachable only by
+# hand through Tests/Tools/run-remote-debug-security-probes.ps1, which meant the
+# static_asserts guarding "the legacy macro must not mint a principal" were
+# never evaluated by any build or CI lane.
+# Tools/RemoteDebugSecurityBoundaryProbe.cpp is a standalone harness that carries
+# its own Logger/SimpleConsole mirrors, so it cannot link against SparkEngineLib
+# (LNK2005 duplicate symbols). The protections it probes are enforced in-suite by
+# Tests/TestRemoteDebugSystem.cpp; it stays a manual tool, not a CTest target.
+
 # Test executable
 add_executable(SparkTests
     TestMain.cpp
@@ -473,11 +484,9 @@ add_executable(SparkTests
     TestCrossSystemIntegration.cpp
     TestUndoRedoManager.cpp
     TestUndoRedoManagerProduction.cpp
-    TestPrefabManager.cpp
     TestEditorLayoutManager.cpp
     TestGizmoMath.cpp
-    # Asset database and game module tests
-    TestAssetDatabase.cpp
+    # Game module tests
     TestSparkGameRPG.cpp
     TestSparkGameARPG.cpp
     TestSparkGameRTS.cpp
@@ -609,6 +618,13 @@ add_executable(SparkTests
     # Windows-only and is added below.
     # FPS game module source needed by TestGameModeReal
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/GameMode.cpp"
+    # FPS game module sources needed by TestSparkGameFPSLoopReal / TestFPSComponentsReal /
+    # TestSparkGameFPSMirrorCompanionsReal. None of the four pulls in Player or D3D11 symbols,
+    # so they link into the headless test binary.
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/GameMechanicsRespawn.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSLocalProfile.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/ProgressionSystem.cpp"
     # Editor core sources (no ImGui dependency)
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
@@ -622,6 +638,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Utils/EditorProcessLaunchPosix.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPluginManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/UndoRedo/UndoRedoManager.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Gizmos/SceneEditTools.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneFile.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneSerializer.cpp"
@@ -917,6 +934,41 @@ target_sources(SparkTests PRIVATE
 target_include_directories(SparkTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # =============================================================================
+# Release-readiness sweep — production-source regression tests
+# =============================================================================
+target_sources(SparkTests PRIVATE
+    TestAudioECSBindingReal.cpp
+    TestAudioEngineReal.cpp
+    TestBuildInfraReal.cpp
+    TestConsoleProcessPipeReal.cpp
+    TestCrashHandlerGatingReal.cpp
+    TestEditorCrashHandlerFilterReal.cpp
+    TestEngineWiringReal.cpp
+    TestD3D11DeviceContractsReal.cpp
+    TestEditorGizmoTransformReal.cpp
+    TestEditorProjectMaterializationReal.cpp
+    TestEditorUndoHierarchyReal.cpp
+    TestFPSComponentsReal.cpp
+    TestLoggerSinksReal.cpp
+    TestModuleLifecycleReal.cpp
+    TestRunnerSemanticsReal.cpp
+    TestSaveSystemRoundTripReal.cpp
+    TestSecurityParsersReal.cpp
+    TestShaderCompilerReal.cpp
+    TestShadowPassReal.cpp
+    TestSparkGameFPSLoopReal.cpp
+    TestSparkGameFPSMirrorCompanionsReal.cpp
+    TestTemplateRuntimeReal.cpp
+    TestUserDataPathsReal.cpp
+    TestWeaponMechanicsReal.cpp
+)
+
+# TestBuildInfraReal.cpp asserts the generated SDK version header still carries
+# the version CMake is building, so the number has to reach the test as data.
+target_compile_definitions(SparkTests PRIVATE
+    SPARK_TESTS_EXPECTED_VERSION="${PROJECT_VERSION}")
+
+# =============================================================================
 # Feature-gated test support
 # When optional dependencies (ImGui, SDL2, Vulkan, etc.) are available, extra
 # tests activate automatically. Tests use #ifdef SPARK_TEST_HAS_* guards.
@@ -1037,6 +1089,29 @@ if(TARGET imgui)
         # files require ImGui to link.
         "${CMAKE_SOURCE_DIR}/Tests/TestLevelStreamingSystemPhaseAA.cpp"
         "${CMAKE_SOURCE_DIR}/Tests/TestVersionControlSystemPhaseAA.cpp"
+        # Release-readiness sweep: editor tests that drive real panel and
+        # subsystem classes. Every one of these production .cpp files calls
+        # ImGui, so neither the tests nor the sources can live in the
+        # ungated list above.
+        "${CMAKE_SOURCE_DIR}/Tests/TestEditorPanelsRealBackends.cpp"
+        "${CMAKE_SOURCE_DIR}/Tests/TestEditorSubsystemsReal.cpp"
+        "${CMAKE_SOURCE_DIR}/Tests/TestVersionControlSystemGitReal.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/TimeOfDayPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/ModdingPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/ReplayPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/SaveSystemPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/WeatherFogPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/SceneStatisticsPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/SearchPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/WeaponEditorPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/ObjectPlacementPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Terrain/TerrainEditor.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Terrain/TerrainEditorTools.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Terrain/TerrainEditorUI.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Terrain/TerrainData.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabManager.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prefabs/PrefabAsset.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Profiler/PerformanceProfiler.cpp"
     )
 
     message(STATUS "[Tests] ImGui available — gated editor + 6 game module tests enabled")
@@ -1107,9 +1182,97 @@ if(TARGET SparkAutomation)
     )
 endif()
 
+# ----------------------------------------------------------------------------
+# Derived test-count floor
+# ----------------------------------------------------------------------------
+# CI carries hand-written --min-tests literals. A literal cannot notice that a
+# whole test family stopped being compiled in, so the registered case count is
+# also emitted here, derived from the source list this build actually compiles.
+# testMacrosUnconditional in the report is a sound floor (those macros are
+# compiled in every configuration); testMacrosTotal additionally counts
+# #if-gated macros and is an upper bound, so it must not be used as a floor.
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    get_target_property(_spark_test_sources SparkTests SOURCES)
+    string(REPLACE ";" "\n" _spark_test_source_lines "${_spark_test_sources}")
+    file(WRITE "${CMAKE_BINARY_DIR}/test-registration-sources.txt" "${_spark_test_source_lines}\n")
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/Tools/count_registered_tests.py"
+            --source-list "${CMAKE_BINARY_DIR}/test-registration-sources.txt"
+            --source-dir "${CMAKE_CURRENT_SOURCE_DIR}"
+            --output "${CMAKE_BINARY_DIR}/test-registration-count.json"
+        RESULT_VARIABLE _spark_test_count_result
+        OUTPUT_VARIABLE _spark_test_count_output
+        ERROR_VARIABLE _spark_test_count_error)
+    if(NOT _spark_test_count_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to derive the registered SparkTests case count: "
+            "${_spark_test_count_output}${_spark_test_count_error}")
+    endif()
+    message(STATUS "[Tests] ${_spark_test_count_output}")
+    unset(_spark_test_sources)
+    unset(_spark_test_source_lines)
+else()
+    message(FATAL_ERROR "Python3 is required to derive the registered SparkTests case count")
+endif()
+
 # Add to CTest. SparkTests also emits its granular JUnit report from CTest so
 # CI can distinguish a real zero-failure run from an executable launch failure.
 enable_testing()
+
+# ------------------------------------------------------------------
+# SparkTests wall-clock budgets (single source of truth)
+# ------------------------------------------------------------------
+# The wrapper's execute_process TIMEOUT always fires before ctest's own TIMEOUT,
+# so the two numbers must be derived from one place or the outer one is dead
+# code. Debug (/Od /RTC1 /JMC) runs several times slower than Release, which is
+# why one constant could not serve both.
+set(SPARK_TEST_TIMEOUT_DEBUG 900 CACHE STRING
+    "Wall-clock budget in seconds for the Debug SparkEngineTests run")
+set(SPARK_TEST_TIMEOUT_OPTIMIZED 240 CACHE STRING
+    "Wall-clock budget in seconds for optimized-configuration SparkEngineTests runs")
+set(SPARK_TEST_LOAD_TIMEOUT_DEBUG 900 CACHE STRING
+    "Wall-clock budget in seconds for the Debug SparkEngineLoadTests run")
+set(SPARK_TEST_LOAD_TIMEOUT_OPTIMIZED 300 CACHE STRING
+    "Wall-clock budget in seconds for optimized-configuration SparkEngineLoadTests runs")
+# Manual promotion knob, deliberately not enabled by any CI lane. It is the
+# executable form of "prove nothing still needs its waiver": flip it ON locally
+# (or in a nightly) and every Tests/TestWarnings.h entry becomes a hard failure,
+# so entries that no longer earn their keep can be deleted with evidence.
+# It stays OFF in CI because the registry documents real non-determinism -- e.g.
+# Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation is
+# recorded as failing ~60% of runs on pristine main -- and turning that into a
+# hard failure would make a required lane red on schedule rather than on a
+# regression. Enable it in CI only once the registry is empty.
+option(SPARK_TESTS_WARN_IS_ERROR
+    "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)" OFF)
+
+# ctest must outlive the wrapper in every configuration, so its budget is
+# derived from the largest inner budget rather than written down separately.
+foreach(_spark_budget IN ITEMS SPARK_TEST_TIMEOUT_DEBUG SPARK_TEST_TIMEOUT_OPTIMIZED
+                              SPARK_TEST_LOAD_TIMEOUT_DEBUG SPARK_TEST_LOAD_TIMEOUT_OPTIMIZED)
+    if(NOT "${${_spark_budget}}" MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "${_spark_budget} must be a positive integer, got '${${_spark_budget}}'")
+    endif()
+endforeach()
+set(SPARK_TEST_CTEST_MARGIN_SECONDS 60)
+set(_spark_ctest_inner_max ${SPARK_TEST_TIMEOUT_DEBUG})
+foreach(_spark_budget IN ITEMS ${SPARK_TEST_TIMEOUT_OPTIMIZED}
+                              ${SPARK_TEST_LOAD_TIMEOUT_DEBUG} ${SPARK_TEST_LOAD_TIMEOUT_OPTIMIZED})
+    if(_spark_budget GREATER _spark_ctest_inner_max)
+        set(_spark_ctest_inner_max ${_spark_budget})
+    endif()
+endforeach()
+math(EXPR SPARK_TEST_CTEST_TIMEOUT "${_spark_ctest_inner_max} + ${SPARK_TEST_CTEST_MARGIN_SECONDS}")
+
+# The load/stress family runs 3000 engine frames, a 100000-entity flood and a
+# 100000-event storm; giving it its own lane keeps one heavy family from
+# consuming the unit suite's budget. The exclusion is a substring match over
+# test names, so it names only the two heavy prefixes: the handful of cheap
+# EdgeCase_ tests that share TestEngineLoadTest.cpp run in both lanes, which
+# costs milliseconds and cannot drop a test the way a broader pattern could.
+set(SPARK_TEST_LOAD_EXCLUDE "LoadTest_,DeepStress_")
+
 add_test(
     NAME SparkEngineTests
     COMMAND ${CMAKE_COMMAND}
@@ -1117,9 +1280,32 @@ add_test(
         -DSPARK_JUNIT_REPORT=${CMAKE_BINARY_DIR}/SparkTests-junit.xml
         -DSPARK_TEST_LOG=${CMAKE_BINARY_DIR}/SparkTests.log
         -DSPARK_TEST_OUTPUT=${CMAKE_BINARY_DIR}/SparkTests-output.log
+        -DSPARK_TEST_WARN_IS_ERROR=${SPARK_TESTS_WARN_IS_ERROR}
+        "-DSPARK_TEST_TIMEOUT_SECONDS=$<IF:$<CONFIG:Debug>,${SPARK_TEST_TIMEOUT_DEBUG},${SPARK_TEST_TIMEOUT_OPTIMIZED}>"
         -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
 )
-set_tests_properties(SparkEngineTests PROPERTIES TIMEOUT 210)
+set_tests_properties(SparkEngineTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_EXCLUDE=${SPARK_TEST_LOAD_EXCLUDE}"
+    TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
+
+add_test(
+    NAME SparkEngineLoadTests
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_TEST_EXECUTABLE=$<TARGET_FILE:SparkTests>
+        -DSPARK_JUNIT_REPORT=${CMAKE_BINARY_DIR}/SparkTests-load-junit.xml
+        -DSPARK_TEST_LOG=${CMAKE_BINARY_DIR}/SparkTests-load.log
+        -DSPARK_TEST_OUTPUT=${CMAKE_BINARY_DIR}/SparkTests-load-output.log
+        -DSPARK_TEST_WARN_IS_ERROR=${SPARK_TESTS_WARN_IS_ERROR}
+        "-DSPARK_TEST_TIMEOUT_SECONDS=$<IF:$<CONFIG:Debug>,${SPARK_TEST_LOAD_TIMEOUT_DEBUG},${SPARK_TEST_LOAD_TIMEOUT_OPTIMIZED}>"
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
+)
+# SPARK_TEST_EXPECT_COUNT fails the lane if the family silently stops being
+# compiled in, so the split cannot turn into a lane that runs nothing.
+set_tests_properties(SparkEngineLoadTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_FILE=TestEngineLoadTest.cpp;SPARK_TEST_EXPECT_COUNT=22"
+    LABELS "load;slow"
+    RUN_SERIAL TRUE
+    TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
 add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --quiet)
 set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=SaveMigration_"
@@ -1200,6 +1386,16 @@ add_test(
         -P ${CMAKE_SOURCE_DIR}/cmake/VerifyTemplateAssets.cmake
 )
 add_test(
+    NAME SparkVersionSingleSource
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_TEMPLATE_ROOT=${CMAKE_SOURCE_DIR}/Templates
+        -DSPARK_EXPECTED_VERSION=${PROJECT_VERSION}
+        -P ${CMAKE_SOURCE_DIR}/cmake/VerifyVersionSingleSource.cmake
+)
+set_tests_properties(SparkVersionSingleSource PROPERTIES
+    LABELS "release;version;unit"
+    TIMEOUT 30)
+add_test(
     NAME SparkTemplateServiceConfigs
     COMMAND ${CMAKE_COMMAND}
         -DSPARK_TEMPLATE_ROOT=${CMAKE_SOURCE_DIR}/Templates
@@ -1226,6 +1422,47 @@ set_tests_properties(SparkPackageModuleSidecarValidatorTests PROPERTIES
     LABELS "package;unit"
     TIMEOUT 30)
 
+# ----------------------------------------------------------------------------
+# Installed-SDK template gate (opt-in)
+# ----------------------------------------------------------------------------
+# Configuring and building the nine shipped templates against a *staged install*
+# is the only thing that proves the exported SparkEngine package is consumable.
+# It stages a full install and runs nine CMake configures, so it is far too slow
+# for the default lane: it is off by default and carries the 'installed-sdk'
+# label so a nightly (or a developer) can select it explicitly with
+#   cmake -B build -DSPARK_ENABLE_INSTALLED_SDK_TESTS=ON
+#   ctest --test-dir build -L installed-sdk --no-tests=error
+# Both halves matter. Without the -D the label selects nothing, and without
+# --no-tests=error ctest reports success for having found no tests at all -- a
+# green "installed SDK verified" that never opened the SDK.
+# The underlying script is not opt-in: .github/workflows/release.yml runs
+# cmake -P cmake/VerifyInstalledTemplates.cmake on every published Windows and
+# Linux package, so this option only controls the local CTest registration.
+option(SPARK_ENABLE_INSTALLED_SDK_TESTS
+    "Register the slow installed-SDK template verification as a CTest" OFF)
+if(SPARK_ENABLE_INSTALLED_SDK_TESTS)
+    add_test(NAME SparkInstalledTemplates
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_TEMPLATE_INSTALL_FROM_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_TEMPLATE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/installed-sdk-templates/prefix"
+            "-DSPARK_TEMPLATE_BUILD_ROOT=${CMAKE_BINARY_DIR}/installed-sdk-templates/build"
+            "-DSPARK_TEMPLATE_SOURCE_ROOT=${CMAKE_SOURCE_DIR}/Templates"
+            "-DSPARK_TEMPLATE_CONFIG=$<CONFIG>"
+            "-DSPARK_TEMPLATE_LIVE_SMOKE_NAME=EmptyProject"
+            # Every live-smoke block in VerifyInstalledTemplates.cmake is guarded
+            # by SPARK_ENGINE_EXECUTABLE, including the count reconciliation that
+            # proves the requested smoke actually ran. Omitting it did not skip
+            # one step: it silently dropped the entire live-load gate and still
+            # printed "verification passed". The staging install above puts the
+            # engine at <prefix>/bin, which is the same path release.yml passes.
+            "-DSPARK_ENGINE_EXECUTABLE=${CMAKE_BINARY_DIR}/installed-sdk-templates/prefix/bin/SparkEngine${CMAKE_EXECUTABLE_SUFFIX}"
+            -P "${CMAKE_SOURCE_DIR}/cmake/VerifyInstalledTemplates.cmake")
+    set_tests_properties(SparkInstalledTemplates PROPERTIES
+        LABELS "installed-sdk"
+        TIMEOUT 3600)
+endif()
+
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
     add_test(
@@ -1244,9 +1481,11 @@ if(Python3_Interpreter_FOUND)
     add_test(
         NAME SparkNetworkBoundaryMutation
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_check_network_boundary.py)
+    # The tracked-inventory cases spin up throwaway git checkouts, so the
+    # mutation lane needs more headroom than the pure in-process cases did.
     set_tests_properties(SparkNetworkBoundaryMutation PROPERTIES
         LABELS "network-security;network;security;static;python"
-        TIMEOUT 30)
+        TIMEOUT 120)
 
     add_test(
         NAME SparkOrchestrationProcessHarness

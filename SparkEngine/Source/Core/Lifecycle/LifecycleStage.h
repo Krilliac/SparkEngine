@@ -18,6 +18,10 @@ namespace Spark::Core::Lifecycle
 
     enum class LifecycleOrder : uint16_t
     {
+        /// Debug hooks, logging sinks/levels and detectors must be live before any
+        /// other stage initializes, or every SystemPreInit/PostInit hook fired
+        /// during networking/gameplay init is a silent no-op.
+        Diagnostics = 50,
         Physics = 100,
         Animation = 200,
         AI = 300,

@@ -92,9 +92,15 @@ AssetPipeline* GraphicsEngine::GetAssetPipeline() const
     return m_assetPipeline.get();
 }
 
+Spark::RHI::RHIBridge* GraphicsEngine::GetRHIBridge() const
+{
+    // The Windows renderer drives D3D11 directly and owns no RHI bridge.
+    return nullptr;
+}
+
 Spark::RHI::IRHIDevice* GraphicsEngine::GetRHIDevice() const
 {
-    return m_rhiBridge ? m_rhiBridge->GetDevice() : nullptr;
+    return nullptr;
 }
 
 LightManager* GraphicsEngine::GetLightManager() const

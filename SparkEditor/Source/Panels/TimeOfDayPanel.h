@@ -11,10 +11,10 @@ namespace SparkEditor
 {
 
     /**
-     * @brief Panel for controlling the TimeOfDaySystem day/night cycle
+     * @brief Panel for controlling the engine TimeOfDaySystem day/night cycle
      *
-     * Provides a time slider, time scale control, sun/ambient preview,
-     * and quick-jump presets for common times of day.
+     * Every control writes through to Spark::TimeOfDaySystem and every value shown
+     * is read back from it; the panel keeps no private day/night simulation.
      */
     class TimeOfDayPanel : public EditorPanel
     {
@@ -27,23 +27,39 @@ namespace SparkEditor
         void Render() override;
         void Shutdown() override;
 
+        /// @brief Set the engine clock to @p hour (hours, [0, 24)).
+        void SetHour(float hour);
+        /// @brief Set the engine time scale (game seconds per real second).
+        void SetTimeScale(float scale);
+        /// @brief Pause or resume the engine clock.
+        void SetPaused(bool paused);
+
+        /// @brief Current hour reported by the engine TimeOfDaySystem.
+        float GetHour() const;
+        /// @brief Current time scale reported by the engine TimeOfDaySystem.
+        float GetTimeScale() const;
+        /// @brief Whether the engine TimeOfDaySystem is paused.
+        bool IsPaused() const;
+
+        /**
+         * @brief Whether this panel advances the clock itself.
+         *
+         * True in the standalone editor, where no engine lifecycle ticks the
+         * TimeOfDaySystem. False once an EngineContext exists in the process,
+         * because the gameplay lifecycle already ticks the same system and a
+         * second tick would double the elapsed game time.
+         */
+        bool IsDrivingClock() const;
+
       private:
         void RenderTimeControls();
         void RenderPresets();
         void RenderLightingPreview();
         void RenderDayInfo();
 
-        float m_currentHour = 12.0f;
-        float m_timeScale = 60.0f;
-        bool m_paused = false;
-        int m_dayCount = 0;
-
-        // Cached lighting state
-        float m_sunDirection[3] = {0.0f, 1.0f, 0.0f};
-        float m_sunColor[3] = {1.0f, 1.0f, 1.0f};
-        float m_sunIntensity = 1.0f;
-        float m_ambientColor[3] = {0.1f, 0.1f, 0.12f};
-        float m_ambientIntensity = 0.3f;
+        // ImGui slider scratch values; re-synced from the engine system every Update().
+        float m_hourSlider = 12.0f;
+        float m_timeScaleSlider = 60.0f;
     };
 
 } // namespace SparkEditor

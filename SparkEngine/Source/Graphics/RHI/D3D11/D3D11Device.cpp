@@ -35,9 +35,18 @@ namespace Spark
             // D3D11 BUFFER
             // ============================================================================
 
-            D3D11Buffer::D3D11Buffer(const RHIBufferDesc& desc, ComPtr<ID3D11Buffer> buffer)
-                : m_desc(desc), m_buffer(std::move(buffer))
+            D3D11Buffer::D3D11Buffer(const RHIBufferDesc& desc, ComPtr<ID3D11Buffer> buffer,
+                                     ComPtr<ID3D11ShaderResourceView> srv, ComPtr<ID3D11UnorderedAccessView> uav)
+                : m_desc(desc), m_buffer(std::move(buffer)), m_srv(std::move(srv)), m_uav(std::move(uav))
             {
+                Spark::Graphics::RHIValidationLayer::GetInstance().TrackResource(
+                    reinterpret_cast<uint64_t>(m_buffer.Get()), m_desc.debugName, "Buffer");
+            }
+
+            D3D11Buffer::~D3D11Buffer()
+            {
+                Spark::Graphics::RHIValidationLayer::GetInstance().UntrackResource(
+                    reinterpret_cast<uint64_t>(m_buffer.Get()));
             }
 
             // ============================================================================
@@ -50,6 +59,14 @@ namespace Spark
                 : m_desc(desc), m_resource(std::move(resource)), m_srv(std::move(srv)), m_rtv(std::move(rtv)),
                   m_dsv(std::move(dsv))
             {
+                Spark::Graphics::RHIValidationLayer::GetInstance().TrackResource(
+                    reinterpret_cast<uint64_t>(m_resource.Get()), m_desc.debugName, "Texture2D");
+            }
+
+            D3D11Texture::~D3D11Texture()
+            {
+                Spark::Graphics::RHIValidationLayer::GetInstance().UntrackResource(
+                    reinterpret_cast<uint64_t>(m_resource.Get()));
             }
 
             // ============================================================================
@@ -250,12 +267,17 @@ namespace Spark
 
             bool D3D11SwapChain::Present(bool vsync)
             {
+                if (!m_swapChain)
+                    return false;
                 HRESULT hr = m_swapChain->Present(vsync ? 1 : 0, 0);
                 return SUCCEEDED(hr);
             }
 
             bool D3D11SwapChain::Resize(uint32_t width, uint32_t height)
             {
+                if (!m_swapChain)
+                    return false;
+
                 m_backBuffer.reset();
                 m_desc.width = width;
                 m_desc.height = height;
@@ -274,6 +296,9 @@ namespace Spark
 
             bool D3D11SwapChain::CreateBackBufferViews()
             {
+                if (!m_swapChain || !m_device)
+                    return false;
+
                 ComPtr<ID3D11Texture2D> backBufferTex;
                 HRESULT hr = m_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), &backBufferTex);
                 if (FAILED(hr))
@@ -304,9 +329,39 @@ namespace Spark
             {
             }
 
-            void D3D11CommandList::Begin() {}
-            void D3D11CommandList::End() {}
-            void D3D11CommandList::Reset() {}
+            D3D11CommandList::D3D11CommandList(ComPtr<ID3D11DeviceContext> deferredContext)
+                : m_ownedContext(std::move(deferredContext)), m_context(m_ownedContext.Get()), m_isImmediate(false)
+            {
+            }
+
+            void D3D11CommandList::Begin()
+            {
+                m_recordedCommands.Reset();
+                m_currentPipeline = nullptr;
+            }
+
+            void D3D11CommandList::End()
+            {
+                if (m_isImmediate || !m_context)
+                    return;
+
+                // Deferred contexts must be finished into an ID3D11CommandList before
+                // D3D11Device::ExecuteCommandList can replay them on the immediate context.
+                m_recordedCommands.Reset();
+                HRESULT hr = m_context->FinishCommandList(FALSE, &m_recordedCommands);
+                if (FAILED(hr))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "D3D11CommandList::End: FinishCommandList failed (HRESULT 0x%08lX)", hr);
+                    m_recordedCommands.Reset();
+                }
+            }
+
+            void D3D11CommandList::Reset()
+            {
+                m_recordedCommands.Reset();
+                m_currentPipeline = nullptr;
+            }
 
             void D3D11CommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
                                                     IRHITexture* depthStencil)
@@ -529,6 +584,9 @@ namespace Spark
 
             void D3D11CommandList::Draw(uint32_t vertexCount, uint32_t startVertex)
             {
+                // Debug builds only — the release build of RHIValidationLayer is an
+                // inline no-op, so this costs nothing in shipping configurations.
+                Spark::Graphics::RHIValidationLayer::GetInstance().ValidateDrawCall(vertexCount, 0);
                 m_context->Draw(vertexCount, startVertex);
             }
 
@@ -540,6 +598,7 @@ namespace Spark
             void D3D11CommandList::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex,
                                                  uint32_t startInstance)
             {
+                Spark::Graphics::RHIValidationLayer::GetInstance().ValidateDrawCall(vertexCount, 0);
                 m_context->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
             }
 
@@ -554,11 +613,30 @@ namespace Spark
                 m_context->Dispatch(x, y, z);
             }
 
+            namespace
+            {
+                /// D3D11 rejects indirect draws whose args buffer lacks MISC_DRAWINDIRECT_ARGS.
+                /// Fail loudly instead of letting the runtime drop the call silently.
+                bool IsUsableIndirectArgsBuffer(const D3D11Buffer* buffer, const char* callSite)
+                {
+                    if (buffer->GetDesc().usage & RHIBufferUsage::IndirectArgs)
+                        return true;
+
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "%s: args buffer '%s' was not created with RHIBufferUsage::IndirectArgs — "
+                                    "the D3D11 runtime would reject the call",
+                                    callSite, buffer->GetDebugName().c_str());
+                    return false;
+                }
+            } // namespace
+
             void D3D11CommandList::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
                 if (!argsBuffer)
                     return;
                 auto* d3dBuf = static_cast<D3D11Buffer*>(argsBuffer);
+                if (!IsUsableIndirectArgsBuffer(d3dBuf, "DrawInstancedIndirect"))
+                    return;
                 m_context->DrawInstancedIndirect(d3dBuf->GetD3D11Buffer(), argsOffset);
             }
 
@@ -567,6 +645,8 @@ namespace Spark
                 if (!argsBuffer)
                     return;
                 auto* d3dBuf = static_cast<D3D11Buffer*>(argsBuffer);
+                if (!IsUsableIndirectArgsBuffer(d3dBuf, "DrawIndexedInstancedIndirect"))
+                    return;
                 m_context->DrawIndexedInstancedIndirect(d3dBuf->GetD3D11Buffer(), argsOffset);
             }
 
@@ -575,6 +655,8 @@ namespace Spark
                 if (!argsBuffer)
                     return;
                 auto* d3dBuf = static_cast<D3D11Buffer*>(argsBuffer);
+                if (!IsUsableIndirectArgsBuffer(d3dBuf, "DispatchIndirect"))
+                    return;
                 m_context->DispatchIndirect(d3dBuf->GetD3D11Buffer(), argsOffset);
             }
 
@@ -635,8 +717,11 @@ namespace Spark
                 if (desc.enableDebugLayer)
                     createFlags |= D3D11_CREATE_DEVICE_DEBUG;
 
-                D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0,
-                                                     D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0};
+                // Feature level 11_0 is the floor: every shader the engine compiles targets
+                // Shader Model 5.0, which a FL10.x device cannot create. Accepting 10_x here
+                // produced a device that initialized "successfully" and then failed every
+                // CreateVertexShader call.
+                D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
 
                 ComPtr<ID3D11Device> device;
                 ComPtr<ID3D11DeviceContext> context;
@@ -730,7 +815,7 @@ namespace Spark
                 m_capabilities.maxTextureSize = (achievedLevel >= D3D_FEATURE_LEVEL_11_0) ? 16384 : 8192;
                 m_capabilities.maxRenderTargets = 8;
                 m_capabilities.maxAnisotropy = 16.0f;
-                m_capabilities.apiVersion = "DirectX 11.1";
+                m_capabilities.apiVersion = (achievedLevel >= D3D_FEATURE_LEVEL_11_1) ? "DirectX 11.1" : "DirectX 11.0";
                 m_capabilities.isSoftwareDevice = m_isSoftwareDevice;
 
                 // Query actual MSAA support
@@ -790,25 +875,116 @@ namespace Spark
 
             std::unique_ptr<IRHISwapChain> D3D11Device::CreateSwapChain(const RHISwapChainDesc& desc)
             {
-                return std::make_unique<D3D11SwapChain>(m_device.Get(), desc);
+                if (!m_device)
+                    return nullptr;
+
+                auto swapChain = std::make_unique<D3D11SwapChain>(m_device.Get(), desc);
+                if (!swapChain->IsValid())
+                {
+                    // The constructor already logged the DXGI failure. Returning a live
+                    // object here would let callers (RHIBridge) treat a dead swap chain
+                    // as success and crash on the first Present().
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "D3D11Device::CreateSwapChain: swap chain unusable — returning nullptr");
+                    return nullptr;
+                }
+                return swapChain;
             }
 
             std::unique_ptr<IRHIBuffer> D3D11Device::CreateBuffer(const RHIBufferDesc& desc)
             {
+                // A D3D11 buffer UAV only exists on a DEFAULT-usage resource, so honouring a
+                // Storage request can require moving the allocation off Dynamic. effectiveDesc
+                // is what the buffer is really created with and what D3D11Buffer reports, so
+                // MapBuffer/UpdateBuffer afterwards pick the path that matches the resource.
+                RHIBufferDesc effectiveDesc = desc;
+
                 D3D11_BUFFER_DESC d3dDesc = {};
-                d3dDesc.ByteWidth = static_cast<UINT>(desc.size);
-                d3dDesc.StructureByteStride = desc.stride;
+                d3dDesc.ByteWidth = static_cast<UINT>(effectiveDesc.size);
+                // D3D11 only accepts a structure stride on structured buffers; the RHI
+                // stride for vertex/index buffers lives in D3D11Buffer::GetStride().
+                if (effectiveDesc.usage & RHIBufferUsage::Structured)
+                    d3dDesc.StructureByteStride = effectiveDesc.stride;
 
-                if (desc.usage & RHIBufferUsage::Vertex)
+                if (effectiveDesc.usage & RHIBufferUsage::Vertex)
                     d3dDesc.BindFlags |= D3D11_BIND_VERTEX_BUFFER;
-                if (desc.usage & RHIBufferUsage::Index)
+                if (effectiveDesc.usage & RHIBufferUsage::Index)
                     d3dDesc.BindFlags |= D3D11_BIND_INDEX_BUFFER;
-                if (desc.usage & RHIBufferUsage::Constant)
+                if (effectiveDesc.usage & RHIBufferUsage::Constant)
                     d3dDesc.BindFlags |= D3D11_BIND_CONSTANT_BUFFER;
-                if (desc.usage & RHIBufferUsage::Structured)
+                if (effectiveDesc.usage & RHIBufferUsage::Structured)
+                {
+                    if (effectiveDesc.stride == 0)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::CreateBuffer: structured buffer '%s' needs a non-zero stride",
+                                        effectiveDesc.debugName.c_str());
+                        return nullptr;
+                    }
+                    if (effectiveDesc.size % effectiveDesc.stride != 0)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::CreateBuffer: structured buffer '%s' size %llu is not a whole "
+                                        "multiple of stride %u",
+                                        effectiveDesc.debugName.c_str(),
+                                        static_cast<unsigned long long>(effectiveDesc.size), effectiveDesc.stride);
+                        return nullptr;
+                    }
                     d3dDesc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+                    d3dDesc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+                }
+                if (effectiveDesc.usage & RHIBufferUsage::Storage)
+                {
+                    // Never hand back a live buffer whose GetD3D11UAV() is null: a compute pass
+                    // would bind nothing and write nowhere while the caller's null check passes.
+                    // Either the UAV is created, or CreateBuffer fails loudly.
+                    if (!(effectiveDesc.usage & RHIBufferUsage::Structured))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::CreateBuffer: '%s' requested Storage (UAV) without Structured "
+                                        "usage — this backend has no UAV for a plain buffer",
+                                        effectiveDesc.debugName.c_str());
+                        return nullptr;
+                    }
+                    if (effectiveDesc.access == RHIBufferAccess::Staging ||
+                        effectiveDesc.access == RHIBufferAccess::ReadBack)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::CreateBuffer: '%s' requested Storage (UAV) on a staging/readback "
+                                        "buffer — D3D11 forbids bind flags on STAGING resources",
+                                        effectiveDesc.debugName.c_str());
+                        return nullptr;
+                    }
+                    if (effectiveDesc.access == RHIBufferAccess::Dynamic)
+                    {
+                        // A DYNAMIC buffer cannot carry a UAV. The UAV is the load-bearing half
+                        // of the request, so promote the allocation to DEFAULT and keep it:
+                        // UpdateBuffer falls back to UpdateSubresource for a Static buffer, so
+                        // CPU-side writes still land. Only MapBuffer becomes unavailable.
+                        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                       "D3D11Device::CreateBuffer: '%s' requested Storage (UAV) with Dynamic access — "
+                                       "promoting to Static (DEFAULT) usage; MapBuffer is unavailable on it",
+                                       effectiveDesc.debugName.c_str());
+                        effectiveDesc.access = RHIBufferAccess::Static;
+                    }
+                    d3dDesc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+                }
+                if (effectiveDesc.usage & RHIBufferUsage::IndirectArgs)
+                {
+                    // D3D11 rejects a buffer carrying both of these misc flags; without the
+                    // check the create fails with an opaque HRESULT.
+                    if (d3dDesc.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::CreateBuffer: '%s' combines Structured and IndirectArgs usage — "
+                                        "D3D11 misc flags are mutually exclusive",
+                                        effectiveDesc.debugName.c_str());
+                        return nullptr;
+                    }
+                    d3dDesc.MiscFlags |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+                }
 
-                switch (desc.access)
+                switch (effectiveDesc.access)
                 {
                 case RHIBufferAccess::Static:
                     d3dDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -830,26 +1006,146 @@ namespace Spark
                 }
 
                 D3D11_SUBRESOURCE_DATA initData = {};
-                initData.pSysMem = desc.initialData;
+                initData.pSysMem = effectiveDesc.initialData;
 
                 ComPtr<ID3D11Buffer> buffer;
-                HRESULT hr = m_device->CreateBuffer(&d3dDesc, desc.initialData ? &initData : nullptr, &buffer);
+                HRESULT hr = m_device->CreateBuffer(&d3dDesc, effectiveDesc.initialData ? &initData : nullptr, &buffer);
                 if (FAILED(hr))
+                {
+                    SPARK_LOG_ERROR(
+                        Spark::LogCategory::Graphics,
+                        "D3D11Device::CreateBuffer: '%s' failed (HRESULT 0x%08lX, bind 0x%04X, misc 0x%04X)",
+                        effectiveDesc.debugName.c_str(), hr, d3dDesc.BindFlags, d3dDesc.MiscFlags);
                     return nullptr;
+                }
 
-                return std::make_unique<D3D11Buffer>(desc, std::move(buffer));
+                const UINT elementCount =
+                    effectiveDesc.stride > 0 ? static_cast<UINT>(effectiveDesc.size / effectiveDesc.stride) : 0;
+
+                ComPtr<ID3D11ShaderResourceView> srv;
+                if ((d3dDesc.BindFlags & D3D11_BIND_SHADER_RESOURCE) && elementCount > 0)
+                {
+                    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                    srvDesc.Format = DXGI_FORMAT_UNKNOWN; // Structured buffers use the structure stride
+                    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+                    srvDesc.Buffer.FirstElement = 0;
+                    srvDesc.Buffer.NumElements = elementCount;
+                    hr = m_device->CreateShaderResourceView(buffer.Get(), &srvDesc, &srv);
+                    if (FAILED(hr))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::CreateBuffer: SRV creation failed for '%s' (HRESULT 0x%08lX)",
+                                        effectiveDesc.debugName.c_str(), hr);
+                        return nullptr;
+                    }
+                }
+
+                ComPtr<ID3D11UnorderedAccessView> uav;
+                if ((d3dDesc.BindFlags & D3D11_BIND_UNORDERED_ACCESS) && elementCount > 0)
+                {
+                    D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+                    uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+                    uavDesc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+                    uavDesc.Buffer.FirstElement = 0;
+                    uavDesc.Buffer.NumElements = elementCount;
+                    hr = m_device->CreateUnorderedAccessView(buffer.Get(), &uavDesc, &uav);
+                    if (FAILED(hr))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::CreateBuffer: UAV creation failed for '%s' (HRESULT 0x%08lX)",
+                                        effectiveDesc.debugName.c_str(), hr);
+                        return nullptr;
+                    }
+                }
+
+                // effectiveDesc, not desc: a promoted Storage buffer must report Static so
+                // MapBuffer refuses it and UpdateBuffer takes the UpdateSubresource path.
+                return std::make_unique<D3D11Buffer>(effectiveDesc, std::move(buffer), std::move(srv), std::move(uav));
             }
+
+            namespace
+            {
+                /// @brief Typeless resource format a depth texture must use to also carry an SRV.
+                /// Returns DXGI_FORMAT_UNKNOWN for non-depth formats.
+                DXGI_FORMAT DepthTypelessFormat(DXGI_FORMAT depthFormat)
+                {
+                    switch (depthFormat)
+                    {
+                    case DXGI_FORMAT_D16_UNORM:
+                        return DXGI_FORMAT_R16_TYPELESS;
+                    case DXGI_FORMAT_D24_UNORM_S8_UINT:
+                        return DXGI_FORMAT_R24G8_TYPELESS;
+                    case DXGI_FORMAT_D32_FLOAT:
+                        return DXGI_FORMAT_R32_TYPELESS;
+                    default:
+                        return DXGI_FORMAT_UNKNOWN;
+                    }
+                }
+
+                /// @brief SRV format that reads the depth channel of a depth texture.
+                DXGI_FORMAT DepthShaderResourceFormat(DXGI_FORMAT depthFormat)
+                {
+                    switch (depthFormat)
+                    {
+                    case DXGI_FORMAT_D16_UNORM:
+                        return DXGI_FORMAT_R16_UNORM;
+                    case DXGI_FORMAT_D24_UNORM_S8_UINT:
+                        return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+                    case DXGI_FORMAT_D32_FLOAT:
+                        return DXGI_FORMAT_R32_FLOAT;
+                    default:
+                        return DXGI_FORMAT_UNKNOWN;
+                    }
+                }
+            } // namespace
 
             std::unique_ptr<IRHITexture> D3D11Device::CreateTexture(const RHITextureDesc& desc)
             {
-                DXGI_FORMAT format = ConvertFormat(desc.format);
+                if (desc.type != RHITextureType::Texture2D && desc.type != RHITextureType::Texture2DArray)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "D3D11Device::CreateTexture: '%s' requested texture type %d — the D3D11 backend "
+                                    "only implements Texture2D/Texture2DArray",
+                                    desc.debugName.c_str(), static_cast<int>(desc.type));
+                    return nullptr;
+                }
+
+                const DXGI_FORMAT format = ConvertFormat(desc.format);
+                if (format == DXGI_FORMAT_UNKNOWN)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "D3D11Device::CreateTexture: '%s' has an unsupported pixel format",
+                                    desc.debugName.c_str());
+                    return nullptr;
+                }
+
+                if (desc.sampleCount > 1)
+                {
+                    UINT qualityLevels = 0;
+                    if (FAILED(m_device->CheckMultisampleQualityLevels(format, desc.sampleCount, &qualityLevels)) ||
+                        qualityLevels == 0)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::CreateTexture: '%s' requested %u MSAA samples, unsupported for "
+                                        "this format",
+                                        desc.debugName.c_str(), desc.sampleCount);
+                        return nullptr;
+                    }
+                }
+
+                // A depth texture that is also sampled must be allocated typeless, with a
+                // typed DSV and a typed SRV — D3D11 rejects an SRV on a DXGI_FORMAT_D* resource.
+                const DXGI_FORMAT typelessFormat = DepthTypelessFormat(format);
+                const bool depthReadback = typelessFormat != DXGI_FORMAT_UNKNOWN &&
+                                           (desc.usage & RHITextureUsage::ShaderResource) &&
+                                           (desc.usage & RHITextureUsage::DepthStencil);
 
                 D3D11_TEXTURE2D_DESC texDesc = {};
                 texDesc.Width = desc.width;
                 texDesc.Height = desc.height;
                 texDesc.MipLevels = desc.mipLevels;
                 texDesc.ArraySize = desc.arraySize;
-                texDesc.Format = format;
+                texDesc.Format = depthReadback ? typelessFormat : format;
                 texDesc.SampleDesc.Count = desc.sampleCount;
                 texDesc.SampleDesc.Quality = 0;
                 texDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -872,9 +1168,16 @@ namespace Spark
                 if (desc.usage & RHITextureUsage::ShaderResource)
                 {
                     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-                    srvDesc.Format = format;
-                    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-                    srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                    srvDesc.Format = depthReadback ? DepthShaderResourceFormat(format) : format;
+                    if (desc.sampleCount > 1)
+                    {
+                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                    }
+                    else
+                    {
+                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                        srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                    }
                     hr = m_device->CreateShaderResourceView(texture.Get(), &srvDesc, &srv);
                     if (FAILED(hr))
                         return nullptr;
@@ -893,7 +1196,8 @@ namespace Spark
                 {
                     D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
                     dsvDesc.Format = format;
-                    dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+                    dsvDesc.ViewDimension =
+                        desc.sampleCount > 1 ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
                     hr = m_device->CreateDepthStencilView(texture.Get(), &dsvDesc, &dsv);
                     if (FAILED(hr))
                         return nullptr;
@@ -916,13 +1220,31 @@ namespace Spark
                 ComPtr<ID3D11ShaderResourceView> srv;
                 if (desc.usage & RHITextureUsage::ShaderResource)
                 {
+                    const DXGI_FORMAT format = ConvertFormat(desc.format);
+                    // Depth resources are allocated typeless by the renderer; an SRV on
+                    // them must use the R-typed view format, never DXGI_FORMAT_D*.
+                    const DXGI_FORMAT depthSRVFormat = DepthShaderResourceFormat(format);
+
                     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-                    srvDesc.Format = ConvertFormat(desc.format);
-                    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-                    srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                    srvDesc.Format = depthSRVFormat != DXGI_FORMAT_UNKNOWN ? depthSRVFormat : format;
+                    if (desc.sampleCount > 1)
+                    {
+                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                    }
+                    else
+                    {
+                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                        srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                    }
                     HRESULT srvHr = m_device->CreateShaderResourceView(resource.Get(), &srvDesc, &srv);
                     if (FAILED(srvHr))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::WrapNativeTexture: SRV creation failed for '%s' "
+                                        "(HRESULT 0x%08lX)",
+                                        desc.debugName.c_str(), srvHr);
                         return nullptr;
+                    }
                 }
 
                 return std::make_unique<D3D11Texture>(desc, resource, std::move(srv));
@@ -1285,14 +1607,51 @@ namespace Spark
 
             std::unique_ptr<IRHICommandList> D3D11Device::CreateDeferredCommandList()
             {
+                if (!m_device)
+                    return nullptr;
+
                 ComPtr<ID3D11DeviceContext> deferredContext;
                 HRESULT hr = m_device->CreateDeferredContext(0, &deferredContext);
                 if (FAILED(hr))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "D3D11Device::CreateDeferredCommandList: CreateDeferredContext failed "
+                                    "(HRESULT 0x%08lX)",
+                                    hr);
                     return nullptr;
-                return std::make_unique<D3D11CommandList>(deferredContext.Get(), false);
+                }
+                // The command list owns the deferred context — a raw pointer here would
+                // dangle as soon as this local ComPtr released the last reference.
+                return std::make_unique<D3D11CommandList>(std::move(deferredContext));
             }
 
-            void D3D11Device::ExecuteCommandList(IRHICommandList*) {}
+            void D3D11Device::ExecuteCommandList(IRHICommandList* commandList)
+            {
+                if (!commandList || !m_immediateContext)
+                    return;
+
+                auto* d3dList = static_cast<D3D11CommandList*>(commandList);
+                if (d3dList->IsImmediate())
+                    return; // Immediate work has already been submitted.
+
+                ID3D11CommandList* recorded = d3dList->GetRecordedCommandList();
+                if (!recorded)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "D3D11Device::ExecuteCommandList: deferred list has no recorded commands — "
+                                   "call End() before executing");
+                    return;
+                }
+
+                // RestoreContextState = TRUE. The Windows renderer draws directly on the
+                // immediate context and keeps its shaders, input layout, constant buffers
+                // and render targets bound across a frame; replaying a deferred list with
+                // FALSE clears all of that, so a mid-frame execute would silently blank
+                // the following draws. The save/restore costs a little per execute and
+                // buys back the contract every caller assumes.
+                m_immediateContext->ExecuteCommandList(recorded, TRUE);
+                d3dList->ReleaseRecordedCommandList();
+            }
 
             void D3D11Device::BeginFrame()
             {

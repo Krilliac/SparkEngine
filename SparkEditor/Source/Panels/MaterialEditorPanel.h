@@ -238,6 +238,14 @@ namespace SparkEditor
         };
         std::vector<ShaderInfo> m_availableShaders;
 
+        /**
+     * @brief Rebuild m_availableShaders by enumerating the shipped shader tree
+     *
+     * Replaces a hard-coded list of twelve filenames, of which only one existed, so the picker cannot offer
+     * a shader the engine has no file for.
+     */
+        void PopulateAvailableShaders();
+
         // UI state
         std::string m_searchFilter;
         bool m_showPreview = true;

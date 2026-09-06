@@ -15,6 +15,7 @@ import time
 import unittest
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
+from typing import Any
 from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -23,6 +24,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
 
 import docs_contract
 import docs_currentness
+import assets as site_assets
 import common as site_common
 import generate as site_generate
 import validate_docs_links as links
@@ -731,6 +733,240 @@ class RepositoryEvidenceTests(unittest.TestCase):
             {"IDC_SparkEngine", "IDD_SparkEngine_DIALOG", "IDI_SparkEngine"} <= names
         )
         self.assertFalse({"IDC_S", "IDD_S", "IDI_S"} & names)
+
+
+class PublishedDocumentationHealthTests(unittest.TestCase):
+    """The bundle's docs health must be measured evidence, never a fallback."""
+
+    GENERATORS = docs_currentness.REQUIRED_GENERATORS
+
+    def payload(self, **overrides: object) -> dict:
+        base = {
+            "schemaVersion": 1,
+            "mode": "update",
+            "sourceCommit": EXACT_SHA,
+            "sourceCommittedAt": COMMITTED_AT,
+            "startedAt": COMMITTED_AT,
+            "completedAt": COMMITTED_AT,
+            "overall": "pass",
+            "successes": len(self.GENERATORS),
+            "failures": 0,
+            "exitCode": 0,
+            "results": [
+                {"id": identifier, "status": "current", "message": "generator completed successfully"}
+                for identifier in self.GENERATORS
+            ],
+        }
+        base.update(overrides)
+        return base
+
+    def test_every_declared_generator_appears_exactly_once(self) -> None:
+        health = site_generate.summarize_documentation_health(self.payload(), 0, EXACT_SHA)
+        self.assertEqual("current", health["status"])
+        self.assertEqual(list(self.GENERATORS), [check["name"] for check in health["checks"]])
+        self.assertEqual(len(self.GENERATORS), health["successes"])
+        self.assertEqual(0, health["failures"])
+
+    def test_a_failed_generator_blocks_current(self) -> None:
+        results = [dict(row) for row in self.payload()["results"]]
+        results[2] = {"id": results[2]["id"], "status": "failed", "message": "generator exited 1"}
+        health = site_generate.summarize_documentation_health(
+            self.payload(results=results, successes=len(self.GENERATORS) - 1, failures=1, overall="fail", exitCode=1),
+            1,
+            EXACT_SHA,
+        )
+        self.assertEqual("refresh-pending", health["status"])
+        self.assertEqual(1, health["failures"])
+        stale = [check["name"] for check in health["checks"] if check["status"] != "current"]
+        self.assertEqual([self.GENERATORS[2]], stale)
+
+    def test_aggregate_counts_must_agree_with_the_rows(self) -> None:
+        results = [dict(row) for row in self.payload()["results"]]
+        results[0] = {"id": results[0]["id"], "status": "failed", "message": "generator exited 1"}
+        with self.assertRaisesRegex(site_common.SiteDataError, "aggregate counts"):
+            site_generate.summarize_documentation_health(self.payload(results=results), 1, EXACT_SHA)
+
+    def test_a_repeated_generator_is_refused(self) -> None:
+        results = [dict(row) for row in self.payload()["results"]]
+        results[1] = dict(results[0])
+        with self.assertRaisesRegex(site_common.SiteDataError, "repeats generators"):
+            site_generate.summarize_documentation_health(self.payload(results=results), 0, EXACT_SHA)
+
+    def test_evidence_for_another_commit_is_refused(self) -> None:
+        with self.assertRaisesRegex(site_common.SiteDataError, "bound to"):
+            site_generate.summarize_documentation_health(self.payload(), 0, "b" * 40)
+
+    def test_empty_results_are_refused(self) -> None:
+        with self.assertRaisesRegex(site_common.SiteDataError, "no generator results"):
+            site_generate.summarize_documentation_health(self.payload(results=[]), 0, EXACT_SHA)
+
+    def test_a_nonzero_run_is_never_current(self) -> None:
+        health = site_generate.summarize_documentation_health(self.payload(), 3, EXACT_SHA)
+        self.assertEqual("refresh-pending", health["status"])
+
+    def test_missing_evidence_raises_instead_of_publishing_unknown(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-health-evidence-") as temporary:
+            missing = Path(temporary) / "absent.json"
+            with self.assertRaises(site_common.SiteDataError):
+                site_generate.documentation_health_block(EXACT_SHA, True, missing)
+
+    def test_evidence_file_is_consumed_when_supplied(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-health-evidence-") as temporary:
+            path = Path(temporary) / "health.json"
+            path.write_text(json.dumps(self.payload()), encoding="utf-8")
+            health = site_generate.documentation_health_block(EXACT_SHA, True, path)
+        self.assertEqual("current", health["status"])
+        self.assertEqual(len(self.GENERATORS), len(health["checks"]))
+
+    def test_skipping_the_check_is_labelled_skipped(self) -> None:
+        health = site_generate.documentation_health_block(EXACT_SHA, False, None)
+        self.assertEqual("skipped", health["status"])
+        self.assertNotEqual("current", health["status"])
+
+
+class AssetIntegrityTests(unittest.TestCase):
+    """The --assets gate must fail on tampering, not merely on absence."""
+
+    def package(self, entries: list[dict[str, Any]], files: dict[str, bytes]) -> tuple[Path, list[str]]:
+        directory = Path(self.temporary.name)
+        for relative, payload in files.items():
+            target = directory / "Templates" / "Probe" / "Assets" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+        manifest = directory / "Templates" / "Probe" / "Assets" / "manifest.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "manifestVersion": 1,
+                    "package": "Probe",
+                    "license": "Spark Open License 1.0",
+                    "assets": entries,
+                }
+            ),
+            encoding="utf-8",
+        )
+        tracked = [f"Templates/Probe/Assets/{name}" for name in files] + [
+            "Templates/Probe/Assets/manifest.json"
+        ]
+        return directory, tracked
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="asset-integrity-fixture-")
+        self.addCleanup(self.temporary.cleanup)
+
+    def findings(self, entries: list[dict[str, Any]], files: dict[str, bytes], tracked: list[str] | None = None) -> list[str]:
+        directory, discovered = self.package(entries, files)
+        with mock.patch.object(site_assets, "REPO_ROOT", directory):
+            results = site_assets.validate_package(
+                "Templates/Probe/Assets", frozenset(tracked if tracked is not None else discovered)
+            )
+        return [message for _, message in results]
+
+    @staticmethod
+    def digest(payload: bytes) -> str:
+        return hashlib.sha256(payload).hexdigest()
+
+    def test_intact_package_is_clean(self) -> None:
+        payload = b"intact\n"
+        self.assertEqual(
+            [],
+            self.findings(
+                [{"path": "art.png", "origin": "repository-authored", "sha256": self.digest(payload)}],
+                {"art.png": payload},
+            ),
+        )
+
+    def test_tampered_content_fails(self) -> None:
+        messages = self.findings(
+            [{"path": "art.png", "origin": "repository-authored", "sha256": self.digest(b"expected")}],
+            {"art.png": b"tampered"},
+        )
+        self.assertTrue(any("differs from its manifest SHA-256" in message for message in messages), messages)
+
+    def test_case_mismatched_reference_fails(self) -> None:
+        payload = b"intact\n"
+        messages = self.findings(
+            [{"path": "Art.png", "origin": "repository-authored", "sha256": self.digest(payload)}],
+            {"art.png": payload},
+        )
+        self.assertTrue(any("resolves to no tracked file" in message for message in messages), messages)
+
+    def test_traversing_and_absolute_references_fail(self) -> None:
+        for reference, fragment in (
+            ("../escape.png", "traverses outside its package"),
+            ("/etc/passwd", "is absolute"),
+            ("Models\\block.obj", "uses backslashes"),
+        ):
+            with self.subTest(reference=reference):
+                messages = self.findings(
+                    [{"path": reference, "origin": "authored", "sha256": "0" * 64}],
+                    {"art.png": b"intact\n"},
+                    tracked=["Templates/Probe/Assets/art.png", "Templates/Probe/Assets/manifest.json"],
+                )
+                self.assertTrue(any(fragment in message for message in messages), messages)
+
+    def test_undeclared_shipped_file_fails(self) -> None:
+        payload = b"intact\n"
+        messages = self.findings(
+            [{"path": "art.png", "origin": "authored", "sha256": self.digest(payload)}],
+            {"art.png": payload, "stowaway.bin": b"extra"},
+        )
+        self.assertTrue(any("no manifest declares it" in message for message in messages), messages)
+
+    def test_repository_asset_packages_pass_the_real_walk(self) -> None:
+        integrity = [
+            f"{location}: {message}"
+            for location, message in site_assets.validate_assets()
+            if not message.startswith("asset package has no manifest.json")
+        ]
+        self.assertEqual([], integrity)
+
+
+class TrackedInventoryAndExecutionEvidenceTests(unittest.TestCase):
+    """On-disk fixtures for tracked-tree metrics and CTest execution evidence."""
+
+    def test_tracked_inventory_ignores_untracked_sources(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="tracked-inventory-") as temporary:
+            root = Path(temporary)
+            (root / "Source").mkdir()
+            (root / "Source" / "tracked.cpp").write_bytes(b"int tracked = 0;\n")
+            (root / "Source" / "untracked.cpp").write_bytes(b"int untracked = 0;\n")
+            with mock.patch.object(site_common, "REPO_ROOT", root), mock.patch.object(
+                site_common, "tracked_paths", lambda: frozenset({"Source/tracked.cpp"})
+            ):
+                found = site_common.tracked_files(root / "Source", {".cpp"})
+        self.assertEqual(["tracked.cpp"], [path.name for path in found])
+
+    def test_execution_metrics_come_from_a_ctest_report(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ctest-junit-") as temporary:
+            report = Path(temporary) / "ctest-junit.xml"
+            report.write_text(
+                "<testsuite>"
+                "<testcase name='a'/>"
+                "<testcase name='b'><failure/></testcase>"
+                "<testcase name='c'><skipped/></testcase>"
+                "</testsuite>",
+                encoding="utf-8",
+            )
+            summary = site_generate.ctest_summary(report)
+        self.assertEqual({"executed": 3, "failed": 1, "skipped": 1}, summary)
+
+    def test_ctest_report_with_a_doctype_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ctest-junit-") as temporary:
+            report = Path(temporary) / "ctest-junit.xml"
+            report.write_text(
+                "<!DOCTYPE testsuite><testsuite><testcase name='a'/></testsuite>",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(site_common.SiteDataError, "doctype"):
+                site_generate.ctest_summary(report)
+
+    def test_empty_ctest_report_is_not_a_pass(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ctest-junit-") as temporary:
+            report = Path(temporary) / "ctest-junit.xml"
+            report.write_text("<testsuite/>", encoding="utf-8")
+            with self.assertRaisesRegex(site_common.SiteDataError, "no test cases"):
+                site_generate.ctest_summary(report)
 
 
 if __name__ == "__main__":

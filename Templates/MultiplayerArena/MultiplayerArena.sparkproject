@@ -4,6 +4,7 @@
   "version": "0.2.0",
   "description": "A symmetric local cyan-versus-magenta arena match with lobby readiness, split-keyboard combat, scoring, respawns, and a timed finish.",
   "engineVersion": "1.0.0",
+  "template": "multiplayer-arena-legacy",
   "defaultScene": "Scenes/Arena.sparkscene",
   "lastOpenedScene": "Scenes/Arena.sparkscene",
   "createdTime": 0,

@@ -5,52 +5,93 @@
 
 #include "TimeOfDayPanel.h"
 #include "../Core/EditorIcons.h"
-#include <imgui.h>
-#include <iostream>
-#include <cstdio>
-#include <cmath>
+#include "Core/EngineContext.h"
+#include "Engine/World/TimeOfDaySystem.h"
 #include "Utils/LogMacros.h"
+#include <cstdio>
+#include <imgui.h>
 
 namespace SparkEditor
 {
+
+    namespace
+    {
+        /**
+         * @brief Resolve the one TimeOfDaySystem this process uses.
+         *
+         * The engine registers the same singleton in the EngineContext, so both
+         * paths reach one instance; the context lookup keeps the panel correct if
+         * a host ever registers a different instance.
+         */
+        Spark::TimeOfDaySystem& ResolveTimeOfDay()
+        {
+            if (auto* context = ::EngineContext::Get())
+            {
+                if (auto* timeOfDay = context->GetTimeOfDay())
+                {
+                    return *timeOfDay;
+                }
+            }
+            return Spark::TimeOfDaySystem::GetInstance();
+        }
+    } // namespace
 
     TimeOfDayPanel::TimeOfDayPanel() : EditorPanel("Time of Day", "time_of_day_panel") {}
 
     bool TimeOfDayPanel::Initialize()
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Time of Day panel");
+        m_hourSlider = GetHour();
+        m_timeScaleSlider = GetTimeScale();
         return true;
     }
 
     void TimeOfDayPanel::Update(float deltaTime)
     {
-        if (!m_paused && m_timeScale > 0.0f)
+        if (IsDrivingClock())
         {
-            m_currentHour += (deltaTime * m_timeScale) / 3600.0f;
-            while (m_currentHour >= 24.0f)
-            {
-                m_currentHour -= 24.0f;
-                ++m_dayCount;
-            }
-
-            // Update sun direction from hour (simplified spherical mapping)
-            float angle = (m_currentHour / 24.0f) * 2.0f * 3.14159265f - 1.5707963f;
-            m_sunDirection[0] = std::cos(angle);
-            m_sunDirection[1] = std::sin(angle);
-            m_sunDirection[2] = 0.3f;
-
-            // Sun intensity based on elevation
-            m_sunIntensity = std::max(0.0f, m_sunDirection[1]);
-
-            // Sun color shifts warm at dawn/dusk
-            float elevationFactor = std::max(0.0f, std::min(1.0f, m_sunDirection[1] * 3.0f));
-            m_sunColor[0] = 1.0f;
-            m_sunColor[1] = 0.7f + 0.3f * elevationFactor;
-            m_sunColor[2] = 0.4f + 0.6f * elevationFactor;
-
-            // Ambient dims at night
-            m_ambientIntensity = 0.1f + 0.2f * m_sunIntensity;
+            ResolveTimeOfDay().Update(deltaTime);
         }
+
+        m_hourSlider = GetHour();
+        m_timeScaleSlider = GetTimeScale();
+    }
+
+    void TimeOfDayPanel::SetHour(float hour)
+    {
+        ResolveTimeOfDay().SetTimeOfDay(hour);
+        m_hourSlider = GetHour();
+    }
+
+    void TimeOfDayPanel::SetTimeScale(float scale)
+    {
+        ResolveTimeOfDay().SetTimeScale(scale);
+        m_timeScaleSlider = GetTimeScale();
+    }
+
+    void TimeOfDayPanel::SetPaused(bool paused)
+    {
+        ResolveTimeOfDay().SetPaused(paused);
+    }
+
+    float TimeOfDayPanel::GetHour() const
+    {
+        return ResolveTimeOfDay().GetTimeOfDay();
+    }
+
+    float TimeOfDayPanel::GetTimeScale() const
+    {
+        return ResolveTimeOfDay().GetTimeScale();
+    }
+
+    bool TimeOfDayPanel::IsPaused() const
+    {
+        return ResolveTimeOfDay().IsPaused();
+    }
+
+    bool TimeOfDayPanel::IsDrivingClock() const
+    {
+        return ::EngineContext::Get() == nullptr;
     }
 
     void TimeOfDayPanel::Render()
@@ -78,44 +119,48 @@ namespace SparkEditor
 
     void TimeOfDayPanel::RenderTimeControls()
     {
-        // Time slider
-        int hours = static_cast<int>(m_currentHour);
-        int minutes = static_cast<int>((m_currentHour - hours) * 60.0f);
+        const float hour = GetHour();
+        const int hours = static_cast<int>(hour);
+        const int minutes = static_cast<int>((hour - static_cast<float>(hours)) * 60.0f);
         char timeStr[16];
         snprintf(timeStr, sizeof(timeStr), "%02d:%02d", hours, minutes);
 
         ImGui::Text(ICON_FA_CLOCK " Time: %s", timeStr);
 
-        if (ImGui::SliderFloat("##TimeSlider", &m_currentHour, 0.0f, 23.99f, "%.2f h"))
+        if (ImGui::SliderFloat("##TimeSlider", &m_hourSlider, 0.0f, 23.99f, "%.2f h"))
         {
-            // Clamp to valid range
-            if (m_currentHour < 0.0f)
-                m_currentHour = 0.0f;
+            SetHour(m_hourSlider);
         }
 
-        // Time scale
         ImGui::Text(ICON_FA_TACHOMETER_ALT " Time Scale:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(150);
-        ImGui::DragFloat("##TimeScale", &m_timeScale, 1.0f, 0.0f, 3600.0f, "%.0f x");
+        if (ImGui::DragFloat("##TimeScale", &m_timeScaleSlider, 1.0f, 0.0f, 3600.0f, "%.0f x"))
+        {
+            SetTimeScale(m_timeScaleSlider);
+        }
 
-        // Quick scale buttons
         ImGui::SameLine();
         if (ImGui::SmallButton("1x"))
-            m_timeScale = 1.0f;
+            SetTimeScale(1.0f);
         ImGui::SameLine();
         if (ImGui::SmallButton("10x"))
-            m_timeScale = 10.0f;
+            SetTimeScale(10.0f);
         ImGui::SameLine();
         if (ImGui::SmallButton("60x"))
-            m_timeScale = 60.0f;
+            SetTimeScale(60.0f);
         ImGui::SameLine();
         if (ImGui::SmallButton("600x"))
-            m_timeScale = 600.0f;
+            SetTimeScale(600.0f);
 
-        // Pause/resume
-        if (ImGui::Button(m_paused ? ICON_FA_PLAY " Resume" : ICON_FA_PAUSE " Pause"))
-            m_paused = !m_paused;
+        const bool paused = IsPaused();
+        if (ImGui::Button(paused ? ICON_FA_PLAY " Resume" : ICON_FA_PAUSE " Pause"))
+            SetPaused(!paused);
+
+        if (!IsDrivingClock())
+        {
+            ImGui::TextDisabled("Clock advanced by the running engine lifecycle");
+        }
     }
 
     void TimeOfDayPanel::RenderPresets()
@@ -123,77 +168,87 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_SUN " Presets:");
 
         if (ImGui::Button("Dawn (6:00)"))
-            m_currentHour = 6.0f;
+            SetHour(6.0f);
         ImGui::SameLine();
         if (ImGui::Button("Morning (9:00)"))
-            m_currentHour = 9.0f;
+            SetHour(9.0f);
         ImGui::SameLine();
         if (ImGui::Button("Noon (12:00)"))
-            m_currentHour = 12.0f;
+            SetHour(12.0f);
         ImGui::SameLine();
         if (ImGui::Button("Dusk (18:00)"))
-            m_currentHour = 18.0f;
+            SetHour(18.0f);
         ImGui::SameLine();
         if (ImGui::Button("Midnight (0:00)"))
-            m_currentHour = 0.0f;
+            SetHour(0.0f);
     }
 
     void TimeOfDayPanel::RenderLightingPreview()
     {
+        const Spark::TimeOfDaySystem& timeOfDay = ResolveTimeOfDay();
+        const auto sunDirection = timeOfDay.GetSunDirection();
+        const auto sunColor = timeOfDay.GetSunColor();
+        const auto ambientColor = timeOfDay.GetAmbientColor();
+
         ImGui::Text(ICON_FA_LIGHTBULB " Lighting State");
+        ImGui::Text("Sun Direction: (%.2f, %.2f, %.2f)", sunDirection.x, sunDirection.y, sunDirection.z);
 
-        // Sun direction
-        ImGui::Text("Sun Direction: (%.2f, %.2f, %.2f)", m_sunDirection[0], m_sunDirection[1], m_sunDirection[2]);
-
-        // Sun color swatch
         ImGui::Text("Sun Color:");
         ImGui::SameLine();
-        ImGui::ColorButton("##SunColor", ImVec4(m_sunColor[0], m_sunColor[1], m_sunColor[2], 1.0f),
+        ImGui::ColorButton("##SunColor", ImVec4(sunColor.x, sunColor.y, sunColor.z, 1.0f),
                            ImGuiColorEditFlags_NoTooltip, ImVec2(40, 20));
         ImGui::SameLine();
-        ImGui::Text("Intensity: %.2f", m_sunIntensity);
+        ImGui::Text("Intensity: %.2f", timeOfDay.GetSunIntensity());
 
-        // Ambient color swatch
         ImGui::Text("Ambient:");
         ImGui::SameLine();
-        ImGui::ColorButton("##AmbientColor", ImVec4(m_ambientColor[0], m_ambientColor[1], m_ambientColor[2], 1.0f),
+        ImGui::ColorButton("##AmbientColor", ImVec4(ambientColor.x, ambientColor.y, ambientColor.z, 1.0f),
                            ImGuiColorEditFlags_NoTooltip, ImVec2(40, 20));
         ImGui::SameLine();
-        ImGui::Text("Intensity: %.2f", m_ambientIntensity);
+        ImGui::Text("Intensity: %.2f", timeOfDay.GetAmbientIntensity());
 
-        // Day/night indicator
-        bool isNight = m_sunDirection[1] < 0.0f;
+        const bool isNight = timeOfDay.IsNight();
         ImGui::TextColored(isNight ? ImVec4(0.4f, 0.4f, 0.8f, 1.0f) : ImVec4(1.0f, 0.9f, 0.3f, 1.0f),
                            isNight ? ICON_FA_ADJUST " Night" : ICON_FA_SUN " Day");
     }
 
     void TimeOfDayPanel::RenderDayInfo()
     {
-        // Day period
+        const Spark::TimeOfDaySystem& timeOfDay = ResolveTimeOfDay();
+
         const char* period = "Unknown";
-        if (m_currentHour < 5.0f)
+        switch (timeOfDay.GetDayPeriod())
+        {
+        case Spark::DayPeriod::Night:
             period = "Night";
-        else if (m_currentHour < 7.0f)
+            break;
+        case Spark::DayPeriod::Dawn:
             period = "Dawn";
-        else if (m_currentHour < 10.0f)
+            break;
+        case Spark::DayPeriod::Morning:
             period = "Morning";
-        else if (m_currentHour < 14.0f)
+            break;
+        case Spark::DayPeriod::Midday:
             period = "Midday";
-        else if (m_currentHour < 17.0f)
+            break;
+        case Spark::DayPeriod::Afternoon:
             period = "Afternoon";
-        else if (m_currentHour < 19.0f)
+            break;
+        case Spark::DayPeriod::Dusk:
             period = "Dusk";
-        else if (m_currentHour < 21.0f)
+            break;
+        case Spark::DayPeriod::Evening:
             period = "Evening";
-        else
+            break;
+        case Spark::DayPeriod::LateNight:
             period = "Late Night";
+            break;
+        }
 
         ImGui::Text("Period: %s", period);
-        ImGui::Text("Day: %d", m_dayCount + 1);
+        ImGui::Text("Day: %d", timeOfDay.GetDayCount() + 1);
 
-        // Progress bar for day cycle
-        float dayProgress = m_currentHour / 24.0f;
-        ImGui::ProgressBar(dayProgress, ImVec2(-1, 0), "Day Cycle");
+        ImGui::ProgressBar(GetHour() / 24.0f, ImVec2(-1, 0), "Day Cycle");
     }
 
 } // namespace SparkEditor
