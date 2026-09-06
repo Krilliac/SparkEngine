@@ -806,10 +806,11 @@ jobs:
   # ===========================================================================
   build-windows-vs2022:
     runs-on: windows-2022
+    # SCCACHE_DIR and SCCACHE_ERROR_LOG live under runner.temp, but the runner
+    # context is not available to job-level env (GitHub rejects the workflow
+    # file), so the install step exports them through GITHUB_ENV.
     env:
-      SCCACHE_DIR: ${{ runner.temp }}\sccache
       SCCACHE_IDLE_TIMEOUT: "0"
-      SCCACHE_ERROR_LOG: ${{ runner.temp }}\sccache-server.log
       SCCACHE_LOG: info
     strategy:
       fail-fast: false
@@ -857,6 +858,8 @@ jobs:
         $bin = Join-Path $dest $name
         if (-not (Test-Path (Join-Path $bin "sccache.exe"))) { throw "sccache.exe missing after extraction in $bin" }
         Add-Content -Path $env:GITHUB_PATH -Value $bin -Encoding utf8
+        Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_DIR=$(Join-Path $env:RUNNER_TEMP 'sccache')" -Encoding utf8
+        Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_ERROR_LOG=$(Join-Path $env:RUNNER_TEMP 'sccache-server.log')" -Encoding utf8
         & (Join-Path $bin "sccache.exe") --version
 
     # Compiler cache lives outside the checkout and is keyed like the Linux
@@ -1304,10 +1307,11 @@ jobs:
     if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: windows-2025-vs2026
     continue-on-error: true
+    # SCCACHE_DIR and SCCACHE_ERROR_LOG live under runner.temp, but the runner
+    # context is not available to job-level env (GitHub rejects the workflow
+    # file), so the install step exports them through GITHUB_ENV.
     env:
-      SCCACHE_DIR: ${{ runner.temp }}\sccache
       SCCACHE_IDLE_TIMEOUT: "0"
-      SCCACHE_ERROR_LOG: ${{ runner.temp }}\sccache-server.log
       SCCACHE_LOG: info
     strategy:
       matrix:
@@ -1354,6 +1358,8 @@ jobs:
         $bin = Join-Path $dest $name
         if (-not (Test-Path (Join-Path $bin "sccache.exe"))) { throw "sccache.exe missing after extraction in $bin" }
         Add-Content -Path $env:GITHUB_PATH -Value $bin -Encoding utf8
+        Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_DIR=$(Join-Path $env:RUNNER_TEMP 'sccache')" -Encoding utf8
+        Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_ERROR_LOG=$(Join-Path $env:RUNNER_TEMP 'sccache-server.log')" -Encoding utf8
         & (Join-Path $bin "sccache.exe") --version
 
     # Compiler cache lives outside the checkout and is keyed like the Linux

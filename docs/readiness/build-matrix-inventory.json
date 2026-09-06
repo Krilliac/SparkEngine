@@ -6629,7 +6629,7 @@
               "SCCACHE_SHA256",
               "SCCACHE_VERSION"
             ],
-            "runDigest": "c13fbb8647379b62"
+            "runDigest": "721dfbbfa4722ce8"
           },
           {
             "index": 3,
@@ -6851,8 +6851,6 @@
           }
         ],
         "envNames": [
-          "SCCACHE_DIR",
-          "SCCACHE_ERROR_LOG",
           "SCCACHE_IDLE_TIMEOUT",
           "SCCACHE_LOG"
         ],
@@ -7112,7 +7110,7 @@
               "SCCACHE_SHA256",
               "SCCACHE_VERSION"
             ],
-            "runDigest": "c13fbb8647379b62"
+            "runDigest": "721dfbbfa4722ce8"
           },
           {
             "index": 3,
@@ -7286,8 +7284,6 @@
           }
         ],
         "envNames": [
-          "SCCACHE_DIR",
-          "SCCACHE_ERROR_LOG",
           "SCCACHE_IDLE_TIMEOUT",
           "SCCACHE_LOG"
         ],
