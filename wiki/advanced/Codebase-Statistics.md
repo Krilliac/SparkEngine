@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 320268 |
-| **SparkEditor/Source** | 102118 |
+| **SparkEngine/Source** | 320312 |
+| **SparkEditor/Source** | 102129 |
 | **GameModules** | 142529 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 180451 |
+| **Tests** | 180594 |
 | **SparkConsole/src** | 1701 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~772823** |
+| **Total C++ (excl. ThirdParty)** | **~773021** |
 
 ### File Counts
 
@@ -42,13 +42,13 @@ Graphics contains 121063 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121063 | 37.8% |
+| Graphics | 121063 | 37.7% |
 | Engine (all subsystems) | 88957 | 27.7% |
 | Utils | 45911 | 14.3% |
 | Core | 30888 | 9.6% |
 | Physics | 10799 | 3.3% |
 | Audio | 6884 | 2.1% |
-| Input | 3953 | 1.2% |
+| Input | 3997 | 1.2% |
 | SceneManager | 2241 | 0.6% |
 | Enums | 1423 | 0.4% |
 | Game | 2828 | 0.8% |
@@ -103,14 +103,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 102118 |
+| Total editor lines | 102129 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 602 |
-| TEST() definitions | 7269 |
+| TEST() definitions | 7271 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
