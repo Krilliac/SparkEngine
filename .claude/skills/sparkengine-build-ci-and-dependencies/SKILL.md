@@ -314,7 +314,7 @@ queues the matrix twice. Concurrency cancels superseded PR runs; pushed SHAs are
 | `check-thirdparty-manifest` | `./tools/check-thirdparty-manifest-sync.sh` (fetch-depth 0) — **blocking** |
 | `build-linux-gcc` / `build-linux-clang` | gcc-14 / clang, Debug+Release, ccache + cached build dir, runs `./bin/SparkTests`; GCC Release also asserts `ENABLE_VULKAN:BOOL=ON` in the cache and that two Vulkan-parity tests appear in the log |
 | `build-linux-asan` / `-tsan` | GCC Debug with ASan+UBSan+LSan / TSan, suppression files in `Tests/` |
-| `build-linux-msan` | Clang + libc++, `continue-on-error` (uninstrumented system libc++ ⇒ false positives), builds only `SparkTests` |
+| `build-linux-msan` | Clang + MSan-instrumented libc++ built in-job, `continue-on-error` (advisory until a run classifies clean), builds only `SparkTests` |
 | `build-windows-vs2022` | windows-2022, Debug+Release, `cmake --fresh` configure (`-T v143`), sccache action installed, ctest on Release, packages Release zip |
 | `build-windows-vs2026` | `continue-on-error`; vswhere **requires** VS `[18.0,19.0)` — an absent toolchain fails visibly instead of a green no-op; `-G "Visual Studio 18 2026"` (default v145) |
 | `build-linux-mingw-wine` | **`workflow_dispatch` only** at HEAD (the CLAUDE.md table predates this), `continue-on-error`; MinGW toolchain file + Wine/DXVK run via `tools/wine-run.sh` |

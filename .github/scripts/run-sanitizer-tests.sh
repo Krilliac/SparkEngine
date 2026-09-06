@@ -267,6 +267,12 @@ timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" \
         # tests that deliberately construct oversized sparse fixtures can raise
         # and restore their own soft limit. Cooperative child output defaults
         # to a 16 MiB write cap; the bounded verifier remains authoritative.
+        # SIGXFSZ is ignored (SIG_IGN survives exec) so an over-cap write fails
+        # with EFBIG instead of killing the suite: a flooding sanitizer log is
+        # truncated at the cap, the run still produces console/JUnit evidence,
+        # and the runtime-entry cap of the verifier classifies it. Run
+        # 34025643171 died here with exit 153 and no completion evidence.
+        trap "" XFSZ
         ulimit -S -f 16384
         "$@" &
         child_pid=$!

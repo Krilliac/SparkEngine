@@ -313,6 +313,7 @@ add_executable(SparkTests
     TestFaultIsolation.cpp
     TestSelfRecovery.cpp
     TestVulkanLavapipe.cpp
+    TestMSanCanary.cpp
     TestWARPRendering.cpp
     # Hardware acceleration tests
     TestGPUParticleSystem.cpp

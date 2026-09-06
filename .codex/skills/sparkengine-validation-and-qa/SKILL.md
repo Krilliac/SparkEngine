@@ -187,7 +187,7 @@ directly. Reproduce on Linux with the same flags (from `.github/workflows/build.
 |---|---|---|---|
 | ASan+UBSan+LSan | `-fsanitize=address,undefined -fno-omit-frame-pointer` | `Tests/lsan_suppressions.txt` (via `LSAN_OPTIONS=suppressions=…`) | **Yes** |
 | TSan | `-fsanitize=thread -fno-omit-frame-pointer` | `Tests/tsan_suppressions.txt` (via `TSAN_OPTIONS`) | **Yes** |
-| MSan | `-fsanitize=memory -fsanitize-memory-track-origins=2 -stdlib=libc++` + `Tests/msan_ignorelist.txt`, `-DENABLE_SDL2=OFF` | ignorelist file | **No** — `continue-on-error`, uninstrumented system libc++ gives inherent false positives; test step is `|| true`, findings live in the `sanitizer-report-msan` artifact |
+| MSan | `-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -stdlib=libc++ -nostdinc++ -isystem $PREFIX/include/c++/v1` + `Tests/msan_ignorelist.txt`, `-DENABLE_SDL2=OFF`, `-DENABLE_VULKAN=OFF` | ignorelist file | **No** — `continue-on-error`; instrumented libc++ built in-job; `halt_on_error=1`; findings in `sanitizer-report-msan`, infrastructure failures labelled in `ci-errors-linux-msan` |
 
 Presets `ci-linux-asan` / `ci-linux-tsan` exist in `CMakePresets.json` for local repro.
 Run options used by CI: `ASAN_OPTIONS=detect_leaks=1:halt_on_error=0:print_stats=1:check_initialization_order=1`,

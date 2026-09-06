@@ -304,6 +304,17 @@ PY
         prefix="$(runtime_prefix)"
         printf 'SUMMARY: MemorySanitizer: use-of-uninitialized-value\n' > "${prefix}.$$"
         ;;
+    runtime-flood)
+        # The fake test itself (bash builtin printf, not a helper process)
+        # writes past the 16 MiB cap; without the wrapper's trap it dies of
+        # SIGXFSZ (exit 153) before write_clean runs.
+        prefix="$(runtime_prefix)"
+        one_mib="$(head -c 1048576 /dev/zero | tr '\0' 'x')"
+        exec 3>"${prefix}.$$"
+        for _ in $(seq 17); do printf '%s' "$one_mib" >&3 || true; done
+        exec 3>&-
+        write_clean
+        ;;
     empty-runtime)
         write_clean
         prefix="$(runtime_prefix)"
@@ -986,6 +997,18 @@ else
     expect_status 0 "$CASE_STATUS" "oversized sparse fixture may lift and restore the soft limit"
     sparse_size="$(wc -c < "$CASE_SPARSE_PATH")"
     [[ "$sparse_size" -eq 536870913 ]] && pass "soft-limit fixture matches the 512 MiB regression boundary" || fail "soft-limit fixture size"
+fi
+
+if [[ "$(uname -s)" =~ ^(MINGW|MSYS) ]]; then
+    skip "POSIX RLIMIT_FSIZE/SIGXFSZ semantics unavailable in Git Bash"
+else
+    run_case runtime-flood
+    expect_status 70 "$CASE_STATUS" "flooded runtime log is a verification failure, not a crash"
+    expect_contains "$CASE_DIR/process-footer.txt" "test_exit_code=0" "SIGXFSZ is ignored: the suite survives the write cap"
+    expect_contains "$CASE_DIR/metadata.json" "exceeds 4194304 bytes" "oversized runtime entry is named"
+    expect_contains "$CASE_DIR/console.txt" "=== Results ===" "completion evidence exists after the flood"
+    flood_size="$(wc -c < "$(ls "$CASE_DIR"/runtime/sanitizer.* | head -n1)")"
+    [[ "$flood_size" -eq 16777216 ]] && pass "runtime log is truncated at the write cap" || fail "runtime log cap"
 fi
 
 # Provenance, required policy, selector, and timeout controls are enforced.

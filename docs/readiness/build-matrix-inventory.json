@@ -1351,7 +1351,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1441,
+      "line": 1442,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1413,7 +1413,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1247,
+      "line": 1248,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2341,7 +2341,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 683,
+      "line": 684,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2462,7 +2462,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 661,
+      "line": 662,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2586,7 +2586,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 762,
+      "line": 763,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2736,10 +2736,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 670,
+      "line": 671,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:669",
+          "id": "Tests/CMakeLists.txt:670",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -2831,7 +2831,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 681,
+      "line": 682,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2841,7 +2841,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 685,
+      "line": 686,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2893,7 +2893,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 767,
+      "line": 768,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2943,7 +2943,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 687,
+      "line": 688,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2975,7 +2975,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 757,
+      "line": 758,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3763,7 +3763,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 683,
+          "line": 684,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3909,7 +3909,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 661,
+          "line": 662,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4035,7 +4035,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 762,
+          "line": 763,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4305,7 +4305,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 670,
+          "line": 671,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4405,7 +4405,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 681,
+          "line": 682,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4423,7 +4423,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 685,
+          "line": 686,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4499,7 +4499,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 767,
+          "line": 768,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4589,7 +4589,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 687,
+          "line": 688,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4645,7 +4645,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 757,
+          "line": 758,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -6408,11 +6408,11 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 12,
+        "stepCount": 20,
         "steps": [
           {
             "index": 0,
-            "name": "Define MSan evidence directory",
+            "name": "Define MSan evidence and runtime directories",
             "id": "",
             "uses": "",
             "shell": "bash",
@@ -6420,7 +6420,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "92841b97a3171e88"
+            "runDigest": "e3ed3b197a3c5c84"
           },
           {
             "index": 1,
@@ -6437,32 +6437,32 @@
           {
             "index": 2,
             "name": "Install dependencies",
-            "id": "",
+            "id": "install-deps",
             "uses": "",
             "shell": "",
             "if": "absent",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "014400e895d3f109"
+            "runDigest": "5fd35306c7b134cb"
           },
           {
             "index": 3,
-            "name": "Setup ccache",
-            "id": "",
-            "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "name": "Pin the runner clang to the LLVM series",
+            "id": "clang",
+            "uses": "",
             "shell": "",
             "if": "absent",
             "continueOnError": "absent",
-            "hasRun": false,
+            "hasRun": true,
             "env": [],
-            "runDigest": ""
+            "runDigest": "cdcaa0039aecf75f"
           },
           {
             "index": 4,
-            "name": "Restore build directory",
-            "id": "",
-            "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "name": "Restore MSan-instrumented libc++",
+            "id": "msan-libcxx-restore",
+            "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
             "shell": "",
             "if": "absent",
             "continueOnError": "absent",
@@ -6472,20 +6472,80 @@
           },
           {
             "index": 5,
-            "name": "Configure CMake (MSan)",
-            "id": "",
+            "name": "Fetch LLVM sources (hash-pinned)",
+            "id": "runtime-fetch",
+            "uses": "",
+            "shell": "",
+            "if": "steps.msan-libcxx-restore.outputs.cache-hit != 'true'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "4fdbfddeaabece19"
+          },
+          {
+            "index": 6,
+            "name": "Build MSan-instrumented libc++ and libc++abi (cache miss only)",
+            "id": "runtime-build",
+            "uses": "",
+            "shell": "",
+            "if": "steps.msan-libcxx-restore.outputs.cache-hit != 'true'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "72d58498db607b10"
+          },
+          {
+            "index": 7,
+            "name": "Verify the instrumented runtime prefix",
+            "id": "verify-prefix",
             "uses": "",
             "shell": "",
             "if": "absent",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "f2ab7e640251b3dc"
+            "runDigest": "d4b804fd783abe7b"
           },
           {
-            "index": 6,
-            "name": "Build (SparkTests only)",
+            "index": 8,
+            "name": "Save MSan-instrumented libc++",
             "id": "",
+            "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "shell": "",
+            "if": "steps.msan-libcxx-restore.outputs.cache-hit != 'true'",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 9,
+            "name": "Restore ccache",
+            "id": "ccache-restore",
+            "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 10,
+            "name": "Configure CMake (MSan)",
+            "id": "configure",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "22226229ded23291"
+          },
+          {
+            "index": 11,
+            "name": "Build (SparkTests only)",
+            "id": "build",
             "uses": "",
             "shell": "",
             "if": "absent",
@@ -6495,7 +6555,19 @@
             "runDigest": "375e0e60e7204e5d"
           },
           {
-            "index": 7,
+            "index": 12,
+            "name": "Verify every built ELF links the instrumented libc++",
+            "id": "verify-link",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "a38f75274494fcbd"
+          },
+          {
+            "index": 13,
             "name": "Print ccache stats",
             "id": "",
             "uses": "",
@@ -6507,7 +6579,31 @@
             "runDigest": "09e0dc05b951a397"
           },
           {
-            "index": 8,
+            "index": 14,
+            "name": "Save ccache",
+            "id": "",
+            "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "shell": "",
+            "if": "${{ always() && steps.ccache-restore.outputs.cache-hit != 'true' }}",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 15,
+            "name": "Record infrastructure failure stage",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "failure()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "7509405d7ddf7693"
+          },
+          {
+            "index": 16,
             "name": "Run Tests under MSan",
             "id": "",
             "uses": "",
@@ -6521,7 +6617,7 @@
             "runDigest": "72e80abc4d1c94d9"
           },
           {
-            "index": 9,
+            "index": 17,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -6530,10 +6626,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "ad82a96f35485df3"
+            "runDigest": "f9acd0c138937277"
           },
           {
-            "index": 10,
+            "index": 18,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6545,7 +6641,7 @@
             "runDigest": ""
           },
           {
-            "index": 11,
+            "index": 19,
             "name": "Upload MSan report",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6557,7 +6653,16 @@
             "runDigest": ""
           }
         ],
-        "envNames": [],
+        "envNames": [
+          "CCACHE_EXTRAFILES",
+          "LLVM_SERIES",
+          "LLVM_TAG",
+          "LLVM_TARBALL_SHA256",
+          "LLVM_TARBALL_SHA512",
+          "LLVM_TARBALL_SIZE",
+          "LLVM_VERSION",
+          "MSAN_LIBCXX_RECIPE"
+        ],
         "gating": "advisory"
       },
       {
@@ -9132,8 +9237,91 @@
       },
       {
         "job": "build-linux-msan",
+        "step": "Build MSan-instrumented libc++ and libc++abi (cache miss only)",
+        "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "steps.msan-libcxx-restore.outputs.cache-hit != 'true'",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -G Ninja -S \"$MSAN_LLVM_SRC/runtimes\" -B \"$MSAN_LLVM_SRC/build-msan\"  -C \"${GITHUB_WORKSPACE}/.github/msan/libcxx-runtime.cmake\"  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_INSTALL_PREFIX=\"$MSAN_LIBCXX_PREFIX\"",
+        "commandProvenance": "literal",
+        "options": {
+          "CMAKE_C_COMPILER": "clang",
+          "CMAKE_CXX_COMPILER": "clang++",
+          "CMAKE_INSTALL_PREFIX": "$MSAN_LIBCXX_PREFIX"
+        },
+        "generator": "Ninja",
+        "sourceDir": "$MSAN_LLVM_SRC/runtimes",
+        "buildDir": "$MSAN_LLVM_SRC/build-msan",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-msan",
+        "step": "Build MSan-instrumented libc++ and libc++abi (cache miss only)",
+        "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "steps.msan-libcxx-restore.outputs.cache-hit != 'true'",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build \"$MSAN_LLVM_SRC/build-msan\" --parallel \"$(nproc)\" --target cxx cxxabi",
+        "commandProvenance": "literal",
+        "targets": [
+          "cxx",
+          "cxxabi"
+        ],
+        "configuration": "",
+        "buildDir": "$MSAN_LLVM_SRC/build-msan",
+        "preset": "",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 1
+      },
+      {
+        "job": "build-linux-msan",
+        "step": "Build MSan-instrumented libc++ and libc++abi (cache miss only)",
+        "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "steps.msan-libcxx-restore.outputs.cache-hit != 'true'",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build \"$MSAN_LLVM_SRC/build-msan\" --target install-cxx install-cxxabi",
+        "commandProvenance": "literal",
+        "targets": [
+          "install-cxx",
+          "install-cxxabi"
+        ],
+        "configuration": "",
+        "buildDir": "$MSAN_LLVM_SRC/build-msan",
+        "preset": "",
+        "parallel": "",
+        "buildsAllTargets": false,
+        "commandIndex": 2
+      },
+      {
+        "job": "build-linux-msan",
         "step": "Configure CMake (MSan)",
-        "stepIndex": 5,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -9145,20 +9333,21 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++\"",
+        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DENABLE_VULKAN=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "ENABLE_SDL2": "OFF",
+          "ENABLE_VULKAN": "OFF",
           "CMAKE_C_COMPILER": "clang",
           "CMAKE_CXX_COMPILER": "clang++",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
-          "CMAKE_C_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
-          "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -lc++abi",
-          "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++"
+          "CMAKE_CXX_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
+          "CMAKE_C_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
+          "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi",
+          "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi"
         },
         "buildDir": "build",
         "commandIndex": 0
@@ -9166,7 +9355,7 @@
       {
         "job": "build-linux-msan",
         "step": "Build (SparkTests only)",
-        "stepIndex": 6,
+        "stepIndex": 11,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -10861,8 +11050,35 @@
       },
       {
         "job": "build-linux-msan",
+        "step": "Build MSan-instrumented libc++ and libc++abi (cache miss only)",
+        "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "steps.msan-libcxx-restore.outputs.cache-hit != 'true'",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -G Ninja -S \"$MSAN_LLVM_SRC/runtimes\" -B \"$MSAN_LLVM_SRC/build-msan\"  -C \"${GITHUB_WORKSPACE}/.github/msan/libcxx-runtime.cmake\"  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_INSTALL_PREFIX=\"$MSAN_LIBCXX_PREFIX\"",
+        "commandProvenance": "literal",
+        "options": {
+          "CMAKE_C_COMPILER": "clang",
+          "CMAKE_CXX_COMPILER": "clang++",
+          "CMAKE_INSTALL_PREFIX": "$MSAN_LIBCXX_PREFIX"
+        },
+        "generator": "Ninja",
+        "sourceDir": "$MSAN_LLVM_SRC/runtimes",
+        "buildDir": "$MSAN_LLVM_SRC/build-msan",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-msan",
         "step": "Configure CMake (MSan)",
-        "stepIndex": 5,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -10874,20 +11090,21 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++\"",
+        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DENABLE_VULKAN=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "ENABLE_SDL2": "OFF",
+          "ENABLE_VULKAN": "OFF",
           "CMAKE_C_COMPILER": "clang",
           "CMAKE_CXX_COMPILER": "clang++",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
-          "CMAKE_C_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
-          "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -lc++abi",
-          "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++"
+          "CMAKE_CXX_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
+          "CMAKE_C_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
+          "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi",
+          "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi"
         },
         "buildDir": "build",
         "commandIndex": 0
@@ -11586,8 +11803,64 @@
       },
       {
         "job": "build-linux-msan",
-        "step": "Build (SparkTests only)",
+        "step": "Build MSan-instrumented libc++ and libc++abi (cache miss only)",
         "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "steps.msan-libcxx-restore.outputs.cache-hit != 'true'",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build \"$MSAN_LLVM_SRC/build-msan\" --parallel \"$(nproc)\" --target cxx cxxabi",
+        "commandProvenance": "literal",
+        "targets": [
+          "cxx",
+          "cxxabi"
+        ],
+        "configuration": "",
+        "buildDir": "$MSAN_LLVM_SRC/build-msan",
+        "preset": "",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 1
+      },
+      {
+        "job": "build-linux-msan",
+        "step": "Build MSan-instrumented libc++ and libc++abi (cache miss only)",
+        "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "steps.msan-libcxx-restore.outputs.cache-hit != 'true'",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build \"$MSAN_LLVM_SRC/build-msan\" --target install-cxx install-cxxabi",
+        "commandProvenance": "literal",
+        "targets": [
+          "install-cxx",
+          "install-cxxabi"
+        ],
+        "configuration": "",
+        "buildDir": "$MSAN_LLVM_SRC/build-msan",
+        "preset": "",
+        "parallel": "",
+        "buildsAllTargets": false,
+        "commandIndex": 2
+      },
+      {
+        "job": "build-linux-msan",
+        "step": "Build (SparkTests only)",
+        "stepIndex": 11,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -12819,8 +13092,8 @@
       "jobCount": 23,
       "matrixLegCount": 31,
       "pathFilteredEventCount": 0,
-      "configureCount": 24,
-      "buildCount": 23,
+      "configureCount": 25,
+      "buildCount": 25,
       "testCount": 16,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
@@ -12943,8 +13216,35 @@
     },
     {
       "job": "build-linux-msan",
+      "step": "Build MSan-instrumented libc++ and libc++abi (cache miss only)",
+      "stepIndex": 6,
+      "matrix": {},
+      "matrixResolved": true,
+      "runnerOs": "linux",
+      "shell": "bash",
+      "jobIf": "absent",
+      "jobContinueOnError": true,
+      "stepIf": "steps.msan-libcxx-restore.outputs.cache-hit != 'true'",
+      "stepContinueOnError": "absent",
+      "gating": "advisory",
+      "tool": "cmake",
+      "kind": "configure",
+      "command": "cmake -G Ninja -S \"$MSAN_LLVM_SRC/runtimes\" -B \"$MSAN_LLVM_SRC/build-msan\"  -C \"${GITHUB_WORKSPACE}/.github/msan/libcxx-runtime.cmake\"  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_INSTALL_PREFIX=\"$MSAN_LIBCXX_PREFIX\"",
+      "commandProvenance": "literal",
+      "options": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_INSTALL_PREFIX": "$MSAN_LIBCXX_PREFIX"
+      },
+      "generator": "Ninja",
+      "sourceDir": "$MSAN_LLVM_SRC/runtimes",
+      "buildDir": "$MSAN_LLVM_SRC/build-msan",
+      "commandIndex": 0
+    },
+    {
+      "job": "build-linux-msan",
       "step": "Configure CMake (MSan)",
-      "stepIndex": 5,
+      "stepIndex": 10,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "linux",
@@ -12956,20 +13256,21 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++\"",
+      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DENABLE_VULKAN=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"",
       "commandProvenance": "literal",
       "options": {
         "CMAKE_BUILD_TYPE": "Debug",
         "BUILD_TESTS": "ON",
         "ENABLE_SDL2": "OFF",
+        "ENABLE_VULKAN": "OFF",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
-        "CMAKE_C_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
-        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -lc++abi",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++"
+        "CMAKE_CXX_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
+        "CMAKE_C_FLAGS": "-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi"
       },
       "buildDir": "build",
       "commandIndex": 0

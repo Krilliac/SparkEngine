@@ -90,24 +90,35 @@ A `ci-linux-tsan` CMake preset bundles these flags as well.
 
 ## Linux Clang MemorySanitizer — Debug (job `build-linux-msan`, `continue-on-error`)
 
-CI builds only the `SparkTests` target for this job (`cmake --build build --parallel $(nproc) --target SparkTests`).
+MSan requires every linked C++ object, including the runtime, to be instrumented. CI therefore first builds an MSan-instrumented libc++/libc++abi from the LLVM 18.1.3 release tarball (hash-pinned in `build.yml`) with the recipe `.github/msan/libcxx-runtime.cmake`, caches that prefix by recipe hash and runner clang version, and then builds only the `SparkTests` target against it (`cmake --build build --parallel $(nproc) --target SparkTests`).
 
 ```bash
+# 1. Instrumented runtime (once; CI caches the prefix). llvm-project-18.1.3.src.tar.xz from the llvmorg-18.1.3 release.
+PREFIX=$PWD/msan-libcxx
+cmake -G Ninja -S llvm-project-18.1.3.src/runtimes -B build-msan \
+  -C .github/msan/libcxx-runtime.cmake \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_INSTALL_PREFIX=$PREFIX
+cmake --build build-msan --target install-cxx install-cxxabi
+
+# 2. SparkTests against it (no distro libc++-dev installed on the runner)
 cmake -B build \
   -DCMAKE_BUILD_TYPE=Debug \
   -DBUILD_TESTS=ON \
+  -DENABLE_SDL2=OFF \
+  -DENABLE_VULKAN=OFF \
   -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-  -DCMAKE_CXX_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
-  -DCMAKE_C_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -lc++abi" \
-  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
+  -DCMAKE_CXX_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem $PREFIX/include/c++/v1 -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
+  -DCMAKE_C_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -L$PREFIX/lib -Wl,-rpath,$PREFIX/lib -lc++abi" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -L$PREFIX/lib -Wl,-rpath,$PREFIX/lib -lc++abi"
 cmake --build build --parallel $(nproc) --target SparkTests
 cd build
-MSAN_OPTIONS=halt_on_error=0 ./bin/SparkTests --output-file msan-results.txt || true
+MSAN_OPTIONS=halt_on_error=1 ./bin/SparkTests --warn-is-error --shuffle 123
 cd ..
 ```
 
-MSan requires libc++ built with `-fsanitize=memory`; this is why the job is `continue-on-error`. Practically, reproduce it only when CI flags a real MSan finding.
+The job stays `continue-on-error` (advisory) until a run classifies clean with the instrumented runtime; `Tests/TestMSanCanary.cpp` is designed to fail RED if the linked libc++ is not instrumented (RED proof pending the first run), and a failure before the tests run is labelled `infrastructure stage '<stage>' failed` in `ci-errors-linux-msan`. Practically, reproduce it only when CI flags a real MSan finding.
 
 ## Windows MSVC VS 2022 (v143) — Debug + Release (job `build-windows-vs2022`)
 
@@ -169,7 +180,7 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
   - Removed the source's prior CTest-plus-`SparkTests` combo from the GCC/Clang jobs — CI runs `./bin/SparkTests` directly there; clarified where CTest actually runs (Windows/macOS matrix).
   - Output filenames updated to match current CI (`asan-ubsan-lsan-results.txt`, etc.).
   - Added the new `ci-linux-asan` / `ci-linux-tsan` presets as alternatives.
-  - Noted MSan builds only the `SparkTests` target in CI; added `|| true` to match CI.
+  - Noted MSan builds only the `SparkTests` target in CI; added `|| true` to match CI (2026-09-06: the recipe now builds the MSan-instrumented libc++ first and runs with `halt_on_error=1`, so the `|| true` was dropped again).
   - Added sccache/`continue-on-error` notes for the Windows jobs and the v145 VS 2026 variant.
   - Added the jobs that did not exist in the source: `check-thirdparty-manifest`, `coverage`, `clang-tidy`, `todo-count`, `build-installer`, `report-ci-errors`, plus the macOS and MinGW-Wine reproduction recipes.
   - Noted the Linux GCC job uses gcc-14/g++-14.
