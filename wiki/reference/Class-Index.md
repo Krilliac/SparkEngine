@@ -1322,7 +1322,7 @@
 | `ExclusiveFileLock` | class | GameModules | [TFSavePaths.h:L43](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L43) |  |
 | `existing` | struct | SparkDaemon | [DaemonServer.cpp:L386](../../SparkDaemon/src/DaemonServer.cpp#L386) |  |
 | `existing` | struct | SparkGateway | [GatewayAreaControl.cpp:L286](../../SparkGateway/src/GatewayAreaControl.cpp#L286) |  |
-| `Expectation` | struct | Tests | [TestShaderCompilerReal.cpp:L376](../../Tests/TestShaderCompilerReal.cpp#L376) |  |
+| `Expectation` | struct | Tests | [TestShaderCompilerReal.cpp:L424](../../Tests/TestShaderCompilerReal.cpp#L424) |  |
 | `ExplorationSaveState` | struct | GameModules | [OWExplorationSystem.h:L61](../../GameModules/SparkGameOpenWorld/Source/Exploration/OWExplorationSystem.h#L61) | Mutable discovery state stored in an OpenWorld save. |
 | `ExponentialFogSettings` | struct | SparkEngine | [FogSystem.h:L89](../../SparkEngine/Source/Graphics/FogSystem.h#L89) |  |
 | `ExposureVolumeComponent` | struct | SparkEngine | [VolumeSystem.h:L92](../../SparkEngine/Source/Graphics/VolumeSystem.h#L92) | Exposure/auto-exposure volume parameters |
