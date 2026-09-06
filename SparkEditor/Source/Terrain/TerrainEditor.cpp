@@ -752,7 +752,6 @@ namespace SparkEditor
         {
             terrainEntity = reg.create();
             reg.emplace<TerrainComponent>(terrainEntity);
-            reg.emplace<Transform>(terrainEntity, Transform{m_currentTerrain->position});
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created new terrain entity in ECS world");
         }
 
@@ -785,9 +784,21 @@ namespace SparkEditor
         // Mark dirty so TerrainSystem will push to ClipmapTerrain and rebuild meshes
         tc.dirty = true;
 
-        // Update transform
-        auto& transform = reg.get<Transform>(terrainEntity);
-        transform.position = m_currentTerrain->position;
+        // Update the engine transform. This must be the runtime's ::Transform
+        // (Engine/ECS/Components/CoreComponents.h): inside namespace SparkEditor
+        // the unqualified name resolves to the scene-file SparkEditor::Transform
+        // from TerrainData.h, which the terrain systems never read. The adopted
+        // entity may have been created without one (only the TerrainComponent
+        // the view matched on is guaranteed), so attach it rather than asserting
+        // inside entt.
+        if (auto* transform = reg.try_get<::Transform>(terrainEntity))
+        {
+            transform->position = m_currentTerrain->position;
+        }
+        else
+        {
+            reg.emplace<::Transform>(terrainEntity).position = m_currentTerrain->position;
+        }
     }
 
 } // namespace SparkEditor

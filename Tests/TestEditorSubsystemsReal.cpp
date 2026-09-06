@@ -18,6 +18,9 @@
 #include "SceneSystem/SceneFile.h"
 #include "Terrain/TerrainEditor.h"
 
+#include "Core/EngineContext.h"
+#include "Engine/ECS/Components.h"
+
 #include "Engine/ECS/Components/TerrainComponents.h"
 #include "Graphics/TerrainRenderer.h"
 
@@ -26,6 +29,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -275,6 +279,93 @@ TEST(EditorSubsystemsReal_TerrainSaveCreatesItsParentDirectory)
     ASSERT_TRUE(editor.SaveTerrain(nested));
     EXPECT_TRUE(std::filesystem::exists(nested));
     EXPECT_EQ(editor.GetTerrainFilePath(), nested);
+}
+
+// ============================================================================
+// SyncToEngine against a World whose terrain entity carries no engine Transform
+// ============================================================================
+
+namespace
+{
+    /// Install a static World on the process-wide EngineContext for one test and
+    /// put the previous pointer back on every exit path (ASSERT_* throws).
+    /// SetWorld(nullptr) erases the registration, so a null previous pointer is
+    /// restored exactly too.
+    class ScopedContextWorld
+    {
+      public:
+        ScopedContextWorld()
+        {
+            if (!EngineContext::Get())
+                EngineContext::SetOwned(std::make_unique<EngineContext>());
+            m_ctx = EngineContext::Get();
+            m_previous = m_ctx->GetWorld();
+            m_ctx->SetWorld(&Instance());
+        }
+        ~ScopedContextWorld()
+        {
+            Instance().GetRegistry().clear();
+            m_ctx->SetWorld(m_previous);
+        }
+        static ::World& Instance()
+        {
+            static ::World s_world; // Static: the context must never point at a dead frame object.
+            return s_world;
+        }
+
+      private:
+        EngineContext* m_ctx = nullptr;
+        ::World* m_previous = nullptr;
+    };
+
+    size_t CountTerrainEntities(entt::registry& reg)
+    {
+        size_t count = 0;
+        for ([[maybe_unused]] auto entity : reg.view<TerrainComponent>())
+            ++count;
+        return count;
+    }
+} // namespace
+
+TEST(EditorSubsystemsReal_TerrainSyncAttachesTheEngineTransformToAnAdoptedEntity)
+{
+    // The editor adopts the first entity carrying a TerrainComponent from the
+    // process-wide World. Two defects met here: inside namespace SparkEditor
+    // the unqualified "Transform" resolved to the scene-file
+    // SparkEditor::Transform, so the entity never carried the engine
+    // ::Transform the terrain systems read (TerrainSystem views
+    // <TerrainComponent, Transform>, so it never visited the editor's entity);
+    // and an adopted entity without the expected component tripped entt's
+    // "Set does not contain entity" assertion (ASan lane, shuffled order,
+    // SparkTests aborted with SIGABRT). A TerrainComponent without a Transform
+    // is a legitimate runtime state: the reflected scene serializer attaches
+    // only the components a scene lists.
+    ScopedContextWorld scope;
+    auto& reg = ScopedContextWorld::Instance().GetRegistry();
+    const entt::entity bare = reg.create();
+    reg.emplace<TerrainComponent>(bare);
+    ASSERT_FALSE(reg.any_of<::Transform>(bare));
+
+    // CreateNewTerrain runs UpdateTerrainMesh, which is the first SyncToEngine:
+    // that call must adopt the bare entity and attach the engine transform.
+    SparkEditor::TerrainEditor editor;
+    editor.CreateNewTerrain(250.0f, 5, XMFLOAT3{1.0f, 2.0f, 3.0f});
+    ASSERT_TRUE(reg.valid(bare));
+    ASSERT_TRUE(reg.any_of<::Transform>(bare));
+    EXPECT_EQ(reg.get<::Transform>(bare).position.x, 1.0f);
+    EXPECT_EQ(reg.get<::Transform>(bare).position.y, 2.0f);
+    EXPECT_EQ(reg.get<::Transform>(bare).position.z, 3.0f);
+    EXPECT_EQ(reg.get<TerrainComponent>(bare).heightmapResolution, 5);
+    EXPECT_TRUE(reg.get<TerrainComponent>(bare).dirty);
+    EXPECT_EQ(CountTerrainEntities(reg), 1u);
+
+    // A later sync updates the same transform in place and still adopts
+    // rather than creating a second terrain entity.
+    editor.GetCurrentTerrain()->position = XMFLOAT3{4.0f, 5.0f, 6.0f};
+    editor.SyncToEngine();
+    EXPECT_EQ(reg.get<::Transform>(bare).position.x, 4.0f);
+    EXPECT_EQ(reg.get<::Transform>(bare).position.z, 6.0f);
+    EXPECT_EQ(CountTerrainEntities(reg), 1u);
 }
 
 // ============================================================================
