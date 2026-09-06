@@ -861,19 +861,19 @@ leaves a dump but does not offer scene recovery.
 <!-- AUTO:panel_list -->
 | Panel | Header |
 |-------|--------|
-| `AbilityEditorPanel` | `SparkEditor/Source/Panels/AbilityEditorPanel.h` |
 | `AIDebugPanel` | `SparkEditor/Source/Panels/AIDebugPanel.h` |
 | `AIEditorPanel` | `SparkEditor/Source/Panels/AIEditorPanel.h` |
+| `AbilityEditorPanel` | `SparkEditor/Source/Panels/AbilityEditorPanel.h` |
 | `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
 | `AudioMixerPanel` | `SparkEditor/Source/Panels/AudioMixerPanel.h` |
 | `BasicMaterialEditorPanel` | `SparkEditor/Source/Panels/BasicMaterialEditorPanel.h` |
 | `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |
+| `CSGEditorPanel` | `SparkEditor/Source/Panels/CSGEditorPanel.h` |
 | `CinematicSequencerPanel` | `SparkEditor/Source/Panels/CinematicSequencerPanel.h` |
 | `CollaborationPanel` | `SparkEditor/Source/Panels/CollaborationPanel.h` |
 | `ConditionEditorPanel` | `SparkEditor/Source/Panels/ConditionEditorPanel.h` |
 | `ConsolePanel` | `SparkEditor/Source/Panels/ConsolePanel.h` |
 | `CoroutineDebugPanel` | `SparkEditor/Source/Panels/CoroutineDebugPanel.h` |
-| `CSGEditorPanel` | `SparkEditor/Source/Panels/CSGEditorPanel.h` |
 | `DebugVisualizerPanel` | `SparkEditor/Source/Panels/DebugVisualizerPanel.h` |
 | `DecalEditorPanel` | `SparkEditor/Source/Panels/DecalEditorPanel.h` |
 | `DecorLayoutEditorPanel` | `SparkEditor/Source/Panels/DecorLayoutEditorPanel.h` |
@@ -920,8 +920,8 @@ leaves a dump but does not offer scene recovery.
 | `TriggerEditorPanel` | `SparkEditor/Source/Panels/TriggerEditorPanel.h` |
 | `UIDesignerPanel` | `SparkEditor/Source/Panels/UIDesignerPanel.h` |
 | `UndoHistoryPanel` | `SparkEditor/Source/Panels/UndoHistoryPanel.h` |
-| `VisualScriptPanel` | `SparkEditor/Source/Panels/VisualScriptPanel.h` |
 | `VRConfigPanel` | `SparkEditor/Source/Panels/VRConfigPanel.h` |
+| `VisualScriptPanel` | `SparkEditor/Source/Panels/VisualScriptPanel.h` |
 | `WeaponEditorPanel` | `SparkEditor/Source/Panels/WeaponEditorPanel.h` |
 | `WeatherFogPanel` | `SparkEditor/Source/Panels/WeatherFogPanel.h` |
 | `WorkflowPanel` | `SparkEditor/Source/Panels/WorkflowPanel.h` |
