@@ -27,6 +27,7 @@
 #include "Utils/LogMacros.h"
 #include "Utils/Logger.h"
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -34,6 +35,7 @@
 #include <memory>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 namespace
@@ -337,4 +339,54 @@ TEST(EngineWiring_InputActionProvidersReadTheRegisteredInputManager)
         actions.SetKeyStateProviders({}, {}, {});
         ctx->SetInput(nullptr);
     }
+}
+
+// A timed console key press used to be released by a detached timer thread that
+// wrote m_keyStates while the frame code read it without a lock (ThreadSanitizer
+// reported the race from the test above on every Linux run). The release is now
+// queued and applied on the input thread by Update() / ApplyDueTimedKeyReleases().
+TEST(EngineWiring_ConsoleSimulatedKeyReleaseIsAppliedOnTheInputThread)
+{
+    InputManager input; // No window: the key state is a plain map.
+
+    // A press whose deadline cannot be reached during this test stays down
+    // across an apply call (nothing waits on it; ClearInputStates drops it).
+    input.Console_SimulateKeyPress("A", 600000);
+    EXPECT_TRUE(input.IsKeyDown('A'));
+    EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 1u);
+    input.ApplyDueTimedKeyReleases();
+    EXPECT_TRUE(input.IsKeyDown('A'));
+    EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 1u);
+
+    // A press whose deadline has passed is released by the next apply call, on
+    // this thread, and only once the caller asks: nothing happens in between.
+    input.Console_SimulateKeyPress("B", 20);
+    EXPECT_TRUE(input.IsKeyDown('B'));
+    EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 2u);
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    EXPECT_TRUE(input.IsKeyDown('B'));
+    input.ApplyDueTimedKeyReleases();
+    EXPECT_FALSE(input.IsKeyDown('B'));
+    EXPECT_TRUE(input.IsKeyDown('A'));
+    EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 1u);
+
+#ifndef _WIN32
+    // The frame tick drains due releases too (the Windows Update() needs a window).
+    input.Console_SimulateKeyPress("C", 20);
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    input.Update();
+    EXPECT_FALSE(input.IsKeyDown('C'));
+    EXPECT_TRUE(input.WasKeyReleased('C'));
+    EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 1u);
+#endif
+
+    // Clearing the input states also forgets the pending timed releases.
+    input.Console_ClearInputStates();
+    EXPECT_FALSE(input.IsKeyDown('A'));
+    EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 0u);
+
+    // A zero-duration press is a complete press/release on the calling thread.
+    input.Console_SimulateKeyPress("D", 0);
+    EXPECT_FALSE(input.IsKeyDown('D'));
+    EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 0u);
 }

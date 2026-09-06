@@ -17,7 +17,6 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
-#include <thread>
 #include <chrono>
 #include <unordered_map>
 
@@ -454,7 +453,7 @@ void InputManager::Console_SimulateKeyPress(const std::string& keyName, int dura
     if (m_inputLogging)
         LogInputEvent(virtualKey, true);
 
-    if (duration == 0)
+    if (duration <= 0)
     {
         UpdateKeyState(virtualKey, false);
         if (m_inputLogging)
@@ -462,22 +461,47 @@ void InputManager::Console_SimulateKeyPress(const std::string& keyName, int dura
     }
     else
     {
-        m_pendingTimedThreads.erase(std::remove_if(m_pendingTimedThreads.begin(), m_pendingTimedThreads.end(),
-                                                   [](std::thread& t) { return !t.joinable(); }),
-                                    m_pendingTimedThreads.end());
-
-        m_pendingTimedThreads.emplace_back(
-            [this, virtualKey, duration]()
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(duration));
-                {
-                    std::lock_guard<std::mutex> lock(m_inputMutex);
-                    UpdateKeyState(virtualKey, false);
-                    if (m_inputLogging)
-                        LogInputEvent(virtualKey, false);
-                }
-            });
+        // The release is applied by Update() on the input thread once the
+        // deadline has passed. A detached timer thread used to write the key
+        // state map here while the frame code read it without a lock.
+        const auto releaseAt = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration);
+        std::lock_guard<std::mutex> lock(m_inputMutex);
+        m_pendingTimedReleases.push_back(TimedKeyRelease{virtualKey, releaseAt});
     }
+}
+
+void InputManager::ApplyDueTimedKeyReleases()
+{
+    std::vector<int> due;
+    {
+        std::lock_guard<std::mutex> lock(m_inputMutex);
+        if (m_pendingTimedReleases.empty())
+            return;
+        const auto now = std::chrono::steady_clock::now();
+        std::erase_if(m_pendingTimedReleases,
+                      [&](const TimedKeyRelease& release)
+                      {
+                          if (release.releaseAt > now)
+                              return false;
+                          due.push_back(release.virtualKey);
+                          return true;
+                      });
+    }
+
+    // Outside the lock: UpdateKeyState may notify the state callback, which is
+    // free to call back into the console accessors that take m_inputMutex.
+    for (int virtualKey : due)
+    {
+        UpdateKeyState(virtualKey, false);
+        if (m_inputLogging)
+            LogInputEvent(virtualKey, false);
+    }
+}
+
+size_t InputManager::GetPendingTimedKeyReleaseCount() const
+{
+    std::lock_guard<std::mutex> lock(m_inputMutex);
+    return m_pendingTimedReleases.size();
 }
 
 void InputManager::Console_ClearInputStates()
@@ -488,6 +512,7 @@ void InputManager::Console_ClearInputStates()
     memset(m_mouseButtons, 0, sizeof(m_mouseButtons));
     memset(m_prevMouseButtons, 0, sizeof(m_prevMouseButtons));
     m_recentInputEvents.clear();
+    m_pendingTimedReleases.clear();
     Spark::SimpleConsole::GetInstance().Log("All input states cleared via console", "SUCCESS");
 }
 
@@ -654,13 +679,6 @@ InputManager::~InputManager()
     Spark::SimpleConsole::GetInstance().Log("InputManager destructor called.", "INFO");
     if (m_mouseCaptured)
         CaptureMouse(false);
-
-    for (auto& t : m_pendingTimedThreads)
-    {
-        if (t.joinable())
-            t.join();
-    }
-    m_pendingTimedThreads.clear();
 }
 
 void InputManager::Initialize(HWND hwnd)
@@ -695,6 +713,7 @@ void InputManager::Update()
     SPARK_REQUIRE_MSG(Spark::LogCategory::Input, m_hwnd != nullptr, "InputManager::Update - hwnd not initialized");
 
     m_prevKeyStates = m_keyStates;
+    ApplyDueTimedKeyReleases();
     memcpy(m_prevMouseButtons, m_mouseButtons, sizeof(m_mouseButtons));
 
     m_prevMouseX = m_mouseX;
@@ -883,12 +902,6 @@ InputManager::InputManager()
 InputManager::~InputManager()
 {
     SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager shutting down");
-    for (auto& t : m_pendingTimedThreads)
-    {
-        if (t.joinable())
-            t.join();
-    }
-    m_pendingTimedThreads.clear();
 }
 
 void InputManager::Initialize(HWND hwnd)
@@ -902,6 +915,7 @@ void InputManager::Initialize(HWND hwnd)
 void InputManager::Update()
 {
     m_prevKeyStates = m_keyStates;
+    ApplyDueTimedKeyReleases();
     memcpy(m_prevMouseButtons, m_mouseButtons, sizeof(m_mouseButtons));
     m_mouseDeltaX = m_mouseX - m_prevMouseX;
     m_mouseDeltaY = m_mouseY - m_prevMouseY;
