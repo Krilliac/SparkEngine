@@ -70,7 +70,7 @@ namespace
     }
 
     /** @brief Write a silent WAV under the temp directory; returns "" on failure. */
-    std::wstring WriteSilentWav(const std::wstring& stem)
+    [[maybe_unused]] std::wstring WriteSilentWav(const std::wstring& stem)
     {
         std::error_code ec;
         const std::filesystem::path dir = std::filesystem::temp_directory_path(ec) / "SparkAudioECSBindingReal";
@@ -152,15 +152,13 @@ TEST(AudioECSBinding_PlayOnAwakeWithUnknownSoundStaysUnbound)
 // Real playback binding (skips without an audio device)
 // ============================================================================
 
+#ifdef _WIN32
+// Registered on Windows only (XAudio2 voice semantics exist only on Windows). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(AudioECSBinding_PlayOnAwakeBindsAuthoredComponentToLiveSource)
 {
-#ifndef _WIN32
-    // Live-source binding rides on XAudio2 voices. Linux/macOS build the XAudio2
-    // shim over miniaudio (or no-op stubs): Initialize() succeeds there but
-    // LoadSound fails (observed on macOS CI), so the binding cannot be exercised.
-    SKIP_TEST("XAudio2 voice semantics are Windows-only; the non-Windows audio shim cannot load sounds");
-#endif
-
     AudioEngine engine;
     if (FAILED(engine.Initialize(2)))
     {
@@ -222,3 +220,4 @@ TEST(AudioECSBinding_PlayOnAwakeBindsAuthoredComponentToLiveSource)
     engine.StopAllSounds();
     engine.Shutdown();
 }
+#endif // _WIN32

@@ -37,7 +37,7 @@ VSOutput main(float3 position : POSITION)
 )";
 
 #ifdef _WIN32
-    const char* const kBrokenVertexShader = R"(
+    [[maybe_unused]] const char* const kBrokenVertexShader = R"(
 float4 main() : SV_Target { return this_is_not_hlsl(; }
 )";
 
@@ -65,6 +65,11 @@ float4 main() : SV_Target { return this_is_not_hlsl(; }
 // HLSL -> DXBC is a real compile, not a passthrough
 // ============================================================================
 
+#ifdef _WIN32
+// Registered on Windows only (needs d3dcompiler_47 (D3DCompile), a Windows-only DLL). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCompilerReal_D3D11EmitsDXBCNotSource)
 {
 #ifndef _WIN32
@@ -80,7 +85,13 @@ TEST(ShaderCompilerReal_D3D11EmitsDXBCNotSource)
     EXPECT_NE(result.bytecode.size(), std::string(kValidVertexShader).size());
 #endif
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (needs d3dcompiler_47 (D3DCompile), a Windows-only DLL). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCompilerReal_BrokenHLSLFailsWithCompilerDiagnostic)
 {
 #ifndef _WIN32
@@ -93,7 +104,13 @@ TEST(ShaderCompilerReal_BrokenHLSLFailsWithCompilerDiagnostic)
     EXPECT_FALSE(result.errorMessage.empty());
 #endif
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (needs d3dcompiler_47 (D3DCompile), a Windows-only DLL). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCompilerReal_WrongStageForSourceFails)
 {
 #ifndef _WIN32
@@ -107,7 +124,13 @@ TEST(ShaderCompilerReal_WrongStageForSourceFails)
     EXPECT_FALSE(result.errorMessage.empty());
 #endif
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (needs d3dcompiler_47 (D3DCompile), a Windows-only DLL). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCompilerReal_RayTracingStageReportsMissingDXC)
 {
 #ifndef _WIN32
@@ -119,7 +142,13 @@ TEST(ShaderCompilerReal_RayTracingStageReportsMissingDXC)
     EXPECT_STR_CONTAINS(result.errorMessage, "DXC");
 #endif
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (needs d3dcompiler_47 (D3DCompile), a Windows-only DLL). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCompilerReal_DefinesReachTheCompiler)
 {
 #ifndef _WIN32
@@ -147,6 +176,7 @@ VSOutput main(float3 position : POSITION)
     EXPECT_TRUE(StartsWithDXBC(withDefine.bytecode));
 #endif
 }
+#endif // _WIN32
 
 // ============================================================================
 // Targets with no integrated compiler fail closed with a reason
@@ -231,6 +261,11 @@ TEST(ShaderCompilerReal_SaveCsoRejectsEmptyPayload)
     EXPECT_FALSE(std::filesystem::exists(path));
 }
 
+#ifdef _WIN32
+// Registered on Windows only (needs d3dcompiler_47 (D3DCompile), a Windows-only DLL). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCompilerReal_SaveCsoAcceptsRealBytecode)
 {
 #ifndef _WIN32
@@ -253,6 +288,7 @@ TEST(ShaderCompilerReal_SaveCsoAcceptsRealBytecode)
     std::filesystem::remove(path);
 #endif
 }
+#endif // _WIN32
 
 TEST(ShaderCompilerReal_SaveNonCsoExtensionIsUnrestricted)
 {
@@ -311,6 +347,11 @@ namespace
     }
 } // namespace
 
+#ifdef _WIN32
+// Registered on Windows only (needs d3dcompiler_47 (D3DCompile), a Windows-only DLL). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCompilerReal_ShippedBasicVSCompilesAgainstPerObjectLayout)
 {
 #ifndef _WIN32
@@ -338,7 +379,13 @@ TEST(ShaderCompilerReal_ShippedBasicVSCompilesAgainstPerObjectLayout)
     EXPECT_TRUE(StartsWithDXBC(result.bytecode));
 #endif
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (needs d3dcompiler_47 (D3DCompile), a Windows-only DLL). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCompilerReal_ShippedBasicPSCompilesAgainstPerFrameLayout)
 {
 #ifndef _WIN32
@@ -366,6 +413,7 @@ TEST(ShaderCompilerReal_ShippedBasicPSCompilesAgainstPerFrameLayout)
     EXPECT_TRUE(StartsWithDXBC(result.bytecode));
 #endif
 }
+#endif // _WIN32
 
 // ============================================================================
 // DXR export-name table matches the shipped ray-tracing shaders

@@ -93,7 +93,7 @@ namespace
     }
 
     /** @brief Write a silent WAV next to the test binary; returns "" on failure. */
-    std::wstring WriteSilentWav(const std::wstring& stem, uint32_t sampleRate, uint16_t channels)
+    [[maybe_unused]] std::wstring WriteSilentWav(const std::wstring& stem, uint32_t sampleRate, uint16_t channels)
     {
         std::error_code ec;
         const std::filesystem::path dir = std::filesystem::temp_directory_path(ec) / "SparkAudioEngineReal";
@@ -133,16 +133,13 @@ TEST(AudioEngineReal_FormatsCompatibleRejectsDifferentWaveFormats)
     EXPECT_FALSE(AudioEngine::FormatsCompatible(lowRateMono, MakeFormat(22050, 1, 8)));
 }
 
+#ifdef _WIN32
+// Registered on Windows only (XAudio2 voice semantics exist only on Windows). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(AudioEngineReal_PooledVoiceIsRebuiltForANewSoundFormat)
 {
-#ifndef _WIN32
-    // The pooled-voice format rebuild is XAudio2 behaviour. Linux/macOS build the
-    // XAudio2 shim over miniaudio (or no-op stubs): Initialize() succeeds there
-    // but LoadSound fails (observed on macOS CI), so the path under test does not
-    // exist. Skip explicitly instead of failing on the first LoadSound.
-    SKIP_TEST("XAudio2 voice semantics are Windows-only; the non-Windows audio shim cannot load sounds");
-#endif
-
     AudioEngine engine;
     if (FAILED(engine.Initialize(1)))
     {
@@ -178,6 +175,7 @@ TEST(AudioEngineReal_PooledVoiceIsRebuiltForANewSoundFormat)
     engine.StopAllSounds();
     engine.Shutdown();
 }
+#endif // _WIN32
 
 // ============================================================================
 // Volume model (physics-audio-input-camera-17)
@@ -211,12 +209,13 @@ TEST(AudioEngineReal_CategoryVolumeExcludesMasterAndTracksBuses)
     EXPECT_NEAR(engine.GetCategoryVolume(AudioCategory::SFX), 0.5f, 0.0001f);
 }
 
+#ifdef _WIN32
+// Registered on Windows only (XAudio2 voice semantics exist only on Windows). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(AudioEngineReal_LiveSourcesFollowCategoryVolumeChanges)
 {
-#ifndef _WIN32
-    SKIP_TEST("XAudio2 voice semantics are Windows-only; the non-Windows audio shim cannot load sounds");
-#endif
-
     AudioEngine engine;
     if (FAILED(engine.Initialize(2)))
     {
@@ -248,6 +247,7 @@ TEST(AudioEngineReal_LiveSourcesFollowCategoryVolumeChanges)
     engine.StopAllSounds();
     engine.Shutdown();
 }
+#endif // _WIN32
 
 // ============================================================================
 // Mixer buses actually applied (physics-audio-input-camera-07)
@@ -376,12 +376,13 @@ TEST(AudioEngineReal_DistanceAttenuationHonorsAuthoredRange)
 // Pooled-handle validity (physics-audio-input-camera-03)
 // ============================================================================
 
+#ifdef _WIN32
+// Registered on Windows only (XAudio2 voice semantics exist only on Windows). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(AudioEngineReal_RecycledSourceInvalidatesAnOlderHandle)
 {
-#ifndef _WIN32
-    SKIP_TEST("XAudio2 voice semantics are Windows-only; the non-Windows audio shim cannot load sounds");
-#endif
-
     AudioEngine engine;
     if (FAILED(engine.Initialize(1)))
     {
@@ -414,6 +415,7 @@ TEST(AudioEngineReal_RecycledSourceInvalidatesAnOlderHandle)
     engine.StopAllSounds();
     engine.Shutdown();
 }
+#endif // _WIN32
 
 // ============================================================================
 // Device loss (physics-audio-input-camera-18)

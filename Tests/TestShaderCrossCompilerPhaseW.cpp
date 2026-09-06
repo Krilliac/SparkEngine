@@ -48,7 +48,7 @@ namespace
                                       "VSOutput main(float3 position : POSITION)\n"
                                       "{ VSOutput o; o.position = float4(position, 1.0f); return o; }\n";
 
-    const char* const kPixelSource = "float4 main() : SV_Target { return float4(1, 0, 0, 1); }\n";
+    [[maybe_unused]] const char* const kPixelSource = "float4 main() : SV_Target { return float4(1, 0, 0, 1); }\n";
 
     Spark::Graphics::ShaderSource MakeSource(const std::string& hlsl = kVertexSource,
                                              Spark::Graphics::ShaderStage stage = Spark::Graphics::ShaderStage::Vertex,
@@ -72,12 +72,12 @@ namespace
     }
 
 #ifdef _WIN32
-    constexpr bool kDXBCCompilerAvailable = true;
+    [[maybe_unused]] constexpr bool kDXBCCompilerAvailable = true;
 #else
-    constexpr bool kDXBCCompilerAvailable = false;
+    [[maybe_unused]] constexpr bool kDXBCCompilerAvailable = false;
 #endif
 
-    bool StartsWithDXBC(const std::vector<uint8_t>& bytecode)
+    [[maybe_unused]] bool StartsWithDXBC(const std::vector<uint8_t>& bytecode)
     {
         return bytecode.size() >= 4 && bytecode[0] == 'D' && bytecode[1] == 'X' && bytecode[2] == 'B' &&
                bytecode[3] == 'C';
@@ -109,6 +109,11 @@ TEST(ShaderCrossCompilerPhaseW_InitializeSetsFlag)
     EXPECT_TRUE(xc.IsInitialized());
 }
 
+#ifdef _WIN32
+// Registered on Windows only (needs the DXBC compiler (d3dcompiler_47), Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCrossCompilerPhaseW_ShutdownClearsFlagAndCache)
 {
     if constexpr (!kDXBCCompilerAvailable)
@@ -126,6 +131,7 @@ TEST(ShaderCrossCompilerPhaseW_ShutdownClearsFlagAndCache)
 
     xc.Initialize();
 }
+#endif // _WIN32
 
 // ============================================================================
 // Compile on uninitialised instance
@@ -147,6 +153,11 @@ TEST(ShaderCrossCompilerPhaseW_CompileBeforeInitializeEmpty)
 // DXBC is a real compile
 // ============================================================================
 
+#ifdef _WIN32
+// Registered on Windows only (needs the DXBC compiler (d3dcompiler_47), Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCrossCompilerPhaseW_CompileDXBCProducesBytecode)
 {
     if constexpr (!kDXBCCompilerAvailable)
@@ -161,7 +172,13 @@ TEST(ShaderCrossCompilerPhaseW_CompileDXBCProducesBytecode)
     EXPECT_TRUE(StartsWithDXBC(blob.bytecode));
     EXPECT_TRUE(blob.errors.empty());
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (needs the DXBC compiler (d3dcompiler_47), Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCrossCompilerPhaseW_CompileDXBCRejectsBrokenHLSL)
 {
     if constexpr (!kDXBCCompilerAvailable)
@@ -177,6 +194,7 @@ TEST(ShaderCrossCompilerPhaseW_CompileDXBCRejectsBrokenHLSL)
     EXPECT_FALSE(blob.errors.empty());
     EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(0)); // failures are never cached
 }
+#endif // _WIN32
 
 // ============================================================================
 // Targets with no compiler behind them fail closed
@@ -241,6 +259,11 @@ TEST(ShaderCrossCompilerPhaseW_UnimplementedTargetsAreNotCached)
 // Caching behaviour
 // ============================================================================
 
+#ifdef _WIN32
+// Registered on Windows only (needs the DXBC compiler (d3dcompiler_47), Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCrossCompilerPhaseW_SecondCompileHitsCache)
 {
     if constexpr (!kDXBCCompilerAvailable)
@@ -261,7 +284,13 @@ TEST(ShaderCrossCompilerPhaseW_SecondCompileHitsCache)
     EXPECT_EQ(size1, size2); // No new entry
     EXPECT_TRUE(stats2.hits > stats1.hits);
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (needs the DXBC compiler (d3dcompiler_47), Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCrossCompilerPhaseW_ClearCacheKeepsInitialized)
 {
     if constexpr (!kDXBCCompilerAvailable)
@@ -277,11 +306,17 @@ TEST(ShaderCrossCompilerPhaseW_ClearCacheKeepsInitialized)
     EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(0));
     EXPECT_TRUE(xc.IsInitialized());
 }
+#endif // _WIN32
 
 // ============================================================================
 // Cache key discrimination
 // ============================================================================
 
+#ifdef _WIN32
+// Registered on Windows only (needs the DXBC compiler (d3dcompiler_47), Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCrossCompilerPhaseW_StageDiscriminatesCache)
 {
     if constexpr (!kDXBCCompilerAvailable)
@@ -301,7 +336,13 @@ TEST(ShaderCrossCompilerPhaseW_StageDiscriminatesCache)
     EXPECT_NE(vs.bytecode.size(), static_cast<size_t>(0));
     EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(2));
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (needs the DXBC compiler (d3dcompiler_47), Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCrossCompilerPhaseW_TargetDiscriminatesCache)
 {
     if constexpr (!kDXBCCompilerAvailable)
@@ -317,7 +358,13 @@ TEST(ShaderCrossCompilerPhaseW_TargetDiscriminatesCache)
     // instead of inserting a zero-byte "success" entry.
     EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(1));
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (needs the DXBC compiler (d3dcompiler_47), Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderCrossCompilerPhaseW_DefinesDiscriminateCache)
 {
     if constexpr (!kDXBCCompilerAvailable)
@@ -333,6 +380,7 @@ TEST(ShaderCrossCompilerPhaseW_DefinesDiscriminateCache)
 
     EXPECT_EQ(xc.GetCacheSize(), static_cast<size_t>(2));
 }
+#endif // _WIN32
 
 // ============================================================================
 // CompileAll fan-out

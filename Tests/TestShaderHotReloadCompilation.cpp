@@ -31,7 +31,8 @@ namespace
                                            "VSOutput main(float3 position : POSITION)\n"
                                            "{ VSOutput o; o.position = float4(position, 1.0f); return o; }\n";
 
-    const char* const kBrokenVertexShader = "float4 main() : SV_Target { return this_is_not_hlsl(; }\n";
+    [[maybe_unused]] const char* const kBrokenVertexShader =
+        "float4 main() : SV_Target { return this_is_not_hlsl(; }\n";
 
 #ifdef _WIN32
     constexpr bool kHLSLCompilerAvailable = true;
@@ -168,6 +169,11 @@ TEST(ShaderReloadComp_ReloadCountIncrements)
     std::filesystem::remove_all(tempDir);
 }
 
+#ifdef _WIN32
+// Registered on Windows only (hot-reload compilation needs d3dcompiler_47, Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderReloadComp_SuccessfulCompileSwapsAtomically)
 {
     if constexpr (!kHLSLCompilerAvailable)
@@ -197,7 +203,13 @@ TEST(ShaderReloadComp_SuccessfulCompileSwapsAtomically)
     hr.Shutdown();
     std::filesystem::remove_all(tempDir);
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (hot-reload compilation needs d3dcompiler_47, Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderReloadComp_FailedCompileKeepsPreviousShader)
 {
     if constexpr (!kHLSLCompilerAvailable)
@@ -240,11 +252,17 @@ TEST(ShaderReloadComp_FailedCompileKeepsPreviousShader)
     hr.Shutdown();
     std::filesystem::remove_all(tempDir);
 }
+#endif // _WIN32
 
 // ============================================================================
 // Compilation is real: broken HLSL must fail, and a success must carry DXBC
 // ============================================================================
 
+#ifdef _WIN32
+// Registered on Windows only (hot-reload compilation needs d3dcompiler_47, Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderReloadComp_InvalidHLSLFails)
 {
     if constexpr (!kHLSLCompilerAvailable)
@@ -275,7 +293,13 @@ TEST(ShaderReloadComp_InvalidHLSLFails)
     hr.Shutdown();
     std::filesystem::remove_all(tempDir);
 }
+#endif // _WIN32
 
+#ifdef _WIN32
+// Registered on Windows only (hot-reload compilation needs d3dcompiler_47, Windows-only). A test that structurally cannot run on a
+// platform is compiled out rather than reported as [ SKIP ], so the per-lane skip
+// ratchet in .github/test-count-ratchet.json keeps tracking environment-dependent
+// skips (no device, no display) instead of platform boundaries.
 TEST(ShaderReloadComp_CommentOnlyShaderIsNotAReload)
 {
     if constexpr (!kHLSLCompilerAvailable)
@@ -308,3 +332,4 @@ TEST(ShaderReloadComp_CommentOnlyShaderIsNotAReload)
     hr.Shutdown();
     std::filesystem::remove_all(tempDir);
 }
+#endif // _WIN32
