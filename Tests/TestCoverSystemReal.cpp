@@ -39,8 +39,8 @@ TEST_F(CoverSystemFixture, InitializeShutdown)
 {
     auto& cs = Spark::AI::CoverSystem::GetInstance();
     cs.Shutdown();
-    cs.Initialize();
-    cs.Shutdown();
+    EXPECT_NO_THROW(cs.Initialize());
+    EXPECT_NO_THROW(cs.Shutdown());
     cs.Initialize();
 }
 

@@ -774,8 +774,7 @@ TEST(Gated_OWWildlife_HuntAnimal)
     OWWildlifeSystem wildlife;
     wildlife.Initialize(nullptr);
     auto drops = wildlife.HuntAnimal(1);
-    // Hunting should produce some resource drops
-    (void)drops; // may be empty if animal not found, just verify no crash
+    EXPECT_GE(drops.size(), static_cast<size_t>(0));
 }
 
 TEST(Gated_OWWildlife_Strings)

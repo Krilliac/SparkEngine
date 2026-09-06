@@ -31,7 +31,7 @@ TEST(RHIBridge_InitializeWithNoneBackend_CreatesHeadlessDevice)
 TEST(RHIBridge_ShutdownWithoutInit_DoesNotCrash)
 {
     RHIBridge bridge;
-    bridge.Shutdown(); // Should be safe to call on uninitialized bridge
+    EXPECT_NO_THROW(bridge.Shutdown());
 }
 
 TEST(RHIBridge_DoubleInitialize_ReinitializesCleanly)

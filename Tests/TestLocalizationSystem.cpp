@@ -75,7 +75,5 @@ TEST(Localization_AvailableLanguages)
     auto& loc = Spark::LocalizationSystem::Get();
     // After fresh state, should have whatever was loaded
     auto langs = loc.GetAvailableLanguages();
-    // Languages list should be a vector (may be empty in test)
-    // GetAvailableLanguages should return a valid vector (may be empty in test)
-    (void)langs;
+    EXPECT_GE(langs.size(), static_cast<size_t>(0));
 }

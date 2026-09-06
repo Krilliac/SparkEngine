@@ -36,8 +36,8 @@ TEST(InventorySystemReal_InitializeShutdown)
 {
     auto& inv = Spark::Gameplay::InventorySystem::GetInstance();
     inv.Shutdown();
-    inv.Initialize();
-    inv.Shutdown();
+    EXPECT_NO_THROW(inv.Initialize());
+    EXPECT_NO_THROW(inv.Shutdown());
     inv.Initialize();
 }
 

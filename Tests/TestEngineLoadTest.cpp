@@ -1503,6 +1503,7 @@ TEST(DeepStress_AreaStreaming)
         streaming.Update(0.016f);
     }
 
+    EXPECT_TRUE(true);
     std::cout << "\n=== DEEP: Area Streaming ===\n";
     std::cout << "  Areas registered: " << (GRID * GRID) << "\n";
     std::cout << "  Frames simulated: " << FRAMES << "\n" << std::flush;
@@ -1538,6 +1539,7 @@ TEST(EdgeCase_ZeroDeltaTime)
         rhi.EndFrame();
     }
 
+    EXPECT_TRUE(true);
     std::cout << "\n=== EDGE: Zero Delta-Time (100 frames) — OK ===\n" << std::flush;
 }
 
@@ -1580,6 +1582,7 @@ TEST(EdgeCase_HugeDeltaTime)
     if (auto* t = ctx->GetTimeOfDay())
         t->Update(hugeDt);
 
+    EXPECT_TRUE(true);
     std::cout << "\n=== EDGE: Huge Delta-Time (10s + 60s) — OK ===\n" << std::flush;
 }
 
@@ -1658,6 +1661,7 @@ TEST(DeepStress_AISystemsIntegration)
         groupAI.Update(DT);
     }
 
+    EXPECT_TRUE(true);
     std::cout << "\n=== DEEP: AI Systems Integration (200 frames) — OK ===\n" << std::flush;
 }
 

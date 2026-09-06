@@ -63,9 +63,7 @@ TEST(MemoryMonitor_GlobalBudget)
     mm.Initialize();
 
     mm.SetGlobalBudget(256 * 1024 * 1024); // 256 MB
-
-    // The global budget is just stored, tested via health checks
-    mm.Shutdown();
+    EXPECT_NO_THROW(mm.Shutdown());
 }
 
 // =============================================================================

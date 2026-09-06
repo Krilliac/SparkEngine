@@ -52,7 +52,7 @@ TEST(ReplaySystem_RecordEvent)
     event.type = "Kill";
     event.sourceEntity = 1;
     event.targetEntity = 2;
-    replay.RecordEvent(event);
+    EXPECT_NO_THROW(replay.RecordEvent(event));
 
     replay.StopRecording();
 }
@@ -60,7 +60,7 @@ TEST(ReplaySystem_RecordEvent)
 TEST(ReplaySystem_SetMetadata)
 {
     auto& replay = ReplaySystem::GetInstance();
-    replay.SetMetadata("TestMap", "Deathmatch");
+    EXPECT_NO_THROW(replay.SetMetadata("TestMap", "Deathmatch"));
     replay.StartRecording();
     replay.StopRecording();
 }

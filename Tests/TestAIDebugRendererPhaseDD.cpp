@@ -37,9 +37,9 @@ TEST(AIDebugRendererPhaseDD_InitializeShutdownLifecycle)
     r.Shutdown();
     r.Initialize();
     // Re-initialising is safe.
-    r.Initialize();
+    EXPECT_NO_THROW(r.Initialize());
     r.Shutdown();
-    r.Shutdown();
+    EXPECT_NO_THROW(r.Shutdown());
     // Restore for other tests.
     r.Initialize();
 }
@@ -138,6 +138,6 @@ TEST(AIDebugRendererPhaseDD_UpdateWhenEnabledIsSafeWithNoData)
     r.SetEnabled(true);
     // Enabled with no agents / navmeshes / paths — Update must still
     // not crash. Cleanup afterwards.
-    r.Update(0.016f);
+    EXPECT_NO_THROW(r.Update(0.016f));
     r.SetEnabled(false);
 }

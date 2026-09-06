@@ -199,7 +199,5 @@ TEST(PersistentCB_MultipleRegistrations)
 
 TEST(MaterialSystem_ConstructDestruct_DoesNotCrash)
 {
-    // Just verify the constructor/destructor pair doesn't crash
-    // (Initialize requires a device, so we can't test the full lifecycle on Linux)
-    MaterialSystem system;
+    EXPECT_NO_THROW(MaterialSystem system);
 }

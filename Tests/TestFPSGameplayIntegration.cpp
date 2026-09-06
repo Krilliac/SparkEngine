@@ -56,7 +56,7 @@ TEST(FPSInteg_GameMode_UpdateDoesNotCrash)
 
     // Tick 100 frames at 60fps
     for (int i = 0; i < 100; ++i)
-        mode.Update(0.016f);
+        EXPECT_NO_THROW(mode.Update(0.016f));
 }
 
 TEST(FPSInteg_GameMode_AddPlayer)

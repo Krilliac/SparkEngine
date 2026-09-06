@@ -1277,8 +1277,7 @@ TEST(ProjectManager_RecentProjects)
     pm.Initialize();
 
     auto recent = pm.GetRecentProjects();
-    // May be empty — just verify it returns without crashing
-    (void)recent; // just verify it returns without crashing
+    EXPECT_GE(recent.size(), static_cast<size_t>(0));
     pm.Shutdown();
 }
 

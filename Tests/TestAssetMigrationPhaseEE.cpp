@@ -20,10 +20,9 @@ TEST(AssetMigrationPhaseEE_InitializeShutdown)
 {
     auto& reg = Spark::AssetMigrationRegistry::GetInstance();
     reg.Shutdown();
+    EXPECT_NO_THROW(reg.Initialize());
+    EXPECT_NO_THROW(reg.Shutdown());
     reg.Initialize();
-    reg.Shutdown();
-    reg.Initialize();
-    // Leave initialised.
 }
 
 TEST(AssetMigrationPhaseEE_DefaultVersionsAfterInit)

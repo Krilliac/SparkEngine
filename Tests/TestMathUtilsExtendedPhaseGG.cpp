@@ -8,9 +8,8 @@
 
 TEST(MathUtilsExtendedPhaseGG_InitializeRandomIsSafe)
 {
-    // Call twice — must not crash or corrupt state.
-    MathUtilsExtended::InitializeRandom();
-    MathUtilsExtended::InitializeRandom();
+    EXPECT_NO_THROW(MathUtilsExtended::InitializeRandom());
+    EXPECT_NO_THROW(MathUtilsExtended::InitializeRandom());
 }
 
 TEST(MathUtilsExtendedPhaseGG_RandomFloatInRange)

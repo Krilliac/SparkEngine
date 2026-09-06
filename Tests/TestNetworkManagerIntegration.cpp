@@ -124,14 +124,14 @@ TEST(NetworkManager_Initialize_Succeeds)
 TEST(NetworkManager_ShutdownWithoutInit_DoesNotCrash)
 {
     auto& nm = NetworkManager::GetInstance();
-    nm.Shutdown(); // Safe on uninitialized manager
+    EXPECT_NO_THROW(nm.Shutdown());
 }
 
 TEST(NetworkManager_DoubleInit_DoesNotCrash)
 {
     auto& nm = NetworkManager::GetInstance();
     nm.Initialize();
-    nm.Initialize(); // Double init should be safe
+    EXPECT_NO_THROW(nm.Initialize());
     nm.Shutdown();
 }
 
@@ -140,7 +140,7 @@ TEST(NetworkManager_DoubleShutdown_DoesNotCrash)
     auto& nm = NetworkManager::GetInstance();
     nm.Initialize();
     nm.Shutdown();
-    nm.Shutdown(); // Double shutdown should be safe
+    EXPECT_NO_THROW(nm.Shutdown());
 }
 
 // ============================================================================
@@ -166,8 +166,7 @@ TEST(NetworkManager_InitialConnectionState_IsDisconnected)
 TEST(NetworkManager_UpdateWithoutInit_DoesNotCrash)
 {
     auto& nm = NetworkManager::GetInstance();
-    // Should be safe to call Update without Initialize
-    nm.Update(0.016f);
+    EXPECT_NO_THROW(nm.Update(0.016f));
 }
 
 TEST(NetworkManager_UpdateAfterInit_DoesNotCrash)
@@ -176,7 +175,7 @@ TEST(NetworkManager_UpdateAfterInit_DoesNotCrash)
     nm.Initialize();
 
     for (int i = 0; i < 10; ++i)
-        nm.Update(0.016f);
+        EXPECT_NO_THROW(nm.Update(0.016f));
 
     nm.Shutdown();
 }
