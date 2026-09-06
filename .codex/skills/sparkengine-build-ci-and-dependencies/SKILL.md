@@ -72,7 +72,7 @@ which one you are in before running `cmake --build`:
 | Style | Configure | Build dir | Build command |
 |---|---|---|---|
 | **Presets** | `cmake --preset windows-release` | `build/windows-release/` (`binaryDir` is `${sourceDir}/build/${presetName}`) | `cmake --build --preset windows-release` |
-| **Raw `-B build`** (what CI and the CLAUDE.md snippets use) | `cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON` | `build/` | `cmake --build build --config Release --parallel` |
+| **Raw `-B build`** (local IDE builds; CI's Windows lanes use the same `-B build` but with `-G "Ninja Multi-Config"` + sccache, see below) | `cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON` | `build/` | `cmake --build build --config Release --parallel` |
 | **Wrapper scripts** | `./build.ps1 -config Release` / `./build.sh release` | `build/` (scripts `cd build; cmake ..`) | done by the script |
 
 Gotchas (all verified):
@@ -103,10 +103,22 @@ cmake --preset linux-gcc-release
 cmake --build --preset linux-gcc-release
 cd build/linux-gcc-release && ./bin/SparkTests
 
-# CI-equivalent raw configure (matches build-windows-vs2022 exactly)
-cmake --fresh -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON
+# CI-equivalent raw configure (matches build-windows-vs2022): run inside an
+# "x64 Native Tools" shell so cl/rc/ninja are on PATH; drop the two _LAUNCHER
+# flags if sccache is not installed, keep -DGENERATE_DEBUG_SYMBOLS=OFF if it is
+cmake --fresh -B build -G "Ninja Multi-Config" \
+  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl \
+  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
+  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
+  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
+  -DGENERATE_DEBUG_SYMBOLS=OFF \
+  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure --parallel
+
+# Visual Studio generator (local IDE builds; ignores compiler launchers — in CI
+# only build-windows-shipping uses it, through its preset)
+cmake --fresh -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON
 ```
 
 Other presets that exist (all in `CMakePresets.json`): `windows-debug`,
@@ -123,10 +135,10 @@ vice versa.
   `"toolset"` field. `SPARK_MSVC_TOOLSET` is a **deprecated compatibility hint**; if set
   and it disagrees with the generator toolset, configure **fails fatally** by design.
   Never rewrite generator toolset/platform from project code.
-- VS 2026 uses CMake ≥ 4.2's native `-G "Visual Studio 18 2026"` generator with its
-  **default v145 toolset** (no `-T` flag in the CI job). Note: the CLAUDE.md CI table
-  says "MSVC v144" for this job — the workflow itself uses the v145 default; trust the
-  workflow.
+- VS 2026 (`build-windows-vs2026`) configures with `-G "Ninja Multi-Config"` inside the VS 2026
+  developer shell (vswhere `[18.0,19.0)`), so it builds with that installation's **default v145
+  toolset** — under Ninja there is no `-T`; the toolset is whatever `cl` the shell exposes. The
+  native `-G "Visual Studio 18 2026"` generator (CMake ≥ 4.2) still works for local IDE builds.
 - Runtime library is pinned via CMP0091 to `MultiThreaded$<$<CONFIG:Debug>:Debug>DLL`
   (i.e. `/MD` / `/MDd`) for **all** targets including vendored deps.
 - Debug info format is pinned via CMP0141 to `Embedded` (`/Z7`) so object files are
@@ -164,11 +176,12 @@ Real, previously-hit Release-only failures whose fixes are load-bearing in the b
    `build/lib/<Config>` — set **before** every `add_subdirectory` so third-party targets
    inherit it. Runtime output stays flat (`bin/`) on purpose; targets link archives by
    target name so paths rewrite automatically. Do not "simplify" this back to flat.
-3. **Stale cached CMake metadata.** CI restores the `build/` directory from
-   `actions/cache`, so an old cache could retain a different generator platform/toolset.
-   Fix (commit `0e1fe7e7`): Windows CI configures with **`cmake --fresh`** — regenerates
-   CMake metadata while keeping restored object files. Reproduce locally when a cached
-   tree misbehaves: `cmake --fresh -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON`.
+3. **Stale cached CMake metadata.** Linux CI restores the `build/` directory from
+   `actions/cache`, so an old cache could retain different generator metadata. The Windows
+   lanes no longer restore `build/` at all (only `SCCACHE_DIR` is cached) but still configure
+   with **`cmake --fresh`** (commit `0e1fe7e7`), which regenerates CMake metadata from scratch.
+   Reproduce locally when a cached tree misbehaves: `cmake --fresh -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON`
+   (or the Ninja Multi-Config line above).
 4. **Toolchain-drift archive rejection (Linux/macOS CI).** `apt`/`brew` compiler updates
    between cached runs change object ABI; the cached `lib*.a` then fails with
    "file format not recognized". CI jobs `build-linux-clang` and `build-macos` delete
@@ -306,8 +319,8 @@ queues the matrix twice. Concurrency cancels superseded PR runs; pushed SHAs are
 | `build-linux-gcc` / `build-linux-clang` | gcc-14 / clang, Debug+Release, ccache + cached build dir, runs `./bin/SparkTests`; GCC Release also asserts `ENABLE_VULKAN:BOOL=ON` in the cache and that two Vulkan-parity tests appear in the log |
 | `build-linux-asan` / `-tsan` | GCC Debug with ASan+UBSan+LSan / TSan, suppression files in `Tests/` |
 | `build-linux-msan` | Clang + libc++, `continue-on-error` (uninstrumented system libc++ ⇒ false positives), builds only `SparkTests` |
-| `build-windows-vs2022` | windows-2022, Debug+Release, `cmake --fresh` configure (`-T v143`), sccache action installed, ctest on Release, packages Release zip |
-| `build-windows-vs2026` | `continue-on-error`; vswhere **requires** VS `[18.0,19.0)` — an absent toolchain fails visibly instead of a green no-op; `-G "Visual Studio 18 2026"` (default v145) |
+| `build-windows-vs2022` | windows-2022, Debug+Release; enters the VS 2022 dev shell (vswhere `[17.0,18.0)`, v143), `cmake --fresh -G "Ninja Multi-Config"` with `CMAKE_{C,CXX}_COMPILER_LAUNCHER=sccache` (v0.17.0, SHA-256-pinned download), PCH / module scanning / Jolt `/Zi` off; `SCCACHE_DIR` restored+saved, `build/` not cached; ctest on Release, packages Release zip |
+| `build-windows-vs2026` | `continue-on-error`; vswhere **requires** VS `[18.0,19.0)` — an absent toolchain fails visibly instead of a green no-op; same Ninja Multi-Config + sccache recipe inside the VS 2026 dev shell (default v145), without `-DBUILD_GAME_MODULES=ON` |
 | `build-linux-mingw-wine` | **`workflow_dispatch` only** at HEAD (the CLAUDE.md table predates this), `continue-on-error`; MinGW toolchain file + Wine/DXVK run via `tools/wine-run.sh` |
 | `build-macos` | `continue-on-error`; matrix: OpenGL Debug/Release + Metal Release; deletes cached `lib*.a` pre-build |
 | `coverage` | gcc-14 `--coverage` + lcov, per-subsystem thresholds via the coverage-report script (repo `scripts/` dir), PR comment |
@@ -322,14 +335,25 @@ Advisory (job-level `continue-on-error: true`; never block merges):
 advisory, but configure/compile failures block). Canonical required-vs-advisory
 fine print: `sparkengine-validation-and-qa` §10.
 
-**Cache contract:** every build job restores `~/.ccache` (or sccache on Windows) *and*
-the `build/` directory keyed on `hashFiles('**/CMakeLists.txt', '**/*.cmake')` + SHA.
-The defenses against stale caches are: `cmake --fresh` (Windows), `*.pch` deletion
-(Linux GCC), `lib*.a` deletion (Linux Clang, macOS). If you add a job that caches
-`build/`, copy the matching defense. `open`: the vs2022 job installs sccache and prints
-its stats, but its configure line passes no `CMAKE_*_COMPILER_LAUNCHER` — whether MSVC
-compilations actually route through sccache there is unverified; don't cite its hit rate
-as evidence.
+**Cache contract:** the Linux/macOS build jobs restore `~/.ccache` (macOS: `~/Library/Caches/ccache`) *and* the `build/`
+directory keyed on `hashFiles('**/CMakeLists.txt', '**/*.cmake')` + SHA; the defenses against
+stale caches there are `*.pch` deletion (Linux GCC) and `lib*.a` deletion (Linux Clang, macOS).
+If you add a job that caches `build/`, copy the matching defense. The Windows lanes
+(`build-windows-vs2022`, `build-windows-vs2026`) cache **only** `SCCACHE_DIR`
+(`${{ runner.temp }}\sccache`) — `build/` is never restored there (`cmake --fresh` + Ninja
+Multi-Config rebuilds from the object cache) — through split `actions/cache/restore` /
+`actions/cache/save` steps keyed `sccache-windows-<lane>-<config>-<hashFiles>-<sha>`. The save
+step runs under `!cancelled()`, so a red job (compile error, test gate) still saves the objects
+it produced (the composite `actions/cache` only saves on `success()`). `Print sccache stats` is
+the authoritative number (`SCCACHE_IDLE_TIMEOUT=0` keeps the server that did the work alive until
+`--stop-server`) and emits `::warning::` on 0 compile requests, non-zero error counters, or a cold
+restore — it never fails the job; a first run of a key family is expected to be cold. Jolt's `/Zi`
+is removed with `-DGENERATE_DEBUG_SYMBOLS=OFF` on the configure line rather than in the top-level
+`CMakeLists.txt` because `Tools/buildmatrix/inventory.py` (`_REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS`,
+around lines 956-981) pins the reviewed Jolt binding to exact top-level `CMakeLists.txt` line
+numbers (1542, 1634-1636) and silently un-reviews it when they shift. `build-windows-shipping`
+still configures through the `windows-shipping` preset (Visual Studio generator) with no compiler
+cache.
 
 Local reproduction commands for every job:
 `wiki/development/CI-Reproducible-Builds.md`. Post-PR polling:
@@ -360,7 +384,15 @@ Verified 2026-08-23 against the working tree of branch
 "fix(ci): invalidate stale CMake metadata") by reading the cited files — no full
 build/CI run at this exact tree. SDL2 export repair landed in `34ee7ab7`
 ("fix(ci): export SDL2 and format hardened sources"). Facts most likely to
-drift: preset list, CI job set/gating, dependency pins, the sccache-launcher open item.
+drift: preset list, CI job set/gating, dependency pins, the Windows sccache cache contract.
+
+**Updated 2026-09-06** (branch `claude/ci-windows-compiler-cache`): `build-windows-vs2022` and
+`build-windows-vs2026` moved from the Visual Studio generators to `Ninja Multi-Config` with a
+SHA-256-pinned sccache v0.17.0 launcher and a split `actions/cache/restore` / `actions/cache/save`
+on `SCCACHE_DIR`; the Windows `build/` caches were removed; PCH, module scanning and Jolt `/Zi`
+are off on those lanes; `SparkConsole/CMakeLists.txt` lost its per-target `/Zi` and
+`COMPILE_PDB_NAME_*`. Read from the workflow and CMake files; no CI run at this tree yet — the
+first run's `Print sccache stats` step is the evidence that the launcher is wired.
 
 Re-verify with:
 

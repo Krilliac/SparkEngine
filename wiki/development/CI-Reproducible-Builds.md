@@ -111,13 +111,26 @@ MSan requires libc++ built with `-fsanitize=memory`; this is why the job is `con
 
 ## Windows MSVC VS 2022 (v143) — Debug + Release (job `build-windows-vs2022`)
 
+Run from an "x64 Native Tools Command Prompt for VS 2022" (or after `Enter-VsDevShell -VsInstallPath <vs> -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64"`): Ninja needs `cl`/`rc` on PATH and `INCLUDE`/`LIB` set, and the SDK `fxc` on PATH is what lets the foliage shader validations run.
+
 ```bash
-cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON
+cmake --fresh -B build -G "Ninja Multi-Config" \
+  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl \
+  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
+  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
+  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
+  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
+  -DGENERATE_DEBUG_SYMBOLS=OFF \
+  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure --parallel --no-tests=error
 ```
 
-The engine selects embedded MSVC debug information (`/Z7`) through CMake policy CMP0141 so Ninja-based local builds can use sccache effectively. The advisory VS 2026 job uses CMake 4.2+'s native `Visual Studio 18 2026` generator and its default v145 toolset; it fails visibly when that toolchain is absent instead of reporting a green no-op.
+Without sccache installed, omit the two `_LAUNCHER` flags. With sccache, keep `-DGENERATE_DEBUG_SYMBOLS=OFF`: Jolt's own `/Zi` would otherwise make sccache expect a PDB that `cl` (honouring the engine's later `/Z7`) never writes, and every Jolt translation unit fails with `sccache: encountered fatal error`. PCH is off because sccache cannot cache `/Yc` / `/Fp`; module scanning is off because no module units exist.
+
+CI installs sccache v0.17.0 from the GitHub release verified against a SHA-256 literal, keeps the cache in `SCCACHE_DIR` under `runner.temp` (split `actions/cache/restore` / `actions/cache/save` steps keyed like the Linux ccache steps; the save runs even when the job went red; `build/` is not restored), starts the server explicitly before configure, and reports the numbers in a `Print sccache stats` step. The engine selects embedded MSVC debug information (`/Z7`) through CMake policy CMP0141 before `project()`, which is what lets the configure-time try-compiles pass under the launcher.
+
+The advisory `build-windows-vs2026` job follows the same recipe inside the VS 2026 developer environment (vswhere `[18.0,19.0)`, default v145 toolset) without `-DBUILD_GAME_MODULES=ON`; it fails visibly when that toolchain is absent instead of reporting a green no-op. `build-windows-shipping` still configures through the `windows-shipping` preset (Visual Studio 17 2022 generator, v143) and uses no compiler cache.
 
 ## macOS (job `build-macos`, `continue-on-error`)
 
@@ -171,6 +184,7 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
   - Added the new `ci-linux-asan` / `ci-linux-tsan` presets as alternatives.
   - Noted MSan builds only the `SparkTests` target in CI; added `|| true` to match CI.
   - Added sccache/`continue-on-error` notes for the Windows jobs and the v145 VS 2026 variant.
+  - Windows VS 2022 / VS 2026 recipes switched to Ninja Multi-Config + sccache (2026-09-06); the Visual Studio-generator configure now applies only to `build-windows-shipping`'s preset.
   - Added the jobs that did not exist in the source: `check-thirdparty-manifest`, `coverage`, `clang-tidy`, `todo-count`, `build-installer`, `report-ci-errors`, plus the macOS and MinGW-Wine reproduction recipes.
   - Noted the Linux GCC job uses gcc-14/g++-14.
 

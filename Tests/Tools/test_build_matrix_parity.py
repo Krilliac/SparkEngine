@@ -177,9 +177,9 @@ class RepositoryInventoryTests(unittest.TestCase):
         )
         self.assertTrue(all(entry["runnerOs"] == "windows" for entry in windows))
         self.assertTrue(windows[0]["fresh"])
-        self.assertEqual(windows[0]["generator"], "Visual Studio 17 2022")
-        self.assertEqual(windows[0]["architecture"], "x64")
-        self.assertEqual(windows[0]["toolset"], "v143")
+        self.assertEqual(windows[0]["generator"], "Ninja Multi-Config")
+        self.assertNotIn("architecture", windows[0])
+        self.assertNotIn("toolset", windows[0])
         # Step names are read structurally, not by a fixed-indentation regex.
         installer = next(entry for entry in configs if entry["job"] == "build-installer")
         self.assertEqual(

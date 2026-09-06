@@ -82,20 +82,16 @@ if(CONSOLE_SOURCES)
         target_compile_options(SparkConsole PRIVATE
             /W3 /MP
             /wd4996
-            # Debug: full debug info; Release: optimize for speed
-            $<$<CONFIG:Debug>:/Zi /Od /RTC1>
+            # Debug-info format comes from CMAKE_MSVC_DEBUG_INFORMATION_FORMAT
+            # (Embedded, forced in the top-level CMakeLists.txt); no per-target /Zi.
+            $<$<CONFIG:Debug>:/Od /RTC1>
             $<$<CONFIG:Release>:/O2 /Oi /GL>
-            $<$<CONFIG:RelWithDebInfo>:/Zi /O2>
+            $<$<CONFIG:RelWithDebInfo>:/O2>
             $<$<CONFIG:MinSizeRel>:/O1 /Os>
         )
         # Enable whole-program optimization for Release
         target_link_options(SparkConsole PRIVATE
             $<$<CONFIG:Release>:/LTCG>
-        )
-        # Generate PDB for RelWithDebInfo and Debug
-        set_target_properties(SparkConsole PROPERTIES
-            COMPILE_PDB_NAME_DEBUG "SparkConsole"
-            COMPILE_PDB_NAME_RELWITHDEBINFO "SparkConsole"
         )
         set_property(TARGET SparkConsole PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 

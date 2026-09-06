@@ -479,8 +479,8 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan + LSan |
 | `build-linux-tsan` | ubuntu-24.04 | GCC | Debug | TSan (thread races) |
 | `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan (`continue-on-error`) |
-| `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
-| `build-windows-vs2026` | windows-latest | MSVC v145 | Debug, Release | `continue-on-error` |
+| `build-windows-vs2022` | windows-2022 | MSVC v143 | Debug, Release | Ninja Multi-Config + sccache, `-DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON` |
+| `build-windows-vs2026` | windows-2025-vs2026 | MSVC v145 | Debug, Release | Ninja Multi-Config + sccache, `continue-on-error` |
 | `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error` |
 | `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
