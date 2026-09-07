@@ -190,3 +190,9 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
 ## Stable release version contract
 
 Versioned publication requires its `vMAJOR.MINOR.PATCH` tag to equal the single `SPARK_ENGINE_VERSION` default in `CMakeLists.txt`. `CHANGELOG.md` must contain exactly one matching `## [MAJOR.MINOR.PATCH]` heading, optionally followed by ` - YYYY-MM-DD`. Missing, duplicate, or mismatched metadata fails preparation before release outputs are emitted. Nightly publication continues to use the source default without requiring a versioned changelog section. This contract does not certify release notes, signing, or Windows qualification; the stable readiness gate remains mandatory.
+
+## Windows native-package component preflight
+
+Versioned Windows publication stages only `runtime`, `tools`, and `samples` into a fresh root before CPack. The package validator's explicit `runtime` layout checks that SDK-free tree against the trusted build's generated game-module inventory and the validator checkout's canonical SDK ABI header. It retains the complete required executable and runtime-content lists, every configured module's sidecar/schema/ABI/SHA-256 checks, and executable help/version smokes. The default `sdk` layout retains its installed inventory/header checks. Unknown layouts, runtime use outside `stable-v1`, or reference files inside the installed package are rejected.
+
+The workflow retains `runtime-layout.log` on success and failure. Local fixtures test orchestration and rejection behavior; POSIX script stand-ins are not engine binaries. This preflight does not execute an MSI or NSIS installer and does not certify Windows 11, code signing, upgrades, rollback, or uninstall. Native installation qualification remains required.

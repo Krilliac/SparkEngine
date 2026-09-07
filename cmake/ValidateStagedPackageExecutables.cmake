@@ -184,6 +184,51 @@ if(NOT SPARK_PACKAGE_PROFILE STREQUAL "default" AND
     message(FATAL_ERROR "Unknown package profile: ${SPARK_PACKAGE_PROFILE}")
 endif()
 
+# Native installers contain runtime/tools/samples only; their module expectation
+# comes from the trusted build, not an inventory supplied by the installed tree.
+if(NOT DEFINED SPARK_PACKAGE_LAYOUT)
+    set(SPARK_PACKAGE_LAYOUT sdk)
+endif()
+if(NOT SPARK_PACKAGE_LAYOUT STREQUAL "sdk" AND NOT SPARK_PACKAGE_LAYOUT STREQUAL "runtime")
+    message(FATAL_ERROR "Unknown package layout: ${SPARK_PACKAGE_LAYOUT}")
+endif()
+if(SPARK_PACKAGE_LAYOUT STREQUAL "runtime" AND NOT SPARK_PACKAGE_PROFILE STREQUAL "stable-v1")
+    message(FATAL_ERROR "Runtime layout is currently defined only for stable-v1")
+endif()
+
+function(_spark_require_external_reference _spark_path)
+    if("${_spark_path}" STREQUAL "" OR "${_spark_path}" MATCHES "[\r\n;]")
+        message(FATAL_ERROR "Runtime layout requires an explicit trusted reference path")
+    endif()
+    set(_spark_reference "${_spark_path}")
+    cmake_path(ABSOLUTE_PATH _spark_reference NORMALIZE)
+    set(_spark_reference_compare "${_spark_reference}")
+    set(_spark_root_compare "${_spark_package_root_normalized}")
+    if(CMAKE_HOST_WIN32)
+        string(TOLOWER "${_spark_reference_compare}" _spark_reference_compare)
+        string(TOLOWER "${_spark_root_compare}" _spark_root_compare)
+    endif()
+    cmake_path(IS_PREFIX _spark_root_compare "${_spark_reference_compare}" NORMALIZE _spark_inside)
+    if(_spark_inside)
+        message(FATAL_ERROR "Runtime layout reference must be outside the package: ${_spark_reference}")
+    endif()
+    if(NOT EXISTS "${_spark_reference}" OR IS_DIRECTORY "${_spark_reference}" OR IS_SYMLINK "${_spark_reference}")
+        message(FATAL_ERROR "Runtime layout reference is not a regular file: ${_spark_reference}")
+    endif()
+    file(REAL_PATH "${_spark_reference}" _spark_reference_real)
+    if(CMAKE_HOST_WIN32)
+        string(TOLOWER "${_spark_reference_real}" _spark_reference_real)
+    endif()
+    if(NOT _spark_reference_compare STREQUAL _spark_reference_real)
+        message(FATAL_ERROR "Runtime layout reference crosses a symlink: ${_spark_reference}")
+    endif()
+    if(CMAKE_HOST_WIN32)
+        cmake_path(GET _spark_reference ROOT_PATH _spark_reference_volume)
+        _spark_require_no_windows_reparse_traversal(
+            "Runtime layout reference" "${_spark_reference_volume}" "${_spark_reference}")
+    endif()
+endfunction()
+
 set(_spark_validate_modules_only OFF)
 if(SPARK_PACKAGE_VALIDATE_MODULES_ONLY)
     set(_spark_validate_modules_only ON)
@@ -234,6 +279,10 @@ endif()
 # pointed at an extracted artifact, and include() would execute staged code.
 set(_spark_game_module_manifest
     "${SPARK_PACKAGE_ROOT}/lib/cmake/SparkEngine/SparkEngineGameModules.cmake")
+if(SPARK_PACKAGE_LAYOUT STREQUAL "runtime")
+    set(_spark_game_module_manifest "${SPARK_PACKAGE_EXPECTED_MODULE_MANIFEST}")
+    _spark_require_external_reference("${_spark_game_module_manifest}")
+endif()
 if(NOT EXISTS "${_spark_game_module_manifest}" OR
    IS_DIRECTORY "${_spark_game_module_manifest}" OR
    IS_SYMLINK "${_spark_game_module_manifest}")
@@ -241,8 +290,10 @@ if(NOT EXISTS "${_spark_game_module_manifest}" OR
         "Staged SparkEngine package is missing its generated game-module inventory:\n"
         "  ${_spark_game_module_manifest}")
 endif()
-_spark_require_bounded_regular_file(
-    "${_spark_game_module_manifest}" "Generated game-module inventory")
+if(SPARK_PACKAGE_LAYOUT STREQUAL "sdk")
+    _spark_require_bounded_regular_file(
+        "${_spark_game_module_manifest}" "Generated game-module inventory")
+endif()
 file(SIZE "${_spark_game_module_manifest}" _spark_game_module_manifest_size)
 if(_spark_game_module_manifest_size LESS 1 OR
    _spark_game_module_manifest_size GREATER 4096)
@@ -320,6 +371,11 @@ if(SPARK_PACKAGE_PROFILE STREQUAL "stable-v1")
 endif()
 
 set(_spark_sdk_version_header "${SPARK_PACKAGE_ROOT}/include/Spark/Version.h")
+if(SPARK_PACKAGE_LAYOUT STREQUAL "runtime")
+    # This header belongs to the validator checkout, not the installed payload.
+    set(_spark_sdk_version_header "${CMAKE_CURRENT_LIST_DIR}/../SparkSDK/Include/Spark/Version.h")
+    _spark_require_external_reference("${_spark_sdk_version_header}")
+endif()
 if(NOT EXISTS "${_spark_sdk_version_header}" OR
    IS_DIRECTORY "${_spark_sdk_version_header}" OR
    IS_SYMLINK "${_spark_sdk_version_header}")
@@ -327,8 +383,10 @@ if(NOT EXISTS "${_spark_sdk_version_header}" OR
         "Staged SparkEngine package is missing its SDK ABI version header:\n"
         "  ${_spark_sdk_version_header}")
 endif()
-_spark_require_bounded_regular_file(
-    "${_spark_sdk_version_header}" "SDK ABI version header")
+if(SPARK_PACKAGE_LAYOUT STREQUAL "sdk")
+    _spark_require_bounded_regular_file(
+        "${_spark_sdk_version_header}" "SDK ABI version header")
+endif()
 file(STRINGS "${_spark_sdk_version_header}" _spark_sdk_version_lines
     REGEX "^#[ \t]*define[ \t]+SPARK_SDK_VERSION[ \t]+[0-9]+[ \t]*$")
 list(LENGTH _spark_sdk_version_lines _spark_sdk_version_line_count)

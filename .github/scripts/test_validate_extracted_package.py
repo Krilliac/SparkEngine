@@ -508,6 +508,15 @@ class ShippingPackageBomTests(unittest.TestCase):
 class ExtractedPackageWorkflowWiringTests(unittest.TestCase):
     def test_all_portable_platforms_run_the_full_extracted_gate(self) -> None:
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        runtime_header = "    - name: Validate Windows stable runtime component layout\n"
+        self.assertEqual(workflow.count(runtime_header), 1)
+        runtime_step = workflow.split(runtime_header, 1)[1].split("\n    - name:", 1)[0]
+        self.assertEqual(runtime_step.count("ValidateStagedPackageExecutables.cmake"), 1)
+        self.assertEqual(runtime_step.count("SPARK_EXECUTABLE_SUFFIX:STRING=.exe"), 1)
+        self.assertIn("-DSPARK_PACKAGE_LAYOUT=runtime", runtime_step)
+        # The new native-component preflight must not substitute for any of the
+        # three platforms' full staged and extracted SDK-package validators.
+        workflow = workflow.replace(runtime_header + runtime_step, "", 1)
         self.assertEqual(workflow.count("validate-extracted-package.py"), 6)
         self.assertEqual(workflow.count("--preflight-archive"), 3)
         self.assertEqual(workflow.count("--stage-root"), 3)

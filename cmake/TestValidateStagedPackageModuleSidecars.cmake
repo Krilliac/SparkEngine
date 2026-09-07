@@ -389,3 +389,121 @@ endif()
 
 message(STATUS
     "Module-sidecar validator accepted the valid fixture and rejected all malformed fixtures")
+
+# Native runtime installers omit the SDK component. Their expected module list
+# must come from the trusted build tree, never an installer-supplied inventory.
+set(_spark_runtime_reference "${_spark_resolved_test_root}/runtime-reference.cmake")
+set(_spark_module_prefix "")
+set(_spark_module_suffix ".dll")
+set(_spark_runtime_modules "SparkGameFPS;SparkGameSecond")
+get_filename_component(_spark_validator_directory "${SPARK_VALIDATOR}" DIRECTORY)
+file(STRINGS "${_spark_validator_directory}/../SparkSDK/Include/Spark/Version.h"
+    _spark_runtime_sdk_line REGEX "^#define SPARK_SDK_VERSION [0-9]+$")
+string(REGEX MATCH "[0-9]+$" _spark_runtime_sdk_version "${_spark_runtime_sdk_line}")
+file(WRITE "${_spark_runtime_reference}"
+    "format=1\ntarget_system=Windows\nmodule_prefix=\nmodule_suffix=.dll\nmodules=${_spark_runtime_modules}\n")
+
+foreach(_spark_case IN ITEMS valid missing_first missing_second hash_mismatch sdk_mismatch
+        missing_sidecar unknown_layout untrusted_inventory missing_reference wrong_profile
+        missing_executable missing_runtime full_valid full_smoke_failure)
+    # POSIX script stand-ins exercise orchestration only, not native PE execution.
+    # Windows runs the real executable smoke in the release workflow.
+    if(CMAKE_HOST_WIN32 AND _spark_case MATCHES "^full_")
+        continue()
+    endif()
+    set(_spark_root "${_spark_resolved_test_root}/runtime_${_spark_case}")
+    _spark_write_valid_fixture("${_spark_root}" "${_spark_runtime_modules}")
+    foreach(_spark_module IN LISTS _spark_runtime_modules)
+        set(_spark_sidecar "${_spark_root}/bin/${_spark_module}.dll.sparkabi")
+        file(READ "${_spark_sidecar}" _spark_content)
+        string(REPLACE "sdk_version=3" "sdk_version=${_spark_runtime_sdk_version}"
+            _spark_content "${_spark_content}")
+        file(WRITE "${_spark_sidecar}" "${_spark_content}")
+    endforeach()
+    file(REMOVE_RECURSE "${_spark_root}/include" "${_spark_root}/lib")
+    set(_spark_modules_only ON)
+    set(_spark_layout runtime)
+    set(_spark_profile stable-v1)
+    set(_spark_reference "${_spark_runtime_reference}")
+    set(_spark_expected "")
+    if(_spark_case STREQUAL "missing_first")
+        file(REMOVE "${_spark_root}/bin/SparkGameFPS.dll")
+        set(_spark_expected "missing required game modules")
+    elseif(_spark_case STREQUAL "missing_second")
+        file(REMOVE "${_spark_root}/bin/SparkGameSecond.dll")
+        set(_spark_expected "missing required game modules")
+    elseif(_spark_case STREQUAL "hash_mismatch")
+        file(APPEND "${_spark_root}/bin/SparkGameFPS.dll" "corrupted")
+        set(_spark_expected "Game-module SHA-256 mismatch")
+    elseif(_spark_case STREQUAL "sdk_mismatch")
+        file(READ "${_spark_root}/bin/SparkGameFPS.dll.sparkabi" _spark_content)
+        string(REPLACE "sdk_version=${_spark_runtime_sdk_version}" "sdk_version=999"
+            _spark_content "${_spark_content}")
+        file(WRITE "${_spark_root}/bin/SparkGameFPS.dll.sparkabi" "${_spark_content}")
+        set(_spark_expected "Game-module SDK ABI version mismatch")
+    elseif(_spark_case STREQUAL "missing_sidecar")
+        file(REMOVE "${_spark_root}/bin/SparkGameFPS.dll.sparkabi")
+        set(_spark_expected "sidecar")
+    elseif(_spark_case STREQUAL "unknown_layout")
+        set(_spark_layout unknown)
+        set(_spark_expected "Unknown package layout")
+    elseif(_spark_case STREQUAL "untrusted_inventory")
+        set(_spark_reference "${_spark_root}/inventory.cmake")
+        file(COPY_FILE "${_spark_runtime_reference}" "${_spark_reference}")
+        set(_spark_expected "must be outside the package")
+    elseif(_spark_case STREQUAL "missing_reference")
+        set(_spark_reference "")
+        set(_spark_expected "requires an explicit trusted reference path")
+    elseif(_spark_case STREQUAL "wrong_profile")
+        set(_spark_profile default)
+        set(_spark_expected "Runtime layout is currently defined only for stable-v1")
+    elseif(_spark_case STREQUAL "missing_executable")
+        set(_spark_modules_only OFF)
+        set(_spark_expected "missing required executables")
+    elseif(_spark_case STREQUAL "missing_runtime" OR _spark_case MATCHES "^full_")
+        set(_spark_modules_only OFF)
+        foreach(_spark_executable IN ITEMS SparkEngine SparkConsole SparkEditor SparkLauncher SparkCooker
+                SparkAutomation SparkBuild SparkInstaller SparkShaderCompiler SparkCrashReporter)
+            file(WRITE "${_spark_root}/bin/${_spark_executable}.exe" "fixture executable")
+        endforeach()
+        set(_spark_expected "missing required runtime content")
+        if(_spark_case MATCHES "^full_")
+            foreach(_spark_executable IN ITEMS SparkEngine SparkConsole SparkEditor SparkLauncher SparkCooker
+                    SparkAutomation SparkBuild SparkInstaller SparkShaderCompiler SparkCrashReporter)
+                set(_spark_tool "${_spark_root}/bin/${_spark_executable}.exe")
+                file(WRITE "${_spark_tool}"
+                    "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'SparkEngine 1.0.0'; fi\nexit 0\n")
+                file(CHMOD "${_spark_tool}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+            endforeach()
+            foreach(_spark_file IN ITEMS LICENSE.txt THIRD_PARTY_NOTICES.txt bin/Shaders/BasicVS.hlsl
+                    bin/Shaders/ForwardPlus/DepthPrepass.hlsl bin/Shaders/HLSL/BasicVS.hlsl
+                    bin/Shaders/HLSL/Compute/GPUCull.hlsl bin/Assets/MMOFPS/Data/continents.json
+                    bin/Assets/Engine/Branding/sparkengine_wordmark.svg
+                    bin/Resources/Config/settings.ini bin/Resources/Config/controls.cfg)
+                file(WRITE "${_spark_root}/${_spark_file}" "fixture runtime content\n")
+            endforeach()
+            if(_spark_case STREQUAL "full_smoke_failure")
+                file(WRITE "${_spark_root}/bin/SparkCooker.exe" "#!/bin/sh\nexit 9\n")
+                set(_spark_expected "SparkCooker --help smoke failed")
+            endif()
+        endif()
+    endif()
+    execute_process(COMMAND "${CMAKE_COMMAND}"
+        "-DSPARK_PACKAGE_ROOT=${_spark_root}"
+        "-DSPARK_PACKAGE_PROFILE=${_spark_profile}"
+        "-DSPARK_PACKAGE_LAYOUT=${_spark_layout}"
+        "-DSPARK_PACKAGE_EXPECTED_MODULE_MANIFEST=${_spark_reference}"
+        "-DSPARK_PACKAGE_VALIDATE_MODULES_ONLY=${_spark_modules_only}"
+        -DSPARK_EXECUTABLE_SUFFIX=.exe
+        -P "${SPARK_VALIDATOR}"
+        RESULT_VARIABLE _spark_result OUTPUT_VARIABLE _spark_stdout ERROR_VARIABLE _spark_stderr)
+    set(_spark_log "${_spark_stdout}\n${_spark_stderr}")
+    if(_spark_case STREQUAL "valid" OR _spark_case STREQUAL "full_valid")
+        if(NOT _spark_result EQUAL 0)
+            message(FATAL_ERROR "Runtime layout rejected valid SDK-free package: ${_spark_log}")
+        endif()
+    elseif(_spark_result EQUAL 0 OR NOT _spark_log MATCHES "${_spark_expected}")
+        message(FATAL_ERROR "Runtime ${_spark_case} did not fail for ${_spark_expected}: ${_spark_log}")
+    endif()
+endforeach()
+message(STATUS "Runtime layout accepted SDK-free fixture and rejected incomplete or inconsistent packages")

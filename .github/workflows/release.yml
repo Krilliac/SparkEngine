@@ -265,6 +265,35 @@ jobs:
           -P cmake/ValidateStagedPackageExecutables.cmake
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+    - name: Validate Windows stable runtime component layout
+      if: needs.prepare.outputs.is_versioned == 'true'
+      shell: pwsh
+      # This checks the native installers' component set before packaging. It
+      # does not install an MSI or certify Windows 11, signing, or upgrades.
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $runtimeRoot = Join-Path "${{ github.workspace }}" "runtime-stage"
+        if (Test-Path -LiteralPath $runtimeRoot) { throw "Runtime staging root must be fresh" }
+        cmake --install ${{ matrix.build_dir }} --config ${{ matrix.config }} --component runtime --prefix "$runtimeRoot" 2>&1 | Tee-Object -FilePath runtime-layout.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cmake --install ${{ matrix.build_dir }} --config ${{ matrix.config }} --component tools --prefix "$runtimeRoot" 2>&1 | Tee-Object -FilePath runtime-layout.log -Append
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cmake --install ${{ matrix.build_dir }} --config ${{ matrix.config }} --component samples --prefix "$runtimeRoot" 2>&1 | Tee-Object -FilePath runtime-layout.log -Append
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cmake -DSPARK_PACKAGE_ROOT="$runtimeRoot" -DSPARK_PACKAGE_LAYOUT=runtime -DSPARK_PACKAGE_PROFILE=stable-v1 `
+          -DSPARK_PACKAGE_EXPECTED_MODULE_MANIFEST="${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake" `
+          -DSPARK_EXECUTABLE_SUFFIX:STRING=.exe -P cmake/ValidateStagedPackageExecutables.cmake 2>&1 | Tee-Object -FilePath runtime-layout.log -Append
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Upload runtime layout diagnostics
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: SparkEngine-Windows-${{ matrix.config }}-runtime-layout-diagnostics
+        path: runtime-layout.log
+        if-no-files-found: ignore
+        retention-days: 7
+
     - name: Generate CPack packages
       shell: pwsh
       run: |

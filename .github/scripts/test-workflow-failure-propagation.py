@@ -1690,7 +1690,8 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_windows_package_native_failures_stop_the_step(self) -> None:
         windows = yaml_section(self.release, "build-windows", indent=2)
-        for name in ("Validate external package consumption", "Extract and smoke-test portable package"):
+        for name in ("Validate external package consumption", "Extract and smoke-test portable package",
+                     "Validate Windows stable runtime component layout"):
             block = named_step(windows, name)
             lines = textwrap.dedent(block.split("run: |\n", 1)[1]).splitlines()
             native_ends = []
@@ -1706,6 +1707,23 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 with self.subTest(step=name, command=lines[end]):
                     self.assertLess(end + 1, len(lines), "Native status must be checked immediately")
                     self.assertRegex(lines[end + 1], r"^if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}$")
+
+    def test_stable_runtime_layout_is_validated_before_packaging(self) -> None:
+        windows = yaml_section(self.release, "build-windows", indent=2)
+        block = named_step(windows, "Validate Windows stable runtime component layout")
+        self.assertIn("if: needs.prepare.outputs.is_versioned == 'true'", block)
+        self.assertIn("-DSPARK_PACKAGE_LAYOUT=runtime", block)
+        self.assertIn("-DSPARK_PACKAGE_PROFILE=stable-v1", block)
+        self.assertIn('-DSPARK_PACKAGE_EXPECTED_MODULE_MANIFEST="${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake"', block)
+        for component in ("runtime", "tools", "samples"):
+            self.assertIn(f"--component {component}", block)
+        self.assertNotIn("--component sdk", block)
+        self.assertNotIn("SPARK_PACKAGE_VALIDATE_MODULES_ONLY", block)
+        self.assertLess(windows.index("Validate Windows stable runtime component layout"),
+                        windows.index("Generate CPack packages"))
+        logs = named_step(windows, "Upload runtime layout diagnostics")
+        self.assertIn("if: always()", logs)
+        self.assertIn("runtime-layout.log", logs)
 
     def test_stable_shipping_build_keeps_validation_separate(self) -> None:
         windows = yaml_section(self.release, "build-windows", indent=2)
