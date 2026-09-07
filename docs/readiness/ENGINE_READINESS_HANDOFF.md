@@ -533,7 +533,7 @@ tools/check-test-registration.sh
 **Priority:** P0 · **Status:** open · **Wave:** 0 · **Area:** content · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. 2026-09-05 progress: tools/site-data/validate.py --assets walks every Assets/ package for provenance and SHA-256 (all nine Templates packages pass; GameModules/SparkGameVisualScript/Assets gained a manifest.json), and the asset-integrity CI job exists in site-data.yml. profile-module-package-smoke remains planned.
+Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked; profile-module-package-smoke remains planned.
 
 **Dependency contract**
 
@@ -543,20 +543,30 @@ Several modules reference missing music/models/scenes, depend on path case that 
 **Source context**
 
 - `Assets`
+- `Assets/assets.integrity.json`
 - `GameModules`
 - `SparkEngine/Source/Graphics`
 - `SparkEngine/Source/Core/GamePackager.cpp`
+- `tools/asset-integrity/verify_asset_integrity.py`
 
 **Entry points**
 
 - `Assets`
+- `Assets/assets.integrity.json`
 - `tools/site-data/assets.py`
+- `tools/asset-integrity/verify_asset_integrity.py`
 - `tools/site-data/validate.py`
 
 **Implementation scope**
 
 - Generate per-module content manifests for truthful discovery and classification
 - Validate existence, exact case, safe path, ownership, license, and package inclusion
+- Generate deterministic SHA-256 integrity manifests for the first-party Assets tree
+- Verify exact hash, exact size, case-collision safety, and completeness
+- Reject symlinks, junctions, reparse points, and traversal paths before manifest generation and verification
+- Detect duplicate manifest entries and paths with Windows reserved device names
+- Cross-validate template manifests against lock file and disk
+- Integrate asset integrity verification into site-data validate.py --assets
 - Detect procedural fallbacks and require an explicit manifest policy
 - Smoke-launch only modules included by a declared release profile from the unpacked stable layout
 
@@ -571,7 +581,10 @@ Several modules reference missing music/models/scenes, depend on path case that 
 **Required commands**
 
 ```bash
+python3 tools/asset-integrity/verify_asset_integrity.py check-all
+python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json
 python3 tools/site-data/validate.py --assets
+python3 Tests/Tools/test_asset_integrity.py
 ctest --test-dir build/windows-shipping -L profile-package --output-on-failure --no-tests=error
 ```
 
@@ -599,6 +612,7 @@ ctest --test-dir build/windows-shipping -L profile-package --output-on-failure -
   - Case-insensitive local filesystems hiding release failures
 - Out of scope:
   - Creating missing production art for every prototype
+  - ThirdParty/submodule provenance
 
 **Definition of done**
 

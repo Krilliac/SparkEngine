@@ -213,7 +213,7 @@
       "wave": 0,
       "area": "content",
       "owner": "unassigned",
-      "rationale": "Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. 2026-09-05 progress: tools/site-data/validate.py --assets walks every Assets/ package for provenance and SHA-256 (all nine Templates packages pass; GameModules/SparkGameVisualScript/Assets gained a manifest.json), and the asset-integrity CI job exists in site-data.yml. profile-module-package-smoke remains planned.",
+      "rationale": "Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked; profile-module-package-smoke remains planned.",
       "dependencies": [
         "RDY-000"
       ],
@@ -224,18 +224,28 @@
       ],
       "sourceContext": [
         "Assets",
+        "Assets/assets.integrity.json",
         "GameModules",
         "SparkEngine/Source/Graphics",
-        "SparkEngine/Source/Core/GamePackager.cpp"
+        "SparkEngine/Source/Core/GamePackager.cpp",
+        "tools/asset-integrity/verify_asset_integrity.py"
       ],
       "entryPoints": [
         "Assets",
+        "Assets/assets.integrity.json",
         "tools/site-data/assets.py",
+        "tools/asset-integrity/verify_asset_integrity.py",
         "tools/site-data/validate.py"
       ],
       "implementationScope": [
         "Generate per-module content manifests for truthful discovery and classification",
         "Validate existence, exact case, safe path, ownership, license, and package inclusion",
+        "Generate deterministic SHA-256 integrity manifests for the first-party Assets tree",
+        "Verify exact hash, exact size, case-collision safety, and completeness",
+        "Reject symlinks, junctions, reparse points, and traversal paths before manifest generation and verification",
+        "Detect duplicate manifest entries and paths with Windows reserved device names",
+        "Cross-validate template manifests against lock file and disk",
+        "Integrate asset integrity verification into site-data validate.py --assets",
         "Detect procedural fallbacks and require an explicit manifest policy",
         "Smoke-launch only modules included by a declared release profile from the unpacked stable layout"
       ],
@@ -247,7 +257,10 @@
         "Experimental modules keep their package-smoke debt outside stable-v1"
       ],
       "commands": [
+        "python3 tools/asset-integrity/verify_asset_integrity.py check-all",
+        "python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json",
         "python3 tools/site-data/validate.py --assets",
+        "python3 Tests/Tools/test_asset_integrity.py",
         "ctest --test-dir build/windows-shipping -L profile-package --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
@@ -279,7 +292,8 @@
         "Case-insensitive local filesystems hiding release failures"
       ],
       "outOfScope": [
-        "Creating missing production art for every prototype"
+        "Creating missing production art for every prototype",
+        "ThirdParty/submodule provenance"
       ],
       "definitionOfDone": [
         "Validation is blocking",
@@ -296,7 +310,20 @@
         "AssetManifest_*",
         "PackageAssets_*",
         "PathCase_*"
-      ]
+      ],
+      "evidence": {
+        "manifestGeneration": "tools/asset-integrity/verify_asset_integrity.py generate Assets produces a deterministic root manifest",
+        "manifestVerification": "tools/asset-integrity/verify_asset_integrity.py verify plus check-all must pass",
+        "pathSafety": "Rejects traversal, absolute paths, control characters, backslashes, consecutive separators, and Windows reserved names",
+        "traversalProtection": "Rejects symlinks, junctions, and reparse points; verifies resolved paths stay within root",
+        "caseCollisionDetection": "Detects paths differing only by case across the manifest",
+        "duplicateDetection": "Rejects duplicate manifest entries",
+        "completenessCheck": "Detects undeclared files on disk and missing manifest entries",
+        "templateCrossValidation": "Cross-validates template manifests against assets.lock.json and disk",
+        "siteDataIntegration": "validate.py --assets invokes the root integrity verifier fail-closed",
+        "testCoverage": "Focused asset-integrity tests cover safety categories and site-data integration",
+        "determinism": "Two clean generations produce byte-identical output"
+      }
     },
     {
       "id": "CI-100",

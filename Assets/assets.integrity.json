@@ -1,0 +1,4418 @@
+{
+  "version": 1,
+  "algorithm": "sha256",
+  "root": "Assets",
+  "fileCount": 882,
+  "entries": [
+    {
+      "path": "Audio/MMO/ambient_arena.wav",
+      "sha256": "11702c05bd202ec17c6bc266195c38557222aa900adca7d59adbfed4d52a5830",
+      "size": 132344
+    },
+    {
+      "path": "Audio/MMO/ambient_dungeon.wav",
+      "sha256": "a8432af040d74c595a4d61d5a400aeda0a7b00d36708c29bc5471bed99b0daf7",
+      "size": 132344
+    },
+    {
+      "path": "Audio/MMO/ambient_town.wav",
+      "sha256": "c119e43106a1cafb228c9f22835438a720f056deb6e5217f1b506d2c7aca3af8",
+      "size": 132344
+    },
+    {
+      "path": "Audio/MMO/ambient_wilderness.wav",
+      "sha256": "6fbe4da21feb129755b2a68e0c77e4f39373aa4b5872bce1fa989c0ae2137997",
+      "size": 132344
+    },
+    {
+      "path": "Audio/MMO/boss_ability_warn.wav",
+      "sha256": "cdd3c6bf774d6d9e6b04a5f4186a7ec2afa8446a2daf9c0391fb8205a64c4217",
+      "size": 22094
+    },
+    {
+      "path": "Audio/MMO/boss_defeated.wav",
+      "sha256": "8ccada4e58dbfbfb8b9b439ba0705367a43070cfaeac94563abf8e6dcdcc954f",
+      "size": 88244
+    },
+    {
+      "path": "Audio/MMO/boss_phase_change.wav",
+      "sha256": "613f9f6dc9f9b1eb7d5ba31523a6d291882987333c2660e3b9e006bfd0cabdaf",
+      "size": 66194
+    },
+    {
+      "path": "Audio/MMO/boss_roar.wav",
+      "sha256": "3fdd695ebddfd62477a2e1b427f3e1b4f0c69f355555b50109fa3f16b2d2fbe0",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMO/combat_block.wav",
+      "sha256": "ad4e568224f556fffa772ac56f738ac3c967cc1dd87b74551758e5146bf357fe",
+      "size": 3572
+    },
+    {
+      "path": "Audio/MMO/combat_crit.wav",
+      "sha256": "0dcc063c14d6f748cfb58e975125247b223ff823ebfab464030fcadcc4b37277",
+      "size": 8864
+    },
+    {
+      "path": "Audio/MMO/combat_death.wav",
+      "sha256": "9d1d8af11db2f35c31007ff6e013bfefde8ac78ad4cdc20c7e2c458893a16bd8",
+      "size": 35324
+    },
+    {
+      "path": "Audio/MMO/combat_heal.wav",
+      "sha256": "606576277da1d9b47aab356d767063afed22959d431065a384fd4005916a9c51",
+      "size": 22094
+    },
+    {
+      "path": "Audio/MMO/combat_magic_cast.wav",
+      "sha256": "b520d1cb25fff8d615e793f7ae8afeba5e4e9e20021419f939a21c54b06d11c5",
+      "size": 17684
+    },
+    {
+      "path": "Audio/MMO/combat_respawn.wav",
+      "sha256": "afcc4f6029778a6af009968ff5908fd34d12655e61f239ec9c24de2ceb1365f5",
+      "size": 26504
+    },
+    {
+      "path": "Audio/MMO/combat_sword_hit.wav",
+      "sha256": "d2e470c993787bd3255362d231f2a0ff7f5026e93d119ef5e83584dc78f4c0e5",
+      "size": 5336
+    },
+    {
+      "path": "Audio/MMO/music_boss.wav",
+      "sha256": "7a0c52d1eca212d89d250e2f1d0fe14eb12920b44d662f391194cdea77452506",
+      "size": 220544
+    },
+    {
+      "path": "Audio/MMO/music_combat.wav",
+      "sha256": "d0c928dfb7482b698f65a444cc699f9e5126c15334488f5032059cd9126ac9e5",
+      "size": 220544
+    },
+    {
+      "path": "Audio/MMO/music_dungeon.wav",
+      "sha256": "be9b3c98f4ddd76e3d2c51285cb4b5fa8aa7a34513f59773cac11e37ec703273",
+      "size": 220544
+    },
+    {
+      "path": "Audio/MMO/music_town.wav",
+      "sha256": "989437bdd8ad35a84d19320be3d5019f83d5d7b027fc5f490a024ec103c055d6",
+      "size": 220544
+    },
+    {
+      "path": "Audio/MMO/music_victory.wav",
+      "sha256": "8ccada4e58dbfbfb8b9b439ba0705367a43070cfaeac94563abf8e6dcdcc954f",
+      "size": 88244
+    },
+    {
+      "path": "Audio/MMO/ui_achievement.wav",
+      "sha256": "c45d757b17160ebaad4ae2a88b12127d73f7a5b6fedd9e8031f768d607fda324",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMO/ui_chat_msg.wav",
+      "sha256": "55ebcf595aaa003de46d7f8e2ba8de89cb7c4c7337e2e2d95b682a273a4ddb7e",
+      "size": 2248
+    },
+    {
+      "path": "Audio/MMO/ui_craft_complete.wav",
+      "sha256": "b4210b565b1d37ecc1ca486912ecfe7c456d4777b1cc95201a8c79dc7bb009e0",
+      "size": 13274
+    },
+    {
+      "path": "Audio/MMO/ui_craft_start.wav",
+      "sha256": "162a06c02e9daa96277b775b0bc5e5817885d868c429d2746922706fb08fb714",
+      "size": 13274
+    },
+    {
+      "path": "Audio/MMO/ui_equip.wav",
+      "sha256": "b09cc21d0f10ad46e728443607ffa5c7ffbc9f0a87f3f190bdfc53d8ca220a2e",
+      "size": 6658
+    },
+    {
+      "path": "Audio/MMO/ui_error.wav",
+      "sha256": "8b4ca4dd6ab9c6e520472560ff48afb66536b993cb69639ea3a1603c3cde881a",
+      "size": 13274
+    },
+    {
+      "path": "Audio/MMO/ui_inventory_open.wav",
+      "sha256": "ed058a4d4fda5a2ca30af91b13849237cc819ab7a9c76e9b49d9e088899cf6d0",
+      "size": 4454
+    },
+    {
+      "path": "Audio/MMO/ui_levelup.wav",
+      "sha256": "513432b3d8c1aaa284e0d130f49b8f27fac50db1ca0f7c281e1cec5e28c64085",
+      "size": 66194
+    },
+    {
+      "path": "Audio/MMO/ui_login.wav",
+      "sha256": "c45d757b17160ebaad4ae2a88b12127d73f7a5b6fedd9e8031f768d607fda324",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMO/ui_quest_complete.wav",
+      "sha256": "94684314c34baa33facee9fdf396e46fb36bccec9767bce99e33d1af177cc7ad",
+      "size": 52964
+    },
+    {
+      "path": "Audio/MMO/ui_success.wav",
+      "sha256": "c9fa27c1d631b0367427f9d0706a102b3b32c26712e572368ca68590930ec858",
+      "size": 8864
+    },
+    {
+      "path": "Audio/MMO/ui_trade_complete.wav",
+      "sha256": "e3264c3bb6c075d5e7a54ac6617295a4577c2fae604acc386c686bb19c4a3f14",
+      "size": 11068
+    },
+    {
+      "path": "Audio/MMOFPS/ambient/combat_distant.wav",
+      "sha256": "3f21148e2b37cd41fc25bad7644a98e208ca4ccca155411f231573fd5ec7432f",
+      "size": 705644
+    },
+    {
+      "path": "Audio/MMOFPS/ambient/sanctuary_hum.wav",
+      "sha256": "349b3e4fc49683fdaf5e90abd281bf18f2aba422086efdcd1a34c58ac2cc147f",
+      "size": 352844
+    },
+    {
+      "path": "Audio/MMOFPS/ambient/wind_loop.wav",
+      "sha256": "0a96d4091d93134c20965a5e378c926be02f1dc2cce183934ac8e60b41313953",
+      "size": 352844
+    },
+    {
+      "path": "Audio/MMOFPS/ambient/wind_loop_02.wav",
+      "sha256": "70b6ad19f50626e956ed65e2dfb636ce538671019522d1f6ed7e70a31f76562b",
+      "size": 352844
+    },
+    {
+      "path": "Audio/MMOFPS/ambient/wind_loop_03.wav",
+      "sha256": "ae8692c5c896c207520682acd0ae5be2ffa89b54fd6d62472ce814e81529f69c",
+      "size": 352844
+    },
+    {
+      "path": "Audio/MMOFPS/foley/footstep_metal_01.wav",
+      "sha256": "e1e7f2a7ab489f92d4c9221b54be2358290ae462f8b3137bc467c60c05287c7f",
+      "size": 30914
+    },
+    {
+      "path": "Audio/MMOFPS/foley/footstep_metal_02.wav",
+      "sha256": "024ecbe11fb5ee2090dff3c48873f759580a974caf169d5f5ba44bbc0bae30c0",
+      "size": 30914
+    },
+    {
+      "path": "Audio/MMOFPS/foley/footstep_metal_03.wav",
+      "sha256": "891effa5687856c7801d04436f0d1eac7a4889db6271587ddc9c41fff359fc5b",
+      "size": 30914
+    },
+    {
+      "path": "Audio/MMOFPS/foley/footstep_metal_04.wav",
+      "sha256": "f971b12c45236f0119fe8402740b7e4c8f5f75abf392d032b010fa0162b98b75",
+      "size": 30914
+    },
+    {
+      "path": "Audio/MMOFPS/foley/footstep_sand_01.wav",
+      "sha256": "6e3af2d6abe15a43248ee974b697549ab8a71ed9f2ac2bd7c302458b8a7723c3",
+      "size": 26504
+    },
+    {
+      "path": "Audio/MMOFPS/foley/footstep_sand_02.wav",
+      "sha256": "c271698518030b77787bfae1f07fb177ce4bfb0349159057fe9621da5831286b",
+      "size": 26504
+    },
+    {
+      "path": "Audio/MMOFPS/foley/footstep_sand_03.wav",
+      "sha256": "b54315bc3bd79373f7596c51e74772c097c08c8de4c4665359bf90e220bd1b48",
+      "size": 26504
+    },
+    {
+      "path": "Audio/MMOFPS/foley/footstep_sand_04.wav",
+      "sha256": "e738634266a10ded01055337d2260d1f74a61ec64b7e61456dd05bea6d50a780",
+      "size": 26504
+    },
+    {
+      "path": "Audio/MMOFPS/ui/capture_alarm.wav",
+      "sha256": "27ae6b7764e80bf490d424443b3aa738fb582fbba4a4986ecc3f72980da66522",
+      "size": 176444
+    },
+    {
+      "path": "Audio/MMOFPS/ui/capture_tick.wav",
+      "sha256": "04799bd196a6d5dc593370b611c44b6501f0451db4c987caa4f80d25b8bf656d",
+      "size": 2092
+    },
+    {
+      "path": "Audio/MMOFPS/ui/death.wav",
+      "sha256": "9f0b6670475acfe39dcb194405403f1d154adb3b2a65d2d71b7037258242a63b",
+      "size": 18160
+    },
+    {
+      "path": "Audio/MMOFPS/ui/hitmarker.wav",
+      "sha256": "540066634d13d76d06efbf6cc0d6aaddf62100f6d32ca38e2badbc692d23f956",
+      "size": 2092
+    },
+    {
+      "path": "Audio/MMOFPS/ui/region_captured.wav",
+      "sha256": "edc349b4ec172932144ee6a3125e29fc75321d7dfbd128d5b15316dd290dffa4",
+      "size": 10878
+    },
+    {
+      "path": "Audio/MMOFPS/ui/spawn.wav",
+      "sha256": "40c4d7e085858a253ab768df4c06faa21fc223654efc98d2694a146074385506",
+      "size": 25608
+    },
+    {
+      "path": "Audio/MMOFPS/ui/terminal_bleep_01.wav",
+      "sha256": "c08cac403e02c2a4c5fdaca812f599bfda4b7a90a64bb1eb71735235033ed7da",
+      "size": 10628
+    },
+    {
+      "path": "Audio/MMOFPS/ui/terminal_bleep_02.wav",
+      "sha256": "4da8ad33f6b364d29db85a3f8625143dc58592af474e0ce406548e6995f814c2",
+      "size": 7982
+    },
+    {
+      "path": "Audio/MMOFPS/ui/terminal_bleep_03.wav",
+      "sha256": "d2ac4de60899286660e8864ba1e5be05b8562a880e647848bc570b9684933295",
+      "size": 12392
+    },
+    {
+      "path": "Audio/MMOFPS/ui/terminal_bleep_04.wav",
+      "sha256": "898c883636f912ed356f7648bc57912bcd237c375ce18483db9a10faed0265b2",
+      "size": 17684
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/apc_loop.wav",
+      "sha256": "f3c4282e73ac2514a8d8f32bac031a3b6a88743e36e6d09d01de2298c7b15d58",
+      "size": 220544
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/explosion.wav",
+      "sha256": "02f1dcb3cb93633f2f7a6767c668622fc039b20d60900f8ce8f30ea275124e4a",
+      "size": 247004
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/hover_dust_wash.wav",
+      "sha256": "7e8dfea5df32d7099f7ce26d49cd11d3cacfe136bfeb02dce65906d0fa85e911",
+      "size": 264644
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/quad_loop.wav",
+      "sha256": "5a31d59b62dd2bec0663654bbd75bfd8ad8aab532ca8a58f8e368e10af0d5caa",
+      "size": 176444
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/tank_loop.wav",
+      "sha256": "d4280a5123bb0b176dafbf7b0fa078036a305630d81d40a02b1551c20136c59a",
+      "size": 220544
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/vtol_loop.wav",
+      "sha256": "3b5c1104cee7cbafd6e316cddb96f13f034809d261aca2c3559d87397dea71a2",
+      "size": 176444
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_carbine_fire_01.wav",
+      "sha256": "b1814969e7450756bf1bb95229584d47f8d3404cbf4eb234cd610d29223e00d6",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_carbine_fire_02.wav",
+      "sha256": "81d20ea1470d32ea4b7548efc11165c34a9873b9395abd4c7de7b9175d382418",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_carbine_fire_03.wav",
+      "sha256": "431047b98b084c9f49fd22bb80111819004532678aafdb9f15ccfafd6cc99f85",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_lmg_fire_01.wav",
+      "sha256": "1130771947e39d4da7eb698fbca31b97cc017113174039ae6e420ebc3470b27b",
+      "size": 52964
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_lmg_fire_02.wav",
+      "sha256": "d41c5a1e35489905cdbacaa974787ff76a9d891f291f5a8297ca14efa57bcde6",
+      "size": 52964
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_lmg_fire_03.wav",
+      "sha256": "8eb38a0ff067238bc973a64b73f18c58c5604b3e3fc538cf85e3afc54b17ea2e",
+      "size": 52964
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_pistol_fire_01.wav",
+      "sha256": "b84bb6cb6919c71bd8d4659fece95795ea75c4aab7884e024465bec91b6293de",
+      "size": 39734
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_pistol_fire_02.wav",
+      "sha256": "51b9b99d40a38d75f4219ca58354ef29dfea5c1586345a3f0cc50af7aae3d11e",
+      "size": 39734
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_pistol_fire_03.wav",
+      "sha256": "b3b24de4005950c15d7c79214ce677dcafdf7c697ea67fb457f7b9dc4d349101",
+      "size": 39734
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_rifle_fire_01.wav",
+      "sha256": "9351fa7e9f65a857dbc37249e80c35d7e0078c0c3a5547bfaa2f8e0edadfb5c7",
+      "size": 48554
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_rifle_fire_02.wav",
+      "sha256": "d290f1844b41486adfe46fdac1d97039c6400b63583fe315530c235c312bb845",
+      "size": 48554
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_rifle_fire_03.wav",
+      "sha256": "536360b35e3ea5ffc596870d021b2570f8d10d0181019ffbc4167f81a596a90a",
+      "size": 48554
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_sniper_fire_01.wav",
+      "sha256": "cc7a7b2598dc9dac15c23549d02e9c2973beb20226304d6a6d5d75575d276a26",
+      "size": 158804
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_sniper_fire_02.wav",
+      "sha256": "f8d1edaf9ea4ef8eef2644debc07dd25e1bd9ccc15091f556a38872af2f44fa5",
+      "size": 158804
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/auc_sniper_fire_03.wav",
+      "sha256": "fcd1125dd02aef9d6be909914486e5c187de69d30e14f06cb19975c35c884324",
+      "size": 158804
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/autocannon_fire.wav",
+      "sha256": "b90c664e465e7faf6fa2180c992678cca012e6924086ea90bbcaaff7cde0dcf2",
+      "size": 47984
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/carbine_fire.wav",
+      "sha256": "9d169dfcfd8f90f04dfac23880b66371333b82a5f53daac72d71930bd1de0d2e",
+      "size": 86272
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/col_cannon_fire_01.wav",
+      "sha256": "306b9ab56d5fe6890a998d4a0f8c5b5b91d8dfb1c4a39654bf8ec2fc2029747a",
+      "size": 61784
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/col_cannon_fire_02.wav",
+      "sha256": "bf9cfa9ec1b5a9c2074224ca00615e666036b06978bbd5faec025a1f3891d5ed",
+      "size": 61784
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/col_cannon_fire_03.wav",
+      "sha256": "1151a146d7abb1bebc51f570980be5e49ab4951af6ae3fa01289d45d42ecee3c",
+      "size": 61784
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/distant_fire_auc.wav",
+      "sha256": "af185cf36ecabc1910a755864876ba9576a882272c55db39bd27b900cb226144",
+      "size": 141164
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/distant_fire_common.wav",
+      "sha256": "69fda56cfc222b801b44c0592919a602c79a38771ab6b2d870a9cd304c21d457",
+      "size": 141164
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/distant_fire_hlx.wav",
+      "sha256": "f9cf02822edb2f58cbdc6e02fb330dfaf8a02b41a36591419012d446148ef264",
+      "size": 141164
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/distant_fire_mra.wav",
+      "sha256": "02a36841f3688e5873782d2bf6532f75a515e1e8256a788ba3ac59440176f042",
+      "size": 141164
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/empty_click.wav",
+      "sha256": "6a99e947463a90928fa364cb93f4b2e7b2b6c12a02179eae2df1e166ac21c6b4",
+      "size": 14156
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/energy_fire.wav",
+      "sha256": "acb24a7c07ff4bb768dffa866e9ce33729b08110ad73367524cbd604fe86bf8e",
+      "size": 42240
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/energy_lmg_fire.wav",
+      "sha256": "0e6221f82371daf381eae5d5bcfe0b397634628ce61fab65b0f5f5731aa181bb",
+      "size": 59724
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/energy_pistol_fire.wav",
+      "sha256": "67047c5ee1ea29dbe3df4a351fee7769bdc4c1a3fae1407df2c6cce75ccfc77e",
+      "size": 20808
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/energy_sniper_fire.wav",
+      "sha256": "4732f1c69534f8d35030c0842044152f8c1f511f0686e1dcbd2c242343e0f3af",
+      "size": 63636
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/heal_loop.wav",
+      "sha256": "3cdd39d814acc5ef9489e2045f0b7d3da6bc0eeadd80667b5d833e534e58128a",
+      "size": 84358
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_carbine_fire_01.wav",
+      "sha256": "4caf19b66f92b728702163ef48af389d73182d82f840769c1b797e1b223706b6",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_carbine_fire_02.wav",
+      "sha256": "dd581f90eebdbd5ae058a9a6bbe6fce75b2f44eba5fd8c8473368209f07d0440",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_carbine_fire_03.wav",
+      "sha256": "192a6f307083b2f21a6d52956b097aac0819854c96bf0226212b8114b22375b7",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_lmg_fire_01.wav",
+      "sha256": "293692d8bc5d77b6fddb9e4b666c05e071bb74e6e6f7c0d7233042821ce2f050",
+      "size": 47672
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_lmg_fire_02.wav",
+      "sha256": "c15d2102bb9063444483ca261fe6e085e8cf04148b9340c20be7cf900f2cd57f",
+      "size": 47672
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_lmg_fire_03.wav",
+      "sha256": "07b3b56c161f03a5e48df3aaf88140b50678e4f15cea84a5f75118830261240d",
+      "size": 47672
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_pistol_fire_01.wav",
+      "sha256": "1ece228cb152fccb7116c7d105825df1b1d20ce4f28442f42c38adb3db7d6663",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_pistol_fire_02.wav",
+      "sha256": "16b46e7491ae054c422a7bbf6a368dcd2ceaa43958bb301658f433d42d7770fb",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_pistol_fire_03.wav",
+      "sha256": "f834a7141c35296880ff16d9deb47d81776368a36b5e15c305d73b2577e67aca",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_rifle_fire_01.wav",
+      "sha256": "11a45e89dcfb0fc0af542579ebf7d799996dc9bc456286e4fb5db992721307ea",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_rifle_fire_02.wav",
+      "sha256": "9daa94e37a3e6e154a3943c2ae5ae0c5c0727e32cef500778aefeb8650d57607",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_rifle_fire_03.wav",
+      "sha256": "5f796497bcdd269728561b34e5657e9df7f6179ee9acff8beadc26f4d9dc3a89",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_sniper_fire_01.wav",
+      "sha256": "604c5579ea702193fe09f82da8d0eae70cdf9db8a15094e8829063ffb43ff735",
+      "size": 103238
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_sniper_fire_02.wav",
+      "sha256": "e25ccf284e646efd70670bb3042f38c69c7d541cbfbec325cfb4ce18d3bcd9f7",
+      "size": 103238
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/hlx_sniper_fire_03.wav",
+      "sha256": "ffed9851ca87beac57b023092b5e4f5fa329c202b9af0227ce78b5ef10cc96c7",
+      "size": 103238
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/knife_swing.wav",
+      "sha256": "e54b529e1b16aa9f74083af9618eed734d2da2379f296d9b005ec41b8aa26b5e",
+      "size": 20860
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/lmg_fire.wav",
+      "sha256": "79e7ca69696492b8fb8b1fd0e50db94a3b10663be8bf8e1fd3d6b1b6e62d0066",
+      "size": 107520
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_carbine_fire_01.wav",
+      "sha256": "6cfa1bfa67c0aeae4f227e90a322208d34c490adec95458afa050c41563fada7",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_carbine_fire_02.wav",
+      "sha256": "f95ce62e48053689d19363f8a08176ed0981e5fdb767245f32aaae3d8c1de440",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_carbine_fire_03.wav",
+      "sha256": "6cb0dbfd3a29aad925c6daa6236657086332d4f96efd1911185b6655ad9c765d",
+      "size": 44144
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_lmg_fire_01.wav",
+      "sha256": "d69c8d4035e9ad5643adad96fd1fe5d7dd30c8f25fe9f01fa6f892386b621ba2",
+      "size": 52964
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_lmg_fire_02.wav",
+      "sha256": "f5dbcd3aff1274841cacdc2b8f17fef011b95d54d61cf3919e7373f37094c045",
+      "size": 52964
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_lmg_fire_03.wav",
+      "sha256": "6a00cdf8bad781fcc667825a350e9fe269d3d49c516d088b0dac9a06a1924d03",
+      "size": 52964
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_pistol_fire_01.wav",
+      "sha256": "d1191968eb11a15b7ebb00365260dba87e04ff4ee5ec8a4879834ecbbef9a6cf",
+      "size": 39734
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_pistol_fire_02.wav",
+      "sha256": "29ffe9daa42d795ed1d846ba6170156db5939b3c4046947bcdb671184a032348",
+      "size": 39734
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_pistol_fire_03.wav",
+      "sha256": "f1722abc307b6757c38ba75d7e70faa801f8b5c85ee1cbbb248b54bd28fe3e02",
+      "size": 39734
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_rifle_fire_01.wav",
+      "sha256": "e81bd898f95ca0bb6b61e233ce517c3f432a0ed7be1fe0bb9a9af7c1c717dac8",
+      "size": 48554
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_rifle_fire_02.wav",
+      "sha256": "73231eb20c22386337eb3a88d4bc6665889009f01ddafa4e71b7c1bb194b85f5",
+      "size": 48554
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_rifle_fire_03.wav",
+      "sha256": "bdbaed8df2490fec6f3f9965c4e470f9957bd1e41343012215180ea3c66cd734",
+      "size": 48554
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_sniper_fire_01.wav",
+      "sha256": "5372c4f311d6170585afdb529652c2d553f57a7e0be09cbdaef2008eda4a621e",
+      "size": 158804
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_sniper_fire_02.wav",
+      "sha256": "5a5673ee230e460a92644dd8d63d0cb597150b2705efd19a56c4cf4c5622673b",
+      "size": 158804
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/mra_sniper_fire_03.wav",
+      "sha256": "8b99f8a253506b6ff2961356ef04fcc91fdf3a0318bb3a82040d045811f2c9e9",
+      "size": 158804
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/np_knife_fire_01.wav",
+      "sha256": "fbb30c17cd6e2c55cc598d8311808fdae39072d692a0d80bd98b8b587184ca4b",
+      "size": 24740
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/np_knife_fire_02.wav",
+      "sha256": "170e95724aabe105cc16a319f93cd30884d9a3755aaab3e6b414377a0bba037c",
+      "size": 24740
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/np_knife_fire_03.wav",
+      "sha256": "ab984fe443dac3174ece730ede757faa9464fde7e74937bbcf37dfa7c418a344",
+      "size": 24740
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/np_launcher_fire_01.wav",
+      "sha256": "b8622083d3007445d961b4b8eb1f50d8024a204555216b06bd7efcb03dd40eae",
+      "size": 123524
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/np_launcher_fire_02.wav",
+      "sha256": "4d7ce9866e13522ee028e20655d758cbdcd0b1654ce59aa57a5630fed43b4da3",
+      "size": 123524
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/np_launcher_fire_03.wav",
+      "sha256": "80aa53da7799bef7a2d0f7403f1a8e987ac8aaf59243266d4fa2d7b6a432150d",
+      "size": 123524
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/np_shotgun_fire_01.wav",
+      "sha256": "f63af39838b0b8d29930c5a1bc5327078fe954dd68e7e13bacd131e469089156",
+      "size": 79424
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/np_shotgun_fire_02.wav",
+      "sha256": "45c5c69a3400ed826c2295d8eb8ea6f0c3df692f7204d1b620db9da74d3f9a06",
+      "size": 79424
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/np_shotgun_fire_03.wav",
+      "sha256": "997f44b37a5850d4277f959b22fa07ddaadb6c247137d1a962c26a43e0e40573",
+      "size": 79424
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/pistol_fire.wav",
+      "sha256": "a43b828e907d1a9bbaf368e99326f0d2be00b198412b955ecb1dd4cd43d37428",
+      "size": 24508
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/pistol_heavy_fire.wav",
+      "sha256": "dfbf70bab00cda303c4442f12501fa8ac73d4704d5414fc42e0bcbe08ad90c5a",
+      "size": 114532
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/reload_bolt.wav",
+      "sha256": "af14460364b6defe4e2f36140f8be98aefe4c5a21c35550b683619a80e12b736",
+      "size": 105884
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/reload_energy.wav",
+      "sha256": "891da62143fb443e930b3582a10552fec7458fe6d35662758d370b44bc7307f5",
+      "size": 114704
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/reload_heavy.wav",
+      "sha256": "c90b3a2777d2dd01619c2f1110633372fc40517020a5ee97644114441f67c855",
+      "size": 149984
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/reload_mag.wav",
+      "sha256": "f52adc8e762b2bb1ec3c225e99b9a3667c5670240bf83d73c8bb87fcffd1d233",
+      "size": 101474
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/reload_shell.wav",
+      "sha256": "1e3ddba8ead7ea48695fe82efd38ab74a146a605da88d2b35ca10b3fd0694eaf",
+      "size": 30914
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/repair_loop.wav",
+      "sha256": "d2ea0eef903463fbf80993a14e328746e1a41a0b00659204813090e339510ee4",
+      "size": 441044
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/rifle_fire.wav",
+      "sha256": "57d85463223b2e967d207a40d7a86f14c331a2d377ad5e45154454f1981a568d",
+      "size": 95728
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/rifle_heavy_fire.wav",
+      "sha256": "d467a399084ba1b975b47f36273a109f6bca8bd186be86a569383cdc76256d24",
+      "size": 86244
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/rocket_fire.wav",
+      "sha256": "cd250622fa7f1b17f8712fc7d07d1541bbe3ee6b50b0ea4d8fbce35c330b2102",
+      "size": 441044
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/shotgun_fire.wav",
+      "sha256": "ef87073f88a91da3b263bc6e2a8dd75b0481ff43fc4938914744c37aace51d81",
+      "size": 94584
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/sniper_fire.wav",
+      "sha256": "6d303dead49dc681cae8c768d386aa124f19ba2752539b1b0e79e1187e5e0f43",
+      "size": 176452
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/tank_cannon_fire.wav",
+      "sha256": "11616f2e7fb7981fb98a5a0c7a6491de2d0dd68bbb565b00b807df694dbda38b",
+      "size": 68616
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/tool_med_fire_01.wav",
+      "sha256": "52bf6658574bdd4a9e2c79a319def2911e5e13e683d8354a2a69433d29713105",
+      "size": 88244
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/tool_repair_fire_01.wav",
+      "sha256": "1e634a3a9c9319e27917381d5f3b2ec711bbe0c32c789dc974c33740ab6f556b",
+      "size": 88244
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/turret_fire.wav",
+      "sha256": "01b1e314455f964529d9f30bd06a72367d1fd051ef2938911a5292bcfa5a2c60",
+      "size": 62044
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/veh_aegis_pdw_fire_01.wav",
+      "sha256": "ccf9275118abe4f2375deeb6aaf45bb6c44c8eb09df0078ce40e91189f31da93",
+      "size": 35324
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/veh_aegis_pdw_fire_02.wav",
+      "sha256": "b02f5b93cfab4a4c861684cd8b93d95f1f4788c6fab10ad6beefb1bdbfe62af2",
+      "size": 35324
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/veh_aegis_pdw_fire_03.wav",
+      "sha256": "f43e1ad73f3f4fdde1683f88f617d697f149cd4b05d031c3c8b87893d2ce8136",
+      "size": 35324
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/veh_ravager_90_fire_01.wav",
+      "sha256": "c8cd7983eda14b47d8bfd03938b01e87f39b2e74370f74ba0d31b26076a1405a",
+      "size": 211724
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/veh_ravager_90_fire_02.wav",
+      "sha256": "30ca6555dec7af301ec21a60df944189bfccbb4755fe3dd1120b56d9d308dd64",
+      "size": 211724
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/veh_ravager_90_fire_03.wav",
+      "sha256": "b0240635bfa8dfa6829f54d6d82ae253dc962071fa51a388c871ea90ae53a23e",
+      "size": 211724
+    },
+    {
+      "path": "Audio/ambient_wind.wav",
+      "sha256": "5bfc870dc202942f781447c5ab999cb29c08ce2018058e12a14582f7652e22b7",
+      "size": 88244
+    },
+    {
+      "path": "Audio/damage.wav",
+      "sha256": "1c769e43c5e3aaae974ff2ab038a7369c3406c16eff9e5e11ad5305735209435",
+      "size": 11068
+    },
+    {
+      "path": "Audio/death.wav",
+      "sha256": "4015e0e68cfb1b02fe0c065ebce3781708593f137f5092ab12aa3bb40f3101ea",
+      "size": 35324
+    },
+    {
+      "path": "Audio/explosion.wav",
+      "sha256": "6467c26c81fd91b0f601f453355df14398238e9061aae0dfac8208c96ea9abaf",
+      "size": 26504
+    },
+    {
+      "path": "Audio/footstep.wav",
+      "sha256": "ad4e568224f556fffa772ac56f738ac3c967cc1dd87b74551758e5146bf357fe",
+      "size": 3572
+    },
+    {
+      "path": "Audio/gunshot.wav",
+      "sha256": "d2e470c993787bd3255362d231f2a0ff7f5026e93d119ef5e83584dc78f4c0e5",
+      "size": 5336
+    },
+    {
+      "path": "Audio/hit_marker.wav",
+      "sha256": "aa41a6aaab1356cab7593a62c970dbac534c4d811de5f31e96d3d203c906efc2",
+      "size": 4454
+    },
+    {
+      "path": "Audio/jump.wav",
+      "sha256": "914e837a53bf0166c2e1b1a1bcbc6c0292abf775706bc97c866fce0dfc39b569",
+      "size": 8864
+    },
+    {
+      "path": "Audio/land.wav",
+      "sha256": "464a014d98533ab1fb23b6f8c03d549b2c2c651d05f666bab40b3b6c4a40862c",
+      "size": 4454
+    },
+    {
+      "path": "Audio/music_combat.wav",
+      "sha256": "1dd1c46b7408a1a4baaf6e40c855036cde02e8ae8d187f4e8bf232ca9081c2e3",
+      "size": 88244
+    },
+    {
+      "path": "Audio/pickup.wav",
+      "sha256": "32d85049633906353028a21377fa835a91a79e643a5e78fe33d0fcb0239c1911",
+      "size": 6658
+    },
+    {
+      "path": "Audio/reload.wav",
+      "sha256": "53a822e717ccf821b58a7a7a242483ff196a730e34502d18c5050144c044db02",
+      "size": 8864
+    },
+    {
+      "path": "Audio/ui_click.wav",
+      "sha256": "2415c6041ecfb425e98bac961acfdc88ad2cd4ecb11cc9c405637a1c53cd24bd",
+      "size": 2248
+    },
+    {
+      "path": "Audio/ui_hover.wav",
+      "sha256": "d8885b3e0ec7034edfd4826a2892f5d106456478ac78c28cc6ea09f6581b0c75",
+      "size": 1366
+    },
+    {
+      "path": "Engine/Branding/README.md",
+      "sha256": "7266daea1caef6768ba372f2043f682062617e7dddca196e3878e91fc0ff5237",
+      "size": 1587
+    },
+    {
+      "path": "Engine/Branding/generate_splash.py",
+      "sha256": "a1a4d61767901bcb54827e299e2af38b39d1d6de86fa3681467403b46b617f36",
+      "size": 10502
+    },
+    {
+      "path": "Engine/Branding/sparkengine_splash.wav",
+      "sha256": "1a4a7360da102fabfcd267073cedc46e476ddbcd6b111008e38f2f8bf4c3e37f",
+      "size": 268844
+    },
+    {
+      "path": "Engine/Branding/sparkengine_splash_1080p.mp4",
+      "sha256": "c44882468c942be877de02dd5427dec4fa38d632e5c856db3f834090023e9efd",
+      "size": 165274
+    },
+    {
+      "path": "Engine/Branding/sparkengine_splash_1080p.webm",
+      "sha256": "5440ce9b1cf2e34c27d56db4b5c95013267b8d512b63ac0fc2cf608a70022969",
+      "size": 161162
+    },
+    {
+      "path": "Engine/Branding/sparkengine_splash_preview.gif",
+      "sha256": "f16f49b946e7ebd6b852ab0b9808bd2bab674864d9a67771d995680a36a416c0",
+      "size": 298901
+    },
+    {
+      "path": "Engine/Branding/sparkengine_wordmark.svg",
+      "sha256": "7678e89acb5228df4239d30cce3a278e26ef46f3d72b67d92df416c6c76074b0",
+      "size": 517
+    },
+    {
+      "path": "Engine/Branding/sparkengine_wordmark_transparent.png",
+      "sha256": "d6d2d6a7cb5f481f3170a805188e44b1851fa213eb71782c1d42a9e5471bee1f",
+      "size": 52456
+    },
+    {
+      "path": "MMO/asset_manifest.json",
+      "sha256": "31eea569533188f26923ab4d01754c5fc2fea814061445d3085b9cce236970e5",
+      "size": 5146
+    },
+    {
+      "path": "MMOFPS/ATTRIBUTION.md",
+      "sha256": "d89215677fc8d7af380f6aaeadf48c2e66113fa8e58b563d60000e1f1603f370",
+      "size": 2295
+    },
+    {
+      "path": "MMOFPS/Data/classes.json",
+      "sha256": "bc16888767ebfffe05363f075cd28397b41728b2837e5f5617934d05081cbf6c",
+      "size": 3887
+    },
+    {
+      "path": "MMOFPS/Data/continents.json",
+      "sha256": "525c7c5d71686f3f638269af1819835f49ff931325014a3d5827eab8a2e7d135",
+      "size": 2591
+    },
+    {
+      "path": "MMOFPS/Data/decor.json",
+      "sha256": "ab648609bd24639b78d1d3983add289ce0a6a372e829bbc2855803dc375d9e54",
+      "size": 11378
+    },
+    {
+      "path": "MMOFPS/Data/deployables.json",
+      "sha256": "08d9f77858ba142b44f7f56bf0053d51342440cd939e9f0dc83b419351e8abc7",
+      "size": 1403
+    },
+    {
+      "path": "MMOFPS/Data/factions.json",
+      "sha256": "0473489a65beb6cade532f54227b5f992566aa5659d7f8bda43676c4bc80c99e",
+      "size": 1476
+    },
+    {
+      "path": "MMOFPS/Data/presentation.json",
+      "sha256": "f590f0a5fd7d8a9b0f357461674e54945b18292fc0db72040f1d09f9ee4f4131",
+      "size": 2687
+    },
+    {
+      "path": "MMOFPS/Data/regions.json",
+      "sha256": "ff3b46f6c7cb44b0cfb8005b215c4528f22adb41b2acdf37cdbdea246faab5eb",
+      "size": 4395
+    },
+    {
+      "path": "MMOFPS/Data/regions_highlands.json",
+      "sha256": "811aed12b8740ecd5d4cbac4e3fcc0ff8968d6aca4f14920ae4af54cd3e4fe21",
+      "size": 4273
+    },
+    {
+      "path": "MMOFPS/Data/suits.json",
+      "sha256": "f4489d4db3afe57492ee0530b7240b383687821fce2ba03d78277808f6925360",
+      "size": 1074
+    },
+    {
+      "path": "MMOFPS/Data/vehicles.json",
+      "sha256": "2e1e176dc8d52308262a72ac5cbd8bc9d2a07dd0e352c59e3dd64c430f81fed6",
+      "size": 3032
+    },
+    {
+      "path": "MMOFPS/Data/weapons.json",
+      "sha256": "18cf6edfe2f15d49789e40c636038b3d13d4359971b1b8d33955d860debded1d",
+      "size": 26200
+    },
+    {
+      "path": "MMOFPS/asset_manifest.json",
+      "sha256": "c7f272a3b4c9d0af8c162029ea53032e8046ed3dee6832877f7b9757d17e738d",
+      "size": 35007
+    },
+    {
+      "path": "Materials/Concrete.json",
+      "sha256": "c2c14b450c5b26d11f6eb0c7e7a0a9e7c2021a06a86bd93b16e302d18cb0bc31",
+      "size": 207
+    },
+    {
+      "path": "Materials/Default.json",
+      "sha256": "2ace8417aa1641b47a3655f141ce45a5830e1b280a64a0037745a0961f72b064",
+      "size": 213
+    },
+    {
+      "path": "Materials/MMO/ArenaSand.json",
+      "sha256": "a8d706107e184c3ead50a937058b06f10e999302455cc29fcc6f264035ea869c",
+      "size": 245
+    },
+    {
+      "path": "Materials/MMO/Cobblestone.json",
+      "sha256": "b3c721df0cab41066d052d02b2fb3747ef6528ae6fa4553dc20f9d724eb16dea",
+      "size": 253
+    },
+    {
+      "path": "Materials/MMO/DungeonStone.json",
+      "sha256": "2ea5bd323ccb18312d8d9128f2c66d9093004ff9030d4e9f1d11959af248e455",
+      "size": 294
+    },
+    {
+      "path": "Materials/MMO/Fabric.json",
+      "sha256": "a3ab2523d0861084f66091b6170853ed8272b5f7ebefbd030765848422555fb9",
+      "size": 212
+    },
+    {
+      "path": "Materials/MMO/Foliage.json",
+      "sha256": "6055b406227dd358970c5a2d563cdc66188b88cfde9ba40e73569a1ab9270bce",
+      "size": 289
+    },
+    {
+      "path": "Materials/MMO/NPC_Guard.json",
+      "sha256": "78838dd8e10f9fa37b3151672ebe45771c41a21311713068865b504af775ffa0",
+      "size": 218
+    },
+    {
+      "path": "Materials/MMO/Rock.json",
+      "sha256": "bcd87ca6f7822b7cb3f7d8db9228406ad9a19bf906f124ce51e1e1bd366a8031",
+      "size": 214
+    },
+    {
+      "path": "Materials/MMO/Stone.json",
+      "sha256": "7f1ef78e967bd101535b884c7b13b031eb4592a9700fc38d3cdb1273c182adba",
+      "size": 207
+    },
+    {
+      "path": "Materials/MMOFPS/Structure_AlloyDark.json",
+      "sha256": "c4c2d90129d162a4b1d8255b9e73e5ac8fd9bbcc037b7d69cfa530e3d69e4290",
+      "size": 351
+    },
+    {
+      "path": "Materials/MMOFPS/Structure_AlloyWorn.json",
+      "sha256": "e3f96c617024a5ffe9a224aa5de85c0f773add28b65bee5d0331bd6591fbca94",
+      "size": 351
+    },
+    {
+      "path": "Materials/MMOFPS/Structure_Concrete.json",
+      "sha256": "6207b8d39cf96bdb8cee0dd29f03e803067156d4cd7fdc4ed4368ec3417c3a46",
+      "size": 348
+    },
+    {
+      "path": "Materials/MMOFPS/Structure_Metal.json",
+      "sha256": "e51021291d84f159c91b9cd8f1f53ec99b1de0500d0aaab0b12201940fb25afd",
+      "size": 336
+    },
+    {
+      "path": "Materials/MMOFPS/Structure_Panel.json",
+      "sha256": "76e069b53c6ab6baf81304252910732de11f92b8fb9571dc92ea50b2bc8db4ae",
+      "size": 336
+    },
+    {
+      "path": "Materials/MMOFPS/Structure_Sanctuary.json",
+      "sha256": "3cd95fa2e052e4dab4633ef5dd64cac7c9420ca97443c294f5456ac22540b063",
+      "size": 348
+    },
+    {
+      "path": "Materials/MMOFPS/Structure_TrimColonial.json",
+      "sha256": "eb027e960cd744116518dff663000adde2d30f3e2a88dfb01a2f605e2b10cb3a",
+      "size": 363
+    },
+    {
+      "path": "Materials/MMOFPS/Terrain_Glass.json",
+      "sha256": "e207808ab71d667baabd86d6af379b7e86d253f2effaf05fcec47caf54a42b18",
+      "size": 321
+    },
+    {
+      "path": "Materials/MMOFPS/Terrain_Grass.json",
+      "sha256": "b16641d72fd791a30fd2b903eb9640ed708cfb9a96304d06f988aa6119b824ed",
+      "size": 327
+    },
+    {
+      "path": "Materials/MMOFPS/Terrain_Gravel.json",
+      "sha256": "5aa528fc495d5dd7e812b4ea205011219e09469e030783be8e878eb0d1df1edd",
+      "size": 331
+    },
+    {
+      "path": "Materials/MMOFPS/Terrain_Rock.json",
+      "sha256": "8e5cd5c5a6abc4f613ebbfa7959ab411bea07647808e081a8565b44e4c5b01d4",
+      "size": 323
+    },
+    {
+      "path": "Materials/MMOFPS/Terrain_Salt.json",
+      "sha256": "cc5489f10f7d142afe07a3943225b10cdfce1513c87d62bd3d1587b5c597776d",
+      "size": 317
+    },
+    {
+      "path": "Materials/MMOFPS/Terrain_Sand.json",
+      "sha256": "5e19bbe6553e399bb9273adf9c5ed79fbb9b7e7f4cbe4796931158a5f029d03e",
+      "size": 323
+    },
+    {
+      "path": "Materials/MMOFPS/Vehicle_AUC.json",
+      "sha256": "2e2438aae78aa3c667a01d9e5152c16740e85ad0e8e82f5f5c531cbd3a13a2b5",
+      "size": 344
+    },
+    {
+      "path": "Materials/MMOFPS/Vehicle_HLX.json",
+      "sha256": "35646773bd8a85c0ad24648a05c905d48a5ed5fd21cabe63f8dfe7a339a5943d",
+      "size": 344
+    },
+    {
+      "path": "Materials/MMOFPS/Vehicle_MRA.json",
+      "sha256": "bf73eb1425d652cca41130d795a33aa8de98be24ac0b1e4b126ff422df44f1ce",
+      "size": 344
+    },
+    {
+      "path": "Materials/MMOFPS/Weapon_AUC.json",
+      "sha256": "b2be52af47202200f67415cdd3b385ded421337d6fb643fb94f7a15f1b325a4f",
+      "size": 336
+    },
+    {
+      "path": "Materials/MMOFPS/Weapon_Common.json",
+      "sha256": "0ae003ed4171e092b22087fe37a9332dde2894bc51fbc45120993c4b855e95a4",
+      "size": 349
+    },
+    {
+      "path": "Materials/MMOFPS/Weapon_HLX.json",
+      "sha256": "d7b13be17eab1339e8b2ba26776ebca61300b649f157d87552e75c2af9d408d4",
+      "size": 337
+    },
+    {
+      "path": "Materials/MMOFPS/Weapon_MRA.json",
+      "sha256": "4df313fc98bb9afda4610cddf003ed65664357e37e63250db3719f766dd8a6f5",
+      "size": 336
+    },
+    {
+      "path": "Materials/MMOFPS/Weapon_Mounted.json",
+      "sha256": "1b9a39924f65287cca80e779a518945fa314cdc8b71634a20fa5877627d11b98",
+      "size": 352
+    },
+    {
+      "path": "Materials/Metal.json",
+      "sha256": "e537464927a23487049b510aec26fadcbe5d136e19493ea3b042bb7ca2d9146b",
+      "size": 204
+    },
+    {
+      "path": "Materials/Terrain_Dirt.json",
+      "sha256": "8cc26e0f87f598192ba21c0e65f4111bdb9d34272b6be4f681268da53b7cfefe",
+      "size": 211
+    },
+    {
+      "path": "Materials/Terrain_Grass.json",
+      "sha256": "d630c883d480452019bf2348ee15bb9e2586a127dd7f6015da66dd3b8ceff725",
+      "size": 212
+    },
+    {
+      "path": "Materials/Wood.json",
+      "sha256": "8f5933083ffafc4c652a17e1ffa44dbe0abec1e61f5cf2e3770f5bbd0edbb60e",
+      "size": 202
+    },
+    {
+      "path": "Models/Cube.mtl",
+      "sha256": "4caef0d77565e65395e937bf64c4d063f9d2a9c3c8283f2e7773a6759ab9720f",
+      "size": 236
+    },
+    {
+      "path": "Models/Cube.obj",
+      "sha256": "11c03feaa3fe66b43f00d5e83c929075f93c28cc2333cfcf1130c47ddb10c2fb",
+      "size": 8177
+    },
+    {
+      "path": "Models/Generated/starter_assets_manifest.json",
+      "sha256": "7a24cb1477a0ddaa6636b9224d9072733d27df211ff9d9e898319a40cf5299a9",
+      "size": 39206
+    },
+    {
+      "path": "Models/MMO/alchemy_shop.mtl",
+      "sha256": "c4e03164b144380bbefeb1af1550aa1528ac85339df9d3bd058eb7bd226a14aa",
+      "size": 2066
+    },
+    {
+      "path": "Models/MMO/alchemy_shop.obj",
+      "sha256": "1190fb49c063de74cec3f1c7b3328557bbf9e1ba7ec91c87b42c2a7440581d94",
+      "size": 199574
+    },
+    {
+      "path": "Models/MMO/anvil.mtl",
+      "sha256": "2770ee48b33d40151817dcfee82d0cf71f426b01d5c97284f98927d03c695aaf",
+      "size": 600
+    },
+    {
+      "path": "Models/MMO/anvil.obj",
+      "sha256": "49ed1e58d3a066e208d1b0e9bcba857f50209f8a8bb147cf76df726950a9c4be",
+      "size": 49907
+    },
+    {
+      "path": "Models/MMO/banner.mtl",
+      "sha256": "be27be50d65d6b4e42cad85161d35169b6904a72dccc9ffe4dc4c7671c06537d",
+      "size": 778
+    },
+    {
+      "path": "Models/MMO/banner.obj",
+      "sha256": "18086d7d3294e9800dfbc786306bdcc5eccdd44495668abb042466a62ddab377",
+      "size": 79808
+    },
+    {
+      "path": "Models/MMO/cauldron.mtl",
+      "sha256": "ec0553776df31fca5313365fbe73971bf845e30c9fd86745edb39c1a780811e1",
+      "size": 604
+    },
+    {
+      "path": "Models/MMO/cauldron.obj",
+      "sha256": "f45061b94a52603abc6b2883a8cb2f565c00721d59767bb90ed8570abfa44eff",
+      "size": 130289
+    },
+    {
+      "path": "Models/MMO/chest.mtl",
+      "sha256": "1752470ac31076779ef347ff7884412ec19b072a879b9203fc490cc50f500a3c",
+      "size": 963
+    },
+    {
+      "path": "Models/MMO/chest.obj",
+      "sha256": "9ecb1afdd50b325ac4a39f025c851c07c161d375a5683bfc8e9b014a8406afc2",
+      "size": 201454
+    },
+    {
+      "path": "Models/MMO/forge.mtl",
+      "sha256": "01c349b0de48a1c1e2263c74037393623e2b3e33ccdf50c3cfd46c4b86c9c2af",
+      "size": 1147
+    },
+    {
+      "path": "Models/MMO/forge.obj",
+      "sha256": "870c8818d18cb738a32340461231ce23f668ba950c2b1f6781db7e24b9cbca12",
+      "size": 80538
+    },
+    {
+      "path": "Models/MMO/fountain.mtl",
+      "sha256": "a2d30feb67167c618d0bcf2a67689aa1fd496835f08fabc87438db2c7054fc24",
+      "size": 785
+    },
+    {
+      "path": "Models/MMO/fountain.obj",
+      "sha256": "f33505a0616092ccf6fd77659331c6c2cf09acfc4ece6fe72d3ffb91e6fef2b4",
+      "size": 133976
+    },
+    {
+      "path": "Models/MMO/gate.mtl",
+      "sha256": "ac3050f3aa679352ce307031a6ebc895c8ce39c2d43c1a8250b9eaeb908e3070",
+      "size": 601
+    },
+    {
+      "path": "Models/MMO/gate.obj",
+      "sha256": "755687b17165412a4b114fda4cdae865cf3f1fb091b84085a7f476cb79da3d1e",
+      "size": 101870
+    },
+    {
+      "path": "Models/MMO/gravestone.mtl",
+      "sha256": "d6a731d11b108d079d47de91f6d76a59f50f48a6b174dce662665032f41d70d2",
+      "size": 599
+    },
+    {
+      "path": "Models/MMO/gravestone.obj",
+      "sha256": "0e643c2ddedd0f8f5d1ee53db185c7d8aae17a56befecdb0e1bf7c5677a20a34",
+      "size": 34334
+    },
+    {
+      "path": "Models/MMO/guild_hall.mtl",
+      "sha256": "8805cdb1b7c6abe131f75fea48d4ab1b099c21cfa352d9cd004761d4208f54a2",
+      "size": 1883
+    },
+    {
+      "path": "Models/MMO/guild_hall.obj",
+      "sha256": "e750ffa3e2091bc9d57a09546c63bb114fe547fe2ce352f6c6bffbd5e6304dec",
+      "size": 171722
+    },
+    {
+      "path": "Models/MMO/market_stall.mtl",
+      "sha256": "c0fb3e5b773f3ec4d5550a1981ecb541b4be8d15b5d49ae49227dd16f3b4fb1c",
+      "size": 1512
+    },
+    {
+      "path": "Models/MMO/market_stall.obj",
+      "sha256": "e8bccf17a1a0c56719fcac96b2e652ee45d65d3ca5842160db1f76f22ad86555",
+      "size": 130683
+    },
+    {
+      "path": "Models/MMO/pillar.mtl",
+      "sha256": "2fc15add42132ca49af8287f2c831598b6e681144f617f289b79daa0c989e7f2",
+      "size": 419
+    },
+    {
+      "path": "Models/MMO/pillar.obj",
+      "sha256": "15e06fc1bf9023afa333f5dcd957e4ce3fd48b47d1383ffa96c2693303d1c2b9",
+      "size": 46394
+    },
+    {
+      "path": "Models/MMO/rock_large.mtl",
+      "sha256": "b1378066a653bad0eabb6ada11b73308935c6d2074089e4cfbd7f84d93589696",
+      "size": 606
+    },
+    {
+      "path": "Models/MMO/rock_large.obj",
+      "sha256": "4ff1da952814d7491cbd0375d92acb5e2aa4398305d05a8c3d9d942920e6fffc",
+      "size": 13711
+    },
+    {
+      "path": "Models/MMO/tent.mtl",
+      "sha256": "d2ee5c83ddb6a5de936396ec4f0f687dad66b756ef7250ed986dc77f71ba7232",
+      "size": 962
+    },
+    {
+      "path": "Models/MMO/tent.obj",
+      "sha256": "21f14636b5b7b57402836284bf25ef098cffb15074094f3c63e90d85f9553751",
+      "size": 34247
+    },
+    {
+      "path": "Models/MMO/torch.mtl",
+      "sha256": "90df59227a6d7c7baa20aca36b0f86e17bda42673265c835588486bc269f704f",
+      "size": 779
+    },
+    {
+      "path": "Models/MMO/torch.obj",
+      "sha256": "4bb878349cb1900b3046b2551eb8666012188a8310cb6e5c19c39582f5365f07",
+      "size": 60614
+    },
+    {
+      "path": "Models/MMO/tree_pine.mtl",
+      "sha256": "068527c37590d9e2e6b534b1c9e46449b55c7dcf51b6ec979c11421bc012350b",
+      "size": 599
+    },
+    {
+      "path": "Models/MMO/tree_pine.obj",
+      "sha256": "5fa004dd0dd327fd75af50760766e455042d56c3e3327baaaf61c7fc045a9432",
+      "size": 45229
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Decals.png",
+      "sha256": "cfd1dfe9d3c86a7f5f9bc2e516d935599a70854090f413a29aec0ced1d6c908a",
+      "size": 161794
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Trim_01_BaseColor_Red.png",
+      "sha256": "15fc0e344ed35483bc771aaa95c1c2a0b0ec2349a893cf24af18b8742f0842ac",
+      "size": 965873
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Trim_01_Normal.png",
+      "sha256": "1aec7ad47a642fc68216b5a3119341b7dca038c1fc9493df8a15ad4aa27ddbcf",
+      "size": 585626
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Trim_02_BaseColor_Red.png",
+      "sha256": "4a08abf8dc0a5bf558a0ae38dc0d70eddc328eaa8060725d07b95d7c8a75663c",
+      "size": 1150649
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Trim_03_BaseColor.png",
+      "sha256": "2a15eadbedbc928d771ed8f2a7a8c1a16bce89b2836a0ecf34ece7e2fab96769",
+      "size": 1285125
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Trim_03_Cables.png",
+      "sha256": "758a95beccdc9f0621d8b8a283ee2593e04b56f1cd32776165ec85e1568e8eb8",
+      "size": 779284
+    },
+    {
+      "path": "Models/MMOFPS/buildings/barracks.obj",
+      "sha256": "c48ef7a75faaeefe7aa392d99645e136eff3c76af65495514aabb8471d3219f4",
+      "size": 57873
+    },
+    {
+      "path": "Models/MMOFPS/buildings/blastwall_gate.obj",
+      "sha256": "58e50ee707c0302752063f3b27e96da10c58d90d802c19aed0e765be3d77051b",
+      "size": 37945
+    },
+    {
+      "path": "Models/MMOFPS/buildings/blastwall_seg.obj",
+      "sha256": "d34a458979da97e5d9f5707385cd042b414898cc449e79a71b8cc7a2c7422e7b",
+      "size": 20798
+    },
+    {
+      "path": "Models/MMOFPS/buildings/cap_banner_ring.obj",
+      "sha256": "f14107a9811e3853825bf6a528c00c4e6aca212cd6c8d1bc90ac8d2afae26a58",
+      "size": 20189
+    },
+    {
+      "path": "Models/MMOFPS/buildings/cap_tower.obj",
+      "sha256": "6634945ed0f9e5f72e86ad658d79fe3f1811035c44d67980adec048ed41aede7",
+      "size": 88394
+    },
+    {
+      "path": "Models/MMOFPS/buildings/comms_relay.obj",
+      "sha256": "a8f02d3fdfc9c4cf2968405dc222395104772a17418d264a55b1e82eea227a2c",
+      "size": 49127
+    },
+    {
+      "path": "Models/MMOFPS/buildings/excavator_gantry.obj",
+      "sha256": "ff566e28269d47dfa49fb7e0047310a3a5d1a31791b3286e88aa1656bac85f96",
+      "size": 142962
+    },
+    {
+      "path": "Models/MMOFPS/buildings/facility_core.mtl",
+      "sha256": "a45ec94204b19f379e56b2a4de7a8223c2edfc4a231398d09be9e27fadce6e73",
+      "size": 223
+    },
+    {
+      "path": "Models/MMOFPS/buildings/facility_core.obj",
+      "sha256": "fb6a2ce160d51e72165aa21e1f97da38fbb3ee6eaa7be25cf14cf0635966d57b",
+      "size": 7659
+    },
+    {
+      "path": "Models/MMOFPS/buildings/fort_wall.mtl",
+      "sha256": "69f7043e8626fca53c510c559605103bdc8f81b26a904e9bc255b8b328ac64aa",
+      "size": 1172
+    },
+    {
+      "path": "Models/MMOFPS/buildings/fort_wall.obj",
+      "sha256": "2514c6c9b48a22d5a9d0c728521986e3eadabe2d6dbcc2428e08f1305af907c4",
+      "size": 23081
+    },
+    {
+      "path": "Models/MMOFPS/buildings/holo_sign_post.obj",
+      "sha256": "3ea5438c73c947ce66b8215d4d016d41d0f28f01196f10af9ab02688177884d1",
+      "size": 18105
+    },
+    {
+      "path": "Models/MMOFPS/buildings/landing_pad.obj",
+      "sha256": "4e2529b09607d8c7cd6fd87cfc76ca73a414ac4ab5ec64c63a061ecf503063d4",
+      "size": 36143
+    },
+    {
+      "path": "Models/MMOFPS/buildings/outpost_tower.mtl",
+      "sha256": "f3bffc87c74d09f65d70a20caf3b3f6f47749e65d81765c08e70f74c04333533",
+      "size": 749
+    },
+    {
+      "path": "Models/MMOFPS/buildings/outpost_tower.obj",
+      "sha256": "55fe1914a855f44468911dd1fb8a0fe54f30300575721bd15a3dc9c7a597a8f9",
+      "size": 8849
+    },
+    {
+      "path": "Models/MMOFPS/buildings/pipeline_seg.obj",
+      "sha256": "97420024391478e1914295b1600bd4dc4ff1554cb54035281c2567328d72d985",
+      "size": 136794
+    },
+    {
+      "path": "Models/MMOFPS/buildings/rail_seg.obj",
+      "sha256": "20169baee1c83d09382588115c68014474f5073bdf164073530c2faa3b05b4eb",
+      "size": 34013
+    },
+    {
+      "path": "Models/MMOFPS/buildings/refinery_stack.obj",
+      "sha256": "f490e2d28ed88cd1ea09601e56bea0ac287932dc60a77576c8b7850f99208936",
+      "size": 115706
+    },
+    {
+      "path": "Models/MMOFPS/buildings/sanc_balustrade.obj",
+      "sha256": "dd82e09b28807bc25e25c8849085d56e50a8babc397873950bd3ee0cd7e6a7e3",
+      "size": 33953
+    },
+    {
+      "path": "Models/MMOFPS/buildings/sanc_holo_tree.obj",
+      "sha256": "0580481f18768caa3d176f3e214967f58047b5a0457ef9f32bfe5050fd8ee32f",
+      "size": 62621
+    },
+    {
+      "path": "Models/MMOFPS/buildings/sanc_plaza_core.obj",
+      "sha256": "bf9bd1e77d22d9e71553443d89314e1eb4ee23dc52da969b6336e0dfcf81988e",
+      "size": 157391
+    },
+    {
+      "path": "Models/MMOFPS/buildings/sanc_spawn_pad.obj",
+      "sha256": "30ab49a086c6f5e0765d9a6cd148293aec844d617e1e3b97c9a09710985cdfd8",
+      "size": 64121
+    },
+    {
+      "path": "Models/MMOFPS/buildings/sanc_terminal.obj",
+      "sha256": "8ed12a8bd4eb1d2cb2f99967f8b6f775e9a5bdae43a02bcca706977b7061780e",
+      "size": 37606
+    },
+    {
+      "path": "Models/MMOFPS/buildings/silo_cluster.obj",
+      "sha256": "703721660f361f3aa3b1eb4873c327bfeaeb08ea2116989776feeee0f3b36604",
+      "size": 139589
+    },
+    {
+      "path": "Models/MMOFPS/buildings/spawn_shelter.mtl",
+      "sha256": "9a4e7c56415ae2e1c0caa507eff3d0a386d1f3c8b5e8760b1fd372e77ac8eb42",
+      "size": 223
+    },
+    {
+      "path": "Models/MMOFPS/buildings/spawn_shelter.obj",
+      "sha256": "c2d206a04c20059d85dae40605cb387dc3e0fab0a967c661f08049f90d03e167",
+      "size": 13702
+    },
+    {
+      "path": "Models/MMOFPS/buildings/tf_banner.mtl",
+      "sha256": "088bf393ed431b10b921a0f7f203b17c90a27923147411ed5c740aeb2271740d",
+      "size": 252
+    },
+    {
+      "path": "Models/MMOFPS/buildings/tf_sanctuary.mtl",
+      "sha256": "f50f4777854a33fa1aa5aec9b7f86bf3eec815961b3f411c889151f199b6916a",
+      "size": 251
+    },
+    {
+      "path": "Models/MMOFPS/buildings/tf_struct.mtl",
+      "sha256": "8158e4167020e18c4bb88f9b714924a2b8b5b8dccf1dff0a27cfec1011973718",
+      "size": 252
+    },
+    {
+      "path": "Models/MMOFPS/buildings/tf_wg_auc.mtl",
+      "sha256": "4c0494cb0d4e24d8a3c432bd572914e61e68f097ca6fc768c5c24b6acf965f0c",
+      "size": 249
+    },
+    {
+      "path": "Models/MMOFPS/buildings/tf_wg_hlx.mtl",
+      "sha256": "f2c3620f0174218d7777fba75621d6a5fbcc1234e3cae8443f95887816a616e1",
+      "size": 249
+    },
+    {
+      "path": "Models/MMOFPS/buildings/tf_wg_mra.mtl",
+      "sha256": "083ce91e7fe332e70975317ae2761a34bb1ea26d19c626209ad8753934e22b16",
+      "size": 249
+    },
+    {
+      "path": "Models/MMOFPS/buildings/vehicle_terminal.mtl",
+      "sha256": "99c977b8ecd8a97659a124c941eb4dbb3891a6c51b8b945cf14eaee526b08ffc",
+      "size": 893
+    },
+    {
+      "path": "Models/MMOFPS/buildings/vehicle_terminal.obj",
+      "sha256": "e87dac0dea9293656477a56627be329b65ca5ee93307c96294a7e4bf30df1bf8",
+      "size": 51447
+    },
+    {
+      "path": "Models/MMOFPS/buildings/warehouse.obj",
+      "sha256": "a0270b6343bc1be991214b79a957e12895aeb11b1a13409b0b048c1f8fd5afbe",
+      "size": 72091
+    },
+    {
+      "path": "Models/MMOFPS/buildings/warpgate_auc.obj",
+      "sha256": "8f358d7deae6dc4e0f1462a04035e8cc884bc4c69e5e06067bab9d6f70a9dcad",
+      "size": 128902
+    },
+    {
+      "path": "Models/MMOFPS/buildings/warpgate_hlx.obj",
+      "sha256": "3fed82888f4b0f4138bed975bd1c2bd426caa70f7a11eb0630a028d6ea50dd75",
+      "size": 229006
+    },
+    {
+      "path": "Models/MMOFPS/buildings/warpgate_mra.obj",
+      "sha256": "e35723c6426be311af60756fd63a2a02e4c97c6d138b46712a0469b1bd4bd84d",
+      "size": 128278
+    },
+    {
+      "path": "Models/MMOFPS/buildings/watchtower.obj",
+      "sha256": "2c193e44eaacc942e33abdca64570e203fe15cf37fd441f206d7abf4892526f6",
+      "size": 65543
+    },
+    {
+      "path": "Models/MMOFPS/characters/char_bulwark.obj",
+      "sha256": "3555c73e2401aaf73477657bd7040a9f6ddbcc466c5325bef21004313d11e292",
+      "size": 153868
+    },
+    {
+      "path": "Models/MMOFPS/characters/char_fabricator.obj",
+      "sha256": "f8709defbbd1e26756e759e3810052887e852f52ad61ec2add7df58b647ebe9d",
+      "size": 133610
+    },
+    {
+      "path": "Models/MMOFPS/characters/char_ghost.obj",
+      "sha256": "afee410824ddc1a7ffa276fb69ff90aa6af9122b228e8b40638a343d540ff7b8",
+      "size": 128708
+    },
+    {
+      "path": "Models/MMOFPS/characters/char_medtech.obj",
+      "sha256": "7284b6e8172243109d6c4ee259e2ad6327ab1a94a9f3eeef46f6b101877467db",
+      "size": 129548
+    },
+    {
+      "path": "Models/MMOFPS/characters/char_striker.obj",
+      "sha256": "604832712838b85dbf56e11e88390be0e41e22c2682932bf1429f7c895f05bdb",
+      "size": 144574
+    },
+    {
+      "path": "Models/MMOFPS/characters/colormap.png",
+      "sha256": "0d4947d34ff32acf4a359c7f22ca784e057e7e72f622170a9a77b6fc88fdb70e",
+      "size": 8706
+    },
+    {
+      "path": "Models/MMOFPS/characters/colossus.obj",
+      "sha256": "1f3d6ad0c9a56df53fe736dbe5ec3131f19a260dbb319972779c94d421178b3d",
+      "size": 151743
+    },
+    {
+      "path": "Models/MMOFPS/characters/soldier.mtl",
+      "sha256": "b2a1ef89a2a890b6e14f64d28964ededb9e93a7d580cd066879345e6cc9cff61",
+      "size": 114
+    },
+    {
+      "path": "Models/MMOFPS/characters/soldier.obj",
+      "sha256": "9d7286bd9db8a5241af67ae6374b9a8c153f5ad0dbdfc527a775364075c8e678",
+      "size": 48482
+    },
+    {
+      "path": "Models/MMOFPS/characters/tf_chars.mtl",
+      "sha256": "10438e85f84451f7449b9c0e97e5a4af75c8e0aae8980d02caea28e52cecb1b9",
+      "size": 247
+    },
+    {
+      "path": "Models/MMOFPS/characters/tf_vehicles_char.mtl",
+      "sha256": "3d59373f4aae17d65e78f874f17e0b3320d683e0f020d06a38acbdca25aa7787",
+      "size": 251
+    },
+    {
+      "path": "Models/MMOFPS/props/antenna_a.mtl",
+      "sha256": "847bbdb3b9cb6e074ff08996e6ed3acc172307d5362717805c5240e142f33fb6",
+      "size": 252
+    },
+    {
+      "path": "Models/MMOFPS/props/antenna_a.obj",
+      "sha256": "9be4e3b54a74230de1fb856c433797903fb595114e7f151d00e0bae3ff8f8fca",
+      "size": 26109
+    },
+    {
+      "path": "Models/MMOFPS/props/barrier_a.mtl",
+      "sha256": "88a6967ad54da4a756f66aff4956f8d26601530b5c9e5a83e8ac18d06467b5f3",
+      "size": 83
+    },
+    {
+      "path": "Models/MMOFPS/props/barrier_a.obj",
+      "sha256": "61b6fb85ce13aeaae407afd49d601ada69b5504ed170e30d09d2d1d61259eddb",
+      "size": 10569
+    },
+    {
+      "path": "Models/MMOFPS/props/colormap.png",
+      "sha256": "6ca023be9f12e8c2358fcf94320c8a894b4c05a3dd0bad1f5c268312053caca1",
+      "size": 7440
+    },
+    {
+      "path": "Models/MMOFPS/props/crate_a.mtl",
+      "sha256": "88a6967ad54da4a756f66aff4956f8d26601530b5c9e5a83e8ac18d06467b5f3",
+      "size": 83
+    },
+    {
+      "path": "Models/MMOFPS/props/crate_a.obj",
+      "sha256": "2b78d197476e5c1f4a168193313bb526d188dc567c8371a9ce7553ec44472186",
+      "size": 6440
+    },
+    {
+      "path": "Models/MMOFPS/props/dep_ammopack.obj",
+      "sha256": "a7a116152d3221a65bcc82999755174feffef85e53cc3124b6db32c0e890cccf",
+      "size": 43876
+    },
+    {
+      "path": "Models/MMOFPS/props/dep_avturret_base.obj",
+      "sha256": "f774a08a9244cb8413034bf3aa85ea833c857b2c5846d97f1a8d42369bbedf12",
+      "size": 62849
+    },
+    {
+      "path": "Models/MMOFPS/props/dep_avturret_head.obj",
+      "sha256": "31f94f74b614544e2dc270d4ff7a3fa5db6dfdd9037928882d8c0bca221552f6",
+      "size": 50638
+    },
+    {
+      "path": "Models/MMOFPS/props/dep_fabturret.obj",
+      "sha256": "59f4fdff67e221d10df49f41d4a5b1264329d7869d605c00c2e1064c9f29e0ee",
+      "size": 71937
+    },
+    {
+      "path": "Models/MMOFPS/props/dep_medbeacon.obj",
+      "sha256": "44c7a82a8501bf05b809b665a8f6fc910b9bbf261d525759c4e51bca152cbc35",
+      "size": 54988
+    },
+    {
+      "path": "Models/MMOFPS/props/dep_resupply.obj",
+      "sha256": "d7e3b886c3efdd148818280915d2ea5f882addb1e3702141c100c3f04ca7189d",
+      "size": 37764
+    },
+    {
+      "path": "Models/MMOFPS/props/dep_shieldwall.obj",
+      "sha256": "634d9351005889fb5bb57a291416faa14b690ae3be6d1d7aee3a322b0fa056b5",
+      "size": 39928
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_ammo_printer.obj",
+      "sha256": "a4a645245732557867ab06cf45933ffeee08b8b19755a69752acbc0993c48fb1",
+      "size": 21818
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_antenna_mast.obj",
+      "sha256": "45b703969b1a3f36acc4345f765b5316cbf714db20feea547fa645a0315ba14d",
+      "size": 19281
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_barrel_chem.obj",
+      "sha256": "8118f9c0c443fef71c69989d4af4072aa9b5cf5b434043bc524563ba8fc98cfe",
+      "size": 55335
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_barrel_fuel.obj",
+      "sha256": "4839d8b9f995eb3a53b2564cb8cd98b6bd37a51e0232b7bdf814e0b0f6777035",
+      "size": 55335
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_cable_spool.obj",
+      "sha256": "88be47dcb086422f55d9faac7dfc3bde85834633d81b483e451d97860e5d73dc",
+      "size": 25330
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_crate_l.obj",
+      "sha256": "dea6bc9c6b3caac4d8a73e198efd3a69bab974e226104c959627249755461067",
+      "size": 25832
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_crate_m.obj",
+      "sha256": "ca9fee268b31e3f52647d742843c120bf79a32fa33c781743d7ab0a89532b6f0",
+      "size": 25832
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_crate_s.obj",
+      "sha256": "24bec5f724d668d0b3e28e208726ca329fd327c73895cf74bea74a35f05d8c58",
+      "size": 25832
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_floodlight.obj",
+      "sha256": "cf614ebc47f6fe6948649d0bb8666e254d6698a2a4a7a97fb196cf09aa2bf88e",
+      "size": 22098
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_holomap_table.obj",
+      "sha256": "ec3f39fc923d3b663ff0761a88f92fcd1482ec1c3dc1425c95d499297f14a713",
+      "size": 13854
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_jersey_barrier.obj",
+      "sha256": "1de3eb9eb43d6ba68694d5c85cf607438dd0473c4a9e574fa8126ed640d8cd3d",
+      "size": 4045
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_pallet_stack.obj",
+      "sha256": "12710ef3ef2b47af1435b5d98408fd0d991d68b4746001257b41b0f8654edb23",
+      "size": 39914
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_rock_a.obj",
+      "sha256": "2b2c6b29233672b9aadcfd0e38ee8d2fbdd9a22aaddd69359483bc69570313ec",
+      "size": 19632
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_rock_b.obj",
+      "sha256": "9cd80737aba28afebd12f31e7387f6dbd33c201eee4e83a3d531d7bbdcd6e9d8",
+      "size": 17143
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_rock_c.obj",
+      "sha256": "b367aef1d4d745adf5b8e47a9e296b7561f2e26574f752c61f620c8020aa1dce",
+      "size": 22100
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_rock_d.obj",
+      "sha256": "88731f07ab206906a4084522994547a97fb76ef03ca4b113a16b49f25342e3a7",
+      "size": 19545
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_rock_e.obj",
+      "sha256": "18115aded18d1095a63fbd222be4079c2cc0e8a361ad2a0481d5e5f4b4cadfb8",
+      "size": 17166
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_scrap_a.obj",
+      "sha256": "e01199f7bf8436a1796badb37eb8874e290386930657f2465343c18689ced1a0",
+      "size": 80560
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_scrap_b.obj",
+      "sha256": "cf1799860c4973f8b69cd37a29593e72d1592e375fe7ce4288d6540a754d9824",
+      "size": 80752
+    },
+    {
+      "path": "Models/MMOFPS/props/prop_wreck_apc.obj",
+      "sha256": "1a7136294f66d3cbb19e918d2667cbc8d21e13f6c5b58cc816cdcee389d43a18",
+      "size": 44152
+    },
+    {
+      "path": "Models/MMOFPS/props/tf_utility.mtl",
+      "sha256": "ef651505ef13c56d254cc3634dea369dbe3a852467d397d0886f1c73d4c185a8",
+      "size": 242
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/apc.mtl",
+      "sha256": "24d9aee8b7d98084fddcaddcc5019719772f18659d6bfa20b6a769cf73b8d8e4",
+      "size": 223
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/apc.obj",
+      "sha256": "290430a4d1f06ed3dd97fe7b9ea3fbfeb66c607dc7c8f5694d7643f65a4946ef",
+      "size": 318230
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/apc_deployed_pylons.obj",
+      "sha256": "60649eaa534a433fe5f72680a54aae1312f9e01dc6ebb55674a8991416cea42a",
+      "size": 44326
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/quad.mtl",
+      "sha256": "ec44fe15821bf6faa76dc4489ac00a93c78ccb3b5eceb54eb1cc41dc2cb1a3d4",
+      "size": 223
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/quad.obj",
+      "sha256": "10cc42883947ed3bbd3806dffe0729f44f748d0039aacf321dd19cf422181143",
+      "size": 245405
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/tank.mtl",
+      "sha256": "04abe4fc72135d99c90168242aef754b254b1c575202e5dff12aae3917cc6e13",
+      "size": 223
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/tank.obj",
+      "sha256": "d3c6b26730d80d8d246d539eb4b9384f9c046d69991ef3c1ca33cff1393c0ac3",
+      "size": 272521
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/tank_turret.obj",
+      "sha256": "788480e55a31676a25e2526a938a102f0c29ee38ba14387ede664941d0e993f5",
+      "size": 68089
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/tf_vehicles.mtl",
+      "sha256": "3d59373f4aae17d65e78f874f17e0b3320d683e0f020d06a38acbdca25aa7787",
+      "size": 251
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/vtol.mtl",
+      "sha256": "f6ced0aaaf28a73bd73e1925f7e0fcba22528df68a3230411dba17170991a373",
+      "size": 414
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/vtol.obj",
+      "sha256": "37c2b1a594da63773e5528fd5aa0477caeb4a378d1f43d82315c4f2251a3df54",
+      "size": 232549
+    },
+    {
+      "path": "Models/MMOFPS/weapons/README_charm_mounts.md",
+      "sha256": "45688e1b7dab6c79bcac8d4a5f3b12446e2fb760f958f351d3541cf3995f4f82",
+      "size": 998
+    },
+    {
+      "path": "Models/MMOFPS/weapons/T_Props_Batch1_BaseColor.png",
+      "sha256": "c0ea20e93b451f65a22a11bbfbc3542e2408f9d5c3f2ac3fd12304f1308106e9",
+      "size": 319692
+    },
+    {
+      "path": "Models/MMOFPS/weapons/T_Props_Batch1_Normal.png",
+      "sha256": "3a0d462366e5d03ef13fb35efc97c38c2463c118a89e303d356bac54d941d4ee",
+      "size": 838136
+    },
+    {
+      "path": "Models/MMOFPS/weapons/auc_carbine.obj",
+      "sha256": "eedd9e43fd940cda216c0ae464bebaedc1bf38bdc8001a2ba0261520f664092e",
+      "size": 137038
+    },
+    {
+      "path": "Models/MMOFPS/weapons/auc_lmg.obj",
+      "sha256": "5c1bb593a4651bc238f92358b7d15105b042e29f5ca083683297a70032548fed",
+      "size": 134431
+    },
+    {
+      "path": "Models/MMOFPS/weapons/auc_pistol.obj",
+      "sha256": "64310c32e61be675f4ceb6ee300a8982a03df061593d9ff1611e1fa66d67b293",
+      "size": 38767
+    },
+    {
+      "path": "Models/MMOFPS/weapons/auc_rifle.obj",
+      "sha256": "0f020ac054ed704c22cdd1415d9eaa81e2c3dd8b565fd639de1f638216be7344",
+      "size": 136916
+    },
+    {
+      "path": "Models/MMOFPS/weapons/auc_sniper.obj",
+      "sha256": "c6327a56972372ceebab07df068dbb4ce5d2bb2ecb935d295e22474c68e71938",
+      "size": 132652
+    },
+    {
+      "path": "Models/MMOFPS/weapons/autocannon.mtl",
+      "sha256": "7c3addb1d325a9f8fff1d713a3f4459c5fe0ec9f5b6f186f9fb34f48a5b35ceb",
+      "size": 604
+    },
+    {
+      "path": "Models/MMOFPS/weapons/autocannon.obj",
+      "sha256": "2e7ac1d14cfec6317a8bcca2418b9e2100629ce98380d75e22380b67744fff4e",
+      "size": 90239
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_a.mtl",
+      "sha256": "1e1f6e3d21b39b81a7c248ba3dc257b1bbf5e86bd7cf38444ba50776ae3b45e3",
+      "size": 779
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_a.obj",
+      "sha256": "b2ae9c7d65e2f9373e6cbf40e0046f66fe0b1aede8cd72eb794f8cd931ebbadb",
+      "size": 39629
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_b.mtl",
+      "sha256": "483af5f5aaf9264c9e02310825869cf4ba00d0acc95cd3ea37cd0131aedbebac",
+      "size": 779
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_b.obj",
+      "sha256": "3ce1436afc0c95b3a6cd99b9f6548c74e9ab8b40117bdc7c6096c3f448fa33bd",
+      "size": 50054
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_c.mtl",
+      "sha256": "88a6967ad54da4a756f66aff4956f8d26601530b5c9e5a83e8ac18d06467b5f3",
+      "size": 83
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_c.obj",
+      "sha256": "f09c34bf22b665525f753d53cc5c768f65233348f6814438a9568bf57ee45cea",
+      "size": 34407
+    },
+    {
+      "path": "Models/MMOFPS/weapons/col_cannon.obj",
+      "sha256": "676b2343ddf05b4ec79e9d80cf89e12b3c1b13c5caf6d20d1d1932e135829f83",
+      "size": 125473
+    },
+    {
+      "path": "Models/MMOFPS/weapons/colormap.png",
+      "sha256": "4d0867c3c3c8c539106f91fbc0987d0e1b7d2811362d1daed593169c7d3b0fdc",
+      "size": 10223
+    },
+    {
+      "path": "Models/MMOFPS/weapons/hlx_carbine.obj",
+      "sha256": "186cf0787594436de05119849d55020dc1c1db8a62a3fde956c92608e85c41fb",
+      "size": 283332
+    },
+    {
+      "path": "Models/MMOFPS/weapons/hlx_lmg.obj",
+      "sha256": "302489a9aac904c32d73a94a5b33db15cef28585423569ae8ad940139e1da931",
+      "size": 371788
+    },
+    {
+      "path": "Models/MMOFPS/weapons/hlx_pistol.obj",
+      "sha256": "2fe4514ed74f5aca3b1b5ca810eb0a293ef6ced16c0ad676e861814067314ce4",
+      "size": 94623
+    },
+    {
+      "path": "Models/MMOFPS/weapons/hlx_rifle.obj",
+      "sha256": "61395a33b89875bf7d957a763e9817660c95aee1645c619b99fda2098958951f",
+      "size": 300409
+    },
+    {
+      "path": "Models/MMOFPS/weapons/hlx_sniper.obj",
+      "sha256": "c07141db42182b0a0d25a207bb5e52c3f55e3b50a75e2f149c60ac409731baa6",
+      "size": 355655
+    },
+    {
+      "path": "Models/MMOFPS/weapons/knife.mtl",
+      "sha256": "25127fbf2e2723d361ca736371d874b0cfb63123b1e28508aa84e644e1798753",
+      "size": 783
+    },
+    {
+      "path": "Models/MMOFPS/weapons/knife.obj",
+      "sha256": "0fbedccbe265b27e1f808c9b6c6892b9bf9921b5266b09672b8324c82ac68be6",
+      "size": 9869
+    },
+    {
+      "path": "Models/MMOFPS/weapons/launcher.mtl",
+      "sha256": "88a6967ad54da4a756f66aff4956f8d26601530b5c9e5a83e8ac18d06467b5f3",
+      "size": 83
+    },
+    {
+      "path": "Models/MMOFPS/weapons/launcher.obj",
+      "sha256": "d699688a93bfe7c5bfff474ac26980c494f1d94f5327cc4faffa80c1b0c3e1de",
+      "size": 27424
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_a.mtl",
+      "sha256": "34e7250e4c0a620d35f1f868d49a2d86d0121d7fe4feed75b5414465a11de77a",
+      "size": 959
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_a.obj",
+      "sha256": "0f264de9f9142366eb3df544530183cdaebceb7d1f5a0569ac314af253ae0ed0",
+      "size": 52506
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_b.mtl",
+      "sha256": "31b5b73b699b77a23bf4f686c3c1fe1b5596b6dd419e8e229a9c583b2d6dda22",
+      "size": 604
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_b.obj",
+      "sha256": "e962708744454f90d62aa1b11ebe868fe78a7a1221d760c331037732b419a6c5",
+      "size": 109306
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_c.mtl",
+      "sha256": "88a6967ad54da4a756f66aff4956f8d26601530b5c9e5a83e8ac18d06467b5f3",
+      "size": 83
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_c.obj",
+      "sha256": "0982b101fef37b4e5be69de92d5df564f40e20c7fe0b835358d1af489a17a20e",
+      "size": 57315
+    },
+    {
+      "path": "Models/MMOFPS/weapons/med_tool.mtl",
+      "sha256": "5b67eaf426531ec747dc106be1771936d6eca66d9051ead04ca8485ee39e081c",
+      "size": 318
+    },
+    {
+      "path": "Models/MMOFPS/weapons/med_tool.obj",
+      "sha256": "4979217ae869d64bc9cdaeffd5a9d228c98d58745d97a52f8fd6dcf5867ceb00",
+      "size": 73738
+    },
+    {
+      "path": "Models/MMOFPS/weapons/mra_carbine.obj",
+      "sha256": "b8947dcc816010b3e9343295c11605beff07f299e20b0531af6e473d11bce612",
+      "size": 296348
+    },
+    {
+      "path": "Models/MMOFPS/weapons/mra_lmg.obj",
+      "sha256": "8e704f7f713f22a2fe68a051fdc20b0441455520100a57dff84e51fd4dbc29ce",
+      "size": 351015
+    },
+    {
+      "path": "Models/MMOFPS/weapons/mra_pistol.obj",
+      "sha256": "93e49f57ef12e06f45b39ea95cc14ad8408aef0b4338792b85f596d38154f8b9",
+      "size": 56014
+    },
+    {
+      "path": "Models/MMOFPS/weapons/mra_rifle.obj",
+      "sha256": "6576efbc1668a20ab2a55bae068223b69a1f8aa55e148b344ed17d3ae31e573c",
+      "size": 296341
+    },
+    {
+      "path": "Models/MMOFPS/weapons/mra_sniper.obj",
+      "sha256": "d12b2940e7f01d703ca65442876e6c71fd5fef9b4a1839a0ed20a91e4b67b281",
+      "size": 355854
+    },
+    {
+      "path": "Models/MMOFPS/weapons/np_knife.obj",
+      "sha256": "046fafdbb770620aa387e555f824a7a6e2c343546e51c829418612881ac0b74e",
+      "size": 32277
+    },
+    {
+      "path": "Models/MMOFPS/weapons/np_launcher.obj",
+      "sha256": "c306d4b5ad3978f03ffc8d5d18e259af2bf044008151a036e00e70bbfbaae950",
+      "size": 136488
+    },
+    {
+      "path": "Models/MMOFPS/weapons/np_shotgun.obj",
+      "sha256": "709d7bffaccb941d89a708be9e85575f706d9e03e05741be2ed9d603c6037328",
+      "size": 184049
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_a.mtl",
+      "sha256": "ad9563d1719544e1eb47286e609c803ee46feb6def24a33ed92ba57c3eaa65c2",
+      "size": 955
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_a.obj",
+      "sha256": "e4559bcbe363bbccbbf3bab360eb0b8bff92051d22fbe131e968afcc4d17e6a6",
+      "size": 44993
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_b.mtl",
+      "sha256": "9735ce4b989c46761734201b2794445a72681976cccd5971e770c960b8b6e61b",
+      "size": 597
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_b.obj",
+      "sha256": "58a56a6f268d0bc595c69d8d1df7dbcbd781f81068e086946fd5320f827b9c16",
+      "size": 39365
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_c.mtl",
+      "sha256": "88a6967ad54da4a756f66aff4956f8d26601530b5c9e5a83e8ac18d06467b5f3",
+      "size": 83
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_c.obj",
+      "sha256": "7c843d2adb2949467155aaf7f3cc824bd14046974b2b6d6ec9be8a95e1b8d8e8",
+      "size": 36749
+    },
+    {
+      "path": "Models/MMOFPS/weapons/repair_tool.mtl",
+      "sha256": "b0b86338251e421b2b012eaef8ad575b8e6abd93c833eff1d5566b09fe9f4fce",
+      "size": 223
+    },
+    {
+      "path": "Models/MMOFPS/weapons/repair_tool.obj",
+      "sha256": "19add92caf90d5e92a93f76600f3505ea9b962c1955280c5a7c5dba14c5e1dc5",
+      "size": 5091
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_a.mtl",
+      "sha256": "a4a2037eb1ca1e3047d4d510c50d36d18a9e975f24392009e2ef83019644ebb1",
+      "size": 782
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_a.obj",
+      "sha256": "86d1093592147e6c63f66535434c2a7aef993a651f57c240b4b226eab3df0bce",
+      "size": 45895
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_b.mtl",
+      "sha256": "a4999ae6f9e82abaccc1fed4e79c0037cc43571c6b49b0c2af159c2482c8be23",
+      "size": 598
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_b.obj",
+      "sha256": "f139ea4f1a058eee0796072739592bbd1d5b3f4dc4a4e00bab9ecec8567c3512",
+      "size": 96646
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_c.mtl",
+      "sha256": "88a6967ad54da4a756f66aff4956f8d26601530b5c9e5a83e8ac18d06467b5f3",
+      "size": 83
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_c.obj",
+      "sha256": "b056ca7755c9d7fa670c8e0b0db786024cbcd4a9a9b62e25653462fc71d35e6e",
+      "size": 39778
+    },
+    {
+      "path": "Models/MMOFPS/weapons/shotgun.mtl",
+      "sha256": "5495c9abbff06b9a6da8fbaf8f7eabdb20702487105ba41d596fc26dcb3cfc3d",
+      "size": 779
+    },
+    {
+      "path": "Models/MMOFPS/weapons/shotgun.obj",
+      "sha256": "7efaefa5a2bba47d78933e9fa0f0b32bd4c294ebd436f9ab874b17e007fed6aa",
+      "size": 49700
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_a.mtl",
+      "sha256": "3d91a0d98c9a9a3b019a1c4d65d801a866d146d206271d3c80b4a667e7250e4a",
+      "size": 955
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_a.obj",
+      "sha256": "465a1ad3aeff6f1d0e6733465cf9fb01c86100b8256565eaa8159349fd53a85b",
+      "size": 53439
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_b.mtl",
+      "sha256": "9e90c92e0fceabbe2493e17f780c7ea7151f49e05b4c52687c7f77fce3ab2989",
+      "size": 958
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_b.obj",
+      "sha256": "8d1acd0858563d3b3d46458a5ed08421e43b43182c18a534ba34ca10d03062b1",
+      "size": 53232
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_c.mtl",
+      "sha256": "88a6967ad54da4a756f66aff4956f8d26601530b5c9e5a83e8ac18d06467b5f3",
+      "size": 83
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_c.obj",
+      "sha256": "d34888bedcc52fa4ac5df0d3314f1d0e51abfd484c87ba72bc442b79a08926b0",
+      "size": 55276
+    },
+    {
+      "path": "Models/MMOFPS/weapons/tf_weapons_auc.mtl",
+      "sha256": "50bf5b2566f10794f1ccc73e9c24b80555be612f6bbcf14d25b641ee5492807a",
+      "size": 252
+    },
+    {
+      "path": "Models/MMOFPS/weapons/tf_weapons_common.mtl",
+      "sha256": "9d0539fce92717728a0a4788ec1be705d64d25c2a643fd0a3acb9182f676c3f9",
+      "size": 258
+    },
+    {
+      "path": "Models/MMOFPS/weapons/tf_weapons_hlx.mtl",
+      "sha256": "8af53e5207431c984b99efd8d1e375921c47ee9b854d8b46e7c0845f4f758a61",
+      "size": 252
+    },
+    {
+      "path": "Models/MMOFPS/weapons/tf_weapons_mounted.mtl",
+      "sha256": "c5e33fe0f003bdeeef1c566f9e64b72aabae5b979c7427225cc8712dc30d9cdf",
+      "size": 260
+    },
+    {
+      "path": "Models/MMOFPS/weapons/tf_weapons_mra.mtl",
+      "sha256": "aa45125e698101a0d73a4bdbd7c5fd7554ed8716c8e7c71285875bd1f68350c9",
+      "size": 252
+    },
+    {
+      "path": "Models/MMOFPS/weapons/tool_med.obj",
+      "sha256": "0ab36158d53a2733b6b86386c962f177cd8d88365022e95d3619d3b2d2fa980c",
+      "size": 39014
+    },
+    {
+      "path": "Models/MMOFPS/weapons/tool_repair.obj",
+      "sha256": "1c33b466158a6ebfb18d65813543991040e3a6cf60d4df670dfd137da8ceae15",
+      "size": 69571
+    },
+    {
+      "path": "Models/MMOFPS/weapons/veh_aegis_pdw_base.obj",
+      "sha256": "4d4fffb4ec6dd63435813615b248c6b17a283b62f8a35fbc978402dca5ce833a",
+      "size": 116302
+    },
+    {
+      "path": "Models/MMOFPS/weapons/veh_aegis_pdw_head.obj",
+      "sha256": "d83322f529479190168d7b9b49b20661903045f383bb8b6c27c3f10484ef2f7c",
+      "size": 80466
+    },
+    {
+      "path": "Models/MMOFPS/weapons/veh_ravager_90.obj",
+      "sha256": "c0a16b09ed52834158675a89c7b216016dc238be3fa56d0a0620baf7790aa1f1",
+      "size": 55724
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/arcane_loot_chest.mtl",
+      "sha256": "383958dabe42fd4c34e0a034e3d741cdfd74fedf04ff7b73aac68a4524323d1f",
+      "size": 958
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/arcane_loot_chest.obj",
+      "sha256": "3a0b23f225210967dfae1747aad981c36a467ac7b71fa5f37f0141fb579cd921",
+      "size": 81463
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/arcane_loot_chest_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/arcane_loot_chest_collision.obj",
+      "sha256": "210e89448863c3db2823a128d73475b857cee516e6afa15da057a3783709527a",
+      "size": 1077
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/arcane_loot_chest_lod1.mtl",
+      "sha256": "609d7355252cfc3c59ac366f5b720bbe382f44921e620e0d59f81de355a1597f",
+      "size": 596
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/arcane_loot_chest_lod1.obj",
+      "sha256": "123503d5ad8c3318045e05b849bf27953d27353d7392078970798aec2ecf8773",
+      "size": 26321
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/necrotic_combat_pillar.mtl",
+      "sha256": "14307891bcca0612f133d4dd2d8b86b40721e78074a2c3a62b3003be0e029993",
+      "size": 963
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/necrotic_combat_pillar.obj",
+      "sha256": "a7ba610410421823246f5ca30cf3125989d93d6f07c332d2293c77347b07e7ed",
+      "size": 107879
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/necrotic_combat_pillar_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/necrotic_combat_pillar_collision.obj",
+      "sha256": "c4a92a3e92ed988bf0e9bbf3b9239f365f0176b36b8ac1435b422777f3d19be4",
+      "size": 2232
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/necrotic_combat_pillar_lod1.mtl",
+      "sha256": "aab349cf5fcf87560bd805a1a895d2d90cf649a524cb072031b9f0f2b3a5a596",
+      "size": 602
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/necrotic_combat_pillar_lod1.obj",
+      "sha256": "535873c00375558ceaf243b9c27e5000163fef985df0bd89ef3a3a5a3cb24981",
+      "size": 30478
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/summoner_ritual_brazier.mtl",
+      "sha256": "cba4f28a4067462e3e56f7c4547af093adac1187e8dc6f4b8b87d37ff039412f",
+      "size": 782
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/summoner_ritual_brazier.obj",
+      "sha256": "6c88e6bdd758c3794bf42e0ac181d2b90c12677a3dcff0cb96ac1adec128f7fa",
+      "size": 78798
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/summoner_ritual_brazier_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/summoner_ritual_brazier_collision.obj",
+      "sha256": "fdecd44b43762bd2a8c72b8724fad31287d98ecf66cc810d32880fbacde0d228",
+      "size": 2235
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/summoner_ritual_brazier_lod1.mtl",
+      "sha256": "421a5ba6a6896913c3287a2a762a9b94bcd00f6398148d2287088cd8f5e7a676",
+      "size": 602
+    },
+    {
+      "path": "Models/ModuleKits/ARPG/summoner_ritual_brazier_lod1.obj",
+      "sha256": "921352b8a68cfff9c5ad98331e663216e86d124a9dcd0ffbebd283ee633dc9b0",
+      "size": 25895
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ancient_waystone_marker.mtl",
+      "sha256": "056ed24614bbbbc9cc00fce1e7872b335cdce44b6ea17100c722a765c78e8eea",
+      "size": 781
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ancient_waystone_marker.obj",
+      "sha256": "19cbe0b4da6a3484175172ea078a3d9dc7714dcfa9f5cf0dadbac628ffb1b6ee",
+      "size": 74389
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ancient_waystone_marker_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ancient_waystone_marker_collision.obj",
+      "sha256": "1e10a40698a8763e5a438775d2c265b3dc1c5d1bd99c0620f5419feea3af217f",
+      "size": 2233
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ancient_waystone_marker_lod1.mtl",
+      "sha256": "14a28841b9d09db4ad4a4877943973c8674bfdb0ee537d8ab72db155ec4ff194",
+      "size": 600
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ancient_waystone_marker_lod1.obj",
+      "sha256": "13446dbabf280043290501114d8109757e19005cf995c2306f99b9924ed8bc1c",
+      "size": 30111
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn.mtl",
+      "sha256": "f3bfd394959abe4697a12aeb8525578d7d0f9e6b86a97372583b0569679df3a6",
+      "size": 596
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn.obj",
+      "sha256": "d67b17161e46caca3cf40afa3677eb54fdba010ea05f3415a8932dd7c9f25063",
+      "size": 66831
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn_collision.obj",
+      "sha256": "4ce2c4bae5e392dab24964d0a5f70fc223815c2135e6a43065895c9b5179bc53",
+      "size": 3230
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn_lod1.mtl",
+      "sha256": "e3576606d191ae1f0ff5ac2283b2b2b3506668a2b3bdff637fe13a3275b23b82",
+      "size": 416
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn_lod1.obj",
+      "sha256": "329d852e3a95996e0bcbfe650901fec2bd665bdbe2f8a379429aa541f9f700a5",
+      "size": 38561
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/traveler_camp_firepit.mtl",
+      "sha256": "5de709c5424b69be8a4947b6a07fddc222cd945559cfb8817a6f08d46ba374ea",
+      "size": 962
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/traveler_camp_firepit.obj",
+      "sha256": "f34123cbe659d806653d2beba9ae691ed8590007964864cecb52f74b2b55df55",
+      "size": 135749
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/traveler_camp_firepit_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/traveler_camp_firepit_collision.obj",
+      "sha256": "c8f97c8d2fc4c6ecd2c8a65e6021238fefcde692d31e70b19be8752f56e3f18d",
+      "size": 2780
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/traveler_camp_firepit_lod1.mtl",
+      "sha256": "d4f30f3f0bb743d91256f8de1810a232b1be7756894250aee8c34fa4c5cd285a",
+      "size": 598
+    },
+    {
+      "path": "Models/ModuleKits/OpenWorld/traveler_camp_firepit_lod1.obj",
+      "sha256": "672de2be43008b1dc8aaf41ed435ba20491ccca7ec0c022bd234ef3be79a3de2",
+      "size": 32860
+    },
+    {
+      "path": "Models/ModuleKits/README.md",
+      "sha256": "ce5c8d2372ff37e1244addb777eaceef057ffae8bbff77071f98f7292fdda011",
+      "size": 1215
+    },
+    {
+      "path": "Models/ModuleKits/RTS/assembly_barracks_module.mtl",
+      "sha256": "3357ab96aea45864afc47965ed5b2d7b38bc8cd141ece5aae8c6e3ca1e15247e",
+      "size": 1323
+    },
+    {
+      "path": "Models/ModuleKits/RTS/assembly_barracks_module.obj",
+      "sha256": "b005724e2923abafcfbefedc2d5491b434b9219a5ee516b2002de61fa4d3cc70",
+      "size": 129782
+    },
+    {
+      "path": "Models/ModuleKits/RTS/assembly_barracks_module_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/RTS/assembly_barracks_module_collision.obj",
+      "sha256": "fe1796b5bebac38858445afca75f9dd485fd7b821ea6f6b320826b29da0d51d0",
+      "size": 1088
+    },
+    {
+      "path": "Models/ModuleKits/RTS/assembly_barracks_module_lod1.mtl",
+      "sha256": "9fdf4027ce100147b72d37d5c46756f95bd0bf78570350a2c4c71f3bbf1f0cf4",
+      "size": 780
+    },
+    {
+      "path": "Models/ModuleKits/RTS/assembly_barracks_module_lod1.obj",
+      "sha256": "16c87453773802852f25d182fac2eb05be402d99344c337258685fbc3e1c965b",
+      "size": 35614
+    },
+    {
+      "path": "Models/ModuleKits/RTS/command_resource_silo.mtl",
+      "sha256": "d8a85d683dc12fdbd55f494a1f22e60d5f3d924a2e856214a59ad85b088dcaa1",
+      "size": 962
+    },
+    {
+      "path": "Models/ModuleKits/RTS/command_resource_silo.obj",
+      "sha256": "8850067be651de1123afede998b90860f45a64695294d0c17aa25fac1f5fc4f8",
+      "size": 139874
+    },
+    {
+      "path": "Models/ModuleKits/RTS/command_resource_silo_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/RTS/command_resource_silo_collision.obj",
+      "sha256": "680edd8516604dd85c37aafa3407edb8b2a4bcad1247728ead133b260a2a4757",
+      "size": 2776
+    },
+    {
+      "path": "Models/ModuleKits/RTS/command_resource_silo_lod1.mtl",
+      "sha256": "5c2d33db2f1f3428bd4da8cf4a2ddb7feff8ebb79ff37c2b9ee4a240f64a05cb",
+      "size": 600
+    },
+    {
+      "path": "Models/ModuleKits/RTS/command_resource_silo_lod1.obj",
+      "sha256": "ba31df5852544e3c7a0ad3f0e8799bb41ea4c36f514307e4ed87c6d6b61b561a",
+      "size": 48871
+    },
+    {
+      "path": "Models/ModuleKits/RTS/power_generator_array.mtl",
+      "sha256": "2ac0c426b1c774f524264b4c3b874e8593e68ff8db3adc90cf8dc63f3c07897f",
+      "size": 1144
+    },
+    {
+      "path": "Models/ModuleKits/RTS/power_generator_array.obj",
+      "sha256": "c4215d0c8a2d68d3d819f064c0a1af9e1c2fe8d462f52106963488478079cf9f",
+      "size": 139768
+    },
+    {
+      "path": "Models/ModuleKits/RTS/power_generator_array_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/RTS/power_generator_array_collision.obj",
+      "sha256": "d4dd20e1d601cadf7b61d3619f091637e3511afa69b988fd11fca25ddcfdc4c6",
+      "size": 2786
+    },
+    {
+      "path": "Models/ModuleKits/RTS/power_generator_array_lod1.mtl",
+      "sha256": "867cf87be6940849e54fa2979a1d089eb2d4b5ed11f894a180513de3a9d925e7",
+      "size": 782
+    },
+    {
+      "path": "Models/ModuleKits/RTS/power_generator_array_lod1.obj",
+      "sha256": "52f6b77135e67383a27ab575ba0a43142eeb3060f1e11982781a70dbc0128ccd",
+      "size": 56676
+    },
+    {
+      "path": "Models/ModuleKits/Racing/circuit_hologram_checkpoint.mtl",
+      "sha256": "fc608411751b5798d410eaa47d1ba61a5ccb2fd67ad96071f489c9a956b50609",
+      "size": 1143
+    },
+    {
+      "path": "Models/ModuleKits/Racing/circuit_hologram_checkpoint.obj",
+      "sha256": "a2ebf0f34b6bdb1fb22d491e41555ce9edd5598e7cc3a33abf14179fc8baa155",
+      "size": 103064
+    },
+    {
+      "path": "Models/ModuleKits/Racing/circuit_hologram_checkpoint_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/Racing/circuit_hologram_checkpoint_collision.obj",
+      "sha256": "6b0819953af67c5d71ac35b07f2350e0a1f1040f565f6dcd39fd120359597e35",
+      "size": 2796
+    },
+    {
+      "path": "Models/ModuleKits/Racing/circuit_hologram_checkpoint_lod1.mtl",
+      "sha256": "acb31451fd79b640d8e7764850e2c0b907d9cb717a715a995ce16c24a37c5924",
+      "size": 599
+    },
+    {
+      "path": "Models/ModuleKits/Racing/circuit_hologram_checkpoint_lod1.obj",
+      "sha256": "6bb6e36890197f14490c7da5016ab6adb1f795937da3531c8ea48a155d21b6d0",
+      "size": 32323
+    },
+    {
+      "path": "Models/ModuleKits/Racing/neon_start_light_gantry.mtl",
+      "sha256": "79c40896084964ebb9eab6e907ef91905b5f1be38f88b9909526a9e7f135a7fb",
+      "size": 1140
+    },
+    {
+      "path": "Models/ModuleKits/Racing/neon_start_light_gantry.obj",
+      "sha256": "ca80cbe678d67dccf162a757dbf83f9bf8702cb18626546ec14f47c9065fc7c5",
+      "size": 114106
+    },
+    {
+      "path": "Models/ModuleKits/Racing/neon_start_light_gantry_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/Racing/neon_start_light_gantry_collision.obj",
+      "sha256": "e9b24d23d6b8778deeb39e9c5675c6456132629dba3f4145d90181afee04e53a",
+      "size": 2694
+    },
+    {
+      "path": "Models/ModuleKits/Racing/neon_start_light_gantry_lod1.mtl",
+      "sha256": "599b591dda4f457a1e39b0e8c7a18c36ae924905ba6789c576fffe396f0962fc",
+      "size": 598
+    },
+    {
+      "path": "Models/ModuleKits/Racing/neon_start_light_gantry_lod1.obj",
+      "sha256": "098094b1133d70719362aedc598d40094e33e6e4cb4ec4a11cf2e323b9d4b075",
+      "size": 34067
+    },
+    {
+      "path": "Models/ModuleKits/Racing/solar_pit_tool_cabinet.mtl",
+      "sha256": "703cd5138a35875dbbddb57972a1c2b287bdf4c9595547167bbd17e4d5baf4b7",
+      "size": 960
+    },
+    {
+      "path": "Models/ModuleKits/Racing/solar_pit_tool_cabinet.obj",
+      "sha256": "7eb282e3508194d6ab5b43175359b657e2d2552af7fcc0d1721dbd90fec70ee7",
+      "size": 113767
+    },
+    {
+      "path": "Models/ModuleKits/Racing/solar_pit_tool_cabinet_collision.mtl",
+      "sha256": "57c46bc8a1ffbc348cc2e6e66998a19c8bbdc143d80ca9d8e1af1ac203c9144e",
+      "size": 236
+    },
+    {
+      "path": "Models/ModuleKits/Racing/solar_pit_tool_cabinet_collision.obj",
+      "sha256": "fa4a0c90d449345986baa3b1241c9a9a8ad17e02eb58285e36fa53231472bbed",
+      "size": 1086
+    },
+    {
+      "path": "Models/ModuleKits/Racing/solar_pit_tool_cabinet_lod1.mtl",
+      "sha256": "7138f4aaffc0bb35468821e43c46ce2ab4c42f66d52dc3a21eec174c6aee673c",
+      "size": 598
+    },
+    {
+      "path": "Models/ModuleKits/Racing/solar_pit_tool_cabinet_lod1.obj",
+      "sha256": "2fc4b383c586efd0098334cc202280859292eabd4fb57819b3118c5148241de1",
+      "size": 26409
+    },
+    {
+      "path": "Models/Plane.mtl",
+      "sha256": "0b6e2c02a50532d179fac309522045c44a91f7668e208030c7a2fc7335159f11",
+      "size": 236
+    },
+    {
+      "path": "Models/Plane.obj",
+      "sha256": "1a6d7c681177a228880762f3058140fb0d9ce817adcb572281b4ff3d7b359eea",
+      "size": 8180
+    },
+    {
+      "path": "Models/Pyramid.mtl",
+      "sha256": "8ceff3ea076b8f49fe9c0eb6f6838143b5d09a4104498863b03b91b3c785917e",
+      "size": 235
+    },
+    {
+      "path": "Models/Pyramid.obj",
+      "sha256": "3ebfaea9e8c52c3d3116437cf5426f4fb237dc2e7eddedebd470a46611bd9c3c",
+      "size": 676
+    },
+    {
+      "path": "Models/Ramp.mtl",
+      "sha256": "fc3821abe7a48205f27ba37e2220ba69f84283f2a43587fe44f0bdb907ee98d6",
+      "size": 237
+    },
+    {
+      "path": "Models/Ramp.obj",
+      "sha256": "b3e7da5363ac17d832577224eacc6804e61b7f2922b8121f56a44ff860a7e306",
+      "size": 554
+    },
+    {
+      "path": "Models/Sphere.mtl",
+      "sha256": "c8573cb1fcf57739757f4efff43dc4f7ba14f5fcc410443c0a80f431feeff8d5",
+      "size": 235
+    },
+    {
+      "path": "Models/Sphere.obj",
+      "sha256": "66737ef1050fdde36bf5d500b6bd97f5a0aa623adbc1f125641a3a73fab0c7c8",
+      "size": 53704
+    },
+    {
+      "path": "Models/Wall.mtl",
+      "sha256": "54c6029ad35436ca1640b73ab51a76e52e8b284bc3229d2c377de64251028bfc",
+      "size": 239
+    },
+    {
+      "path": "Models/Wall.obj",
+      "sha256": "9cd28cdab7d6dcd2c72ec5d595bd889bfe37afd267361cb82feb120ab78d88c8",
+      "size": 8183
+    },
+    {
+      "path": "Models/barrier.obj",
+      "sha256": "a5573c4421fe56d9775f231344556757668dd12e5dc1880d217ed49b516561f4",
+      "size": 1056
+    },
+    {
+      "path": "Models/building_small.obj",
+      "sha256": "e9997aad88f8fad2cece4d070fb87ddb8f7253f5d423c3c539f5a907e58450de",
+      "size": 2583
+    },
+    {
+      "path": "Models/character.obj",
+      "sha256": "74f1446c12fea14821e29b6b5d972cb577dd9757bef24cc7c5c89b1fa364bc18",
+      "size": 3608
+    },
+    {
+      "path": "Models/crate.obj",
+      "sha256": "9d3d46a4991c0751736d4a6b848e2ad02b1ac2bdf1561ae2ba280169c24b721a",
+      "size": 1401
+    },
+    {
+      "path": "Models/lmg.obj",
+      "sha256": "1e8cbd5b7a66073667e1164e45b6f38ae96adb1130973b2880bb1c3656b23d19",
+      "size": 2183
+    },
+    {
+      "path": "Models/pistol.obj",
+      "sha256": "286fe4bdc5bbbb053a91362afb54f8bb01db4e756fed60a6281515c90fe6af5f",
+      "size": 1727
+    },
+    {
+      "path": "Models/rifle.obj",
+      "sha256": "9363a679c8f54c68eea6d7776424148b019131f167256387ba548cc54694d5a0",
+      "size": 2415
+    },
+    {
+      "path": "Models/shotgun.obj",
+      "sha256": "08b1a1c292da945b3b4ee76c943c04d6f051256450bf726f0c7003c4d65bbf79",
+      "size": 1884
+    },
+    {
+      "path": "Models/sniper.obj",
+      "sha256": "3381d14528a3c981861ca842dd5092f706d5417e22e0d0dbae048610dd959463",
+      "size": 2389
+    },
+    {
+      "path": "Models/target.obj",
+      "sha256": "3312ede718e6833d249da79f879b7d5ce56a6ea37e6d8541f7960e47909fc335",
+      "size": 1461
+    },
+    {
+      "path": "Models/turret.obj",
+      "sha256": "cc0b56e148a3467123effaa2556ab3fd148e76a9f379da54cd298ab0adff332a",
+      "size": 2092
+    },
+    {
+      "path": "Models/watchtower.obj",
+      "sha256": "5138037853a1df0d2286d7d7af899c887ef59f3eb6d9b1aae9a03b1c3b89f1da",
+      "size": 2290
+    },
+    {
+      "path": "README.md",
+      "sha256": "00322d8896a84fd626483b89021ac4d4a89ccc55e3445c40a32b8ae806a7578b",
+      "size": 1849
+    },
+    {
+      "path": "Scenes/Default.scene",
+      "sha256": "76bdcae8151908dde2232a1c8a80eb6fd7c4f4aa34ea03f6b1942d5ae16d2b5f",
+      "size": 3897
+    },
+    {
+      "path": "Scenes/MMO/battleground.scene",
+      "sha256": "7cc3de1fcdcd8e18400dec0fe5adec563832e5140fea31c76830c8c7ac17ff8c",
+      "size": 5084
+    },
+    {
+      "path": "Scenes/MMO/shadow_crypt.scene",
+      "sha256": "72c62058bbaa4c09e6a592e60d6996fbc9750570cdb0d00e8c49c22f6e2ff7d2",
+      "size": 5430
+    },
+    {
+      "path": "Scenes/MMO/town_square.scene",
+      "sha256": "8243f9087956e866fed2cd9230d1a7a9e349c02e69f5fdbf54278f5d42e0724b",
+      "size": 8436
+    },
+    {
+      "path": "Scenes/MMO/wilderness.scene",
+      "sha256": "d212ce460e15aaea51c4d87ff26c7ec0c98d2bde4fca9591d5587f512b57edca",
+      "size": 5821
+    },
+    {
+      "path": "Scenes/MMOFPS/cindral_wastes.scene",
+      "sha256": "abb3b9039204d3107bc4a91d7a34d30e167d1d101c1db751887cd83b11aaa109",
+      "size": 28660
+    },
+    {
+      "path": "Scenes/MMOFPS/sanctuary_haven.scene",
+      "sha256": "6eba9fada9302ebcb514ee38ef8524939395b68b7603927c940c7202444c5fd9",
+      "size": 5930
+    },
+    {
+      "path": "Scenes/MMOFPS/veyra_highlands.scene",
+      "sha256": "a0d4c314b6ce9d4c5e2fda3234869accaa07e9b5f774314faf765d7af05f4827",
+      "size": 34637
+    },
+    {
+      "path": "Scenes/combat_arena.scene",
+      "sha256": "a6d8d91696d76ad012e52fadff0f0c82a85ad8abc4c3ba9fe83457d8e7e6ba45",
+      "size": 6219
+    },
+    {
+      "path": "Scenes/level1.scene",
+      "sha256": "e24b73a4acc2fe5e810eafc3369b9302cd3e26c7f29062984f9b82ff7da86ca6",
+      "size": 11450
+    },
+    {
+      "path": "Scripts/PlayerController.as",
+      "sha256": "51851f99a43d96ba4dee3dc1639288c87a16461d5b5543393c1f46a873849668",
+      "size": 1380
+    },
+    {
+      "path": "Textures/Decals/MMOFPS/crest_auc.png",
+      "sha256": "19c058870f060b7cb9b68f07205183bb3f6c9fd272211cd634e826a3d9067b2b",
+      "size": 20914
+    },
+    {
+      "path": "Textures/Decals/MMOFPS/crest_hlx.png",
+      "sha256": "fb5f881338a300d234c966bc81eeee39fb8dc53b104ebc047404c224c4705843",
+      "size": 27162
+    },
+    {
+      "path": "Textures/Decals/MMOFPS/crest_mra.png",
+      "sha256": "95cc40fd70a58f7d7c59ad6eab30e453f0350b635fece53e8d9b2ddfbcf47c31",
+      "size": 14858
+    },
+    {
+      "path": "Textures/Decals/blood_splatter.png",
+      "sha256": "ea711ea0b8195a5a0992baf42bd5acf4d19412ad6de63a7c12b1e78ab10d160b",
+      "size": 642
+    },
+    {
+      "path": "Textures/Decals/bullet_hole.png",
+      "sha256": "bc59b4c3b15698a1c5859c92ccffc72f351c3abc70aaaca9f9e2431d91593c36",
+      "size": 646
+    },
+    {
+      "path": "Textures/Decals/bullet_hole_normal.png",
+      "sha256": "9a7e229f63aef2d35623775b549b82d57770665f6de3204b7fd35dd9b90aedb1",
+      "size": 101
+    },
+    {
+      "path": "Textures/Decals/scorch_mark.png",
+      "sha256": "aa0aa4da7a5bbc299d7a4229abfd3b1c1d8dda7e48f6ff61f805366ce50ee605",
+      "size": 642
+    },
+    {
+      "path": "Textures/Default/black.png",
+      "sha256": "1fc5ddbe6ba5683582371cf28957311ce2f7b3ed6e5af5d464d433c5092d93b3",
+      "size": 74
+    },
+    {
+      "path": "Textures/Default/checkerboard.png",
+      "sha256": "332a6b79b6ceaece48e3efc55400e675a8591741f43432840da0d6534f827d37",
+      "size": 181
+    },
+    {
+      "path": "Textures/Default/grid.png",
+      "sha256": "92fc184a50357be019eb06ca77eb982be24c54adad17642bf5cca6f0d3b37461",
+      "size": 177
+    },
+    {
+      "path": "Textures/Default/noise.png",
+      "sha256": "9ddaacdd74f54a4df8a110dae51484482a2f342d764080fc30ed8e7dd5a9ede3",
+      "size": 7109
+    },
+    {
+      "path": "Textures/Default/normal_flat.png",
+      "sha256": "87bbe7914db93a5d76335901d7a8bd3e277f17d52ea75913c92ec55e84b6d005",
+      "size": 75
+    },
+    {
+      "path": "Textures/Default/uv_test.png",
+      "sha256": "60a0e2a22a9961bbe0cc2059ac0ba8bfca8d32606faddb6476fd9ccad98182e9",
+      "size": 178
+    },
+    {
+      "path": "Textures/Default/white.png",
+      "sha256": "033363320406e259c9dbeeac58907310aca2bd2fb64bcc9510abb302c40dff1f",
+      "size": 72
+    },
+    {
+      "path": "Textures/MMO/UI/bar_bg.png",
+      "sha256": "89411d6954cb45196d14d701bfdb1ffa2f9f7ecbd1444dec0793b20ec1826c96",
+      "size": 90
+    },
+    {
+      "path": "Textures/MMO/UI/button_hover.png",
+      "sha256": "76b9b2d62c2fda6007da2771c6f4bd14815c4319ab9387dc8bd388fcb2dedae7",
+      "size": 506
+    },
+    {
+      "path": "Textures/MMO/UI/button_normal.png",
+      "sha256": "5c01b83477935073577aaaef05fb0cf9f67f9403e2b4cd0de63ffd31a61b0b98",
+      "size": 508
+    },
+    {
+      "path": "Textures/MMO/UI/button_pressed.png",
+      "sha256": "d38be235f946c4dc812047507d355325d67df188346fb03072b4116686d6b77f",
+      "size": 501
+    },
+    {
+      "path": "Textures/MMO/UI/chat_area.png",
+      "sha256": "ce1c566c7428eb57c494580cfe976e74fd4b59b80a0716443090b15c16faa4ad",
+      "size": 83
+    },
+    {
+      "path": "Textures/MMO/UI/chat_global.png",
+      "sha256": "0a4587e2ae94c6ce6e53c2bf8cdb388e28933984e5a009457da0409576f46f1c",
+      "size": 83
+    },
+    {
+      "path": "Textures/MMO/UI/chat_party.png",
+      "sha256": "a8002402c29f1fb37b08e20c59e092a797b073cdfc206d5c8b798de55f0298d2",
+      "size": 83
+    },
+    {
+      "path": "Textures/MMO/UI/chat_whisper.png",
+      "sha256": "085ce97bf4acfa442319251122d7b4cd6fb7d7aa7fe3328cfba8a48e08802c13",
+      "size": 83
+    },
+    {
+      "path": "Textures/MMO/UI/health_bar.png",
+      "sha256": "5a9cf032bfce7098a031c3e2856f58ad26a57e3537027bfcd851b6ae36e99404",
+      "size": 90
+    },
+    {
+      "path": "Textures/MMO/UI/icon_dwarf.png",
+      "sha256": "cc23793f5f41bc97c337ba1b5828a0492994eb3e34c3a9f71a8d40dbc95b0944",
+      "size": 1103
+    },
+    {
+      "path": "Textures/MMO/UI/icon_elf.png",
+      "sha256": "1c7afd4c56f6c6ded2db75aa4df903db47100f1623228dde234749248474b8ff",
+      "size": 1112
+    },
+    {
+      "path": "Textures/MMO/UI/icon_engineer.png",
+      "sha256": "ca3efd269f27e1b6d4f4c1911b340e87908b42a7f7bdd6f520324881ef5cc951",
+      "size": 1066
+    },
+    {
+      "path": "Textures/MMO/UI/icon_healer.png",
+      "sha256": "5775fcd41c3e07fb572bde6ab9ae53ef2b1a3a9a02d27291a83ab8d0e52cc773",
+      "size": 1082
+    },
+    {
+      "path": "Textures/MMO/UI/icon_human.png",
+      "sha256": "7e5db2605df2814642ed5dfcbe3777148d1bde866971045be1437a77bfc46906",
+      "size": 1128
+    },
+    {
+      "path": "Textures/MMO/UI/icon_mage.png",
+      "sha256": "3f679f0b4aa9cb0af1072cff58c6ac2b0f7b55fd35d5e2d87f0ddcd4045399dd",
+      "size": 1079
+    },
+    {
+      "path": "Textures/MMO/UI/icon_orc.png",
+      "sha256": "9f753e5769857dedbb7f206d55c091a714f4c4196a841f2011e2e13f9b9bc891",
+      "size": 1083
+    },
+    {
+      "path": "Textures/MMO/UI/icon_ranger.png",
+      "sha256": "4378f5900ad832c3ffd36f4369ff87289e2c3892b70edba06b3c363dab1105dd",
+      "size": 967
+    },
+    {
+      "path": "Textures/MMO/UI/icon_warrior.png",
+      "sha256": "e62366097a4efe949e54261d51dde29e3b787482e5cc6a59aa7fcb954aee297d",
+      "size": 940
+    },
+    {
+      "path": "Textures/MMO/UI/mana_bar.png",
+      "sha256": "6d7a318d084e4e961dba66085f93d4c646df1bc4db140527ca68a6cfc490dd33",
+      "size": 90
+    },
+    {
+      "path": "Textures/MMO/UI/minimap_frame.png",
+      "sha256": "951d20083ec94378673498bc4e48f3dade4a754e20e5970f1284bfb955e6788c",
+      "size": 1284
+    },
+    {
+      "path": "Textures/MMO/UI/panel_bg.png",
+      "sha256": "9efaa7b745e4773131aa4ba8efc79d3c81d9798e1e5e4ea78658aea85fbdca68",
+      "size": 160
+    },
+    {
+      "path": "Textures/MMO/UI/panel_border.png",
+      "sha256": "be3c4ba1c1b2e8d4cd4b44a972a2e8546a0997d105519db20a5c2e0959b25487",
+      "size": 75
+    },
+    {
+      "path": "Textures/MMO/UI/rarity_common.png",
+      "sha256": "88926bb39c531d90be674f04d59480286406d12736e5a1f526a2176bc7b3c9c6",
+      "size": 75
+    },
+    {
+      "path": "Textures/MMO/UI/rarity_epic.png",
+      "sha256": "ac1c962323889f5343826e7f1c3fba12de7048bdbdcd9fbc5040991092fd4d70",
+      "size": 75
+    },
+    {
+      "path": "Textures/MMO/UI/rarity_legendary.png",
+      "sha256": "f2779a1d52bc12eb189d05459b6d41f447e8e2767d082dbb55437f4fa99c0d32",
+      "size": 75
+    },
+    {
+      "path": "Textures/MMO/UI/rarity_rare.png",
+      "sha256": "9d87f4f8726a2d2000c3245fb6ad7c24b50a89579a3672a1c4deec64d3349be8",
+      "size": 75
+    },
+    {
+      "path": "Textures/MMO/UI/rarity_uncommon.png",
+      "sha256": "b86be73d3df7783e4ec82a60d4f3ec53c1cceeed40e91e5f7e970f58301f810e",
+      "size": 75
+    },
+    {
+      "path": "Textures/MMO/UI/stamina_bar.png",
+      "sha256": "5b9a4670e6d01067dd260107631b09df26f5137be64e5b5e0531232141a92cc6",
+      "size": 90
+    },
+    {
+      "path": "Textures/MMO/UI/tooltip_bg.png",
+      "sha256": "4eecfac37dc1fab704e77d470508e92e87e439c1027a2cbc81dc4d3b6bd7db1f",
+      "size": 75
+    },
+    {
+      "path": "Textures/MMO/UI/xp_bar.png",
+      "sha256": "0c41c911046d3237b80a1e3690c97259098a1f5f16410958b050e2aab8ca22c8",
+      "size": 90
+    },
+    {
+      "path": "Textures/MMO/cobblestone_diffuse.png",
+      "sha256": "65ed2681f31695d6d476e54cc121252816f629a6e2834520b7a9e1054ab5d2fc",
+      "size": 478
+    },
+    {
+      "path": "Textures/MMO/cobblestone_normal.png",
+      "sha256": "896d5608bccc40827fd84c5444d64080cccc93ea42487fd521644d854a48311a",
+      "size": 156
+    },
+    {
+      "path": "Textures/MMO/dungeon_stone_diffuse.png",
+      "sha256": "93c1f4ff7275ce25f6267078e5e9cdafa782fcd8b33d86f26d5d1321761e7a19",
+      "size": 527
+    },
+    {
+      "path": "Textures/MMO/dungeon_stone_normal.png",
+      "sha256": "896d5608bccc40827fd84c5444d64080cccc93ea42487fd521644d854a48311a",
+      "size": 156
+    },
+    {
+      "path": "Textures/MMO/fabric_diffuse.png",
+      "sha256": "0158dae06c3330c04a3201de94b4f7fb8e3fe821d7114ab004e5f9b228dace1a",
+      "size": 1281
+    },
+    {
+      "path": "Textures/MMO/foliage_diffuse.png",
+      "sha256": "6317542424d56644436084311192ffc1bcc62d7a751bacb940c0e3bfe7652869",
+      "size": 5382
+    },
+    {
+      "path": "Textures/MMO/npc_guard_diffuse.png",
+      "sha256": "edbbd1ead695c99e4398f2c07a99282024dbc9be22a881753bf8a4fd7a84ce77",
+      "size": 1115
+    },
+    {
+      "path": "Textures/MMO/stone_diffuse.png",
+      "sha256": "5a6879c8c8b01a63581461b8532271433400fe10d92a0bb750fc86324247ae9c",
+      "size": 4558
+    },
+    {
+      "path": "Textures/MMO/stone_normal.png",
+      "sha256": "896d5608bccc40827fd84c5444d64080cccc93ea42487fd521644d854a48311a",
+      "size": 156
+    },
+    {
+      "path": "Textures/MMOFPS/characters/chars_auc_color.png",
+      "sha256": "9cc67f376beb3d826813103a2aee414eb07f32726962a41ca2dccf650af63ad9",
+      "size": 2885190
+    },
+    {
+      "path": "Textures/MMOFPS/characters/chars_auc_normal.png",
+      "sha256": "b9ce1cdaf0a094bd248cde10fe771abcfcc43da6defa0bcdbe169cde8bb1e97e",
+      "size": 6154939
+    },
+    {
+      "path": "Textures/MMOFPS/characters/chars_auc_roughness.png",
+      "sha256": "5d619ef9118b9bdd0e51f9f9075a21c27834820807f02762d7eb395f299afc20",
+      "size": 2833408
+    },
+    {
+      "path": "Textures/MMOFPS/characters/chars_hlx_color.png",
+      "sha256": "3ca9f5963eb846a3ac1840ab6302988fcc7360b23d1d65c427587e148514f93f",
+      "size": 2838144
+    },
+    {
+      "path": "Textures/MMOFPS/characters/chars_hlx_normal.png",
+      "sha256": "b6f994209f0d254819f8eefd7ac3fb372bd7a8a5b4b4e192a8a1dec1233d15b6",
+      "size": 6162775
+    },
+    {
+      "path": "Textures/MMOFPS/characters/chars_hlx_roughness.png",
+      "sha256": "3b6ffa6c9365c882a5da59f9c138722c00224bfea9316adad926f4f2786d7de6",
+      "size": 2793623
+    },
+    {
+      "path": "Textures/MMOFPS/characters/chars_mra_color.png",
+      "sha256": "273bbe8656820c04045cd9c387e43a29bd6dae189550d21d975229524f4b9ab3",
+      "size": 2539710
+    },
+    {
+      "path": "Textures/MMOFPS/characters/chars_mra_normal.png",
+      "sha256": "c0320b6fb051676392d8e89ba7be5ff066565a858107d5f892f0dd4767a243da",
+      "size": 6166228
+    },
+    {
+      "path": "Textures/MMOFPS/characters/chars_mra_roughness.png",
+      "sha256": "a8c8ac5fe3d0ef09eb17c9dcea3f5a40a94b1085318ab82262f27fa0bc54da18",
+      "size": 2855387
+    },
+    {
+      "path": "Textures/MMOFPS/fx/capture_beam.png",
+      "sha256": "1170bb240b35f9fe9b0eccbd198ceab0b1993e8d22d7385cd3fac0e6d08f4fdc",
+      "size": 9991
+    },
+    {
+      "path": "Textures/MMOFPS/fx/capture_disc.png",
+      "sha256": "4a2665fd5bf490e9aa9273b93bf83663d4df6330db4e2e07500905ee717e0a2d",
+      "size": 4697
+    },
+    {
+      "path": "Textures/MMOFPS/fx/capture_ring.png",
+      "sha256": "ff38773732594b4facc225fb5273134f12adcfef9e1cdf41046b4246f572dfd4",
+      "size": 28718
+    },
+    {
+      "path": "Textures/MMOFPS/fx/hover_dust.png",
+      "sha256": "52e36dd907453b34c1225d9cd7936eb45164604eb8e6e9457fcf4c3b0acdbde2",
+      "size": 116900
+    },
+    {
+      "path": "Textures/MMOFPS/fx/muzzle_flash_auc.png",
+      "sha256": "7cbc5b9917290bf4b95177e9575b27cafa254905f644d03cfe62e2b4bbc22d93",
+      "size": 105853
+    },
+    {
+      "path": "Textures/MMOFPS/fx/muzzle_flash_common.png",
+      "sha256": "e950926b3216d4561da30b8f997431fdae401048245d96ebff11059fe56afdf0",
+      "size": 107012
+    },
+    {
+      "path": "Textures/MMOFPS/fx/muzzle_flash_hlx.png",
+      "sha256": "e7c2196224867fbfd1bcf4a48d22851cf00141bd6950bc50ba50f0f62b8c9961",
+      "size": 107614
+    },
+    {
+      "path": "Textures/MMOFPS/fx/muzzle_flash_mra.png",
+      "sha256": "f8b3f74ebc651510c23fc7cbfd5703b5d10396f6965a04c3363d1a5bc5e33bdb",
+      "size": 104715
+    },
+    {
+      "path": "Textures/MMOFPS/fx/shield_plane.png",
+      "sha256": "f5f864f0cb663ec9e2e7e6153be6fbde8e9335e108f39762db73fcf2039a53b9",
+      "size": 308074
+    },
+    {
+      "path": "Textures/MMOFPS/fx/veh_smoke.png",
+      "sha256": "f2ab1f5ad8032e5736a4db84793046786ccce930f39798d098ff5053641c958b",
+      "size": 33053
+    },
+    {
+      "path": "Textures/MMOFPS/props/utility_color.png",
+      "sha256": "2620e5c44aacc1f31fcdbf272ea196edd2baf48c4a467fd7f436ea076c58e3b3",
+      "size": 2978378
+    },
+    {
+      "path": "Textures/MMOFPS/props/utility_normal.png",
+      "sha256": "d8433ded7c71bd7a6765d8bfe3cb47d8df11584d7e4dacdd7fbc8c0540fe6193",
+      "size": 6188708
+    },
+    {
+      "path": "Textures/MMOFPS/props/utility_roughness.png",
+      "sha256": "4f048911eef173b5a7ae6e6446e80b5c9118e047e896d971f4ffe2ad978c6d05",
+      "size": 2658848
+    },
+    {
+      "path": "Textures/MMOFPS/sky/sanctuary_nx.png",
+      "sha256": "f33338a7a2e0064f938f8a89d260f199d234dc818301348d19aaf792236cd3c6",
+      "size": 637105
+    },
+    {
+      "path": "Textures/MMOFPS/sky/sanctuary_ny.png",
+      "sha256": "b8fb97d5a081b38970afdd1ef21497e24dfe239a08861652f16430f700de6269",
+      "size": 1121599
+    },
+    {
+      "path": "Textures/MMOFPS/sky/sanctuary_nz.png",
+      "sha256": "23189dc8e04a6c6e95a7010f39e5c0ddbd1e48c1e76115485b06ae6c1f930ad4",
+      "size": 503847
+    },
+    {
+      "path": "Textures/MMOFPS/sky/sanctuary_px.png",
+      "sha256": "a45ab22733df4f4ebd0d92c37d6983e37905687cc8374fa75ac228266e89267b",
+      "size": 537557
+    },
+    {
+      "path": "Textures/MMOFPS/sky/sanctuary_py.png",
+      "sha256": "0ed4beb9c36ebc3b379dd95a18f07f1c627ac740cfa389d119f868a6fb179abe",
+      "size": 75136
+    },
+    {
+      "path": "Textures/MMOFPS/sky/sanctuary_pz.png",
+      "sha256": "921b3fe6f6a10c3d8fbc23166cb6b9f7fd68c74a860196ec9f3be8bcd51b6328",
+      "size": 634273
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_nx.png",
+      "sha256": "e4c0cfdf2070ac9fd650d2f1f27faef2a62b0812108e605f389f60e9ab2287e6",
+      "size": 1813350
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_ny.png",
+      "sha256": "3249e8b88eb8580fe76da6e776a9d60d355b40087b4225bec69c5104b4d577f6",
+      "size": 1806547
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_nz.png",
+      "sha256": "1601aba73fc8e3fe74cf37829a2a70a2f33a5d13bdfeb71498a19ac490d61b3e",
+      "size": 1804455
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_px.png",
+      "sha256": "4cdd56e78922fdb43a7bd0c6a3591fc75233482219b13580a0abd3a8ed10d7d9",
+      "size": 1698687
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_py.png",
+      "sha256": "38bad1d8864ff8cd3c1c57f310a43d74bb6a765af07292987d766229d62c069a",
+      "size": 1899848
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_pz.png",
+      "sha256": "8f83fa6a01d6a53bc8663a872e7e4e1ef8273178c1b5fb7bd9151d819d42590f",
+      "size": 1925426
+    },
+    {
+      "path": "Textures/MMOFPS/sky/veyra_nx.png",
+      "sha256": "1adc1744577f329b23e265e3bf47e3d762b46c4625cc9bcbe05a106d900363a3",
+      "size": 460224
+    },
+    {
+      "path": "Textures/MMOFPS/sky/veyra_ny.png",
+      "sha256": "10055613e48ab7e4ec2e17ef2a727c829a2e9c0ba35cd4692d1da44bf1e6a144",
+      "size": 101493
+    },
+    {
+      "path": "Textures/MMOFPS/sky/veyra_nz.png",
+      "sha256": "2b8d9da43c171aed5ad43b967c46ebd21a9a88e4b968211b3b8f1e352ca66a41",
+      "size": 483668
+    },
+    {
+      "path": "Textures/MMOFPS/sky/veyra_px.png",
+      "sha256": "c6907944215c4662e5e25e4c8c117a6fb7650492e9246ac97f4be13061bf3ad6",
+      "size": 492598
+    },
+    {
+      "path": "Textures/MMOFPS/sky/veyra_py.png",
+      "sha256": "abaf5fb46df33c11e48ff6e19007322f4253dc0c38a65fbd729dc24b11ef1ed5",
+      "size": 794926
+    },
+    {
+      "path": "Textures/MMOFPS/sky/veyra_pz.png",
+      "sha256": "c574ca7f660b74e901689ce70956c0eca9ab35fad72162521facbd9f014fc237",
+      "size": 492572
+    },
+    {
+      "path": "Textures/MMOFPS/structures/alloy_dark_color.png",
+      "sha256": "b09458367f77b40fc19510d6f6e7de659b69815da94ea79db483e7397f39f034",
+      "size": 1023624
+    },
+    {
+      "path": "Textures/MMOFPS/structures/alloy_dark_normal.png",
+      "sha256": "677cc65442c6f2d8d7a8459a0314c964c5169f767736899915c84b7ee1125fbe",
+      "size": 2067136
+    },
+    {
+      "path": "Textures/MMOFPS/structures/alloy_dark_roughness.png",
+      "sha256": "6d2c05fa4122ec91f476a94734b40d9d974bba846f3760513e5e9915d20e1cc4",
+      "size": 1085715
+    },
+    {
+      "path": "Textures/MMOFPS/structures/alloy_worn_color.png",
+      "sha256": "3a4ade86960fc84591bd0dc75d8550d252d8dd81351d60c4f1f9e97a8b13ac2b",
+      "size": 1463480
+    },
+    {
+      "path": "Textures/MMOFPS/structures/alloy_worn_normal.png",
+      "sha256": "1d6538aa0341d7b8a22c58ab50daffb98b8b8fe7030553fc789fd526e7a10c03",
+      "size": 2067878
+    },
+    {
+      "path": "Textures/MMOFPS/structures/alloy_worn_roughness.png",
+      "sha256": "09f0468b77f42767ed2051a2ac93686d80eb1346c39cd647c4bfc94b6c0fe1d3",
+      "size": 1087252
+    },
+    {
+      "path": "Textures/MMOFPS/structures/concrete_color.png",
+      "sha256": "dffbbd0fd7249e938a30b650675262034fe0face516b0d036e9c34cae5a99190",
+      "size": 288279
+    },
+    {
+      "path": "Textures/MMOFPS/structures/concrete_normal.png",
+      "sha256": "7378313b5e38d138a2048d0a300194444ba7b205b062751a93a91bde8dfbccf9",
+      "size": 2715117
+    },
+    {
+      "path": "Textures/MMOFPS/structures/concrete_roughness.png",
+      "sha256": "b2f8b937d4c9d1d305fc30b915b28712d166939bba1c3823ad39767dd22e1f07",
+      "size": 206202
+    },
+    {
+      "path": "Textures/MMOFPS/structures/holo_banner_auc.png",
+      "sha256": "373216996ff050c7bff747680cd2ecad755aff70151f6bfce5baebd17523a087",
+      "size": 54944
+    },
+    {
+      "path": "Textures/MMOFPS/structures/holo_banner_hlx.png",
+      "sha256": "489bca92270d9b4fd7a432cccef7d2892904f8f35ca11ab8472d40c9fe05c6cc",
+      "size": 50147
+    },
+    {
+      "path": "Textures/MMOFPS/structures/holo_banner_mra.png",
+      "sha256": "87e41dec8b22469b0ff41ecacec5825807663f85ac5d1078b9627ebf881a1091",
+      "size": 47561
+    },
+    {
+      "path": "Textures/MMOFPS/structures/holo_banner_neutral.png",
+      "sha256": "8b364133c14454d2aae583b01bdad16c24b7a07e43d8fab25df44cd512316a91",
+      "size": 55398
+    },
+    {
+      "path": "Textures/MMOFPS/structures/metal_color.png",
+      "sha256": "37b50aa3635cde294572c8e96441630de28e6ca27b9b28956a1a70974a252e99",
+      "size": 474847
+    },
+    {
+      "path": "Textures/MMOFPS/structures/metal_normal.png",
+      "sha256": "e8a7bafa75388df8309ffc08f2c62d19d2d0a10264d538764300f2a9cd5a23e5",
+      "size": 4079408
+    },
+    {
+      "path": "Textures/MMOFPS/structures/metal_roughness.png",
+      "sha256": "36467c677bb08fe5685634b4f181a9cc7e7752fd9166f9ed1cef4dbe833e20b7",
+      "size": 244791
+    },
+    {
+      "path": "Textures/MMOFPS/structures/panel_color.png",
+      "sha256": "626c7f4dee3cd99e7d80dc3d93654ccc05d9140a680a5ebe1a7c453dff8309a0",
+      "size": 705714
+    },
+    {
+      "path": "Textures/MMOFPS/structures/panel_normal.png",
+      "sha256": "a6408408be7dced91aa949186e5ffe65e30f995733e9adb7ac45b903fb10698f",
+      "size": 4379337
+    },
+    {
+      "path": "Textures/MMOFPS/structures/panel_roughness.png",
+      "sha256": "85a96af84f1e00bb62c9be9d66c6feea4cdf71d820effedbfe8695313a78f01b",
+      "size": 351206
+    },
+    {
+      "path": "Textures/MMOFPS/structures/sanctuary_color.png",
+      "sha256": "59dfb9cdc963fd2ccf96be3a69ce7ada3613732151f81056e42871cd49a618e6",
+      "size": 1761378
+    },
+    {
+      "path": "Textures/MMOFPS/structures/sanctuary_normal.png",
+      "sha256": "dad802fcfbdda68eab0214c43e0f5cc6739fd51ae8747450cc2638e31da76708",
+      "size": 5423583
+    },
+    {
+      "path": "Textures/MMOFPS/structures/sanctuary_roughness.png",
+      "sha256": "21fbe1dfd8870a677dff188e191b9e7ee854073bd2ee4a0bdb0b92b0f415a658",
+      "size": 2420630
+    },
+    {
+      "path": "Textures/MMOFPS/structures/trim_colonial_color.png",
+      "sha256": "ad5bc4c45c6ae434a9d3539a52ea25245b9cd14a7dc82356e5a0e3ac75618782",
+      "size": 2945004
+    },
+    {
+      "path": "Textures/MMOFPS/structures/trim_colonial_normal.png",
+      "sha256": "2700bc80437385f12bd267cea8679b36a0c8c9e1280a0bd7d59c746556d3a870",
+      "size": 6336291
+    },
+    {
+      "path": "Textures/MMOFPS/structures/trim_colonial_roughness.png",
+      "sha256": "8072ec0964fcebadd60e86e44789d1178ed7cb35f9e5fa185fcda88330605d9e",
+      "size": 2190498
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/detail_noise.png",
+      "sha256": "9bb01f8943034c3ff545d8572c15826a098fd35b78df0d2904956fd589742460",
+      "size": 408166
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/glass_color.png",
+      "sha256": "29988c2139b2322f56744d4ace0eaf55b42564455a50f68a3064ce042945dee5",
+      "size": 1898441
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/glass_normal.png",
+      "sha256": "1c71673a4305da3e187bd05cf91ec3525f8d837e75434c3a751cf1a6a07264ca",
+      "size": 2884420
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/glass_roughness.png",
+      "sha256": "f8e7e2f262e75d443cfe2ad8e0cc8ccaf6625220070b55d9c4322d3d9ed68b1a",
+      "size": 323507
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/grass_color.png",
+      "sha256": "303c89c8fc665dfc1d0739b854a432d7384a2c91802d3a892ce4ec64f7726283",
+      "size": 1857380
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/grass_normal.png",
+      "sha256": "751a07dcf2b8792dd22f6026f73492f1cc666c6c2d82e09183454495ace83afe",
+      "size": 3103190
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/grass_roughness.png",
+      "sha256": "b2bd64882471e2cfd9f72b1645b7e77f4d36ca840a9886542b4f0f30f2933a74",
+      "size": 421204
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/gravel_color.png",
+      "sha256": "7d13bf20cf0ac2a8f9c32a2acdfd68ac457ce391e0f71ec0b86c2c29068918f9",
+      "size": 1838157
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/gravel_normal.png",
+      "sha256": "bfddfe4c77159577ba97481409da721554b04ec7f06792231e762433c98f4910",
+      "size": 3312593
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/gravel_roughness.png",
+      "sha256": "adf594a5fa4ca4ef59131f6d69a570a20a42e02fb6daa621d24dba74da11f73e",
+      "size": 24688
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/rock_color.png",
+      "sha256": "5f48ae806cf269f941b6f560c92e795a10996fd096049d19e06e53bde64cb55d",
+      "size": 1857446
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/rock_normal.png",
+      "sha256": "475ff6197be7b39a1f737faa37d315ac8dc95ca37f3d15b1b217b5e282f27013",
+      "size": 3061855
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/rock_roughness.png",
+      "sha256": "5327dc452fd5147e32b66a739cb4bf493331b42949b6d79241af7e244f697915",
+      "size": 24690
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/salt_color.png",
+      "sha256": "b4b2325835c467165ec94972e50da2af7fd41b5634d9ecba533f1b99844d794f",
+      "size": 1982760
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/salt_normal.png",
+      "sha256": "5029ad8bb9f17f6fd1474f10e496963469745f888b469db1f1f907dfe796a97d",
+      "size": 2917810
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/salt_roughness.png",
+      "sha256": "709aadf08580c228302344ce88de4a609475e7d5748873bbbcdba507830d3cd8",
+      "size": 1221065
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/sand_color.png",
+      "sha256": "00243cd7623a777cd544de3ed68313745d5309bccf9b730d178e656cb4ba694a",
+      "size": 1832424
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/sand_normal.png",
+      "sha256": "6a1473f7a20a6c547d63bfddfe750656cd5ec2ccfbafb5dd950bfd4840dfd5ed",
+      "size": 3051533
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/sand_roughness.png",
+      "sha256": "adf594a5fa4ca4ef59131f6d69a570a20a42e02fb6daa621d24dba74da11f73e",
+      "size": 24688
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/cap_capturing.png",
+      "sha256": "105ac1897822afff17bcb934dd761537f925c93fc7b002fb503b802fe6df674a",
+      "size": 3242
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/cap_contested.png",
+      "sha256": "b3038101ec3d53d64f0c0f21762dcb15a36b14fc8ce3d0f790d69b30e6346562",
+      "size": 3489
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/cap_owned.png",
+      "sha256": "a93dcb282d6013a8d180c29c5343154db988c29178c767d57430baad6df06883",
+      "size": 3536
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/class_bulwark.png",
+      "sha256": "e55d218deb5477c095e7a4f511ddde5bdcf217e71529387a506dc35e220ae242",
+      "size": 3693
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/class_colossus.png",
+      "sha256": "42d291dcb2e2bbe93f53077d03a19f17189d50688f79a2a3a2edc163906d6113",
+      "size": 4535
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/class_fabricator.png",
+      "sha256": "2c4ff5922502a840d9b61522aa04174ce3c9d19fd67be267a0cea82c85478a7b",
+      "size": 3592
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/class_ghost.png",
+      "sha256": "d749e5d127701f326d5a23841673c19aceae87238d1a2a0b331a1499ce786633",
+      "size": 3247
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/class_medtech.png",
+      "sha256": "223d6f84dbc63fbb1b689dd8a6557fd88f5bffffeb70aec0a25aef7f8b61b59b",
+      "size": 3567
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/class_striker.png",
+      "sha256": "0fc5a451621bcbb7dccc5bfc666ebb71471ccfe31a713d6507a247bd8359d31a",
+      "size": 3190
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/crest_auc.png",
+      "sha256": "f75e7d5fe9b61cac0741eb7b4a9b79c8a13baa0dadc9a1c1daa36de20fd48822",
+      "size": 2577
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/crest_hlx.png",
+      "sha256": "3f4d21df2ee49a59af17c8d5a46daa92ea60bbf9b4a963c300e8cd413fb297b9",
+      "size": 3610
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/crest_mra.png",
+      "sha256": "dd5d6038a2361e8862b33afac64e0ff199cfc59a4cb70e6aa20cade3c6895cfd",
+      "size": 2085
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/damage_chevron.png",
+      "sha256": "a75cf7492e2d5886991a205e9d779b5b120256beb4cbfe79298f946de7b0e726",
+      "size": 2641
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/dep_ammopack.png",
+      "sha256": "76b1df5be0ad769b58d431792e61547b53960d6534b4b789507433c0688e288d",
+      "size": 1735
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/dep_avturret.png",
+      "sha256": "8b18725e1c338278c8025bb4603cb8f17bace35c56b2ca8f2bccac700d6affd5",
+      "size": 3069
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/dep_fabturret.png",
+      "sha256": "d4208ae42d8b0fa0993aaea2bf1ca750439bed1a36582a2c2c0d76646f8b831d",
+      "size": 4149
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/dep_medbeacon.png",
+      "sha256": "94b96c3c2253145e7023d0f6b385378fa7edc2037b5f5a415472ef9b678d9b8d",
+      "size": 2400
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/dep_resupply.png",
+      "sha256": "487f9989f5ed2731c57c69ecb28926c7afee2ce63ac07d9b497f300944d5cb16",
+      "size": 1932
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/dep_shieldwall.png",
+      "sha256": "7672f4d9d2db4c7709968b7c6e78f12084b7bd3122e5613a665aec1d059b2883",
+      "size": 1666
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/hit_kill.png",
+      "sha256": "943bb963ab886c8c9b6a9346cc2415fd4afc2720c0d41096662d76adbd778cdd",
+      "size": 1530
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/hit_marker.png",
+      "sha256": "03d3195398ee9515ceea9786737b94a57ab8ef8435cd31437bebcabfe1bb8100",
+      "size": 1541
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/lattice_contested.png",
+      "sha256": "78a686e0eee34887d4da179a13006f3bf26ea89dae7caab344e25452a2d447b8",
+      "size": 1617
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/lattice_link.png",
+      "sha256": "154b359caf8cb8f2fc41d90fe6eef769050e38c039da71836e6a48ddc2537188",
+      "size": 1447
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_hex_1.png",
+      "sha256": "1019f7c4977bc538eb661dd61be3fc337570e26b9a870331d837ea37564f39b8",
+      "size": 2348
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_hex_2.png",
+      "sha256": "0ce74307c53cc3c9f296addd5f13dae6a9d4e5789811409158de400bf7d2fd70",
+      "size": 2634
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_hex_3.png",
+      "sha256": "6b157197fa6423e25178876fe457b45c1a8fb1dc8430e602a233b9e8e3f34894",
+      "size": 2817
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_ring_1.png",
+      "sha256": "1a1deee5a8aebec3c75f6efd8301c15a13389cde1cd209435fc400b8fec22e80",
+      "size": 2794
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_ring_2.png",
+      "sha256": "b72f713fb6d90c30619d04a4708057b570bd5674ec6218c0f4a7c54b3156854b",
+      "size": 3079
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_ring_3.png",
+      "sha256": "38e096e64c9b554327ef79a01a4eed982bee2b2c86700f42c2eff2ced44f340e",
+      "size": 3262
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_shield_1.png",
+      "sha256": "63a9702e6a475d8133b96cb0f9abd800a38568cffeed611a92407165d1ea282f",
+      "size": 2503
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_shield_2.png",
+      "sha256": "0767b9184bb5712bfc34c4d9b93c98924d498c98ee0815ceb4eaf70b01a154d7",
+      "size": 2780
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_shield_3.png",
+      "sha256": "99c0c9fbf0c86d1000429aed1397354996db380cc0776d353bb990b71045619e",
+      "size": 2951
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_star_1.png",
+      "sha256": "281fc6d0048ca2d5e11ddedb64cb244babf267e636c098153fbb168409b4f996",
+      "size": 2794
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_star_2.png",
+      "sha256": "f97817e4f62188943dd9c52cddca265e8a445f65fdd813a398715fc5f03edf35",
+      "size": 3060
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/medal_star_3.png",
+      "sha256": "4934f0f4e99878bbf9316cfbd99aca89223c3dd21ff18fc657c686690560c94a",
+      "size": 3248
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/pip_player.png",
+      "sha256": "5b12026be7872a119b9d3aedbc1690fe8e4607573a8422220d50f1e1e029006e",
+      "size": 1851
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/pip_squad.png",
+      "sha256": "54491f08b7f4b7b92d5f5d1882782c10f398618c35a43c3e922c81d750b2e230",
+      "size": 2613
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/pip_vehicle.png",
+      "sha256": "c47adc8f7b9dec5c2df2d272dc124783142f7be4cca14b5d93f734dbb541a54b",
+      "size": 1048
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/prompt_interact.png",
+      "sha256": "97b483d5e6ade80412ca346f78a8968d8942412b49df29adbd74d1d3eaec9fd2",
+      "size": 1075
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/prompt_reload.png",
+      "sha256": "e5218bc45d01388ce869fa97af5929580acc4d01ab2e9158ab382fb4bd57f2fd",
+      "size": 2619
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_depot.png",
+      "sha256": "0ae041f5757f1adc6ede5ba8e574647c49bc261fce523619ab89617cea93c66e",
+      "size": 1148
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_flats.png",
+      "sha256": "5e217f62292eeaa872ce64a6cfbb458b4a5753fad654031e3b3972ae28756824",
+      "size": 1897
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_fluxwell.png",
+      "sha256": "813e95dca2a9afadecddc0b69f1606783ee9fe5c58c94aacc284469ee754ed51",
+      "size": 1549
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_kiln.png",
+      "sha256": "1bea5e584013d51bb984909018ca55a0aa720eb7f11f58287621598c8c41c6b1",
+      "size": 2428
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_pass.png",
+      "sha256": "04b345d108f9329589d167ea8dfe19ea08ca1ce38454f0378e5c2732c2c73251",
+      "size": 2194
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_quarry.png",
+      "sha256": "2f18c8a7613bb05e4f00d796242e2849aa0ea1428e2a3f626a0fcd80c32b4b74",
+      "size": 2398
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_redoubt.png",
+      "sha256": "b04ba2361f5d7bbb7af471b4a94457f8e4de2507cdd39fa4e40235fc8c615c1d",
+      "size": 1234
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_relay.png",
+      "sha256": "7ae6b3f30d72a08034f19fb446b93f52933bd011b8be5aa57cffe7507bda6305",
+      "size": 2207
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_ridge.png",
+      "sha256": "6f6fca35b7b0c4ec532f587edacd703d75f104d28268dcbcefbc9191dcb9c5ac",
+      "size": 2295
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_skyanchor_auc.png",
+      "sha256": "34d408a1f4e44a8362841241b4587260d7fa6b6d932899145fcd8dac4c00364a",
+      "size": 3751
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_skyanchor_hlx.png",
+      "sha256": "9422b6815b17b8f39dba3ef593e4c8974d3eed8f32cefe969f857484975294ba",
+      "size": 4269
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_skyanchor_mra.png",
+      "sha256": "5da2550c9896e50e3a1c7e7937f604b82edcd89f6c8347f99317545afef6cc00",
+      "size": 3302
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/region_station.png",
+      "sha256": "de10e00873fd266c60adc90f5db76406eedac4457ce138ce5fbdb9ddae940f21",
+      "size": 1186
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/veh_aegis.png",
+      "sha256": "af4ead056db256582cd72269aa40982116d68efaca889ed13d463c7555f07516",
+      "size": 2235
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/veh_colossus.png",
+      "sha256": "f1c5b9764b2808fd5e19e821ef17e93801609cb9185d7e74c2962db2fd87bfee",
+      "size": 2632
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/veh_drifter.png",
+      "sha256": "ed6f5db82ed5738d9f3463c670c05d3ae189bb6588c9937accd99e6c0c7b393f",
+      "size": 3081
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/veh_ravager.png",
+      "sha256": "817f59139e3372153d58d83588f8ab19e5ab7e5ac96b346a63693572a711f123",
+      "size": 2631
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/veh_vulture.png",
+      "sha256": "dbd86f62ac8bb4cd612880ec8bd3900903d49082bd5e25088dfaab1c10c600fe",
+      "size": 2777
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_auc_carbine.png",
+      "sha256": "55b0365fe4a4171c35394983b2ba6f4e41050c8e2efd6693c43e511ca84e158e",
+      "size": 2758
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_auc_lmg.png",
+      "sha256": "5c5d944c7f67cbd11afb8ecc9a5b0955ba6e47c881f7dc19dc629e081604074b",
+      "size": 2448
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_auc_pistol.png",
+      "sha256": "2d6e4e235686b19b181294e969cc01b5d5065b79690c33f353181013be5d5c98",
+      "size": 3170
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_auc_rifle.png",
+      "sha256": "90541f897be17a546f5b6e8d1eb95e6eb175c7e4a1d4503033281dcc525e648d",
+      "size": 2456
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_auc_sniper.png",
+      "sha256": "c09ddb30b8a1a749628ce4dcad2a6cbfaf4635d8d9bb4b4871d6fefed37145b9",
+      "size": 2260
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_col_cannon.png",
+      "sha256": "ca55892c3e64d4e87cba960c6d9509ee4879dc3c25ef280208e12e23bf88692b",
+      "size": 2261
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_hlx_carbine.png",
+      "sha256": "9c3a4a79b967bb9c71c3dee934f4cf8f45fa418d00c3252f3f64c40b22406530",
+      "size": 3128
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_hlx_lmg.png",
+      "sha256": "eb77fb4c57e4b2fde35f7f0c331594db461943856eda683c311aece2eb1c62e7",
+      "size": 3124
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_hlx_pistol.png",
+      "sha256": "0acd13b47d74f88aaace8e9879178a699da279859e0e7371995037428f1d8f56",
+      "size": 3253
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_hlx_rifle.png",
+      "sha256": "d62d0ded5b1985329111a204d2757581071285764b411fa3d5e41d054408488f",
+      "size": 2937
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_hlx_sniper.png",
+      "sha256": "5c759ce6cf0f388cf7db498ac95cd928c8c5322ab6d8254469d215463adb7197",
+      "size": 2655
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_mra_carbine.png",
+      "sha256": "5c15b4f8578eafb953303dfabcffa0cdf9624b9bdde967465cedd7d9cc801e8d",
+      "size": 2704
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_mra_lmg.png",
+      "sha256": "6ffb86b5c16018b6e76669e526c3439a21081ccbc48a6478516d721cd2171284",
+      "size": 2422
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_mra_pistol.png",
+      "sha256": "da9370b295aba89813a98c161e2173670a0a2ad3c120d69a355aad2248ff9c67",
+      "size": 2880
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_mra_rifle.png",
+      "sha256": "0f96fb0031bfa24f77cec970b7a36cad28b0fd970febdaa0544b2ab7bce214aa",
+      "size": 2458
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_mra_sniper.png",
+      "sha256": "cfcc40eee795e1e65811e53dc585f320781c6ef3b4a98c20da55ec3b87dcaeb8",
+      "size": 2174
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_np_knife.png",
+      "sha256": "1af44d805bbe497005472445ad1fcd8da5ec96fdd4dada9d5ed179ca432816f1",
+      "size": 2255
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_np_launcher.png",
+      "sha256": "a9151fbd46816c067907f7595fe9c73c7f124fa43ce33dc967a66944b1f8bb38",
+      "size": 2615
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_np_shotgun.png",
+      "sha256": "e0a1841342a10151086def2508e6662755ed8632bcc664b23f1c138232b3838a",
+      "size": 2150
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_tool_med.png",
+      "sha256": "5cad8cce3989d1423693abae5ce1c364005c2894b5a941166977e40732bc4e74",
+      "size": 3073
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_tool_repair.png",
+      "sha256": "99b59e7d562d72967245747f414a3a68920bcee87ea7f7c18a3c8468eba2322e",
+      "size": 2938
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_veh_aegis_pdw.png",
+      "sha256": "979c1e6fba4a080c98eb044b8205632b5bd27a4d8c7e5d5c39bf43d0d373d711",
+      "size": 2907
+    },
+    {
+      "path": "Textures/MMOFPS/ui/128/wpn_veh_ravager_90.png",
+      "sha256": "20bb0e7950813f0b6d6aa1fc6d1a8a8b7373006794bbfe31504d585dae2805b8",
+      "size": 1965
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/cap_capturing.png",
+      "sha256": "cc7eb5c028e57b52133b700dc92b1a72329114bd76cb9ca43aa52db92647b4c0",
+      "size": 1820
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/cap_contested.png",
+      "sha256": "55338fab8b8d949f29a7e038f515d36254681619dc34aba27f8ded169999fb44",
+      "size": 1720
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/cap_owned.png",
+      "sha256": "7a89c2f9a7ab42b8db7a9d5e51e2450945e3540a103e71b69ce5004d84eaa401",
+      "size": 1863
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/class_bulwark.png",
+      "sha256": "6a6686c11158e76b82a01ca35a61346b2f6d3611cb9da2e33090ff396c3874b9",
+      "size": 1375
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/class_colossus.png",
+      "sha256": "c9eaf189e7cabcdba36afd6cd963ad00634ed21dae2277f9f545a6f1d1048eeb",
+      "size": 1546
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/class_fabricator.png",
+      "sha256": "6d21b3e30a5ea079f60a2117f5b7bae38b741f4f3df2524507e227a11543bed7",
+      "size": 1234
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/class_ghost.png",
+      "sha256": "50a411645950526a7965cb8276cc63d2d457655189777d8ebaf26c5272564626",
+      "size": 1138
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/class_medtech.png",
+      "sha256": "d273ccd0f8dc3125cd963be063c88fb4b1f0c4f482c1354df23d05c4e4e572fb",
+      "size": 1225
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/class_striker.png",
+      "sha256": "bc163b18bea6c039b3fec7770c188eb6fd7b5121b344b3ea01aa444f79300da6",
+      "size": 1114
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/crest_auc.png",
+      "sha256": "04d469bf945b3f47797c74ad3d55c4027ba873a75dfcc62db1e2dfcb9924f64d",
+      "size": 1233
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/crest_hlx.png",
+      "sha256": "1ef30525d33227c2bd42290e8f14bffb754ee9a0ce387f2b80bd5c796bf4cacb",
+      "size": 1619
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/crest_mra.png",
+      "sha256": "7f572189f107cfef3c78b267b94b8037f8c7a4141e10448ca386be9af7f3e1ec",
+      "size": 1132
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/damage_chevron.png",
+      "sha256": "37a588b8e2098ae21c2c62e00f77aa95191d3ddd2ce06369c8ca010742fc9ee7",
+      "size": 1441
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/dep_ammopack.png",
+      "sha256": "91cfb8e0e4ff13c204b990cd85c00a8f33101aed7584b560176c0f8876c31846",
+      "size": 639
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/dep_avturret.png",
+      "sha256": "411b81ac90335c8f82f5cf2e372127990ee4556aff96dae0838ecf64682117cf",
+      "size": 1144
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/dep_fabturret.png",
+      "sha256": "4d07c46ea82df3f63c72069776d6b7a2f70f58104809afe8132dc0d44381f93f",
+      "size": 1428
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/dep_medbeacon.png",
+      "sha256": "e6413f8307137fe860b6d83cd3ba2d618363494fb81df1880827eb3bde68c621",
+      "size": 935
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/dep_resupply.png",
+      "sha256": "0a6f0e66db976f5097a4119cf61870d93d67dbbdc7f3d69b69bd21b2c8c35d72",
+      "size": 791
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/dep_shieldwall.png",
+      "sha256": "3abce50c664789d775a7bf86b57e4de773d8a55a98a8b04ff6f3ec9a6f617649",
+      "size": 647
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/hit_kill.png",
+      "sha256": "6fdcf56bf0743dbc39e41b431d6462a623eaf37ac477aeb31e35bb4da9c0abf5",
+      "size": 799
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/hit_marker.png",
+      "sha256": "642de5affa871bed2872626622908a5d8ff33cd5fac36f8118155bd1f05542e1",
+      "size": 651
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/lattice_contested.png",
+      "sha256": "18bc34086d3893509a2bc5ae256da8e30bce49f71e541e0b9891c57899aca99d",
+      "size": 755
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/lattice_link.png",
+      "sha256": "a4745464ab9f8bc4f542b7f496d656bf130deab0362f39d71f6c965c880d130a",
+      "size": 636
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_hex_1.png",
+      "sha256": "5238103ce3a9f6d9bd00998f763a7beee1d0549aa883bf5f052c786b6e83df4a",
+      "size": 1314
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_hex_2.png",
+      "sha256": "16c5bc1abfa938b74b151545baa210488421c06567596af84c5f3cd838e58fa1",
+      "size": 1524
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_hex_3.png",
+      "sha256": "7fcbfc67b03cf604dd5d112824d0f32eed8511dea157c0b19c52cec5a604063f",
+      "size": 1572
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_ring_1.png",
+      "sha256": "0699ef7f9a27476a3a989803502288473ee782b73958af0d1e342366b306af6d",
+      "size": 1574
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_ring_2.png",
+      "sha256": "4dd5ad545821ff52822659a42d018f1f3fd831fb72bffe0c8276851cae7858cc",
+      "size": 1776
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_ring_3.png",
+      "sha256": "dd5a051782e74ef97db4ac9658317a991c860bd7dc8f8cc7b1dff5fe2eb27b54",
+      "size": 1825
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_shield_1.png",
+      "sha256": "5e634e6ee410e1027335566603deb61013e5fe3c4ff5046bc228b9549febabb0",
+      "size": 1380
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_shield_2.png",
+      "sha256": "f326d00655e9c22d6888af52f5712f40cfdcfe501e51ba8aa97998f969a57871",
+      "size": 1585
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_shield_3.png",
+      "sha256": "bba6ac6f1cb1bae71fcd1220113a7054af1cb3fa9746019adf4c05c4fc6b96d5",
+      "size": 1633
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_star_1.png",
+      "sha256": "3f8dc3924f5f273fbcbbdb7b743d80a790c47e9dc3e131d1b0887297e9914261",
+      "size": 1534
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_star_2.png",
+      "sha256": "8e673daf47714602e23e334028a312e7b0ab8d090a054c1d524f55260f9c4868",
+      "size": 1734
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/medal_star_3.png",
+      "sha256": "274d9a2522b20011a65ede4fd8b9dae90cffc57048f26f92ca7331dcf6631a1e",
+      "size": 1781
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/pip_player.png",
+      "sha256": "c44e72ad4abb524bfa8a6329988d16a77c96988c0fc5cfb39381407729392ac5",
+      "size": 984
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/pip_squad.png",
+      "sha256": "4528bdd775d1a8ab7567bed7466d18164388803a1b57741812f1937e2fa1b1ba",
+      "size": 1470
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/pip_vehicle.png",
+      "sha256": "179eca469ff71108842e6ed634063552b3080dd565205d936db087ce9aeb2c77",
+      "size": 466
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/prompt_interact.png",
+      "sha256": "6e709b338fb4f646798f313b0e8868a5cf12ce38765a97ac0fa4fe111b89a2cf",
+      "size": 565
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/prompt_reload.png",
+      "sha256": "945c60c193342cd579489de465726df84fb6853d289727f7a6cf6c572e4555c9",
+      "size": 1200
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_depot.png",
+      "sha256": "2fbf5a3e2b5c8f3d92a3583c71f24b3e60ec675b9998e993916f32cb8dcca1f6",
+      "size": 552
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_flats.png",
+      "sha256": "6d1a7ff76a8e3ab54c15b5398451ea8145adfa6691b9ea523fac7345d04f85aa",
+      "size": 919
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_fluxwell.png",
+      "sha256": "7298ad5d72af976fdff5533648ae410e79a81c56dd94613c7a2078b881a5785a",
+      "size": 807
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_kiln.png",
+      "sha256": "2352749eb119afe2ab47982be81f277870bb4b20a153ca4576e6f1f3475b97d4",
+      "size": 1252
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_pass.png",
+      "sha256": "0706f4cc7f034acd2ca3c0219490739eb1378951b2bacb9906d1402de6b4c992",
+      "size": 1067
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_quarry.png",
+      "sha256": "2dd36a03c339240ea450990478ccaf5be8ce3a400316d0707d10e00d7a660de7",
+      "size": 1401
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_redoubt.png",
+      "sha256": "77761492ca14bc122f21da1f923fe4910ac9fefd4849cc2ca43c06e2da68be7a",
+      "size": 621
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_relay.png",
+      "sha256": "b4267a7deec5a263c0154647eac0b1fcfc97ec4fc1e2fe78050f13c1b9feec55",
+      "size": 1016
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_ridge.png",
+      "sha256": "0b2a4c038e4859cea41a17ef55c4e9e06537e17a60b835667d1a844820e68e07",
+      "size": 1080
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_skyanchor_auc.png",
+      "sha256": "1b3ba5836207c89432bf4150bbdef2b60633ce009c63782a33232a2dddff2bb5",
+      "size": 2069
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_skyanchor_hlx.png",
+      "sha256": "fd756b1966e30fc279d093530ffe0548b7d9fdbc7d2bac94ce0e5669e52a7dcc",
+      "size": 2210
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_skyanchor_mra.png",
+      "sha256": "7074bcdf2e660fb008a7f5f0e9f243f15c5868e645a3ea8a5d6f1fe0057655a1",
+      "size": 1816
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/region_station.png",
+      "sha256": "5645726e972fd592af0e9ea5c1d74e83b0d31329bd29ba69458e10fbacfc1c61",
+      "size": 594
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/veh_aegis.png",
+      "sha256": "487b5754daee67b878693a542a665fb2ac18fdc4c0faf4682128c04f6405d119",
+      "size": 775
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/veh_colossus.png",
+      "sha256": "a823ddf25d5d4b6b6a16ae790c0f268bc4abdeb217e81d9af9034358f086269f",
+      "size": 986
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/veh_drifter.png",
+      "sha256": "f08d5143bf6b1ad04694d1bb13a878a1fc75a6f557438d07848664b46f42d287",
+      "size": 1027
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/veh_ravager.png",
+      "sha256": "be84192c2296c54390ae131d4b5b462cecf24afc3b46b52e233be23897907fcd",
+      "size": 932
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/veh_vulture.png",
+      "sha256": "f5524eae5d24d1a2acdc6f2940fc3413ae8307aec16e9a8368c52fdd7b55a1eb",
+      "size": 930
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_auc_carbine.png",
+      "sha256": "c175f9b9cc719cd3abcfefcf2e0e466a73628c613d867ee89145043d15c66ca0",
+      "size": 922
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_auc_lmg.png",
+      "sha256": "a3c8fe3ba1945bbf456bcba3e3d87c5e6bd676eab17be903ae71bd95ff2377d0",
+      "size": 798
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_auc_pistol.png",
+      "sha256": "fcb8ef570f221c22dd9385f884a20db03898e85978b3c46f07ad0694c29f3d76",
+      "size": 1104
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_auc_rifle.png",
+      "sha256": "cfb8c42bfc65cd656cba7e1d149312dddb1398aa2d3f5e302ffed62aa82e6b08",
+      "size": 806
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_auc_sniper.png",
+      "sha256": "74ce871a00a376a3b9d894df6de38632a80eda958d7cac28bb9a440875a3add3",
+      "size": 802
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_col_cannon.png",
+      "sha256": "99ded2172512f46a6836169bee82b3e1ca8ed13d6cf357d9446a7eb1758b9722",
+      "size": 694
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_hlx_carbine.png",
+      "sha256": "b13cec9621f6c687694063121bf712747a46203bfd0877f56813d7a68221cfa6",
+      "size": 1042
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_hlx_lmg.png",
+      "sha256": "dfee13c6f05e7e4d88f03a40b09ce375cde2da57bbeb2624ce64a4a06c0fec5f",
+      "size": 1014
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_hlx_pistol.png",
+      "sha256": "995170bc0d87a925946697db8b381821846125a62ee6041550c7b5a6602d4cf1",
+      "size": 1177
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_hlx_rifle.png",
+      "sha256": "b75e0f153ae29ae065f465c1f8094df43580bca0e15f31d28770ba766ead1552",
+      "size": 948
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_hlx_sniper.png",
+      "sha256": "0dcde3b49d63fb3ce7fb17d532cb85affb0b836283f3685c353601bb95cfaaf5",
+      "size": 812
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_mra_carbine.png",
+      "sha256": "0c4c491b2d074a0e10fc3141f2623538907286f1c1d18ae20c41bf2f50b2a626",
+      "size": 928
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_mra_lmg.png",
+      "sha256": "6b3243260203f7981284bca03a2f7922c60ccb6777f3d3490d4ad7cad1496f94",
+      "size": 844
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_mra_pistol.png",
+      "sha256": "97b486de944fd8d32813effff70245322c6a3d8c88c0ff4f9c507f40502a7ee2",
+      "size": 1001
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_mra_rifle.png",
+      "sha256": "eeebcfd0da5e07af6562455b4ff95a2482e2c7f0a3d2b517bdfd821768868164",
+      "size": 831
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_mra_sniper.png",
+      "sha256": "784d490852d1a1dfa3be4b35f563ee86f2b0182d385f96d883c96507e63f690a",
+      "size": 771
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_np_knife.png",
+      "sha256": "8a460c6919b3a305c94b25f05305c5e695ea0f62abe6f9c5b20861a9e4851ee5",
+      "size": 775
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_np_launcher.png",
+      "sha256": "f247fdb6650acd1cfb796e1634edb2c7b0c347de835205043ecf30b376c95437",
+      "size": 871
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_np_shotgun.png",
+      "sha256": "59de11a75ea840ed57f3cbb5992473912413d94cac660e61deaf4dfd6f7dc480",
+      "size": 747
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_tool_med.png",
+      "sha256": "b1ae0a1e93c2cb81c4c81459944e77f35e62345b13cb1dc8f50b4714fbfac719",
+      "size": 1047
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_tool_repair.png",
+      "sha256": "b877163fcadab73093c179512b2a1c551fa5e4a084418252ebeaa57f9513de7e",
+      "size": 997
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_veh_aegis_pdw.png",
+      "sha256": "17c32ecca01b1ea4421ca952144b3170b4575b9f6ed16761afe457d8ee1e6b17",
+      "size": 936
+    },
+    {
+      "path": "Textures/MMOFPS/ui/64/wpn_veh_ravager_90.png",
+      "sha256": "7326c2035b2c1b1582594d6b763bc5b338a8b115939acd1e17f8054a7794d8ea",
+      "size": 680
+    },
+    {
+      "path": "Textures/MMOFPS/vehicles/vehicles_auc_color.png",
+      "sha256": "5dbdd1d8a6c0180e03f49687332b61d19f598530a29c1b6e80e7aec3608bb2a4",
+      "size": 2733906
+    },
+    {
+      "path": "Textures/MMOFPS/vehicles/vehicles_auc_normal.png",
+      "sha256": "be5720b3935b876b9e7b6c5e61e343f8b2736a32f7eaa6b95cd30e667373febc",
+      "size": 6052985
+    },
+    {
+      "path": "Textures/MMOFPS/vehicles/vehicles_auc_roughness.png",
+      "sha256": "dd88de9294642741f99cc3b388d12f12cd1e69a71cdb40ea2ba98871a0aa63e8",
+      "size": 2541516
+    },
+    {
+      "path": "Textures/MMOFPS/vehicles/vehicles_hlx_color.png",
+      "sha256": "b3fc532b7949daef41286e426d221005f2e51b73a12222204e111d742e4577f3",
+      "size": 2690599
+    },
+    {
+      "path": "Textures/MMOFPS/vehicles/vehicles_hlx_normal.png",
+      "sha256": "875f402806fe9433ee428c1088e7b9f809f929c8ad618a1d81dc3c8fe0ad987c",
+      "size": 6059727
+    },
+    {
+      "path": "Textures/MMOFPS/vehicles/vehicles_hlx_roughness.png",
+      "sha256": "0f859fe4f13ea50e46c4d722c8ae9659814a0157c418595a0d9cfa5f9c69d073",
+      "size": 2544836
+    },
+    {
+      "path": "Textures/MMOFPS/vehicles/vehicles_mra_color.png",
+      "sha256": "d82656776fda8e03775bf41d19bcc0cdc5b858671dc641be0ec985c7b6d517ba",
+      "size": 2552147
+    },
+    {
+      "path": "Textures/MMOFPS/vehicles/vehicles_mra_normal.png",
+      "sha256": "4ba311a38ab1d7728eff3056a11dafe1ec48856af9b74627300008b984bb8877",
+      "size": 6051019
+    },
+    {
+      "path": "Textures/MMOFPS/vehicles/vehicles_mra_roughness.png",
+      "sha256": "79b573153880139104a3fe548f050fb53cb1200cf2cd13a0ad414b2e59dd74e2",
+      "size": 2568411
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_auc_color.png",
+      "sha256": "db711e242985dc9df975e751db88c589d5b24104a61fbd1b1d853977a4aa634d",
+      "size": 2799386
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_auc_normal.png",
+      "sha256": "aa6a6973267cf765cf6a6201b6716ab333fdd42e06b6044a932d9b5284cd4424",
+      "size": 6175635
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_auc_roughness.png",
+      "sha256": "b15e109a37376fd21a20be1b2110f66351759b17f9044c323123538563af78e7",
+      "size": 2414752
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_common_color.png",
+      "sha256": "4d01477a86f1aeb77c3aedcf4e08757547fb4b294fab7ebf3cf06c8c8625fe16",
+      "size": 2306515
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_common_normal.png",
+      "sha256": "9562f7843acd433899de1fcfac5e9153d0257f98f1ef8ebd523967402fa71a44",
+      "size": 6206351
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_common_roughness.png",
+      "sha256": "4a26d27783c3843808de4aa9c1aabd404c50016fa451ae6d81896dd5f07dacae",
+      "size": 2457409
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_hlx_color.png",
+      "sha256": "ad706648f40be58f3c72de45c5e23590877f3d6fb0bd3afd14c51367a3674527",
+      "size": 2245606
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_hlx_normal.png",
+      "sha256": "1d5c0df8d7abf67a92454873f8bf61bb649afbaa92bad9096d51e750d3808405",
+      "size": 6183924
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_hlx_roughness.png",
+      "sha256": "1db25e8a3afab6c599b3d5d992a39c5d431f2d8781d8dbf55807a6019cf2d47b",
+      "size": 2438376
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_mounted_color.png",
+      "sha256": "dbe818982c078531a6b95d11f1e42b49b23400b0a1a5473fe3be6d7df9bca867",
+      "size": 1920368
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_mounted_normal.png",
+      "sha256": "94bef45d3cb1298578fb1b1b3308024f80a03e2155808ac36105c33a2a6bfecf",
+      "size": 6206029
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_mounted_roughness.png",
+      "sha256": "819946add358740ba34a819b417da2f6c055f0f572f31fa9be91d41e407c3670",
+      "size": 2451647
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_mra_color.png",
+      "sha256": "fc5b3b0f22a438894fa69bc2d3f1442c80e339761874576a643a1ff5fee417a2",
+      "size": 1913137
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_mra_normal.png",
+      "sha256": "961345b490aa09b210b239cf458eb3d920cf6bbcc69ba570cfc15b9ef3f596b1",
+      "size": 6206474
+    },
+    {
+      "path": "Textures/MMOFPS/weapons/weapons_mra_roughness.png",
+      "sha256": "a46f652cfdc78e0ca60d27622feb5e9ff34709fbe051ebbbc4c94bd306c7adaf",
+      "size": 2459692
+    },
+    {
+      "path": "Textures/Sky/sky_gradient.png",
+      "sha256": "6e345dd626062ee51a4af20643e9747cbf90decc4e6c48b4fd098cae3409fa5c",
+      "size": 424
+    },
+    {
+      "path": "Textures/Terrain/dirt.png",
+      "sha256": "43cf80db5cc12989f9433a26ea9885af6d2ffd5bec69d886edef07257acf5dfc",
+      "size": 104
+    },
+    {
+      "path": "Textures/Terrain/grass.png",
+      "sha256": "493195b52ca96ccc07ce904b48d5628c5861dccb471685822fc2f8740d9f04a2",
+      "size": 104
+    },
+    {
+      "path": "Textures/Terrain/grass_diffuse.png",
+      "sha256": "550711ab372d7e41ff4825023b06c9900c164a55ad2e3a7cb08173165704aeaa",
+      "size": 4936
+    },
+    {
+      "path": "Textures/Terrain/rock.png",
+      "sha256": "693d3447ab8f4d786abb63ce9f7c98313376d59fabd0b78d973d179c5206b800",
+      "size": 103
+    },
+    {
+      "path": "Textures/Terrain/rock_diffuse.png",
+      "sha256": "54b0b1985da3638fedb4b5f00002433822cae063faa40482cfdd97c3e5e99124",
+      "size": 4559
+    },
+    {
+      "path": "Textures/Terrain/sand.png",
+      "sha256": "d7f0f9c69ea4e8b97331ba0f695917ef0975058a1be8158909d49cac878fb61d",
+      "size": 105
+    },
+    {
+      "path": "Textures/Terrain/sand_diffuse.png",
+      "sha256": "61767790478a6090d57bc770a15b0d870b5d0123273e03d2e8a93ad88efb3101",
+      "size": 4159
+    },
+    {
+      "path": "Textures/Terrain/snow.png",
+      "sha256": "88c0ab47b49546c098f65fbeaaa89b906a6c91009ce8af28cc660e08e2e46179",
+      "size": 104
+    },
+    {
+      "path": "Textures/concrete_diffuse.png",
+      "sha256": "7f5cb89adfa45f5055bcf15d7f5e6724736fdf388b4a36f242fd24b8a25ba6d1",
+      "size": 104
+    },
+    {
+      "path": "Textures/concrete_normal.png",
+      "sha256": "9a7e229f63aef2d35623775b549b82d57770665f6de3204b7fd35dd9b90aedb1",
+      "size": 101
+    },
+    {
+      "path": "Textures/loading_bg.png",
+      "sha256": "08e0fb60b5b1142c84f6d52420bb14e3e9e40ba299f8bcbc7183b93e18be7384",
+      "size": 329
+    },
+    {
+      "path": "Textures/metal_diffuse.png",
+      "sha256": "ad42cdaeda6996e16c4f078ce0661732ff590aced54cbc1d31855c7fc83285fb",
+      "size": 104
+    },
+    {
+      "path": "Textures/wood_diffuse.png",
+      "sha256": "4f2da47164fc0f20d47389664d68f45124ed9f548b566163dba66bc8c43fbe83",
+      "size": 104
+    }
+  ]
+}

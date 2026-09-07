@@ -2026,6 +2026,38 @@ class Validator:
             # job still has to pass the waiver for the unrelated
             # contract-reference debt the whole validator walks.
             self.error(location, message)
+        integrity_manifest = REPO_ROOT / "Assets" / "assets.integrity.json"
+        self.require(integrity_manifest.is_file(), "Assets/assets.integrity.json", "asset integrity manifest is missing")
+        tool_path = REPO_ROOT / "tools" / "asset-integrity" / "verify_asset_integrity.py"
+        self.require(tool_path.is_file(), "tools/asset-integrity/verify_asset_integrity.py", "asset integrity verifier is missing")
+        if integrity_manifest.is_file() and tool_path.is_file():
+            import importlib.util
+
+            module_name = "_spark_asset_integrity_verifier"
+            spec = importlib.util.spec_from_file_location(module_name, tool_path)
+            if not spec or not spec.loader:
+                self.error("tools/asset-integrity/verify_asset_integrity.py", "asset integrity verifier could not be loaded")
+                return
+            module = importlib.util.module_from_spec(spec)
+            previous = sys.modules.get(module_name)
+            sys.modules[module_name] = module
+            try:
+                spec.loader.exec_module(module)
+                verifier = getattr(module, "verify_manifest", None)
+                if not callable(verifier):
+                    self.error("tools/asset-integrity/verify_asset_integrity.py", "asset integrity verifier exposes no verify_manifest function")
+                    return
+                errors = verifier(integrity_manifest)
+            except Exception as exc:  # noqa: BLE001 - a gate must report tool load failures.
+                self.error("tools/asset-integrity/verify_asset_integrity.py", f"asset integrity verifier failed: {exc}")
+                return
+            finally:
+                if previous is None:
+                    sys.modules.pop(module_name, None)
+                else:
+                    sys.modules[module_name] = previous
+            for err in errors:
+                self.error(f"asset-integrity:{err.path}", err.message)
 
     def validate_docs_surface(self) -> None:
         catalog = self.contract["docsCatalog"]
