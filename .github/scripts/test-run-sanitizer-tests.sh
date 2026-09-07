@@ -143,6 +143,17 @@ PY
 case "${FAKE_MODE:-clean}" in
     clean) write_clean ;;
     empty) exit 0 ;;
+    expected-filesystem-diagnostic)
+        write_clean 'Expected missing fixture: No such file or directory; Permission denied'
+        ;;
+    incomplete-infrastructure)
+        echo 'failed to start process: Permission denied'
+        exit 0
+        ;;
+    nonzero-infrastructure)
+        write_clean 'failed to start process: Permission denied'
+        exit 17
+        ;;
     zero)
         output="=== SparkEngine Test Suite ===
 Shuffle seed: 123
@@ -818,6 +829,19 @@ assert data["process"]["captureExitCode"] == 0
 PY
 pass "clean metadata binds completion, selector, and provenance"
 
+# Negative filesystem tests emit infrastructure-like prose. A complete,
+# consistent successful suite is authoritative; retain the diagnostic signal.
+run_case expected-filesystem-diagnostic
+expect_status 0 "$CASE_STATUS" "expected filesystem diagnostics do not reject a verified successful suite"
+expect_contains "$CASE_DIR/metadata.json" '"infrastructure": true' "expected infrastructure-like diagnostic remains recorded"
+expect_contains "$CASE_DIR/metadata.json" '"classification": "clean"' "verified successful diagnostic run is clean"
+run_case incomplete-infrastructure
+expect_status 70 "$CASE_STATUS" "infrastructure diagnostic without completion still fails"
+expect_contains "$CASE_DIR/metadata.json" '"classification": "infrastructure-failure"' "incomplete infrastructure classification preserved"
+run_case nonzero-infrastructure
+expect_status 17 "$CASE_STATUS" "infrastructure diagnostic with nonzero process still fails"
+expect_contains "$CASE_DIR/metadata.json" '"classification": "infrastructure-failure"' "nonzero infrastructure classification preserved"
+
 # Exit zero is never enough without complete positive evidence.
 run_case empty
 expect_status 70 "$CASE_STATUS" "empty-output exit zero fails verification"
@@ -1249,6 +1273,26 @@ printf 'unexpected\n' > "$published_dir/extra.json"
 verify_published
 expect_status 70 "$PUBLISHED_STATUS" "published artifact rejects ambiguous extra evidence"
 rm "$published_dir/extra.json"
+
+run_case expected-filesystem-diagnostic
+published_dir="$CASE_DIR"
+published_run="$CASE_RUN"
+"$TEST_PYTHON" "$SUMMARIZER" "$published_dir/junit.xml" \
+    --min-tests 1 --title "Synthetic filesystem negative test" \
+    --json "$published_dir/test-stats-linux-asan.json" >/dev/null
+verify_published
+expect_status 0 "$PUBLISHED_STATUS" "published successful filesystem negative test is independently verified"
+cp "$published_dir/metadata.json" "$TMP_ROOT/diagnostic-metadata.json"
+cp "$published_dir/process-footer.txt" "$TMP_ROOT/diagnostic-footer.txt"
+for mutation in 'signals.infrastructure false' 'scannerExitCodes.infrastructure 1' \
+    'signals.infrastructure 1' 'scannerExitCodes.infrastructure false'; do
+    read -r field value <<< "$mutation"
+    tamper_metadata_and_rebind_footer "$field" "$value" json
+    verify_published
+    expect_status 70 "$PUBLISHED_STATUS" "published diagnostic rejects inconsistent or mistyped $mutation"
+    cp "$TMP_ROOT/diagnostic-metadata.json" "$published_dir/metadata.json"
+    cp "$TMP_ROOT/diagnostic-footer.txt" "$published_dir/process-footer.txt"
+done
 
 # Static workflow contracts: required/optional policy, timeouts, aggregation,
 # and private exact-provenance paths remain reviewable without running C++.
