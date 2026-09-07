@@ -4169,7 +4169,7 @@
 | `TemporalEffects` | class | SparkEngine | [TemporalEffects.h:L67](../../SparkEngine/Source/Graphics/TemporalEffects.h#L67) | Manages TAA, motion blur, and frame history for temporal rendering |
 | `TemporalUpscaleConstants` | struct | SparkEngine | [DynamicQualityTypes.h:L241](../../SparkEngine/Source/Graphics/DynamicQualityTypes.h#L241) | Constant buffer shared by DLSS/XeSS fallback path |
 | `TemporalUpscaleConstants` | struct | SparkEngine | [UpscalingTypes.h:L239](../../SparkEngine/Source/Graphics/UpscalingTypes.h#L239) | Constant buffer shared by DLSS/XeSS fallback path |
-| `TemporaryDirectory` | struct | Tests | [TestGLTFStaticMeshLoader.cpp:L20](../../Tests/TestGLTFStaticMeshLoader.cpp#L20) |  |
+| `TemporaryDirectory` | struct | Tests | [TestGLTFStaticMeshLoader.cpp:L23](../../Tests/TestGLTFStaticMeshLoader.cpp#L23) |  |
 | `TemporaryFileCleanup` | class | SparkEditor | [JSONSceneSerializer.cpp:L172](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L172) |  |
 | `TemporaryPluginBinary` | class | Tests | [TestPluginABI.cpp:L348](../../Tests/TestPluginABI.cpp#L348) |  |
 | `TemporarySceneFile` | class | Tests | [TestSceneSerializerReal.cpp:L28](../../Tests/TestSceneSerializerReal.cpp#L28) |  |

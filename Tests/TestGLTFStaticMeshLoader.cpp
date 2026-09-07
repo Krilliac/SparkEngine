@@ -6,7 +6,10 @@
 #include "TestFramework.h"
 #include "Graphics/GLTFStaticMeshLoader.h"
 
+#include <algorithm>
+#include <array>
 #include <bit>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -263,4 +266,116 @@ TEST(GLTFStaticMesh_RejectsSkinsAndAnimations)
     std::string error;
     EXPECT_FALSE(LoadExternalTriangle(temp.path, json, meshData, error));
     EXPECT_TRUE(error.find("skins and animations") != std::string::npos);
+}
+
+TEST(GLTFStaticMesh_LoadsBlenderAuthoredStaticBox)
+{
+    // Authored Z-up bounds [0,2]x[0,4]x[0,6] export as glTF (x,z,-y).
+    // This exercises the real Blender export, not a hand-written glTF buffer.
+    const auto path =
+        std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests/Fixtures/GLTFStaticMesh/BlenderBox/authored_box.glb";
+    GLTFStaticMeshData meshData;
+    std::string error;
+    ASSERT_TRUE(Spark::Graphics::Detail::LoadGLTFStaticMesh(path, meshData, error));
+    ASSERT_EQ(meshData.vertices.size(), 24u);
+    ASSERT_EQ(meshData.indices.size(), 36u);
+    ASSERT_EQ(meshData.primitives.size(), 1u);
+    EXPECT_EQ(meshData.primitives[0].indexStart, 0u);
+    EXPECT_EQ(meshData.primitives[0].indexCount, 36u);
+
+    constexpr float tolerance = 0.0001f;
+    constexpr std::array<float, 3> expectedMin = {0.0f, 0.0f, -4.0f};
+    constexpr std::array<float, 3> expectedMax = {2.0f, 6.0f, 0.0f};
+    constexpr std::array<std::array<float, 3>, 8> corners = {
+        {{0, 0, 0}, {2, 0, 0}, {2, 0, -4}, {0, 0, -4}, {0, 6, 0}, {2, 6, 0}, {2, 6, -4}, {0, 6, -4}}};
+    // Original author.py loop order for faces -X,+X,-Y,+Y,-Z,+Z after export.
+    constexpr std::array<std::array<size_t, 4>, 6> faceCorners = {
+        {{3, 0, 4, 7}, {1, 2, 6, 5}, {0, 3, 2, 1}, {4, 5, 6, 7}, {2, 3, 7, 6}, {0, 1, 5, 4}}};
+    // Blender's V coordinate is flipped by glTF export; asymmetry exposes flips.
+    constexpr std::array<std::array<float, 2>, 4> expectedUV = {
+        {{0.125f, 0.75f}, {0.875f, 0.75f}, {0.875f, 0.375f}, {0.125f, 0.375f}}};
+    std::array<std::array<int, 4>, 6> faceCornerCounts{};
+    auto minimum = meshData.vertices[0].position;
+    auto maximum = minimum;
+    for (const auto& vertex : meshData.vertices)
+    {
+        size_t normalAxis = 3;
+        float normalLengthSquared = 0.0f;
+        for (size_t axis = 0; axis < 3; ++axis)
+        {
+            minimum[axis] = std::min(minimum[axis], vertex.position[axis]);
+            maximum[axis] = std::max(maximum[axis], vertex.position[axis]);
+            normalLengthSquared += vertex.normal[axis] * vertex.normal[axis];
+            if (std::abs(vertex.normal[axis]) > 0.5f)
+            {
+                normalAxis = axis;
+            }
+        }
+        EXPECT_NEAR(normalLengthSquared, 1.0f, tolerance);
+        ASSERT_TRUE(normalAxis < 3);
+        const size_t face = normalAxis * 2 + (vertex.normal[normalAxis] > 0.0f ? 1 : 0);
+        for (size_t axis = 0; axis < 3; ++axis)
+        {
+            const float expectedNormal = axis == normalAxis ? (face % 2 == 0 ? -1.0f : 1.0f) : 0.0f;
+            EXPECT_NEAR(vertex.normal[axis], expectedNormal, tolerance);
+        }
+        size_t matchedCorner = 4;
+        for (size_t corner = 0; corner < 4; ++corner)
+        {
+            const auto& expectedPosition = corners[faceCorners[face][corner]];
+            if (std::abs(vertex.position[0] - expectedPosition[0]) < tolerance &&
+                std::abs(vertex.position[1] - expectedPosition[1]) < tolerance &&
+                std::abs(vertex.position[2] - expectedPosition[2]) < tolerance)
+            {
+                matchedCorner = corner;
+                break;
+            }
+        }
+        ASSERT_TRUE(matchedCorner < 4);
+        ++faceCornerCounts[face][matchedCorner];
+        EXPECT_NEAR(vertex.texCoord[0], expectedUV[matchedCorner][0], tolerance);
+        EXPECT_NEAR(vertex.texCoord[1], expectedUV[matchedCorner][1], tolerance);
+    }
+    for (size_t axis = 0; axis < 3; ++axis)
+    {
+        EXPECT_NEAR(minimum[axis], expectedMin[axis], tolerance);
+        EXPECT_NEAR(maximum[axis], expectedMax[axis], tolerance);
+    }
+    for (const auto& face : faceCornerCounts)
+    {
+        for (int count : face)
+        {
+            EXPECT_EQ(count, 1);
+        }
+    }
+
+    std::array<bool, 24> referenced{};
+    for (size_t triangle = 0; triangle < meshData.indices.size(); triangle += 3)
+    {
+        for (size_t offset = 0; offset < 3; ++offset)
+        {
+            ASSERT_TRUE(meshData.indices[triangle + offset] < meshData.vertices.size());
+            referenced[meshData.indices[triangle + offset]] = true;
+        }
+        const auto& a = meshData.vertices[meshData.indices[triangle]];
+        const auto& b = meshData.vertices[meshData.indices[triangle + 1]];
+        const auto& c = meshData.vertices[meshData.indices[triangle + 2]];
+        std::array<float, 3> ab{}, ac{};
+        for (size_t axis = 0; axis < 3; ++axis)
+        {
+            ab[axis] = b.position[axis] - a.position[axis];
+            ac[axis] = c.position[axis] - a.position[axis];
+            EXPECT_NEAR(a.normal[axis], b.normal[axis], tolerance);
+            EXPECT_NEAR(a.normal[axis], c.normal[axis], tolerance);
+        }
+        const std::array<float, 3> cross = {ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2],
+                                            ab[0] * ac[1] - ab[1] * ac[0]};
+        const float orientedArea = cross[0] * a.normal[0] + cross[1] * a.normal[1] + cross[2] * a.normal[2];
+        const float expectedArea = std::abs(a.normal[0]) > 0.5f ? 24.0f : std::abs(a.normal[1]) > 0.5f ? 8.0f : 12.0f;
+        EXPECT_NEAR(orientedArea, expectedArea, tolerance);
+    }
+    for (bool used : referenced)
+    {
+        EXPECT_TRUE(used);
+    }
 }

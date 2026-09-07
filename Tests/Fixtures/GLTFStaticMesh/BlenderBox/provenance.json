@@ -1,0 +1,52 @@
+{
+  "authorship": "Original procedural fixture authored for SparkEngine with Blender; no third-party assets",
+  "license": "Spark Open License 1.0",
+  "license_file": "../../../../LICENSE",
+  "blender_version": "4.0.2",
+  "blender_dimensions": [
+    2,
+    4,
+    6
+  ],
+  "blender_center": [
+    1,
+    2,
+    3
+  ],
+  "gltf_aabb_min": [
+    0,
+    0,
+    -4
+  ],
+  "gltf_aabb_max": [
+    2,
+    6,
+    0
+  ],
+  "vertices": 24,
+  "triangles": 12,
+  "export_options": {
+    "export_format": "GLB",
+    "use_selection": true,
+    "export_apply": true,
+    "export_yup": true,
+    "export_normals": true,
+    "export_texcoords": true,
+    "export_tangents": false,
+    "export_colors": false,
+    "export_attributes": false,
+    "export_materials": "NONE",
+    "export_animations": false,
+    "export_skins": false,
+    "export_morph": false,
+    "export_cameras": false,
+    "export_lights": false,
+    "export_extras": false,
+    "export_draco_mesh_compression_enable": false
+  },
+  "sha256": {
+    "author.py": "2e416ad0015ae6ba60cbf21dd05f07de15ee5fb59899e2c96510ff5aba455823",
+    "authored_box.blend": "0b394ad333dfe6c9f0250e0bcd23263f9689d70e33689ffb262a32a22f54bf56",
+    "authored_box.glb": "6761d73683bc727e0170f2bf84122967142457d9eea4fd9810b5b4026d3cf7a7"
+  }
+}
