@@ -81,6 +81,18 @@
       "size": 886,
       "type": "license"
     },
+    "ThirdParty/OpenGL/GL/gl.h": {
+      "sha256": "1269ef722705011ab05938c03097055ffe3932bfdf659b14a21d32343728ed10",
+      "git_blob": "beb34fd81477317f2f7109e3b8b175572e056da5",
+      "size": 1236,
+      "type": "source"
+    },
+    "ThirdParty/OpenGL/GL/glext.h": {
+      "sha256": "b77a70fbebfde76ef02cdb6a85a01d05814c9fbabee385ce61ff37f3c1d86c68",
+      "git_blob": "df902537a0f7a2011c5e17f9e9d8a7ac097012a2",
+      "size": 343,
+      "type": "source"
+    },
     "ThirdParty/Physics/JoltPhysics/Build/CMakeLists.txt": {
       "sha256": "ee2f9cc2ccd28d04a82403b688c8ec720a52eff941917d39506a446c73ae2e78",
       "git_blob": "7cda755e671fe0ac6f57141bf84194e0a6c95025",

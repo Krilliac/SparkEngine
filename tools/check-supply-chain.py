@@ -355,7 +355,12 @@ def check_sentinel_files(
         git_blob_expected = expected.get("git_blob")
         if git_blob_expected:
             actual_blob = git_blob_hash(rel_path, root)
-            if actual_blob and actual_blob != git_blob_expected:
+            if not actual_blob:
+                result.error(
+                    "integrity", rel_path,
+                    "git hash-object failed — cannot verify blob identity",
+                )
+            elif actual_blob != git_blob_expected:
                 result.error(
                     "integrity", rel_path,
                     f"git blob drift: lockfile={git_blob_expected[:16]}..., "
@@ -470,7 +475,36 @@ def check_unmanaged_dirs(
                 )
 
 
+# ── Check: sentinel coverage of managed dirs ─────────────────────────
+
+def check_sentinel_coverage(
+    lockfile: dict[str, Any], result: CheckResult
+) -> None:
+    managed = set(lockfile.get("managed_vendored_dirs", []))
+    sentinels = set(lockfile.get("sentinel_files", {}).keys())
+    for d in sorted(managed):
+        if not any(s.startswith(d + "/") for s in sentinels):
+            result.error(
+                "coverage", d,
+                "managed vendored directory has no sentinel files — "
+                "content could be replaced undetected",
+            )
+
+
 # ── Check: action pinning ─────────────────────────────────────────────
+
+_YAML_COMMENT_RE = re.compile(r"\s+#.*$")
+
+
+def _strip_yaml_comment(line: str) -> str:
+    """Remove trailing YAML comment (# ...) from a line.
+
+    Handles the common case of `uses: owner/repo@ref # vX.Y` by stripping
+    everything from the first ` #` to end-of-line.  This prevents a crafted
+    comment containing a fake SHA-pinned reference from fooling the pin check.
+    """
+    return _YAML_COMMENT_RE.sub("", line)
+
 
 def check_action_pins(root: Path, result: CheckResult) -> None:
     workflows = root / WORKFLOWS_DIR
@@ -500,7 +534,8 @@ def check_action_pins(root: Path, result: CheckResult) -> None:
             uses_value = match.group(1)
             if uses_value.startswith("./"):
                 continue
-            if not ACTION_SHA_PIN_RE.search(stripped):
+            code_before_comment = _strip_yaml_comment(stripped)
+            if not ACTION_SHA_PIN_RE.search(code_before_comment):
                 result.error(
                     "actions", f"{rel}:{i}",
                     f"unpinned action: {uses_value} — must use 40-char commit SHA",
@@ -768,6 +803,7 @@ def main() -> int:
 
     check_submodule_gitlinks(root, lockfile, result)
     check_sentinel_files(root, lockfile, result)
+    check_sentinel_coverage(lockfile, result)
     check_unmanaged_dirs(root, lockfile, result)
     check_action_pins(root, result)
     check_gitmodules_consistency(root, lockfile, result)

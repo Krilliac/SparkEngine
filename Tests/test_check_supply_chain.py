@@ -763,5 +763,163 @@ class TestAtomicUpdate(unittest.TestCase):
         self.assertTrue(data["passed"])
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Adversarial repair — git_blob_hash fail-open
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestGitBlobFailClosed(unittest.TestCase):
+    """Verify that git hash-object failure is an error, not a silent pass."""
+
+    def test_blob_hash_failure_produces_error(self):
+        lockfile = _real_lockfile()
+        with patch.object(sc, "git_blob_hash", return_value=""):
+            result = sc.CheckResult()
+            sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
+            blob_errors = [v for v in result.violations
+                           if "hash-object failed" in v.message
+                           or "blob" in v.message.lower()]
+            sentinels_with_blob = sum(
+                1 for e in lockfile["sentinel_files"].values()
+                if e.get("git_blob")
+            )
+            self.assertGreater(len(blob_errors), 0,
+                               "git_blob_hash failure must produce an error, not pass silently")
+            self.assertEqual(len(blob_errors), sentinels_with_blob,
+                             "every sentinel with a git_blob must report a failure")
+
+    def test_blob_hash_failure_on_single_file(self):
+        lockfile = _real_lockfile()
+        first = next(iter(lockfile["sentinel_files"]))
+        original_fn = sc.git_blob_hash
+
+        def selective_fail(path, cwd):
+            if path == first:
+                return ""
+            return original_fn(path, cwd)
+
+        with patch.object(sc, "git_blob_hash", side_effect=selective_fail):
+            result = sc.CheckResult()
+            sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
+            blob_errors = [v for v in result.violations
+                           if "hash-object failed" in v.message]
+            self.assertEqual(len(blob_errors), 1)
+            self.assertIn(first, blob_errors[0].path)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Adversarial repair — action pin comment injection
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestActionPinCommentInjection(unittest.TestCase):
+    """Verify that a SHA in a YAML comment cannot fool the pin checker."""
+
+    def _make_workflow_root(self, tmpdir, content):
+        root = Path(tmpdir)
+        wf_dir = root / ".github" / "workflows"
+        wf_dir.mkdir(parents=True)
+        (wf_dir / "test.yml").write_text(content)
+        return root
+
+    def test_sha_in_comment_does_not_pass(self):
+        fake_sha = "a" * 40
+        with tempfile.TemporaryDirectory() as d:
+            root = self._make_workflow_root(d,
+                "jobs:\n  build:\n    steps:\n"
+                f"    - uses: evil/action@v1 # uses: foo/bar@{fake_sha}\n")
+            result = sc.CheckResult()
+            sc.check_action_pins(root, result)
+            self.assertFalse(result.passed,
+                             "unpinned action with SHA in comment must be rejected")
+            self.assertTrue(any("unpinned" in v.message for v in result.violations))
+
+    def test_sha_in_comment_variant_hash_only(self):
+        fake_sha = "b" * 40
+        with tempfile.TemporaryDirectory() as d:
+            root = self._make_workflow_root(d,
+                "jobs:\n  build:\n    steps:\n"
+                f"    - uses: evil/action@v1 # {fake_sha}\n")
+            result = sc.CheckResult()
+            sc.check_action_pins(root, result)
+            self.assertFalse(result.passed)
+
+    def test_legitimate_pinned_action_with_comment_passes(self):
+        real_sha = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+        with tempfile.TemporaryDirectory() as d:
+            root = self._make_workflow_root(d,
+                "jobs:\n  build:\n    steps:\n"
+                f"    - uses: actions/checkout@{real_sha} # v7\n")
+            result = sc.CheckResult()
+            sc.check_action_pins(root, result)
+            self.assertTrue(result.passed,
+                            "legitimate SHA-pinned action with version comment must pass")
+
+    def test_strip_yaml_comment_helper(self):
+        self.assertEqual(sc._strip_yaml_comment("uses: foo@abc # v1"), "uses: foo@abc")
+        self.assertEqual(sc._strip_yaml_comment("uses: foo@abc"), "uses: foo@abc")
+        self.assertEqual(sc._strip_yaml_comment("# full comment"), "# full comment")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Adversarial repair — sentinel coverage enforcement
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestSentinelCoverage(unittest.TestCase):
+    """Verify that managed dirs without sentinels are flagged."""
+
+    def test_managed_dir_without_sentinel_flagged(self):
+        lockfile = _make_lockfile(
+            managed_vendored_dirs=["ThirdParty/Uncovered"],
+            sentinel_files={
+                "ThirdParty/Other/file.h": {
+                    "sha256": "a" * 64,
+                    "git_blob": "b" * 40,
+                    "size": 100,
+                    "type": "source",
+                }
+            },
+        )
+        result = sc.CheckResult()
+        sc.check_sentinel_coverage(lockfile, result)
+        self.assertFalse(result.passed)
+        self.assertTrue(
+            any("no sentinel files" in v.message for v in result.violations))
+        self.assertTrue(
+            any("ThirdParty/Uncovered" in v.path for v in result.violations))
+
+    def test_managed_dir_with_sentinel_passes(self):
+        lockfile = _make_lockfile(
+            managed_vendored_dirs=["ThirdParty/Covered"],
+            sentinel_files={
+                "ThirdParty/Covered/file.h": {
+                    "sha256": "a" * 64,
+                    "git_blob": "b" * 40,
+                    "size": 100,
+                    "type": "source",
+                }
+            },
+        )
+        result = sc.CheckResult()
+        sc.check_sentinel_coverage(lockfile, result)
+        self.assertTrue(result.passed)
+
+    def test_real_lockfile_has_full_coverage(self):
+        lockfile = _real_lockfile()
+        result = sc.CheckResult()
+        sc.check_sentinel_coverage(lockfile, result)
+        coverage_errors = [v for v in result.violations
+                           if v.category == "coverage" and v.severity == "error"]
+        self.assertEqual(coverage_errors, [],
+                         f"real lockfile has uncovered dirs: "
+                         f"{[v.path for v in coverage_errors]}")
+
+    def test_empty_managed_dirs_passes(self):
+        lockfile = _make_lockfile(managed_vendored_dirs=[], sentinel_files={})
+        result = sc.CheckResult()
+        sc.check_sentinel_coverage(lockfile, result)
+        coverage_errors = [v for v in result.violations
+                           if v.category == "coverage"]
+        self.assertEqual(coverage_errors, [])
+
+
 if __name__ == "__main__":
     unittest.main()

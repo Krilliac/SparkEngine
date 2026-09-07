@@ -54,15 +54,19 @@ Third-party dependencies are governed by [`ThirdParty/POLICY.md`](ThirdParty/POL
 and enforced by `tools/check-supply-chain.py`, a required CI gate on every push
 and pull request. The checker verifies:
 
-- **Pinned identity and content integrity:** submodules are locked to exact
-  gitlink SHAs; declared payload is checked with SHA-256 and Git blob identity.
-- **Directory inventory:** every declared directory under `ThirdParty/` is
-  categorized as managed vendored code, project-owned code, or a submodule.
-- **Action pinning:** GitHub Actions references must use full 40-character
-  commit SHAs; tag-only or branch-only references are rejected.
-- **License and manifest coverage:** every dependency must have license terms,
-  and manifest notices must reconcile with tracked policy records.
-- **Fail-closed verification:** missing or malformed policy data, schema errors,
+- **Content integrity**: SHA-256 hashes and git blob identity for 39 sentinel
+  files (entry-point headers, implementation files, license texts)
+- **Submodule identity**: Exact gitlink SHAs for 6 git submodules, reconciled
+  bidirectionally against `.gitmodules`
+- **Directory inventory**: Every directory under `ThirdParty/` must be declared
+  as a managed vendored directory, project-owned directory, or submodule
+- **Action pinning**: All GitHub Actions workflow references must use full
+  40-character commit SHAs
+- **License coverage**: Every dependency must have a license file with copyright
+  and operative terms
+- **Manifest reconciliation**: License notices referenced in
+  `ThirdParty/dependencies.lock` must be tracked as sentinel files
+- **Fail-closed verification**: missing or malformed policy data, schema errors,
   Git failures, and path-escape attempts are errors; policy violations exit 1
   and verifier failures exit 2.
 
