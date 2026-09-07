@@ -1068,7 +1068,7 @@ cmake --build build/windows-shipping --config MinSizeRel --clean-first
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Still open: tag/default-version/changelog equality, complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy.
+CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Stable preparation now requires tag/default-version equality, one source version declaration, and exactly one matching versioned changelog heading, with executed rejection fixtures; the current Unreleased-only changelog intentionally does not satisfy this contract. Still open: complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy.
 
 **Dependency contract**
 

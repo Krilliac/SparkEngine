@@ -1611,6 +1611,67 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn('LOCAL_SHA" != "$WORKFLOW_SHA', controller)
         self.assertIn('LOCAL_SHA" != "$REMOTE_SHA', controller)
 
+    def test_release_metadata_requires_one_source_version_and_changelog_entry(self) -> None:
+        block = named_step(self.release, "Compute release metadata")
+        script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        declaration = 'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n'
+        heading = "## [1.2.3] - 2026-09-07\n\n### Fixed\n- Fixture release note.\n"
+        cases = (
+            ("matching", "v1.2.3", declaration, heading, 0),
+            ("heading without date", "v1.2.3", declaration, "## [1.2.3]\n", 0),
+            ("version mismatch", "v9.8.7", declaration, "## [9.8.7]\n", 1),
+            ("duplicate default", "v1.2.3", declaration * 2, heading, 1),
+            ("conflicting default", "v1.2.3", declaration + declaration.replace("1.2.3", "9.8.7"), heading, 1),
+            ("multiline duplicate", "v1.2.3", declaration + 'set(\n SPARK_ENGINE_VERSION "9.8.7")\n', heading, 1),
+            ("indented duplicate", "v1.2.3", declaration + "  " + declaration, heading, 1),
+            ("missing default", "v1.2.3", "", heading, 1),
+            ("unreleased only", "v1.2.3", declaration, "## [Unreleased]\n", 1),
+            ("missing changelog", "v1.2.3", declaration, None, 1),
+            ("duplicate heading", "v1.2.3", declaration, heading * 2, 1),
+            ("other release", "v1.2.3", declaration, "## [1.2.30]\n", 1),
+            ("nonheading mention", "v1.2.3", declaration, "See [1.2.3] for details.\n", 1),
+            ("regex lookalike", "v1.2.3", declaration, "## [1x2x3]\n", 1),
+            ("malformed tag", "v1.2.3-rc1", declaration, heading, 1),
+        )
+        for label, tag, cmake, changelog, status in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                (root / "CMakeLists.txt").write_text(cmake, encoding="utf-8")
+                if changelog is not None:
+                    (root / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
+                output = root / "outputs"
+                completed = subprocess.run(
+                    [shutil.which("bash"), "-c", script], cwd=root, text=True, capture_output=True,
+                    env={**os.environ, "EVENT_NAME": "repository_dispatch", "INPUT_RELEASE_TAG": tag,
+                         "GITHUB_OUTPUT": str(output)},
+                )
+                self.assertEqual(completed.returncode, status, completed.stderr)
+                values = dict(line.split("=", 1) for line in output.read_text().splitlines()) if output.exists() else {}
+                if status:
+                    self.assertNotIn("is_versioned", values, "Rejected metadata must not emit release outputs")
+                else:
+                    self.assertEqual(values, {"tag": tag, "version": "1.2.3", "cmake_version": "1.2.3",
+                                              "is_versioned": "true"})
+
+    def test_nightly_metadata_does_not_require_versioned_changelog(self) -> None:
+        block = named_step(self.release, "Compute release metadata")
+        script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        for event, tag in (("schedule", ""), ("schedule", "v9.8.7"), ("repository_dispatch", "")):
+            with self.subTest(event=event, tag=tag), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                (root / "CMakeLists.txt").write_text(
+                    'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n', encoding="utf-8")
+                output = root / "outputs"
+                completed = subprocess.run(
+                    [shutil.which("bash"), "-c", script], cwd=root, text=True, capture_output=True,
+                    env={**os.environ, "EVENT_NAME": event, "INPUT_RELEASE_TAG": tag,
+                         "GITHUB_OUTPUT": str(output)},
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(dict(line.split("=", 1) for line in output.read_text().splitlines()),
+                                 {"tag": "nightly", "version": "nightly", "cmake_version": "1.2.3",
+                                  "is_versioned": "false"})
+
     def test_release_concurrency_uses_only_supported_github_schema(self) -> None:
         release_job = self.release[self.release.index("  release:\n") :]
         concurrency = release_job[

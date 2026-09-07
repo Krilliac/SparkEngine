@@ -186,3 +186,7 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
 - [Build Optimizations](Build-Optimizations.md) — CI workflow speedups
 - [Workflow Patterns](Workflow-Patterns.md) — pre-push checklist
 - [Project conventions (CLAUDE.md)](../../CLAUDE.md) — "CI jobs summary" table
+
+## Stable release version contract
+
+Versioned publication requires its `vMAJOR.MINOR.PATCH` tag to equal the single `SPARK_ENGINE_VERSION` default in `CMakeLists.txt`. `CHANGELOG.md` must contain exactly one matching `## [MAJOR.MINOR.PATCH]` heading, optionally followed by ` - YYYY-MM-DD`. Missing, duplicate, or mismatched metadata fails preparation before release outputs are emitted. Nightly publication continues to use the source default without requiring a versioned changelog section. This contract does not certify release notes, signing, or Windows qualification; the stable readiness gate remains mandatory.

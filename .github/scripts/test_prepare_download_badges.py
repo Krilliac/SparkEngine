@@ -6,9 +6,13 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -2626,12 +2630,51 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         collect_step = workflow[collect:stage]
         self.assertIn("readme_nightly_assets", collect_step)
         self.assertIn('[[ ! -f "$required_asset" ]]', collect_step)
-        self.assertIn("for config in Debug Release", collect_step)
         self.assertIn('"SparkEngine-Windows-x64-${config}.zip"', collect_step)
         self.assertIn(
             '"SparkEngine-Windows-x64-${config}-Installer.exe"', collect_step
         )
         self.assertIn("SparkInstaller-Windows-x64.exe", workflow)
+
+    def test_nightly_collection_creates_all_readme_aliases_and_rejects_missing_packages(self):
+        workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        start = workflow.index("    - name: Collect release assets")
+        end = workflow.index("\n    - name:", start + 1)
+        script = textwrap.dedent(workflow[start:end].split("run: |\n", 1)[1])
+        script = script.replace("${{ needs.prepare.outputs.is_versioned }}", "false")
+        aliases = {}
+        for config in ("Debug", "Release"):
+            aliases[f"SparkEngine-Windows-x64-{config}.zip"] = (
+                f"SparkEngine-7.8.9-Windows-AMD64-{config}.zip"
+            )
+            aliases[f"SparkEngine-Windows-x64-{config}-Installer.exe"] = (
+                f"SparkEngine-7.8.9-Windows-AMD64-{config}-Runtime.exe"
+            )
+        aliases["SparkInstaller-Windows-x64.exe"] = "SparkInstaller-Windows-x64.exe"
+        for missing in (None, *aliases.values()):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                packages = root / "release-assets"
+                packages.mkdir()
+                (root / "README.md").write_text(README.read_text(encoding="utf-8"), encoding="utf-8")
+                for source in aliases.values():
+                    if source != missing:
+                        (packages / source).write_text(source, encoding="utf-8")
+                result = subprocess.run(
+                    [shutil.which("bash"), "-c", script], cwd=root, text=True, capture_output=True,
+                    env={**os.environ, "IS_VERSIONED": "false", "RELEASE_VERSION": "7.8.9",
+                         "GITHUB_OUTPUT": str(root / "outputs"), "GITHUB_STEP_SUMMARY": str(root / "summary")},
+                )
+                if missing:
+                    self.assertNotEqual(result.returncode, 0, "Incomplete nightly must not publish")
+                    self.assertIn("Missing README nightly asset", result.stderr)
+                    self.assertFalse((root / "expected-release-assets.txt").exists())
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    assets = set((root / "expected-release-assets.txt").read_text().splitlines())
+                    self.assertEqual(assets, set(aliases) | set(aliases.values()) | {"SHA256SUMS"})
+                    for alias, source in aliases.items():
+                        self.assertEqual((root / alias).read_text(), source)
 
     def test_rolling_release_uses_fail_closed_production_order(self):
         text = RELEASE_WORKFLOW.read_text(encoding="utf-8")

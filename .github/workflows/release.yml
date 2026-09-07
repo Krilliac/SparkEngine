@@ -86,6 +86,29 @@ jobs:
             echo "Release tag must have the form vMAJOR.MINOR.PATCH; got: $TAG" >&2
             exit 1
           fi
+          # An override must not manufacture a stable version absent from the source.
+          # Nightly deliberately has no versioned-changelog requirement.
+          python3 - "${TAG#v}" "$DEFAULT_VERSION" <<'PYVERSION'
+        import re
+        import sys
+        from pathlib import Path
+
+        version, default = sys.argv[1:]
+        declarations = re.findall(
+            r"(?im)^[ \t]*set\s*\(\s*SPARK_ENGINE_VERSION(?=\s|\))",
+            Path("CMakeLists.txt").read_text(encoding="utf-8"),
+        )
+        if len(declarations) != 1 or version != default:
+            sys.exit("Stable tag must equal the single CMake SPARK_ENGINE_VERSION default")
+        changelog = Path("CHANGELOG.md")
+        if not changelog.is_file():
+            sys.exit("Stable publication requires CHANGELOG.md")
+        heading = re.compile(r"## \[" + re.escape(version) + r"\](?: - \d{4}-\d{2}-\d{2})?[ \t]*")
+        count = sum(heading.fullmatch(line) is not None
+                    for line in changelog.read_text(encoding="utf-8").splitlines())
+        if count != 1:
+            sys.exit(f"Stable publication requires exactly one CHANGELOG.md heading for [{version}]; found {count}")
+        PYVERSION
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
           echo "cmake_version=${TAG#v}" >> "$GITHUB_OUTPUT"
