@@ -245,7 +245,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **open** | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
 | [`SEC-100`](#sec-100--close-critical-remote-administration-and-runtime-security-paths) Close critical remote-administration and runtime security paths | P0 | **open** | — | `CI-100`, `OPS-100`, `RDY-000` |
 | [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **in-progress** | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
-| [`SEC-120`](#sec-120--fuzz-and-bound-every-stable-v1-untrusted-file-and-package-parser) Fuzz and bound every stable-v1 untrusted file and package parser | P0 | **open** | `CI-100`, `SEC-110` | `NET-100`, `ASSET-220`, `SAVE-230` |
+| [`SEC-120`](#sec-120--fuzz-and-bound-every-stable-v1-untrusted-file-and-package-parser) Fuzz and bound every stable-v1 untrusted file and package parser | P0 | **in-progress** | `CI-100`, `SEC-110` | `NET-100`, `ASSET-220`, `SAVE-230` |
 | [`OPS-100`](#ops-100--secure-and-complete-crash-reporting-telemetry-delivery-and-symbol-operations) Secure and complete crash reporting, telemetry delivery, and symbol operations | P0 | **open** | — | `SEC-100`, `CI-100`, `RDY-000` |
 
 ### Wave 2 — Primary engine workflow
@@ -1407,7 +1407,7 @@ osv-scanner --lockfile ThirdParty/dependencies.lock
 
 ### SEC-120 — Fuzz and bound every stable-v1 untrusted file and package parser
 
-**Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
 Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross stable-v1 trust boundaries without a unified fuzz/bounds gate; packet and script campaigns belong to the excluded networking and scripting surfaces. 2026-09-05 progress (partial hardening, no fuzz harness): Json::ParseBounded/JsonLimits budgets on every default parse entry point; mod.json and mod config capped at 64 KB / depth 16 / 4096 nodes and parsed strictly; scene manifests capped at 8 MB / 100,000 entries with path containment; .spk decompression ratio bounded at Open; .skel/.sanim name-length and parentIndex validation; Spark::IsVirtualPathSafe. Tests/TestSecurityParsersReal.cpp now executes the shipped parsers (the packet-validator evidence is tracked under NET-100). Do not promote a JSON-fuzz claim: only bounded regressions were added.

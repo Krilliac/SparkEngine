@@ -147,6 +147,7 @@
 - [Performance Tips](advanced/Performance-Tips.md)
 - [Benchmark Framework](advanced/Benchmark-Framework.md)
 - [Threading Model](advanced/Threading-Model.md)
+- [Fuzz Policy and Parser Security](advanced/Fuzz-Policy-and-Parser-Security.md)
 - [Memory Safety](advanced/Memory-Safety.md)
 - [Memory Management Patterns](advanced/Memory-Management-Patterns.md)
 - [Build System and CMake Modules](advanced/Build-System-and-CMake-Modules.md)

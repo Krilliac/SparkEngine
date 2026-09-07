@@ -225,7 +225,7 @@
       "id": "SEC-120",
       "title": "Fuzz and bound every stable-v1 untrusted file and package parser",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "security",
