@@ -28,6 +28,22 @@ class GeneratedRuntimeArtifactHygieneTests(unittest.TestCase):
             "runtime database lock output must be ignored so it cannot enter a release change",
         )
 
+    def test_runtime_database_lock_output_is_not_tracked_by_git(self) -> None:
+        completed = subprocess.run(
+            ["git", "ls-files", "--", "Saves/*.db.lock"],
+            cwd=REPO_ROOT,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        self.assertEqual(
+            completed.stdout.strip(),
+            "",
+            "runtime database lock output must not be tracked in the release source",
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
