@@ -177,6 +177,10 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Test native Windows signature rejection
+      if: needs.prepare.outputs.is_versioned == 'true'
+      run: python .github/scripts/test_verify_windows_package_signatures.py
+
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
@@ -309,6 +313,20 @@ jobs:
           exit $cpackExitCode
         }
 
+    # Owner prerequisite: sign the final CPack outputs and provision the public
+    # publisher certificate thumbprint. Missing signing/configuration fails closed.
+    - name: Verify Windows stable outer installer signatures
+      if: needs.prepare.outputs.is_versioned == 'true'
+      shell: pwsh
+      env:
+        SPARK_RELEASE_SIGNER_THUMBPRINT: ${{ vars.SPARK_RELEASE_SIGNER_THUMBPRINT }}
+      run: |
+        python .github/scripts/verify-windows-package-signatures.py `
+          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
+          --version "${{ needs.prepare.outputs.cmake_version }}" --source-sha "${{ github.sha }}" `
+          --report "${{ github.workspace }}/signature-verification/result.json"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
     - name: Qualify Windows stable MSI install and uninstall
       if: needs.prepare.outputs.is_versioned == 'true'
       shell: pwsh
@@ -321,6 +339,15 @@ jobs:
           --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `
           --source-sha "${{ github.sha }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Upload Windows stable signature diagnostics
+      if: always() && needs.prepare.outputs.is_versioned == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: SparkEngine-Windows-${{ matrix.config }}-signature-verification
+        path: signature-verification/
+        if-no-files-found: ignore
+        retention-days: 7
 
     - name: Upload native MSI qualification diagnostics
       if: always()
@@ -386,6 +413,16 @@ jobs:
           ${{ matrix.build_dir }}/packages/_CPack_Packages/**/wix.log
         if-no-files-found: ignore
         retention-days: 7
+
+    - name: Check signed installer bytes after native qualification
+      if: needs.prepare.outputs.is_versioned == 'true'
+      shell: pwsh
+      run: |
+        python .github/scripts/verify-windows-package-signatures.py --check-hashes `
+          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
+          --version "${{ needs.prepare.outputs.cmake_version }}" --source-sha "${{ github.sha }}" `
+          --report "${{ github.workspace }}/signature-verification/result.json"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Upload packaged artifact
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

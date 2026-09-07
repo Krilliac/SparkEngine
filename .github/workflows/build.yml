@@ -81,6 +81,9 @@ jobs:
     - name: Test crash-consistent release download counters
       run: python3 .github/scripts/test_prepare_download_badges.py
 
+    - name: Test Windows package signature orchestration
+      run: python3 .github/scripts/test_verify_windows_package_signatures.py
+
     - name: Test native MSI qualification orchestration
       run: python3 .github/scripts/test_qualify_windows_msi.py
 
@@ -850,6 +853,10 @@ jobs:
           build/*-process-smoke.log \
           build/*-process-smoke.json \
           build/*-process-smoke.xml
+
+    - name: Test native Windows signature rejection
+      if: matrix.config == 'Release'
+      run: python .github/scripts/test_verify_windows_package_signatures.py
 
     - name: Configure CMake (VS 2022 / v143)
       shell: bash
