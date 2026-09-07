@@ -1,0 +1,356 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "source_commit": "ff951c19a5e12be6ec3724696af6fe030070e8c4",
+  "author_script": {
+    "path": "tools/blender/author_mmo_props.py",
+    "sha256": "b3540dace34a332df885c5f9376ed2c8ca060fa173dd8707fcda05493a7a5310"
+  },
+  "blend": {
+    "path": "Art/Blender/MMO/props.blend",
+    "sha256": "caff1cdaf5ad9e85477edcb26eeeb5c0cd7493ae67cdc75fc5ab9ef2cc968317"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "assets": [
+    {
+      "name": "chest",
+      "obj_path": "Assets/Models/MMO/chest.obj",
+      "mtl_path": "Assets/Models/MMO/chest.mtl",
+      "source_before_sha256": "6c68bff57d18e3e66e80095bca48bcecd6c764ab1e2dec56e9ade6078571f96a",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "triangle_count": 2352,
+      "obj_sha256": "9ecb1afdd50b325ac4a39f025c851c07c161d375a5683bfc8e9b014a8406afc2",
+      "mtl_sha256": "1752470ac31076779ef347ff7884412ec19b072a879b9203fc490cc50f500a3c"
+    },
+    {
+      "name": "anvil",
+      "obj_path": "Assets/Models/MMO/anvil.obj",
+      "mtl_path": "Assets/Models/MMO/anvil.mtl",
+      "source_before_sha256": "6c68bff57d18e3e66e80095bca48bcecd6c764ab1e2dec56e9ade6078571f96a",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "triangle_count": 584,
+      "obj_sha256": "49ed1e58d3a066e208d1b0e9bcba857f50209f8a8bb147cf76df726950a9c4be",
+      "mtl_sha256": "2770ee48b33d40151817dcfee82d0cf71f426b01d5c97284f98927d03c695aaf"
+    },
+    {
+      "name": "forge",
+      "obj_path": "Assets/Models/MMO/forge.obj",
+      "mtl_path": "Assets/Models/MMO/forge.mtl",
+      "source_before_sha256": "6c68bff57d18e3e66e80095bca48bcecd6c764ab1e2dec56e9ade6078571f96a",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "triangle_count": 992,
+      "obj_sha256": "870c8818d18cb738a32340461231ce23f668ba950c2b1f6781db7e24b9cbca12",
+      "mtl_sha256": "01c349b0de48a1c1e2263c74037393623e2b3e33ccdf50c3cfd46c4b86c9c2af"
+    },
+    {
+      "name": "guild_hall",
+      "obj_path": "Assets/Models/MMO/guild_hall.obj",
+      "mtl_path": "Assets/Models/MMO/guild_hall.mtl",
+      "source_before_sha256": "6c68bff57d18e3e66e80095bca48bcecd6c764ab1e2dec56e9ade6078571f96a",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "triangle_count": 2132,
+      "obj_sha256": "e750ffa3e2091bc9d57a09546c63bb114fe547fe2ce352f6c6bffbd5e6304dec",
+      "mtl_sha256": "8805cdb1b7c6abe131f75fea48d4ab1b099c21cfa352d9cd004761d4208f54a2"
+    },
+    {
+      "name": "alchemy_shop",
+      "obj_path": "Assets/Models/MMO/alchemy_shop.obj",
+      "mtl_path": "Assets/Models/MMO/alchemy_shop.mtl",
+      "source_before_sha256": "6c68bff57d18e3e66e80095bca48bcecd6c764ab1e2dec56e9ade6078571f96a",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "triangle_count": 2464,
+      "obj_sha256": "1190fb49c063de74cec3f1c7b3328557bbf9e1ba7ec91c87b42c2a7440581d94",
+      "mtl_sha256": "c4e03164b144380bbefeb1af1550aa1528ac85339df9d3bd058eb7bd226a14aa"
+    },
+    {
+      "name": "market_stall",
+      "obj_path": "Assets/Models/MMO/market_stall.obj",
+      "mtl_path": "Assets/Models/MMO/market_stall.mtl",
+      "source_before_sha256": "6c68bff57d18e3e66e80095bca48bcecd6c764ab1e2dec56e9ade6078571f96a",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "triangle_count": 1620,
+      "obj_sha256": "e8bccf17a1a0c56719fcac96b2e652ee45d65d3ca5842160db1f76f22ad86555",
+      "mtl_sha256": "c0fb3e5b773f3ec4d5550a1981ecb541b4be8d15b5d49ae49227dd16f3b4fb1c"
+    },
+    {
+      "name": "gate",
+      "obj_path": "Assets/Models/MMO/gate.obj",
+      "mtl_path": "Assets/Models/MMO/gate.mtl",
+      "source_before_sha256": "6c68bff57d18e3e66e80095bca48bcecd6c764ab1e2dec56e9ade6078571f96a",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "triangle_count": 1252,
+      "obj_sha256": "755687b17165412a4b114fda4cdae865cf3f1fb091b84085a7f476cb79da3d1e",
+      "mtl_sha256": "ac3050f3aa679352ce307031a6ebc895c8ce39c2d43c1a8250b9eaeb908e3070"
+    },
+    {
+      "name": "gravestone",
+      "obj_path": "Assets/Models/MMO/gravestone.obj",
+      "mtl_path": "Assets/Models/MMO/gravestone.mtl",
+      "source_before_sha256": "6c68bff57d18e3e66e80095bca48bcecd6c764ab1e2dec56e9ade6078571f96a",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "triangle_count": 448,
+      "obj_sha256": "0e643c2ddedd0f8f5d1ee53db185c7d8aae17a56befecdb0e1bf7c5677a20a34",
+      "mtl_sha256": "d6a731d11b108d079d47de91f6d76a59f50f48a6b174dce662665032f41d70d2"
+    },
+    {
+      "name": "rock_large",
+      "obj_path": "Assets/Models/MMO/rock_large.obj",
+      "mtl_path": "Assets/Models/MMO/rock_large.mtl",
+      "source_before_sha256": "6c68bff57d18e3e66e80095bca48bcecd6c764ab1e2dec56e9ade6078571f96a",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "triangle_count": 140,
+      "obj_sha256": "4ff1da952814d7491cbd0375d92acb5e2aa4398305d05a8c3d9d942920e6fffc",
+      "mtl_sha256": "b1378066a653bad0eabb6ada11b73308935c6d2074089e4cfbd7f84d93589696"
+    },
+    {
+      "name": "tree_pine",
+      "obj_path": "Assets/Models/MMO/tree_pine.obj",
+      "mtl_path": "Assets/Models/MMO/tree_pine.mtl",
+      "source_before_sha256": "74bfb70cd56f441b2c1ac94cd691aa6dd7c92c486f9f31e84458aaa630474f93",
+      "original_bounds": {
+        "min": [
+          -1.0,
+          0.0,
+          -1.0
+        ],
+        "max": [
+          1.0,
+          4.0,
+          1.0
+        ]
+      },
+      "triangle_count": 496,
+      "obj_sha256": "5fa004dd0dd327fd75af50760766e455042d56c3e3327baaaf61c7fc045a9432",
+      "mtl_sha256": "068527c37590d9e2e6b534b1c9e46449b55c7dcf51b6ec979c11421bc012350b"
+    },
+    {
+      "name": "tent",
+      "obj_path": "Assets/Models/MMO/tent.obj",
+      "mtl_path": "Assets/Models/MMO/tent.mtl",
+      "source_before_sha256": "aa6e46fabcd9f827107d3ce57a774b54ef831cc4603a26fb0a7869ac1ca5d492",
+      "original_bounds": {
+        "min": [
+          -1.5,
+          0.0,
+          -1.5
+        ],
+        "max": [
+          1.5,
+          2.0,
+          1.5
+        ]
+      },
+      "triangle_count": 356,
+      "obj_sha256": "21f14636b5b7b57402836284bf25ef098cffb15074094f3c63e90d85f9553751",
+      "mtl_sha256": "d2ee5c83ddb6a5de936396ec4f0f687dad66b756ef7250ed986dc77f71ba7232"
+    },
+    {
+      "name": "banner",
+      "obj_path": "Assets/Models/MMO/banner.obj",
+      "mtl_path": "Assets/Models/MMO/banner.mtl",
+      "source_before_sha256": "6c68bff57d18e3e66e80095bca48bcecd6c764ab1e2dec56e9ade6078571f96a",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "triangle_count": 916,
+      "obj_sha256": "18086d7d3294e9800dfbc786306bdcc5eccdd44495668abb042466a62ddab377",
+      "mtl_sha256": "be27be50d65d6b4e42cad85161d35169b6904a72dccc9ffe4dc4c7671c06537d"
+    },
+    {
+      "name": "pillar",
+      "obj_path": "Assets/Models/MMO/pillar.obj",
+      "mtl_path": "Assets/Models/MMO/pillar.mtl",
+      "source_before_sha256": "b5002f382c18a8dc6df2f7d2f5601c91f7c2cf67928c6d0b9f1a7fcf5328d373",
+      "original_bounds": {
+        "min": [
+          -0.3,
+          -1.5,
+          -0.3
+        ],
+        "max": [
+          0.3,
+          1.5,
+          0.3
+        ]
+      },
+      "triangle_count": 500,
+      "obj_sha256": "15e06fc1bf9023afa333f5dcd957e4ce3fd48b47d1383ffa96c2693303d1c2b9",
+      "mtl_sha256": "2fc15add42132ca49af8287f2c831598b6e681144f617f289b79daa0c989e7f2"
+    },
+    {
+      "name": "torch",
+      "obj_path": "Assets/Models/MMO/torch.obj",
+      "mtl_path": "Assets/Models/MMO/torch.mtl",
+      "source_before_sha256": "7caa2906ea7a6b6b3f51cacdafddc8c394095cf6e0fd08ffe55d89a2d44c696e",
+      "original_bounds": {
+        "min": [
+          -0.1,
+          -0.5,
+          -0.1
+        ],
+        "max": [
+          0.1,
+          0.5,
+          0.1
+        ]
+      },
+      "triangle_count": 720,
+      "obj_sha256": "4bb878349cb1900b3046b2551eb8666012188a8310cb6e5c19c39582f5365f07",
+      "mtl_sha256": "90df59227a6d7c7baa20aca36b0f86e17bda42673265c835588486bc269f704f"
+    },
+    {
+      "name": "cauldron",
+      "obj_path": "Assets/Models/MMO/cauldron.obj",
+      "mtl_path": "Assets/Models/MMO/cauldron.mtl",
+      "source_before_sha256": "305d6b4307d87decb11a0bbce795b60eb41ca3827d590bdd90249a4c5fdebc60",
+      "original_bounds": {
+        "min": [
+          -0.5,
+          -0.4,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.4,
+          0.5
+        ]
+      },
+      "triangle_count": 1564,
+      "obj_sha256": "f45061b94a52603abc6b2883a8cb2f565c00721d59767bb90ed8570abfa44eff",
+      "mtl_sha256": "ec0553776df31fca5313365fbe73971bf845e30c9fd86745edb39c1a780811e1"
+    },
+    {
+      "name": "fountain",
+      "obj_path": "Assets/Models/MMO/fountain.obj",
+      "mtl_path": "Assets/Models/MMO/fountain.mtl",
+      "source_before_sha256": "d76b3e92ed9e40a213372feb72ccf5321f979f3c7bf67c613430d11f0865fd6f",
+      "original_bounds": {
+        "min": [
+          -1.5,
+          -1.0,
+          -1.5
+        ],
+        "max": [
+          1.5,
+          1.0,
+          1.5
+        ]
+      },
+      "triangle_count": 1524,
+      "obj_sha256": "f33505a0616092ccf6fd77659331c6c2cf09acfc4ece6fe72d3ffb91e6fef2b4",
+      "mtl_sha256": "a2d30feb67167c618d0bcf2a67689aa1fd496835f08fabc87438db2c7054fc24"
+    }
+  ]
+}

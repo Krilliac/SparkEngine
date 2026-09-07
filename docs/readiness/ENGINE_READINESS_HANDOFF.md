@@ -4564,7 +4564,7 @@ ctest --test-dir build/linux-shipping -L opengl --output-on-failure --no-tests=e
 **Priority:** P1 · **Status:** open · **Wave:** 5 · **Area:** rendering · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable-v1 first-party slice, and D3D11 lacks one canonical packaged-content contract. 2026-09-05: the Tests/TestAssetDatabase.cpp entry point was a decoy that included no production header and was deleted; the glTF loader test is Tests/TestGLTFStaticMeshLoader.cpp.
+The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable-v1 first-party slice, and D3D11 lacks one canonical packaged-content contract. 2026-09-05: the Tests/TestAssetDatabase.cpp entry point was a decoy that included no production header and was deleted; the glTF loader test is Tests/TestGLTFStaticMeshLoader.cpp. 2026-09-07 Blender asset-quality checkpoint: sixteen MMO placeholder OBJ models replaced with distinct authored geometry and materials while preserving paths and bounds; editable source, source/provenance validation and production CPU importer tests added. This does not qualify Windows/D3D11, skinned import, installed content or the remaining asset collection; status remains open.
 
 **Dependency contract**
 

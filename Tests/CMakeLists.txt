@@ -337,6 +337,7 @@ add_executable(SparkTests
     TestNetworkManagerReal.cpp
     TestMaterialSystemReal.cpp
     TestAssetPipelineReal.cpp
+    TestMMOAssetImport.cpp
     TestAbilitySystemReal.cpp
     TestAchievementSystemReal.cpp
     TestConstantBufferDiffReal.cpp
@@ -1465,6 +1466,21 @@ endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME BlenderMMOAssetSourceContract
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/blender/validate_mmo_props.py
+            --root ${CMAKE_SOURCE_DIR})
+    set_tests_properties(BlenderMMOAssetSourceContract PROPERTIES
+        LABELS "asset;cpu;static;python"
+        TIMEOUT 30)
+
+    add_test(
+        NAME BlenderMMOAssetGeneratorRegression
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_blender_mmo_assets.py)
+    set_tests_properties(BlenderMMOAssetGeneratorRegression PROPERTIES
+        LABELS "asset;cpu;unit;python"
+        TIMEOUT 30)
+
     add_test(
         NAME SparkRunSparkTestsHarness
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test-run-spark-tests.py)
