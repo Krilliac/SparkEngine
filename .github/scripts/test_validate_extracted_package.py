@@ -6,6 +6,9 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import hashlib
+import json
+import subprocess
 from pathlib import Path
 import sys
 import tarfile
@@ -409,6 +412,97 @@ class ExtractedPackageValidationTests(unittest.TestCase):
             stage.mkdir()
             with self.assertRaisesRegex(MODULE.ValidationError, "no SparkEngine static library"):
                 MODULE.validate_package(package, stage, None)
+
+
+@unittest.skipIf(sys.platform == "win32", "fixture executables use a POSIX shell")
+class ShippingPackageBomTests(unittest.TestCase):
+    executables = (
+        "SparkEngine", "SparkConsole", "SparkEditor", "SparkLauncher", "SparkCooker",
+        "SparkAutomation", "SparkBuild", "SparkInstaller", "SparkShaderCompiler", "SparkCrashReporter",
+    )
+
+    def fixture(self, root: Path) -> None:
+        def write(relative: str, text: str) -> Path:
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+            return path
+
+        for name in self.executables:
+            write(f"bin/{name}.exe", "#!/bin/sh\nprintf 'SparkEngine 1.0.0\\n'\n").chmod(0o755)
+        write("include/Spark/Version.h", "#define SPARK_SDK_VERSION 3\n")
+        write("lib/cmake/SparkEngine/SparkEngineGameModules.cmake",
+              "format=1\ntarget_system=Windows\nmodule_prefix=\nmodule_suffix=.dll\nmodules=SparkGameFPS\n")
+        module = write("bin/SparkGameFPS.dll", "fixture module\n")
+        write("bin/SparkGameFPS.dll.sparkabi",
+              "format=1\nstruct_size=64\nmagic=1263685715\nsdk_version=3\nruntime_abi_version=1\n"
+              "compiler_family=1\ncompiler_abi_version=1944\ncxx_language_level=202400\n"
+              "runtime_library=1\niterator_debug_level=0\npointer_size=8\n"
+              f"binary_sha256={hashlib.sha256(module.read_bytes()).hexdigest()}\n")
+        for name in (
+            "LICENSE.txt", "THIRD_PARTY_NOTICES.txt", "bin/Shaders/BasicVS.hlsl",
+            "bin/Shaders/ForwardPlus/DepthPrepass.hlsl", "bin/Shaders/HLSL/BasicVS.hlsl",
+            "bin/Shaders/HLSL/Compute/GPUCull.hlsl", "bin/Assets/MMOFPS/Data/continents.json",
+            "bin/Assets/Engine/Branding/sparkengine_wordmark.svg", "bin/Resources/Config/settings.ini",
+            "bin/Resources/Config/controls.cfg",
+        ):
+            write(name, "fixture content\n")
+
+    def validate(self, root: Path, profile: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["cmake", f"-DSPARK_PACKAGE_ROOT={root}", f"-DSPARK_PACKAGE_PROFILE={profile}",
+             "-DSPARK_EXECUTABLE_SUFFIX:STRING=.exe", "-P", str(ROOT / "cmake/ValidateStagedPackageExecutables.cmake")],
+            text=True, capture_output=True,
+        )
+
+    def test_stable_bom_accepts_profile_without_experimental_services(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.fixture(root)
+            result = self.validate(root, "stable-v1")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_stable_bom_rejects_each_missing_required_executable(self) -> None:
+        for name in self.executables:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                self.fixture(root)
+                (root / f"bin/{name}.exe").unlink()
+                result = self.validate(root, "stable-v1")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(name + ".exe", result.stderr)
+
+    def test_default_bom_still_requires_services_and_unknown_profile_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.fixture(root)
+            result = self.validate(root, "default")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("SparkServer.exe", result.stderr)
+            result = self.validate(root, "stable-v2")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Unknown package profile", result.stderr)
+
+    def test_stable_bom_requires_windows_and_first_party_fps_module(self) -> None:
+        for replacement, message in (("target_system=Linux", "Windows"), ("modules=SparkGameOther", "SparkGameFPS")):
+            with self.subTest(replacement=replacement), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                self.fixture(root)
+                manifest = root / "lib/cmake/SparkEngine/SparkEngineGameModules.cmake"
+                text = manifest.read_text()
+                text = text.replace("target_system=Windows", replacement) if replacement.startswith("target") else text.replace("modules=SparkGameFPS", replacement)
+                manifest.write_text(text)
+                result = self.validate(root, "stable-v1")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(message, result.stderr)
+
+    def test_stable_executable_bom_matches_declared_release_products(self) -> None:
+        data = json.loads((ROOT / "docs/site/readiness.json").read_text())
+        profiles = data["releaseProfiles"]
+        profile = next(item for item in profiles if item["id"] == "stable-v1")
+        expected = {item["target"] for item in profile["buildProducts"]
+                    if item["kind"] == "executable" and item["buildProfile"] == "windows-shipping"}
+        self.assertEqual(set(self.executables), expected)
 
 
 class ExtractedPackageWorkflowWiringTests(unittest.TestCase):

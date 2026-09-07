@@ -25,6 +25,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       is_versioned: ${{ steps.meta.outputs.is_versioned }}
       configs: ${{ steps.matrix.outputs.configs }}
+      windows_matrix: ${{ steps.matrix.outputs.windows_matrix }}
       build_type: ${{ steps.matrix.outputs.build_type }}
     steps:
     - name: Checkout release metadata source
@@ -103,6 +104,7 @@ jobs:
         IS_VERSIONED: ${{ steps.meta.outputs.is_versioned }}
         REQUESTED_CONFIGS: ${{ github.event.client_payload.build_configs || 'both' }}
       run: |
+        set -euo pipefail
         # Every rolling nightly publishes both configurations so direct Debug
         # and Release links always identify assets from one exact source SHA.
         # Only versioned releases may honor an explicit single-config choice.
@@ -111,7 +113,7 @@ jobs:
           exit 1
         fi
         if [[ "$IS_VERSIONED" == "true" && "$REQUESTED_CONFIGS" == "debug" ]]; then
-          echo "versioned releases must include Release artifacts; debug-only publication is forbidden" >&2
+          echo "versioned releases require Windows Shipping artifacts; debug-only publication is forbidden" >&2
           exit 1
         fi
         if [[ "$IS_VERSIONED" == "false" ]]; then
@@ -120,6 +122,12 @@ jobs:
           BUILD_CONFIGS="$REQUESTED_CONFIGS"
         fi
         echo "build_type=$BUILD_CONFIGS" >> "$GITHUB_OUTPUT"
+
+        if [[ "$IS_VERSIONED" == "true" ]]; then
+          echo 'windows_matrix=[{"config":"MinSizeRel","build_dir":"build/windows-shipping","profile":"stable-v1"}]' >> "$GITHUB_OUTPUT"
+        else
+          echo 'windows_matrix=[{"config":"Debug","build_dir":"build","profile":"default"},{"config":"Release","build_dir":"build","profile":"default"}]' >> "$GITHUB_OUTPUT"
+        fi
 
         if [[ "$BUILD_CONFIGS" == "both" ]]; then
           echo 'configs=["Debug","Release"]' >> "$GITHUB_OUTPUT"
@@ -138,7 +146,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: ${{ fromJson(needs.prepare.outputs.configs) }}
+        include: ${{ fromJson(needs.prepare.outputs.windows_matrix) }}
 
     steps:
     - name: Checkout repository
@@ -149,26 +157,50 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
+    - name: Configure Windows stable validation
+      if: needs.prepare.outputs.is_versioned == 'true'
+      run: cmake --preset windows-release -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+
+    - name: Build Windows stable validation
+      if: needs.prepare.outputs.is_versioned == 'true'
+      run: cmake --build build/windows-release --config Release --parallel
+
+    - name: Test Windows stable validation
+      if: needs.prepare.outputs.is_versioned == 'true'
+      run: ctest --test-dir build/windows-release -C Release --output-on-failure --no-tests=error
+
+    - name: Configure Windows Shipping package
+      if: needs.prepare.outputs.is_versioned == 'true'
+      # Preserve the authoritative Shipping feature surface, including BUILD_TESTS=OFF.
+      # The separate Release tree above supplies validation; only this tree is packaged.
+      run: cmake --preset windows-shipping -DSPARK_REQUIRE_WINDOWS_INSTALLERS=ON -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
+
     - name: Configure CMake
+      if: needs.prepare.outputs.is_versioned == 'false'
       # SPARK_REQUIRE_WINDOWS_INSTALLERS turns a missing makensis/WiX toolchain into
       # a configure error here, so the release cannot quietly produce a ZIP only.
       run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON -DSPARK_STRICT_DEPS=ON -DSPARK_REQUIRE_WINDOWS_INSTALLERS=ON -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
 
     - name: Build
-      run: cmake --build build --config ${{ matrix.config }} --parallel
+      run: cmake --build ${{ matrix.build_dir }} --config ${{ matrix.config }} --parallel
 
     - name: Run Tests
-      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error
+      if: needs.prepare.outputs.is_versioned == 'false'
+      run: ctest --test-dir ${{ matrix.build_dir }} -C ${{ matrix.config }} --output-on-failure --no-tests=error
 
     - name: Validate external package consumption
       shell: pwsh
       run: |
-        cmake --install build --config ${{ matrix.config }}
+        cmake --install ${{ matrix.build_dir }} --config ${{ matrix.config }}
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake -S Tests/PackageSmoke -B smoke-build -G "Visual Studio 17 2022" -A x64 -T v143 `
           -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" `
           -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake --build smoke-build --config ${{ matrix.config }} --parallel
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         ctest --test-dir smoke-build -C ${{ matrix.config }} --output-on-failure --no-tests=error
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Build every template against the installed SDK
       shell: pwsh
@@ -184,6 +216,7 @@ jobs:
           -DSPARK_CMAKE_GENERATOR_PLATFORM=x64 `
           -DSPARK_CMAKE_GENERATOR_TOOLSET=v143 `
           -P cmake/VerifyInstalledTemplates.cmake
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Verify staged template assets and service configs
       shell: pwsh
@@ -194,25 +227,28 @@ jobs:
         cmake `
           -DSPARK_TEMPLATE_ROOT="${{ github.workspace }}/stage/share/SparkEngine/templates" `
           -P cmake/VerifyTemplateAssets.cmake
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake `
           -DSPARK_TEMPLATE_ROOT="${{ github.workspace }}/stage/share/SparkEngine/templates" `
           -P cmake/VerifyTemplateServiceConfigs.cmake
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Validate staged package executable BOM
       shell: pwsh
       run: |
         cmake `
           -DSPARK_PACKAGE_ROOT="${{ github.workspace }}/stage" `
-          -DSPARK_EXECUTABLE_SUFFIX:STRING=.exe `
+          -DSPARK_PACKAGE_PROFILE=${{ matrix.profile }} -DSPARK_EXECUTABLE_SUFFIX:STRING=.exe `
           -P cmake/ValidateStagedPackageExecutables.cmake
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Generate CPack packages
       shell: pwsh
       run: |
-        cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
+        cpack --config ${{ matrix.build_dir }}/CPackConfig.cmake -C ${{ matrix.config }} -B ${{ matrix.build_dir }}/packages
         $cpackExitCode = $LASTEXITCODE
         if ($cpackExitCode -ne 0) {
-          Get-ChildItem build/packages/_CPack_Packages -File -Recurse -ErrorAction SilentlyContinue |
+          Get-ChildItem ${{ matrix.build_dir }}/packages/_CPack_Packages -File -Recurse -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -in @('NSISOutput.log', 'wix.log') } |
             ForEach-Object {
               Write-Error "CPack diagnostic: $($_.FullName)" -ErrorAction Continue
@@ -224,12 +260,13 @@ jobs:
     - name: Extract and smoke-test portable package
       shell: pwsh
       run: |
-        $archives = @(Get-ChildItem -LiteralPath build/packages -Filter *.zip -File)
+        $archives = @(Get-ChildItem -LiteralPath ${{ matrix.build_dir }}/packages -Filter *.zip -File)
         if ($archives.Count -ne 1) {
           throw "Expected exactly one portable ZIP package; found $($archives.Count)"
         }
         python .github/scripts/validate-extracted-package.py --preflight-archive "$($archives[0].FullName)"
-        Remove-Item -LiteralPath build/packages/_CPack_Packages -Recurse -Force -ErrorAction SilentlyContinue
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Remove-Item -LiteralPath ${{ matrix.build_dir }}/packages/_CPack_Packages -Recurse -Force -ErrorAction SilentlyContinue
         $extractRoot = Join-Path "${{ github.workspace }}" "package-extract"
         New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
         Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath $extractRoot
@@ -243,10 +280,15 @@ jobs:
           $packageRoot = $roots[0].FullName
         }
         python .github/scripts/validate-extracted-package.py --package-root "$packageRoot" --stage-root "${{ github.workspace }}/stage" --archive "$($archives[0].FullName)"
-        cmake -DSPARK_PACKAGE_ROOT="$packageRoot" -DSPARK_EXECUTABLE_SUFFIX:STRING=.exe -P cmake/ValidateStagedPackageExecutables.cmake
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cmake -DSPARK_PACKAGE_ROOT="$packageRoot" -DSPARK_PACKAGE_PROFILE=${{ matrix.profile }} -DSPARK_EXECUTABLE_SUFFIX:STRING=.exe -P cmake/ValidateStagedPackageExecutables.cmake
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake -S Tests/PackageSmoke -B package-smoke-build -G "Visual Studio 17 2022" -A x64 -T v143 -DSparkEngine_DIR="$packageRoot/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake --build package-smoke-build --config ${{ matrix.config }} --parallel
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         ctest --test-dir package-smoke-build -C ${{ matrix.config }} --output-on-failure --no-tests=error
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake `
           -DSPARK_TEMPLATE_ROOT="$packageRoot/share/SparkEngine/templates" `
           -DSPARK_TEMPLATE_SOURCE_ROOT="${{ github.workspace }}/Templates" `
@@ -258,6 +300,7 @@ jobs:
           -DSPARK_CMAKE_GENERATOR_PLATFORM=x64 `
           -DSPARK_CMAKE_GENERATOR_TOOLSET=v143 `
           -P cmake/VerifyInstalledTemplates.cmake
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Upload CPack failure diagnostics
       if: failure()
@@ -265,8 +308,8 @@ jobs:
       with:
         name: SparkEngine-Windows-${{ matrix.config }}-cpack-diagnostics
         path: |
-          build/packages/_CPack_Packages/**/NSISOutput.log
-          build/packages/_CPack_Packages/**/wix.log
+          ${{ matrix.build_dir }}/packages/_CPack_Packages/**/NSISOutput.log
+          ${{ matrix.build_dir }}/packages/_CPack_Packages/**/wix.log
         if-no-files-found: ignore
         retention-days: 7
 
@@ -275,9 +318,9 @@ jobs:
       with:
         name: SparkEngine-Windows-${{ matrix.config }}-packages
         path: |
-          build/packages/*.zip
-          build/packages/*.exe
-          build/packages/*.msi
+          ${{ matrix.build_dir }}/packages/*.zip
+          ${{ matrix.build_dir }}/packages/*.exe
+          ${{ matrix.build_dir }}/packages/*.msi
         retention-days: 7
         if-no-files-found: error
 
@@ -760,9 +803,12 @@ jobs:
       id: sha
       run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-    - name: Download all build artifacts
+    - name: Download channel build artifacts
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       with:
+        # Stable SBOM and publication include only the qualified Windows Shipping product.
+        # Nightly retains all platform packages and standalone bootstrap installers.
+        pattern: ${{ needs.prepare.outputs.is_versioned == 'true' && 'SparkEngine-Windows-MinSizeRel-packages' || '*' }}
         path: release-assets
 
     - name: Generate SPDX software bill of materials
@@ -777,9 +823,39 @@ jobs:
 
     - name: Collect release assets
       id: assets
+      env:
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        RELEASE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
       run: |
         set -euo pipefail
-        # Flatten all package artifacts + standalone installer binaries to current directory.
+        # Select the same channel boundary as the download/SBOM step. Do not flatten
+        # another platform or bootstrap installer into the stable release even if
+        # an unrelated artifact directory is present.
+        package_root=release-assets
+        if [[ "$IS_VERSIONED" == "true" ]]; then
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid stable package version" >&2
+            exit 1
+          fi
+          package_root=release-assets/SparkEngine-Windows-MinSizeRel-packages
+          required_stable_packages=(
+            "SparkEngine-${RELEASE_VERSION}-Windows-AMD64-MinSizeRel.zip"
+            "SparkEngine-${RELEASE_VERSION}-Windows-AMD64-MinSizeRel-Runtime.exe"
+            "SparkEngine-${RELEASE_VERSION}-Windows-AMD64-MinSizeRel-Runtime.msi"
+          )
+          for required_package in "${required_stable_packages[@]}"; do
+            if [[ ! -f "$package_root/$required_package" || -L "$package_root/$required_package" ]]; then
+              echo "Missing regular Windows Shipping package: $required_package" >&2
+              exit 1
+            fi
+          done
+          mapfile -d '' stable_files < <(find "$package_root" -mindepth 1 -print0)
+          if (( ${#stable_files[@]} != ${#required_stable_packages[@]} )); then
+            echo "Unexpected content in Windows Shipping artifact" >&2
+            exit 1
+          fi
+        fi
+        # Flatten selected package artifacts to the current directory.
         while IFS= read -r -d '' artifact; do
           name=$(basename "$artifact")
           if [[ -e "$name" ]]; then
@@ -788,14 +864,18 @@ jobs:
           fi
           cp "$artifact" "$name"
         done < <(
-          find release-assets -type f \
+          find "$package_root" -type f \
             \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
                -o -name "SparkInstaller-*" \) -print0
         )
 
         # Publish version-independent aliases for direct README downloads.
         # Keep the versioned packages alongside them for archival clarity.
-        for config in Debug Release; do
+        alias_configs=()
+        if [[ "$IS_VERSIONED" == "false" ]]; then
+          alias_configs=(Debug Release)
+        fi
+        for config in "${alias_configs[@]}"; do
           mapfile -t zip_matches < <(compgen -G "SparkEngine-*-Windows-AMD64-${config}.zip" || true)
           mapfile -t installer_matches < <(compgen -G "SparkEngine-*-Windows-AMD64-${config}-Runtime.exe" || true)
 
@@ -1539,7 +1619,9 @@ jobs:
       id: suffix
       run: |
         BUILD_TYPE="${{ needs.prepare.outputs.build_type }}"
-        if [[ "$BUILD_TYPE" == "debug" ]]; then
+        if [[ "${{ needs.prepare.outputs.is_versioned }}" == "true" ]]; then
+          echo "label= (Windows Shipping)" >> "$GITHUB_OUTPUT"
+        elif [[ "$BUILD_TYPE" == "debug" ]]; then
           echo "label= (Debug)" >> "$GITHUB_OUTPUT"
         elif [[ "$BUILD_TYPE" == "release" ]]; then
           echo "label= (Release)" >> "$GITHUB_OUTPUT"
@@ -1637,7 +1719,7 @@ jobs:
           Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           Built on: ${{ steps.run-start.outputs.started_at }}
 
-          > **Stable releases** are manually published and thoroughly tested. For the latest development builds, see the [nightly release](https://github.com/${{ github.repository }}/releases/tag/nightly).
+          > **Stable-v1 releases** contain Windows x64 Shipping packages built with the authoritative `windows-shipping` preset and validated separately in Release. For the latest development builds, see the [nightly release](https://github.com/${{ github.repository }}/releases/tag/nightly).
 
           ### Downloads
 

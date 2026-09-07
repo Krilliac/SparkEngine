@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
-# Validate the executable bill of materials for SparkEngine's default release
-# configuration. Run after `cmake --install` and before CPack uploads artifacts.
+# Validate the executable bill of materials for the selected trusted profile.
+# The default is the full nightly product; stable-v1 is Windows Shipping. Run after `cmake --install` and before CPack uploads artifacts.
 
 if(NOT DEFINED SPARK_PACKAGE_ROOT OR SPARK_PACKAGE_ROOT STREQUAL "")
     message(FATAL_ERROR "SPARK_PACKAGE_ROOT must name the staged install root")
@@ -174,6 +174,16 @@ if(NOT DEFINED SPARK_EXECUTABLE_SUFFIX)
     endif()
 endif()
 
+# This selector comes from the trusted workflow, never the staged package.
+# Keep stable-v1's executable list aligned with docs/site/readiness.json.
+if(NOT DEFINED SPARK_PACKAGE_PROFILE)
+    set(SPARK_PACKAGE_PROFILE default)
+endif()
+if(NOT SPARK_PACKAGE_PROFILE STREQUAL "default" AND
+   NOT SPARK_PACKAGE_PROFILE STREQUAL "stable-v1")
+    message(FATAL_ERROR "Unknown package profile: ${SPARK_PACKAGE_PROFILE}")
+endif()
+
 set(_spark_validate_modules_only OFF)
 if(SPARK_PACKAGE_VALIDATE_MODULES_ONLY)
     set(_spark_validate_modules_only ON)
@@ -185,19 +195,18 @@ if(NOT _spark_validate_modules_only)
         SparkConsole
         SparkEditor
         SparkLauncher
-        SparkServer
-        SparkGateway
-        SparkDaemon
-        SparkCollabServer
-        SparkOrchestrator
         SparkCooker
-        SparkWorker
         SparkAutomation
         SparkBuild
         SparkInstaller
         SparkShaderCompiler
         SparkCrashReporter
     )
+
+    if(SPARK_PACKAGE_PROFILE STREQUAL "default")
+        list(APPEND _spark_required_executables
+            SparkServer SparkGateway SparkDaemon SparkCollabServer SparkOrchestrator SparkWorker)
+    endif()
 
     set(_spark_missing_executables "")
     foreach(_spark_executable IN LISTS _spark_required_executables)
@@ -300,6 +309,15 @@ foreach(_spark_module IN LISTS _spark_required_game_modules)
     endif()
     list(APPEND _spark_seen_game_modules "${_spark_module}")
 endforeach()
+
+if(SPARK_PACKAGE_PROFILE STREQUAL "stable-v1")
+    if(NOT _spark_package_target_system STREQUAL "Windows")
+        message(FATAL_ERROR "stable-v1 requires a Windows package")
+    endif()
+    if(NOT "SparkGameFPS" IN_LIST _spark_required_game_modules)
+        message(FATAL_ERROR "stable-v1 package omits required SparkGameFPS module")
+    endif()
+endif()
 
 set(_spark_sdk_version_header "${SPARK_PACKAGE_ROOT}/include/Spark/Version.h")
 if(NOT EXISTS "${_spark_sdk_version_header}" OR
@@ -596,22 +614,10 @@ if(_spark_missing_runtime_files)
         "  ${_spark_missing_runtime_report}")
 endif()
 
-set(_spark_help_smoke_executables
-    SparkEngine
-    SparkLauncher
-    SparkServer
-    SparkGateway
-    SparkDaemon
-    SparkCollabServer
-    SparkOrchestrator
-    SparkCooker
-    SparkWorker
-    SparkAutomation
-    SparkBuild
-    SparkInstaller
-    SparkShaderCompiler
-    SparkCrashReporter
-)
+# Console and editor have interactive entry points; all remaining required tools
+# retain their --help smoke, including service tools in the default profile.
+set(_spark_help_smoke_executables ${_spark_required_executables})
+list(REMOVE_ITEM _spark_help_smoke_executables SparkConsole SparkEditor)
 foreach(_spark_executable IN LISTS _spark_help_smoke_executables)
     set(_spark_help_path
         "${SPARK_PACKAGE_ROOT}/bin/${_spark_executable}${SPARK_EXECUTABLE_SUFFIX}")

@@ -240,8 +240,8 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 |---|---|---|---|---|
 | [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **open** | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
 | [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
-| [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **open** | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
-| [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **open** | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
+| [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **in-progress** | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
+| [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **open** | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
 | [`SEC-100`](#sec-100--close-critical-remote-administration-and-runtime-security-paths) Close critical remote-administration and runtime security paths | P0 | **open** | — | `CI-100`, `OPS-100`, `RDY-000` |
 | [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **open** | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
@@ -989,10 +989,10 @@ python3 tools/site-data/validate.py
 
 ### BLD-100 — Create strict reproducible Shipping configurations
 
-**Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** build · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** build · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Public release automation builds Debug/Release rather than authoritative hardened Shipping presets and does not prove reproducibility or symbol handling.
+Versioned Windows publication now selects the authoritative windows-shipping preset and MinSizeRel product tree, with separate windows-release validation. Nightly retains Debug/Release packages. Executed workflow-selection and asset-collection regressions, plus staged-package profile checks, verify the local orchestration contract. Hosted Windows Shipping packaging, reproducibility comparison, exact toolchain/dependency manifests, and private symbol retention remain unverified or unfinished; this item is not complete.
 
 **Dependency contract**
 
@@ -1065,10 +1065,10 @@ cmake --build build/windows-shipping --config MinSizeRel --clean-first
 
 ### REL-100 — Unify versioning, packaging, installer, launcher, and release provenance
 
-**Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Release automation now passes SPARK_ENGINE_VERSION to CMake, generates SDK version headers, and checks exact publication provenance. The remaining acceptance work is to prove version agreement across every stable-v1 product and tag, and to package the authoritative Shipping profile with a complete toolchain and dependency manifest.
+CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Still open: tag/default-version/changelog equality, complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy.
 
 **Dependency contract**
 
