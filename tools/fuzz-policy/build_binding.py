@@ -293,7 +293,7 @@ def _single(
     if not matches:
         raise PolicyError(f"{field} has no {what}")
     if len(matches) > 1:
-        raise PolicyError(f"{field} declares {what} more than once")
+        raise PolicyError(f"{field} has more than one {what}")
     return matches[0]
 
 
@@ -331,7 +331,7 @@ def verify_cmake_registration(
         "add_executable",
         lambda command: bool(command.arguments) and _literal(command.arguments[0], field) == cmake_target,
         field,
-        f"an add_executable declaring target {cmake_target!r}",
+        f"add_executable declaring target {cmake_target!r}",
     )
     sources = [
         _resolve_path(directory, argument, field)
@@ -357,7 +357,7 @@ def verify_cmake_registration(
         and command.arguments[0].upper() == "NAME"
         and _literal(command.arguments[1], field) == test_selector,
         field,
-        f"an add_test registering {test_selector!r}",
+        f"add_test registering {test_selector!r}",
     )
     upper = [argument.upper() for argument in test.arguments]
     if "COMMAND" not in upper:

@@ -778,7 +778,7 @@ class TestCorpusBinding(FixtureTestCase):
         self.fixture.make_fuzzed()
         commented = "".join(f"# {line}\n" for line in FUZZ_CMAKE.splitlines())
         self.fixture.rewrite_cmake(commented)
-        with self.assertPolicyError("has no an add_executable declaring target 'FuzzExampleParser'"):
+        with self.assertPolicyError("has no add_executable declaring target 'FuzzExampleParser'"):
             self.fixture.load_corpora()
 
     def test_literal_blob_comment_is_rejected(self) -> None:
@@ -787,13 +787,13 @@ class TestCorpusBinding(FixtureTestCase):
             "# FuzzExampleParser FuzzExampleParserSmoke Tests/Fuzz/ExampleFuzz.cpp "
             "-max_len=128 -timeout=1 -rss_limit_mb=64 TIMEOUT 5 fsanitize=fuzzer\n"
         )
-        with self.assertPolicyError("has no an add_executable"):
+        with self.assertPolicyError("has no add_executable"):
             self.fixture.load_corpora()
 
     def test_undeclared_cmake_target_is_rejected(self) -> None:
         self.fixture.make_fuzzed()
         self.fixture.rewrite_cmake(FUZZ_CMAKE.replace("add_executable(FuzzExampleParser", "add_executable(SomethingElse"))
-        with self.assertPolicyError("has no an add_executable declaring target 'FuzzExampleParser'"):
+        with self.assertPolicyError("has no add_executable declaring target 'FuzzExampleParser'"):
             self.fixture.load_corpora()
 
     def test_target_must_compile_the_declared_harness(self) -> None:
@@ -1187,6 +1187,100 @@ class TestWorkflowBinding(unittest.TestCase):
         duplicated = self.workflow + "\n  fuzz-policy:\n    runs-on: ubuntu-24.04\n"
         with self.assertRaisesRegex(policy_common.PolicyError, "exactly one fuzz-policy job"):
             check_fuzz_policy._job_block(duplicated, check_fuzz_policy.FUZZ_JOB)
+
+
+class CiBindingFixture:
+    """A copy of the real CI/CMake wiring that individual tests can break."""
+
+    FILES = (
+        ".github/workflows/build.yml",
+        "CMakeLists.txt",
+        "cmake/SparkFuzzPolicy.cmake",
+        "tools/fuzz-policy/CMakeLists.txt",
+    )
+
+    def __init__(self, root: pathlib.Path) -> None:
+        self.root = root
+        for relative in self.FILES:
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes((REPO_ROOT / relative).read_bytes())
+
+    def patch(self, relative: str, old: str, new: str) -> None:
+        path = self.root / relative
+        text = path.read_text(encoding="utf-8")
+        assert old in text, f"{relative} does not contain {old!r}"
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def validate(self, fuzz_target_count: int = 0) -> None:
+        check_fuzz_policy.validate_ci_and_cmake_binding(self.root, fuzz_target_count=fuzz_target_count)
+
+
+class TestCiBindingMutations(unittest.TestCase):
+    """validate_ci_and_cmake_binding must fail on a broken wiring, not just pass on a good one."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.fixture = CiBindingFixture(pathlib.Path(self.temp.name))
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def test_unmodified_wiring_passes(self) -> None:
+        self.fixture.validate()
+
+    def test_conditional_job_is_rejected(self) -> None:
+        self.fixture.patch(".github/workflows/build.yml", '  fuzz-policy:\n    name: "Fuzz policy"', '  fuzz-policy:\n    if: false\n    name: "Fuzz policy"')
+        with self.assertRaisesRegex(policy_common.PolicyError, "must not be conditional"):
+            self.fixture.validate()
+
+    def test_continue_on_error_job_is_rejected(self) -> None:
+        self.fixture.patch(".github/workflows/build.yml", '  fuzz-policy:\n    name: "Fuzz policy"', '  fuzz-policy:\n    continue-on-error: true\n    name: "Fuzz policy"')
+        with self.assertRaisesRegex(policy_common.PolicyError, "must not set continue-on-error"):
+            self.fixture.validate()
+
+    def test_commented_out_command_is_rejected(self) -> None:
+        self.fixture.patch(
+            ".github/workflows/build.yml",
+            "      run: cmake --build build/fuzz-policy --target check-fuzz-policy",
+            "      # run: cmake --build build/fuzz-policy --target check-fuzz-policy\n      run: true",
+        )
+        with self.assertRaisesRegex(policy_common.PolicyError, "does not run 'cmake --build"):
+            self.fixture.validate()
+
+    def test_required_gate_without_the_dependency_is_rejected(self) -> None:
+        text = (self.fixture.root / ".github/workflows/build.yml").read_text(encoding="utf-8")
+        gate = check_fuzz_policy._job_block(text, "required-ci-gate")
+        stripped = "\n".join(line for line in gate if line.strip() != "- fuzz-policy")
+        (self.fixture.root / ".github/workflows/build.yml").write_text(
+            text.replace("\n".join(gate), stripped, 1), encoding="utf-8"
+        )
+        with self.assertRaisesRegex(policy_common.PolicyError, "does not depend on fuzz-policy"):
+            self.fixture.validate()
+
+    def test_root_cmake_without_the_include_is_rejected(self) -> None:
+        self.fixture.patch(
+            "CMakeLists.txt",
+            'include("${CMAKE_SOURCE_DIR}/cmake/SparkFuzzPolicy.cmake")',
+            'include("${CMAKE_SOURCE_DIR}/cmake/SomethingElse.cmake")',
+        )
+        with self.assertRaisesRegex(policy_common.PolicyError, "does not include cmake/SparkFuzzPolicy.cmake"):
+            self.fixture.validate()
+
+    def test_module_without_the_python_option_gate_is_rejected(self) -> None:
+        self.fixture.patch("cmake/SparkFuzzPolicy.cmake", "option(SPARK_ENABLE_FUZZ_POLICY_CHECKS", "set(SPARK_ENABLE_FUZZ_POLICY_CHECKS")
+        with self.assertRaisesRegex(policy_common.PolicyError, "does not gate its Python dependency"):
+            self.fixture.validate()
+
+    def test_module_without_the_adversarial_test_is_rejected(self) -> None:
+        self.fixture.patch("cmake/SparkFuzzPolicy.cmake", "NAME FuzzPolicyAdversarial", "NAME FuzzPolicyRenamed")
+        with self.assertRaisesRegex(policy_common.PolicyError, "does not register the FuzzPolicyAdversarial test"):
+            self.fixture.validate()
+
+    def test_standalone_project_without_enable_testing_is_rejected(self) -> None:
+        self.fixture.patch("tools/fuzz-policy/CMakeLists.txt", "enable_testing()", "# enable_testing()")
+        with self.assertRaisesRegex(policy_common.PolicyError, "is missing enable_testing"):
+            self.fixture.validate()
 
 
 # =========================================================================
