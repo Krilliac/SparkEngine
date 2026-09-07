@@ -121,6 +121,11 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         attempted = True
         execute("install", [msiexec, "/i", str(package), "/qn", "/norestart", "/L*V",
                             str(logs / "msi-install.log"), f"INSTALL_ROOT={install_root}"])
+        installed = identity("identity-installed")
+        # INSTALLSTATE_DEFAULT (5) means installed for the current context;
+        # advertised, absent, or broken registration is not a successful install.
+        if installed["ProductState"] != 5:
+            raise ValueError("MSI installation did not establish installed product registration")
         execute("validate", [cmake, f"-DSPARK_PACKAGE_ROOT={install_root}", "-DSPARK_PACKAGE_LAYOUT=runtime",
                              "-DSPARK_PACKAGE_PROFILE=stable-v1", f"-DSPARK_PACKAGE_EXPECTED_MODULE_MANIFEST={manifest}",
                              "-DSPARK_EXECUTABLE_SUFFIX:STRING=.exe", "-P",

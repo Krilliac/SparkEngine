@@ -19,7 +19,7 @@ SPEC.loader.exec_module(MODULE)
 class WindowsMSILifecycleTests(unittest.TestCase):
     def test_lifecycle_failures_preserve_original_error_and_attempt_uninstall(self):
         for case in ("success", "install", "validate", "fps", "uninstall", "residue", "install_and_uninstall",
-                     "reboot", "changed_msi", "wrong_identity", "wrong_version", "invalid_identity", "preexisting", "wrong_root", "timeout", "registration_remains", "no_marker", "zero_marker", "older_related_product"):
+                     "reboot", "changed_msi", "wrong_identity", "wrong_version", "invalid_identity", "preexisting", "wrong_root", "timeout", "registration_remains", "no_marker", "zero_marker", "older_related_product", "unregistered_install", "absent_install", "advertised_install", "broken_install"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
                 packages = root / "packages"
@@ -41,12 +41,16 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                         if case == "invalid_identity":
                             log.write_text("[]")
                             return 0
+                        product_state = 5 if case == "preexisting" or installed or (
+                            case == "registration_remains" and any("/x" in call for call in calls)) else -1
+                        if installed:
+                            product_state = {"unregistered_install": -1, "absent_install": 2,
+                                             "advertised_install": 1, "broken_install": 0}.get(case, product_state)
                         log.write_text(json.dumps({"ProductName": "Wrong" if case == "wrong_identity" else "SparkEngine",
                                                   "ProductVersion": "9.8.7" if case == "wrong_version" else "1.2.3", "ProductCode": "{12345678-1234-1234-1234-123456789ABC}",
                                                   "UpgradeCode": "{ABCDEF01-1234-1234-1234-123456789ABC}",
                                                   "RelatedProducts": ["{98765432-1234-1234-1234-123456789ABC}"] if case == "older_related_product" else [],
-                                                  "ProductState": 5 if case == "preexisting" or installed or (
-                                                      case == "registration_remains" and any("/x" in call for call in calls)) else -1,
+                                                  "ProductState": product_state,
                                                   "InstallRoot": "WRONG" if case == "wrong_root" else "INSTALL_ROOT"}))
                         return 0
                     if "/i" in argv:
@@ -107,6 +111,10 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 if case == "install_and_uninstall":
                     self.assertIn("install", report["errors"][0])
                     self.assertTrue(any("uninstall" in error for error in report["errors"][1:]))
+                if case in ("unregistered_install", "absent_install", "advertised_install", "broken_install"):
+                    self.assertTrue(any("registration" in error for error in report["errors"]))
+                    self.assertFalse(any(any(arg.startswith("-DSPARK_PACKAGE_ROOT=") for arg in argv) for argv in calls))
+                    self.assertFalse(any(argv[0].endswith("SparkEngine.exe") for argv in calls))
                 if case == "residue":
                     self.assertTrue(any("residue" in error for error in report["errors"]))
 
