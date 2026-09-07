@@ -1173,6 +1173,31 @@ class TestWorkflowBinding(unittest.TestCase):
         commands = check_fuzz_policy._run_commands(block)
         self.assertNotIn("cmake --build build/fuzz-policy --target check-fuzz-policy", commands)
 
+    def test_block_scalar_body_is_a_command(self) -> None:
+        block = [
+            "  fuzz-policy:",
+            "    steps:",
+            "    - name: Multi",
+            "      run: |",
+            "        cmake -S tools/fuzz-policy -B build/fuzz-policy",
+            "        ctest --test-dir build/fuzz-policy",
+        ]
+        commands = check_fuzz_policy._run_commands(block)
+        self.assertIn("cmake -S tools/fuzz-policy -B build/fuzz-policy", commands)
+        self.assertIn("ctest --test-dir build/fuzz-policy", commands)
+
+    def test_sibling_key_after_a_block_scalar_is_not_a_command(self) -> None:
+        block = [
+            "  fuzz-policy:",
+            "    steps:",
+            "    - run: |",
+            "        echo hello",
+            "      name: cmake --build build/fuzz-policy --target check-fuzz-policy",
+        ]
+        commands = check_fuzz_policy._run_commands(block)
+        self.assertNotIn("name: cmake --build build/fuzz-policy --target check-fuzz-policy", commands)
+        self.assertNotIn("cmake --build build/fuzz-policy --target check-fuzz-policy", commands)
+
     def test_disabled_job_is_rejected(self) -> None:
         block = ["  fuzz-policy:", "    if: false", "    runs-on: ubuntu-24.04"]
         with self.assertRaisesRegex(policy_common.PolicyError, "must not be conditional"):

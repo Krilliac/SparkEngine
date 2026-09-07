@@ -188,11 +188,19 @@ exist. See [Fuzz Policy and Parser Security](Fuzz-Policy-and-Parser-Security.md)
 ```bash
 cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
-ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error
+# -C is required by multi-config generators (Visual Studio) and ignored by
+# single-config ones; without it CTest reports "Not Run" on Windows.
+ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 ```
 
-With a multi-config generator such as Visual Studio, append `-C Debug` (or the
-configuration being tested) to the `ctest` command.
+The registered checks are `FuzzPolicy` (the structural gate) and
+`FuzzPolicyAdversarial` (the hostile regression suite). They register only when
+`SPARK_ENABLE_FUZZ_POLICY_CHECKS` is on, which defaults to `BUILD_TESTS`, so an
+engine-only configure does not require Python. Release publication additionally runs
+`check_fuzz_policy.py --require-closure`, which fails today by design.
+
+For a multi-config generator such as Visual Studio, replace `Release` with the
+configuration being tested.
 
 ### Run Registered CTest Entries
 

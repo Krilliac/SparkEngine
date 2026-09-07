@@ -102,18 +102,27 @@ def _run_commands(block: list[str]) -> set[str]:
         if match is None:
             index += 1
             continue
-        indent, inline = match.group(1), match.group(2).strip()
+        inline = match.group(2).strip()
         if inline and inline not in ("|", ">", "|-", ">-"):
             commands.add(inline)
             index += 1
             continue
+        # A block scalar's body is every line indented at least as far as its
+        # first line. Anchoring on the `run:` key's own indent would also sweep
+        # in sibling keys, so a literal in a `name:` could pose as a command.
         index += 1
+        body_indent: str | None = None
         while index < len(block):
             body = _strip_yaml_comment(block[index])
-            if body.strip() and not body.startswith(indent + " "):
+            if not body.strip():
+                index += 1
+                continue
+            leading = body[: len(body) - len(body.lstrip())]
+            if body_indent is None:
+                body_indent = leading
+            elif not leading.startswith(body_indent):
                 break
-            if body.strip():
-                commands.add(body.strip())
+            commands.add(body.strip())
             index += 1
     return commands
 
