@@ -45,6 +45,16 @@ env:
 jobs:
   # ===========================================================================
   # Security — blocking SEC-120 parser inventory and fuzz-policy contract
+  #
+  # Intentionally unfiltered. Its scan roots are every first-party source tree
+  # in tools/fuzz-policy/parser-inventory.json — SparkEngine/Source,
+  # SparkEditor/Source and Spark{ShaderCompiler,Installer,CrashReporter,
+  # AssetPipelineCore,Cooker,Worker,Build,Launcher,Console,Daemon,Server,
+  # Gateway,Automation}/src, SparkSDK/Include, GameModules — plus
+  # tools/fuzz-policy/**, Tests/fuzz-policy/**, Tests/fuzz-corpora/**,
+  # cmake/SparkFuzzPolicy.cmake and CMakeLists.txt. Do NOT add paths: or
+  # paths-ignore: to this workflow without covering all of them: a skipped gate
+  # reports the same green as a passing one.
   # ===========================================================================
   fuzz-policy:
     name: "Fuzz policy"
@@ -62,7 +72,9 @@ jobs:
       run: cmake --build build/fuzz-policy --target check-fuzz-policy
 
     - name: Run adversarial policy tests
-      run: ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error
+      # -C is required by multi-config generators and ignored by single-config
+      # ones, so the same command works for CI and for local Windows runs.
+      run: ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 
   # ===========================================================================
   # CI Tooling — prove report parsers and generated repository statistics
@@ -3240,6 +3252,6 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["validate-ci-tools","check-format","validate-prompts","check-thirdparty-manifest","check-supply-chain","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","build-windows-shipping","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","check-format","validate-prompts","check-thirdparty-manifest","check-supply-chain","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","build-windows-shipping","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py

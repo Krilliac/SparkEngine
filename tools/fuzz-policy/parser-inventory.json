@@ -13,38 +13,51 @@
       "SparkBuild/src",
       "SparkLauncher/src",
       "SparkConsole/src",
+      "SparkDaemon/src",
+      "SparkServer/src",
+      "SparkGateway/src",
+      "SparkAutomation/src",
+      "SparkSDK/Include",
       "GameModules"
     ],
     "excluded_subtrees": [
       {
         "path": "SparkEngine/Source/Engine/Networking",
-        "reason": "Packet and protocol campaigns are owned by NET-100 behind readiness gate G12.",
-        "ticket": "NET-100"
+        "reason": "Packet and protocol campaigns are owned by NET-100 behind readiness gate G12; audited 2026-08-28 as containing no untrusted-file parser (write-only ofstream in DedicatedServer.cpp only).",
+        "ticket": "NET-100",
+        "owner": "net-100-protocol-campaign",
+        "expires": "2027-08-23",
+        "hidden_candidate_count": 8
       },
       {
         "path": "SparkEngine/Source/Engine/Scripting",
-        "reason": "AngelScript and visual-script campaigns are owned by ENG-200 behind readiness gate G11.",
-        "ticket": "ENG-200"
-      },
-      {
-        "path": "GameModules/SparkGameMMOFPS/Source/Net",
-        "reason": "Game-module packet parsing belongs to the NET-100 protocol campaign.",
-        "ticket": "NET-100"
-      },
-      {
-        "path": "GameModules/SparkGameVisualScript",
-        "reason": "Visual-script parsing belongs to the ENG-200 scripting campaign.",
-        "ticket": "ENG-200"
+        "reason": "AngelScript campaigns are owned by ENG-200 behind readiness gate G11. This subtree does ingest untrusted .as files from disk (AngelScriptEngine::CompileScriptFile -> AddSectionFromFile); that file surface is explicitly ENG-200's, not unowned.",
+        "ticket": "ENG-200",
+        "owner": "eng-200-scripting-campaign",
+        "expires": "2027-08-23",
+        "hidden_candidate_count": 3
       }
     ],
-    "extensions": [".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".inl", ".m", ".mm"],
+    "excluded_files": [],
+    "extensions": [
+      ".c",
+      ".cc",
+      ".cpp",
+      ".cxx",
+      ".h",
+      ".hh",
+      ".hpp",
+      ".inl",
+      ".m",
+      ".mm"
+    ],
     "limits": {
-      "max_files": 10000,
-      "max_directories": 5000,
+      "max_files": 20000,
+      "max_directories": 8000,
       "max_file_bytes": 4194304,
-      "max_total_bytes": 268435456,
+      "max_total_bytes": 536870912,
       "max_depth": 32,
-      "timeout_seconds": 30
+      "timeout_seconds": 240
     }
   },
   "parsers": [
@@ -52,503 +65,2826 @@
       "id": "mesh-obj-loader",
       "description": "Wavefront OBJ model loading on Windows and Linux.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/ModelLoadingWindows.cpp", "SparkEngine/Source/Graphics/ModelLoadingLinux.cpp"],
-      "formats": [".obj"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/ModelLoadingWindows.cpp",
+        "SparkEngine/Source/Graphics/ModelLoadingLinux.cpp"
+      ],
+      "formats": [
+        ".obj"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "mesh-fbx-importer",
       "description": "FBX model importer.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/FBXImporter.cpp", "SparkEngine/Source/Graphics/FBXImporter.h"],
-      "formats": [".fbx"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/FBXImporter.cpp",
+        "SparkEngine/Source/Graphics/FBXImporter.h"
+      ],
+      "formats": [
+        ".fbx"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "The proprietary SDK path has no engine-owned fuzz harness or bounded corpus.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "The proprietary SDK path has no engine-owned fuzz harness or bounded corpus.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "mesh-gltf-loader",
       "description": "glTF and GLB static-mesh loader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp", "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.h"],
-      "formats": [".gltf", ".glb"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp",
+        "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.h"
+      ],
+      "formats": [
+        ".gltf",
+        ".glb"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "texture-loader-windows",
       "description": "Windows image and texture loader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/TextureSystemWindows.cpp", "SparkEngine/Source/Graphics/TextureSystem.h"],
-      "formats": [".png", ".jpg", ".bmp", ".dds", ".tga", ".hdr"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/TextureSystemWindows.cpp",
+        "SparkEngine/Source/Graphics/TextureSystem.h"
+      ],
+      "formats": [
+        ".png",
+        ".jpg",
+        ".bmp",
+        ".dds",
+        ".tga",
+        ".hdr"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "texture-loader-linux",
       "description": "Linux image and texture loader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/TextureSystemLinux.cpp", "SparkEngine/Source/Graphics/TextureSystemLinuxTexture.cpp"],
-      "formats": [".png", ".jpg", ".bmp", ".tga", ".hdr"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/TextureSystemLinux.cpp",
+        "SparkEngine/Source/Graphics/TextureSystemLinuxTexture.cpp"
+      ],
+      "formats": [
+        ".png",
+        ".jpg",
+        ".bmp",
+        ".tga",
+        ".hdr"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "texture-exr-loader",
       "description": "OpenEXR texture loader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/EXRLoader.h"],
-      "formats": [".exr"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/EXRLoader.h"
+      ],
+      "formats": [
+        ".exr"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "texture-basis-transcoder",
       "description": "Basis and KTX2 texture transcoder.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/BasisTranscoder.h"],
-      "formats": [".basis", ".ktx2"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/BasisTranscoder.h"
+      ],
+      "formats": [
+        ".basis",
+        ".ktx2"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "texture-streaming-container",
       "description": "Streamed texture container reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/TextureStreaming.cpp"],
-      "formats": [".stex"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/TextureStreaming.cpp"
+      ],
+      "formats": [
+        ".stex"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "material-loader",
       "description": "Material definition loader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/MaterialLoader.cpp", "SparkEngine/Source/Graphics/MaterialLoader.h"],
-      "formats": [".mat", ".json"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/MaterialLoader.cpp",
+        "SparkEngine/Source/Graphics/MaterialLoader.h"
+      ],
+      "formats": [
+        ".mat",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "shader-source-loader",
       "description": "Runtime shader source loading and hot reload.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/ShaderCompilationWindows.cpp", "SparkEngine/Source/Graphics/ShaderCompilationLinux.cpp", "SparkEngine/Source/Graphics/ShaderHotReload.cpp"],
-      "formats": [".hlsl", ".glsl", ".vert", ".frag", ".comp"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/ShaderCompilationLinux.cpp",
+        "SparkEngine/Source/Graphics/ShaderCompilationLinuxInternal.h",
+        "SparkEngine/Source/Graphics/ShaderCompilationWindows.cpp",
+        "SparkEngine/Source/Graphics/ShaderHotReload.cpp",
+        "SparkEngine/Source/Graphics/ShaderHotReload.h"
+      ],
+      "formats": [
+        ".hlsl",
+        ".glsl",
+        ".vert",
+        ".frag",
+        ".comp"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "svg-renderer",
       "description": "SVG document reader used by the renderer.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/SVGRenderer.h"],
-      "formats": [".svg"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/SVGRenderer.h"
+      ],
+      "formats": [
+        ".svg"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "audio-sound-effect",
       "description": "WAV and OGG sound-effect loader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Audio/SoundEffect.cpp", "SparkEngine/Source/Audio/SoundEffect.h"],
-      "formats": [".wav", ".ogg"],
+      "source_files": [
+        "SparkEngine/Source/Audio/SoundEffect.cpp",
+        "SparkEngine/Source/Audio/SoundEffect.h"
+      ],
+      "formats": [
+        ".wav",
+        ".ogg"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "scene-serializer",
       "description": "Runtime scene and reflected-scene reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/SceneManager/SceneManager.cpp", "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp", "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h"],
-      "formats": [".scene", ".json"],
+      "source_files": [
+        "SparkEngine/Source/SceneManager/SceneManager.cpp",
+        "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp",
+        "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h"
+      ],
+      "formats": [
+        ".scene",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "save-system",
       "description": "Runtime save-game reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp", "SparkEngine/Source/Engine/SaveSystem/SaveSystem.h", "SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h"],
-      "formats": [".sav", ".save"],
+      "source_files": [
+        "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp",
+        "SparkEngine/Source/Engine/SaveSystem/SaveSystem.h",
+        "SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h"
+      ],
+      "formats": [
+        ".sav",
+        ".save"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "replay-system",
       "description": "Recorded input replay reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/Replay/ReplaySystem.cpp", "SparkEngine/Source/Engine/Replay/ReplaySystem.h"],
-      "formats": [".replay"],
+      "source_files": [
+        "SparkEngine/Source/Engine/Replay/ReplaySystem.cpp",
+        "SparkEngine/Source/Engine/Replay/ReplaySystem.h"
+      ],
+      "formats": [
+        ".replay"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "config-parser",
       "description": "INI-style engine configuration parser.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Utils/ConfigParser.cpp", "SparkEngine/Source/Utils/ConfigParser.h"],
-      "formats": [".ini", ".cfg", ".config"],
+      "source_files": [
+        "SparkEngine/Source/Utils/ConfigParser.cpp",
+        "SparkEngine/Source/Utils/ConfigParser.h"
+      ],
+      "formats": [
+        ".ini",
+        ".cfg",
+        ".config"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "engine-settings",
       "description": "Engine settings JSON reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Core/EngineSettings.cpp", "SparkEngine/Source/Core/EngineSettings.h"],
-      "formats": [".json"],
+      "source_files": [
+        "SparkEngine/Source/Core/EngineSettings.cpp",
+        "SparkEngine/Source/Core/EngineSettings.h"
+      ],
+      "formats": [
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "datatable-system",
       "description": "CSV and JSON data-table reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/DataTable/DataTableSystem.h"],
-      "formats": [".csv", ".json"],
+      "source_files": [
+        "SparkEngine/Source/Engine/DataTable/DataTableSystem.h"
+      ],
+      "formats": [
+        ".csv",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "dialogue-system",
       "description": "Dialogue graph reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/Dialogue/DialogueSystem.cpp", "SparkEngine/Source/Engine/Dialogue/DialogueSystem.h"],
-      "formats": [".dialogue", ".json"],
+      "source_files": [
+        "SparkEngine/Source/Engine/Dialogue/DialogueSystem.cpp",
+        "SparkEngine/Source/Engine/Dialogue/DialogueSystem.h"
+      ],
+      "formats": [
+        ".dialogue",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "localization-system",
       "description": "Localization catalog reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/Localization/LocalizationSystem.cpp", "SparkEngine/Source/Engine/Localization/LocalizationSystem.h"],
-      "formats": [".loc", ".csv", ".json"],
+      "source_files": [
+        "SparkEngine/Source/Engine/Localization/LocalizationSystem.cpp",
+        "SparkEngine/Source/Engine/Localization/LocalizationSystem.h"
+      ],
+      "formats": [
+        ".loc",
+        ".csv",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "achievement-definitions",
       "description": "Achievement definition reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/Gameplay/AchievementSystem.h"],
-      "formats": [".json"],
+      "source_files": [
+        "SparkEngine/Source/Engine/Gameplay/AchievementSystem.h"
+      ],
+      "formats": [
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "event-response-definitions",
       "description": "Event-response definition reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp", "SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h"],
-      "formats": [".json"],
+      "source_files": [
+        "SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp",
+        "SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h"
+      ],
+      "formats": [
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "input-bindings",
       "description": "User input-binding configuration reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Input/InputBindings.cpp", "SparkEngine/Source/Input/InputBindings.h"],
-      "formats": [".json", ".ini"],
+      "source_files": [
+        "SparkEngine/Source/Input/InputBindings.cpp",
+        "SparkEngine/Source/Input/InputBindings.h"
+      ],
+      "formats": [
+        ".json",
+        ".ini"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "mod-manifest",
       "description": "Mod manifest and metadata reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/Modding/ModSystemIO.cpp", "SparkEngine/Source/Engine/Modding/ModSystem.h"],
-      "formats": [".mod", ".json"],
+      "source_files": [
+        "SparkEngine/Source/Engine/Modding/ModSystemIO.cpp",
+        "SparkEngine/Source/Engine/Modding/ModSystem.h"
+      ],
+      "formats": [
+        ".mod",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "archive-resource-provider",
       "description": "Archive-backed resource provider.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.cpp", "SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h"],
-      "formats": [".pak", ".zip"],
+      "source_files": [
+        "SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.cpp",
+        "SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h"
+      ],
+      "formats": [
+        ".pak",
+        ".zip"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "sparkpak-reader",
       "description": "SparkPak archive reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Core/SparkPak.cpp", "SparkEngine/Source/Core/SparkPak.h"],
-      "formats": [".spak"],
+      "source_files": [
+        "SparkEngine/Source/Core/SparkPak.cpp",
+        "SparkEngine/Source/Core/SparkPak.h"
+      ],
+      "formats": [
+        ".spak"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "virtual-filesystem-mounts",
       "description": "Virtual-filesystem mount and archive metadata reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp", "SparkEngine/Source/Engine/Modding/VirtualFileSystem.h"],
-      "formats": [".vfs", ".pak"],
+      "source_files": [
+        "SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp",
+        "SparkEngine/Source/Engine/Modding/VirtualFileSystem.h"
+      ],
+      "formats": [
+        ".vfs",
+        ".pak"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "runtime-prefab",
       "description": "Runtime prefab JSON reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/ECS/RuntimePrefab.h"],
-      "formats": [".prefab", ".json"],
+      "source_files": [
+        "SparkEngine/Source/Engine/ECS/RuntimePrefab.h"
+      ],
+      "formats": [
+        ".prefab",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "entity-archetype-loader",
       "description": "Entity archetype JSON reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp", "SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.h"],
-      "formats": [".archetype", ".json"],
+      "source_files": [
+        "SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp",
+        "SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.h"
+      ],
+      "formats": [
+        ".archetype",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "scene-manifest",
       "description": "Streaming scene manifest reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/Streaming/SceneManifest.h"],
-      "formats": [".manifest", ".json"],
+      "source_files": [
+        "SparkEngine/Source/Engine/Streaming/SceneManifest.h"
+      ],
+      "formats": [
+        ".manifest",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "asset-pipeline",
       "description": "Runtime asset metadata and import pipeline.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Graphics/AssetPipeline.cpp", "SparkEngine/Source/Graphics/AssetPipeline.h", "SparkEngine/Source/Graphics/AssetPipelineWindows.cpp", "SparkEngine/Source/Graphics/AssetPipelineLinux.cpp"],
-      "formats": ["asset-source", ".json"],
+      "source_files": [
+        "SparkEngine/Source/Graphics/AssetPipeline.cpp",
+        "SparkEngine/Source/Graphics/AssetPipeline.h",
+        "SparkEngine/Source/Graphics/AssetPipelineWindows.cpp",
+        "SparkEngine/Source/Graphics/AssetPipelineLinux.cpp"
+      ],
+      "formats": [
+        "asset-source",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "asset-migration",
       "description": "Asset migration manifest reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Core/AssetMigration.h"],
-      "formats": [".json"],
+      "source_files": [
+        "SparkEngine/Source/Core/AssetMigration.h"
+      ],
+      "formats": [
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "navmesh-loader",
       "description": "Navigation-mesh binary reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/AI/NavMesh.cpp", "SparkEngine/Source/Engine/AI/NavMesh.h"],
-      "formats": [".navmesh", ".bin"],
+      "source_files": [
+        "SparkEngine/Source/Engine/AI/NavMesh.cpp",
+        "SparkEngine/Source/Engine/AI/NavMesh.h"
+      ],
+      "formats": [
+        ".navmesh",
+        ".bin"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "ui-layout",
       "description": "UI layout and factory JSON readers.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Engine/UI/UILayoutExtensions.cpp", "SparkEngine/Source/Engine/UI/UILayoutExtensions.h", "SparkEngine/Source/Engine/UI/UIFactory.cpp", "SparkEngine/Source/Engine/UI/UIFactory.h"],
-      "formats": [".uilayout", ".json"],
+      "source_files": [
+        "SparkEngine/Source/Engine/UI/UILayoutExtensions.cpp",
+        "SparkEngine/Source/Engine/UI/UILayoutExtensions.h",
+        "SparkEngine/Source/Engine/UI/UIFactory.cpp",
+        "SparkEngine/Source/Engine/UI/UIFactory.h"
+      ],
+      "formats": [
+        ".uilayout",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "json-utils",
       "description": "Shared strict JSON helper layer.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Utils/JsonUtils.h"],
-      "formats": [".json"],
+      "source_files": [
+        "SparkEngine/Source/Utils/JsonUtils.h"
+      ],
+      "formats": [
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No direct production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No direct production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "binary-serializer",
       "description": "Shared binary reader and serializer.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEngine/Source/Utils/Serializer.h"],
-      "formats": ["binary-blob"],
+      "source_files": [
+        "SparkEngine/Source/Utils/Serializer.h"
+      ],
+      "formats": [
+        "binary-blob"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No direct production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No direct production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "crash-manifest-parser",
       "description": "Crash reporter manifest JSON parser.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkCrashReporter/src/CrashReporterApp.cpp", "SparkCrashReporter/src/CrashReporterApp.h"],
-      "formats": [".json"],
+      "source_files": [
+        "SparkCrashReporter/src/CrashReporterApp.cpp",
+        "SparkCrashReporter/src/CrashReporterApp.h"
+      ],
+      "formats": [
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "shader-compiler-tool",
       "description": "Standalone shader source compiler input reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkShaderCompiler/src/main.cpp"],
-      "formats": [".hlsl", ".glsl"],
+      "source_files": [
+        "SparkShaderCompiler/src/main.cpp"
+      ],
+      "formats": [
+        ".hlsl",
+        ".glsl"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "installer-state-manifest",
       "description": "Installer state and tracked-file manifest reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkInstaller/src/InstallState.cpp"],
-      "formats": [".json"],
+      "source_files": [
+        "SparkInstaller/src/InstallState.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "sparkbuild-config",
       "description": "SparkBuild project configuration reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkBuild/src/Config.cpp"],
-      "formats": [".json"],
+      "source_files": [
+        "SparkBuild/src/Config.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "asset-cooker-input",
       "description": "Asset-cooker recipe and source metadata reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkAssetPipelineCore/src/AssetCooker.cpp"],
-      "formats": ["asset-source", ".json"],
+      "source_files": [
+        "SparkAssetPipelineCore/src/AssetCooker.cpp"
+      ],
+      "formats": [
+        "asset-source",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "editor-scene-json",
       "description": "Editor JSON scene reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"],
-      "formats": [".scene", ".json"],
+      "source_files": [
+        "SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"
+      ],
+      "formats": [
+        ".scene",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "editor-scene-binary",
       "description": "Editor binary scene reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEditor/Source/SceneSystem/BinarySceneSerializer.cpp"],
-      "formats": [".scene", "binary-scene"],
+      "source_files": [
+        "SparkEditor/Source/SceneSystem/BinarySceneSerializer.cpp"
+      ],
+      "formats": [
+        ".scene",
+        "binary-scene"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "editor-prefab",
       "description": "Editor prefab asset reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEditor/Source/Prefabs/PrefabAsset.cpp"],
-      "formats": [".prefab", ".json"],
+      "source_files": [
+        "SparkEditor/Source/Prefabs/PrefabAsset.cpp"
+      ],
+      "formats": [
+        ".prefab",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "editor-terrain-data",
       "description": "Editor terrain-data reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEditor/Source/Terrain/TerrainData.cpp"],
-      "formats": ["terrain-data"],
+      "source_files": [
+        "SparkEditor/Source/Terrain/TerrainData.cpp"
+      ],
+      "formats": [
+        "terrain-data"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     },
     {
       "id": "editor-layout",
       "description": "Editor layout state reader.",
       "trust_boundary": "untrusted-file",
-      "source_files": ["SparkEditor/Source/Core/EditorLayoutManager.cpp", "SparkEditor/Source/Core/EditorLayoutManager.h"],
-      "formats": [".ini", ".json"],
+      "source_files": [
+        "SparkEditor/Source/Core/EditorLayoutManager.cpp",
+        "SparkEditor/Source/Core/EditorLayoutManager.h"
+      ],
+      "formats": [
+        ".ini",
+        ".json"
+      ],
       "status": "blocked",
-      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "module-abi-sidecar",
+      "description": "Game-module .sparkabi sidecar and DLL byte reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Core/ModuleManager.cpp",
+        "SparkEngine/Source/Core/ModuleManager.h"
+      ],
+      "formats": [
+        ".sparkabi",
+        "spark.modules.json",
+        "pe",
+        "elf"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "plugin-metadata-json",
+      "description": "Dynamic plugin metadata JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Core/DynamicPluginHost.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "startup-splash-bmp",
+      "description": "Hand-rolled BMP decoder and INI reader for the startup splash.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Core/StartupSplash.cpp"
+      ],
+      "formats": [
+        ".bmp",
+        ".ini"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "exec-script-file",
+      "description": "Console -exec script file whose contents are executed as commands.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Core/SparkEngineWindows.cpp"
+      ],
+      "formats": [
+        ".txt"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "terrain-sparkterrain",
+      "description": "Binary .sparkterrain heightmap/splatmap reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/TerrainRenderer.cpp"
+      ],
+      "formats": [
+        ".sparkterrain"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "texture-stex-compressor",
+      "description": "Compressed .stex container reader in the texture compressor.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/TextureCompressor.cpp"
+      ],
+      "formats": [
+        ".stex"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "asset-obj-windows",
+      "description": "Windows Wavefront OBJ text parser.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/AssetTypesWindows.cpp"
+      ],
+      "formats": [
+        ".obj"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "asset-media-windows",
+      "description": "Windows TGA decoder and WAV RIFF chunk walker.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/AssetTypesWindowsMedia.cpp"
+      ],
+      "formats": [
+        ".tga",
+        ".wav"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "neural-weights-nnw",
+      "description": "Binary .nnw neural weight loader with file-derived allocation sizes.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/Neural/NeuralWeights.cpp",
+        "SparkEngine/Source/Graphics/Neural/NeuralWeights.h"
+      ],
+      "formats": [
+        ".nnw"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "neural-texture-ntex",
+      "description": "Binary .ntex neural texture container reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/Neural/NeuralTextureCompressor.cpp"
+      ],
+      "formats": [
+        ".ntex"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "shader-disk-cache-blob",
+      "description": "Shader disk-cache blob reader handing bytecode to the driver.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/ShaderDiskCache.cpp"
+      ],
+      "formats": [
+        ".blob"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "rhi-shader-bytecode",
+      "description": "Precompiled shader bytecode loader and SPIR-V reflection.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/RHI/RHIFactory.cpp"
+      ],
+      "formats": [
+        ".spv",
+        ".cso"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "rhi-bridge-shader-load",
+      "description": "RHI bridge shader blob and source loader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/RHI/RHIBridge.cpp"
+      ],
+      "formats": [
+        ".spv",
+        ".hlsl"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "dxr-library-blob",
+      "description": "DXR shader library blob reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/RHI/DXRSupport.cpp"
+      ],
+      "formats": [
+        ".dxil"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "basic-material-json",
+      "description": "Hand-rolled basic-material JSON scraper.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsBasicState.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "wic-texture-system-windows",
+      "description": "Windows WIC image decode in the texture system.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/TextureSystemWindowsTexture.cpp"
+      ],
+      "formats": [
+        ".png",
+        ".jpg",
+        ".bmp",
+        ".tiff",
+        ".gif"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "wic-device-resources-texture",
+      "description": "Windows WIC image decode in device resources.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsTextures.cpp"
+      ],
+      "formats": [
+        ".png",
+        ".jpg",
+        ".bmp",
+        ".tiff",
+        ".gif"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "wic-material-texture",
+      "description": "Windows WIC image decode for material textures.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/MaterialTextureLoading.cpp"
+      ],
+      "formats": [
+        ".png",
+        ".jpg",
+        ".bmp"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "wic-pbr-material-texture",
+      "description": "Windows WIC image decode for PBR material binding.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/PBRMaterialBinding.cpp"
+      ],
+      "formats": [
+        ".png",
+        ".jpg",
+        ".bmp"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "animation-skel-sanim",
+      "description": "Binary SKEL/ANIM skeleton and clip readers.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Engine/Animation/AnimationSystem.cpp"
+      ],
+      "formats": [
+        ".skel",
+        ".sanim"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "audio-openal-wav",
+      "description": "OpenAL WAV RIFF loader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Audio/OpenALAudioEngine.cpp"
+      ],
+      "formats": [
+        ".wav"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "freeze-buffer-blob",
+      "description": "Byte-cursor freeze/thaw deserializer for save-state blobs.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h"
+      ],
+      "formats": [
+        "blob"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "async-database-kv",
+      "description": "On-disk key/value persistence reader with escape decoding.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp"
+      ],
+      "formats": [
+        ".db"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "launcher-template-json",
+      "description": "Project template.json reader with a hand-rolled JSON extractor.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkLauncher/src/LauncherApp.cpp"
+      ],
+      "formats": [
+        "template.json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "launcher-module-manifest",
+      "description": "Launcher spark.modules.json manifest reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkLauncher/src/LauncherProcess.cpp"
+      ],
+      "formats": [
+        "spark.modules.json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "daemon-orchestration-journal",
+      "description": "Orchestration journal and write-ahead-log binary decoder.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkDaemon/src/OrchestrationJournal.cpp"
+      ],
+      "formats": [
+        "journal",
+        ".wal"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "daemon-asset-cache-blob",
+      "description": "On-disk asset cache blob reader with a length-prefixed key.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkDaemon/src/AssetService.cpp"
+      ],
+      "formats": [
+        ".asset"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "daemon-shader-cache-blob",
+      "description": "On-disk shader cache blob reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkDaemon/src/ShaderService.cpp"
+      ],
+      "formats": [
+        ".blob"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "daemon-orchestrator-identity-state",
+      "description": "Orchestrator identity state-file decoder.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkDaemon/src/OrchestratorIdentity.cpp"
+      ],
+      "formats": [
+        "state"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "daemon-bounded-wire-codec",
+      "description": "Bounded wire reader shared by the daemon journal and its protocols.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkDaemon/src/BoundedWireCodec.h"
+      ],
+      "formats": [
+        "blob"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "gateway-area-control-state",
+      "description": "Area-control epoch state-file reader with an unbounded record count.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkGateway/src/GatewayAreaControl.cpp"
+      ],
+      "formats": [
+        "state"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-account-database",
+      "description": "TerraFront account/character database JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-outfit-store",
+      "description": "TerraFront outfit store JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStoreDisk.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-world-save",
+      "description": "TerraFront world/progression save JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-json-strict",
+      "description": "Shared strict-JSON lexeme gate for the TerraFront stores.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Persistence/TFJsonStrict.h"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-social-store",
+      "description": "TerraFront social store JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-data-tables",
+      "description": "TerraFront game data-table JSON loader (lenient parse).",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-grenade-data",
+      "description": "TerraFront grenade effect table JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystem.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-optics-weapons-data",
+      "description": "TerraFront optics/weapons table JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Game/TFOpticsSystem.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-suit-table",
+      "description": "TerraFront suit progression table JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemMeta.cpp",
+        "GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemInternal.h"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-region-decor-data",
+      "description": "TerraFront region decor.json template reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/World/TFRegionDecorData.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-continent-meta",
+      "description": "TerraFront continents.json metadata reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/World/TFTravelSystem.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-region-map-data-source",
+      "description": "Region-map registry and per-region JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Panels/RegionMapDataSource.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-region-map-io",
+      "description": "Region-map editor document reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Panels/RegionMapEditorIO.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-decor-layout-io",
+      "description": "Decor layout editor document reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Panels/DecorLayoutEditorIO.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-decor-obj-bounds",
+      "description": "OBJ bounds streaming parser in the decor layout panel.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Panels/DecorLayoutEditorPanel.cpp"
+      ],
+      "formats": [
+        ".obj"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-obj-lod-loader",
+      "description": "Editor OBJ mesh loader used for LOD generation.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/AssetPipeline/AssetProcessors.cpp"
+      ],
+      "formats": [
+        ".obj"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-advanced-asset-metadata",
+      "description": "Advanced asset pipeline .meta key/value reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/AssetPipeline/AdvancedAssetPipelineUI.cpp"
+      ],
+      "formats": [
+        ".meta"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-asset-database-import",
+      "description": "Asset-database text export importer.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp"
+      ],
+      "formats": [
+        "asset-database"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-level-streaming-world",
+      "description": "Binary world/tile streaming file reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp"
+      ],
+      "formats": [
+        "world",
+        "tile"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-terrain-file",
+      "description": "Binary SPKT terrain file reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Terrain/TerrainEditor.cpp"
+      ],
+      "formats": [
+        ".spkt"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-window-layout",
+      "description": "Editor window layout JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Core/EditorWindowManager.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-theme-import",
+      "description": "Editor theme import with hand-rolled JSON and sscanf colour parsing.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Core/EditorTheme.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-crash-recovery-state",
+      "description": "Editor crash recovery state reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Core/EditorCrashHandler.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-profiling-import",
+      "description": "Editor profiling capture importer.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Profiler/PerformanceProfiler.cpp"
+      ],
+      "formats": [
+        "profile"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-basic-material-doc",
+      "description": "Basic material document JSON scraper.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp"
+      ],
+      "formats": [
+        ".mat"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-modules-manifest-probe",
+      "description": "spark.modules.json substring probe in the build pipeline panel.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Panels/BuildPipeline.cpp"
+      ],
+      "formats": [
+        "spark.modules.json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "telemetry-spool-format",
+      "description": "Telemetry local binary spool record decoder.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Utils/TelemetrySpoolFormat.cpp"
+      ],
+      "formats": [
+        "telemetry-spool"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     }
   ],
-  "deferred_candidates": {
-    "reason": "Detected parser-like source requires manual SEC-120 classification; the pinned list makes newly detected candidates fail CI.",
-    "ticket": "SEC-120",
-    "source_files": [
-      "GameModules/SparkGameFPS/Source/Core/Main.cpp",
-      "GameModules/SparkGameFPS/Source/Game/Game.cpp",
-      "GameModules/SparkGameFPS/Source/Game/Game.h",
-      "GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp",
-      "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h",
-      "GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp",
-      "GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesParseRoster.cpp",
-      "GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.cpp",
-      "GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.h",
-      "GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.cpp",
-      "GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.h",
-      "GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl",
-      "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp",
-      "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp",
-      "GameModules/SparkGameRTS/Source/Core/RTSPersistence.h",
-      "GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp",
-      "GameModules/SparkGameRacing/Source/Core/RacingPersistence.h",
-      "SparkBuild/src/Downloader.cpp",
-      "SparkBuild/src/Downloader.h",
-      "SparkConsole/src/CommandParser.cpp",
-      "SparkConsole/src/CommandParser.h",
-      "SparkCrashReporter/src/main.cpp",
-      "SparkEditor/Source/Communication/CollaborativeEditSession.cpp",
-      "SparkEditor/Source/Communication/CollaborativeEditSession.h",
-      "SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp",
-      "SparkEditor/Source/Communication/EngineInterface.cpp",
-      "SparkEditor/Source/Communication/EngineInterface.h",
-      "SparkEditor/Source/Core/EditorUI.cpp",
-      "SparkEditor/Source/Core/ProjectManager.cpp",
-      "SparkEditor/Source/Integration/SparkEngineIntegration.cpp",
-      "SparkEditor/Source/Integration/SparkEngineIntegration.h",
-      "SparkEditor/Source/Panels/ReplayPanel.cpp",
-      "SparkEditor/Source/Panels/SceneImportPanel.cpp",
-      "SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp",
-      "SparkEditor/Source/SceneSystem/SceneComponentCodec.h",
-      "SparkEditor/Source/SceneSystem/SceneManager.cpp",
-      "SparkEditor/Source/SceneSystem/SceneManager.h",
-      "SparkEditor/Source/SceneSystem/SceneSerializer.cpp",
-      "SparkEditor/Source/SceneSystem/SceneSerializer.h",
-      "SparkEngine/Source/Audio/AudioEngine.cpp",
-      "SparkEngine/Source/Core/GameModuleLoader.cpp",
-      "SparkEngine/Source/Core/GameModuleLoader.h",
-      "SparkEngine/Source/Core/ReflectionSerializer.h",
-      "SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp",
-      "SparkEngine/Source/Engine/Editor/CoreComponentSerializers.h",
-      "SparkEngine/Source/Engine/Editor/CoreComponentSerializersInternal.h",
-      "SparkEngine/Source/Engine/Editor/CoreComponentSerializersPhysicsAudio.cpp",
-      "SparkEngine/Source/Engine/Editor/PlayModeManager.h",
-      "SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h",
-      "SparkEngine/Source/Engine/Streaming/AreaAssetLoader.cpp",
-      "SparkEngine/Source/Engine/Streaming/AreaAssetLoader.h",
-      "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp",
-      "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h",
-      "SparkEngine/Source/Game/CubeObject.cpp",
-      "SparkEngine/Source/Game/GameObject.cpp",
-      "SparkEngine/Source/Game/Model.cpp",
-      "SparkEngine/Source/Game/PlaceholderMesh.h",
-      "SparkEngine/Source/Game/PlaneObject.cpp",
-      "SparkEngine/Source/Game/PyramidObject.cpp",
-      "SparkEngine/Source/Game/RampObject.cpp",
-      "SparkEngine/Source/Game/SphereObject.cpp",
-      "SparkEngine/Source/Game/WallObject.cpp",
-      "SparkEngine/Source/Graphics/AssetPipelineConsoleOps.cpp",
-      "SparkEngine/Source/Graphics/AssetPipelineLinuxStreaming.cpp",
-      "SparkEngine/Source/Graphics/AssetTypesLinux.cpp",
-      "SparkEngine/Source/Graphics/AssetTypesLinuxMedia.cpp",
-      "SparkEngine/Source/Graphics/AssetTypesWindowsMedia.cpp",
-      "SparkEngine/Source/Graphics/MaterialConsoleOps.cpp",
-      "SparkEngine/Source/Graphics/MaterialSystem.cpp",
-      "SparkEngine/Source/Graphics/MaterialSystem.h",
-      "SparkEngine/Source/Graphics/Mesh.h",
-      "SparkEngine/Source/Graphics/MeshLinux.cpp",
-      "SparkEngine/Source/Graphics/MeshTypes.h",
-      "SparkEngine/Source/Graphics/MeshWindows.cpp",
-      "SparkEngine/Source/Graphics/PBRMaterialLightingLinux.cpp",
-      "SparkEngine/Source/Graphics/PBRMaterialLightingWindows.cpp",
-      "SparkEngine/Source/Graphics/Shader.h",
-      "SparkEngine/Source/Graphics/ShaderConsoleOps.cpp",
-      "SparkEngine/Source/SceneManager/SceneManager.h",
-      "SparkEngine/Source/Utils/CompressionUtils.cpp",
-      "SparkEngine/Source/Utils/CrashReportUploader.cpp",
-      "SparkEngine/Source/Utils/CrashReportUploader.h"
-    ]
-  }
+  "deferred_candidates": [
+    {
+      "source_file": "GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.cpp",
+      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameFPS/Source/Core/Main.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameFPS/Source/Game/Game.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameFPS/Source/Game/Game.h",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameFPS/Source/Game/ModelObject.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameFPS/Source/Game/Player.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesParseRoster.cpp",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.cpp",
+      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.h",
+      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp",
+      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemPersist.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFDayNight.cpp",
+      "reason": "Detected by scanf-parse; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFRegionDecor.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFRegionDecorLayout.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.cpp",
+      "reason": "Detected by getline-loop, parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.h",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.cpp",
+      "reason": "Detected by getline-loop, load-format-entry, parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.h",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp",
+      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameRTS/Source/Core/RTSPersistence.h",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp",
+      "reason": "Detected by deserialize, parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "GameModules/SparkGameRacing/Source/Core/RacingPersistence.h",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkAutomation/src/main.cpp",
+      "reason": "Detected by stream-slurp; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkBuild/src/DownloadSecurity.cpp",
+      "reason": "Hashes a downloaded archive; the trust boundary is untrusted-network, routed with Downloader.cpp.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkBuild/src/Downloader.cpp",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkBuild/src/Downloader.h",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkBuild/src/SparkBuild.cpp",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkConsole/src/CommandParser.cpp",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkConsole/src/CommandParser.h",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkCrashReporter/src/main.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkDaemon/src/CollaborationService.cpp",
+      "reason": "Detected by binary-stream-read; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Communication/CollaborativeEditSession.cpp",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Communication/CollaborativeEditSession.h",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Communication/EngineInterface.cpp",
+      "reason": "Detected by binary-magic-compare, deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Communication/EngineInterface.h",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Core/EditorUI.cpp",
+      "reason": "Detected by deserialize, stream-slurp; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Core/ProjectManager.cpp",
+      "reason": "Detected by deserialize, json-string-scrape, stream-slurp; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Integration/SparkEngineIntegration.cpp",
+      "reason": "Detected by getline-loop, parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Integration/SparkEngineIntegration.h",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/DecorLayoutEditorCanvas.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/DecorLayoutEditorPanel.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/DedicatedServerProcessController.cpp",
+      "reason": "Detected by getline-loop, stream-slurp; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/EditorAutomation.h",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/PlayControlLaunch.cpp",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/RegionMapEditorPanel.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/RegionMapEditorPanel.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/SceneImportPanel.cpp",
+      "reason": "Detected by getline-loop, parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/ServiceTopologyController.cpp",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/VisualScriptPanel.cpp",
+      "reason": "Editor-side visual-script graph JSON with unchecked offsets; ownership between SEC-120 and ENG-200 is unresolved.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneComponentCodec.h",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneFile.cpp",
+      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneManager.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneManager.h",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneSerializer.cpp",
+      "reason": "Detected by binary-magic-compare, binary-stream-read, parse-entry, parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneSerializer.h",
+      "reason": "Detected by deserialize, parse-entry, parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Terrain/TerrainEditor.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Terrain/TerrainEditorUI.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/VersionControl/VersionControlConflicts.cpp",
+      "reason": "Reads repo-owned .gitignore text; low-value fuzz target, classify deliberately.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/VersionControl/VersionControlHelpers.cpp",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Workflow/BuiltinWorkflows.cpp",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/main.cpp",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Audio/AudioEngine.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Audio/OpenALAudioEngine.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/FileIntegrity.cpp",
+      "reason": "Detected by binary-stream-read; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/GameModuleLoader.cpp",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/GameModuleLoader.h",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/ReflectionSerializer.h",
+      "reason": "Detected by deserialize, parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/SparkEngineLinux.cpp",
+      "reason": "Detected by scanf-parse; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/SparkPakWriter.cpp",
+      "reason": "Pack/write path that consumes files without interpreting their structure; cook-side twin of sparkpak-reader.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Animation/AnimationClip.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Animation/AnimationSystem.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Animation/AnimationTypes.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Animation/Skeleton.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp",
+      "reason": "Detected by deserialize, parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializers.h",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializersInternal.h",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializersPhysicsAudio.cpp",
+      "reason": "Detected by deserialize, parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/PlayModeManager.h",
+      "reason": "Detected by deserialize; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h",
+      "reason": "Detected by binary-magic-compare, deserialize, parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Persistence/AsyncDatabase.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Streaming/AreaAssetLoader.cpp",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Streaming/AreaAssetLoader.h",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp",
+      "reason": "Detected by binary-stream-read, parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/CubeObject.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/GameObject.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/Model.cpp",
+      "reason": "Detected by load-format-entry, model-codec; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/Model.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/PlaceholderMesh.h",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/PlaneObject.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/PyramidObject.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/RampObject.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/SphereObject.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/WallObject.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/AssetPipelineConsoleOps.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/AssetPipelineLinuxStreaming.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/AssetTypesLinux.cpp",
+      "reason": "Detected by load-format-entry, model-codec; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/AssetTypesLinuxMedia.cpp",
+      "reason": "Detected by binary-stream-read, image-codec; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/MaterialConsoleOps.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/MaterialSystem.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/MaterialSystem.h",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Mesh.h",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/MeshLinux.cpp",
+      "reason": "Detected by load-format-entry, model-codec, parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/MeshTypes.h",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/MeshWindows.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralFunctionApproximator.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.cpp",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralTextureCompressor.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralTextureFormat.h",
+      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/PBRMaterialLightingLinux.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/PBRMaterialLightingWindows.cpp",
+      "reason": "Detected by getline-loop, parse-entry, stream-slurp; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/RHI/RHIFactory.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/RenderCommandRing.h",
+      "reason": "Detected by byte-cursor; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Shader.h",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/ShaderConsoleOps.cpp",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/TextureCompressor.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/SceneManager/SceneManager.h",
+      "reason": "Detected by parse-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/BenchmarkFramework.h",
+      "reason": "Declares the hand-rolled JSON baseline extractor; classify with BenchmarkFrameworkBaseline.cpp.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/BenchmarkFrameworkBaseline.cpp",
+      "reason": "Hand-rolled JSON baseline parser over dev-tooling input; trust boundary unresolved.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/ColorUtils.h",
+      "reason": "Bounded hex-colour sscanf reachable only via config/scene strings; likely not worth its own record.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/CompressionUtils.cpp",
+      "reason": "Detected by archive-codec; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/CrashHandler.cpp",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/CrashReportUploader.cpp",
+      "reason": "Detected by getline-loop, json-string-scrape, parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/CrashReportUploader.h",
+      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/FileUtils.h",
+      "reason": "Generic read primitive, not itself a grammar; owner must decide helper-exempt vs inventoried boundary.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/GoldenImageTest.h",
+      "reason": "Raw image reader with a header-derived size, but it is a test-harness feature compiled into the engine.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/LockFreeRingAllocator.h",
+      "reason": "Detected by byte-cursor; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/WineDetection.cpp",
+      "reason": "Detected by getline-loop; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkLauncher/src/LauncherApp.h",
+      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkSDK/Include/Spark/ModuleABI.h",
+      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkSDK/Include/Spark/PluginABI.h",
+      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/ReplayPanel.cpp",
+      "reason": "The panel selects a replay path but delegates byte decoding to the separately inventoried ReplaySystem parser.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/SceneStatisticsPanel.cpp",
+      "reason": "The Linux-only fscanf reads kernel-owned /proc/self/statm counters, not an engine asset, network payload, or user document.",
+      "owner": "sec-120-parser-triage",
+      "ticket": "SEC-120",
+      "expires": "2027-02-24"
+    }
+  ]
 }

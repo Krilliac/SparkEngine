@@ -7,8 +7,11 @@ import json
 import os
 import stat
 import sys
+import time
+import unicodedata
+from datetime import date
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any
+from typing import Any, Iterator
 
 
 MAX_MANIFEST_BYTES = 1024 * 1024
@@ -17,6 +20,7 @@ MAX_JSON_OBJECT_MEMBERS = 256
 MAX_JSON_ARRAY_ITEMS = 20_000
 MAX_JSON_STRING_CHARS = 64 * 1024
 FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+MAX_DIRECTORY_ENTRIES = 20_000
 WINDOWS_RESERVED_NAMES = {
     "CON",
     "PRN",
@@ -25,6 +29,21 @@ WINDOWS_RESERVED_NAMES = {
     *(f"COM{index}" for index in range(1, 10)),
     *(f"LPT{index}" for index in range(1, 10)),
 }
+
+
+class Deadline:
+    """A single wall-clock budget shared by every phase of one policy run."""
+
+    def __init__(self, seconds: int, label: str) -> None:
+        self._deadline = time.monotonic() + seconds
+        self._seconds = seconds
+        self._label = label
+
+    def check(self) -> None:
+        # >= so that a zero-second budget is already spent on its first check
+        # rather than depending on clock granularity.
+        if time.monotonic() >= self._deadline:
+            raise PolicyError(f"{self._label} exceeded {self._seconds} seconds")
 
 
 class PolicyError(ValueError):
@@ -148,13 +167,23 @@ def _opened_final_path(descriptor: int) -> Path | None:
         if value.endswith(" (deleted)"):
             raise PolicyError("opened file was unlinked during validation")
         return Path(value)
-    return None
+    if sys.platform == "darwin":
+        import fcntl
+
+        f_getpath = 50  # <sys/fcntl.h> F_GETPATH
+        buffer = bytearray(1024)  # PATH_MAX
+        try:
+            fcntl.fcntl(descriptor, f_getpath, buffer)
+        except OSError as exc:
+            raise PolicyError(f"cannot resolve the opened file descriptor: {exc}") from exc
+        return Path(bytes(buffer).split(b"\0", 1)[0].decode("utf-8", "surrogateescape"))
+    # Returning None here would make the post-open confinement check a silent
+    # no-op, so an unsupported platform fails closed instead.
+    raise PolicyError(f"opened-handle confinement is unavailable on {sys.platform}")
 
 
 def _require_opened_confinement(root: Path, descriptor: int, field: str, relative: str) -> None:
     opened_path = _opened_final_path(descriptor)
-    if opened_path is None:
-        return
     root_text = os.path.normcase(str(root))
     opened_text = os.path.normcase(str(opened_path.resolve(strict=True)))
     try:
@@ -164,9 +193,14 @@ def _require_opened_confinement(root: Path, descriptor: int, field: str, relativ
         raise PolicyError(f"{field} opened on a different volume: {relative}") from exc
 
 
-def confined_path(root: Path, raw: Any, field: str, *, expect: str) -> tuple[str, Path, os.stat_result]:
+def confined_path(
+    root: Path, raw: Any, field: str, *, expect: str, root_is_canonical: bool = False
+) -> tuple[str, Path, os.stat_result]:
     relative = normalized_relative_path(raw, field)
-    root = canonical_root(root)
+    # Re-canonicalizing per file costs several stat/resolve syscalls each time;
+    # callers that already hold a canonical root say so.
+    if not root_is_canonical:
+        root = canonical_root(root)
 
     current = root
     for index, part in enumerate(relative.split("/")):
@@ -186,9 +220,12 @@ def confined_path(root: Path, raw: Any, field: str, *, expect: str) -> tuple[str
     return relative, current, identity
 
 
-def read_confined_file(root: Path, raw: Any, field: str, *, max_bytes: int) -> bytes:
-    root = canonical_root(root)
-    relative, path, expected = confined_path(root, raw, field, expect="file")
+def read_confined_file(
+    root: Path, raw: Any, field: str, *, max_bytes: int, root_is_canonical: bool = False
+) -> bytes:
+    if not root_is_canonical:
+        root = canonical_root(root)
+    relative, path, expected = confined_path(root, raw, field, expect="file", root_is_canonical=True)
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(path, flags)
@@ -305,3 +342,55 @@ def load_json_document(root: Path, raw: str, field: str) -> Any:
 
     check_collections(document, field)
     return document
+
+
+def bounded_scandir(directory: Path, field: str, *, max_entries: int = MAX_DIRECTORY_ENTRIES) -> list[os.DirEntry]:
+    """Enumerate a directory with the entry cap enforced *before* the list is materialized."""
+    entries: list[os.DirEntry] = []
+    try:
+        with os.scandir(directory) as iterator:
+            for entry in iterator:
+                if len(entries) >= max_entries:
+                    raise PolicyError(f"{field} exceeds {max_entries} directory entries: {directory}")
+                entries.append(entry)
+    except PolicyError:
+        raise
+    except OSError as exc:
+        raise PolicyError(f"{field} is unreadable: {directory}: {exc}") from exc
+    entries.sort(key=lambda entry: entry.name)
+    return entries
+
+
+def require_token(value: Any, field: str, pattern, *, maximum: int = 128) -> str:
+    """Require an exact, unicode-canonical token so case and homoglyph aliases cannot slip in."""
+    text = require_string(value, field, maximum=maximum)
+    if unicodedata.normalize("NFC", text) != text:
+        raise PolicyError(f"{field} must be unicode-NFC normalized")
+    if not text.isascii():
+        raise PolicyError(f"{field} must be ASCII")
+    if text != text.strip():
+        raise PolicyError(f"{field} must not have surrounding whitespace")
+    if not pattern.fullmatch(text):
+        raise PolicyError(f"{field} does not match {pattern.pattern}")
+    return text
+
+
+def require_iso_date(value: Any, field: str) -> date:
+    text = require_string(value, field, maximum=10)
+    try:
+        parsed = date.fromisoformat(text)
+    except ValueError as exc:
+        raise PolicyError(f"{field} must be YYYY-MM-DD") from exc
+    if parsed.isoformat() != text:
+        raise PolicyError(f"{field} must use canonical YYYY-MM-DD")
+    return parsed
+
+
+def casefold_duplicates(values: Iterator[str] | list[str] | tuple[str, ...], field: str) -> None:
+    """Reject values that differ only by case, so aliases cannot double-register."""
+    seen: dict[str, str] = {}
+    for value in values:
+        key = value.casefold()
+        if key in seen:
+            raise PolicyError(f"{field} contains case-aliased duplicates: {seen[key]!r} and {value!r}")
+        seen[key] = value

@@ -338,7 +338,7 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
             workflow,
             "Verify exact source commit passed Required CI Gate",
         )
-        badge_checkout = named_step(workflow, "Checkout badge-state seed")
+        badge_checkout = named_step(workflow, "Checkout canonical badge branch")
     except AssertionError as error:
         errors.append(str(error))
     else:
@@ -347,7 +347,7 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
             "Verify exact source commit passed Required CI Gate"
         )
         profile_gate_position = ordered_step_names.index(step_name)
-        badge_checkout_position = ordered_step_names.index("Checkout badge-state seed")
+        badge_checkout_position = ordered_step_names.index("Checkout canonical badge branch")
         if profile_gate_position != required_ci_position + 1:
             errors.append(
                 "stable-v1 publication gate must run immediately after Required CI"
@@ -778,7 +778,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
         if not exact_field(gate, "if", "always()"):
             errors.append("required-ci-gate must run under exact if: always()")
         expected_dependencies = [
-            "validate-ci-tools", "check-format", "validate-prompts", "check-thirdparty-manifest", "check-supply-chain",
+            "fuzz-policy", "validate-ci-tools", "check-format", "validate-prompts", "check-thirdparty-manifest", "check-supply-chain",
             "build-linux-asan", "build-linux-tsan", "telemetry-integration",
             "build-windows-vs2022", "build-windows-shipping", "build-linux-gcc",
             "build-linux-clang", "coverage", "clang-tidy", "todo-count",
@@ -792,7 +792,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
             if needs_match else []
         )
         if actual_dependencies != expected_dependencies:
-            errors.append("required-ci-gate must preserve the exact ordered 17-job dependency inventory")
+            errors.append("required-ci-gate must preserve the exact ordered 18-job dependency inventory")
         try:
             verifier = named_step(gate, "Verify every required job succeeded")
         except AssertionError as exc:
@@ -802,7 +802,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 errors.append("required-ci-gate verifier has a conditional/error bypass")
             required_environment = (
                 "NEEDS_JSON: ${{ toJSON(needs) }}",
-                "EXPECTED_REQUIRED_JOBS_JSON: '[\"validate-ci-tools\",\"check-format\",\"validate-prompts\",\"check-thirdparty-manifest\",\"check-supply-chain\",\"build-linux-asan\",\"build-linux-tsan\",\"telemetry-integration\",\"build-windows-vs2022\",\"build-windows-shipping\",\"build-linux-gcc\",\"build-linux-clang\",\"coverage\",\"clang-tidy\",\"todo-count\",\"build-installer\",\"aggregate-test-stats\"]'",
+                "EXPECTED_REQUIRED_JOBS_JSON: '[\"fuzz-policy\",\"validate-ci-tools\",\"check-format\",\"validate-prompts\",\"check-thirdparty-manifest\",\"check-supply-chain\",\"build-linux-asan\",\"build-linux-tsan\",\"telemetry-integration\",\"build-windows-vs2022\",\"build-windows-shipping\",\"build-linux-gcc\",\"build-linux-clang\",\"coverage\",\"clang-tidy\",\"todo-count\",\"build-installer\",\"aggregate-test-stats\"]'",
                 "DEFERRED_REQUIRED_FAILURES_JSON: '{}'",
             )
             if verifier.count("env:") != 1 or any(

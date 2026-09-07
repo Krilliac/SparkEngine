@@ -34,12 +34,19 @@ This ensures your report is private and only visible to the maintainers until a 
 SparkEngine's first-party gameplay, discovery, collaboration, and live-editor endpoints default to loopback. A development LAN endpoint must name one canonical RFC1918 interface and prefix (for example `192.168.1.20/24`); the entire subnet must remain inside RFC1918 space, and its exact network and directed-broadcast addresses are rejected. Peers are limited to that same subnet. Wildcard, public, documentation, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, and alternate textual forms are rejected before socket creation. This is a containment boundary, not transport security: the active UDP protocol is unauthenticated and unencrypted, and the legacy XOR/FNV helpers must not protect credentials or hostile-network traffic. NET-100 remains open for the experimental multiplayer surface, which is outside the single-player, service-free `stable-v1` profile and does not certify it.
 
 The SEC-120 structural fuzz-policy gate inventories stable-v1 file/package parser
-surfaces and blocks unclassified additions, unsafe manifest paths, malformed schemas,
-and incomplete static corpus/resource bindings. It is not runtime parser-safety or
-fuzz-coverage evidence. SEC-120 remains release-blocking because no production
-parser fuzz target, bounded seed corpus, sanitizer smoke campaign, or scheduled
-campaign is currently committed. See
-`wiki/advanced/Fuzz-Policy-and-Parser-Security.md` for the exact scope and blockers.
+surfaces across every first-party source tree and blocks unclassified additions, unsafe
+manifest paths, malformed schemas, unreviewed scope exclusions, and incomplete
+corpus/resource bindings. A parser may only be marked as fuzzed when a tokenized read of
+the CMake and C++ proves a declared, build-reachable, sanitizer-instrumented target, a
+registered CTest entry point that passes the corpus directory and exact runtime limits,
+and a harness that calls the production entry point — a commented-out or string-literal
+declaration proves nothing. It is not runtime parser-safety or fuzz-coverage evidence.
+SEC-120 remains release-blocking, and `release.yml` enforces that with
+`check_fuzz_policy.py --require-closure`, because no production parser fuzz target,
+bounded seed corpus, sanitizer smoke campaign, or scheduled campaign is currently
+committed: 108 inventoried parsers are blocked and 149 detected candidates are still
+deferred. See `wiki/advanced/Fuzz-Policy-and-Parser-Security.md` for the exact scope,
+the reviewed exclusions, and the closure blockers.
 
 The following are considered security vulnerabilities:
 

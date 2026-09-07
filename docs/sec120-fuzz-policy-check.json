@@ -1,7 +1,7 @@
 {
   "closure_blockers": [
-    "46 inventoried parsers have no fuzz target",
-    "82 detected candidates await classification",
+    "104 inventoried parsers have no fuzz target",
+    "151 detected candidates await classification",
     "no corpus/resource budget is bound to a runnable fuzz target"
   ],
   "corpus": {
@@ -11,18 +11,34 @@
     "seed_bytes": 0,
     "seed_count": 0
   },
+  "coverage_claim": false,
+  "inputs": {
+    "corpus_manifest": "1bc6f04e0af9e4f5969ae6aa95f83ad214aaaa3dc93ea65fdbe0441423e4c2e2",
+    "inventory": "30a03bf12d9b8b8e02c937750e1e1207627894e8128d7c3f72735e62b9d78999"
+  },
   "inventory": {
-    "blocked_count": 46,
-    "candidate_count": 133,
-    "deferred_candidate_count": 82,
+    "blocked_count": 104,
+    "candidate_count": 267,
+    "deferred_candidate_count": 151,
+    "excluded_files": [],
     "excluded_subtrees": [
-      "SparkEngine/Source/Engine/Networking",
-      "SparkEngine/Source/Engine/Scripting",
-      "GameModules/SparkGameMMOFPS/Source/Net",
-      "GameModules/SparkGameVisualScript"
+      {
+        "expires": "2027-08-23",
+        "hidden_candidate_count": 8,
+        "owner": "net-100-protocol-campaign",
+        "path": "SparkEngine/Source/Engine/Networking",
+        "ticket": "NET-100"
+      },
+      {
+        "expires": "2027-08-23",
+        "hidden_candidate_count": 3,
+        "owner": "eng-200-scripting-campaign",
+        "path": "SparkEngine/Source/Engine/Scripting",
+        "ticket": "ENG-200"
+      }
     ],
     "fuzzed_count": 0,
-    "parser_count": 46,
+    "parser_count": 104,
     "scan_roots": [
       "SparkEngine/Source",
       "SparkEditor/Source",
@@ -35,11 +51,22 @@
       "SparkBuild/src",
       "SparkLauncher/src",
       "SparkConsole/src",
+      "SparkDaemon/src",
+      "SparkServer/src",
+      "SparkGateway/src",
+      "SparkAutomation/src",
+      "SparkSDK/Include",
       "GameModules"
     ],
+    "scanned_file_count": 1960,
     "unclassified_candidate_count": 0
   },
-  "passed": true,
+  "passed": false,
   "policy_complete": false,
-  "schema_version": 1
+  "runtime_evidence": {
+    "sanitizer_smoke_executed": false,
+    "scheduled_campaign": false
+  },
+  "schema_version": 1,
+  "structural_gate": true
 }

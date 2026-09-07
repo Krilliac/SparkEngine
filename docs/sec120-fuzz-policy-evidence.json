@@ -1,31 +1,58 @@
 {
   "schema_version": 1,
   "work_item": "SEC-120",
-  "exact_base_commit": "d34bd6b0885fdaab640726db32ab274fd4e22815",
+  "exact_base_commit": "006c2ed32f751d3c363e76c3595c78a95069c4bc",
   "status": "open",
   "blocking": true,
   "profileApplicability": {
     "stable-v1": "required"
   },
-  "completed_in_this_slice": [
-    "A blocking Linux CI job is a dependency of Required CI Gate.",
-    "CMake exposes check-fuzz-policy and two CTest policy checks without compiling C++.",
-    "Strict JSON schemas reject duplicate keys, floats, non-finite values, excess depth, unknown fields, and invalid types.",
-    "Manifest, source, target, and corpus paths are repository-confined regular files/directories; aliases and hard links fail closed.",
-    "The source scan is deterministic and bounded by roots, extensions, files, directories, bytes, depth, and wall time.",
-    "Every fuzzed parser must bind an existing harness, CMake target, CTest selector, non-empty corpus, and static input/time/memory/depth budgets."
-  ],
   "verified_snapshot": "docs/sec120-fuzz-policy-check.json",
-  "not_completed": [
-    "No production parser has a libFuzzer/AFL harness.",
-    "No seed corpus or runtime resource budget is bound to a production fuzz target.",
-    "Detected candidate backlog still requires manual classification.",
-    "ASan/UBSan fuzz smoke and scheduled campaigns are not implemented.",
-    "Production entry-point behavior has not been proven safe for malformed input."
+  "closure_claim": false,
+  "coverage_claim": false,
+  "what_this_gate_proves": [
+    "A blocking Linux CI job is a dependency of Required CI Gate, and the job is asserted to be unconditional and not continue-on-error.",
+    "The required CI commands are read as run: steps, so a commented-out or echoed command cannot satisfy them.",
+    "CMake exposes check-fuzz-policy and two CTest policy checks behind SPARK_ENABLE_FUZZ_POLICY_CHECKS, so an engine-only configure no longer requires Python.",
+    "Release publication runs --require-closure, so SEC-120 blocks a release until real fuzz targets exist.",
+    "Strict JSON schemas reject duplicate keys, floats, non-finite values, excess depth, unknown fields, and invalid types.",
+    "Manifest, source, target, and corpus paths are repository-confined regular files/directories; symlinks, reparse points, hard links, case aliases, and cross-volume paths fail closed.",
+    "The source scan is deterministic and bounded by roots, extensions, files, directories, bytes, depth, directory entries, and a shared wall-clock deadline; the entry cap applies before a directory listing is materialized.",
+    "Scan-root coverage is enforced against the repository: every first-party Spark*/GameModules source tree present on disk must be a declared root, and the extension set may not be narrowed.",
+    "Exclusions require an approved ticket, its approved owner, an expiry inside 365 days, and an exact count of the candidates they hide; overlapping, whole-root, case-aliased, expired, stale, and newly-absorbing exclusions are rejected. Single-file exclusions additionally pin a sha256 of the reviewed content.",
+    "Deferrals are per-file and carry a reason, the SEC-120 owner, and an expiry; a deferral that no longer matches a detected candidate is rejected as stale.",
+    "A fuzzed parser must bind a CMake target declared by add_executable, reachable from the root listfile via add_subdirectory, instrumented with -fsanitize=fuzzer, registered as a CTest entry point that invokes that target, passing the corpus directory and exact -max_len/-timeout/-rss_limit_mb values, with a matching CTest TIMEOUT and a fuzz label. CMake and C++ are tokenized, so comments and string literals cannot satisfy any of it.",
+    "A harness must define LLVMFuzzerTestOneInput(const uint8_t*, size_t) with a body, include a header, define and use SPARK_FUZZ_MAX_DEPTH and SPARK_FUZZ_MAX_INPUT_BYTES at the declared budget values, compare its input size against the input bound, and call an entry symbol that exists in the parser's own inventoried sources.",
+    "Corpus seeds are opened and read, not merely stat-ed, and a corpus content digest pins last_verified to exact seed bytes.",
+    "The gate's passed field is computed from the closure blockers, and the narrative ledger cannot claim closure or a non-blocking status while blockers remain."
+  ],
+  "what_this_gate_does_not_prove": [
+    "It is a structural contract check. It is not runtime parser safety, fuzz coverage, or crash-freedom evidence.",
+    "No production parser has a libFuzzer/AFL harness: fuzzed_count is 0 and 108 inventoried parsers are blocked.",
+    "No seed corpus or runtime resource budget is bound to a production fuzz target: corpus_count is 0.",
+    "No ASan/UBSan fuzz smoke run and no scheduled campaign have been executed.",
+    "149 detected candidates are deferred with owner sec-120-parser-triage and expiry 2027-02-24; they are recorded, not classified.",
+    "27 inventoried source files are not matched by any detector pattern (detector_blind_spots in the snapshot): human review found them, the regexes would not have.",
+    "Production entry-point behaviour has not been proven safe for malformed input."
+  ],
+  "closure_blockers": [
+    "108 inventoried parsers have no fuzz target",
+    "149 detected candidates await classification",
+    "no corpus/resource budget is bound to a runnable fuzz target"
   ],
   "scope_boundaries": {
     "network": "NET-100 behind G12",
-    "scripting": "ENG-200 behind G11"
+    "scripting": "ENG-200 behind G11; includes .as script-file ingestion under SparkEngine/Source/Engine/Scripting"
   },
-  "closure_claim": false
+  "retired_exclusions": [
+    "GameModules/SparkGameMMOFPS/Source/Net (NET-100) hid zero parser candidates on 2026-08-28 and was removed as stale breadth.",
+    "GameModules/SparkGameVisualScript (ENG-200) hid zero parser candidates on 2026-08-28 and was removed as stale breadth."
+  ],
+  "not_completed": [
+    "No production parser has a libFuzzer/AFL harness.",
+    "No seed corpus or runtime resource budget is bound to a production fuzz target.",
+    "The 149-file detected candidate backlog still requires manual classification.",
+    "ASan/UBSan fuzz smoke and scheduled campaigns are not implemented.",
+    "Production entry-point behaviour has not been proven safe for malformed input."
+  ]
 }

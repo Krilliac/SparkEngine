@@ -875,10 +875,19 @@ jobs:
         python3 tools/site-data/exact_evidence.py write \
           --output "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json"
 
+    # SEC-120 is release-blocking: publication must fail while any inventoried
+    # parser still lacks a sanitizer-backed fuzz target and bounded corpus.
+    # The structural gate in build.yml blocks merges; this blocks releases.
+    - name: Verify SEC-120 parser fuzz-policy closure
+      run: python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure
+
     # Download counters are durable generated state on one moving tag. Keeping
     # them off Working lets branch protection stay strict and leaves the source
     # commit unchanged throughout exact-CI revalidation.
-    - name: Checkout badge-state seed
+    # Counters are repository-global/default-branch state, not tag state. A
+    # separate checkout keeps release tags immutable and preserves the exact
+    # source checkout used by the release metadata below.
+    - name: Checkout canonical badge branch
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         ref: Working
