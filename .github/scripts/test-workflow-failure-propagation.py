@@ -8,6 +8,8 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -1176,8 +1178,12 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         )
         mutations = {
             "condition bypass": self.release.replace(
-                "      if: needs.prepare.outputs.is_versioned == 'true'",
-                "      if: needs.prepare.outputs.is_versioned == 'true' || github.event_name == 'workflow_dispatch'",
+                readiness,
+                readiness.replace(
+                    "      if: needs.prepare.outputs.is_versioned == 'true'",
+                    "      if: needs.prepare.outputs.is_versioned == 'true' || github.event_name == 'workflow_dispatch'",
+                    1,
+                ),
                 1,
             ),
             # The mutants are derived from the step itself rather than from a
@@ -1610,6 +1616,67 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn('LOCAL_SHA" != "$WORKFLOW_SHA', controller)
         self.assertIn('LOCAL_SHA" != "$REMOTE_SHA', controller)
 
+    def test_release_metadata_requires_one_source_version_and_changelog_entry(self) -> None:
+        block = named_step(self.release, "Compute release metadata")
+        script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        declaration = 'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n'
+        heading = "## [1.2.3] - 2026-09-07\n\n### Fixed\n- Fixture release note.\n"
+        cases = (
+            ("matching", "v1.2.3", declaration, heading, 0),
+            ("heading without date", "v1.2.3", declaration, "## [1.2.3]\n", 0),
+            ("version mismatch", "v9.8.7", declaration, "## [9.8.7]\n", 1),
+            ("duplicate default", "v1.2.3", declaration * 2, heading, 1),
+            ("conflicting default", "v1.2.3", declaration + declaration.replace("1.2.3", "9.8.7"), heading, 1),
+            ("multiline duplicate", "v1.2.3", declaration + 'set(\n SPARK_ENGINE_VERSION "9.8.7")\n', heading, 1),
+            ("indented duplicate", "v1.2.3", declaration + "  " + declaration, heading, 1),
+            ("missing default", "v1.2.3", "", heading, 1),
+            ("unreleased only", "v1.2.3", declaration, "## [Unreleased]\n", 1),
+            ("missing changelog", "v1.2.3", declaration, None, 1),
+            ("duplicate heading", "v1.2.3", declaration, heading * 2, 1),
+            ("other release", "v1.2.3", declaration, "## [1.2.30]\n", 1),
+            ("nonheading mention", "v1.2.3", declaration, "See [1.2.3] for details.\n", 1),
+            ("regex lookalike", "v1.2.3", declaration, "## [1x2x3]\n", 1),
+            ("malformed tag", "v1.2.3-rc1", declaration, heading, 1),
+        )
+        for label, tag, cmake, changelog, status in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                (root / "CMakeLists.txt").write_text(cmake, encoding="utf-8")
+                if changelog is not None:
+                    (root / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
+                output = root / "outputs"
+                completed = subprocess.run(
+                    [shutil.which("bash"), "-c", script], cwd=root, text=True, capture_output=True,
+                    env={**os.environ, "EVENT_NAME": "repository_dispatch", "INPUT_RELEASE_TAG": tag,
+                         "GITHUB_OUTPUT": str(output)},
+                )
+                self.assertEqual(completed.returncode, status, completed.stderr)
+                values = dict(line.split("=", 1) for line in output.read_text().splitlines()) if output.exists() else {}
+                if status:
+                    self.assertNotIn("is_versioned", values, "Rejected metadata must not emit release outputs")
+                else:
+                    self.assertEqual(values, {"tag": tag, "version": "1.2.3", "cmake_version": "1.2.3",
+                                              "is_versioned": "true"})
+
+    def test_nightly_metadata_does_not_require_versioned_changelog(self) -> None:
+        block = named_step(self.release, "Compute release metadata")
+        script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        for event, tag in (("schedule", ""), ("schedule", "v9.8.7"), ("repository_dispatch", "")):
+            with self.subTest(event=event, tag=tag), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                (root / "CMakeLists.txt").write_text(
+                    'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n', encoding="utf-8")
+                output = root / "outputs"
+                completed = subprocess.run(
+                    [shutil.which("bash"), "-c", script], cwd=root, text=True, capture_output=True,
+                    env={**os.environ, "EVENT_NAME": event, "INPUT_RELEASE_TAG": tag,
+                         "GITHUB_OUTPUT": str(output)},
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(dict(line.split("=", 1) for line in output.read_text().splitlines()),
+                                 {"tag": "nightly", "version": "nightly", "cmake_version": "1.2.3",
+                                  "is_versioned": "false"})
+
     def test_release_concurrency_uses_only_supported_github_schema(self) -> None:
         release_job = self.release[self.release.index("  release:\n") :]
         concurrency = release_job[
@@ -1626,13 +1693,162 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 offenders.append(path.name)
         self.assertEqual(offenders, [])
 
-    def test_versioned_release_cannot_publish_debug_without_release(self) -> None:
-        matrix = named_step(self.release, "Determine build configurations")
-        self.assertIn(
-            'if [[ "$IS_VERSIONED" == "true" && "$REQUESTED_CONFIGS" == "debug" ]]',
-            matrix,
+    def test_windows_package_native_failures_stop_the_step(self) -> None:
+        windows = yaml_section(self.release, "build-windows", indent=2)
+        for name in ("Validate external package consumption", "Extract and smoke-test portable package",
+                     "Validate Windows stable runtime component layout"):
+            block = named_step(windows, name)
+            lines = textwrap.dedent(block.split("run: |\n", 1)[1]).splitlines()
+            native_ends = []
+            in_native = False
+            for index, line in enumerate(lines):
+                if re.match(r"^(cmake|ctest|python)\s", line):
+                    in_native = True
+                if in_native and not line.rstrip().endswith("`"):
+                    native_ends.append(index)
+                    in_native = False
+            self.assertGreaterEqual(len(native_ends), 4, name)
+            for end in native_ends:
+                with self.subTest(step=name, command=lines[end]):
+                    self.assertLess(end + 1, len(lines), "Native status must be checked immediately")
+                    self.assertRegex(lines[end + 1], r"^if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}$")
+
+    def test_native_msi_qualification_blocks_package_upload_and_retains_logs(self) -> None:
+        windows = yaml_section(self.release, "build-windows", indent=2)
+        block = named_step(windows, "Qualify Windows stable MSI install and uninstall")
+        self.assertIn("if: needs.prepare.outputs.is_versioned == 'true'", block)
+        self.assertIn("python .github/scripts/qualify-windows-msi.py", block)
+        self.assertIn('--manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake"', block)
+        self.assertIn('--runner-temp "${{ runner.temp }}"', block)
+        self.assertIn('--source-sha "${{ github.sha }}"', block)
+        self.assertTrue(block.rstrip().endswith("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"))
+        self.assertNotIn("continue-on-error", block)
+        self.assertLess(windows.index("Generate CPack packages"), windows.index("Qualify Windows stable MSI"))
+        self.assertLess(windows.index("Qualify Windows stable MSI"), windows.index("Upload packaged artifact"))
+        logs = named_step(windows, "Upload native MSI qualification diagnostics")
+        self.assertIn("if: always()", logs)
+        self.assertIn("path: msi-qualification/", logs)
+        self.assertIn("test_qualify_windows_msi.py", self.build)
+
+    def test_shipping_ci_qualifies_native_msi_without_rebuilding_or_publishing(self) -> None:
+        shipping = yaml_section(self.build, "build-windows-shipping", indent=2)
+        block = named_step(shipping, "Package and qualify the Windows Shipping MSI")
+        self.assertIn("cpack --config build/windows-shipping/CPackConfig.cmake -G WIX -C MinSizeRel", block)
+        self.assertIn("python .github/scripts/qualify-windows-msi.py", block)
+        self.assertIn('"build/ci-msi-package"', block)
+        self.assertIn('SPARK_ENGINE_VERSION:STRING=', block)
+        self.assertIn('--manifest "${{ github.workspace }}/build/windows-shipping/SparkEngineGameModules.cmake"', block)
+        self.assertEqual(block.count("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"), 2)
+        self.assertNotIn("continue-on-error", block)
+        self.assertNotIn("cmake --build", block)
+        self.assertNotIn("cmake --preset", block)
+        self.assertNotIn("if: ", block)
+        self.assertLess(shipping.index("validate_pending_authority.py"), shipping.index("Package and qualify"))
+        logs = named_step(shipping, "Upload Windows Shipping MSI qualification diagnostics")
+        self.assertIn("if: always()", logs)
+        self.assertIn("msi-qualification", logs)
+        self.assertIn("msi-cpack.log", logs)
+
+    def test_stable_runtime_layout_is_validated_before_packaging(self) -> None:
+        windows = yaml_section(self.release, "build-windows", indent=2)
+        block = named_step(windows, "Validate Windows stable runtime component layout")
+        self.assertIn("if: needs.prepare.outputs.is_versioned == 'true'", block)
+        self.assertIn("-DSPARK_PACKAGE_LAYOUT=runtime", block)
+        self.assertIn("-DSPARK_PACKAGE_PROFILE=stable-v1", block)
+        self.assertIn('-DSPARK_PACKAGE_EXPECTED_MODULE_MANIFEST="${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake"', block)
+        for component in ("runtime", "tools", "samples"):
+            self.assertIn(f"--component {component}", block)
+        self.assertNotIn("--component sdk", block)
+        self.assertNotIn("SPARK_PACKAGE_VALIDATE_MODULES_ONLY", block)
+        self.assertLess(windows.index("Validate Windows stable runtime component layout"),
+                        windows.index("Generate CPack packages"))
+        logs = named_step(windows, "Upload runtime layout diagnostics")
+        self.assertIn("if: always()", logs)
+        self.assertIn("runtime-layout.log", logs)
+
+    def test_stable_shipping_build_keeps_validation_separate(self) -> None:
+        windows = yaml_section(self.release, "build-windows", indent=2)
+        shipping = named_step(windows, "Configure Windows Shipping package")
+        validation = named_step(windows, "Configure Windows stable validation")
+        tests = named_step(windows, "Test Windows stable validation")
+        for block in (shipping, validation, tests):
+            self.assertIn("if: needs.prepare.outputs.is_versioned == 'true'", block)
+            self.assertNotIn("continue-on-error", block)
+        self.assertIn("cmake --preset windows-shipping", shipping)
+        self.assertNotIn("-DBUILD_TESTS", shipping)
+        self.assertIn("cmake --preset windows-release", validation)
+        self.assertIn("ctest --test-dir build/windows-release -C Release", tests)
+        self.assertIn("--no-tests=error", tests)
+        package_build = named_step(windows, "Build")
+        self.assertIn("cmake --build ${{ matrix.build_dir }} --config ${{ matrix.config }}", package_build)
+        download = named_step(self.release, "Download channel build artifacts")
+        self.assertIn("needs.prepare.outputs.is_versioned == 'true' && 'SparkEngine-Windows-MinSizeRel-packages'", download)
+
+    def test_release_matrix_selects_shipping_only_for_stable_windows(self) -> None:
+        block = named_step(self.release, "Determine build configurations")
+        script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        bash = shutil.which("bash")
+        self.assertIsNotNone(bash)
+        for stable, requested, status in (
+            ("true", "both", 0), ("true", "release", 0), ("true", "debug", 1),
+            ("false", "both", 0), ("false", "release", 0), ("false", "debug", 0),
+            ("true", "unrecognized", 1),
+        ):
+            with self.subTest(stable=stable, requested=requested), tempfile.TemporaryDirectory() as raw:
+                output = Path(raw) / "outputs"
+                completed = subprocess.run(
+                    [bash, "-c", script], text=True, capture_output=True,
+                    env={**os.environ, "IS_VERSIONED": stable, "REQUESTED_CONFIGS": requested,
+                         "EVENT_NAME": "repository_dispatch", "GITHUB_OUTPUT": str(output)},
+                )
+                self.assertEqual(completed.returncode, status, completed.stderr)
+                if status:
+                    continue
+                values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+                self.assertIn("windows_matrix", values, "Windows publication configuration must be explicit")
+                windows = json.loads(values["windows_matrix"])
+                if stable == "true":
+                    self.assertEqual(windows, [{"config": "MinSizeRel", "build_dir": "build/windows-shipping",
+                                                "profile": "stable-v1"}])
+                else:
+                    self.assertEqual([row["config"] for row in windows], ["Debug", "Release"])
+                    self.assertTrue(all(row["build_dir"] == "build" and row["profile"] == "default"
+                                        for row in windows))
+                    self.assertEqual(json.loads(values["configs"]), ["Debug", "Release"])
+
+    def test_stable_collection_excludes_nonshipping_artifacts_and_requires_complete_packages(self) -> None:
+        block = named_step(self.release, "Collect release assets")
+        script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        script = script.replace("${{ needs.prepare.outputs.is_versioned }}", "true")
+        names = (
+            "SparkEngine-7.8.9-Windows-AMD64-MinSizeRel.zip",
+            "SparkEngine-7.8.9-Windows-AMD64-MinSizeRel-Runtime.exe",
+            "SparkEngine-7.8.9-Windows-AMD64-MinSizeRel-Runtime.msi",
         )
-        self.assertIn("versioned releases must include Release artifacts", matrix)
+        for missing in (None, names[0], names[1], names[2]):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                packages = root / "release-assets/SparkEngine-Windows-MinSizeRel-packages"
+                packages.mkdir(parents=True)
+                for name in names:
+                    if name != missing:
+                        (packages / name).write_bytes(b"fixture package")
+                extras = root / "release-assets/unrelated"
+                extras.mkdir()
+                for name in ("SparkInstaller-Windows-x64.exe", "SparkEngine-7.8.9-Linux-x86_64-Release.tar.gz",
+                             "SparkEngine-7.8.9-Windows-AMD64-Release.zip"):
+                    (extras / name).write_bytes(b"not a Shipping package")
+                completed = subprocess.run(
+                    [shutil.which("bash"), "-c", script], cwd=root, text=True, capture_output=True,
+                    env={**os.environ, "IS_VERSIONED": "true", "RELEASE_VERSION": "7.8.9",
+                         "GITHUB_OUTPUT": str(root / "outputs"), "GITHUB_STEP_SUMMARY": str(root / "summary")},
+                )
+                if missing:
+                    self.assertNotEqual(completed.returncode, 0, "Missing stable package must block publication")
+                else:
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    assets = (root / "expected-release-assets.txt").read_text().splitlines()
+                    self.assertEqual(set(assets), {*names, "SHA256SUMS"})
 
     def test_release_binaries_bind_and_verify_the_requested_cmake_version(self) -> None:
         installer_cmake = (REPO_ROOT / "SparkInstaller" / "CMakeLists.txt").read_text(encoding="utf-8")

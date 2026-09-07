@@ -153,6 +153,7 @@
                 "SPARK_STRICT_DEPS": "ON",
                 "BUILD_TESTS": "OFF",
                 "BUILD_GAME_MODULES": "ON",
+                "SPARK_GAME_MODULES": "SparkGameFPS",
                 "ENABLE_LAUNCHER": "ON",
                 "ENABLE_SPARKBUILD": "ON",
                 "ENABLE_INSTALLER": "ON",

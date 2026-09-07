@@ -1180,7 +1180,7 @@
 | `AppendAdmissionValue` | function | SparkGateway | [GatewayAreaControl.cpp:L1131](../../SparkGateway/src/GatewayAreaControl.cpp#L1131) |  |
 | `AppendEscaped` | function | SparkEditor | [DecorLayoutEditorIO.cpp:L76](../../SparkEditor/Source/Panels/DecorLayoutEditorIO.cpp#L76) |  |
 | `AppendEscaped` | function | SparkEditor | [RegionMapEditorIO.cpp:L56](../../SparkEditor/Source/Panels/RegionMapEditorIO.cpp#L56) |  |
-| `AppendFloat` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L52](../../Tests/TestGLTFStaticMeshLoader.cpp#L52) |  |
+| `AppendFloat` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L55](../../Tests/TestGLTFStaticMeshLoader.cpp#L55) |  |
 | `AppendHex` | function | SparkGateway | [GatewayAreaControl.cpp:L518](../../SparkGateway/src/GatewayAreaControl.cpp#L518) |  |
 | `AppendHex` | function | SparkGateway | [GatewaySecurity.cpp:L31](../../SparkGateway/src/GatewaySecurity.cpp#L31) |  |
 | `AppendLog` | function | SparkInstaller | [WizardGui.cpp:L45](../../SparkInstaller/src/gui/WizardGui.cpp#L45) |  |
@@ -1198,9 +1198,9 @@
 | `AppendString` | function | SparkEngine | [TelemetrySpoolFormat.cpp:L46](../../SparkEngine/Source/Utils/TelemetrySpoolFormat.cpp#L46) |  |
 | `AppendString` | function | SparkGateway | [GatewaySecurity.cpp:L90](../../SparkGateway/src/GatewaySecurity.cpp#L90) |  |
 | `AppendStringField` | function | Tests | [TestSecurityParsersReal.cpp:L33](../../Tests/TestSecurityParsersReal.cpp#L33) |  |
-| `AppendU16` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L46](../../Tests/TestGLTFStaticMeshLoader.cpp#L46) |  |
+| `AppendU16` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L49](../../Tests/TestGLTFStaticMeshLoader.cpp#L49) |  |
 | `AppendU32` | function | SparkEngine | [TelemetrySpoolFormat.cpp:L34](../../SparkEngine/Source/Utils/TelemetrySpoolFormat.cpp#L34) |  |
-| `AppendU32` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L38](../../Tests/TestGLTFStaticMeshLoader.cpp#L38) |  |
+| `AppendU32` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L41](../../Tests/TestGLTFStaticMeshLoader.cpp#L41) |  |
 | `AppendU64` | function | SparkEngine | [TelemetrySpoolFormat.cpp:L40](../../SparkEngine/Source/Utils/TelemetrySpoolFormat.cpp#L40) |  |
 | `AppendUint32` | function | SparkGateway | [GatewaySecurity.cpp:L78](../../SparkGateway/src/GatewaySecurity.cpp#L78) |  |
 | `AppendUint64` | function | SparkGateway | [GatewaySecurity.cpp:L84](../../SparkGateway/src/GatewaySecurity.cpp#L84) |  |
@@ -10538,8 +10538,8 @@
 | `File` | function | Tests | [TestEditorSubsystemsReal.cpp:L61](../../Tests/TestEditorSubsystemsReal.cpp#L61) |  |
 | `file` | function | Tests | [TestEngineSettingsReal.cpp:L239](../../Tests/TestEngineSettingsReal.cpp#L239) |  |
 | `file` | function | Tests | [TestEngineSettingsReal.cpp:L248](../../Tests/TestEngineSettingsReal.cpp#L248) |  |
-| `file` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L109](../../Tests/TestGLTFStaticMeshLoader.cpp#L109) |  |
-| `file` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L115](../../Tests/TestGLTFStaticMeshLoader.cpp#L115) |  |
+| `file` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L112](../../Tests/TestGLTFStaticMeshLoader.cpp#L112) |  |
+| `file` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L118](../../Tests/TestGLTFStaticMeshLoader.cpp#L118) |  |
 | `file` | function | Tests | [TestSceneSerializerReal.cpp:L89](../../Tests/TestSceneSerializerReal.cpp#L89) |  |
 | `file` | function | Tests | [TestSceneSerializerReal.cpp:L117](../../Tests/TestSceneSerializerReal.cpp#L117) |  |
 | `file` | function | Tests | [TestSceneSerializerReal.cpp:L204](../../Tests/TestSceneSerializerReal.cpp#L204) |  |
@@ -21471,7 +21471,7 @@
 | `loaderPath` | function | Tests | [TestWorldBasicRender.cpp:L75](../../Tests/TestWorldBasicRender.cpp#L75) |  |
 | `LoaderStats` | struct | Tests | [TestDirectStorageLoader.cpp:L56](../../Tests/TestDirectStorageLoader.cpp#L56) |  |
 | `LoadExecScriptFromCmdLine` | function | SparkEngine | [SparkEngineWindows.cpp:L291](../../SparkEngine/Source/Core/SparkEngineWindows.cpp#L291) |  |
-| `LoadExternalTriangle` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L144](../../Tests/TestGLTFStaticMeshLoader.cpp#L144) |  |
+| `LoadExternalTriangle` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L147](../../Tests/TestGLTFStaticMeshLoader.cpp#L147) |  |
 | `LoadFBX` | function | SparkEngine | [AssetPipeline.h:L589](../../SparkEngine/Source/Graphics/AssetPipeline.h#L589) |  |
 | `LoadFont` | function | SparkEngine | [FontSystem.h:L188](../../SparkEngine/Source/Engine/Text/FontSystem.h#L188) | Load a TrueType font from file |
 | `LoadFont` | function | SparkEngine | [MSDFTextRenderer.h:L170](../../SparkEngine/Source/Graphics/MSDFTextRenderer.h#L170) |  |
@@ -23439,7 +23439,7 @@
 | `MakeFlatQuadNavMesh` | function | Tests | [TestNavMesh.cpp:L474](../../Tests/TestNavMesh.cpp#L474) |  |
 | `MakeFormat` | function | Tests | [TestAudioEngineReal.cpp:L36](../../Tests/TestAudioEngineReal.cpp#L36) |  |
 | `MakeFrustumLookingAtOrigin` | function | Tests | [TestBVHAccelerator.cpp:L48](../../Tests/TestBVHAccelerator.cpp#L48) |  |
-| `MakeGLB` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L119](../../Tests/TestGLTFStaticMeshLoader.cpp#L119) |  |
+| `MakeGLB` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L122](../../Tests/TestGLTFStaticMeshLoader.cpp#L122) |  |
 | `MakeGrid` | function | Tests | [TestLODGeneratorPhaseGG.cpp:L40](../../Tests/TestLODGeneratorPhaseGG.cpp#L40) |  |
 | `MakeGridNavMesh` | function | Tests | [TestNavMesh.cpp:L487](../../Tests/TestNavMesh.cpp#L487) |  |
 | `MakeHostAPI` | function | Tests | [TestPluginABI.cpp:L174](../../Tests/TestPluginABI.cpp#L174) |  |
@@ -23517,8 +23517,8 @@
 | `MakeTouch` | function | Tests | [Test_engine-misc_MobileGestures.cpp:L17](../../Tests/harden/Test_engine-misc_MobileGestures.cpp#L17) |  |
 | `MakeTransformRecord` | function | Tests | [TestSaveSystemRoundTripReal.cpp:L50](../../Tests/TestSaveSystemRoundTripReal.cpp#L50) |  |
 | `MakeTriangle` | function | Tests | [TestLightmapBaker.cpp:L6](../../Tests/TestLightmapBaker.cpp#L6) |  |
-| `MakeTriangleBuffer` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L57](../../Tests/TestGLTFStaticMeshLoader.cpp#L57) |  |
-| `MakeTriangleJson` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L81](../../Tests/TestGLTFStaticMeshLoader.cpp#L81) |  |
+| `MakeTriangleBuffer` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L60](../../Tests/TestGLTFStaticMeshLoader.cpp#L60) |  |
+| `MakeTriangleJson` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L84](../../Tests/TestGLTFStaticMeshLoader.cpp#L84) |  |
 | `MakeTrigger` | function | Templates | [GameModule.h:L256](../../Templates/PlatformerKit/Source/GameModule.h#L256) |  |
 | `MakeUniqueDirectory` | function | Tests | [TestConsoleProcessPipeReal.cpp:L16](../../Tests/TestConsoleProcessPipeReal.cpp#L16) |  |
 | `MakeUniqueLogDirectory` | function | Tests | [TestLoggerSinksReal.cpp:L18](../../Tests/TestLoggerSinksReal.cpp#L18) |  |
@@ -32134,7 +32134,7 @@
 | `ReplaceFirstAscii` | function | Tests | [Test_persistence_SaveSystem.cpp:L145](../../Tests/harden/Test_persistence_SaveSystem.cpp#L145) |  |
 | `ReplaceLengthPrefixedString` | function | Tests | [Test_persistence_SaveSystem.cpp:L156](../../Tests/harden/Test_persistence_SaveSystem.cpp#L156) |  |
 | `replacements` | function | SparkEngine | [AsyncDatabase.cpp:L297](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L297) |  |
-| `ReplaceOnce` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L98](../../Tests/TestGLTFStaticMeshLoader.cpp#L98) |  |
+| `ReplaceOnce` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L101](../../Tests/TestGLTFStaticMeshLoader.cpp#L101) |  |
 | `Replay` | function | SparkEngine | [EngineSettings.h:L1033](../../SparkEngine/Source/Core/EngineSettings.h#L1033) |  |
 | `Replay` | function | SparkEngine | [EngineSettings.h:L1034](../../SparkEngine/Source/Core/EngineSettings.h#L1034) |  |
 | `ReplayData` | struct | SparkEngine | [ReplaySystem.h:L95](../../SparkEngine/Source/Engine/Replay/ReplaySystem.h#L95) |  |
@@ -37800,7 +37800,7 @@
 | `Spark::GetEngineVersion` | method | SparkEngine | [EngineContext.cpp:L99](../../SparkEngine/Source/Core/EngineContext.cpp#L99) |  |
 | `Spark::GetFieldAsString` | method | SparkEngine | [AngelScriptEngine.cpp:L1190](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp#L1190) |  |
 | `Spark::GetSDKVersion` | method | SparkEngine | [EngineContext.cpp:L104](../../SparkEngine/Source/Core/EngineContext.cpp#L104) |  |
-| `Spark::Graphics::Detail::LoadGLTFStaticMesh` | method | Tests | [TestGLTFStaticMeshLoader.cpp:L149](../../Tests/TestGLTFStaticMeshLoader.cpp#L149) |  |
+| `Spark::Graphics::Detail::LoadGLTFStaticMesh` | method | Tests | [TestGLTFStaticMeshLoader.cpp:L152](../../Tests/TestGLTFStaticMeshLoader.cpp#L152) |  |
 | `Spark::Graphics::DetectBestSIMD` | method | SparkEngine | [GraphicsEngineLinuxAccessors.cpp:L33](../../SparkEngine/Source/Graphics/GraphicsEngineLinuxAccessors.cpp#L33) |  |
 | `Spark::Graphics::DetectBestSIMD` | method | SparkEngine | [GraphicsEngineWindowsAccessors.cpp:L38](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsAccessors.cpp#L38) |  |
 | `Spark::Json::Parse` | method | Tests | [TestTFDataTables.cpp:L72](../../Tests/TestTFDataTables.cpp#L72) |  |
@@ -40494,14 +40494,14 @@
 | `temp` | function | Tests | [TestEditorPanelsRealBackends.cpp:L198](../../Tests/TestEditorPanelsRealBackends.cpp#L198) |  |
 | `temp` | function | Tests | [TestEditorPanelsRealBackends.cpp:L221](../../Tests/TestEditorPanelsRealBackends.cpp#L221) |  |
 | `temp` | function | Tests | [TestEditorPanelsRealBackends.cpp:L249](../../Tests/TestEditorPanelsRealBackends.cpp#L249) |  |
-| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L155](../../Tests/TestGLTFStaticMeshLoader.cpp#L155) |  |
-| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L173](../../Tests/TestGLTFStaticMeshLoader.cpp#L173) |  |
-| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L187](../../Tests/TestGLTFStaticMeshLoader.cpp#L187) |  |
-| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L201](../../Tests/TestGLTFStaticMeshLoader.cpp#L201) |  |
-| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L214](../../Tests/TestGLTFStaticMeshLoader.cpp#L214) |  |
-| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L229](../../Tests/TestGLTFStaticMeshLoader.cpp#L229) |  |
-| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L243](../../Tests/TestGLTFStaticMeshLoader.cpp#L243) |  |
-| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L256](../../Tests/TestGLTFStaticMeshLoader.cpp#L256) |  |
+| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L158](../../Tests/TestGLTFStaticMeshLoader.cpp#L158) |  |
+| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L176](../../Tests/TestGLTFStaticMeshLoader.cpp#L176) |  |
+| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L190](../../Tests/TestGLTFStaticMeshLoader.cpp#L190) |  |
+| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L204](../../Tests/TestGLTFStaticMeshLoader.cpp#L204) |  |
+| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L217](../../Tests/TestGLTFStaticMeshLoader.cpp#L217) |  |
+| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L232](../../Tests/TestGLTFStaticMeshLoader.cpp#L232) |  |
+| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L246](../../Tests/TestGLTFStaticMeshLoader.cpp#L246) |  |
+| `temp` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L259](../../Tests/TestGLTFStaticMeshLoader.cpp#L259) |  |
 | `TempAllocator` | class | SparkEngine | [PhysicsSystem.h:L47](../../SparkEngine/Source/Physics/PhysicsSystem.h#L47) |  |
 | `TempAssets` | struct | Tests | [TestAdvancedAssetPipeline.cpp:L24](../../Tests/TestAdvancedAssetPipeline.cpp#L24) |  |
 | `tempCounts` | function | SparkEngine | [MeshOptimizer.h:L114](../../SparkEngine/Source/Graphics/MeshOptimizer.h#L114) |  |
@@ -40525,8 +40525,8 @@
 | `TemporalUpscaleConstants` | struct | SparkEngine | [UpscalingTypes.h:L239](../../SparkEngine/Source/Graphics/UpscalingTypes.h#L239) | Constant buffer shared by DLSS/XeSS fallback path |
 | `temporary` | function | SparkEngine | [AsyncDatabase.cpp:L564](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L564) |  |
 | `temporaryCleanup` | function | SparkEditor | [JSONSceneSerializer.cpp:L533](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L533) |  |
-| `TemporaryDirectory` | struct | Tests | [TestGLTFStaticMeshLoader.cpp:L20](../../Tests/TestGLTFStaticMeshLoader.cpp#L20) |  |
-| `TemporaryDirectory` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L22](../../Tests/TestGLTFStaticMeshLoader.cpp#L22) |  |
+| `TemporaryDirectory` | struct | Tests | [TestGLTFStaticMeshLoader.cpp:L23](../../Tests/TestGLTFStaticMeshLoader.cpp#L23) |  |
+| `TemporaryDirectory` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L25](../../Tests/TestGLTFStaticMeshLoader.cpp#L25) |  |
 | `TemporaryFileCleanup` | class | SparkEditor | [JSONSceneSerializer.cpp:L172](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L172) |  |
 | `TemporaryFileCleanup` | function | SparkEditor | [JSONSceneSerializer.cpp:L175](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L175) |  |
 | `TemporaryPath` | function | SparkDaemon | [OrchestratorIdentity.cpp:L82](../../SparkDaemon/src/OrchestratorIdentity.cpp#L82) |  |
@@ -46596,7 +46596,7 @@
 | `WriteBytes` | function | SparkEngine | [SceneSnapshotSerializer.h:L53](../../SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h#L53) |  |
 | `WriteBytes` | function | SparkEngine | [NetworkManager.h:L204](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L204) |  |
 | `WriteBytes` | function | SparkEngine | [Serializer.h:L167](../../SparkEngine/Source/Utils/Serializer.h#L167) | Write raw bytes directly into the buffer (no endian conversion). |
-| `WriteBytes` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L107](../../Tests/TestGLTFStaticMeshLoader.cpp#L107) |  |
+| `WriteBytes` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L110](../../Tests/TestGLTFStaticMeshLoader.cpp#L110) |  |
 | `WriteBytes` | function | Tests | [TestNetBuffer.cpp:L61](../../Tests/TestNetBuffer.cpp#L61) |  |
 | `WriteBytes` | function | Tests | [TestServerMockClient.cpp:L102](../../Tests/TestServerMockClient.cpp#L102) |  |
 | `WriteBytes` | function | Tests | [Test_persistence_SaveSystem.cpp:L185](../../Tests/harden/Test_persistence_SaveSystem.cpp#L185) |  |
@@ -46737,7 +46737,7 @@
 | `WriteTempVertexShader` | function | Tests | [TestD3D11DeviceContractsReal.cpp:L131](../../Tests/TestD3D11DeviceContractsReal.cpp#L131) |  |
 | `WriteText` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L71](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L71) |  |
 | `WriteText` | function | SparkEngine | [LocalFileCache.h:L165](../../SparkEngine/Source/Utils/LocalFileCache.h#L165) | Write text content to disk and update the cache |
-| `WriteText` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L113](../../Tests/TestGLTFStaticMeshLoader.cpp#L113) |  |
+| `WriteText` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L116](../../Tests/TestGLTFStaticMeshLoader.cpp#L116) |  |
 | `WriteTextFile` | function | SparkEditor | [BuildPipeline.cpp:L410](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L410) |  |
 | `WriteTextFile` | function | SparkEngine | [FileUtils.h:L62](../../SparkEngine/Source/Utils/FileUtils.h#L62) |  |
 | `WriteTextFile` | function | Tests | [TestEditorProjectMaterializationReal.cpp:L49](../../Tests/TestEditorProjectMaterializationReal.cpp#L49) |  |

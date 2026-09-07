@@ -954,13 +954,8 @@ _REQUIRED_TARGET_REFERENCE_COMMANDS = {
 }
 # Each record pins the exact declaration a human reviewed, line numbers
 # included, so a moved or rewritten reference is re-reviewed rather than
-# silently inherited. The release-readiness sweep inserted 37 lines above
-# CMakeLists.txt:893 (the pre-project() CMAKE_MSVC_DEBUG_INFORMATION_FORMAT
-# block, the /MP + STRIP_DEBUG_SYMBOLS link-option handling, and the
-# top-level ENABLE_LTO option), which shifted both references down by exactly
-# 37 lines. The guard conditions are byte-identical to the reviewed ones:
-# `git show 4fec0297:CMakeLists.txt | sed -n '893p;951p;1505p;1597,1599p'`
-# matches `sed -n '930p;988p;1542p;1634,1636p' CMakeLists.txt` today.
+# silently inherited. The stable-shipping CMake change shifted the audited
+# references by two lines; the guard conditions remain byte-identical.
 _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
     "Jolt": {
         "profiles": frozenset({"windows-shipping", "windows-validation"}),
@@ -968,15 +963,15 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "Jolt",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 1636,
+            "line": 1638,
             "conditionFrames": [
-                {"id": "CMakeLists.txt:1542", "branch": 0, "branches": ["JOLT_FOUND"]},
+                {"id": "CMakeLists.txt:1544", "branch": 0, "branches": ["JOLT_FOUND"]},
                 {
-                    "id": "CMakeLists.txt:1634",
+                    "id": "CMakeLists.txt:1636",
                     "branch": 0,
                     "branches": ["SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"],
                 },
-                {"id": "CMakeLists.txt:1635", "branch": 0, "branches": ["MSVC"]},
+                {"id": "CMakeLists.txt:1637", "branch": 0, "branches": ["MSVC"]},
             ],
             "definitionScope": [],
             "origin": "required-target-reference",
@@ -989,10 +984,10 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "angelscript",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 988,
+            "line": 990,
             "conditionFrames": [
                 {
-                    "id": "CMakeLists.txt:930",
+                    "id": "CMakeLists.txt:932",
                     "branch": 0,
                     "branches": ["ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"],
                 }

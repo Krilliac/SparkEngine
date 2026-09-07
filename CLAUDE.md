@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 7273 test definitions across 603 files, CTest
+Tests/                                   — 7274 test definitions across 603 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -396,3 +396,7 @@ Review whether anything learned warrants a new or updated entry — especially o
 - Do not exclude `.claude/` from `.promptignore`
 - Always commit context changes — future sessions on any branch benefit
 - Prefer updating an existing entry over creating a new one for the same topic
+
+### Asset workflow
+
+Use Blender for asset creation, repair, and export work. Preserve editable source assets and verify exported files through the engine's asset pipeline; a successful Blender export alone is not release qualification.

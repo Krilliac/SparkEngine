@@ -1783,6 +1783,16 @@
               "type": "source",
               "path": "SparkSDK/Include/Spark/IModule.h",
               "label": "Public SDK surface the slice must build against"
+            },
+            {
+              "type": "source",
+              "path": "CMakePresets.json",
+              "label": "windows-shipping selects only SparkGameFPS from the in-tree game-module set"
+            },
+            {
+              "type": "test",
+              "path": "cmake/TestValidateStagedPackageModuleSidecars.cmake",
+              "label": "Stable package validation rejects game-module payloads and base-game sample source outside the SparkGameFPS slice"
             }
           ]
         },
@@ -1831,7 +1841,7 @@
           "preset": "windows-shipping",
           "configuration": "MinSizeRel",
           "purpose": "shipping",
-          "description": "Authoritative strict Windows 11 x64 Shipping configuration for runtime, editor, first-party game, and delivery tools."
+          "description": "Authoritative strict Windows 11 x64 Shipping configuration for runtime, editor, delivery tools, and exactly the first-party SparkGameFPS module."
         },
         {
           "id": "windows-validation",

@@ -81,6 +81,12 @@ jobs:
     - name: Test crash-consistent release download counters
       run: python3 .github/scripts/test_prepare_download_badges.py
 
+    - name: Test Windows package signature orchestration
+      run: python3 .github/scripts/test_verify_windows_package_signatures.py
+
+    - name: Test native MSI qualification orchestration
+      run: python3 .github/scripts/test_qualify_windows_msi.py
+
     - name: Test exact release asset publication boundary
       run: python3 .github/scripts/test_verify_release_asset_boundary.py
 
@@ -1132,6 +1138,10 @@ jobs:
         sccache --start-server
         sccache --show-stats
 
+    - name: Test native Windows signature rejection
+      if: matrix.config == 'Release'
+      run: python .github/scripts/test_verify_windows_package_signatures.py
+
     - name: Configure CMake (VS 2022 / v143)
       shell: bash
       # Ninja Multi-Config so CMAKE_<LANG>_COMPILER_LAUNCHER is honoured (Visual
@@ -1462,6 +1472,37 @@ jobs:
           > build-matrix-pending-receipt-stdout.json
         cmp build-matrix-pending-receipt.json build-matrix-pending-receipt-stdout.json
         echo "status=$status" >> "$GITHUB_OUTPUT"
+
+    - name: Package and qualify the Windows Shipping MSI
+      shell: pwsh
+      # Reuse this job's authoritative Shipping binaries; installation evidence
+      # on Windows Server does not certify the separate Windows 11 release gate.
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $versions = @(Get-Content -LiteralPath build/windows-shipping/CMakeCache.txt | Select-String -Pattern '^SPARK_ENGINE_VERSION:STRING=([0-9]+\.[0-9]+\.[0-9]+)$')
+        if ($versions.Count -ne 1) { throw "Expected one configured Shipping version" }
+        $version = $versions[0].Matches[0].Groups[1].Value
+        $packageRoot = Join-Path "${{ github.workspace }}" "build/ci-msi-package"
+        if (Test-Path -LiteralPath $packageRoot) { throw "CI MSI package directory must be fresh" }
+        cpack --config build/windows-shipping/CPackConfig.cmake -G WIX -C MinSizeRel -B "$packageRoot" 2>&1 | Tee-Object -FilePath msi-cpack.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python .github/scripts/qualify-windows-msi.py --packages "$packageRoot" --version "$version" `
+          --manifest "${{ github.workspace }}/build/windows-shipping/SparkEngineGameModules.cmake" `
+          --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `
+          --source-sha "${{ github.sha }}"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Upload Windows Shipping MSI qualification diagnostics
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: msi-qualification-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          msi-cpack.log
+          msi-qualification
+          build/ci-msi-package/_CPack_Packages/**/wix.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: ignore
 
     - name: Upload build-matrix evidence
       if: always()

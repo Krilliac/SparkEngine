@@ -638,6 +638,8 @@ auto mesh = pipeline.LoadMesh("Assets/Models/weapon.gltf");
 
 `LoadGLTFStaticMesh()` is deliberately a static-mesh subset. It rejects skins, animations, morph targets, sparse accessors, non-triangle primitives, and required extensions; it does not import PBR material or texture graphs.
 
+The canonical Blender-authored static fixture lives in `Tests/Fixtures/GLTFStaticMesh/BlenderBox/` with an editable compressed `.blend`, reproducible author/export script, GLB, and hash-bound provenance. `GLTFStaticMesh_LoadsBlenderAuthoredStaticBox` exercises the production CPU loader against its nonuniform applied-transform box: exported axis-converted bounds, flat normals, all six faces' geometric-corner/UV associations, triangle winding/area, and indices. This establishes the documented static attribute contract only; D3D11 rendering, scene-node transforms, skeletal data, animation, and packaged-content certification remain separate requirements.
+
 ### Observed Model Data Handoffs
 
 | Format path | Data handed to `MeshAssetData` | Current limit |

@@ -80,7 +80,7 @@ The single product shape SparkEngine intends to declare stable first: a Windows 
 | Rendered path | Direct3D 11 | `rendering.d3d11` | `SparkEngine/Source/Graphics/RHI/D3D11`, `wiki/graphics/RHI-Abstraction-Layer.md` |
 | Headless path | NullRHI on Windows 11 x64: the no-render device path for GPU-less execution and automation. NullRHI renders nothing. It is not software rendering, and the llvmpipe software OpenGL path belongs to the experimental OpenGL backend outside this profile. | `runtime.nullrhi` | `SparkEngine/Source/Graphics/RHI/NullRHIDevice.h`, `Tests/TestNullRHIDevice.cpp` |
 | Gameplay authoring language | C++23 game modules built against the SDK module interface | `runtime.cpp` | `SparkSDK/Include/Spark/IModule.h`, `SparkEngine/Source/Core/ModuleManager.cpp` |
-| First-party game | SparkGameFPS, one first-party single-player vertical slice that must build through the public SDK surface alone. Constrained LAN play is optional and is not required by this profile. | `modules.fps`, `scope.singleplayer` | `GameModules/SparkGameFPS`, `GameModules/SparkGameFPS/CMakeLists.txt`, `SparkSDK/Include/Spark/IModule.h` |
+| First-party game | SparkGameFPS, one first-party single-player vertical slice that must build through the public SDK surface alone. Constrained LAN play is optional and is not required by this profile. | `modules.fps`, `scope.singleplayer` | `GameModules/SparkGameFPS`, `GameModules/SparkGameFPS/CMakeLists.txt`, `SparkSDK/Include/Spark/IModule.h`, `CMakePresets.json`, `cmake/TestValidateStagedPackageModuleSidecars.cmake` |
 | Delivered product shape | One installed single-player vertical slice authored in SparkEditor, cooked, packaged, installed, and run without external services | `scope.singleplayer`, `editor.authoring` | `wiki/gameplay-tools/Game-Packaging.md`, `SparkInstaller`, `GameModules/SparkGameFPS` |
 
 ### Profile boundaries
@@ -240,8 +240,8 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 |---|---|---|---|---|
 | [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **open** | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
 | [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
-| [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **open** | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
-| [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **open** | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
+| [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **in-progress** | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
+| [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **open** | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
 | [`SEC-100`](#sec-100--close-critical-remote-administration-and-runtime-security-paths) Close critical remote-administration and runtime security paths | P0 | **open** | — | `CI-100`, `OPS-100`, `RDY-000` |
 | [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **open** | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
@@ -989,10 +989,10 @@ python3 tools/site-data/validate.py
 
 ### BLD-100 — Create strict reproducible Shipping configurations
 
-**Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** build · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** build · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Public release automation builds Debug/Release rather than authoritative hardened Shipping presets and does not prove reproducibility or symbol handling.
+Versioned Windows publication now selects the authoritative windows-shipping preset and MinSizeRel product tree, with separate windows-release validation. Nightly retains Debug/Release packages. Executed workflow-selection and asset-collection regressions, plus staged-package profile checks, verify the local orchestration contract. Runtime-only component staging now has an explicit trusted-layout preflight before CPack, retaining executable, runtime-content, and all configured module sidecar/hash checks without requiring installed SDK files. Local fixture validation does not establish native installer execution. Hosted Windows Shipping packaging, reproducibility comparison, exact toolchain/dependency manifests, and private symbol retention remain unverified or unfinished; this item is not complete.
 
 **Dependency contract**
 
@@ -1065,10 +1065,10 @@ cmake --build build/windows-shipping --config MinSizeRel --clean-first
 
 ### REL-100 — Unify versioning, packaging, installer, launcher, and release provenance
 
-**Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Release automation now passes SPARK_ENGINE_VERSION to CMake, generates SDK version headers, and checks exact publication provenance. The remaining acceptance work is to prove version agreement across every stable-v1 product and tag, and to package the authoritative Shipping profile with a complete toolchain and dependency manifest.
+CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Stable preparation now requires tag/default-version equality, one source version declaration, and exactly one matching versioned changelog heading, with executed rejection fixtures; the current Unreleased-only changelog intentionally does not satisfy this contract. Still open: complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy.
 
 **Dependency contract**
 
@@ -1152,7 +1152,7 @@ SparkLauncher --version
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Release automation already generates SHA256SUMS, an SBOM, and build attestations. Stable-v1 still requires independently verified code signing, artifact and dependency scan policy, and a protected release approval environment; existing integrity metadata alone does not satisfy this gate.
+Release automation already generates SHA256SUMS, an SBOM, and build attestations. Stable-v1 still requires independently verified code signing, artifact and dependency scan policy, and a protected release approval environment; existing integrity metadata alone does not satisfy this gate. A bounded first slice now gates final stable Windows Runtime EXE/MSI execution and upload on native Valid embedded Authenticode, a timestamp certificate, an explicitly configured publisher certificate thumbprint, and SHA-256 continuity through native qualification. Injected-process regressions run in validate-ci-tools; real unsigned EXE/MSI fixture rejection is wired to ordinary Windows VS 2022 Release CI and the Windows stable release job. This verifies outer installers only, not ZIP/internal PE payloads. Publisher identity provisioning, a secure signing pipeline, native signed-artifact success evidence, consumer verification, scans, and protected approval remain prerequisites; REL-110 is open.
 
 **Dependency contract**
 
@@ -2017,7 +2017,7 @@ ctest --test-dir /tmp/spark-consumer --output-on-failure --no-tests=error
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback.
+The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. Local process fixtures verify orchestration; hosted native results are pending. This does not close signing, Windows 11, NSIS, upgrade, rollback, repair, or user-data retention requirements.
 
 **Dependency contract**
 
@@ -4564,7 +4564,7 @@ ctest --test-dir build/linux-shipping -L opengl --output-on-failure --no-tests=e
 **Priority:** P1 · **Status:** open · **Wave:** 5 · **Area:** rendering · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable-v1 first-party slice, and D3D11 lacks one canonical packaged-content contract. 2026-09-05: the Tests/TestAssetDatabase.cpp entry point was a decoy that included no production header and was deleted; the glTF loader test is Tests/TestGLTFStaticMeshLoader.cpp.
+The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable-v1 first-party slice, and D3D11 lacks one canonical packaged-content contract. 2026-09-05: the Tests/TestAssetDatabase.cpp entry point was a decoy that included no production header and was deleted; the glTF loader test is Tests/TestGLTFStaticMeshLoader.cpp. The loader now has a canonical Blender 4.0.2-authored static GLB fixture with compressed editable source, author/export script, and hash provenance. Production CPU regression verifies exported AABB, flat normals, geometric-corner UV association, triangle winding/area, and indices; D3D11 rendering, skeletal/animation import, and canonical packaged-content qualification remain unverified.
 
 **Dependency contract**
 
