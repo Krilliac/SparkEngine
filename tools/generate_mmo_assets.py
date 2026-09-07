@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Generate placeholder assets for SparkGameMMO.
+Generate legacy texture/audio assets and verify authored models for SparkGameMMO.
 
-Creates procedurally generated textures, audio, and OBJ models for the MMO
-module. All assets are CC0/public domain (procedurally generated, no
-third-party content).
+Creates legacy procedurally generated textures and audio for the MMO module.
+Those outputs retain their existing CC0 attribution. Blender-authored models
+use the repository Spark Open License 1.0 and are validated, never overwritten.
 
 Usage:
     python3 tools/generate_mmo_assets.py
@@ -237,88 +237,6 @@ def make_wav_fanfare(duration_s=2.0, sample_rate=22050):
 
 
 # ---------------------------------------------------------------------------
-# OBJ writer
-# ---------------------------------------------------------------------------
-
-def make_obj_cube() -> str:
-    """Unit cube centered at origin."""
-    return """# Cube mesh
-v -0.5 -0.5  0.5
-v  0.5 -0.5  0.5
-v  0.5  0.5  0.5
-v -0.5  0.5  0.5
-v -0.5 -0.5 -0.5
-v  0.5 -0.5 -0.5
-v  0.5  0.5 -0.5
-v -0.5  0.5 -0.5
-vn  0  0  1
-vn  0  0 -1
-vn  1  0  0
-vn -1  0  0
-vn  0  1  0
-vn  0 -1  0
-f 1//1 2//1 3//1 4//1
-f 6//2 5//2 8//2 7//2
-f 2//3 6//3 7//3 3//3
-f 5//4 1//4 4//4 8//4
-f 4//5 3//5 7//5 8//5
-f 5//6 6//6 2//6 1//6
-"""
-
-
-def make_obj_cylinder(segments=12, height=1.0, radius=0.5) -> str:
-    """Vertical cylinder centered at origin."""
-    lines = ["# Cylinder mesh"]
-    # Vertices
-    for i in range(segments):
-        angle = 2 * math.pi * i / segments
-        x = radius * math.cos(angle)
-        z = radius * math.sin(angle)
-        lines.append(f"v {x:.4f} {-height/2:.4f} {z:.4f}")
-        lines.append(f"v {x:.4f} {height/2:.4f} {z:.4f}")
-    # Top/bottom centers
-    lines.append(f"v 0.0 {-height/2:.4f} 0.0")
-    lines.append(f"v 0.0 {height/2:.4f} 0.0")
-    lines.append("vn 0 -1 0")
-    lines.append("vn 0  1 0")
-
-    bottom_center = segments * 2 + 1
-    top_center = segments * 2 + 2
-
-    for i in range(segments):
-        i0 = i * 2 + 1
-        i1 = i * 2 + 2
-        j0 = ((i + 1) % segments) * 2 + 1
-        j1 = ((i + 1) % segments) * 2 + 2
-        # Side quad
-        lines.append(f"f {i0} {j0} {j1} {i1}")
-        # Bottom triangle
-        lines.append(f"f {bottom_center}//1 {j0}//1 {i0}//1")
-        # Top triangle
-        lines.append(f"f {top_center}//2 {i1}//2 {j1}//2")
-
-    return "\n".join(lines) + "\n"
-
-
-def make_obj_pyramid(base=1.0, height=1.5) -> str:
-    """Simple pyramid."""
-    h2 = base / 2
-    return f"""# Pyramid mesh
-v {-h2} 0 {h2}
-v {h2} 0 {h2}
-v {h2} 0 {-h2}
-v {-h2} 0 {-h2}
-v 0 {height} 0
-vn 0 -1 0
-f 1 4 3 2
-f 1 2 5
-f 2 3 5
-f 3 4 5
-f 4 1 5
-"""
-
-
-# ---------------------------------------------------------------------------
 # File writer
 # ---------------------------------------------------------------------------
 
@@ -518,29 +436,17 @@ def generate_mmo_audio():
 
 
 # ---------------------------------------------------------------------------
-# MMO Models (simple OBJ placeholders)
+# MMO Models (preserved Blender exports)
 # ---------------------------------------------------------------------------
 
 def generate_mmo_models():
-    print("\n=== MMO Models ===")
+    """Preserve authored exports; never replace them with procedural placeholders."""
+    from pathlib import Path
+    from blender.validate_mmo_props import validate_exports
 
-    # Simple placeholder models
-    write_file("Models/MMO/fountain.obj", make_obj_cylinder(16, 2.0, 1.5))
-    write_file("Models/MMO/market_stall.obj", make_obj_cube())
-    write_file("Models/MMO/guild_hall.obj", make_obj_cube())
-    write_file("Models/MMO/forge.obj", make_obj_cube())
-    write_file("Models/MMO/alchemy_shop.obj", make_obj_cube())
-    write_file("Models/MMO/gate.obj", make_obj_cube())
-    write_file("Models/MMO/tree_pine.obj", make_obj_pyramid(2.0, 4.0))
-    write_file("Models/MMO/rock_large.obj", make_obj_cube())
-    write_file("Models/MMO/tent.obj", make_obj_pyramid(3.0, 2.0))
-    write_file("Models/MMO/torch.obj", make_obj_cylinder(8, 1.0, 0.1))
-    write_file("Models/MMO/chest.obj", make_obj_cube())
-    write_file("Models/MMO/anvil.obj", make_obj_cube())
-    write_file("Models/MMO/cauldron.obj", make_obj_cylinder(12, 0.8, 0.5))
-    write_file("Models/MMO/banner.obj", make_obj_cube())
-    write_file("Models/MMO/gravestone.obj", make_obj_cube())
-    write_file("Models/MMO/pillar.obj", make_obj_cylinder(8, 3.0, 0.3))
+    print("\n=== Verify Blender MMO Models ===")
+    validate_exports(Path(ASSET_ROOT).resolve().parent)
+    print("  Preserving all 16 Blender-authored models. Regenerate with tools/blender/author_mmo_props.py.")
 
 
 # ---------------------------------------------------------------------------
@@ -550,11 +456,15 @@ def generate_mmo_models():
 def generate_asset_manifest():
     print("\n=== Asset Manifest ===")
 
+    from blender.validate_mmo_props import NAMES as model_names
+
     manifest = {
         "name": "SparkGameMMO Assets",
         "version": "1.0.0",
-        "description": "Placeholder assets for the SparkGameMMO module",
-        "license": "CC0 (procedurally generated, no third-party content)",
+        "description": "Blender-authored models with legacy procedural textures and audio for SparkGameMMO",
+        "license": "Mixed: models use Spark Open License 1.0; legacy textures/audio retain CC0",
+        "model_generator": "tools/blender/author_mmo_props.py",
+        "model_provenance": "Art/Blender/MMO/provenance.json",
         "generator": "tools/generate_mmo_assets.py",
         "recommended_replacements": {
             "models": [
@@ -637,13 +547,7 @@ def generate_asset_manifest():
                     "Audio/MMO/combat_crit.wav"
                 ]
             },
-            "models": [
-                "Models/MMO/fountain.obj",
-                "Models/MMO/market_stall.obj",
-                "Models/MMO/guild_hall.obj",
-                "Models/MMO/tree_pine.obj",
-                "Models/MMO/torch.obj"
-            ],
+            "models": [f"Models/MMO/{name}.obj" for name in model_names],
             "scenes": [
                 "Scenes/MMO/town_square.scene",
                 "Scenes/MMO/wilderness.scene",
@@ -663,14 +567,15 @@ def generate_asset_manifest():
 def main():
     print(f"Generating MMO assets in: {ASSET_ROOT}")
 
+    # Fail before any writes if authored models are missing or invalid.
+    generate_mmo_models()
     generate_mmo_textures()
     generate_mmo_audio()
-    generate_mmo_models()
     generate_asset_manifest()
 
-    print(f"\nDone! All MMO placeholder assets generated in {ASSET_ROOT}/")
-    print("\nTo replace with production-quality assets, see Assets/MMO/asset_manifest.json")
-    print("for recommended free asset sources (all CC0/public domain).\n")
+    print(f"\nDone! MMO legacy texture/audio assets generated; Blender models preserved in {ASSET_ROOT}/")
+    print("\nSee Assets/MMO/asset_manifest.json for per-category attribution and model provenance")
+    print("and Art/Blender/README.md for the ongoing asset quality pass.\n")
 
 
 if __name__ == "__main__":

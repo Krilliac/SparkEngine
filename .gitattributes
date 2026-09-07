@@ -3,6 +3,10 @@
 ###############################################################################
 * text=auto
 *.sh text eol=lf
+# Blender MMO provenance hashes bind the authoring script and license bytes.
+# Keep both LF-stable so Windows autocrlf cannot invalidate the evidence.
+tools/blender/author_mmo_props.py text eol=lf
+LICENSE text eol=lf
 # Runtime-sheet descriptors are content-addressed in Templates/assets.lock.json.
 # Keep their on-disk bytes stable across Windows, Linux, and macOS checkouts.
 Templates/*/Assets/runtime_sheet.json text eol=lf

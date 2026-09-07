@@ -6,6 +6,19 @@ SparkEngine's `AssetPipeline` wires runtime loading, streaming, caching, and man
 
 **Source:** `SparkEngine/Source/Graphics/AssetPipeline.h`
 
+## Blender MMO source checkpoint
+
+The sixteen `Assets/Models/MMO` props now have distinct Blender-authored
+geometry, UVs, normals and same-name material libraries, with original paths
+and bounds preserved. Editable source, pinned authoring instructions and
+SHA-256 provenance are in [`Art/Blender/MMO`](../../Art/Blender/MMO/README.md).
+The legacy generator validates these exports before any writes and preserves
+them. CTest registers source-contract and generator regressions; sixteen
+production CPU importer cases verify the complete kit. This is a focused
+asset-quality checkpoint, not Windows/D3D11, installed-content or release
+qualification. The wider [baseline audit](../../Art/Blender/README.md) still
+requires visual and contextual review of the remaining assets.
+
 ## Architecture
 
 ```

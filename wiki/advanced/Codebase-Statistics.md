@@ -15,21 +15,21 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 | **GameModules** | 142571 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 181341 |
+| **Tests** | 181539 |
 | **SparkConsole/src** | 1701 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~773825** |
+| **Total C++ (excl. ThirdParty)** | **~774023** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hh/.hpp/.hxx/.inl) | 1051 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1564 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1565 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 603 |
+| Test-bearing implementation files (.cpp/.mm) | 604 |
 | Wiki pages (.md) | 198 |
 
 ### Largest Top-Level Source Section
@@ -109,8 +109,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| Test files | 603 |
-| TEST() definitions | 7274 |
+| Test files | 604 |
+| TEST() definitions | 7290 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics

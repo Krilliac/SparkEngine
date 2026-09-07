@@ -1,8 +1,10 @@
 {
   "name": "SparkGameMMO Assets",
   "version": "1.0.0",
-  "description": "Placeholder assets for the SparkGameMMO module",
-  "license": "CC0 (procedurally generated, no third-party content)",
+  "description": "Blender-authored models with legacy procedural textures and audio for SparkGameMMO",
+  "license": "Mixed: models use Spark Open License 1.0; legacy textures/audio retain CC0",
+  "model_generator": "tools/blender/author_mmo_props.py",
+  "model_provenance": "Art/Blender/MMO/provenance.json",
   "generator": "tools/generate_mmo_assets.py",
   "recommended_replacements": {
     "models": [
@@ -144,11 +146,22 @@
       ]
     },
     "models": [
+      "Models/MMO/alchemy_shop.obj",
+      "Models/MMO/anvil.obj",
+      "Models/MMO/banner.obj",
+      "Models/MMO/cauldron.obj",
+      "Models/MMO/chest.obj",
+      "Models/MMO/forge.obj",
       "Models/MMO/fountain.obj",
-      "Models/MMO/market_stall.obj",
+      "Models/MMO/gate.obj",
+      "Models/MMO/gravestone.obj",
       "Models/MMO/guild_hall.obj",
-      "Models/MMO/tree_pine.obj",
-      "Models/MMO/torch.obj"
+      "Models/MMO/market_stall.obj",
+      "Models/MMO/pillar.obj",
+      "Models/MMO/rock_large.obj",
+      "Models/MMO/tent.obj",
+      "Models/MMO/torch.obj",
+      "Models/MMO/tree_pine.obj"
     ],
     "scenes": [
       "Scenes/MMO/town_square.scene",
