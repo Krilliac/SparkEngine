@@ -53,7 +53,12 @@ TEST_SUPPORT_HEADERS = {"TestFramework.h", "TestWarnings.h"}
 
 # ...which leaves the files whose SUBJECT is the harness. Includes alone cannot
 # distinguish those, so they are named here.
-HARNESS_TESTS = frozenset({"Tests/TestRunnerSemanticsReal.cpp"})
+HARNESS_TESTS = frozenset({
+    "Tests/TestRunnerSemanticsReal.cpp",
+    # Verifies the sanitizer harness and instrumented C++ runtime, not a
+    # test-local copy of engine behavior. Non-MSan builds explicitly skip it.
+    "Tests/TestMSanCanary.cpp",
+})
 
 # A file with no production header still exercises production code if it drives
 # a shipped executable and asserts on the result.

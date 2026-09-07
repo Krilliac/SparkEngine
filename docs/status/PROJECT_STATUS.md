@@ -156,7 +156,7 @@ This page records source presence and implementation maturity only. An **Impleme
 | Test definitions | **Implemented** | Generated inventory exists; passing definitions alone do not certify `stable-v1` |
 | ASan / UBSan / LSan | **Implemented** | Required workflow lane exists; exact-SHA release evidence remains gated |
 | TSan | **Implemented** | Required workflow lane exists; exact-SHA release evidence remains gated |
-| MSan | Experimental | Advisory (uninstrumented libc++) |
+| MSan | Experimental | Advisory (instrumented libc++, proving) |
 | Code Coverage | **Implemented** | lcov reporting exists; coverage is not release certification |
 | Golden Image Testing | Framework | Harness exists; the required D3D11 visual-certification gate remains blocked |
 | clang-format | **Implemented** | Policy/workflow exists; exact-SHA release evidence remains gated |

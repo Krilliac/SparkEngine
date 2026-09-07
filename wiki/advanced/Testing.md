@@ -478,7 +478,7 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan + LSan |
 | `build-linux-tsan` | ubuntu-24.04 | GCC | Debug | TSan (thread races) |
-| `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan (`continue-on-error`) |
+| `build-linux-msan` | ubuntu-24.04 | Clang + instrumented libc++ | Debug | MSan (`continue-on-error`, proving) |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v145 | Debug, Release | `continue-on-error` |
 | `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error` |
@@ -651,7 +651,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*601 test-bearing `.cpp`/`.mm` files, 7270 source-level test definitions*
+*602 test-bearing `.cpp`/`.mm` files, 7272 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -954,6 +954,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLoggerSinksReal` | 4 |
 | `TestLootAndCrafting` | 11 |
 | `TestMMOCredentialSecurity` | 3 |
+| `TestMSanCanary` | 2 |
 | `TestMacOSPlatform` | 6 |
 | `TestMaterialDefinition` | 10 |
 | `TestMaterialEffects` | 5 |
