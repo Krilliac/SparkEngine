@@ -50,25 +50,32 @@ The following are **not** in scope:
 
 ## Supply-Chain Security
 
-SparkEngine enforces a dependency supply-chain policy covering all third-party
-code under `ThirdParty/`. Key controls:
+Third-party dependencies are governed by [`ThirdParty/POLICY.md`](ThirdParty/POLICY.md)
+and enforced by `tools/check-supply-chain.py`, a required CI gate on every push
+and pull request. The checker verifies:
 
-- **Pinned identity:** Every submodule is locked to an exact commit SHA in
-  `ThirdParty/supply-chain.lock`. Vendored snapshots are locked by SHA-256
-  content hash. Any drift is a CI failure.
-- **License coverage:** Every dependency must ship a license file containing a
-  copyright statement and operative terms. The CI checker and CMake audit both
-  enforce this.
-- **Action pinning:** All GitHub Actions are pinned to full 40-character commit
-  SHAs — tag-only or branch-only references are rejected.
-- **Inventory completeness:** No unmanaged code may appear under `ThirdParty/`
-  without being declared in the lockfile.
-- **Fail-closed:** Missing lockfile, corrupt JSON, unrecognized version, or any
-  verification error causes the check to exit non-zero.
+- **Pinned identity and content integrity:** submodules are locked to exact
+  gitlink SHAs; declared payload is checked with SHA-256 and Git blob identity.
+- **Directory inventory:** every declared directory under `ThirdParty/` is
+  categorized as managed vendored code, project-owned code, or a submodule.
+- **Action pinning:** GitHub Actions references must use full 40-character
+  commit SHAs; tag-only or branch-only references are rejected.
+- **License and manifest coverage:** every dependency must have license terms,
+  and manifest notices must reconcile with tracked policy records.
+- **Fail-closed verification:** missing or malformed policy data, schema errors,
+  Git failures, and path-escape attempts are errors; policy violations exit 1
+  and verifier failures exit 2.
 
-Policy details: [`ThirdParty/POLICY.md`](ThirdParty/POLICY.md)
 Verification: `python tools/check-supply-chain.py`
 CI job: `check-supply-chain` in `.github/workflows/build.yml`
+
+**Outstanding (SEC-110 remains open/blocking):**
+
+- SBOM generation and release provenance
+- Vulnerability-scanner integration
+- Required secret-scanning enforcement
+- CodeQL coverage for every shipped product
+- A formal severity-exception schema with owner and expiry
 
 ## Credit
 

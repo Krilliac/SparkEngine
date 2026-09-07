@@ -96,7 +96,7 @@
       "id": "SEC-110",
       "title": "Establish software supply-chain and dependency policy",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "security",

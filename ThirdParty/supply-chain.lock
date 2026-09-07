@@ -1,7 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-08-28",
-  "description": "Authoritative supply-chain content lockfile. Verified by tools/check-supply-chain.py on every CI run. Update with: python tools/check-supply-chain.py --update-lockfile",
+  "description": "Authoritative supply-chain content lockfile. Verified by tools/check-supply-chain.py on every CI run. Update with: python tools/check-supply-chain.py --update",
   "submodule_gitlinks": {
     "ThirdParty/AI/recastnavigation": "9f4ce64458dfae86e1239c525ddc219c4e9e06f1",
     "ThirdParty/ECS/entt": "85c6bba014049b5de8fad49d25424df2f1f6a8c1",

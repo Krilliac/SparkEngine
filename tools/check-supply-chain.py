@@ -7,12 +7,13 @@ license coverage, action pinning, and manifest consistency.
 Exit codes:
     0  All checks passed
     1  One or more policy violations detected
-    2  Checker itself failed (missing lockfile, bad JSON, etc.)
+    2  Checker itself failed (internal error, missing lockfile, bad schema)
 
 Usage:
     python tools/check-supply-chain.py              # verify
-    python tools/check-supply-chain.py --update-lockfile  # regenerate lockfile
-    python tools/check-supply-chain.py --json        # machine-readable output
+    python tools/check-supply-chain.py --update     # regenerate lockfile (atomic)
+    python tools/check-supply-chain.py --json       # machine-readable output
+    python tools/check-supply-chain.py --ci         # CI mode (identical to default)
 """
 
 from __future__ import annotations
@@ -22,16 +23,19 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 LOCKFILE_REL = "ThirdParty/supply-chain.lock"
-MANIFEST_REL = "ThirdParty/dependencies.lock"
 GITMODULES_REL = ".gitmodules"
 WORKFLOWS_DIR = ".github/workflows"
+
+AUTHORITATIVE_ROOTS = frozenset({"ThirdParty"})
 
 MIN_LICENSE_SIZE = 200
 LICENSE_KEYWORDS_TERMS = re.compile(
@@ -42,10 +46,19 @@ LICENSE_KEYWORDS_TERMS = re.compile(
 )
 LICENSE_KEYWORDS_COPYRIGHT = re.compile(r"[Cc]opyright")
 
-ACTION_PIN_RE = re.compile(
-    r"uses:\s*([^@\s]+)@([0-9a-fA-F]{40})\s*(#.*)?$"
-)
+SHA_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+SHA40_HEX_RE = re.compile(r"^[0-9a-f]{40}$")
+SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_\-./]+$")
+
 ACTION_USES_RE = re.compile(r"uses:\s*(\S+)")
+ACTION_SHA_PIN_RE = re.compile(
+    r"uses:\s*[^@\s]+@([0-9a-fA-F]{40})\s*(#.*)?$"
+)
+
+
+def _fatal(msg: str) -> None:
+    print(f"FATAL: {msg}", file=sys.stderr)
+    sys.exit(2)
 
 
 @dataclass
@@ -71,64 +84,198 @@ class CheckResult:
         self.violations.append(Violation(category, path, message, "warning"))
 
 
+# ── Project root ──────────────────────────────────────────────────────
+
 def project_root() -> Path:
-    here = Path(__file__).resolve().parent
-    root = here.parent
-    if not (root / ".git").exists() and not (root / ".git").is_file():
-        print("ERROR: cannot locate project root", file=sys.stderr)
-        sys.exit(2)
+    """Locate project root via git, not file-relative heuristics."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        _fatal("cannot run git to locate project root")
+    if out.returncode != 0:
+        _fatal("git rev-parse --show-toplevel failed — not in a git repo?")
+    root = Path(out.stdout.strip()).resolve()
+    if not root.is_dir():
+        _fatal(f"git root is not a directory: {root}")
     return root
 
 
+# ── Git helpers (fail-closed) ─────────────────────────────────────────
+
 def git_cmd(args: list[str], cwd: Path) -> str:
-    result = subprocess.run(
-        ["git", *args],
-        capture_output=True,
-        text=True,
-        cwd=str(cwd),
-    )
+    """Run a git command. On failure, raise RuntimeError (caller must handle)."""
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            capture_output=True, text=True, cwd=str(cwd), timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise RuntimeError(f"git {' '.join(args)}: {e}")
     if result.returncode != 0:
-        return ""
+        raise RuntimeError(
+            f"git {' '.join(args)} exited {result.returncode}: "
+            f"{result.stderr.strip()}"
+        )
     return result.stdout.strip()
 
 
-def git_blob_sha(path: str, cwd: Path) -> str | None:
-    output = git_cmd(["ls-tree", "HEAD", "--", path], cwd)
-    if not output:
-        return None
-    parts = output.split()
-    if len(parts) >= 3 and parts[0] != "160000":
-        return parts[2]
+def git_blob_hash(path: str, cwd: Path) -> str:
+    """Return the git blob hash of a tracked file via hash-object on its content.
+
+    This produces the same hash on all platforms regardless of autocrlf,
+    because git hash-object hashes the content as git would store it
+    (with LF normalization per .gitattributes).
+    """
+    try:
+        return git_cmd(["hash-object", "--", path], cwd)
+    except RuntimeError:
+        return ""
+
+
+def git_ls_tree_thirdparty(cwd: Path) -> str:
+    """Get ls-tree output for ThirdParty/. Fail-closed on error."""
+    return git_cmd(["ls-tree", "-r", "HEAD", "--", "ThirdParty/"], cwd)
+
+
+# ── Path safety ───────────────────────────────────────────────────────
+
+def validate_repo_relative_path(
+    rel_path: str, *, allowed_roots: frozenset[str] | None = None
+) -> str | None:
+    """Validate a repository-relative path. Returns error message or None."""
+    if not rel_path:
+        return "empty path"
+    if os.path.isabs(rel_path):
+        return "absolute path rejected"
+    if "\\" in rel_path:
+        return "backslash in path rejected"
+    if not SAFE_PATH_RE.match(rel_path):
+        return f"unsafe characters in path: {rel_path!r}"
+    segments = rel_path.split("/")
+    if ".." in segments:
+        return "dot-segment (..) in path rejected"
+    if "." in segments:
+        return "dot-segment (.) in path rejected"
+    if "" in segments:
+        return "empty segment in path rejected"
+    posix = PurePosixPath(rel_path)
+    if allowed_roots and posix.parts[0] not in allowed_roots:
+        return f"path root {posix.parts[0]!r} not in allowed roots {allowed_roots}"
     return None
 
 
-def content_sha256(filepath: Path) -> str:
-    h = hashlib.sha256()
-    with open(filepath, "rb") as f:
-        while True:
-            chunk = f.read(65536)
-            if not chunk:
-                break
-            h.update(chunk)
-    return h.hexdigest()
+def assert_regular_file_no_escape(
+    filepath: Path, root: Path
+) -> str | None:
+    """Verify filepath is a regular file inside root, not a symlink/junction/etc.
+    Returns error message or None.
+    """
+    if not filepath.exists():
+        return "file does not exist"
+    if filepath.is_symlink():
+        return "symlink rejected"
+    if sys.platform == "win32":
+        try:
+            st = filepath.stat()
+            if st.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+                return "reparse point (junction/symlink) rejected"
+        except (OSError, AttributeError):
+            pass
+    if not filepath.is_file():
+        return "not a regular file"
+    try:
+        resolved = filepath.resolve(strict=True)
+        root_resolved = root.resolve(strict=True)
+        resolved.relative_to(root_resolved)
+    except (ValueError, OSError):
+        return "path escapes repository root after resolution"
+    return None
+
+
+# ── Lockfile loading and schema validation ────────────────────────────
+
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """JSON object_pairs_hook that rejects duplicate keys."""
+    seen: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in seen:
+            _fatal(f"duplicate JSON key in lockfile: {key!r}")
+        seen[key] = value
+    return seen
 
 
 def load_lockfile(root: Path) -> dict[str, Any]:
     lockpath = root / LOCKFILE_REL
     if not lockpath.is_file():
-        print(f"FATAL: lockfile not found: {LOCKFILE_REL}", file=sys.stderr)
-        sys.exit(2)
+        _fatal(f"lockfile not found: {LOCKFILE_REL}")
     try:
-        with open(lockpath) as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"FATAL: cannot parse lockfile: {e}", file=sys.stderr)
-        sys.exit(2)
-    if data.get("version") != 1:
-        print("FATAL: unsupported lockfile version", file=sys.stderr)
-        sys.exit(2)
+        text = lockpath.read_text(encoding="utf-8")
+    except OSError as e:
+        _fatal(f"cannot read lockfile: {e}")
+    try:
+        data = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+    except json.JSONDecodeError as e:
+        _fatal(f"cannot parse lockfile: {e}")
+
+    if not isinstance(data.get("version"), int) or data["version"] != 1:
+        _fatal(f"unsupported lockfile version: {data.get('version')!r}")
+
+    _validate_lockfile_schema(data)
     return data
 
+
+def _validate_lockfile_schema(data: dict[str, Any]) -> None:
+    """Validate all lockfile fields have correct types and safe paths."""
+    for key in ("submodule_gitlinks", "sentinel_files"):
+        if key not in data or not isinstance(data[key], dict):
+            _fatal(f"lockfile missing or invalid field: {key}")
+
+    for key in ("managed_vendored_dirs", "project_owned_dirs"):
+        if key not in data or not isinstance(data[key], list):
+            _fatal(f"lockfile missing or invalid field: {key}")
+
+    for path, sha in data["submodule_gitlinks"].items():
+        err = validate_repo_relative_path(path, allowed_roots=AUTHORITATIVE_ROOTS)
+        if err:
+            _fatal(f"submodule_gitlinks path {path!r}: {err}")
+        if not isinstance(sha, str) or not SHA40_HEX_RE.match(sha):
+            _fatal(f"submodule_gitlinks[{path!r}]: invalid SHA: {sha!r}")
+
+    for path, entry in data["sentinel_files"].items():
+        err = validate_repo_relative_path(path, allowed_roots=AUTHORITATIVE_ROOTS)
+        if err:
+            _fatal(f"sentinel_files path {path!r}: {err}")
+        if not isinstance(entry, dict):
+            _fatal(f"sentinel_files[{path!r}]: entry must be an object")
+        sha256 = entry.get("sha256")
+        if not isinstance(sha256, str) or not SHA_HEX_RE.match(sha256):
+            _fatal(f"sentinel_files[{path!r}]: invalid sha256: {sha256!r}")
+        git_blob = entry.get("git_blob")
+        if git_blob is not None:
+            if not isinstance(git_blob, str) or not SHA40_HEX_RE.match(git_blob):
+                _fatal(f"sentinel_files[{path!r}]: invalid git_blob: {git_blob!r}")
+        size = entry.get("size")
+        if not isinstance(size, int) or size < 0:
+            _fatal(f"sentinel_files[{path!r}]: invalid size: {size!r}")
+        stype = entry.get("type")
+        if stype not in ("license", "source"):
+            _fatal(f"sentinel_files[{path!r}]: invalid type: {stype!r}")
+
+    for lst_key in ("managed_vendored_dirs", "project_owned_dirs"):
+        for path in data[lst_key]:
+            if not isinstance(path, str):
+                _fatal(f"{lst_key}: non-string entry: {path!r}")
+            err = validate_repo_relative_path(
+                path, allowed_roots=AUTHORITATIVE_ROOTS
+            )
+            if err:
+                _fatal(f"{lst_key} path {path!r}: {err}")
+
+
+# ── Check: submodule gitlinks ─────────────────────────────────────────
 
 def check_submodule_gitlinks(
     root: Path, lockfile: dict[str, Any], result: CheckResult
@@ -138,9 +285,11 @@ def check_submodule_gitlinks(
         result.error("submodule", LOCKFILE_REL, "no submodule gitlinks in lockfile")
         return
 
-    actual_output = git_cmd(
-        ["ls-tree", "-r", "HEAD", "ThirdParty/"], root
-    )
+    try:
+        actual_output = git_ls_tree_thirdparty(root)
+    except RuntimeError as e:
+        _fatal(f"git ls-tree failed (cannot verify submodules): {e}")
+
     actual: dict[str, str] = {}
     for line in actual_output.splitlines():
         parts = line.split()
@@ -150,14 +299,12 @@ def check_submodule_gitlinks(
     for path, expected_sha in expected.items():
         if path not in actual:
             result.error(
-                "submodule",
-                path,
-                f"expected submodule gitlink not found in repository tree",
+                "submodule", path,
+                "expected submodule gitlink not found in repository tree",
             )
         elif actual[path] != expected_sha:
             result.error(
-                "submodule",
-                path,
+                "submodule", path,
                 f"gitlink drift: lockfile={expected_sha}, "
                 f"repository={actual[path]}",
             )
@@ -165,11 +312,12 @@ def check_submodule_gitlinks(
     for path in actual:
         if path not in expected:
             result.error(
-                "submodule",
-                path,
-                "unmanaged submodule in ThirdParty — add to supply-chain.lock",
+                "submodule", path,
+                "unmanaged submodule — add to supply-chain.lock",
             )
 
+
+# ── Check: sentinel files ─────────────────────────────────────────────
 
 def check_sentinel_files(
     root: Path, lockfile: dict[str, Any], result: CheckResult
@@ -181,36 +329,52 @@ def check_sentinel_files(
 
     for rel_path, expected in sentinels.items():
         filepath = root / rel_path
-        if not filepath.is_file():
-            result.error(
-                "sentinel",
-                rel_path,
-                "sentinel file missing from working tree",
-            )
+
+        file_err = assert_regular_file_no_escape(filepath, root)
+        if file_err:
+            result.error("sentinel", rel_path, f"sentinel file: {file_err}")
             continue
 
-        actual_sha = content_sha256(filepath)
-        expected_sha = expected.get("sha256", "")
+        actual_sha = _content_sha256(filepath)
+        expected_sha = expected["sha256"]
         if actual_sha != expected_sha:
             result.error(
-                "integrity",
-                rel_path,
+                "integrity", rel_path,
                 f"content hash mismatch: lockfile={expected_sha[:16]}..., "
                 f"actual={actual_sha[:16]}...",
             )
 
-        expected_size = expected.get("size")
-        if expected_size is not None:
-            actual_size = filepath.stat().st_size
-            if actual_size != expected_size:
+        expected_size = expected["size"]
+        actual_size = filepath.stat().st_size
+        if actual_size != expected_size:
+            result.error(
+                "integrity", rel_path,
+                f"size mismatch: lockfile={expected_size}, actual={actual_size}",
+            )
+
+        git_blob_expected = expected.get("git_blob")
+        if git_blob_expected:
+            actual_blob = git_blob_hash(rel_path, root)
+            if actual_blob and actual_blob != git_blob_expected:
                 result.error(
-                    "integrity",
-                    rel_path,
-                    f"size mismatch: lockfile={expected_size}, actual={actual_size}",
+                    "integrity", rel_path,
+                    f"git blob drift: lockfile={git_blob_expected[:16]}..., "
+                    f"actual={actual_blob[:16]}...",
                 )
 
-        if expected.get("type") == "license":
+        if expected["type"] == "license":
             _check_license_content(filepath, rel_path, result)
+
+
+def _content_sha256(filepath: Path) -> str:
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        while True:
+            chunk = f.read(65536)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def _check_license_content(
@@ -219,8 +383,7 @@ def _check_license_content(
     size = filepath.stat().st_size
     if size < MIN_LICENSE_SIZE:
         result.error(
-            "license",
-            rel_path,
+            "license", rel_path,
             f"license file implausibly short ({size} bytes)",
         )
         return
@@ -235,6 +398,8 @@ def _check_license_content(
         result.error("license", rel_path, "license lacks operative terms")
 
 
+# ── Check: unmanaged directories ──────────────────────────────────────
+
 def check_unmanaged_dirs(
     root: Path, lockfile: dict[str, Any], result: CheckResult
 ) -> None:
@@ -243,7 +408,13 @@ def check_unmanaged_dirs(
     submodule_paths = set(lockfile.get("submodule_gitlinks", {}).keys())
 
     known_paths = managed_vendored | project_owned | submodule_paths
-    known_basenames = {os.path.basename(p) for p in known_paths}
+
+    allowed_files = {
+        LOCKFILE_REL,
+        "ThirdParty/README.md",
+        "ThirdParty/POLICY.md",
+        "ThirdParty/dependencies.lock",
+    }
 
     thirdparty = root / "ThirdParty"
     if not thirdparty.is_dir():
@@ -253,47 +424,66 @@ def check_unmanaged_dirs(
     for entry in sorted(thirdparty.iterdir()):
         if entry.name.startswith("."):
             continue
+        if entry.is_symlink():
+            result.error(
+                "inventory",
+                f"ThirdParty/{entry.name}",
+                "symlink in ThirdParty rejected",
+            )
+            continue
+
+        rel = f"ThirdParty/{entry.name}"
+
         if entry.is_file():
-            rel = f"ThirdParty/{entry.name}"
-            if rel in (LOCKFILE_REL, MANIFEST_REL, "ThirdParty/README.md",
-                       "ThirdParty/POLICY.md"):
-                continue
-            pass
+            if rel not in allowed_files:
+                result.error(
+                    "inventory", rel,
+                    "unmanaged file in ThirdParty root",
+                )
         elif entry.is_dir():
-            rel = f"ThirdParty/{entry.name}"
             if rel in known_paths:
                 continue
             has_managed_child = False
             for child in sorted(entry.iterdir()):
+                if child.is_symlink():
+                    result.error(
+                        "inventory",
+                        f"ThirdParty/{entry.name}/{child.name}",
+                        "symlink in ThirdParty rejected",
+                    )
+                    continue
                 if child.is_dir():
                     child_rel = f"ThirdParty/{entry.name}/{child.name}"
                     if child_rel in known_paths:
                         has_managed_child = True
                     else:
                         result.error(
-                            "inventory",
-                            child_rel,
-                            "unmanaged directory in ThirdParty — add to supply-chain.lock or remove",
+                            "inventory", child_rel,
+                            "unmanaged directory — add to supply-chain.lock",
                         )
             if not has_managed_child and not any(
                 p.startswith(rel + "/") for p in known_paths
             ):
                 result.error(
-                    "inventory",
-                    rel,
-                    "unmanaged directory in ThirdParty — add to supply-chain.lock or remove",
+                    "inventory", rel,
+                    "unmanaged directory — add to supply-chain.lock",
                 )
 
 
-def check_action_pins(
-    root: Path, result: CheckResult
-) -> None:
+# ── Check: action pinning ─────────────────────────────────────────────
+
+def check_action_pins(root: Path, result: CheckResult) -> None:
     workflows = root / WORKFLOWS_DIR
     if not workflows.is_dir():
         result.warn("actions", WORKFLOWS_DIR, "no workflows directory found")
         return
 
-    for yml in sorted(workflows.glob("*.yml")):
+    for yml in sorted(workflows.iterdir()):
+        if yml.suffix not in (".yml", ".yaml"):
+            continue
+        if yml.is_symlink():
+            result.error("actions", str(yml.relative_to(root)), "symlink rejected")
+            continue
         rel = str(yml.relative_to(root)).replace("\\", "/")
         try:
             lines = yml.read_text(encoding="utf-8").splitlines()
@@ -310,13 +500,14 @@ def check_action_pins(
             uses_value = match.group(1)
             if uses_value.startswith("./"):
                 continue
-            if not ACTION_PIN_RE.search(stripped):
+            if not ACTION_SHA_PIN_RE.search(stripped):
                 result.error(
-                    "actions",
-                    f"{rel}:{i}",
+                    "actions", f"{rel}:{i}",
                     f"unpinned action: {uses_value} — must use 40-char commit SHA",
                 )
 
+
+# ── Check: .gitmodules consistency ────────────────────────────────────
 
 def check_gitmodules_consistency(
     root: Path, lockfile: dict[str, Any], result: CheckResult
@@ -326,11 +517,15 @@ def check_gitmodules_consistency(
         result.error("gitmodules", GITMODULES_REL, ".gitmodules not found")
         return
 
-    submodule_paths_output = git_cmd(
-        ["config", "--file", GITMODULES_REL,
-         "--get-regexp", "^submodule\\..*\\.path$"],
-        root,
-    )
+    try:
+        submodule_paths_output = git_cmd(
+            ["config", "--file", GITMODULES_REL,
+             "--get-regexp", r"^submodule\..*\.path$"],
+            root,
+        )
+    except RuntimeError as e:
+        _fatal(f"git config --file .gitmodules failed: {e}")
+
     gitmodule_paths: set[str] = set()
     for line in submodule_paths_output.splitlines():
         parts = line.split(None, 1)
@@ -342,47 +537,70 @@ def check_gitmodules_consistency(
     for path in gitmodule_paths:
         if path not in lockfile_submodules:
             result.error(
-                "gitmodules",
-                path,
+                "gitmodules", path,
                 "submodule in .gitmodules but not in supply-chain.lock",
             )
 
     for path in lockfile_submodules:
         if path not in gitmodule_paths:
             result.error(
-                "gitmodules",
-                path,
+                "gitmodules", path,
                 "submodule in supply-chain.lock but not in .gitmodules",
             )
 
 
-def check_manifest_consistency(
+# ── Check: dependencies.lock manifest reconciliation ─────────────────
+
+def check_manifest_reconciliation(
     root: Path, lockfile: dict[str, Any], result: CheckResult
 ) -> None:
-    manifest = root / MANIFEST_REL
-    if not manifest.is_file():
-        result.error("manifest", MANIFEST_REL, "dependencies.lock not found")
+    manifest_path = root / "ThirdParty" / "dependencies.lock"
+    if not manifest_path.is_file():
+        result.error("manifest", "ThirdParty/dependencies.lock",
+                      "dependencies.lock not found")
         return
 
     try:
-        text = manifest.read_text(encoding="utf-8")
+        text = manifest_path.read_text(encoding="utf-8")
     except OSError:
-        result.error("manifest", MANIFEST_REL, "cannot read manifest")
+        result.error("manifest", "ThirdParty/dependencies.lock",
+                      "cannot read manifest")
         return
 
-    entries = re.findall(r'"([^"]+)"', text)
-    manifest_paths: set[str] = set()
+    manifest_deps: dict[str, str] = {}
     manifest_notices: set[str] = set()
-    for entry in entries:
+
+    in_entries = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if "SPARK_THIRDPARTY_AUDIT_ENTRIES" in stripped:
+            in_entries = True
+            continue
+        if in_entries and stripped == ")":
+            break
+        if not in_entries:
+            continue
+        match = re.search(r'"([^"]*)"', stripped)
+        if not match:
+            continue
+        entry = match.group(1)
         fields = entry.split("|")
         if len(fields) != 10:
+            result.error(
+                "manifest",
+                "ThirdParty/dependencies.lock",
+                f"malformed manifest entry (expected 10 fields, got {len(fields)}): "
+                f"{entry[:60]}...",
+            )
             continue
-        # Skip comment/header lines that happen to have 10 pipe-separated fields
+        name = fields[0]
         local_path = fields[4]
+        notice_csv = fields[9]
+
         if not local_path.startswith("ThirdParty/"):
             continue
-        manifest_paths.add(local_path)
-        notice_csv = fields[9]
+        manifest_deps[name] = local_path
+
         for notice in notice_csv.split(","):
             notice = notice.strip()
             if notice and notice.startswith("ThirdParty/"):
@@ -390,35 +608,55 @@ def check_manifest_consistency(
 
     sentinels = set(lockfile.get("sentinel_files", {}).keys())
     license_sentinels = {
-        p
-        for p, v in lockfile.get("sentinel_files", {}).items()
+        p for p, v in lockfile.get("sentinel_files", {}).items()
         if v.get("type") == "license"
     }
 
     for notice in manifest_notices:
         if notice not in sentinels:
             result.error(
-                "manifest",
-                notice,
-                "license file referenced in dependencies.lock but missing from supply-chain.lock sentinels",
+                "manifest", notice,
+                "license file in dependencies.lock not tracked in supply-chain.lock",
             )
 
+    managed_all = (
+        set(lockfile.get("managed_vendored_dirs", []))
+        | set(lockfile.get("project_owned_dirs", []))
+        | set(lockfile.get("submodule_gitlinks", {}).keys())
+    )
+    for name, local_path in manifest_deps.items():
+        if not any(
+            local_path == mp or local_path.startswith(mp + "/")
+            for mp in managed_all
+        ):
+            result.error(
+                "manifest", local_path,
+                f"dependency {name!r} path not in supply-chain.lock managed set",
+            )
+
+
+# ── Update lockfile (atomic, deterministic) ───────────────────────────
 
 def update_lockfile(root: Path) -> None:
     lockpath = root / LOCKFILE_REL
 
-    submodule_output = git_cmd(
-        ["ls-tree", "-r", "HEAD", "ThirdParty/"], root
-    )
+    try:
+        tree_output = git_ls_tree_thirdparty(root)
+    except RuntimeError as e:
+        _fatal(f"git ls-tree failed: {e}")
+
     gitlinks: dict[str, str] = {}
-    for line in submodule_output.splitlines():
+    for line in tree_output.splitlines():
         parts = line.split()
         if len(parts) >= 4 and parts[0] == "160000":
             gitlinks[parts[3]] = parts[2]
 
     if lockpath.is_file():
-        with open(lockpath) as f:
-            existing = json.load(f)
+        try:
+            text = lockpath.read_text(encoding="utf-8")
+            existing = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+        except (json.JSONDecodeError, OSError) as e:
+            _fatal(f"cannot read existing lockfile for sentinel list: {e}")
     else:
         existing = {
             "version": 1,
@@ -426,20 +664,33 @@ def update_lockfile(root: Path) -> None:
             "project_owned_dirs": ["ThirdParty/Licenses"],
         }
 
-    sentinel_paths = list(existing.get("sentinel_files", {}).keys())
+    sentinel_paths = sorted(existing.get("sentinel_files", {}).keys())
     sentinels: dict[str, dict[str, Any]] = {}
-    for rel_path in sorted(sentinel_paths):
+
+    for rel_path in sentinel_paths:
+        err = validate_repo_relative_path(
+            rel_path, allowed_roots=AUTHORITATIVE_ROOTS
+        )
+        if err:
+            _fatal(f"sentinel path {rel_path!r} in existing lockfile: {err}")
+
         filepath = root / rel_path
-        if not filepath.is_file():
-            print(f"  SKIP (missing): {rel_path}")
-            continue
-        blob = git_blob_sha(rel_path, root)
-        sha = content_sha256(filepath)
+        file_err = assert_regular_file_no_escape(filepath, root)
+        if file_err:
+            _fatal(f"sentinel {rel_path}: {file_err}")
+
+        blob = git_blob_hash(rel_path, root)
+        if not blob:
+            _fatal(f"sentinel {rel_path}: cannot compute git blob hash")
+        sha = _content_sha256(filepath)
         sz = filepath.stat().st_size
+
+        basename_upper = os.path.basename(rel_path).upper()
         is_license = any(
-            kw in os.path.basename(rel_path).upper()
+            kw in basename_upper
             for kw in ("LICENSE", "COPYING", "NOTICE", "APACHE")
         )
+
         sentinels[rel_path] = {
             "sha256": sha,
             "git_blob": blob,
@@ -448,41 +699,67 @@ def update_lockfile(root: Path) -> None:
         }
         print(f"  OK: {rel_path}")
 
-    from datetime import date
-
-    lockfile = {
+    lockfile_data = {
         "version": 1,
-        "generated": str(date.today()),
-        "description": existing.get("description", ""),
+        "description": existing.get(
+            "description",
+            "Authoritative supply-chain content lockfile. "
+            "Verified by tools/check-supply-chain.py on every CI run. "
+            "Update with: python tools/check-supply-chain.py --update",
+        ),
         "submodule_gitlinks": dict(sorted(gitlinks.items())),
-        "managed_vendored_dirs": existing.get("managed_vendored_dirs", []),
-        "project_owned_dirs": existing.get("project_owned_dirs", []),
+        "managed_vendored_dirs": sorted(
+            existing.get("managed_vendored_dirs", [])
+        ),
+        "project_owned_dirs": sorted(
+            existing.get("project_owned_dirs", [])
+        ),
         "sentinel_files": sentinels,
     }
-    with open(lockpath, "w", newline="\n") as f:
-        json.dump(lockfile, f, indent=2)
-        f.write("\n")
-    print(f"\nWrote {lockpath.relative_to(root)}")
 
+    output = json.dumps(lockfile_data, indent=2, sort_keys=False) + "\n"
+
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(lockpath.parent),
+        prefix=".supply-chain.lock.",
+        suffix=".tmp",
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+            f.write(output)
+        os.replace(tmp_path, str(lockpath))
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+    print(f"\nWrote {LOCKFILE_REL}")
+
+
+# ── Main ──────────────────────────────────────────────────────────────
 
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="SparkEngine supply-chain policy checker"
     )
     parser.add_argument(
-        "--update-lockfile",
-        action="store_true",
+        "--update", action="store_true",
         help="regenerate supply-chain.lock from current repository state",
     )
     parser.add_argument(
-        "--json",
-        action="store_true",
+        "--json", action="store_true",
         help="output results as JSON",
+    )
+    parser.add_argument(
+        "--ci", action="store_true",
+        help="CI mode (identical to default verify)",
     )
     args = parser.parse_args()
     root = project_root()
 
-    if args.update_lockfile:
+    if args.update:
         update_lockfile(root)
         return 0
 
@@ -494,7 +771,7 @@ def main() -> int:
     check_unmanaged_dirs(root, lockfile, result)
     check_action_pins(root, result)
     check_gitmodules_consistency(root, lockfile, result)
-    check_manifest_consistency(root, lockfile, result)
+    check_manifest_reconciliation(root, lockfile, result)
 
     if args.json:
         output = {
@@ -517,7 +794,6 @@ def main() -> int:
     RED = "\033[0;31m"
     GREEN = "\033[0;32m"
     YELLOW = "\033[1;33m"
-    BLUE = "\033[0;34m"
     NC = "\033[0m"
 
     errors = [v for v in result.violations if v.severity == "error"]
@@ -537,11 +813,13 @@ def main() -> int:
             print(f"        {v.message}")
         print()
 
+    sentinel_count = len(lockfile.get("sentinel_files", {}))
+    submodule_count = len(lockfile.get("submodule_gitlinks", {}))
+
     if result.passed:
         print(
             f"{GREEN}[SUPPLY-CHAIN]{NC} All checks passed "
-            f"({len(lockfile.get('sentinel_files', {}))} sentinel files, "
-            f"{len(lockfile.get('submodule_gitlinks', {}))} submodules)"
+            f"({sentinel_count} sentinel files, {submodule_count} submodules)"
         )
         return 0
     else:
