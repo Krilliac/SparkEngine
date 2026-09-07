@@ -34,10 +34,9 @@
 #include <cstdint>
 #include <random>
 
-#include "Engine/Events/EventSystem.h"
-
 namespace Spark
 {
+    class EventBus;
 
     // =============================================================================
     // Item Rarity
@@ -215,12 +214,9 @@ namespace Spark
      * @param registry  Item registry for looking up item properties
      * @param itemId    Item type ID to add
      * @param count     Number of items to add
-     * @param eventBus  Optional EventBus to publish ItemPickedUpEvent
-     * @param entityId  Entity ID for the event (only used if eventBus is set)
      * @return          Number of items actually added (may be less if full/overweight)
      */
-        inline int AddItem(InventoryComponent& inv, const ItemRegistry& registry, uint32_t itemId, int count = 1,
-                           EventBus* eventBus = nullptr, uint32_t entityId = 0)
+        inline int AddItem(InventoryComponent& inv, const ItemRegistry& registry, uint32_t itemId, int count = 1)
         {
             const ItemDef* def = registry.GetItem(itemId);
             if (!def || count <= 0)
@@ -263,18 +259,17 @@ namespace Spark
 
             int added = count - remaining;
 
-            // Publish item picked up event
-            if (added > 0 && eventBus)
-            {
-                ItemPickedUpEvent evt;
-                evt.entityId = entityId;
-                evt.itemDefId = itemId;
-                evt.count = added;
-                eventBus->Publish(evt);
-            }
-
             return added;
         }
+
+        /**
+         * @brief Add items and publish one ItemPickedUpEvent for the actual added count.
+         * @param eventBus Optional engine event bus; nullptr suppresses publication.
+         * @param entityId Entity attributed to the pickup event.
+         * @return Number of items actually added.
+         */
+        int AddItem(InventoryComponent& inv, const ItemRegistry& registry, uint32_t itemId, int count,
+                    EventBus* eventBus, uint32_t entityId = 0);
 
         /**
      * @brief Remove items from inventory

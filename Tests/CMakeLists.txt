@@ -1654,3 +1654,6 @@ if(Python3_Interpreter_FOUND)
 else()
     message(WARNING "Python 3 not found; template runtime-sheet and Spark CLI validation are disabled")
 endif()
+
+# Actual FPS mutation adapters and engine event publication, without module rendering dependencies.
+add_subdirectory(FPSGameplayEvents)

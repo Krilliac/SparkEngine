@@ -105,3 +105,12 @@ set_target_properties(spark_fps_abilities_consumer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 add_test(NAME SparkFPSAbilitiesConsumer COMMAND spark_fps_abilities_consumer)
+
+# These inline mutation implementations are the same ones used by the engine event adapters.
+add_executable(spark_fps_inventory_quests_consumer inventory_quests.cpp)
+target_compile_features(spark_fps_inventory_quests_consumer PRIVATE cxx_std_23)
+target_include_directories(spark_fps_inventory_quests_consumer PRIVATE "${_fps_source}" "${_public_sdk}")
+set_target_properties(spark_fps_inventory_quests_consumer PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+add_test(NAME SparkFPSInventoryQuestsConsumer COMMAND spark_fps_inventory_quests_consumer)

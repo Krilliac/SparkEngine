@@ -388,10 +388,10 @@
 | `InterpolationMode` | enum | SparkEngine | [Sequencer.h:L46](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L46) |  |
 | `IOOperationType` | enum | SparkEngine | [IODebugger.h:L43](../../SparkEngine/Source/Utils/IODebugger.h#L43) | Type of I/O operation |
 | `ISALevel` | enum | SparkEngine | [MultiISA.h:L24](../../SparkEngine/Source/Utils/MultiISA.h#L24) | Detected SIMD instruction set level. |
-| `ItemCategory` | enum | GameModules | [InventorySystem.h:L61](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L61) | Item category for filtering and UI grouping |
+| `ItemCategory` | enum | GameModules | [InventorySystem.h:L60](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L60) | Item category for filtering and UI grouping |
 | `ItemCategory` | enum | GameModules | [MMOEnums.h:L165](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L165) | Item categories for inventory filtering |
 | `ItemRarity` | enum | GameModules | [GameSystemEnums.h:L135](../../GameModules/SparkGameFPS/Source/Enums/GameSystemEnums.h#L135) | Item rarity levels |
-| `ItemRarity` | enum | GameModules | [InventorySystem.h:L49](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L49) | Item rarity tiers affecting drop rates and visual display |
+| `ItemRarity` | enum | GameModules | [InventorySystem.h:L48](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L48) | Item rarity tiers affecting drop rates and visual display |
 | `ItemRarity` | enum | GameModules | [MMOEnums.h:L152](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L152) | Item rarity tiers for loot and crafting output |
 | `ItemRarity` | enum | GameModules | [RPGEnums.h:L118](../../GameModules/SparkGameRPG/Source/Enums/RPGEnums.h#L118) | Item rarity tiers affecting stats and value |
 | `ItemRarity` | enum | SparkEngine | [LootAndCraftingSystem.h:L26](../../SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h#L26) | Item rarity tiers used by loot and crafting systems |
@@ -515,7 +515,7 @@
 | `NPCBehavior` | enum | GameModules | [RPGEnums.h:L92](../../GameModules/SparkGameRPG/Source/Enums/RPGEnums.h#L92) | NPC behavioral states |
 | `NPCDisposition` | enum | GameModules | [RPGEnums.h:L131](../../GameModules/SparkGameRPG/Source/Enums/RPGEnums.h#L131) | NPC disposition toward the player |
 | `NPCRole` | enum | GameModules | [OpenWorldEnums.h:L141](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L141) | NPC roles within settlements |
-| `ObjectiveType` | enum | GameModules | [QuestSystem.h:L59](../../GameModules/SparkGameFPS/Source/Game/QuestSystem.h#L59) | Types of quest objectives |
+| `ObjectiveType` | enum | GameModules | [QuestSystem.h:L58](../../GameModules/SparkGameFPS/Source/Game/QuestSystem.h#L58) | Types of quest objectives |
 | `ObjectiveType` | enum | GameModules | [RPGEnums.h:L142](../../GameModules/SparkGameRPG/Source/Enums/RPGEnums.h#L142) | Quest objective types |
 | `ObjectiveType` | enum | Tests | [TestQuestSystem.cpp:L23](../../Tests/TestQuestSystem.cpp#L23) |  |
 | `ObjectLayer` | enum | SparkEditor | [SceneSystemEnums.h:L169](../../SparkEditor/Source/Enums/SceneSystemEnums.h#L169) | Scene object layer types |
@@ -607,7 +607,7 @@
 | `QualityPreset` | enum | SparkEngine | [GraphicsEngineTypes.h:L60](../../SparkEngine/Source/Graphics/GraphicsEngineTypes.h#L60) | Rendering quality presets |
 | `QuestState` | enum | GameModules | [RPGEnums.h:L67](../../GameModules/SparkGameRPG/Source/Enums/RPGEnums.h#L67) | Quest progression states |
 | `QuestState` | enum | SparkEngine | [QuestSystem.h:L94](../../SparkEngine/Source/Engine/Gameplay/QuestSystem.h#L94) |  |
-| `QuestStatus` | enum | GameModules | [QuestSystem.h:L48](../../GameModules/SparkGameFPS/Source/Game/QuestSystem.h#L48) | Status of a quest in the player's journal |
+| `QuestStatus` | enum | GameModules | [QuestSystem.h:L47](../../GameModules/SparkGameFPS/Source/Game/QuestSystem.h#L47) | Status of a quest in the player's journal |
 | `QuestStatus` | enum | Tests | [TestGameplayStress.cpp:L152](../../Tests/TestGameplayStress.cpp#L152) |  |
 | `QuestStatus` | enum | Tests | [TestQuestSystem.cpp:L16](../../Tests/TestQuestSystem.cpp#L16) |  |
 | `QuoteMode` | enum | SparkEditor | [EditorProcessLaunchPosixInternal.h:L70](../../SparkEditor/Source/Utils/EditorProcessLaunchPosixInternal.h#L70) |  |

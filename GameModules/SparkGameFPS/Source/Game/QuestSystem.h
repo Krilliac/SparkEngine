@@ -33,10 +33,9 @@
 #include <algorithm>
 #include <cstdint>
 
-#include "Engine/Events/EventSystem.h"
-
 namespace Spark
 {
+    class EventBus;
 
     // =============================================================================
     // Quest Enums
@@ -243,13 +242,10 @@ namespace Spark
      * @param questId        Quest to update
      * @param objectiveIndex Index of the objective within the quest
      * @param increment      How much to increment progress
-     * @param eventBus       Optional EventBus to publish QuestCompletedEvent
-     * @param entityId       Entity ID for the event (only used if eventBus is set)
      * @return               true if the objective was updated
      */
         inline bool UpdateObjective(QuestJournalComponent& journal, const QuestRegistry& registry, uint32_t questId,
-                                    int objectiveIndex, int increment = 1, EventBus* eventBus = nullptr,
-                                    uint32_t entityId = 0)
+                                    int objectiveIndex, int increment = 1)
         {
             const QuestDef* def = registry.GetQuest(questId);
             if (!def)
@@ -287,16 +283,6 @@ namespace Spark
                     {
                         aq.status = QuestStatus::Completed;
                         journal.completedQuestIds.insert(questId);
-
-                        // Publish quest completion event
-                        if (eventBus)
-                        {
-                            QuestCompletedEvent evt;
-                            evt.entityId = entityId;
-                            evt.questId = questId;
-                            evt.questName = def->name;
-                            eventBus->Publish(evt);
-                        }
                     }
 
                     return true;
@@ -304,6 +290,15 @@ namespace Spark
             }
             return false;
         }
+
+        /**
+         * @brief Update an objective and publish one QuestCompletedEvent when this update completes the quest.
+         * @param eventBus Optional engine event bus; nullptr suppresses publication.
+         * @param entityId Entity attributed to the completion event.
+         * @return True if the objective was updated.
+         */
+        bool UpdateObjective(QuestJournalComponent& journal, const QuestRegistry& registry, uint32_t questId,
+                             int objectiveIndex, int increment, EventBus* eventBus, uint32_t entityId = 0);
 
         /**
      * @brief Fail a quest
