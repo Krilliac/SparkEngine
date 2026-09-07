@@ -11,6 +11,8 @@ if(NOT EXISTS "${SPARK_ENGINE_INCLUDE_DIR}/Spark/IModule.h")
     message(FATAL_ERROR "The canonical Spark SDK headers are missing")
 endif()
 set(_public_sdk "${CMAKE_CURRENT_BINARY_DIR}/public-sdk")
+# A removed installed header must not survive from an earlier configure.
+file(REMOVE_RECURSE "${_public_sdk}")
 file(COPY "${SPARK_ENGINE_INCLUDE_DIR}/Spark" DESTINATION "${_public_sdk}")
 
 # Compile the production FPS logic without linking an engine target: its
@@ -75,3 +77,19 @@ add_test(NAME SparkFPSWeaponsConsumer COMMAND spark_fps_weapons_consumer)
 add_library(spark_weapon_enum_compatibility OBJECT weapon_enum_compatibility.cpp)
 target_compile_features(spark_weapon_enum_compatibility PRIVATE cxx_std_23)
 target_include_directories(spark_weapon_enum_compatibility PRIVATE "${_public_sdk}")
+
+add_test(NAME SparkSDKHeaderRefresh
+    COMMAND "${CMAKE_COMMAND}"
+        "-DCONSUMER_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/sdk-refresh/$<CONFIG>"
+        "-DINSTALLED_INCLUDE_DIR=${SPARK_ENGINE_INCLUDE_DIR}"
+        "-DCONSUMER_CONFIG=$<CONFIG>"
+        "-DCONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCONSUMER_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCONSUMER_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCONSUMER_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        -P "${CMAKE_CURRENT_LIST_DIR}/TestSDKHeaderRefresh.cmake"
+)
+set_tests_properties(SparkSDKHeaderRefresh PROPERTIES TIMEOUT 300)
