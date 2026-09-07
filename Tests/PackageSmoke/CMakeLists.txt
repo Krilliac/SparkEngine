@@ -28,3 +28,5 @@ else()
     target_link_libraries(spark_package_module_header_smoke PRIVATE Spark::SparkEngineInterface)
 endif()
 add_dependencies(spark_package_smoke spark_package_module_header_smoke)
+
+add_subdirectory(FPSProgression)

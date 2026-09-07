@@ -318,7 +318,11 @@ void Game::ApplyLocalProfile(const Spark::FPSLocalProfile& profile)
     m_playTime = profile.playTimeSeconds;
 
     if (m_progression)
+    {
         m_progression->RestoreProgress(profile.progressionXP);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Progression restored from save (level %d, %d XP)",
+                       m_progression->GetLevel(), m_progression->GetCurrentXP());
+    }
 
     if (m_player)
     {

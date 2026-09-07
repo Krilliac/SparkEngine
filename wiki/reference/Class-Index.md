@@ -2087,13 +2087,13 @@
 | `LegacyModuleAdapter` | class | SparkEngine | [ModuleManager.cpp:L597](../../SparkEngine/Source/Core/ModuleManager.cpp#L597) | Wraps a legacy IGameModule implementation behind the new IModule interface |
 | `LensDistortionSettings` | struct | SparkEngine | [PostProcessingTypes.h:L155](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L155) | Lens distortion settings |
 | `LensFlareSettings` | struct | SparkEngine | [PostProcessingTypes.h:L182](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L182) | Lens flare settings |
-| `LevelBonuses` | struct | GameModules | [ProgressionSystem.h:L46](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L46) | Per-level stat bonuses applied automatically |
+| `LevelBonuses` | struct | GameModules | [ProgressionSystem.h:L45](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L45) | Per-level stat bonuses applied automatically |
 | `LevelCollectionStats` | struct | GameModules | [PlatformerCollectibleSystem.h:L51](../../GameModules/SparkGamePlatformer/Source/Collectible/PlatformerCollectibleSystem.h#L51) | Per-level collection summary |
 | `LevelDef` | struct | GameModules | [PlatformerLevelSystem.h:L77](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L77) | Complete level definition |
 | `LevelGPUBuffers` | struct | SparkEngine | [ClipmapTerrain.h:L168](../../SparkEngine/Source/Graphics/ClipmapTerrain.h#L168) | Per-level GPU mesh buffers. |
 | `LevelProgress` | struct | GameModules | [PlatformerLevelSystem.h:L91](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L91) | Per-level progress tracking |
 | `LevelStreamingSystem` | class | SparkEditor | [LevelStreamingSystem.h:L48](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L48) |  |
-| `LevelUnlock` | struct | GameModules | [ProgressionSystem.h:L28](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L28) | An unlock granted at a specific level |
+| `LevelUnlock` | struct | GameModules | [ProgressionSystem.h:L27](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L27) | An unlock granted at a specific level |
 | `LifecycleCompositionRoot` | class | SparkEngine | [GameplaySystemLifecycle.cpp:L38](../../SparkEngine/Source/Core/GameplaySystemLifecycle.cpp#L38) |  |
 | `LifecycleDaemonFixture` | struct | Tests | [TestDaemonLifecycle.cpp:L136](../../Tests/TestDaemonLifecycle.cpp#L136) |  |
 | `LifecycleEvidence` | struct | SparkEngine | [ModuleManager.h:L66](../../SparkEngine/Source/Core/ModuleManager.h#L66) | Successfully completed module lifecycle callbacks for one manager lifetime. |
@@ -3085,8 +3085,8 @@
 | `ProfilerConfig` | struct | SparkEditor | [ProfilerTypes.h:L252](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L252) | Profiler configuration |
 | `ProfileSample` | struct | SparkEngine | [Profiler.h:L52](../../SparkEngine/Source/Utils/Profiler.h#L52) | Single timing sample |
 | `Prog` | struct | GameModules | [TFProgressionSystem.h:L232](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h#L232) |  |
-| `ProgressionCallbacks` | struct | GameModules | [ProgressionSystem.h:L61](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L61) | Callbacks for progression events |
-| `ProgressionSystem` | class | GameModules | [ProgressionSystem.h:L71](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L71) | XP and leveling progression system |
+| `ProgressionCallbacks` | struct | GameModules | [ProgressionSystem.h:L60](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L60) | Callbacks for progression events |
+| `ProgressionSystem` | class | GameModules | [ProgressionSystem.h:L72](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L72) | XP and leveling progression system |
 | `ProjectBrowserPanel` | class | SparkEditor | [EditorUI.h:L107](../../SparkEditor/Source/Core/EditorUI.h#L107) |  |
 | `ProjectBrowserPanel` | class | SparkEditor | [ProjectBrowserPanel.h:L32](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L32) | Project browser panel for creating/opening projects |
 | `Projectile` | class | GameModules | [Projectile.h:L39](../../GameModules/SparkGameFPS/Source/Projectiles/Projectile.h#L39) |  |

@@ -12,20 +12,20 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 |---------|------:|
 | **SparkEngine/Source** | 320312 |
 | **SparkEditor/Source** | 102129 |
-| **GameModules** | 142529 |
+| **GameModules** | 142534 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 180604 |
+| **Tests** | 180674 |
 | **SparkConsole/src** | 1701 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~773031** |
+| **Total C++ (excl. ThirdParty)** | **~773106** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hh/.hpp/.hxx/.inl) | 1049 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1553 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1554 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |

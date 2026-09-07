@@ -4,9 +4,6 @@
  */
 
 #include "ProgressionSystem.h"
-#include "Core/Platform.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -47,16 +44,11 @@ namespace Spark
         CheckLevelUp();
 
         m_callbacks = std::move(liveCallbacks);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Progression restored from save (level %d, %d XP)", m_level,
-                       m_currentXP);
     }
 
     void ProgressionSystem::Initialize()
     {
         ResetToDefaults();
-
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Progression system initialized (level 1, max %d)", m_maxLevel);
-        LOG_TO_CONSOLE_IMMEDIATE(L"Progression system initialized (level 1, 50 max)", L"SUCCESS");
     }
 
     void ProgressionSystem::AwardXP(int amount, const std::string& source)
@@ -65,8 +57,8 @@ namespace Spark
             return;
 
         int modified = static_cast<int>(amount * m_currentBonuses.xpMultiplier);
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "XP awarded: %d (source: %s, modified: %d)", amount, source.c_str(),
-                        modified);
+        if (m_callbacks.onXPAwarded)
+            m_callbacks.onXPAwarded(amount, source, modified);
         m_currentXP += modified;
 
         if (m_callbacks.onXPGained)
@@ -140,10 +132,6 @@ namespace Spark
 
             if (m_callbacks.onLevelUp)
                 m_callbacks.onLevelUp(m_level, m_currentBonuses);
-
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "Level up! Now level %d", m_level);
-            std::wstring msg = L"LEVEL UP! Now level " + std::to_wstring(m_level);
-            LOG_TO_CONSOLE_IMMEDIATE(msg, L"SUCCESS");
         }
     }
 
