@@ -395,7 +395,7 @@ message(STATUS
 set(_spark_runtime_reference "${_spark_resolved_test_root}/runtime-reference.cmake")
 set(_spark_module_prefix "")
 set(_spark_module_suffix ".dll")
-set(_spark_runtime_modules "SparkGameFPS;SparkGameSecond")
+set(_spark_runtime_modules "SparkGameFPS")
 get_filename_component(_spark_validator_directory "${SPARK_VALIDATOR}" DIRECTORY)
 file(STRINGS "${_spark_validator_directory}/../SparkSDK/Include/Spark/Version.h"
     _spark_runtime_sdk_line REGEX "^#define SPARK_SDK_VERSION [0-9]+$")
@@ -403,7 +403,7 @@ string(REGEX MATCH "[0-9]+$" _spark_runtime_sdk_version "${_spark_runtime_sdk_li
 file(WRITE "${_spark_runtime_reference}"
     "format=1\ntarget_system=Windows\nmodule_prefix=\nmodule_suffix=.dll\nmodules=${_spark_runtime_modules}\n")
 
-foreach(_spark_case IN ITEMS valid missing_first missing_second hash_mismatch sdk_mismatch
+foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sidecar unlisted_sample_source hash_mismatch sdk_mismatch
         missing_sidecar unknown_layout untrusted_inventory missing_reference wrong_profile
         missing_executable missing_runtime full_valid full_smoke_failure)
     # POSIX script stand-ins exercise orchestration only, not native PE execution.
@@ -429,9 +429,17 @@ foreach(_spark_case IN ITEMS valid missing_first missing_second hash_mismatch sd
     if(_spark_case STREQUAL "missing_first")
         file(REMOVE "${_spark_root}/bin/SparkGameFPS.dll")
         set(_spark_expected "missing required game modules")
-    elseif(_spark_case STREQUAL "missing_second")
-        file(REMOVE "${_spark_root}/bin/SparkGameSecond.dll")
-        set(_spark_expected "missing required game modules")
+    elseif(_spark_case STREQUAL "unlisted_module")
+        file(WRITE "${_spark_root}/bin/SparkGameSecond.dll" "unexpected module payload\n")
+        set(_spark_expected "unlisted game-module payload")
+    elseif(_spark_case STREQUAL "unlisted_sidecar")
+        file(WRITE "${_spark_root}/bin/SparkGameSecond.dll.sparkabi" "unexpected module payload\n")
+        set(_spark_expected "unlisted game-module payload")
+    elseif(_spark_case STREQUAL "unlisted_sample_source")
+        file(MAKE_DIRECTORY "${_spark_root}/share/SparkEngine/samples/SparkGame")
+        file(WRITE "${_spark_root}/share/SparkEngine/samples/SparkGame/CMakeLists.txt"
+            "unexpected source sample\n")
+        set(_spark_expected "out-of-profile SparkGame sample source")
     elseif(_spark_case STREQUAL "hash_mismatch")
         file(APPEND "${_spark_root}/bin/SparkGameFPS.dll" "corrupted")
         set(_spark_expected "Game-module SHA-256 mismatch")

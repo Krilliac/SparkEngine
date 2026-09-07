@@ -483,8 +483,12 @@ class ShippingPackageBomTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Unknown package profile", result.stderr)
 
-    def test_stable_bom_requires_windows_and_first_party_fps_module(self) -> None:
-        for replacement, message in (("target_system=Linux", "Windows"), ("modules=SparkGameOther", "SparkGameFPS")):
+    def test_stable_bom_requires_windows_and_exactly_the_first_party_fps_module(self) -> None:
+        for replacement, message in (
+            ("target_system=Linux", "Windows"),
+            ("modules=SparkGameOther", "exactly one"),
+            ("modules=SparkGameFPS;SparkGameOther", "exactly one"),
+        ):
             with self.subTest(replacement=replacement), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
                 self.fixture(root)
@@ -495,6 +499,53 @@ class ShippingPackageBomTests(unittest.TestCase):
                 result = self.validate(root, "stable-v1")
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(message, result.stderr)
+
+    def test_stable_bom_rejects_unlisted_game_module_payloads(self) -> None:
+        for relative in ("bin/SparkGameOther.dll", "bin/SparkGameOther.dll.sparkabi"):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                self.fixture(root)
+                payload = root / relative
+                payload.write_text("unexpected module payload\n")
+                result = self.validate(root, "stable-v1")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("unlisted game-module payload", result.stderr)
+
+    def test_stable_bom_rejects_base_game_module_sample_source(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            self.fixture(root)
+            source = root / "share/SparkEngine/samples/SparkGame/CMakeLists.txt"
+            source.parent.mkdir(parents=True)
+            source.write_text("unexpected source sample\n")
+            result = self.validate(root, "stable-v1")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("out-of-profile SparkGame sample source", result.stderr)
+
+    def test_stable_bom_requires_windows_dll_module_naming(self) -> None:
+        for original, replacement in (
+            ("module_prefix=\n", "module_prefix=prefix-\n"),
+            ("module_suffix=.dll\n", "module_suffix=.module\n"),
+        ):
+            with self.subTest(replacement=replacement), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                self.fixture(root)
+                manifest = root / "lib/cmake/SparkEngine/SparkEngineGameModules.cmake"
+                manifest.write_text(manifest.read_text().replace(original, replacement))
+                result = self.validate(root, "stable-v1")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("empty module prefix and .dll module suffix", result.stderr)
+
+    def test_shipping_preset_selects_only_the_first_party_fps_module(self) -> None:
+        presets = json.loads((ROOT / "CMakePresets.json").read_text())
+        shipping = next(
+            preset for preset in presets["configurePresets"]
+            if preset["name"] == "windows-shipping"
+        )
+        self.assertEqual(
+            shipping["cacheVariables"].get("SPARK_GAME_MODULES"),
+            "SparkGameFPS",
+        )
 
     def test_stable_executable_bom_matches_declared_release_products(self) -> None:
         data = json.loads((ROOT / "docs/site/readiness.json").read_text())

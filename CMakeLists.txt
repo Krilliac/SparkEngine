@@ -161,6 +161,8 @@ option(ENABLE_VR "Enable VR/AR framework (OpenXR-ready stub)" OFF)
 option(ENABLE_MOBILE "Enable mobile platform support (touch, gestures, battery-aware scaling)" OFF)
 option(BUILD_TESTS "Build test suite" ON)
 option(BUILD_GAME_MODULES "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)" ON)
+set(SPARK_GAME_MODULES "" CACHE STRING
+    "Semicolon-separated in-tree game modules to build (empty builds every discovered module)")
 option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)" OFF)
 option(SPARK_SUPPRESS_THIRDPARTY_WARNINGS "Suppress compiler warnings from third-party libraries (Jolt, etc.)" ON)
 option(SPARK_DOUBLE_PRECISION_PHYSICS "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds" OFF)
@@ -1796,10 +1798,35 @@ if(BUILD_GAME_MODULES)
         message(STATUS "Game modules: none found in GameModules/")
     endif()
 
+    set(_SPARK_DISCOVERED_GAME_MODULE_NAMES "")
+    foreach(_MOD_CMAKE IN LISTS _SPARK_GAME_MODULE_DIRS)
+        get_filename_component(_MOD_DIR "${_MOD_CMAKE}" DIRECTORY)
+        get_filename_component(_MOD_NAME "${_MOD_DIR}" NAME)
+        list(APPEND _SPARK_DISCOVERED_GAME_MODULE_NAMES "${_MOD_NAME}")
+    endforeach()
+
+    if(SPARK_GAME_MODULES)
+        set(_SPARK_SELECTED_GAME_MODULE_NAMES "${SPARK_GAME_MODULES}")
+        list(REMOVE_DUPLICATES _SPARK_SELECTED_GAME_MODULE_NAMES)
+        foreach(_SPARK_REQUESTED_GAME_MODULE IN LISTS _SPARK_SELECTED_GAME_MODULE_NAMES)
+            if(NOT _SPARK_REQUESTED_GAME_MODULE IN_LIST _SPARK_DISCOVERED_GAME_MODULE_NAMES)
+                message(FATAL_ERROR
+                    "Requested game module '${_SPARK_REQUESTED_GAME_MODULE}' was not discovered in GameModules/")
+            endif()
+        endforeach()
+    else()
+        set(_SPARK_SELECTED_GAME_MODULE_NAMES "${_SPARK_DISCOVERED_GAME_MODULE_NAMES}")
+    endif()
+
     set(_SPARK_GAME_MODULE_NAMES "")
     foreach(_MOD_CMAKE IN LISTS _SPARK_GAME_MODULE_DIRS)
         get_filename_component(_MOD_DIR "${_MOD_CMAKE}" DIRECTORY)
         get_filename_component(_MOD_NAME "${_MOD_DIR}" NAME)
+
+        if(NOT _MOD_NAME IN_LIST _SPARK_SELECTED_GAME_MODULE_NAMES)
+            message(STATUS "Skipping game module: ${_MOD_NAME} (not selected)")
+            continue()
+        endif()
 
         message(STATUS "Adding game module: ${_MOD_NAME}")
         add_subdirectory("${_MOD_DIR}" "${CMAKE_BINARY_DIR}/GameModules/${_MOD_NAME}")
@@ -2852,7 +2879,10 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/Samples")
         COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
     )
 endif()
-if(EXISTS "${CMAKE_SOURCE_DIR}/GameModules/SparkGame")
+if(EXISTS "${CMAKE_SOURCE_DIR}/GameModules/SparkGame" AND
+   NOT SPARK_GAME_MODULES STREQUAL "SparkGameFPS")
+    # The focused FPS shipping selector must not stage the unrelated base-game
+    # source sample in the native installer payload.
     spark_install_tracked_directory(
         SOURCE GameModules/SparkGame
         DESTINATION share/SparkEngine/samples/SparkGame

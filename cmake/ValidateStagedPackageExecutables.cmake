@@ -365,8 +365,51 @@ if(SPARK_PACKAGE_PROFILE STREQUAL "stable-v1")
     if(NOT _spark_package_target_system STREQUAL "Windows")
         message(FATAL_ERROR "stable-v1 requires a Windows package")
     endif()
-    if(NOT "SparkGameFPS" IN_LIST _spark_required_game_modules)
-        message(FATAL_ERROR "stable-v1 package omits required SparkGameFPS module")
+    if(NOT _spark_module_prefix STREQUAL "" OR
+       NOT _spark_module_suffix STREQUAL ".dll")
+        message(FATAL_ERROR
+            "stable-v1 requires an empty module prefix and .dll module suffix")
+    endif()
+    if(NOT _spark_required_game_modules STREQUAL "SparkGameFPS")
+        message(FATAL_ERROR
+            "stable-v1 package must include exactly one first-party game module, "
+            "SparkGameFPS; found '${_spark_required_game_modules}'")
+    endif()
+
+    set(_spark_expected_stable_game_module_payload "SparkGameFPS.dll")
+    set(_spark_unlisted_stable_game_module_payloads "")
+    file(GLOB _spark_stable_game_module_binaries LIST_DIRECTORIES true
+        "${SPARK_PACKAGE_ROOT}/bin/SparkGame*.dll")
+    file(GLOB _spark_stable_game_module_sidecars LIST_DIRECTORIES true
+        "${SPARK_PACKAGE_ROOT}/bin/SparkGame*.dll.sparkabi")
+    foreach(_spark_stable_game_module_payload IN LISTS
+            _spark_stable_game_module_binaries _spark_stable_game_module_sidecars)
+        get_filename_component(_spark_stable_game_module_payload_name
+            "${_spark_stable_game_module_payload}" NAME)
+        if(NOT _spark_stable_game_module_payload_name STREQUAL
+               "${_spark_expected_stable_game_module_payload}" AND
+           NOT _spark_stable_game_module_payload_name STREQUAL
+               "${_spark_expected_stable_game_module_payload}.sparkabi")
+            list(APPEND _spark_unlisted_stable_game_module_payloads
+                "${_spark_stable_game_module_payload}")
+        endif()
+    endforeach()
+    if(_spark_unlisted_stable_game_module_payloads)
+        list(SORT _spark_unlisted_stable_game_module_payloads)
+        list(JOIN _spark_unlisted_stable_game_module_payloads "\n  "
+            _spark_unlisted_stable_game_module_report)
+        message(FATAL_ERROR
+            "stable-v1 package contains unlisted game-module payloads:\n"
+            "  ${_spark_unlisted_stable_game_module_report}")
+    endif()
+
+    set(_spark_out_of_profile_sample_source
+        "${SPARK_PACKAGE_ROOT}/share/SparkEngine/samples/SparkGame")
+    if(EXISTS "${_spark_out_of_profile_sample_source}" OR
+       IS_SYMLINK "${_spark_out_of_profile_sample_source}")
+        message(FATAL_ERROR
+            "stable-v1 package contains out-of-profile SparkGame sample source:\n"
+            "  ${_spark_out_of_profile_sample_source}")
     endif()
 endif()
 
