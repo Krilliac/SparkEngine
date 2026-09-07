@@ -2017,7 +2017,7 @@ ctest --test-dir /tmp/spark-consumer --output-on-failure --no-tests=error
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback.
+The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. Local process fixtures verify orchestration; hosted native results are pending. This does not close signing, Windows 11, NSIS, upgrade, rollback, repair, or user-data retention requirements.
 
 **Dependency contract**
 

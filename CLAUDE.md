@@ -396,3 +396,7 @@ Review whether anything learned warrants a new or updated entry — especially o
 - Do not exclude `.claude/` from `.promptignore`
 - Always commit context changes — future sessions on any branch benefit
 - Prefer updating an existing entry over creating a new one for the same topic
+
+### Asset workflow
+
+Use Blender for asset creation, repair, and export work. Preserve editable source assets and verify exported files through the engine's asset pipeline; a successful Blender export alone is not release qualification.
