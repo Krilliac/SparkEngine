@@ -1,7 +1,7 @@
 # Fuzz Policy and Parser Security
 
-**Audience:** Engine developers, security reviewers, CI maintainers  
-**Thread Context:** SEC-120 — fuzz and bound every untrusted parser and protocol  
+**Audience:** Engine developers, security reviewers, CI maintainers
+**Thread Context:** SEC-120 — fuzz and bound every untrusted parser and protocol
 **Platform-Backend Scope:** All platforms (fuzz infrastructure runs on Linux CI)
 
 ---
