@@ -1743,16 +1743,23 @@ def published_main(argv: list[str]) -> int:
             label="metadata.signals",
             errors=errors,
         )
-        if signals is not None and any(value is not False for value in signals.values()):
-            errors.append("metadata clean evidence contains asserted signals")
+        infrastructure_diagnostic = bool(INFRASTRUCTURE_PATTERN.search(union_text))
+        if signals is not None and any(
+            not exact_json_value(value, infrastructure_diagnostic if key == "infrastructure" else False)
+            for key, value in signals.items()
+        ):
+            errors.append("metadata signals do not match independently verified clean evidence")
         scans = require_exact_keys(
             metadata_obj.get("scannerExitCodes"),
             {"sanitizerSignature", "warning", "testFailure", "crash", "infrastructure"},
             label="metadata.scannerExitCodes",
             errors=errors,
         )
-        if scans is not None and any(value != 1 or isinstance(value, bool) for value in scans.values()):
-            errors.append("metadata scanner exit codes are not exact clean no-match results")
+        if scans is not None and any(
+            not exact_json_value(value, int(not infrastructure_diagnostic) if key == "infrastructure" else 1)
+            for key, value in scans.items()
+        ):
+            errors.append("metadata scanner exit codes do not match verified content")
         started = metadata_obj.get("startedUnixNanoseconds")
         if not isinstance(started, int) or isinstance(started, bool) or started <= 0:
             errors.append("metadata start timestamp is invalid")
@@ -2228,7 +2235,10 @@ def main() -> int:
     elif crash_present:
         classification = "crash"
         recommended_exit = args.process_exit or 1
-    elif infrastructure_present:
+    elif infrastructure_present and (args.process_exit != 0 or incomplete_run):
+        # Negative filesystem/process tests intentionally emit these phrases.
+        # Keep the observed signal in metadata, but a verified successful
+        # completion must not become an infrastructure failure based on prose.
         classification = "infrastructure-failure"
         recommended_exit = args.process_exit or 70
     elif args.process_exit != 0:
