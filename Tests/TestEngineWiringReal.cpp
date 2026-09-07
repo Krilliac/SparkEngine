@@ -245,6 +245,20 @@ TEST(EngineWiring_ProximityTriggerDefersCallbacksUntilScanCompletes)
 TEST(EngineWiring_TriggerVolumeComponentPublishesEnterEventFromLifecycleTick)
 {
     World& world = SetupContextWithWorld();
+    // Other tests can reach this static world through EngineContext. Retire
+    // their entities so this trigger fixture starts identically in shuffled runs.
+    const auto& registry = world.GetRegistry();
+    std::vector<EntityID> staleEntities;
+    if (const auto* entities = registry.storage<entt::entity>())
+    {
+        for (auto [entity] : entities->each())
+            staleEntities.push_back(entity);
+    }
+    for (EntityID entity : staleEntities)
+    {
+        if (registry.valid(entity))
+            world.DestroyEntity(entity);
+    }
     InitializeProductionLifecycle();
 
     const EntityID volume = world.CreateEntity("wiring_trigger_volume");

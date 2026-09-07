@@ -259,8 +259,8 @@ namespace Spark::Net
 
     struct ReplicatedEntity
     {
-        uint32_t networkID;                         ///< Unique network-wide entity identifier.
-        ClientID ownerID;                           ///< Client that owns/controls this entity.
+        uint32_t networkID = 0;                     ///< Unique network-wide entity identifier.
+        ClientID ownerID = INVALID_CLIENT;          ///< Client that owns/controls this entity.
         std::string entityType;                     ///< Type name for spawning on remote clients.
         std::vector<ReplicatedProperty> properties; ///< Replicated property list (delta-compressed).
         XMFLOAT3 position{0, 0, 0};                 ///< Last known world-space position.

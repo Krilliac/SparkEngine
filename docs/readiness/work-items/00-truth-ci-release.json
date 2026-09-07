@@ -721,7 +721,7 @@
       "wave": 1,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "The remote has no tags; release version is not passed to CMake; multiple products default to 1.0.0; and badge commits can move source after artifact construction.",
+      "rationale": "Release automation now passes SPARK_ENGINE_VERSION to CMake, generates SDK version headers, and checks exact publication provenance. The remaining acceptance work is to prove version agreement across every stable-v1 product and tag, and to package the authoritative Shipping profile with a complete toolchain and dependency manifest.",
       "dependencies": [
         "BLD-100",
         "CI-100"
@@ -816,7 +816,7 @@
       "wave": 1,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "Current release artifacts have no checksum file, signing, SBOM, build provenance, malware scan, or protected approval environment.",
+      "rationale": "Release automation already generates SHA256SUMS, an SBOM, and build attestations. Stable-v1 still requires independently verified code signing, artifact and dependency scan policy, and a protected release approval environment; existing integrity metadata alone does not satisfy this gate.",
       "dependencies": [
         "BLD-100",
         "SEC-110",

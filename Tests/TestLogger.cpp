@@ -228,6 +228,7 @@ TEST(Logger_StackTraceLevelConfiguration)
 
 TEST(Logger_ShouldLogWithStringCategory)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.Initialize(false);
     logger.SetGlobalLevel(Spark::LogLevel::Info);
@@ -246,6 +247,7 @@ TEST(Logger_ShouldLogWithStringCategory)
 
 TEST(Logger_LogWithStringCategory)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.ClearSinks();
     logger.Initialize(false);
@@ -276,6 +278,7 @@ TEST(Logger_LogWithStringCategory)
 
 TEST(Logger_LogMessageMetadata)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.ClearSinks();
     logger.Initialize(false);
@@ -312,6 +315,7 @@ TEST(Logger_LogMessageMetadata)
 
 TEST(Logger_FlushAll)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.Initialize(false);
 
@@ -327,6 +331,7 @@ TEST(Logger_FlushAll)
 
 TEST(Logger_IsInitialized)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.Initialize(false);
     EXPECT_TRUE(logger.IsInitialized());
@@ -370,6 +375,7 @@ TEST(Logger_StringToLogLevel)
 
 TEST(Logger_CategoryBitmask)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.Initialize(false);
     logger.SetGlobalLevel(Spark::LogLevel::Trace);
@@ -420,6 +426,7 @@ TEST(Logger_CategoryBitHelper)
 
 TEST(Logger_ApplyConfig)
 {
+    ScopedLoggerBaseline loggerBaseline;
     auto& logger = Spark::Logger::Get();
     logger.Initialize(false);
 

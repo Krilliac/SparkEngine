@@ -18,12 +18,15 @@ name: "Build Matrix Verifier"
 on:
   workflow_run:
     workflows: ["Build SparkEngine"]
+    branches: [Working]
     types: [in_progress, completed]
 
 jobs:
   invalidate-running:
     name: "Invalidate the prior build-matrix status for a running source attempt"
-    if: github.event.action == 'in_progress'
+    if: >-
+      github.event.action == 'in_progress' &&
+      contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
@@ -87,7 +90,9 @@ jobs:
 
   verify:
     name: "Verify and attest build-matrix evidence"
-    if: github.event.action == 'completed'
+    if: >-
+      github.event.action == 'completed' &&
+      contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:

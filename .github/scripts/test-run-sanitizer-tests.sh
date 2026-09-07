@@ -143,6 +143,17 @@ PY
 case "${FAKE_MODE:-clean}" in
     clean) write_clean ;;
     empty) exit 0 ;;
+    expected-filesystem-diagnostic)
+        write_clean 'Expected missing fixture: No such file or directory; Permission denied'
+        ;;
+    incomplete-infrastructure)
+        echo 'failed to start process: Permission denied'
+        exit 0
+        ;;
+    nonzero-infrastructure)
+        write_clean 'failed to start process: Permission denied'
+        exit 17
+        ;;
     zero)
         output="=== SparkEngine Test Suite ===
 Shuffle seed: 123
@@ -303,6 +314,17 @@ PY
         write_clean
         prefix="$(runtime_prefix)"
         printf 'SUMMARY: MemorySanitizer: use-of-uninitialized-value\n' > "${prefix}.$$"
+        ;;
+    runtime-flood)
+        # The fake test itself (bash builtin printf, not a helper process)
+        # writes past the 16 MiB cap; without the wrapper's trap it dies of
+        # SIGXFSZ (exit 153) before write_clean runs.
+        prefix="$(runtime_prefix)"
+        one_mib="$(head -c 1048576 /dev/zero | tr '\0' 'x')"
+        exec 3>"${prefix}.$$"
+        for _ in $(seq 17); do printf '%s' "$one_mib" >&3 || true; done
+        exec 3>&-
+        write_clean
         ;;
     empty-runtime)
         write_clean
@@ -807,6 +829,19 @@ assert data["process"]["captureExitCode"] == 0
 PY
 pass "clean metadata binds completion, selector, and provenance"
 
+# Negative filesystem tests emit infrastructure-like prose. A complete,
+# consistent successful suite is authoritative; retain the diagnostic signal.
+run_case expected-filesystem-diagnostic
+expect_status 0 "$CASE_STATUS" "expected filesystem diagnostics do not reject a verified successful suite"
+expect_contains "$CASE_DIR/metadata.json" '"infrastructure": true' "expected infrastructure-like diagnostic remains recorded"
+expect_contains "$CASE_DIR/metadata.json" '"classification": "clean"' "verified successful diagnostic run is clean"
+run_case incomplete-infrastructure
+expect_status 70 "$CASE_STATUS" "infrastructure diagnostic without completion still fails"
+expect_contains "$CASE_DIR/metadata.json" '"classification": "infrastructure-failure"' "incomplete infrastructure classification preserved"
+run_case nonzero-infrastructure
+expect_status 17 "$CASE_STATUS" "infrastructure diagnostic with nonzero process still fails"
+expect_contains "$CASE_DIR/metadata.json" '"classification": "infrastructure-failure"' "nonzero infrastructure classification preserved"
+
 # Exit zero is never enough without complete positive evidence.
 run_case empty
 expect_status 70 "$CASE_STATUS" "empty-output exit zero fails verification"
@@ -986,6 +1021,18 @@ else
     expect_status 0 "$CASE_STATUS" "oversized sparse fixture may lift and restore the soft limit"
     sparse_size="$(wc -c < "$CASE_SPARSE_PATH")"
     [[ "$sparse_size" -eq 536870913 ]] && pass "soft-limit fixture matches the 512 MiB regression boundary" || fail "soft-limit fixture size"
+fi
+
+if [[ "$(uname -s)" =~ ^(MINGW|MSYS) ]]; then
+    skip "POSIX RLIMIT_FSIZE/SIGXFSZ semantics unavailable in Git Bash"
+else
+    run_case runtime-flood
+    expect_status 70 "$CASE_STATUS" "flooded runtime log is a verification failure, not a crash"
+    expect_contains "$CASE_DIR/process-footer.txt" "test_exit_code=0" "SIGXFSZ is ignored: the suite survives the write cap"
+    expect_contains "$CASE_DIR/metadata.json" "exceeds 4194304 bytes" "oversized runtime entry is named"
+    expect_contains "$CASE_DIR/console.txt" "=== Results ===" "completion evidence exists after the flood"
+    flood_size="$(wc -c < "$(ls "$CASE_DIR"/runtime/sanitizer.* | head -n1)")"
+    [[ "$flood_size" -eq 16777216 ]] && pass "runtime log is truncated at the write cap" || fail "runtime log cap"
 fi
 
 # Provenance, required policy, selector, and timeout controls are enforced.
@@ -1226,6 +1273,26 @@ printf 'unexpected\n' > "$published_dir/extra.json"
 verify_published
 expect_status 70 "$PUBLISHED_STATUS" "published artifact rejects ambiguous extra evidence"
 rm "$published_dir/extra.json"
+
+run_case expected-filesystem-diagnostic
+published_dir="$CASE_DIR"
+published_run="$CASE_RUN"
+"$TEST_PYTHON" "$SUMMARIZER" "$published_dir/junit.xml" \
+    --min-tests 1 --title "Synthetic filesystem negative test" \
+    --json "$published_dir/test-stats-linux-asan.json" >/dev/null
+verify_published
+expect_status 0 "$PUBLISHED_STATUS" "published successful filesystem negative test is independently verified"
+cp "$published_dir/metadata.json" "$TMP_ROOT/diagnostic-metadata.json"
+cp "$published_dir/process-footer.txt" "$TMP_ROOT/diagnostic-footer.txt"
+for mutation in 'signals.infrastructure false' 'scannerExitCodes.infrastructure 1' \
+    'signals.infrastructure 1' 'scannerExitCodes.infrastructure false'; do
+    read -r field value <<< "$mutation"
+    tamper_metadata_and_rebind_footer "$field" "$value" json
+    verify_published
+    expect_status 70 "$PUBLISHED_STATUS" "published diagnostic rejects inconsistent or mistyped $mutation"
+    cp "$TMP_ROOT/diagnostic-metadata.json" "$published_dir/metadata.json"
+    cp "$TMP_ROOT/diagnostic-footer.txt" "$published_dir/process-footer.txt"
+done
 
 # Static workflow contracts: required/optional policy, timeouts, aggregation,
 # and private exact-provenance paths remain reviewable without running C++.

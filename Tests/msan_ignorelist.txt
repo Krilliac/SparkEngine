@@ -1,54 +1,37 @@
 # MemorySanitizer ignorelist for SparkEngine
 #
-# MSan requires ALL code to be instrumented. Third-party libraries built
-# without MSan instrumentation produce false positives. This file suppresses
-# reports originating from uninstrumented code so that MSan findings in
-# SparkEngine's own code are actionable.
+# `src:` entries disable MSan checks AND shadow propagation inside code that is
+# compiled with MSan (every load in a matching file is treated as initialised).
+# They cannot affect prebuilt shared libraries or runtime interceptors; the C++
+# runtime is handled by linking the MSan-instrumented libc++ that
+# build-linux-msan builds (see .github/msan/libcxx-runtime.cmake). Keep this
+# list short: every entry is a blind spot, and Tests/TestMSanCanary.cpp must
+# never match one.
 #
 # Syntax: https://clang.llvm.org/docs/SanitizerSpecialCaseList.html
 
-# Jolt Physics — compiled without MSan instrumentation
+# Jolt Physics (in-tree, proving-phase blind spot; retire in phase 3)
 src:*/ThirdParty/Physics/JoltPhysics/*
-src:*/Jolt/*
 
-# ImGui — compiled without MSan instrumentation
+# ImGui (in-tree; imgui_impl_sdl2 is never called from tests)
 src:*/ThirdParty/UI/imgui/*
 src:*/imgui.cpp
 src:*/imgui_*.cpp
 
-# EnTT — header-only, but templates instantiated in our TUs are fine;
-# suppress only the internal registry/storage internals if needed
-# (no suppression needed for header-only libs generally)
-
-# tinyobjloader
+# tinyobjloader (retire early in phase 3: parsed output feeds engine code)
 src:*/ThirdParty/Utils/tinyobjloader/*
 
-# SDL2 — C library incompatible with MSan instrumentation
-src:*/ThirdParty/SDL2/*
-
-# miniz
+# miniz (retire first in phase 3: decompression output feeds engine code)
 src:*/ThirdParty/Utils/miniz/*
 
-# AngelScript
+# AngelScript add-ons only. The core is compiled from
+# build/ThirdParty/AngelScriptPatched/source/ (CMakeLists.txt:936-971) and is
+# instrumented by design; a native-trampoline artefact gets a narrow fun:
+# entry, never src: on the core.
 src:*/ThirdParty/Scripting/angelscript-mirror/*
-
-# GLM
-src:*/ThirdParty/glm/*
-
-# RapidJSON
-src:*/ThirdParty/rapidjson/*
 
 # stb headers (stb_image, etc.)
 src:*/stb_*.h
 
-# spdlog
-src:*/ThirdParty/spdlog/*
-
-# Assimp
-src:*/ThirdParty/assimp/*
-
 # miniaudio
 src:*/miniaudio.h
-
-# System libraries (libc++, libstdc++, glibc)
-src:/usr/*

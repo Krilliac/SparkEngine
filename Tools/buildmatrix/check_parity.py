@@ -16,12 +16,13 @@ import argparse
 import fnmatch
 import hashlib
 import json
-import os
+import ntpath
+import posixpath
 import re
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Iterable
 
 import inventory as inventory_tool
@@ -48,6 +49,11 @@ class Finding:
         if self.detail:
             result["detail"] = self.detail
         return result
+
+
+def _recorded_path(value: str) -> PureWindowsPath | PurePosixPath:
+    """Interpret producer paths lexically, independent of the verifier host."""
+    return PureWindowsPath(value) if ntpath.splitdrive(value)[0] else PurePosixPath(value)
 
 
 def _exception_map(entries: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -733,22 +739,25 @@ def check_configured_targets(data: dict[str, Any]) -> list[Finding]:
                             f"nameOnDisk is inconsistent with Windows {product.get('kind')}"
                         )
                     elif not any(
-                        Path(str(path)).name.casefold()
+                        _recorded_path(str(path)).name.casefold()
                         == str(entry.get("nameOnDisk", "")).casefold()
                         for path in artifacts
                     ):
                         artifact_problem = "no artifact matches nameOnDisk"
                     build_directory = str(evidence.get("buildDirectory", ""))
+                    path_ops = ntpath if ntpath.splitdrive(build_directory)[0] else posixpath
                     for artifact in artifacts:
-                        if not isinstance(artifact, str) or not artifact or not Path(artifact).is_absolute():
+                        if not isinstance(artifact, str) or not artifact or not _recorded_path(artifact).is_absolute():
                             artifact_problem = "artifact paths must be absolute"
                             break
                         try:
-                            common = os.path.commonpath((build_directory, artifact))
+                            common = path_ops.commonpath((
+                                path_ops.normpath(build_directory), path_ops.normpath(artifact)
+                            ))
                         except ValueError:
                             artifact_problem = "artifact is on another volume from its build tree"
                             break
-                        if os.path.normcase(common) != os.path.normcase(build_directory):
+                        if path_ops.normcase(common) != path_ops.normcase(path_ops.normpath(build_directory)):
                             artifact_problem = "artifact escapes its build tree"
                             break
                     if artifact_state in {
@@ -1154,7 +1163,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
     def path_key(value: Any) -> str:
         if not isinstance(value, str) or not value:
             return ""
-        return Path(value).as_posix().rstrip("/").casefold()
+        return _recorded_path(value).as_posix().rstrip("/").casefold()
 
     def preset_cache_value(value: Any) -> str:
         if isinstance(value, dict) and "value" in value:
@@ -1436,7 +1445,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
 
         expected_source = ""
         if root and config.get("sourceDirectory"):
-            expected_source = str(Path(root) / str(config["sourceDirectory"]))
+            expected_source = (_recorded_path(root) / str(config["sourceDirectory"])).as_posix()
         elif preset is not None:
             expected_source = root
         if expected_source and source and path_key(source) != path_key(expected_source):
@@ -1451,7 +1460,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
 
         expected_dir = ""
         if root and config.get("buildDirectory"):
-            expected_dir = str(Path(root) / str(config["buildDirectory"]))
+            expected_dir = (_recorded_path(root) / str(config["buildDirectory"])).as_posix()
         elif preset is not None:
             expected_dir = str(preset.get("resolvedBinaryDir", "")).replace(
                 "${sourceDir}", root or "${sourceDir}"
@@ -1504,7 +1513,7 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
         elif config.get("purpose") == "installed-sdk-consumer" and root:
             material_cache.update(
                 {
-                    "SparkEngine_DIR": str(Path(root) / str(config.get("packageDirectory", ""))),
+                    "SparkEngine_DIR": (_recorded_path(root) / str(config.get("packageDirectory", ""))).as_posix(),
                     "SPARK_EXPECTED_ENGINE_VERSION": str(config.get("expectedEngineVersion", "")),
                 }
             )
@@ -1517,7 +1526,11 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                         f"Profile '{identifier}' evidence omits material cache value {name}",
                     )
                 )
-            elif expected_value and str(observed_cache[name]).upper() != expected_value.upper():
+            elif expected_value and (
+                path_key(observed_cache[name]) != path_key(expected_value)
+                if name in {"CMAKE_HOME_DIRECTORY", "SparkEngine_DIR"}
+                else str(observed_cache[name]).upper() != expected_value.upper()
+            ):
                 findings.append(
                     Finding(
                         "codemodel-cache-mismatch",

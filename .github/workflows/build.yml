@@ -673,47 +673,170 @@ jobs:
 
   # ===========================================================================
   # Linux Build — Clang with MemorySanitizer
-  # MSan requires ALL code (including stdlib) to be MSan-instrumented. The
-  # system libc++ on ubuntu-24.04 is NOT instrumented, which causes false
-  # positives in basic string/IO operations. A fully clean MSan build would
-  # require building libc++ from source with -fsanitize=memory, so this job
-  # stays continue-on-error; Tests/msan_ignorelist.txt suppresses the frames
-  # that have actually been confirmed.
+  # MSan requires ALL code, including the C++ runtime, to be instrumented.
+  # This job builds libc++/libc++abi from the LLVM release matching the
+  # runner's clang series (LLVM_TAG below; "Pin the runner clang" fails on a
+  # series change) with the recipe in .github/msan/libcxx-runtime.cmake,
+  # caches the install prefix by (recipe epoch, recipe hash, LLVM tag, runner
+  # clang package version), verifies the prefix on every run (hit or miss),
+  # and compiles SparkTests against it with -nostdinc++/-isystem and
+  # -L/-rpath. Tests/TestMSanCanary.cpp proves at run time that libc++ stores
+  # update shadow memory. Run 34025643171 (uninstrumented distro libc++)
+  # produced 732 reports of std::string bytes in the first 25 tests, hit the
+  # 16 MiB write cap (SIGXFSZ, exit 153) and left no completion evidence;
+  # that is the failure this design removes.
   #
-  # Standing-advisory review mechanism (CI-110) — "manual review" had no owner
-  # and no record, and the evidence needed to do it was unreadable:
-  #   * run-sanitizer-tests.sh now echoes a bounded excerpt of the runtime
-  #     report into this job's log for any non-clean classification, so a
-  #     finding can be read without downloading the multi-GB bundle;
-  #   * verify-sanitizer-evidence.py reports 'incomplete-run' (naming the last
-  #     started test) when the suite died before writing JUnit, so an aborted
-  #     run is no longer indistinguishable from a completed one with a finding.
-  # Last observed failure, 2026-09-04 (run 33854547067, commit 4fec0297): the
-  # suite aborted during RegionMapDataSource_RejectsUnsafeRegistryEntry with no
-  # JUnit written — an incomplete run, NOT a libc++ false positive. Promote
-  # this lane into EXPECTED_REQUIRED_JOBS_JSON once a run classifies clean.
+  # Still advisory (continue-on-error) until a run classifies clean with the
+  # instrumented runtime; MSAN_OPTIONS halt_on_error=1 makes the first report
+  # the artifact (classification incomplete-run names the test). A failure
+  # before the tests run is labelled by "Record infrastructure failure stage"
+  # so ci-errors-linux-msan distinguishes runtime-fetch/runtime-build/link
+  # from a finding. Standing review mechanism (CI-110): run-sanitizer-tests.sh
+  # echoes a bounded excerpt of the runtime report for any non-clean
+  # classification, and the verifier reports incomplete-run when the suite
+  # died before writing JUnit. Promote this lane into
+  # EXPECTED_REQUIRED_JOBS_JSON once a run classifies clean.
   # ===========================================================================
   build-linux-msan:
     runs-on: ubuntu-24.04
     continue-on-error: true
     timeout-minutes: 90
+    env:
+      # LLVM release matching the runner's apt clang (noble: clang-18 1:18.1.3-1ubuntu1).
+      # Bump LLVM_TAG/LLVM_VERSION/LLVM_SERIES and both hashes together. Bump
+      # MSAN_LIBCXX_RECIPE when the fetch/build steps change; edits to
+      # .github/msan/libcxx-runtime.cmake re-key the prefix cache by themselves.
+      LLVM_TAG: llvmorg-18.1.3
+      LLVM_VERSION: 18.1.3
+      LLVM_SERIES: "18.1"
+      LLVM_TARBALL_SIZE: "132049300"
+      LLVM_TARBALL_SHA256: 2929f62d69dec0379e529eb632c40e15191e36f3bd58c2cb2df0413a0dc48651
+      LLVM_TARBALL_SHA512: b8b8a00c560bc7d4c4b5d533b92dbd52f2c0254f0acf687e787e8b7fa780cd5d96f6e9709356d2c406c0b36b186dee4de6b1bc1928a97de0bda863fa873e0783
+      MSAN_LIBCXX_RECIPE: r1
+      # ccache 4.9.1 hashes -fsanitize-blacklist= contents but not
+      # -fsanitize-ignorelist=; hash the ignorelist explicitly.
+      CCACHE_EXTRAFILES: ${{ github.workspace }}/Tests/msan_ignorelist.txt
     steps:
-    - name: Define MSan evidence directory
+    - name: Define MSan evidence and runtime directories
       shell: bash
-      run: echo "SANITIZER_EVIDENCE_DIR=${RUNNER_TEMP}/spark-sanitizer-msan-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-build-linux-msan" >> "$GITHUB_ENV"
+      run: |
+        echo "SANITIZER_EVIDENCE_DIR=${RUNNER_TEMP}/spark-sanitizer-msan-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-build-linux-msan" >> "$GITHUB_ENV"
+        echo "MSAN_LIBCXX_PREFIX=${RUNNER_TEMP}/msan-libcxx" >> "$GITHUB_ENV"
+        echo "MSAN_LLVM_SRC=${RUNNER_TEMP}/llvm-project-${LLVM_VERSION}" >> "$GITHUB_ENV"
 
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
 
+    # No libc++-dev/libc++abi-dev: the only libc++ on this runner is the
+    # instrumented one, so a lost -L/-isystem fails the link instead of
+    # silently linking the distro library. libclang-rt-18-dev (the MSan
+    # runtime) is only a Recommends of libclang-common-18-dev, so name it.
     - name: Install dependencies
+      id: install-deps
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
+        sudo apt-get install -y clang clang-18 libclang-rt-18-dev cmake ninja-build ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
-    - name: Setup ccache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+    - name: Pin the runner clang to the LLVM series
+      id: clang
+      run: |
+        set -euo pipefail
+        clang --version
+        version="$(clang --version | head -n1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -n1)"
+        series="${version%.*}"
+        test "$series" = "$LLVM_SERIES" || { echo "::error::runner clang ${version} is not the ${LLVM_SERIES}.x series of LLVM_TAG ${LLVM_TAG}; bump LLVM_TAG, LLVM_VERSION, LLVM_SERIES and both tarball hashes together"; exit 1; }
+        test "$version" = "$LLVM_VERSION" || echo "::warning::runner clang ${version} differs from LLVM_TAG ${LLVM_TAG} (same series; the prefix is re-keyed on the compiler version)"
+        package="$(dpkg-query -W -f='${Version}' clang-18 | tr -c 'A-Za-z0-9.+-' '_' | tr -d '\n')"
+        echo "version=${version}" >> "$GITHUB_OUTPUT"
+        echo "package=${package}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore MSan-instrumented libc++
+      id: msan-libcxx-restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ${{ env.MSAN_LIBCXX_PREFIX }}
+        key: msan-libcxx-${{ env.MSAN_LIBCXX_RECIPE }}-${{ hashFiles('.github/msan/libcxx-runtime.cmake') }}-${{ runner.os }}-${{ env.LLVM_TAG }}-clang${{ steps.clang.outputs.version }}-${{ steps.clang.outputs.package }}
+
+    - name: Fetch LLVM sources (hash-pinned)
+      id: runtime-fetch
+      if: steps.msan-libcxx-restore.outputs.cache-hit != 'true'
+      run: |
+        set -euo pipefail
+        tarball="llvm-project-${LLVM_VERSION}.src.tar.xz"
+        archive="${RUNNER_TEMP}/${tarball}"
+        curl -fsSL --retry 3 --retry-delay 10 --retry-all-errors --connect-timeout 30 --max-time 900 \
+          -o "$archive" "https://github.com/llvm/llvm-project/releases/download/${LLVM_TAG}/${tarball}"
+        actual_size="$(stat -c %s "$archive")"
+        test "$actual_size" = "$LLVM_TARBALL_SIZE" || { echo "::error::${tarball}: size ${actual_size} != pinned ${LLVM_TARBALL_SIZE}"; exit 1; }
+        echo "${LLVM_TARBALL_SHA256}  ${archive}" | sha256sum -c -
+        echo "${LLVM_TARBALL_SHA512}  ${archive}" | sha512sum -c -
+        mkdir -p "$MSAN_LLVM_SRC"
+        tar -xJf "$archive" -C "$MSAN_LLVM_SRC" --strip-components=1 --no-same-owner \
+          "llvm-project-${LLVM_VERSION}.src/cmake" \
+          "llvm-project-${LLVM_VERSION}.src/runtimes" \
+          "llvm-project-${LLVM_VERSION}.src/libcxx" \
+          "llvm-project-${LLVM_VERSION}.src/libcxxabi" \
+          "llvm-project-${LLVM_VERSION}.src/libunwind" \
+          "llvm-project-${LLVM_VERSION}.src/llvm/cmake" \
+          "llvm-project-${LLVM_VERSION}.src/llvm/utils/llvm-lit" \
+          "llvm-project-${LLVM_VERSION}.src/third-party"
+        rm -f "$archive"
+        test -f "$MSAN_LLVM_SRC/runtimes/CMakeLists.txt"
+
+    - name: Build MSan-instrumented libc++ and libc++abi (cache miss only)
+      id: runtime-build
+      if: steps.msan-libcxx-restore.outputs.cache-hit != 'true'
+      run: |
+        set -euo pipefail
+        cmake -G Ninja -S "$MSAN_LLVM_SRC/runtimes" -B "$MSAN_LLVM_SRC/build-msan" \
+          -C "${GITHUB_WORKSPACE}/.github/msan/libcxx-runtime.cmake" \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_INSTALL_PREFIX="$MSAN_LIBCXX_PREFIX"
+        cmake --build "$MSAN_LLVM_SRC/build-msan" --parallel "$(nproc)" --target cxx cxxabi
+        cmake --build "$MSAN_LLVM_SRC/build-msan" --target install-cxx install-cxxabi
+        printf '%s\n' "${{ steps.msan-libcxx-restore.outputs.cache-primary-key }}" > "$MSAN_LIBCXX_PREFIX/.spark-msan-recipe"
+        du -sh "$MSAN_LIBCXX_PREFIX"
+
+    # Runs on cache hit and miss alike: a truncated or foreign prefix fails RED
+    # here, and a bad build is never saved (the save step needs success()).
+    - name: Verify the instrumented runtime prefix
+      id: verify-prefix
+      run: |
+        set -euo pipefail
+        test -f "$MSAN_LIBCXX_PREFIX/include/c++/v1/__config_site"
+        test -f "$MSAN_LIBCXX_PREFIX/include/c++/v1/string"
+        test -f "$MSAN_LIBCXX_PREFIX/lib/libc++.so"
+        for lib in libc++.so.1 libc++abi.so.1; do
+          test -f "$MSAN_LIBCXX_PREFIX/lib/$lib"
+          nm -D "$MSAN_LIBCXX_PREFIX/lib/$lib" > "$RUNNER_TEMP/$lib.syms"
+          if ! grep -q ' U __msan_' "$RUNNER_TEMP/$lib.syms"; then
+            echo "::error::$lib imports no __msan_* symbol: the runtime prefix is not MSan-instrumented"
+            exit 1
+          fi
+        done
+        expected_key="${{ steps.msan-libcxx-restore.outputs.cache-primary-key }}"
+        actual_key="$(cat "$MSAN_LIBCXX_PREFIX/.spark-msan-recipe" 2>/dev/null || echo '<missing>')"
+        if [ "$actual_key" != "$expected_key" ]; then
+          echo "::error::runtime prefix stamp '${actual_key}' does not match cache key '${expected_key}'"
+          exit 1
+        fi
+        du -sh "$MSAN_LIBCXX_PREFIX"
+
+    - name: Save MSan-instrumented libc++
+      if: steps.msan-libcxx-restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ${{ env.MSAN_LIBCXX_PREFIX }}
+        key: ${{ steps.msan-libcxx-restore.outputs.cache-primary-key }}
+
+    # restore/save are split so a red run still saves the objects it produced
+    # (the composite action only saves on success(), which this lane never was).
+    - name: Restore ccache
+      id: ccache-restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/.ccache
         key: ccache-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -721,43 +844,123 @@ jobs:
           ccache-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           ccache-linux-msan-
 
-    - name: Restore build directory
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-      with:
-        path: build
-        key: build-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
-        restore-keys: |
-          build-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
-          build-linux-msan-
-
     - name: Configure CMake (MSan)
+      id: configure
       run: |
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
           -DENABLE_SDL2=OFF \
+          -DENABLE_VULKAN=OFF \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-          -DCMAKE_CXX_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt" \
-          -DCMAKE_C_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt" \
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -lc++abi" \
-          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
+          -DCMAKE_CXX_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt" \
+          -DCMAKE_C_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi"
 
     - name: Build (SparkTests only)
+      id: build
       run: |
         set -o pipefail
         cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
+
+    # RED check over every ELF the suite can execute, load or spawn: the
+    # SparkTests executable, the probe executables, the dlopen'd fixture and
+    # plugin .so files and the engine/game-module shared libraries.
+    - name: Verify every built ELF links the instrumented libc++
+      id: verify-link
+      run: |
+        set -euo pipefail
+        test -x build/bin/SparkTests
+        checked=0
+        while IFS= read -r -d '' elf; do
+          [ "$(head -c 4 "$elf" | od -An -c | tr -d ' ')" = '177ELF' ] || continue
+          checked=$((checked + 1))
+          ldd "$elf" > msan-ldd.txt
+          readelf -d "$elf" > msan-dyn.txt
+          readelf -l "$elf" > msan-prog.txt
+          nm -D "$elf" > msan-syms.txt
+          echo "== $elf"
+          grep -E "libc\+\+(abi)?\.so\.1 => " msan-ldd.txt || true
+          if grep -qE "libc\+\+(abi)?\.so\.1 => /usr/|libstdc\+\+\.so" msan-ldd.txt; then
+            echo "::error::$elf resolves a distro C++ runtime"; exit 1
+          fi
+          if ! grep -qE "libc\+\+\.so\.1 => ${MSAN_LIBCXX_PREFIX}/lib/" msan-ldd.txt; then
+            echo "::error::$elf does not resolve libc++.so.1 from ${MSAN_LIBCXX_PREFIX}/lib"; exit 1
+          fi
+          if ! grep -qE "libc\+\+abi\.so\.1 => ${MSAN_LIBCXX_PREFIX}/lib/" msan-ldd.txt; then
+            echo "::error::$elf does not resolve libc++abi.so.1 from ${MSAN_LIBCXX_PREFIX}/lib"; exit 1
+          fi
+          if ! grep -qE "\(RUNPATH\)|\(RPATH\)" msan-dyn.txt || ! grep -qF "${MSAN_LIBCXX_PREFIX}/lib" msan-dyn.txt; then
+            echo "::error::$elf carries no RUNPATH/RPATH naming ${MSAN_LIBCXX_PREFIX}/lib"; exit 1
+          fi
+          if ! grep -qE "\(NEEDED\).*libc\+\+abi\.so\.1" msan-dyn.txt; then
+            echo "::error::$elf lacks a direct NEEDED on libc++abi.so.1 (RUNPATH does not apply to transitive dependencies)"; exit 1
+          fi
+          # Executables (PIE too, hence PT_INTERP rather than the ELF type) link
+          # libclang_rt.msan whole-archive and export it, so __msan_* are defined
+          # there, never imported; shared objects must import them.
+          if grep -q 'INTERP' msan-prog.txt; then
+            if ! grep -qE ' [TW] __msan_init$' msan-syms.txt; then
+              echo "::error::$elf defines no __msan_init: not linked with -fsanitize=memory"; exit 1
+            fi
+          elif ! grep -q ' U __msan_' msan-syms.txt; then
+            echo "::error::$elf imports no __msan_* symbol: not MSan-instrumented"; exit 1
+          fi
+        done < <(find build/bin build/lib -type f \( -perm -u+x -o -name '*.so' -o -name '*.so.*' \) -print0 2>/dev/null)
+        echo "verified ${checked} ELF file(s)"
+        test "$checked" -ge 5 || { echo "::error::only ${checked} ELF files found under build/bin and build/lib; expected SparkTests plus fixtures"; exit 1; }
 
     - name: Print ccache stats
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
+    # always(): a PR push inside the ~28 min cold window cancels this run
+    # (concurrency.cancel-in-progress); the objects compiled so far are still
+    # valid ccache entries and this is the only chance to keep them.
+    - name: Save ccache
+      if: ${{ always() && steps.ccache-restore.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.ccache
+        key: ${{ steps.ccache-restore.outputs.cache-primary-key }}
+
+    # Names the first failed pre-test stage so ci-errors-linux-msan carries
+    # "infrastructure stage 'runtime-build' failed" instead of an empty report
+    # that reads like a finding. Also seeds the evidence directory so the
+    # unconditional report upload has a file to carry.
+    - name: Record infrastructure failure stage
+      if: failure()
+      run: |
+        stage="unknown"
+        for entry in \
+          "install-deps:${{ steps.install-deps.outcome }}" \
+          "pin-clang:${{ steps.clang.outcome }}" \
+          "runtime-restore:${{ steps.msan-libcxx-restore.outcome }}" \
+          "runtime-fetch:${{ steps.runtime-fetch.outcome }}" \
+          "runtime-build:${{ steps.runtime-build.outcome }}" \
+          "runtime-verify:${{ steps.verify-prefix.outcome }}" \
+          "engine-configure:${{ steps.configure.outcome }}" \
+          "engine-build:${{ steps.build.outcome }}" \
+          "link-verify:${{ steps.verify-link.outcome }}"; do
+          case "$entry" in
+            *:failure) stage="${entry%%:*}"; break ;;
+          esac
+        done
+        line="build-linux-msan: error: infrastructure stage '${stage}' failed before SparkTests ran (not a sanitizer finding)"
+        echo "::error title=build-linux-msan infrastructure::stage=${stage}"
+        printf '%s\n' "$line" > msan-infrastructure.log
+        echo "$line"
+        mkdir -p "$SANITIZER_EVIDENCE_DIR"
+        printf '%s\n' "$line" > "$SANITIZER_EVIDENCE_DIR/infrastructure-failure.txt"
+
     - name: Run Tests under MSan
       env:
-        MSAN_OPTIONS: halt_on_error=0:print_stats=1
+        MSAN_OPTIONS: halt_on_error=1:print_stats=1:dedup_token_length=3
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
           --evidence-root "${{ runner.temp }}" \
@@ -778,6 +981,7 @@ jobs:
         .github/scripts/extract-errors.sh \
           "build-linux-msan" \
           error-summary.json \
+          msan-infrastructure.log \
           cmake-build.log \
           "$SANITIZER_EVIDENCE_DIR/console.txt" \
           "$SANITIZER_EVIDENCE_DIR/process-footer.txt" \
