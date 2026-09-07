@@ -13,6 +13,7 @@
 #include "Core/Platform.h"
 
 #include "Enums/GameSystemEnums.h"
+#include "ClassAbilityState.h"
 #include "Projectiles/WeaponStats.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
@@ -52,27 +53,6 @@ namespace Spark
         LoadoutSlot tool;      ///< Class-specific tool (med tool, repair tool, turret, etc.).
 
         ClassLoadout() = default;
-    };
-
-    /**
- * @brief Ability runtime state
- */
-    struct AbilityState
-    {
-        ClassAbility type = ClassAbility::NONE;
-        float cooldownMax = 10.0f;      ///< Max cooldown in seconds
-        float cooldownRemaining = 0.0f; ///< Current cooldown remaining
-        float durationMax = 5.0f;       ///< Max active duration
-        float durationRemaining = 0.0f; ///< Current active time remaining
-        float energyCost = 25.0f;       ///< Energy/resource cost to activate
-        bool isActive = false;          ///< Currently active
-        bool isReady = true;            ///< Off cooldown and ready to use
-
-        void Update(float dt);
-        bool Activate(float currentEnergy);
-        void Deactivate();
-        void Reset();
-        float GetCooldownProgress() const;
     };
 
     /**

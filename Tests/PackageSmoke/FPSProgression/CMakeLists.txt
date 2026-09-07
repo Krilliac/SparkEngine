@@ -93,3 +93,15 @@ add_test(NAME SparkSDKHeaderRefresh
         -P "${CMAKE_CURRENT_LIST_DIR}/TestSDKHeaderRefresh.cmake"
 )
 set_tests_properties(SparkSDKHeaderRefresh PROPERTIES TIMEOUT 300)
+
+# ClassSystem and Player use this exact ability implementation in the FPS module.
+add_executable(spark_fps_abilities_consumer
+    abilities.cpp
+    "${_fps_source}/Game/ClassAbilityState.cpp"
+)
+target_compile_features(spark_fps_abilities_consumer PRIVATE cxx_std_23)
+target_include_directories(spark_fps_abilities_consumer PRIVATE "${_fps_source}" "${_public_sdk}")
+set_target_properties(spark_fps_abilities_consumer PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+add_test(NAME SparkFPSAbilitiesConsumer COMMAND spark_fps_abilities_consumer)

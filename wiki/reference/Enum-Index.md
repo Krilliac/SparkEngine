@@ -864,7 +864,7 @@
 | `TutorialDifficulty` | enum | SparkEditor | [TutorialSystem.h:L74](../../SparkEditor/Source/Core/TutorialSystem.h#L74) | Difficulty classification for a tutorial sequence. |
 | `TutorialStepType` | enum | SparkEditor | [TutorialSystem.h:L55](../../SparkEditor/Source/Core/TutorialSystem.h#L55) | The kind of action a tutorial step performs. |
 | `TweenState` | enum | SparkEngine | [TweenSystem.h:L56](../../SparkEngine/Source/Engine/Tween/TweenSystem.h#L56) | Current state of a tween. |
-| `Type` | enum | GameModules | [ClassSystem.h:L142](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L142) | Deployable object placed by Engineer or other classes |
+| `Type` | enum | GameModules | [ClassSystem.h:L122](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L122) | Deployable object placed by Engineer or other classes |
 | `Type` | enum | GameModules | [ProgressionSystem.h:L30](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L30) | An unlock granted at a specific level |
 | `Type` | enum | GameModules | [RacingTrackSystem.h:L64](../../GameModules/SparkGameRacing/Source/Track/RacingTrackSystem.h#L64) | A track hazard (oil slick, barrier, jump ramp, etc.) |
 | `Type` | enum | SparkEditor | [ProfilerTypes.h:L206](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L206) | Performance bottleneck identification |

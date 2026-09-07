@@ -30,7 +30,7 @@
 | `AbilityEffect` | struct | Tests | [TestAbilitySystem.cpp:L495](../../Tests/TestAbilitySystem.cpp#L495) |  |
 | `AbilityEntry` | struct | SparkEditor | [AbilityEditorPanel.h:L36](../../SparkEditor/Source/Panels/AbilityEditorPanel.h#L36) |  |
 | `AbilityFlags` | struct | GameModules | [PlatformerPlayerController.h:L46](../../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.h#L46) | Tracks which abilities the player has unlocked |
-| `AbilityState` | struct | GameModules | [ClassSystem.h:L60](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L60) | Ability runtime state |
+| `AbilityState` | struct | GameModules | [ClassAbilityState.h:L15](../../GameModules/SparkGameFPS/Source/Game/ClassAbilityState.h#L15) | Ability runtime state |
 | `AbilitySystem` | class | SparkEngine | [AbilitySystem.h:L280](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L280) |  |
 | `AbilitySystem` | class | SparkSDK | [IEngineContext.h:L56](../../SparkSDK/Include/Spark/IEngineContext.h#L56) |  |
 | `AbilitySystem` | struct | Tests | [TestAbilitySystem.cpp:L103](../../Tests/TestAbilitySystem.cpp#L103) |  |
@@ -599,9 +599,9 @@
 | `ClassDef` | struct | GameModules | [MMOCharacterSystem.h:L76](../../GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.h#L76) | Class definition |
 | `ClassDef` | struct | GameModules | [TFDataTables.h:L71](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.h#L71) |  |
 | `ClassDef` | struct | GameModules | [RPGCharacterSystem.h:L63](../../GameModules/SparkGameRPG/Source/Character/RPGCharacterSystem.h#L63) | Class definition with base stats, growth, and abilities |
-| `ClassDefinition` | struct | GameModules | [ClassSystem.h:L94](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L94) | Complete class definition with stats, loadout, abilities, and traits |
-| `ClassLoadout` | struct | GameModules | [ClassSystem.h:L47](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L47) | Full class loadout (weapons + equipment) |
-| `ClassSystem` | class | GameModules | [ClassSystem.h:L172](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L172) | Main class system manager |
+| `ClassDefinition` | struct | GameModules | [ClassSystem.h:L74](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L74) | Complete class definition with stats, loadout, abilities, and traits |
+| `ClassLoadout` | struct | GameModules | [ClassSystem.h:L48](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L48) | Full class loadout (weapons + equipment) |
+| `ClassSystem` | class | GameModules | [ClassSystem.h:L152](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L152) | Main class system manager |
 | `ClassTerminal` | class | GameModules | [InteractiveObject.h:L183](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L183) | Class change terminal |
 | `ClearOnExit` | class | SparkEngine | [SecureMemory.h:L95](../../SparkEngine/Source/Utils/SecureMemory.h#L95) |  |
 | `ClientConnection` | struct | SparkEditor | [CollaborativeEditSession.h:L428](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L428) | A per-client handler thread plus a flag it sets when it exits, |
@@ -1017,7 +1017,7 @@
 | `DeltaTracker` | class | Tests | [TestExtendedSystems.cpp:L43](../../Tests/TestExtendedSystems.cpp#L43) |  |
 | `DenoiserBuffer` | struct | SparkEngine | [DenoiserInterface.h:L69](../../SparkEngine/Source/Graphics/DenoiserInterface.h#L69) | Image buffer for denoiser input/output |
 | `DenoiserSettings` | struct | SparkEngine | [DenoiserInterface.h:L55](../../SparkEngine/Source/Graphics/DenoiserInterface.h#L55) |  |
-| `Deployable` | struct | GameModules | [ClassSystem.h:L140](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L140) | Deployable object placed by Engineer or other classes |
+| `Deployable` | struct | GameModules | [ClassSystem.h:L120](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L120) | Deployable object placed by Engineer or other classes |
 | `DeployableVisualDef` | struct | GameModules | [TFDataTables.h:L215](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.h#L215) |  |
 | `DepthGuard` | struct | SparkEngine | [DialogueSystem.cpp:L449](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.cpp#L449) |  |
 | `DepthGuard` | struct | SparkEngine | [DynamicResponseSystem.cpp:L102](../../SparkEngine/Source/Engine/Dialogue/DynamicResponseSystem.cpp#L102) |  |
@@ -2149,7 +2149,7 @@
 | `LoadingRequest` | struct | SparkEditor | [LevelStreamingSystem.h:L421](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L421) |  |
 | `LoadingScreen` | class | SparkEngine | [LoadingScreen.h:L85](../../SparkEngine/Source/Engine/Loading/LoadingScreen.h#L85) | Manages async loading with progress tracking and display. |
 | `LoadingTask` | struct | SparkEngine | [LoadingScreen.h:L52](../../SparkEngine/Source/Engine/Loading/LoadingScreen.h#L52) | A single loading task with weight and callback. |
-| `LoadoutSlot` | struct | GameModules | [ClassSystem.h:L35](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L35) | Weapon loadout slot definition |
+| `LoadoutSlot` | struct | GameModules | [ClassSystem.h:L36](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L36) | Weapon loadout slot definition |
 | `LoadRequest` | struct | SparkEngine | [DirectStorageLoader.h:L69](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L69) | Describes a single load request |
 | `LoadRequest` | struct | Tests | [TestDirectStorageLoader.cpp:L47](../../Tests/TestDirectStorageLoader.cpp#L47) |  |
 | `LoadRequestHandle` | struct | SparkEngine | [DirectStorageLoader.h:L59](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L59) | Opaque handle to a pending load request |
@@ -2761,7 +2761,7 @@
 | `PassConfig` | struct | Tests | [TestPostProcessingPipeline.cpp:L32](../../Tests/TestPostProcessingPipeline.cpp#L32) |  |
 | `PassHistory` | struct | SparkEngine | [GPUTimestampQuery.h:L372](../../SparkEngine/Source/Graphics/GPUTimestampQuery.h#L372) | Rolling history buffer for a single pass |
 | `PassInfo` | struct | Tests | [TestExtendedSystems.cpp:L871](../../Tests/TestExtendedSystems.cpp#L871) |  |
-| `PassiveTrait` | struct | GameModules | [ClassSystem.h:L81](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L81) | Passive trait that modifies class behavior |
+| `PassiveTrait` | struct | GameModules | [ClassSystem.h:L61](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L61) | Passive trait that modifies class behavior |
 | `PassMetrics` | struct | SparkEngine | [PostProcessingTypes.h:L297](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L297) | Performance metrics for a single post-processing pass |
 | `PathCache` | class | Tests | [TestPathCache.cpp:L62](../../Tests/TestPathCache.cpp#L62) |  |
 | `PathCommand` | struct | SparkEngine | [SVGRenderer.h:L69](../../SparkEngine/Source/Graphics/SVGRenderer.h#L69) | A single SVG path command with up to 3 control points |
