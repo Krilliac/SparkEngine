@@ -101,7 +101,15 @@ Useful for verifying which CMake toggles (`ENABLE_NETWORKING`, `ENABLE_DXR`, etc
 
 ## Compiler Caching in CI (ccache / sccache)
 
-CI uses compiler caches to speed up incremental builds: ccache on the Linux jobs and sccache on the Windows MSVC jobs (passed via `-DCMAKE_C_COMPILER_LAUNCHER` / `-DCMAKE_CXX_COMPILER_LAUNCHER`). If you reproduce a CI job locally and have ccache/sccache installed, adding the same launcher flags makes repeat builds far faster; otherwise omit them.
+CI uses compiler caches to speed up incremental builds: ccache on the Linux jobs and sccache on the two Windows MSVC lanes (`build-windows-vs2022`, `build-windows-vs2026`), passed via `-DCMAKE_C_COMPILER_LAUNCHER=sccache` / `-DCMAKE_CXX_COMPILER_LAUNCHER=sccache`. If you reproduce a CI job locally and have ccache/sccache installed, adding the same launcher flags makes repeat builds far faster; otherwise omit them.
+
+The Windows contract (since 2026-09-06):
+
+- **Generator:** `-G "Ninja Multi-Config"` inside the Visual Studio developer environment (`Enter-VsDevShell -VsInstallPath <vs> -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64"`, which also puts `cl`, `rc`, `ninja` and the Windows SDK `fxc` on PATH) (fxc discovery and the foliage shader validations are expected from `find_program(FXC_EXECUTABLE ...)`; no CI run at this tree has confirmed them yet). Visual Studio generators ignore `CMAKE_<LANG>_COMPILER_LAUNCHER`, which is why the earlier sccache step on the VS-generator lane was inert. `build-windows-shipping` still configures through its `windows-shipping` preset (Visual Studio 17 2022 generator) and uses no compiler cache.
+- **Tool:** sccache v0.17.0 downloaded from the GitHub release and verified against a SHA-256 literal in the workflow; a hash mismatch or failed download fails the job before any compile. `mozilla-actions/sccache-action` is no longer used.
+- **Cache:** `SCCACHE_DIR` under `runner.temp`, restored and saved with split `actions/cache/restore` / `actions/cache/save` steps keyed `sccache-windows-<lane>-<config>-<hashFiles of CMakeLists.txt and *.cmake>-<sha>` (the same shape as the Linux ccache keys). The save step runs under `!cancelled()`, so a job that went red (compile error, test gate) still saves the objects it produced. `build/` is never restored on these lanes any more.
+- **Flags:** `-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON` (sccache cannot cache `/Yc` / `/Fp`), `-DCMAKE_CXX_SCAN_FOR_MODULES=OFF` (no module units exist), `-DGENERATE_DEBUG_SYMBOLS=OFF` (removes Jolt's `/Zi`, which would otherwise make sccache demand a PDB that `cl` never writes under the engine's `/Z7`), plus `-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded` as a guard for the pin the top-level `CMakeLists.txt` already sets before `project()`.
+- **Evidence:** the `Print sccache stats` step (the server is kept alive with `SCCACHE_IDLE_TIMEOUT=0` until `--stop-server`) writes the stats to the job summary and emits `::warning::` annotations for 0 compile requests, non-zero cache error counters, or a cold restore; it never fails the job.
 
 ## Source & Freshness
 
@@ -111,6 +119,7 @@ CI uses compiler caches to speed up incremental builds: ccache on the Linux jobs
   - Added a Windows/PowerShell note for `--parallel` (the `$(nproc)` form is bash-only).
   - Added the `ci-errors-*` artifacts / `report-ci-errors` job as a faster-than-`--log-failed` option (new since source).
   - Added a ccache/sccache section documenting the compiler-cache launcher flags CI now uses.
+  - Rewrote the Windows part of that section (2026-09-06): the vs2022/vs2026 lanes now use Ninja Multi-Config + hash-pinned sccache with split restore/save on `SCCACHE_DIR`; the earlier claim that the Visual Studio-generator lanes passed launcher flags was false (the sccache step there was inert).
   - Refreshed the default-OFF/ON toggle list against current `CLAUDE.md` (source pointed at a `codebase-observations.md` file not migrated here).
   - Retargeted cross-references to the migrated wiki pages.
 

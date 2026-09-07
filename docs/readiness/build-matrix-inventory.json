@@ -6590,7 +6590,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 17,
+        "stepCount": 21,
         "steps": [
           {
             "index": 0,
@@ -6618,21 +6618,24 @@
           },
           {
             "index": 2,
-            "name": "Setup sccache",
+            "name": "Install sccache v0.17.0 (hash-pinned)",
             "id": "",
-            "uses": "mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba",
-            "shell": "",
+            "uses": "",
+            "shell": "pwsh",
             "if": "absent",
             "continueOnError": "absent",
-            "hasRun": false,
-            "env": [],
-            "runDigest": ""
+            "hasRun": true,
+            "env": [
+              "SCCACHE_SHA256",
+              "SCCACHE_VERSION"
+            ],
+            "runDigest": "721dfbbfa4722ce8"
           },
           {
             "index": 3,
-            "name": "Restore build directory",
-            "id": "",
-            "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "name": "Restore sccache cache",
+            "id": "sccache-restore",
+            "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
             "shell": "",
             "if": "absent",
             "continueOnError": "absent",
@@ -6654,6 +6657,30 @@
           },
           {
             "index": 5,
+            "name": "Enter Visual Studio 2022 developer environment (x64)",
+            "id": "",
+            "uses": "",
+            "shell": "pwsh",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "10a11d7ffd45c458"
+          },
+          {
+            "index": 6,
+            "name": "Start sccache server",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "27820c774843388c"
+          },
+          {
+            "index": 7,
             "name": "Configure CMake (VS 2022 / v143)",
             "id": "",
             "uses": "",
@@ -6662,10 +6689,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "0171433a63de724b"
+            "runDigest": "16cee9c384035edb"
           },
           {
-            "index": 6,
+            "index": 8,
             "name": "Build",
             "id": "",
             "uses": "",
@@ -6677,19 +6704,33 @@
             "runDigest": "07847ccc2fa9f873"
           },
           {
-            "index": 7,
+            "index": 9,
             "name": "Print sccache stats",
             "id": "",
             "uses": "",
-            "shell": "",
+            "shell": "bash",
             "if": "always()",
             "continueOnError": "absent",
             "hasRun": true,
-            "env": [],
-            "runDigest": "2b1295ec22d45c69"
+            "env": [
+              "SCCACHE_RESTORED_KEY"
+            ],
+            "runDigest": "ac023990345bb5e5"
           },
           {
-            "index": 8,
+            "index": 10,
+            "name": "Save sccache cache",
+            "id": "",
+            "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "shell": "",
+            "if": "${{ !cancelled() && steps.sccache-restore.outputs.cache-hit != 'true' }}",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 11,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -6701,7 +6742,7 @@
             "runDigest": "5db485c42c212495"
           },
           {
-            "index": 9,
+            "index": 12,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -6713,7 +6754,7 @@
             "runDigest": "04d1482b4a194b41"
           },
           {
-            "index": 10,
+            "index": 13,
             "name": "Census of production-source vs mirror tests",
             "id": "",
             "uses": "",
@@ -6725,7 +6766,7 @@
             "runDigest": "7741b0414f585daa"
           },
           {
-            "index": 11,
+            "index": 14,
             "name": "Upload exact-commit CTest report",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6737,7 +6778,7 @@
             "runDigest": ""
           },
           {
-            "index": 12,
+            "index": 15,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6749,7 +6790,7 @@
             "runDigest": ""
           },
           {
-            "index": 13,
+            "index": 16,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -6761,7 +6802,7 @@
             "runDigest": "fe715c78b7a4aa4e"
           },
           {
-            "index": 14,
+            "index": 17,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6773,7 +6814,19 @@
             "runDigest": ""
           },
           {
-            "index": 15,
+            "index": 18,
+            "name": "Upload sccache server log",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "failure()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 19,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -6785,7 +6838,7 @@
             "runDigest": "7b34a4169ceb6e5e"
           },
           {
-            "index": 16,
+            "index": 20,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6797,7 +6850,10 @@
             "runDigest": ""
           }
         ],
-        "envNames": [],
+        "envNames": [
+          "SCCACHE_IDLE_TIMEOUT",
+          "SCCACHE_LOG"
+        ],
         "gating": "blocking"
       },
       {
@@ -7015,7 +7071,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 11,
+        "stepCount": 17,
         "steps": [
           {
             "index": 0,
@@ -7043,9 +7099,24 @@
           },
           {
             "index": 2,
-            "name": "Restore build directory",
+            "name": "Install sccache v0.17.0 (hash-pinned)",
             "id": "",
-            "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "uses": "",
+            "shell": "pwsh",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "SCCACHE_SHA256",
+              "SCCACHE_VERSION"
+            ],
+            "runDigest": "721dfbbfa4722ce8"
+          },
+          {
+            "index": 3,
+            "name": "Restore sccache cache",
+            "id": "sccache-restore",
+            "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
             "shell": "",
             "if": "absent",
             "continueOnError": "absent",
@@ -7054,7 +7125,7 @@
             "runDigest": ""
           },
           {
-            "index": 3,
+            "index": 4,
             "name": "Scrub restored test evidence",
             "id": "",
             "uses": "",
@@ -7066,7 +7137,7 @@
             "runDigest": "aa854d3d7363656e"
           },
           {
-            "index": 4,
+            "index": 5,
             "name": "Require Visual Studio 2026",
             "id": "",
             "uses": "",
@@ -7078,19 +7149,43 @@
             "runDigest": "c4aa88494eff4d37"
           },
           {
-            "index": 5,
-            "name": "Configure CMake (VS 2026 / v145)",
+            "index": 6,
+            "name": "Enter Visual Studio 2026 developer environment (x64)",
             "id": "",
             "uses": "",
-            "shell": "",
+            "shell": "pwsh",
             "if": "absent",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "7ed636ceab33624d"
+            "runDigest": "b0d1b1aa6a0ef87d"
           },
           {
-            "index": 6,
+            "index": 7,
+            "name": "Start sccache server",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "27820c774843388c"
+          },
+          {
+            "index": 8,
+            "name": "Configure CMake (VS 2026 / v145)",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "d0c69ce303c1e745"
+          },
+          {
+            "index": 9,
             "name": "Build",
             "id": "",
             "uses": "",
@@ -7102,7 +7197,33 @@
             "runDigest": "d69ad68ffbba1551"
           },
           {
-            "index": 7,
+            "index": 10,
+            "name": "Print sccache stats",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "SCCACHE_RESTORED_KEY"
+            ],
+            "runDigest": "584ee9c080c11f3d"
+          },
+          {
+            "index": 11,
+            "name": "Save sccache cache",
+            "id": "",
+            "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "shell": "",
+            "if": "${{ !cancelled() && steps.sccache-restore.outputs.cache-hit != 'true' }}",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 12,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -7114,7 +7235,7 @@
             "runDigest": "d3c4368b3410f79a"
           },
           {
-            "index": 8,
+            "index": 13,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -7126,7 +7247,7 @@
             "runDigest": "ccfea9cd882fe6e7"
           },
           {
-            "index": 9,
+            "index": 14,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7138,7 +7259,7 @@
             "runDigest": ""
           },
           {
-            "index": 10,
+            "index": 15,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7148,9 +7269,24 @@
             "hasRun": false,
             "env": [],
             "runDigest": ""
+          },
+          {
+            "index": 16,
+            "name": "Upload sccache server log",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "failure()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
           }
         ],
-        "envNames": [],
+        "envNames": [
+          "SCCACHE_IDLE_TIMEOUT",
+          "SCCACHE_LOG"
+        ],
         "gating": "advisory"
       },
       {
@@ -9193,8 +9329,29 @@
       },
       {
         "job": "build-windows-vs2022",
-        "step": "Configure CMake (VS 2022 / v143)",
+        "step": "Enter Visual Studio 2022 developer environment (x64)",
         "stepIndex": 5,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "pwsh",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "other",
+        "command": "cmake --version",
+        "commandProvenance": "literal",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
+        "step": "Configure CMake (VS 2022 / v143)",
+        "stepIndex": 7,
         "matrix": {
           "config": "Debug"
         },
@@ -9208,23 +9365,29 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "CMAKE_C_COMPILER": "cl",
+          "CMAKE_CXX_COMPILER": "cl",
+          "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+          "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+          "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+          "GENERATE_DEBUG_SYMBOLS": "OFF",
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
         },
         "fresh": true,
         "buildDir": "build",
-        "generator": "Visual Studio 17 2022",
-        "architecture": "x64",
-        "toolset": "v143",
+        "generator": "Ninja Multi-Config",
         "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 6,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
@@ -9253,7 +9416,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 8,
+        "stepIndex": 11,
         "matrix": {
           "config": "Debug"
         },
@@ -9277,8 +9440,29 @@
       },
       {
         "job": "build-windows-vs2022",
-        "step": "Configure CMake (VS 2022 / v143)",
+        "step": "Enter Visual Studio 2022 developer environment (x64)",
         "stepIndex": 5,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "pwsh",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "other",
+        "command": "cmake --version",
+        "commandProvenance": "literal",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
+        "step": "Configure CMake (VS 2022 / v143)",
+        "stepIndex": 7,
         "matrix": {
           "config": "Release"
         },
@@ -9292,23 +9476,29 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "CMAKE_C_COMPILER": "cl",
+          "CMAKE_CXX_COMPILER": "cl",
+          "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+          "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+          "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+          "GENERATE_DEBUG_SYMBOLS": "OFF",
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
         },
         "fresh": true,
         "buildDir": "build",
-        "generator": "Visual Studio 17 2022",
-        "architecture": "x64",
-        "toolset": "v143",
+        "generator": "Ninja Multi-Config",
         "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 6,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
@@ -9337,7 +9527,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 8,
+        "stepIndex": 11,
         "matrix": {
           "config": "Release"
         },
@@ -9557,8 +9747,8 @@
       },
       {
         "job": "build-windows-vs2026",
-        "step": "Configure CMake (VS 2026 / v145)",
-        "stepIndex": 5,
+        "step": "Enter Visual Studio 2026 developer environment (x64)",
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -9571,22 +9761,50 @@
         "stepContinueOnError": "absent",
         "gating": "advisory",
         "tool": "cmake",
+        "kind": "other",
+        "command": "cmake --version",
+        "commandProvenance": "literal",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2026",
+        "step": "Configure CMake (VS 2026 / v145)",
+        "stepIndex": 8,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 18 2026\" -A x64 -DBUILD_TESTS=ON",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "CMAKE_C_COMPILER": "cl",
+          "CMAKE_CXX_COMPILER": "cl",
+          "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+          "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+          "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+          "GENERATE_DEBUG_SYMBOLS": "OFF",
           "BUILD_TESTS": "ON"
         },
         "fresh": true,
         "buildDir": "build",
-        "generator": "Visual Studio 18 2026",
-        "architecture": "x64",
+        "generator": "Ninja Multi-Config",
         "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 6,
+        "stepIndex": 9,
         "matrix": {
           "config": "Debug"
         },
@@ -9615,7 +9833,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 12,
         "matrix": {
           "config": "Debug"
         },
@@ -9639,8 +9857,8 @@
       },
       {
         "job": "build-windows-vs2026",
-        "step": "Configure CMake (VS 2026 / v145)",
-        "stepIndex": 5,
+        "step": "Enter Visual Studio 2026 developer environment (x64)",
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -9653,22 +9871,50 @@
         "stepContinueOnError": "absent",
         "gating": "advisory",
         "tool": "cmake",
+        "kind": "other",
+        "command": "cmake --version",
+        "commandProvenance": "literal",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2026",
+        "step": "Configure CMake (VS 2026 / v145)",
+        "stepIndex": 8,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 18 2026\" -A x64 -DBUILD_TESTS=ON",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "CMAKE_C_COMPILER": "cl",
+          "CMAKE_CXX_COMPILER": "cl",
+          "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+          "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+          "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+          "GENERATE_DEBUG_SYMBOLS": "OFF",
           "BUILD_TESTS": "ON"
         },
         "fresh": true,
         "buildDir": "build",
-        "generator": "Visual Studio 18 2026",
-        "architecture": "x64",
+        "generator": "Ninja Multi-Config",
         "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 6,
+        "stepIndex": 9,
         "matrix": {
           "config": "Release"
         },
@@ -9697,7 +9943,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 12,
         "matrix": {
           "config": "Release"
         },
@@ -10895,7 +11141,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Configure CMake (VS 2022 / v143)",
-        "stepIndex": 5,
+        "stepIndex": 7,
         "matrix": {
           "config": "Debug"
         },
@@ -10909,23 +11155,29 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "CMAKE_C_COMPILER": "cl",
+          "CMAKE_CXX_COMPILER": "cl",
+          "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+          "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+          "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+          "GENERATE_DEBUG_SYMBOLS": "OFF",
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
         },
         "fresh": true,
         "buildDir": "build",
-        "generator": "Visual Studio 17 2022",
-        "architecture": "x64",
-        "toolset": "v143",
+        "generator": "Ninja Multi-Config",
         "commandIndex": 0
       },
       {
         "job": "build-windows-vs2022",
         "step": "Configure CMake (VS 2022 / v143)",
-        "stepIndex": 5,
+        "stepIndex": 7,
         "matrix": {
           "config": "Release"
         },
@@ -10939,17 +11191,23 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "CMAKE_C_COMPILER": "cl",
+          "CMAKE_CXX_COMPILER": "cl",
+          "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+          "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+          "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+          "GENERATE_DEBUG_SYMBOLS": "OFF",
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
         },
         "fresh": true,
         "buildDir": "build",
-        "generator": "Visual Studio 17 2022",
-        "architecture": "x64",
-        "toolset": "v143",
+        "generator": "Ninja Multi-Config",
         "commandIndex": 0
       },
       {
@@ -11025,13 +11283,13 @@
       {
         "job": "build-windows-vs2026",
         "step": "Configure CMake (VS 2026 / v145)",
-        "stepIndex": 5,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
         "matrixResolved": true,
         "runnerOs": "windows",
-        "shell": "pwsh",
+        "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
         "jobContinueOnError": true,
         "stepIf": "absent",
@@ -11039,27 +11297,34 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 18 2026\" -A x64 -DBUILD_TESTS=ON",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "CMAKE_C_COMPILER": "cl",
+          "CMAKE_CXX_COMPILER": "cl",
+          "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+          "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+          "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+          "GENERATE_DEBUG_SYMBOLS": "OFF",
           "BUILD_TESTS": "ON"
         },
         "fresh": true,
         "buildDir": "build",
-        "generator": "Visual Studio 18 2026",
-        "architecture": "x64",
+        "generator": "Ninja Multi-Config",
         "commandIndex": 0
       },
       {
         "job": "build-windows-vs2026",
         "step": "Configure CMake (VS 2026 / v145)",
-        "stepIndex": 5,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
         "matrixResolved": true,
         "runnerOs": "windows",
-        "shell": "pwsh",
+        "shell": "bash",
         "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
         "jobContinueOnError": true,
         "stepIf": "absent",
@@ -11067,15 +11332,22 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Visual Studio 18 2026\" -A x64 -DBUILD_TESTS=ON",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "CMAKE_C_COMPILER": "cl",
+          "CMAKE_CXX_COMPILER": "cl",
+          "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+          "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+          "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+          "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+          "GENERATE_DEBUG_SYMBOLS": "OFF",
           "BUILD_TESTS": "ON"
         },
         "fresh": true,
         "buildDir": "build",
-        "generator": "Visual Studio 18 2026",
-        "architecture": "x64",
+        "generator": "Ninja Multi-Config",
         "commandIndex": 0
       },
       {
@@ -11615,7 +11887,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 6,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
@@ -11644,7 +11916,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 6,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
@@ -11754,7 +12026,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 6,
+        "stepIndex": 9,
         "matrix": {
           "config": "Debug"
         },
@@ -11783,7 +12055,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Build",
-        "stepIndex": 6,
+        "stepIndex": 9,
         "matrix": {
           "config": "Release"
         },
@@ -12202,7 +12474,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 8,
+        "stepIndex": 11,
         "matrix": {
           "config": "Debug"
         },
@@ -12227,7 +12499,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 8,
+        "stepIndex": 11,
         "matrix": {
           "config": "Release"
         },
@@ -12275,7 +12547,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 12,
         "matrix": {
           "config": "Debug"
         },
@@ -12300,7 +12572,7 @@
       {
         "job": "build-windows-vs2026",
         "step": "Run Tests",
-        "stepIndex": 7,
+        "stepIndex": 12,
         "matrix": {
           "config": "Release"
         },
@@ -12977,7 +13249,7 @@
     {
       "job": "build-windows-vs2022",
       "step": "Configure CMake (VS 2022 / v143)",
-      "stepIndex": 5,
+      "stepIndex": 7,
       "matrix": {
         "config": "Debug"
       },
@@ -12991,23 +13263,29 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+      "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+        "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+        "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+        "GENERATE_DEBUG_SYMBOLS": "OFF",
         "BUILD_TESTS": "ON",
         "BUILD_GAME_MODULES": "ON"
       },
       "fresh": true,
       "buildDir": "build",
-      "generator": "Visual Studio 17 2022",
-      "architecture": "x64",
-      "toolset": "v143",
+      "generator": "Ninja Multi-Config",
       "commandIndex": 0
     },
     {
       "job": "build-windows-vs2022",
       "step": "Configure CMake (VS 2022 / v143)",
-      "stepIndex": 5,
+      "stepIndex": 7,
       "matrix": {
         "config": "Release"
       },
@@ -13021,17 +13299,23 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --fresh -B build -G \"Visual Studio 17 2022\" -A x64 -T v143  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+      "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+        "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+        "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+        "GENERATE_DEBUG_SYMBOLS": "OFF",
         "BUILD_TESTS": "ON",
         "BUILD_GAME_MODULES": "ON"
       },
       "fresh": true,
       "buildDir": "build",
-      "generator": "Visual Studio 17 2022",
-      "architecture": "x64",
-      "toolset": "v143",
+      "generator": "Ninja Multi-Config",
       "commandIndex": 0
     },
     {
@@ -13107,13 +13391,13 @@
     {
       "job": "build-windows-vs2026",
       "step": "Configure CMake (VS 2026 / v145)",
-      "stepIndex": 5,
+      "stepIndex": 8,
       "matrix": {
         "config": "Debug"
       },
       "matrixResolved": true,
       "runnerOs": "windows",
-      "shell": "pwsh",
+      "shell": "bash",
       "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
       "jobContinueOnError": true,
       "stepIf": "absent",
@@ -13121,27 +13405,34 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --fresh -B build -G \"Visual Studio 18 2026\" -A x64 -DBUILD_TESTS=ON",
+      "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+        "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+        "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+        "GENERATE_DEBUG_SYMBOLS": "OFF",
         "BUILD_TESTS": "ON"
       },
       "fresh": true,
       "buildDir": "build",
-      "generator": "Visual Studio 18 2026",
-      "architecture": "x64",
+      "generator": "Ninja Multi-Config",
       "commandIndex": 0
     },
     {
       "job": "build-windows-vs2026",
       "step": "Configure CMake (VS 2026 / v145)",
-      "stepIndex": 5,
+      "stepIndex": 8,
       "matrix": {
         "config": "Release"
       },
       "matrixResolved": true,
       "runnerOs": "windows",
-      "shell": "pwsh",
+      "shell": "bash",
       "jobIf": "github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
       "jobContinueOnError": true,
       "stepIf": "absent",
@@ -13149,15 +13440,22 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --fresh -B build -G \"Visual Studio 18 2026\" -A x64 -DBUILD_TESTS=ON",
+      "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded",
+        "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+        "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
+        "GENERATE_DEBUG_SYMBOLS": "OFF",
         "BUILD_TESTS": "ON"
       },
       "fresh": true,
       "buildDir": "build",
-      "generator": "Visual Studio 18 2026",
-      "architecture": "x64",
+      "generator": "Ninja Multi-Config",
       "commandIndex": 0
     },
     {

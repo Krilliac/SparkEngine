@@ -459,8 +459,13 @@ def standard_test_evidence_errors(workflow: str) -> list[str]:
             continue
 
         ordered_names = [name for name, _block in step_blocks(job)]
+        restore_step_names = {
+            "build-windows-vs2022": "Restore sccache cache",
+            "build-windows-vs2026": "Restore sccache cache",
+        }
+        restore_name = restore_step_names.get(job_name, "Restore build directory")
         required_names = (
-            "Restore build directory",
+            restore_name,
             "Scrub restored test evidence",
             "Validate and summarize test statistics",
             "Upload machine-readable test results",
@@ -470,7 +475,7 @@ def standard_test_evidence_errors(workflow: str) -> list[str]:
         except ValueError as error:
             errors.append(f"{job_name} test-evidence steps are incomplete: {error}")
             continue
-        if positions["Scrub restored test evidence"] != positions["Restore build directory"] + 1:
+        if positions["Scrub restored test evidence"] != positions[restore_name] + 1:
             errors.append(f"{job_name} must scrub test evidence immediately after cache restore")
         if not (
             positions["Scrub restored test evidence"]

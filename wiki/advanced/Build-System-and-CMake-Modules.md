@@ -442,8 +442,8 @@ Runs on pushes to `main`, `develop`, `Working`, and `release/**`; pull requests 
 | `build-linux-gcc` | ubuntu-24.04 | GCC | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan |
-| `build-windows-vs2022` | windows-2022 | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
-| `build-windows-vs2026` | windows-latest | MSVC v145 | Debug, Release | native VS 18 generator; advisory until runner availability is guaranteed |
+| `build-windows-vs2022` | windows-2022 | MSVC v143 | Debug, Release | Ninja Multi-Config + sccache (hash-pinned, `SCCACHE_DIR` restore/save; PCH, module scan, Jolt `/Zi` off), `-DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON` |
+| `build-windows-vs2026` | windows-2025-vs2026 | MSVC v145 | Debug, Release | Ninja Multi-Config + sccache inside the VS 2026 dev shell; advisory until runner availability is guaranteed |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
 | `todo-count` | ubuntu-24.04 | -- | -- | threshold: 20 |
@@ -477,13 +477,19 @@ cmake --build build --parallel $(nproc)
 cd build && ctest --output-on-failure --no-tests=error && ./bin/SparkTests && cd ..
 ```
 
-**Windows MSVC (VS 2022):**
+**Windows MSVC (VS 2022, as `build-windows-vs2022` runs it — from an "x64 Native Tools" shell):**
 ```bash
-cmake -B build -G "Visual Studio 17 2022" -A x64 \
-    -T v143 -DBUILD_TESTS=ON
+cmake --fresh -B build -G "Ninja Multi-Config" \
+    -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl \
+    -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
+    -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
+    -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
+    -DGENERATE_DEBUG_SYMBOLS=OFF \
+    -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
 ```
+Omit the two `_LAUNCHER` flags without sccache; with sccache keep `-DGENERATE_DEBUG_SYMBOLS=OFF` (Jolt's `/Zi` otherwise breaks every Jolt TU under sccache). The Visual Studio generator (`-G "Visual Studio 17 2022" -A x64 -T v143`) still works for local IDE builds but ignores compiler launchers; in CI only `build-windows-shipping` uses it, through its preset, uncached.
 
 ### release.yml (rolling pre-release artifacts)
 

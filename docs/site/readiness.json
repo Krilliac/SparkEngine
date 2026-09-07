@@ -1681,7 +1681,7 @@
         {
           "id": "toolchain",
           "label": "Supported compiler line",
-          "value": "The MSVC v143 toolset line (Visual Studio 17 2022 generator, architecture x64, toolset v143). The exact MSVC compiler build and Windows SDK version are not pinned yet, so this names the supported line, not a certified toolchain.",
+          "value": "The MSVC v143 toolset line (Ninja Multi-Config inside the VS 2022 x64 developer environment in build-windows-vs2022; the Visual Studio 17 2022 generator, x64, v143 in the windows-shipping preset). The exact MSVC compiler build and Windows SDK version are not pinned yet, so this names the supported line, not a certified toolchain.",
           "capabilityIds": [
             "platform.windows",
             "runtime.cpp"
@@ -1691,7 +1691,7 @@
               "type": "workflow",
               "path": ".github/workflows/build.yml",
               "job": "build-windows-vs2022",
-              "label": "Configure step pins the Visual Studio 17 2022 generator with -A x64 -T v143"
+              "label": "Configure step uses Ninja Multi-Config inside the VS 2022 developer environment (v143 via vswhere [17.0,18.0)); sccache launcher"
             },
             {
               "type": "source",

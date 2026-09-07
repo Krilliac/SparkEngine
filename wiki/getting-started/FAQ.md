@@ -285,7 +285,7 @@ Check which job failed:
 | `build-linux-gcc` | GCC compilation + tests |
 | `build-linux-clang` | Clang compilation + tests |
 | `build-linux-asan` | Memory safety (ASan + UBSan) |
-| `build-windows-vs2022` | MSVC compilation + tests |
+| `build-windows-vs2022` | MSVC v143 compilation (Ninja Multi-Config + sccache) + tests |
 
 The VS2026 and macOS jobs are job-level advisory. MinGW is a manual
 `workflow_dispatch` development lane rather than a required push gate. The

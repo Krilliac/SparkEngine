@@ -806,6 +806,12 @@ jobs:
   # ===========================================================================
   build-windows-vs2022:
     runs-on: windows-2022
+    # SCCACHE_DIR and SCCACHE_ERROR_LOG live under runner.temp, but the runner
+    # context is not available to job-level env (GitHub rejects the workflow
+    # file), so the install step exports them through GITHUB_ENV.
+    env:
+      SCCACHE_IDLE_TIMEOUT: "0"
+      SCCACHE_LOG: info
     strategy:
       fail-fast: false
       matrix:
@@ -820,17 +826,55 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
-    - name: Setup sccache
-      uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+    # sccache is pinned by the SHA-256 of the release archive, not by a sidecar
+    # fetched from the same (mutable) release. A mismatch or a failed download
+    # fails the job before any compile: same class as apt-get install ccache.
+    - name: Install sccache v0.17.0 (hash-pinned)
+      shell: pwsh
+      env:
+        SCCACHE_VERSION: v0.17.0
+        SCCACHE_SHA256: caf1932d76a909c909b7a2e41443cdfe3c79a49a380da1a22fa422e1d00d3ca7
+      run: |
+        $name = "sccache-$env:SCCACHE_VERSION-x86_64-pc-windows-msvc"
+        $url = "https://github.com/mozilla/sccache/releases/download/$env:SCCACHE_VERSION/$name.tar.gz"
+        $dest = Join-Path $env:RUNNER_TEMP "sccache-bin"
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        $archive = Join-Path $dest "$name.tar.gz"
+        $attempt = 0
+        while ($true) {
+          $attempt++
+          try { Invoke-WebRequest -Uri $url -OutFile $archive; break }
+          catch {
+            if ($attempt -ge 3) { throw }
+            Write-Host "sccache download attempt $attempt failed: $($_.Exception.Message)"
+            Start-Sleep -Seconds (10 * $attempt)
+          }
+        }
+        $actual = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
+        if ($actual -ne $env:SCCACHE_SHA256) {
+          throw "sccache archive hash mismatch: expected $env:SCCACHE_SHA256, got $actual"
+        }
+        & (Join-Path $env:SystemRoot "System32\tar.exe") -xf $archive -C $dest
+        $bin = Join-Path $dest $name
+        if (-not (Test-Path (Join-Path $bin "sccache.exe"))) { throw "sccache.exe missing after extraction in $bin" }
+        Add-Content -Path $env:GITHUB_PATH -Value $bin -Encoding utf8
+        Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_DIR=$(Join-Path $env:RUNNER_TEMP 'sccache')" -Encoding utf8
+        Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_ERROR_LOG=$(Join-Path $env:RUNNER_TEMP 'sccache-server.log')" -Encoding utf8
+        & (Join-Path $bin "sccache.exe") --version
 
-    - name: Restore build directory
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+    # Compiler cache lives outside the checkout and is keyed like the Linux
+    # ccache steps. A miss is an empty directory: sccache compiles everything
+    # and the job proceeds. restore/save are split so a red job still saves
+    # the objects it produced (the composite action only saves on success()).
+    - name: Restore sccache cache
+      id: sccache-restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
-        path: build
-        key: build-windows-vs2022-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        path: ${{ runner.temp }}\sccache
+        key: sccache-windows-vs2022-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
         restore-keys: |
-          build-windows-vs2022-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
-          build-windows-vs2022-${{ matrix.config }}-
+          sccache-windows-vs2022-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          sccache-windows-vs2022-${{ matrix.config }}-
 
     - name: Scrub restored test evidence
       if: always()
@@ -848,13 +892,60 @@ jobs:
           build/*-process-smoke.json \
           build/*-process-smoke.xml
 
+    # Ninja needs cl/rc/ninja on PATH and INCLUDE/LIB set; setup-msbuild does
+    # neither. Enter the VS 2022 developer environment and export the delta.
+    # This also puts the Windows SDK bin on PATH, so CMakeLists.txt finds fxc
+    # and the four foliage shader validations run in CI for the first time.
+    - name: Enter Visual Studio 2022 developer environment (x64)
+      shell: pwsh
+      run: |
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio/Installer/vswhere.exe"
+        if (-not (Test-Path $vswhere)) { throw "vswhere is unavailable; cannot locate Visual Studio 2022" }
+        $install = & $vswhere -latest -products * -version '[17.0,18.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if (-not $install) { throw "Visual Studio 2022 with the v143 toolset is unavailable on this runner" }
+        $before = @{}
+        Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+        Import-Module (Join-Path $install "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+        Enter-VsDevShell -VsInstallPath $install -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64"
+        foreach ($entry in Get-ChildItem env:) {
+          if ($entry.Name.StartsWith('=')) { continue }
+          if ($entry.Value -match "[`r`n]") { continue }
+          if ($before[$entry.Name] -ne $entry.Value) {
+            Add-Content -Path $env:GITHUB_ENV -Value "$($entry.Name)=$($entry.Value)" -Encoding utf8
+          }
+        }
+        Get-Command cl.exe, rc.exe, ninja.exe, cmake.exe | Format-Table Name, Source -AutoSize
+        ninja --version
+        cmake --version
+
+    # A server that cannot start is NOT fail-open: the client bails instead of
+    # compiling locally, and CMake would report it as "compiler is not able to
+    # compile a simple test program". Start it here, loudly, with the server
+    # log in runner.temp (uploaded on failure below).
+    - name: Start sccache server
+      shell: bash
+      run: |
+        sccache --start-server
+        sccache --show-stats
+
     - name: Configure CMake (VS 2022 / v143)
       shell: bash
-      # Keep restored object files, but regenerate CMake metadata so an older
-      # cache cannot retain a different generator platform or toolset.
+      # Ninja Multi-Config so CMAKE_<LANG>_COMPILER_LAUNCHER is honoured (Visual
+      # Studio generators ignore it). PCH is off because sccache cannot cache
+      # /Yc or /Fp; module scanning is off because no module units exist;
+      # GENERATE_DEBUG_SYMBOLS=OFF removes Jolt's /Zi, which would otherwise make
+      # sccache demand a PDB that cl (honouring the later /Z7) never writes.
+      # CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded is already forced before
+      # project(); repeated here as a guard.
       run: |
         set -o pipefail
-        cmake --fresh -B build -G "Visual Studio 17 2022" -A x64 -T v143 \
+        cmake --fresh -B build -G "Ninja Multi-Config" \
+          -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl \
+          -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
+          -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
+          -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
+          -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
+          -DGENERATE_DEBUG_SYMBOLS=OFF \
           -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log
 
     - name: Build
@@ -863,9 +954,40 @@ jobs:
         set -o pipefail
         cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
 
+    # Authoritative cache numbers for this job (SCCACHE_IDLE_TIMEOUT=0 keeps the
+    # server that did the work alive until --stop-server here). Never fails the
+    # job; degraded states are surfaced as ::warning:: annotations because
+    # every one of them is otherwise green.
     - name: Print sccache stats
       if: always()
-      run: sccache --show-stats
+      shell: bash
+      env:
+        SCCACHE_RESTORED_KEY: ${{ steps.sccache-restore.outputs.cache-matched-key }}
+      run: |
+        set -o pipefail
+        sccache --show-stats 2>&1 | tee sccache-stats.txt || echo "::warning::sccache --show-stats failed"
+        requests="$(awk '$1=="Compile" && $2=="requests" && NF==3 {print $3; exit}' sccache-stats.txt)"
+        if [ "${requests:-0}" = "0" ]; then
+          echo "::warning::sccache handled 0 compile requests: the launcher is not wired (INERT)"
+        fi
+        if awk '/^Cache (errors|read errors|write errors|timeouts)/ && $NF+0 != 0 {found=1} END {exit !found}' sccache-stats.txt; then
+          echo "::warning::sccache reported non-zero cache error counters; see sccache-stats.txt and the sccache server log artifact"
+        fi
+        if [ -z "${SCCACHE_RESTORED_KEY}" ]; then
+          echo "::warning::no sccache cache was restored (expected only on the first run of this key family); this build was cold"
+        fi
+        { echo "### sccache — build-windows-vs2022 ${{ matrix.config }}"; echo "restored key: ${SCCACHE_RESTORED_KEY:-<none>}"; echo '```'; cat sccache-stats.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        sccache --stop-server || echo "::warning::sccache --stop-server failed"
+
+    # Runs after a failed Build/Run Tests too (only not on cancel): objects from
+    # a job that went red are still valid and are what the fix-up push needs.
+    # Skipped when the primary key already exists (same as the composite action).
+    - name: Save sccache cache
+      if: ${{ !cancelled() && steps.sccache-restore.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ${{ runner.temp }}\sccache
+        key: ${{ steps.sccache-restore.outputs.cache-primary-key }}
 
     # Debug is built but not tested here: the Debug SparkTests run exceeds the
     # single ctest timeout this lane inherits, so no green lane in the
@@ -975,6 +1097,15 @@ jobs:
         name: ci-errors-windows-vs2022-${{ matrix.config }}
         path: error-summary.json
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
+    - name: Upload sccache server log
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: sccache-server-log-windows-vs2022-${{ matrix.config }}
+        path: ${{ runner.temp }}\sccache-server.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -1168,7 +1299,7 @@ jobs:
 
   # ===========================================================================
   # Windows Build (Visual Studio 2026 / v145)
-  # CMake 4.2+ provides the native Visual Studio 18 2026 generator. This lane
+  # Ninja Multi-Config inside the VS 2026 developer environment (v145). This lane
   # remains advisory until GitHub-hosted runners guarantee that installation,
   # but an unavailable toolchain must be visible rather than a green no-op.
   # ===========================================================================
@@ -1176,6 +1307,12 @@ jobs:
     if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: windows-2025-vs2026
     continue-on-error: true
+    # SCCACHE_DIR and SCCACHE_ERROR_LOG live under runner.temp, but the runner
+    # context is not available to job-level env (GitHub rejects the workflow
+    # file), so the install step exports them through GITHUB_ENV.
+    env:
+      SCCACHE_IDLE_TIMEOUT: "0"
+      SCCACHE_LOG: info
     strategy:
       matrix:
         config: [Debug, Release]
@@ -1189,14 +1326,55 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
-    - name: Restore build directory
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+    # sccache is pinned by the SHA-256 of the release archive, not by a sidecar
+    # fetched from the same (mutable) release. A mismatch or a failed download
+    # fails the job before any compile: same class as apt-get install ccache.
+    - name: Install sccache v0.17.0 (hash-pinned)
+      shell: pwsh
+      env:
+        SCCACHE_VERSION: v0.17.0
+        SCCACHE_SHA256: caf1932d76a909c909b7a2e41443cdfe3c79a49a380da1a22fa422e1d00d3ca7
+      run: |
+        $name = "sccache-$env:SCCACHE_VERSION-x86_64-pc-windows-msvc"
+        $url = "https://github.com/mozilla/sccache/releases/download/$env:SCCACHE_VERSION/$name.tar.gz"
+        $dest = Join-Path $env:RUNNER_TEMP "sccache-bin"
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        $archive = Join-Path $dest "$name.tar.gz"
+        $attempt = 0
+        while ($true) {
+          $attempt++
+          try { Invoke-WebRequest -Uri $url -OutFile $archive; break }
+          catch {
+            if ($attempt -ge 3) { throw }
+            Write-Host "sccache download attempt $attempt failed: $($_.Exception.Message)"
+            Start-Sleep -Seconds (10 * $attempt)
+          }
+        }
+        $actual = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
+        if ($actual -ne $env:SCCACHE_SHA256) {
+          throw "sccache archive hash mismatch: expected $env:SCCACHE_SHA256, got $actual"
+        }
+        & (Join-Path $env:SystemRoot "System32\tar.exe") -xf $archive -C $dest
+        $bin = Join-Path $dest $name
+        if (-not (Test-Path (Join-Path $bin "sccache.exe"))) { throw "sccache.exe missing after extraction in $bin" }
+        Add-Content -Path $env:GITHUB_PATH -Value $bin -Encoding utf8
+        Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_DIR=$(Join-Path $env:RUNNER_TEMP 'sccache')" -Encoding utf8
+        Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_ERROR_LOG=$(Join-Path $env:RUNNER_TEMP 'sccache-server.log')" -Encoding utf8
+        & (Join-Path $bin "sccache.exe") --version
+
+    # Compiler cache lives outside the checkout and is keyed like the Linux
+    # ccache steps. A miss is an empty directory: sccache compiles everything
+    # and the job proceeds. restore/save are split so a red job still saves
+    # the objects it produced (the composite action only saves on success()).
+    - name: Restore sccache cache
+      id: sccache-restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
-        path: build
-        key: build-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        path: ${{ runner.temp }}\sccache
+        key: sccache-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
         restore-keys: |
-          build-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
-          build-windows-vs2026-${{ matrix.config }}-
+          sccache-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          sccache-windows-vs2026-${{ matrix.config }}-
 
     - name: Scrub restored test evidence
       if: always()
@@ -1227,11 +1405,92 @@ jobs:
         }
         Write-Host "Visual Studio 2026: $install"
 
+    # Ninja needs cl/rc/ninja on PATH and INCLUDE/LIB set; setup-msbuild does
+    # neither. Enter the VS 2026 developer environment and export the delta.
+    # This also puts the Windows SDK bin on PATH, so CMakeLists.txt finds fxc
+    # and the four foliage shader validations run in CI for the first time.
+    - name: Enter Visual Studio 2026 developer environment (x64)
+      shell: pwsh
+      run: |
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio/Installer/vswhere.exe"
+        if (-not (Test-Path $vswhere)) { throw "vswhere is unavailable; cannot locate Visual Studio 2026" }
+        $install = & $vswhere -latest -products * -version '[18.0,19.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if (-not $install) { throw "Visual Studio 2026 with the v145 toolset is unavailable on this runner" }
+        $before = @{}
+        Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+        Import-Module (Join-Path $install "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+        Enter-VsDevShell -VsInstallPath $install -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64"
+        foreach ($entry in Get-ChildItem env:) {
+          if ($entry.Name.StartsWith('=')) { continue }
+          if ($entry.Value -match "[`r`n]") { continue }
+          if ($before[$entry.Name] -ne $entry.Value) {
+            Add-Content -Path $env:GITHUB_ENV -Value "$($entry.Name)=$($entry.Value)" -Encoding utf8
+          }
+        }
+        Get-Command cl.exe, rc.exe, ninja.exe, cmake.exe | Format-Table Name, Source -AutoSize
+        ninja --version
+        cmake --version
+
+    # A server that cannot start is NOT fail-open: the client bails instead of
+    # compiling locally, and CMake would report it as "compiler is not able to
+    # compile a simple test program". Start it here, loudly, with the server
+    # log in runner.temp (uploaded on failure below).
+    - name: Start sccache server
+      shell: bash
+      run: |
+        sccache --start-server
+        sccache --show-stats
+
     - name: Configure CMake (VS 2026 / v145)
-      run: cmake --fresh -B build -G "Visual Studio 18 2026" -A x64 -DBUILD_TESTS=ON
+      shell: bash
+      run: |
+        set -o pipefail
+        cmake --fresh -B build -G "Ninja Multi-Config" \
+          -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl \
+          -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
+          -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
+          -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
+          -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
+          -DGENERATE_DEBUG_SYMBOLS=OFF \
+          -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log
 
     - name: Build
       run: cmake --build build --config ${{ matrix.config }} --parallel
+
+    # Authoritative cache numbers for this job (SCCACHE_IDLE_TIMEOUT=0 keeps the
+    # server that did the work alive until --stop-server here). Never fails the
+    # job; degraded states are surfaced as ::warning:: annotations because
+    # every one of them is otherwise green.
+    - name: Print sccache stats
+      if: always()
+      shell: bash
+      env:
+        SCCACHE_RESTORED_KEY: ${{ steps.sccache-restore.outputs.cache-matched-key }}
+      run: |
+        set -o pipefail
+        sccache --show-stats 2>&1 | tee sccache-stats.txt || echo "::warning::sccache --show-stats failed"
+        requests="$(awk '$1=="Compile" && $2=="requests" && NF==3 {print $3; exit}' sccache-stats.txt)"
+        if [ "${requests:-0}" = "0" ]; then
+          echo "::warning::sccache handled 0 compile requests: the launcher is not wired (INERT)"
+        fi
+        if awk '/^Cache (errors|read errors|write errors|timeouts)/ && $NF+0 != 0 {found=1} END {exit !found}' sccache-stats.txt; then
+          echo "::warning::sccache reported non-zero cache error counters; see sccache-stats.txt and the sccache server log artifact"
+        fi
+        if [ -z "${SCCACHE_RESTORED_KEY}" ]; then
+          echo "::warning::no sccache cache was restored (expected only on the first run of this key family); this build was cold"
+        fi
+        { echo "### sccache — build-windows-vs2026 ${{ matrix.config }}"; echo "restored key: ${SCCACHE_RESTORED_KEY:-<none>}"; echo '```'; cat sccache-stats.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        sccache --stop-server || echo "::warning::sccache --stop-server failed"
+
+    # Runs after a failed Build/Run Tests too (only not on cancel): objects from
+    # a job that went red are still valid and are what the fix-up push needs.
+    # Skipped when the primary key already exists (same as the composite action).
+    - name: Save sccache cache
+      if: ${{ !cancelled() && steps.sccache-restore.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ${{ runner.temp }}\sccache
+        key: ${{ steps.sccache-restore.outputs.cache-primary-key }}
 
     - name: Run Tests
       if: matrix.config == 'Release'
@@ -1285,6 +1544,15 @@ jobs:
         name: SparkEngine-Windows-VS2026-${{ matrix.config }}
         path: build/bin/${{ matrix.config }}/
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+    - name: Upload sccache server log
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: sccache-server-log-windows-vs2026-${{ matrix.config }}
+        path: ${{ runner.temp }}\sccache-server.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
 
   # ===========================================================================
   # Linux Build - GCC
