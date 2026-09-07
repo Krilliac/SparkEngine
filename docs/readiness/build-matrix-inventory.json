@@ -3210,6 +3210,16 @@
       "resolved": true
     },
     {
+      "target": "spark_fps_assets_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 39,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "spark_fps_progression_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
@@ -4863,6 +4873,24 @@
           "file": "CMakeLists.txt",
           "line": 841,
           "kind": "interface_library",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_fps_assets_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 39,
+          "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
           "resolved": true

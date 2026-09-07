@@ -276,6 +276,8 @@ target_include_directories(MyGame PRIVATE "Source")
 
 Use `-DSparkEngine_DIR="<sdk>/lib/cmake/SparkEngine"` (or an equivalent package-discovery setting) after `cmake --install <engine-build> --prefix <sdk> --config Release`. A raw engine build directory is not the standalone SDK contract.
 
+`Tests/PackageSmoke/FPSProgression` compiles the production FPS progression, local-profile, and asset-path sources using only the canonical installed `Spark/` headers and module headers, without linking an engine target. Its asset tests run copied consumers in isolated layouts to verify executable-directory and parent priority on Windows/Linux, working-directory discovery, missing-root fallback, UTF-8 paths, and cached root stability. The full FPS module still depends on private rendering, input, and world interfaces; these consumers establish a bounded migration step, not complete SDK independence.
+
 ## Configuration Files
 
 ### `<ProjectName>.sparkproject`

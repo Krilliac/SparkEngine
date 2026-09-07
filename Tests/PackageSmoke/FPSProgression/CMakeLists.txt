@@ -33,3 +33,28 @@ target_include_directories(spark_fps_progression_consumer PRIVATE
 )
 enable_testing()
 add_test(NAME SparkFPSProgressionConsumer COMMAND spark_fps_progression_consumer)
+
+# Asset discovery is production FPS code too. Keep its compiler inputs just as
+# isolated; linking an engine target would mask accidental private includes.
+add_executable(spark_fps_assets_consumer
+    assets.cpp
+    "${_fps_source}/Game/FPSAssetPaths.cpp"
+)
+target_compile_features(spark_fps_assets_consumer PRIVATE cxx_std_23)
+target_include_directories(spark_fps_assets_consumer PRIVATE "${_fps_source}" "${_public_sdk}")
+set_target_properties(spark_fps_assets_consumer PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+set(_asset_scenarios working fallback)
+if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND _asset_scenarios executable parent)
+endif()
+foreach(_scenario IN LISTS _asset_scenarios)
+    add_test(NAME SparkFPSAssets_${_scenario}
+        COMMAND "${CMAKE_COMMAND}"
+            "-DCONSUMER=$<TARGET_FILE:spark_fps_assets_consumer>"
+            "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/asset-fixtures/$<CONFIG>/${_scenario}-é-世界"
+            "-DSCENARIO=${_scenario}"
+            -P "${CMAKE_CURRENT_LIST_DIR}/RunAssetsConsumer.cmake"
+    )
+endforeach()
