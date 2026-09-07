@@ -48,6 +48,28 @@ The following are **not** in scope:
 - Issues requiring physical access to the machine
 - Vulnerabilities in third-party dependencies (report these to the upstream project)
 
+## Supply-Chain Security
+
+SparkEngine enforces a dependency supply-chain policy covering all third-party
+code under `ThirdParty/`. Key controls:
+
+- **Pinned identity:** Every submodule is locked to an exact commit SHA in
+  `ThirdParty/supply-chain.lock`. Vendored snapshots are locked by SHA-256
+  content hash. Any drift is a CI failure.
+- **License coverage:** Every dependency must ship a license file containing a
+  copyright statement and operative terms. The CI checker and CMake audit both
+  enforce this.
+- **Action pinning:** All GitHub Actions are pinned to full 40-character commit
+  SHAs — tag-only or branch-only references are rejected.
+- **Inventory completeness:** No unmanaged code may appear under `ThirdParty/`
+  without being declared in the lockfile.
+- **Fail-closed:** Missing lockfile, corrupt JSON, unrecognized version, or any
+  verification error causes the check to exit non-zero.
+
+Policy details: [`ThirdParty/POLICY.md`](ThirdParty/POLICY.md)
+Verification: `python tools/check-supply-chain.py`
+CI job: `check-supply-chain` in `.github/workflows/build.yml`
+
 ## Credit
 
 We are happy to credit security researchers in the changelog and release notes. Let us know in your report how you would like to be credited.

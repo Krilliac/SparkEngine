@@ -113,10 +113,12 @@
       "sourceContext": [
         ".github/workflows",
         "ThirdParty/dependencies.lock",
+        "ThirdParty/supply-chain.lock",
         "VERSIONS.txt",
         ".github/codeql/codeql-config.yml"
       ],
       "entryPoints": [
+        "ThirdParty/supply-chain.lock",
         "ThirdParty/dependencies.lock",
         ".github/workflows/build.yml",
         ".github/workflows/codeql.yml"
@@ -136,26 +138,33 @@
         "Release artifacts include verifiable supply-chain evidence"
       ],
       "commands": [
-        "python3 tools/check-thirdparty-manifest-sync.sh",
+        "python3 tools/check-supply-chain.py",
+        "python3 tools/check-supply-chain.py --json",
+        "python3 -m pytest Tests/test_check_supply_chain.py -v",
+        "bash tools/check-thirdparty-manifest-sync.sh",
         "syft packages dir:.",
         "osv-scanner --lockfile ThirdParty/dependencies.lock"
       ],
       "testSelectors": [
         "DependencyManifest_*",
-        "WorkflowPins_*"
+        "WorkflowPins_*",
+        "test_check_supply_chain::*"
       ],
       "requiredCiJobs": [
         "dependency-policy",
         "analyze",
         "secret-scan",
-        "license-scan"
+        "license-scan",
+        "check-thirdparty-manifest",
+        "check-supply-chain"
       ],
       "performanceBudgets": [
         "Security scans complete inside merge/release SLAs"
       ],
       "documentationUpdates": [
         "SECURITY.md",
-        "ThirdParty/README.md"
+        "ThirdParty/README.md",
+        "ThirdParty/POLICY.md"
       ],
       "readinessChanges": [
         "G06",
@@ -174,6 +183,21 @@
         "Policy is blocking",
         "Inventories reconcile",
         "Exceptions are owned and expire"
+      ],
+      "evidence": [
+        "ThirdParty/supply-chain.lock — authoritative content-hash lockfile (37 sentinel files and 6 submodule gitlinks)",
+        "tools/check-supply-chain.py — fail-closed verifier",
+        "Tests/test_check_supply_chain.py — 27 adversarial tests",
+        ".github/workflows/build.yml — check-supply-chain is required by both gate jobs",
+        "ThirdParty/POLICY.md — supply-chain policy document",
+        "SECURITY.md — supply-chain security section"
+      ],
+      "remainingBlockers": [
+        "CodeQL expansion across all shipped products (CI-100 and CI-110)",
+        "SBOM and provenance generation for release artifacts",
+        "Vulnerability scanner integration",
+        "Secret scanning CI job",
+        "Formal exception schema with owner and expiry fields"
       ],
       "profileApplicability": {
         "stable-v1": "shared"

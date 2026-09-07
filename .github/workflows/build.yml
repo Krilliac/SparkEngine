@@ -350,6 +350,20 @@ jobs:
     - name: Check ThirdParty manifest sync
       run: ./tools/check-thirdparty-manifest-sync.sh
 
+  check-supply-chain:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+
+    - name: Supply-chain policy check
+      run: python3 tools/check-supply-chain.py
+
+    - name: Supply-chain adversarial tests
+      run: python3 -m pytest Tests/test_check_supply_chain.py -v
+
   # ===========================================================================
   # Linux Build — GCC with AddressSanitizer + UBSan + LSan
   # ===========================================================================
@@ -3000,6 +3014,7 @@ jobs:
       - check-format
       - validate-prompts
       - check-thirdparty-manifest
+      - check-supply-chain
       - build-linux-asan
       - build-linux-tsan
       - telemetry-integration
@@ -3166,6 +3181,7 @@ jobs:
       - check-format
       - validate-prompts
       - check-thirdparty-manifest
+      - check-supply-chain
       - build-linux-asan
       - build-linux-tsan
       - telemetry-integration
