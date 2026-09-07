@@ -186,6 +186,8 @@ TEST(NetworkManager_ReplicatedEntityAccessIsSnapshotAndAtomicUpdate)
     nm.StartServer(27015, 16);
 
     ReplicatedEntity entity;
+    EXPECT_EQ(entity.networkID, uint32_t{0});
+    EXPECT_EQ(entity.ownerID, INVALID_CLIENT);
     entity.position = {1.0f, 2.0f, 3.0f};
     const uint32_t netID = nm.RegisterReplicatedEntity(entity);
 
@@ -195,6 +197,7 @@ TEST(NetworkManager_ReplicatedEntityAccessIsSnapshotAndAtomicUpdate)
 
     const auto unchanged = nm.GetReplicatedEntitySnapshot(netID);
     EXPECT_TRUE(unchanged.has_value());
+    EXPECT_EQ(unchanged->ownerID, INVALID_CLIENT);
     EXPECT_NEAR(unchanged->position.x, 1.0f, 0.001f);
 
     ReplicatedEntityUpdate update;

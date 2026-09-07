@@ -1117,6 +1117,74 @@ class PresetAndCodemodelTests(unittest.TestCase):
         self.assertIn("Release", missing[0].message)
 
 
+class RecordedWindowsPathTests(unittest.TestCase):
+    """Windows producer evidence has the same meaning on a Linux verifier."""
+
+    def artifact_data(self, artifact: str) -> dict[str, Any]:
+        return {
+            "profile": {
+                "supportedHosts": ["Windows 11 x64"],
+                "buildConfigurations": [{"id": "shipping", "configuration": "MinSizeRel"}],
+                "buildProducts": [{
+                    "target": "Game", "kind": "executable", "buildProfile": "shipping",
+                    "applicability": "required",
+                }],
+            },
+            "configuredTargetEvidence": [{
+                "profile": "shipping", "status": "available", "buildDirectory": "D:/repo/build",
+                "targets": [{
+                    "target": "Game", "configuration": "MinSizeRel", "kind": "executable",
+                    "id": "Game::fixture", "nameOnDisk": "Game.exe",
+                    "artifacts": [artifact], "artifactState": "declared-not-built",
+                }],
+            }],
+        }
+
+    def test_windows_artifacts_accept_both_separators_and_case(self) -> None:
+        for artifact in ("D:/repo/build/bin/Game.exe", r"d:\REPO\build\bin\Game.exe"):
+            with self.subTest(artifact=artifact):
+                self.assertEqual(check_parity.check_configured_targets(self.artifact_data(artifact)), [])
+
+    def test_windows_artifacts_reject_relative_foreign_and_escaping_paths(self) -> None:
+        for artifact in (
+            "bin/Game.exe", "D:bin/Game.exe", "E:/repo/build/bin/Game.exe",
+            "D:/repo/build-other/Game.exe", "D:/repo/build/../Game.exe",
+            r"D:\repo\build\..\Game.exe", "/repo/build/Game.exe",
+        ):
+            with self.subTest(artifact=artifact):
+                findings = check_parity.check_configured_targets(self.artifact_data(artifact))
+                self.assertIn("configured-target-artifact-mismatch", finding_categories(findings))
+
+    def test_installed_consumer_windows_paths_match_recorded_cache(self) -> None:
+        data = {
+            "repository": {"root": r"D:\repo", "commit": "0" * 40, "clean": True},
+            "cmakePresets": {}, "cmakeTargets": [],
+            "profile": {"buildConfigurations": [{
+                "id": "consumer", "purpose": "installed-sdk-consumer",
+                "sourceDirectory": "Tests/PackageSmoke", "buildDirectory": "build/consumer",
+                "packageDirectory": "stage/lib/cmake/SparkEngine", "expectedEngineVersion": "1.0.0",
+            }]},
+            "configuredTargetEvidence": [{
+                "profile": "consumer", "status": "available", "targets": [],
+                "sourceDirectory": "D:/repo/Tests/PackageSmoke", "buildDirectory": "D:/repo/build/consumer",
+                "evidenceDirectory": r"D:\repo\build\consumer",
+                "generator": "Ninja", "architecture": "", "toolset": "",
+                "cacheVariables": {
+                    "CMAKE_GENERATOR": "Ninja", "CMAKE_GENERATOR_PLATFORM": "", "CMAKE_GENERATOR_TOOLSET": "",
+                    "CMAKE_HOME_DIRECTORY": r"D:\repo\Tests\PackageSmoke",
+                    "SparkEngine_DIR": "D:/repo/stage/lib/cmake/SparkEngine",
+                    "SPARK_EXPECTED_ENGINE_VERSION": "1.0.0",
+                },
+            }],
+        }
+        findings = check_parity.check_codemodel_provenance(data)
+        path_findings = [item for item in findings if item.category in {
+            "codemodel-source-mismatch", "codemodel-build-dir-mismatch", "codemodel-cache-mismatch",
+            "codemodel-evidence-dir-mismatch",
+        }]
+        self.assertEqual(path_findings, [])
+
+
 class CommandLineContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

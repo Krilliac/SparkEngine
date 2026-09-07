@@ -1068,7 +1068,7 @@ cmake --build build/windows-shipping --config MinSizeRel --clean-first
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-The remote has no tags; release version is not passed to CMake; multiple products default to 1.0.0; and badge commits can move source after artifact construction.
+Release automation now passes SPARK_ENGINE_VERSION to CMake, generates SDK version headers, and checks exact publication provenance. The remaining acceptance work is to prove version agreement across every stable-v1 product and tag, and to package the authoritative Shipping profile with a complete toolchain and dependency manifest.
 
 **Dependency contract**
 
@@ -1152,7 +1152,7 @@ SparkLauncher --version
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Current release artifacts have no checksum file, signing, SBOM, build provenance, malware scan, or protected approval environment.
+Release automation already generates SHA256SUMS, an SBOM, and build attestations. Stable-v1 still requires independently verified code signing, artifact and dependency scan policy, and a protected release approval environment; existing integrity metadata alone does not satisfy this gate.
 
 **Dependency contract**
 

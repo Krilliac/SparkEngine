@@ -14,6 +14,12 @@ When a job fails, use `gh run view <RUN_ID> --log-failed` to get logs (see [GitH
 
 The CI test binary is `SparkTests` (built into `build/bin/`). CI runs it directly (`./bin/SparkTests`) and, for the standard GCC/Clang/Windows/macOS matrix jobs, via `ctest`. The Linux GCC job uses GCC 14 (`gcc-14`/`g++-14`).
 
+### Trusted build-matrix verification
+
+The Windows Shipping producer and the Linux trusted verifier must compute the same parity report. Recorded Windows paths are data: use Windows lexical path rules for their basename, absolute-path, containment, and provenance comparisons, regardless of the verifier host. Native filesystem checks remain appropriate only when inspecting files on the current host. A mismatch such as `producer=3 trusted=19` can therefore indicate a checker portability defect even when the Windows build succeeded; do not waive report equality or promote the readiness gates to resolve it.
+
+`Build Matrix Verifier` accepts only `push` and `workflow_dispatch` builds on `Working`. Its workflow trigger filters the branch and its job conditions filter those event types. Pull-request and scheduled builds remain ordinary CI evidence and must not invoke the publication verifier as if they were accepted release sources. The verifier still independently checks repository, workflow, commit, run attempt, artifact, and receipt identity before publishing a status.
+
 ## clang-format check (runs on every PR — job `check-format`)
 
 ```bash
