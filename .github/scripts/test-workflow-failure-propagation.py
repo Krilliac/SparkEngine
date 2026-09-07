@@ -13,6 +13,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+import yaml
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build.yml"
@@ -355,6 +357,73 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
         if profile_gate_position >= badge_checkout_position:
             errors.append("stable-v1 publication gate must precede badge publication")
 
+    return errors
+
+
+def release_acceptance_gate_errors(workflow: str) -> list[str]:
+    """Require both final publication paths to use the fail-closed acceptance gate."""
+
+    errors: list[str] = []
+    for step_name in (
+        "Publish complete stable versioned release",
+        "Publish complete nightly rolling release",
+    ):
+        try:
+            step = named_step(workflow, step_name)
+        except AssertionError as error:
+            errors.append(str(error))
+            continue
+        for fragment in (
+            "GITHUB_REPOSITORY: ${{ github.repository }}",
+            "IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}",
+            "EXPECTED_ASSETS_FILE: expected-release-assets.txt",
+            "EXPECTED_DIGESTS_FILE: expected-release-digests.txt",
+            'python3 -I "$GITHUB_WORKSPACE/.github/scripts/release-acceptance-gate.py"',
+            "verify-exact-required-gate.py",
+            "verify-release-publication-boundary.sh",
+            "recover_release_publication.py",
+        ):
+            if fragment not in step:
+                errors.append(f"{step_name} is missing required acceptance-gate fragment: {fragment}")
+        if "gh api --method PATCH" in step:
+            errors.append(f"{step_name} must not publish through a bare gh API PATCH")
+    return errors
+
+
+def release_acceptance_recovery_errors(workflow: str) -> list[str]:
+    """Ensure compensation is armed only after a PATCH can have started."""
+
+    errors: list[str] = []
+    acceptance_command = 'python3 -I "$GITHUB_WORKSPACE/.github/scripts/release-acceptance-gate.py"'
+    marker = "RELEASE_ACCEPTANCE_PATCH_STARTED_FILE"
+    for step_name in (
+        "Publish complete stable versioned release",
+        "Publish complete nightly rolling release",
+    ):
+        try:
+            step = named_step(workflow, step_name)
+        except AssertionError as error:
+            errors.append(str(error))
+            continue
+        required_fragments = (
+            f'{marker}="$RUNNER_TEMP/release-acceptance-patch-started-$RELEASE_ID"',
+            f'rm -f "${marker}"',
+            f"export {marker}",
+            f'if [[ "$publication_attempted" != "true" && ! -f "${marker}" ]]; then',
+        )
+        for fragment in required_fragments:
+            if fragment not in step:
+                errors.append(f"{step_name} is missing PATCH-attempt recovery guard: {fragment}")
+        marker_setup = step.find(f"{marker}=")
+        trap_setup = step.find("trap redraft_failed_publication ERR")
+        command_position = step.find(acceptance_command)
+        attempt_position = step.find("publication_attempted=true")
+        if marker_setup < 0 or trap_setup < 0 or marker_setup > trap_setup:
+            errors.append(f"{step_name} arms recovery before its marker is reset")
+        if command_position < 0 or attempt_position < command_position:
+            errors.append(f"{step_name} arms unconditional recovery before acceptance PATCH dispatch")
+        if f'trap - ERR\n        rm -f "${marker}"' not in step:
+            errors.append(f"{step_name} does not clear its PATCH-attempt marker after recovery is disarmed")
     return errors
 
 
@@ -833,6 +902,23 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
 
+    def test_release_workflow_is_yaml_parseable(self) -> None:
+        document = yaml.safe_load(self.release)
+        self.assertIsInstance(document, dict)
+        self.assertIn("jobs", document)
+
+    def test_ci_runs_release_acceptance_gate_regressions(self) -> None:
+        validation = yaml_section(self.build, "validate-ci-tools", indent=2)
+        acceptance_tests = named_step(validation, "Test release acceptance publication gate")
+        self.assertTrue(
+            exact_field(
+                acceptance_tests,
+                "run",
+                "python3 .github/scripts/test-release-acceptance-gate.py",
+                indent=6,
+            )
+        )
+
     def test_static_build_matrix_baseline_does_not_duplicate_producer_enforcement(self) -> None:
         static_validation = yaml_section(self.build, "validate-ci-tools", indent=2)
         structural_producer = yaml_section(self.build, "build-windows-shipping", indent=2)
@@ -1121,6 +1207,31 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_versioned_publication_requires_ready_release_profile(self) -> None:
         self.assertEqual(versioned_publication_gate_errors(self.release), [])
+
+    def test_final_publication_paths_use_acceptance_gate(self) -> None:
+        self.assertEqual(release_acceptance_gate_errors(self.release), [])
+
+    def test_release_acceptance_recovery_waits_for_patch_marker(self) -> None:
+        self.assertEqual(release_acceptance_recovery_errors(self.release), [])
+
+    def test_release_acceptance_gate_rejects_bare_patch_mutation(self) -> None:
+        acceptance_command = 'python3 -I "$GITHUB_WORKSPACE/.github/scripts/release-acceptance-gate.py"'
+        for step_name in (
+            "Publish complete stable versioned release",
+            "Publish complete nightly rolling release",
+        ):
+            step = named_step(self.release, step_name)
+            mutated = self.release.replace(
+                step,
+                step.replace(acceptance_command, "gh api --method PATCH"),
+                1,
+            )
+            with self.subTest(step_name=step_name):
+                errors = release_acceptance_gate_errors(mutated)
+                self.assertIn(
+                    f"{step_name} must not publish through a bare gh API PATCH",
+                    errors,
+                )
 
     def test_release_timestamp_uses_authenticated_workflow_run_record(self) -> None:
         self.assertEqual(release_run_timestamp_errors(self.release), [])

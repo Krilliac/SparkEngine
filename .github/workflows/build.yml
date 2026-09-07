@@ -108,6 +108,9 @@ jobs:
     - name: Test exact-commit release gate
       run: python3 .github/scripts/test-verify-exact-required-gate.py
 
+    - name: Test release acceptance publication gate
+      run: python3 .github/scripts/test-release-acceptance-gate.py
+
     - name: Test the build-matrix exact-source status gate
       run: node .github/scripts/test-build-matrix-commit-status.js
 

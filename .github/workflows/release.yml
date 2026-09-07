@@ -2132,10 +2132,14 @@ jobs:
         RELEASE_ID: ${{ steps.stable-stage.outputs.id || steps.release-freeze.outputs.target_release_id }}
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         TARGET_SHA: ${{ github.sha }}
+        EXPECTED_ASSETS_FILE: expected-release-assets.txt
+        EXPECTED_DIGESTS_FILE: expected-release-digests.txt
       run: |
         set -euo pipefail
         test -n "$RELEASE_ID"
-        PUBLISHED_RELEASE="$RUNNER_TEMP/published-stable-release.json"
+        RELEASE_ACCEPTANCE_PATCH_STARTED_FILE="$RUNNER_TEMP/release-acceptance-patch-started-$RELEASE_ID"
+        rm -f "$RELEASE_ACCEPTANCE_PATCH_STARTED_FILE"
+        export RELEASE_ACCEPTANCE_PATCH_STARTED_FILE
         FINAL_GATE_OUTPUT="$RUNNER_TEMP/final-stable-exact-gate.out"
         rm -f "$FINAL_GATE_OUTPUT"
         GITHUB_OUTPUT="$FINAL_GATE_OUTPUT" \
@@ -2188,7 +2192,7 @@ jobs:
         redraft_failed_publication() {
           local failure_status="$?"
           trap - ERR
-          if [[ "$publication_attempted" != "true" ]]; then
+          if [[ "$publication_attempted" != "true" && ! -f "$RELEASE_ACCEPTANCE_PATCH_STARTED_FILE" ]]; then
             return "$failure_status"
           fi
           if ! python3 -I "$GITHUB_WORKSPACE/.github/scripts/recover_release_publication.py" \
@@ -2202,25 +2206,13 @@ jobs:
           return "$failure_status"
         }
         trap redraft_failed_publication ERR
+        python3 -I "$GITHUB_WORKSPACE/.github/scripts/release-acceptance-gate.py"
         publication_attempted=true
-        gh api --method PATCH \
-          "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
-          -F draft=false \
-          -F prerelease=false \
-          -f make_latest=true > "$PUBLISHED_RELEASE"
-        jq -e \
-          --argjson release_id "$RELEASE_ID" \
-          --arg release_tag "$RELEASE_TAG" \
-          'type == "object" and
-           .id == $release_id and
-           .tag_name == $release_tag and
-           .draft == false and
-           .prerelease == false' \
-          "$PUBLISHED_RELEASE" >/dev/null
         bash "$GITHUB_WORKSPACE/.github/scripts/verify-release-publication-boundary.sh" \
           post-publish-preflight
         publication_attempted=false
         trap - ERR
+        rm -f "$RELEASE_ACCEPTANCE_PATCH_STARTED_FILE"
 
     - name: Publish complete nightly rolling release
       if: needs.prepare.outputs.is_versioned == 'false'
@@ -2236,10 +2228,14 @@ jobs:
         RELEASE_ID: ${{ steps.nightly-stage.outputs.id }}
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         TARGET_SHA: ${{ github.sha }}
+        EXPECTED_ASSETS_FILE: expected-release-assets.txt
+        EXPECTED_DIGESTS_FILE: expected-release-digests.txt
       run: |
         set -euo pipefail
         test -n "$RELEASE_ID"
-        PUBLISHED_RELEASE="$RUNNER_TEMP/published-nightly-release.json"
+        RELEASE_ACCEPTANCE_PATCH_STARTED_FILE="$RUNNER_TEMP/release-acceptance-patch-started-$RELEASE_ID"
+        rm -f "$RELEASE_ACCEPTANCE_PATCH_STARTED_FILE"
+        export RELEASE_ACCEPTANCE_PATCH_STARTED_FILE
         FINAL_GATE_OUTPUT="$RUNNER_TEMP/final-nightly-exact-gate.out"
         rm -f "$FINAL_GATE_OUTPUT"
         GITHUB_OUTPUT="$FINAL_GATE_OUTPUT" \
@@ -2292,7 +2288,7 @@ jobs:
         redraft_failed_publication() {
           local failure_status="$?"
           trap - ERR
-          if [[ "$publication_attempted" != "true" ]]; then
+          if [[ "$publication_attempted" != "true" && ! -f "$RELEASE_ACCEPTANCE_PATCH_STARTED_FILE" ]]; then
             return "$failure_status"
           fi
           if ! python3 -I "$GITHUB_WORKSPACE/.github/scripts/recover_release_publication.py" \
@@ -2306,25 +2302,13 @@ jobs:
           return "$failure_status"
         }
         trap redraft_failed_publication ERR
+        python3 -I "$GITHUB_WORKSPACE/.github/scripts/release-acceptance-gate.py"
         publication_attempted=true
-        gh api --method PATCH \
-          "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
-          -F draft=false \
-          -F prerelease=true \
-          -f make_latest=false > "$PUBLISHED_RELEASE"
-        jq -e \
-          --argjson release_id "$RELEASE_ID" \
-          --arg release_tag "$RELEASE_TAG" \
-          'type == "object" and
-           .id == $release_id and
-           .tag_name == $release_tag and
-           .draft == false and
-           .prerelease == true' \
-          "$PUBLISHED_RELEASE" >/dev/null
         bash "$GITHUB_WORKSPACE/.github/scripts/verify-release-publication-boundary.sh" \
           post-publish-preflight
         publication_attempted=false
         trap - ERR
+        rm -f "$RELEASE_ACCEPTANCE_PATCH_STARTED_FILE"
 
     - name: Verify release tag immediately after publication
       env:
