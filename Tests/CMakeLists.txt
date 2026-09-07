@@ -657,6 +657,18 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/UIDesigner/UIDesignerSystem.cpp"
 )
 
+# This is an in-tree compatibility check, not an installed-SDK consumer. It
+# intentionally includes the legacy engine enum and verifies that it remains
+# aligned with the canonical public SDK type at compile time.
+add_library(SparkWeaponEnumCompatibility OBJECT
+    "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/FPSProgression/weapon_enum_compatibility.cpp"
+)
+target_compile_features(SparkWeaponEnumCompatibility PRIVATE cxx_std_23)
+target_include_directories(SparkWeaponEnumCompatibility PRIVATE
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+    "${CMAKE_SOURCE_DIR}/SparkSDK/Include"
+)
+
 # Standalone process used to exercise CRT destruction order without the test
 # runner's top-level crash handler masking a teardown access violation.
 add_executable(SparkDebugHookTeardownProbe
@@ -1662,3 +1674,6 @@ if(Python3_Interpreter_FOUND)
 else()
     message(WARNING "Python 3 not found; template runtime-sheet and Spark CLI validation are disabled")
 endif()
+
+# Actual FPS mutation adapters and engine event publication, without module rendering dependencies.
+add_subdirectory(FPSGameplayEvents)

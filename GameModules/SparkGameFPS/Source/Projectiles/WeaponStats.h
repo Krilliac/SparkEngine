@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "Enums/GameSystemEnums.h"
+#include <Spark/WeaponTypes.h>
 #include <cassert>
 
 /**

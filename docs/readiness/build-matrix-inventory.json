@@ -1351,7 +1351,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1442,
+      "line": 1454,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1413,7 +1413,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1248,
+      "line": 1260,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2342,7 +2342,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 684,
+      "line": 696,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2463,7 +2463,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 662,
+      "line": 674,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2587,7 +2587,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 763,
+      "line": 775,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2737,10 +2737,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 671,
+      "line": 683,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:670",
+          "id": "Tests/CMakeLists.txt:682",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -2832,7 +2832,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 682,
+      "line": 694,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2842,7 +2842,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 686,
+      "line": 698,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2894,7 +2894,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 768,
+      "line": 780,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2944,7 +2944,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 688,
+      "line": 700,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2976,10 +2976,20 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 758,
+      "line": 770,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
+      "resolved": true
+    },
+    {
+      "target": "SparkWeaponEnumCompatibility",
+      "kind": "object_library",
+      "file": "Tests/CMakeLists.txt",
+      "line": 663,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
       "resolved": true
     },
     {
@@ -3206,6 +3216,66 @@
           ]
         }
       ],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_fps_abilities_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 113,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_fps_assets_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 41,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_fps_gameplay_events_tests",
+      "kind": "executable",
+      "file": "Tests/FPSGameplayEvents/CMakeLists.txt",
+      "line": 7,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_fps_inventory_quests_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 125,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_fps_progression_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 21,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_fps_weapons_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 64,
+      "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
       "resolved": true
@@ -3764,7 +3834,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 684,
+          "line": 696,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3910,7 +3980,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 662,
+          "line": 674,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4036,7 +4106,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 763,
+          "line": 775,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4306,7 +4376,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 671,
+          "line": 683,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4406,7 +4476,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 682,
+          "line": 694,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4424,7 +4494,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 686,
+          "line": 698,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4500,7 +4570,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 768,
+          "line": 780,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4590,7 +4660,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 688,
+          "line": 700,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4646,9 +4716,27 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 758,
+          "line": 770,
           "kind": "shared_library",
           "origin": "wrapper-call",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkWeaponEnumCompatibility",
+      "kind": "object_library",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 663,
+          "kind": "object_library",
+          "origin": "declaration",
           "definitionScope": [],
           "resolved": true
         }
@@ -4854,6 +4942,114 @@
           "file": "CMakeLists.txt",
           "line": 843,
           "kind": "interface_library",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_fps_abilities_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 113,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_fps_assets_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 41,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_fps_gameplay_events_tests",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/FPSGameplayEvents/CMakeLists.txt",
+          "line": 7,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_fps_inventory_quests_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 125,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_fps_progression_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 21,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_fps_weapons_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 64,
+          "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
           "resolved": true

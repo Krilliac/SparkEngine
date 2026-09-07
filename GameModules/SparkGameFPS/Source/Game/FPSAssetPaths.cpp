@@ -5,10 +5,10 @@
 
 #include "FPSAssetPaths.h"
 
-#include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
+// Executable discovery needs the native API, not private engine platform types.
+#ifdef _WIN32
 #include <windows.h>
-#endif // SPARK_PLATFORM_WINDOWS
+#endif // _WIN32
 
 namespace Spark
 {
@@ -18,7 +18,7 @@ namespace Spark
         {
             std::filesystem::path ExecutableDirectory()
             {
-#ifdef SPARK_PLATFORM_WINDOWS
+#ifdef _WIN32
                 wchar_t buffer[MAX_PATH] = {};
                 const DWORD length = ::GetModuleFileNameW(nullptr, buffer, static_cast<DWORD>(MAX_PATH));
                 if (length == 0 || length >= static_cast<DWORD>(MAX_PATH))
@@ -30,7 +30,7 @@ namespace Spark
                 if (error)
                     return {};
                 return exePath.parent_path();
-#endif // SPARK_PLATFORM_WINDOWS
+#endif // _WIN32
             }
         } // namespace
 

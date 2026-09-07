@@ -454,10 +454,16 @@ void Game::InitializeGameplaySystems()
     // --- Progression ---
     m_progression = std::make_unique<Spark::ProgressionSystem>();
     m_progression->Initialize();
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Progression system initialized (level 1, max %d)",
+                   m_progression->GetMaxLevel());
+    LOG_TO_CONSOLE_IMMEDIATE(L"Progression system initialized (level 1, 50 max)", L"SUCCESS");
 
     // Wire progression callbacks to HUD
     m_progression->GetCallbacks().onLevelUp = [this](int newLevel, const Spark::LevelBonuses& bonuses)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Level up! Now level %d", newLevel);
+        std::wstring message = L"LEVEL UP! Now level " + std::to_wstring(newLevel);
+        LOG_TO_CONSOLE_IMMEDIATE(message, L"SUCCESS");
         if (m_hudSystem)
             m_hudSystem->AddKillFeedEntry("", "Player1", "LEVEL UP: " + std::to_string(newLevel));
 
@@ -473,6 +479,12 @@ void Game::InitializeGameplaySystems()
     {
         if (m_hudSystem)
             m_hudSystem->AddKillFeedEntry("", "UNLOCK", unlock.name + " - " + unlock.description);
+    };
+
+    m_progression->GetCallbacks().onXPAwarded = [](int base, const std::string& source, int modified)
+    {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "XP awarded: %d (source: %s, modified: %d)", base, source.c_str(),
+                        modified);
     };
 
     // --- Loot System ---

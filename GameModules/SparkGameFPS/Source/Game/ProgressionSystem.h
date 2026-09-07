@@ -7,7 +7,6 @@
  */
 
 #pragma once
-#include "Core/Platform.h"
 #include "Enums/GameSystemEnums.h"
 
 #include <vector>
@@ -63,6 +62,8 @@ namespace Spark
         std::function<void(int newLevel, const LevelBonuses& bonuses)> onLevelUp;
         std::function<void(const LevelUnlock& unlock)> onUnlock;
         std::function<void(int xpGained, int totalXP)> onXPGained;
+        /// Diagnostic notification before XP is applied; kept separate from gameplay callbacks.
+        std::function<void(int baseXP, const std::string& source, int modifiedXP)> onXPAwarded;
     };
 
     /**
@@ -93,7 +94,7 @@ namespace Spark
         /**
          * @brief Award XP from various sources
          * @param amount Base XP amount (modified by multiplier)
-         * @param source Description for logging ("kill", "wave_clear", "quest")
+         * @param source Description forwarded to onXPAwarded ("kill", "wave_clear", "quest").
          */
         void AwardXP(int amount, const std::string& source = "");
 
