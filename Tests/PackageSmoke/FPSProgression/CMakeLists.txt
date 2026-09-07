@@ -72,12 +72,6 @@ set_target_properties(spark_fps_weapons_consumer PROPERTIES
 )
 add_test(NAME SparkFPSWeaponsConsumer COMMAND spark_fps_weapons_consumer)
 
-# Separately check the engine's legacy header against the canonical SDK type.
-# This object is not linked to any consumer and adds no private include path.
-add_library(spark_weapon_enum_compatibility OBJECT weapon_enum_compatibility.cpp)
-target_compile_features(spark_weapon_enum_compatibility PRIVATE cxx_std_23)
-target_include_directories(spark_weapon_enum_compatibility PRIVATE "${_public_sdk}")
-
 add_test(NAME SparkSDKHeaderRefresh
     COMMAND "${CMAKE_COMMAND}"
         "-DCONSUMER_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}"
@@ -93,6 +87,27 @@ add_test(NAME SparkSDKHeaderRefresh
         -P "${CMAKE_CURRENT_LIST_DIR}/TestSDKHeaderRefresh.cmake"
 )
 set_tests_properties(SparkSDKHeaderRefresh PROPERTIES TIMEOUT 300)
+
+# Rebuild a copied consumer tree that contains only the FPS source slice and
+# staged Spark/ headers. This catches any target that reaches back into the
+# checkout for an engine-private header through a relative include.
+add_test(NAME SparkFPSProgressionConsumerSourceBoundary
+    COMMAND "${CMAKE_COMMAND}"
+        "-DCONSUMER_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DFPS_SOURCE=${_fps_source}"
+        "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/sdk-source-boundary/$<CONFIG>"
+        "-DINSTALLED_INCLUDE_DIR=${SPARK_ENGINE_INCLUDE_DIR}"
+        "-DCONSUMER_CONFIG=$<CONFIG>"
+        "-DCONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCONSUMER_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCONSUMER_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCONSUMER_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        "-DCONSUMER_CTEST=${CMAKE_CTEST_COMMAND}"
+        -P "${CMAKE_CURRENT_LIST_DIR}/TestConsumerSourceBoundary.cmake"
+)
+set_tests_properties(SparkFPSProgressionConsumerSourceBoundary PROPERTIES TIMEOUT 300)
 
 # ClassSystem and Player use this exact ability implementation in the FPS module.
 add_executable(spark_fps_abilities_consumer
