@@ -25,12 +25,14 @@
 #include "Utils/JsonUtils.h"
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <utility>
 #include <set>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -90,14 +92,20 @@ namespace
         return allowed.count(s) != 0;
     }
 
+    template <size_t N> bool InSet(const std::string& s, const std::array<std::string_view, N>& allowed)
+    {
+        const std::string_view value(s.data(), s.size());
+        return std::find(allowed.begin(), allowed.end(), value) != allowed.end();
+    }
+
     // Vocabularies mirrored from TFDataTables.cpp's IsOneOf validation.
-    const std::set<std::string> kWeaponSlots = {
+    constexpr std::array<std::string_view, 12> kWeaponSlots = {
         "rifle",        "carbine",       "lmg",   "sniper", "pistol",
         "shotgun",      "launcher",      "melee", "tool",   "colossus_autocannon",
         "vehicle_main", "vehicle_turret"};
-    const std::set<std::string> kWeaponKinds = {"hitscan", "projectile", "melee", "beam"};
-    const std::set<std::string> kRegionTiers = {"skyanchor", "outpost", "fort", "facility"};
-    const std::set<std::string> kFactionTags = {"MRA", "AUC", "HLX"};
+    constexpr std::array<std::string_view, 4> kWeaponKinds = {"hitscan", "projectile", "melee", "beam"};
+    constexpr std::array<std::string_view, 4> kRegionTiers = {"skyanchor", "outpost", "fort", "facility"};
+    constexpr std::array<std::string_view, 3> kFactionTags = {"MRA", "AUC", "HLX"};
 } // namespace
 
 // ============================================================================
@@ -691,5 +699,7 @@ TEST(TFData_Factions_ThreePowers_CompleteTraits)
         EXPECT_GE(Num(traits, "projGravityMult", -1.0), 0.0); // HLX: 0 = no drop
         EXPECT_GT(Num(traits, "shieldRegenDelaySec"), 0.0);
     }
-    EXPECT_TRUE(tags == kFactionTags); // exactly MRA/AUC/HLX, no strangers
+    EXPECT_EQ(tags.size(), kFactionTags.size());
+    for (const std::string& tag : tags)
+        EXPECT_TRUE(InSet(tag, kFactionTags)); // exactly MRA/AUC/HLX, no strangers
 }
