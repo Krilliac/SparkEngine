@@ -113,6 +113,16 @@ jobs:
           set -euo pipefail
           python3 Tests/Tools/test_site_data_contract.py -v
 
+      - name: Validate documentation links and routes
+        run: |
+          set -euo pipefail
+          python3 tools/site-data/validate_docs_links.py
+
+      - name: Run documentation health tests
+        run: |
+          set -euo pipefail
+          python3 Tests/Tools/test_docs_health.py -v
+
       # Documentation health is excluded from THIS determinism claim (see the
       # --skip-doc-health note below). The publication path proves health too:
       # site-data-publish.yml regenerates it once and compares the payload built

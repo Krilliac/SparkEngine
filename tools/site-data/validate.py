@@ -2080,6 +2080,18 @@ class Validator:
                 f"{entry['target']}: {entry['error']}",
             )
 
+        from validate_docs_links import validate_docs_links, validate_docs_routes
+
+        route_errors = validate_docs_routes(catalog)
+        for entry in route_errors:
+            self.error(f"docsCatalog.routeOverrides.{entry['target']}", entry["error"])
+        link_errors = validate_docs_links(catalog)
+        for entry in link_errors:
+            self.error(
+                f"{entry['source']}:{entry['line']}",
+                f"broken link to {entry['target']}: {entry['error']}",
+            )
+
     def validate_docs_catalog(self) -> None:
         catalog = self.contract["docsCatalog"]
         include = catalog.get("include", {})
