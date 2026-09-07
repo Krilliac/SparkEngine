@@ -3230,6 +3230,16 @@
       "resolved": true
     },
     {
+      "target": "spark_fps_weapons_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 62,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "spark_package_module_header_smoke",
       "kind": "module_library",
       "file": "Tests/PackageSmoke/CMakeLists.txt",
@@ -3244,6 +3254,16 @@
       "kind": "executable",
       "file": "Tests/PackageSmoke/CMakeLists.txt",
       "line": 13,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_weapon_enum_compatibility",
+      "kind": "object_library",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 75,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4916,6 +4936,24 @@
       ]
     },
     {
+      "target": "spark_fps_weapons_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 62,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "spark_package_module_header_smoke",
       "kind": "module_library",
       "buildable": true,
@@ -4945,6 +4983,24 @@
           "file": "Tests/PackageSmoke/CMakeLists.txt",
           "line": 13,
           "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_weapon_enum_compatibility",
+      "kind": "object_library",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 75,
+          "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
           "resolved": true

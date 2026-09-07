@@ -58,3 +58,20 @@ foreach(_scenario IN LISTS _asset_scenarios)
             -P "${CMAKE_CURRENT_LIST_DIR}/RunAssetsConsumer.cmake"
     )
 endforeach()
+
+add_executable(spark_fps_weapons_consumer
+    weapons.cpp
+    "${_fps_source}/Projectiles/WeaponStats.cpp"
+)
+target_compile_features(spark_fps_weapons_consumer PRIVATE cxx_std_23)
+target_include_directories(spark_fps_weapons_consumer PRIVATE "${_fps_source}" "${_public_sdk}")
+set_target_properties(spark_fps_weapons_consumer PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+add_test(NAME SparkFPSWeaponsConsumer COMMAND spark_fps_weapons_consumer)
+
+# Separately check the engine's legacy header against the canonical SDK type.
+# This object is not linked to any consumer and adds no private include path.
+add_library(spark_weapon_enum_compatibility OBJECT weapon_enum_compatibility.cpp)
+target_compile_features(spark_weapon_enum_compatibility PRIVATE cxx_std_23)
+target_include_directories(spark_weapon_enum_compatibility PRIVATE "${_public_sdk}")
