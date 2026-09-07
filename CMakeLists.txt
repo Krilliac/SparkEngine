@@ -2523,6 +2523,9 @@ endif()
 # ---------------------------------------------------------------------
 # 16) Test suite
 # ---------------------------------------------------------------------
+include("${CMAKE_SOURCE_DIR}/cmake/SparkFuzzPolicy.cmake")
+spark_enable_fuzz_policy("${CMAKE_SOURCE_DIR}")
+
 if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
     enable_testing()
     add_test(

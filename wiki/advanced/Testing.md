@@ -177,6 +177,23 @@ stay equal to the aggregate step's `--expected-lane` list
 Windows Debug SparkTests run is still guarded off in `build.yml` until the
 per-config timeout is measured on the runner.
 
+### SEC-120 Fuzz-Policy Checks
+
+The blocking `fuzz-policy` Linux job runs the standalone policy CMake project.
+Its structural gate and Python adversarial tests do not substitute for production
+fuzz-harness execution, so SEC-120 remains release-blocking until the documented
+entry-point targets, bounded corpora, sanitizer smoke, and scheduled campaigns
+exist. See [Fuzz Policy and Parser Security](Fuzz-Policy-and-Parser-Security.md).
+
+```bash
+cmake -S tools/fuzz-policy -B build/fuzz-policy
+cmake --build build/fuzz-policy --target check-fuzz-policy
+ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error
+```
+
+With a multi-config generator such as Visual Studio, append `-C Debug` (or the
+configuration being tested) to the `ctest` command.
+
 ### Run Registered CTest Entries
 
 ```bash

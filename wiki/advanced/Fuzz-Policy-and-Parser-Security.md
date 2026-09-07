@@ -1,170 +1,98 @@
 # Fuzz Policy and Parser Security
 
-**Audience:** Engine developers, security reviewers, CI maintainers
-**Thread Context:** SEC-120 — fuzz and bound every untrusted parser and protocol
-**Platform-Backend Scope:** All platforms (fuzz infrastructure runs on Linux CI)
+**Audience:** Engine developers, security reviewers, and CI maintainers
+**Thread Context:** SEC-120 — stable-v1 untrusted file and package parsers
+**Platform-Backend Scope:** Cross-platform policy tooling; Linux CI is the blocking execution lane
 
----
+## Current Status
 
-## Overview
+SEC-120 remains open and release-blocking. The repository has a blocking structural
+policy gate, but it does not yet have a production fuzz target, seed corpus, sanitizer
+fuzz smoke, scheduled campaign, coverage result, or crash-free-duration result.
 
-SparkEngine processes untrusted data from files, network packets, scripts, and modded content through ~48 distinct parser surfaces. SEC-120 establishes a **fail-closed fuzz policy** that requires every parser crossing a trust boundary to be inventoried, classified, and either fuzzed or explicitly blocked with a tracking ticket.
+The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
+For the recorded source-tree state it reports 46 explicitly inventoried parsers, all
+blocked, plus 80 detected candidates awaiting manual classification. Those counts are
+not fuzz coverage and must be regenerated whenever the policy inputs change.
 
-The policy infrastructure lives in `tools/fuzz-policy/` and is enforced by CI via `check_fuzz_policy.py`.
+Network packet/protocol fuzzing belongs to NET-100 behind G12. AngelScript and
+visual-script fuzzing belongs to ENG-200 behind G11. Their source subtrees are named
+as ticketed exclusions in the inventory rather than silently omitted.
 
----
+## What the Gate Proves
 
-## Trust Boundary Model
+The policy tooling lives under the case-sensitive Git path `tools/fuzz-policy/`.
+The `fuzz-policy` Linux job runs its standalone CMake project, and Required CI Gate
+depends on that job. The root CMake project also exposes `check-fuzz-policy` and the
+`FuzzPolicy`/`FuzzPolicyAdversarial` CTest tests.
 
-Every parser is classified into one of three trust boundaries:
+The gate proves only that:
 
-| Boundary | Description | Risk | Examples |
-|----------|-------------|------|----------|
-| `untrusted-file` | Data from disk that users/modders can supply | Path traversal, buffer overflow, integer overflow, unbounded allocation | Save files, scene files, textures, meshes, mods, config |
-| `untrusted-network` | Data from network peers (unauthenticated UDP) | All file risks + remote exploitation, DoS | Packets, replication data, datablocks |
-| `trusted-internal` | Data from engine-controlled sources | Lower risk but still fuzzable (IPC, database) | Daemon framing, SQLite rows, scene snapshots |
+- policy JSON is strict UTF-8 with bounded size/depth/collections, unique keys,
+  integer-only numeric fields, exact schemas, and known enum values;
+- every declared path is repository-relative and resolves through regular,
+  non-reparse, non-symlink components; source/target/seed files cannot be hard links;
+- the twelve declared first-party roots were scanned deterministically within file,
+  directory, byte, depth, and wall-time limits, with unreadable entries fatal;
+- every detected candidate is either owned by an inventory record or pinned in the
+  ticketed classification backlog, so a newly detected candidate fails CI;
+- any parser marked `fuzzed` has a one-to-one non-empty corpus and static CMake
+  bindings for input length, per-input timeout, memory, smoke timeout, and a harness
+  depth constant.
 
-### Trust Boundary Rules
+The gate does not prove that a regex scanner finds every possible parser, that a
+declared harness reaches the production entry point, or that declared limits hold at
+runtime. Those require review plus actual ASan/UBSan fuzz execution.
 
-1. **Untrusted-file** is the default classification for any parser that reads from disk — user-editable config, save files, and modded content are all untrusted
-2. **Untrusted-network** applies to any parser that processes data received over the network, regardless of whether the protocol is authenticated
-3. **Trusted-internal** is reserved for parsers where both the writer and reader are engine-controlled, with no user/modder path to inject data
-4. A parser handling common external formats (`.json`, `.xml`, `.csv`) in a trusted-internal role must document why the trust boundary is correct
+## Commands
 
----
+```bash
+python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci
+python3 -m unittest discover -s Tests/fuzz-policy -p "test_*.py" -v
 
-## Parser Inventory
-
-The authoritative parser inventory lives in `tools/fuzz-policy/parser_inventory.py` as the `KNOWN_PARSERS` list. Each entry contains:
-
-- **parser_id**: Unique kebab-case identifier
-- **description**: What the parser does
-- **trust_boundary**: One of the three boundaries above
-- **source_files**: All source files that implement the parser
-- **formats_handled**: File extensions or wire format names
-- **fuzz_status**: `fuzzed`, `blocked`, or `unclassified`
-- **fuzz_target**: Path to the libFuzzer harness (when fuzzed)
-- **blocker_reason/blocker_ticket**: Why fuzzing is blocked and the tracking ticket
-
-### Adding a New Parser
-
-When adding code that parses external data:
-
-1. Add a `ParserEntry` to `KNOWN_PARSERS` in `parser_inventory.py`
-2. Set the trust boundary — default to `untrusted-file` unless you can prove otherwise
-3. Set `fuzz_status` to either `fuzzed` (with a harness) or `blocked` (with reason + ticket)
-4. Run `python tools/fuzz-policy/check_fuzz_policy.py` to verify
-5. The CI gate will reject any PR that adds parser-like code without a registry entry (in `--ci` mode)
-
----
-
-## Fuzz Status Lifecycle
-
-```
-UNCLASSIFIED → BLOCKED (with ticket) → FUZZED (with harness)
-                                            ↓
-                                      Regression fixtures persisted
+cmake -S tools/fuzz-policy -B build/fuzz-policy
+cmake --build build/fuzz-policy --target check-fuzz-policy
+ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error
 ```
 
-- **UNCLASSIFIED**: The CI gate rejects this in `--ci` mode. Every parser must be classified.
-- **BLOCKED**: The parser is known but not yet fuzzed. Must have a `blocker_reason` explaining why and a `blocker_ticket` tracking the work.
-- **FUZZED**: The parser has a working libFuzzer/AFL harness. Must declare `fuzz_target`, `max_input_bytes`, and `max_parse_time_ms`.
+With a multi-config generator such as Visual Studio, append `-C Debug` (or the
+configuration being tested) to the `ctest` command.
 
----
+All validation failures return nonzero, including JSON emission mode. The CI mode
+also checks the workflow/CMake wiring and requires the committed evidence snapshot
+to equal the freshly computed report.
 
-## Resource Budgets
+## Adding or Reclassifying a Parser
 
-Every fuzz target must declare bounded resource limits to prevent unbounded consumption during fuzz campaigns. Four standard tiers are defined in `corpus_manifest.py`:
+1. Add its production implementation files to
+   `tools/fuzz-policy/parser-inventory.json` using canonical repository-relative paths.
+2. Mark it `blocked` with a substantive SEC-120 reason, or mark it `fuzzed` with an
+   existing harness, CMake file, target, selector, and corpus identifier.
+3. Remove any corresponding source from `deferred_candidates`.
+4. For a fuzzed parser, add exactly one entry to `corpus-manifest.json`. The seed tree
+   must be non-empty, fresh, confined, link-free, and within every declared limit.
+5. Bind the exact input, timeout, memory, depth, and smoke limits in the harness and
+   CMake registration, then run the commands above under ASan/UBSan.
+6. Persist each minimized crash input as a regression and regenerate the evidence
+   snapshot.
 
-| Tier | Max Input | Timeout | Memory | Corpus Entries | Corpus Size |
-|------|-----------|---------|--------|----------------|-------------|
-| **network** | 64 KB | 500 ms | 128 MB | 10,000 | 100 MB |
-| **small** | 1 MB | 1,000 ms | 256 MB | 5,000 | 500 MB |
-| **medium** | 10 MB | 5,000 ms | 1 GB | 10,000 | 2 GB |
-| **large** | 50 MB | 30,000 ms | 2 GB | 50,000 | 5 GB |
+Do not change a parser to `fuzzed` based on an upstream library campaign or a unit
+test that bypasses the production entry point.
 
-Hard ceilings enforce that no tier can exceed: 100 MB input, 60s timeout, 4 GB memory, 100K entries, 10 GB corpus.
+## Remaining Closure Work
 
-### Corpus Freshness
-
-Seed corpora must be re-verified every 90 days. The `corpus_manifest.py` `last_verified` field tracks this, and the CI gate rejects stale corpora.
-
----
-
-## Risk-Priority Matrix
-
-Parsers are prioritized for fuzz harness implementation based on trust boundary and attack surface:
-
-| Priority | Trust Boundary | Parser Category | Examples |
-|----------|---------------|-----------------|----------|
-| **P0 — Critical** | untrusted-network | Network packet deserializers | `network-packet-parser`, `entity-replicator`, `datablock-registry` |
-| **P0 — Critical** | untrusted-file | Archive/package extractors | `sparkpak`, `archive-resource-provider`, `mod-system` |
-| **P1 — High** | untrusted-file | Binary format parsers | `save-system`, `mesh-obj-loader`, `audio-sound-effect`, `navmesh-loader` |
-| **P1 — High** | untrusted-file | Scene/prefab deserializers | `scene-serializer`, `runtime-prefab`, `entity-archetype-loader` |
-| **P2 — Medium** | untrusted-file | Text format parsers | `config-parser`, `material-loader`, `localization-system`, `datatable-system` |
-| **P2 — Medium** | untrusted-file | Shader source parsers | `shader-source-loader`, `shader-compiler-tool` |
-| **P3 — Lower** | trusted-internal | Internal serialization | `reflection-serializer`, `daemon-framing`, `async-database` |
-
----
-
-## CI Integration
-
-### Policy Check (Current)
-
-```yaml
-# In .github/workflows/build.yml (planned)
-- name: Check fuzz policy
-  run: python tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci
-```
-
-The `--ci` flag treats unclassified parser sources as hard failures (exit 1).
-
-### Fuzz Smoke (Planned — SEC-120 acceptance criteria)
-
-```yaml
-# Planned CI job: fuzz-smoke
-- name: Build fuzz targets
-  run: |
-    cmake --preset linux-fuzz
-    cmake --build build/linux-fuzz
-- name: Run fuzz smoke
-  run: ctest --test-dir build/linux-fuzz -L fuzz-smoke --output-on-failure
-```
-
-### Scheduled Campaigns (Planned — SEC-120 acceptance criteria)
-
-Longer fuzz campaigns run on a schedule (not per-PR) and publish:
-- Coverage percentage per parser
-- Crash-free duration
-- Minimized regression fixtures
-
----
-
-## Validation Scripts
-
-| Script | Purpose | CI Integration |
-|--------|---------|----------------|
-| `tools/fuzz-policy/parser_inventory.py` | Emit parser manifest | `--emit-json` for evidence |
-| `tools/fuzz-policy/corpus_manifest.py` | Validate corpus metadata | `--check` for CI |
-| `tools/fuzz-policy/check_fuzz_policy.py` | Fail-closed policy gate | `--ci` for PR checks |
-| `tests/fuzz-policy/test_fuzz_policy.py` | 54 mutation tests | `pytest` |
-
----
-
-## Related Work Items
-
-- **SEC-120**: This policy infrastructure (fuzz and bound every untrusted parser)
-- **SEC-110**: Supply-chain and dependency policy (ThirdParty fuzzing is upstream's responsibility)
-- **NET-100**: Authenticated encryption (network parsers need transport security first)
-- **ASSET-220**: Asset pipeline hardening (parsers in the asset import path)
-- **SAVE-230**: Save system hardening (save file parser)
-
----
+- classify or explicitly inventory the current candidate backlog;
+- implement the required `FuzzSave`, `FuzzScene`, `FuzzAsset`, `FuzzShader`,
+  `FuzzArchive`, and `FuzzCrashManifest` production-entry-point targets;
+- commit bounded seed corpora and minimized regression inputs;
+- add blocking ASan/UBSan smoke and scheduled campaigns with retained coverage and
+  crash-free-duration evidence;
+- independently review that each harness reaches production parsing code and that
+  allocation, depth, path, integer, and time bounds are enforced by that code.
 
 ## Source & Freshness
 
-- **Created:** 2026-08-28
-- **Work item:** SEC-120
-- **Base commit:** `360c05e8`
-- **Evidence:** `docs/sec120-fuzz-policy-evidence.json`, `docs/sec120-parser-inventory.json`
-- **Status:** Policy infrastructure delivered; 0/48 parsers have active fuzz harnesses; SEC-120 remains open/blocking
+Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, and the blocking
+`fuzz-policy` job in `.github/workflows/build.yml`. Status checked 2026-08-28 against
+base commit `d34bd6b0885fdaab640726db32ab274fd4e22815`; rerun the CI command for current
+counts.

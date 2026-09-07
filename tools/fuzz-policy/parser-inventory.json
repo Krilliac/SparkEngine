@@ -1,0 +1,554 @@
+{
+  "schema_version": 1,
+  "scope": {
+    "roots": [
+      "SparkEngine/Source",
+      "SparkEditor/Source",
+      "SparkShaderCompiler/src",
+      "SparkInstaller/src",
+      "SparkCrashReporter/src",
+      "SparkAssetPipelineCore/src",
+      "SparkCooker/src",
+      "SparkWorker/src",
+      "SparkBuild/src",
+      "SparkLauncher/src",
+      "SparkConsole/src",
+      "GameModules"
+    ],
+    "excluded_subtrees": [
+      {
+        "path": "SparkEngine/Source/Engine/Networking",
+        "reason": "Packet and protocol campaigns are owned by NET-100 behind readiness gate G12.",
+        "ticket": "NET-100"
+      },
+      {
+        "path": "SparkEngine/Source/Engine/Scripting",
+        "reason": "AngelScript and visual-script campaigns are owned by ENG-200 behind readiness gate G11.",
+        "ticket": "ENG-200"
+      },
+      {
+        "path": "GameModules/SparkGameMMOFPS/Source/Net",
+        "reason": "Game-module packet parsing belongs to the NET-100 protocol campaign.",
+        "ticket": "NET-100"
+      },
+      {
+        "path": "GameModules/SparkGameVisualScript",
+        "reason": "Visual-script parsing belongs to the ENG-200 scripting campaign.",
+        "ticket": "ENG-200"
+      }
+    ],
+    "extensions": [".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".inl", ".m", ".mm"],
+    "limits": {
+      "max_files": 10000,
+      "max_directories": 5000,
+      "max_file_bytes": 4194304,
+      "max_total_bytes": 268435456,
+      "max_depth": 32,
+      "timeout_seconds": 30
+    }
+  },
+  "parsers": [
+    {
+      "id": "mesh-obj-loader",
+      "description": "Wavefront OBJ model loading on Windows and Linux.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/ModelLoadingWindows.cpp", "SparkEngine/Source/Graphics/ModelLoadingLinux.cpp"],
+      "formats": [".obj"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "mesh-fbx-importer",
+      "description": "FBX model importer.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/FBXImporter.cpp", "SparkEngine/Source/Graphics/FBXImporter.h"],
+      "formats": [".fbx"],
+      "status": "blocked",
+      "blocker": {"reason": "The proprietary SDK path has no engine-owned fuzz harness or bounded corpus.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "mesh-gltf-loader",
+      "description": "glTF and GLB static-mesh loader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp", "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.h"],
+      "formats": [".gltf", ".glb"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "texture-loader-windows",
+      "description": "Windows image and texture loader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/TextureSystemWindows.cpp", "SparkEngine/Source/Graphics/TextureSystem.h"],
+      "formats": [".png", ".jpg", ".bmp", ".dds", ".tga", ".hdr"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "texture-loader-linux",
+      "description": "Linux image and texture loader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/TextureSystemLinux.cpp", "SparkEngine/Source/Graphics/TextureSystemLinuxTexture.cpp"],
+      "formats": [".png", ".jpg", ".bmp", ".tga", ".hdr"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "texture-exr-loader",
+      "description": "OpenEXR texture loader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/EXRLoader.h"],
+      "formats": [".exr"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "texture-basis-transcoder",
+      "description": "Basis and KTX2 texture transcoder.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/BasisTranscoder.h"],
+      "formats": [".basis", ".ktx2"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "texture-streaming-container",
+      "description": "Streamed texture container reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/TextureStreaming.cpp"],
+      "formats": [".stex"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "material-loader",
+      "description": "Material definition loader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/MaterialLoader.cpp", "SparkEngine/Source/Graphics/MaterialLoader.h"],
+      "formats": [".mat", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "shader-source-loader",
+      "description": "Runtime shader source loading and hot reload.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/ShaderCompilationWindows.cpp", "SparkEngine/Source/Graphics/ShaderCompilationLinux.cpp", "SparkEngine/Source/Graphics/ShaderHotReload.cpp"],
+      "formats": [".hlsl", ".glsl", ".vert", ".frag", ".comp"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "svg-renderer",
+      "description": "SVG document reader used by the renderer.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/SVGRenderer.h"],
+      "formats": [".svg"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "audio-sound-effect",
+      "description": "WAV and OGG sound-effect loader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Audio/SoundEffect.cpp", "SparkEngine/Source/Audio/SoundEffect.h"],
+      "formats": [".wav", ".ogg"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "scene-serializer",
+      "description": "Runtime scene and reflected-scene reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/SceneManager/SceneManager.cpp", "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp", "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h"],
+      "formats": [".scene", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "save-system",
+      "description": "Runtime save-game reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp", "SparkEngine/Source/Engine/SaveSystem/SaveSystem.h", "SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h"],
+      "formats": [".sav", ".save"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "replay-system",
+      "description": "Recorded input replay reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/Replay/ReplaySystem.cpp", "SparkEngine/Source/Engine/Replay/ReplaySystem.h"],
+      "formats": [".replay"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "config-parser",
+      "description": "INI-style engine configuration parser.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Utils/ConfigParser.cpp", "SparkEngine/Source/Utils/ConfigParser.h"],
+      "formats": [".ini", ".cfg", ".config"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "engine-settings",
+      "description": "Engine settings JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Core/EngineSettings.cpp", "SparkEngine/Source/Core/EngineSettings.h"],
+      "formats": [".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "datatable-system",
+      "description": "CSV and JSON data-table reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/DataTable/DataTableSystem.h"],
+      "formats": [".csv", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "dialogue-system",
+      "description": "Dialogue graph reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/Dialogue/DialogueSystem.cpp", "SparkEngine/Source/Engine/Dialogue/DialogueSystem.h"],
+      "formats": [".dialogue", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "localization-system",
+      "description": "Localization catalog reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/Localization/LocalizationSystem.cpp", "SparkEngine/Source/Engine/Localization/LocalizationSystem.h"],
+      "formats": [".loc", ".csv", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "achievement-definitions",
+      "description": "Achievement definition reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/Gameplay/AchievementSystem.h"],
+      "formats": [".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "event-response-definitions",
+      "description": "Event-response definition reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp", "SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h"],
+      "formats": [".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "input-bindings",
+      "description": "User input-binding configuration reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Input/InputBindings.cpp", "SparkEngine/Source/Input/InputBindings.h"],
+      "formats": [".json", ".ini"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "mod-manifest",
+      "description": "Mod manifest and metadata reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/Modding/ModSystemIO.cpp", "SparkEngine/Source/Engine/Modding/ModSystem.h"],
+      "formats": [".mod", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "archive-resource-provider",
+      "description": "Archive-backed resource provider.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.cpp", "SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h"],
+      "formats": [".pak", ".zip"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "sparkpak-reader",
+      "description": "SparkPak archive reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Core/SparkPak.cpp", "SparkEngine/Source/Core/SparkPak.h"],
+      "formats": [".spak"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "virtual-filesystem-mounts",
+      "description": "Virtual-filesystem mount and archive metadata reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp", "SparkEngine/Source/Engine/Modding/VirtualFileSystem.h"],
+      "formats": [".vfs", ".pak"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "runtime-prefab",
+      "description": "Runtime prefab JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/ECS/RuntimePrefab.h"],
+      "formats": [".prefab", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "entity-archetype-loader",
+      "description": "Entity archetype JSON reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp", "SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.h"],
+      "formats": [".archetype", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "scene-manifest",
+      "description": "Streaming scene manifest reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/Streaming/SceneManifest.h"],
+      "formats": [".manifest", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "asset-pipeline",
+      "description": "Runtime asset metadata and import pipeline.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Graphics/AssetPipeline.cpp", "SparkEngine/Source/Graphics/AssetPipeline.h", "SparkEngine/Source/Graphics/AssetPipelineWindows.cpp", "SparkEngine/Source/Graphics/AssetPipelineLinux.cpp"],
+      "formats": ["asset-source", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "asset-migration",
+      "description": "Asset migration manifest reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Core/AssetMigration.h"],
+      "formats": [".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "navmesh-loader",
+      "description": "Navigation-mesh binary reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/AI/NavMesh.cpp", "SparkEngine/Source/Engine/AI/NavMesh.h"],
+      "formats": [".navmesh", ".bin"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "ui-layout",
+      "description": "UI layout and factory JSON readers.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Engine/UI/UILayoutExtensions.cpp", "SparkEngine/Source/Engine/UI/UILayoutExtensions.h", "SparkEngine/Source/Engine/UI/UIFactory.cpp", "SparkEngine/Source/Engine/UI/UIFactory.h"],
+      "formats": [".uilayout", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "json-utils",
+      "description": "Shared strict JSON helper layer.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Utils/JsonUtils.h"],
+      "formats": [".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No direct production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "binary-serializer",
+      "description": "Shared binary reader and serializer.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEngine/Source/Utils/Serializer.h"],
+      "formats": ["binary-blob"],
+      "status": "blocked",
+      "blocker": {"reason": "No direct production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "crash-manifest-parser",
+      "description": "Crash reporter manifest JSON parser.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkCrashReporter/src/CrashReporterApp.cpp", "SparkCrashReporter/src/CrashReporterApp.h"],
+      "formats": [".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "shader-compiler-tool",
+      "description": "Standalone shader source compiler input reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkShaderCompiler/src/main.cpp"],
+      "formats": [".hlsl", ".glsl"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "installer-state-manifest",
+      "description": "Installer state and tracked-file manifest reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkInstaller/src/InstallState.cpp"],
+      "formats": [".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "sparkbuild-config",
+      "description": "SparkBuild project configuration reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkBuild/src/Config.cpp"],
+      "formats": [".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "asset-cooker-input",
+      "description": "Asset-cooker recipe and source metadata reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkAssetPipelineCore/src/AssetCooker.cpp"],
+      "formats": ["asset-source", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "editor-scene-json",
+      "description": "Editor JSON scene reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"],
+      "formats": [".scene", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "editor-scene-binary",
+      "description": "Editor binary scene reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEditor/Source/SceneSystem/BinarySceneSerializer.cpp"],
+      "formats": [".scene", "binary-scene"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "editor-prefab",
+      "description": "Editor prefab asset reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEditor/Source/Prefabs/PrefabAsset.cpp"],
+      "formats": [".prefab", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "editor-terrain-data",
+      "description": "Editor terrain-data reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEditor/Source/Terrain/TerrainData.cpp"],
+      "formats": ["terrain-data"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    },
+    {
+      "id": "editor-layout",
+      "description": "Editor layout state reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": ["SparkEditor/Source/Core/EditorLayoutManager.cpp", "SparkEditor/Source/Core/EditorLayoutManager.h"],
+      "formats": [".ini", ".json"],
+      "status": "blocked",
+      "blocker": {"reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.", "ticket": "SEC-120"}
+    }
+  ],
+  "deferred_candidates": {
+    "reason": "Detected parser-like source requires manual SEC-120 classification; the pinned list makes newly detected candidates fail CI.",
+    "ticket": "SEC-120",
+    "source_files": [
+      "GameModules/SparkGameFPS/Source/Core/Main.cpp",
+      "GameModules/SparkGameFPS/Source/Game/Game.cpp",
+      "GameModules/SparkGameFPS/Source/Game/Game.h",
+      "GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp",
+      "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h",
+      "GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp",
+      "GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesParseRoster.cpp",
+      "GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.cpp",
+      "GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.h",
+      "GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.cpp",
+      "GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.h",
+      "GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl",
+      "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp",
+      "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp",
+      "GameModules/SparkGameRTS/Source/Core/RTSPersistence.h",
+      "GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp",
+      "GameModules/SparkGameRacing/Source/Core/RacingPersistence.h",
+      "SparkBuild/src/Downloader.cpp",
+      "SparkBuild/src/Downloader.h",
+      "SparkConsole/src/CommandParser.cpp",
+      "SparkConsole/src/CommandParser.h",
+      "SparkCrashReporter/src/main.cpp",
+      "SparkEditor/Source/Communication/CollaborativeEditSession.cpp",
+      "SparkEditor/Source/Communication/CollaborativeEditSession.h",
+      "SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp",
+      "SparkEditor/Source/Communication/EngineInterface.cpp",
+      "SparkEditor/Source/Communication/EngineInterface.h",
+      "SparkEditor/Source/Core/EditorUI.cpp",
+      "SparkEditor/Source/Core/ProjectManager.cpp",
+      "SparkEditor/Source/Integration/SparkEngineIntegration.cpp",
+      "SparkEditor/Source/Integration/SparkEngineIntegration.h",
+      "SparkEditor/Source/Panels/ReplayPanel.cpp",
+      "SparkEditor/Source/Panels/SceneImportPanel.cpp",
+      "SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp",
+      "SparkEditor/Source/SceneSystem/SceneComponentCodec.h",
+      "SparkEditor/Source/SceneSystem/SceneManager.cpp",
+      "SparkEditor/Source/SceneSystem/SceneManager.h",
+      "SparkEditor/Source/SceneSystem/SceneSerializer.cpp",
+      "SparkEditor/Source/SceneSystem/SceneSerializer.h",
+      "SparkEngine/Source/Audio/AudioEngine.cpp",
+      "SparkEngine/Source/Core/GameModuleLoader.cpp",
+      "SparkEngine/Source/Core/GameModuleLoader.h",
+      "SparkEngine/Source/Core/ReflectionSerializer.h",
+      "SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp",
+      "SparkEngine/Source/Engine/Editor/CoreComponentSerializers.h",
+      "SparkEngine/Source/Engine/Editor/CoreComponentSerializersInternal.h",
+      "SparkEngine/Source/Engine/Editor/CoreComponentSerializersPhysicsAudio.cpp",
+      "SparkEngine/Source/Engine/Editor/PlayModeManager.h",
+      "SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h",
+      "SparkEngine/Source/Engine/Streaming/AreaAssetLoader.cpp",
+      "SparkEngine/Source/Engine/Streaming/AreaAssetLoader.h",
+      "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp",
+      "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h",
+      "SparkEngine/Source/Game/CubeObject.cpp",
+      "SparkEngine/Source/Game/GameObject.cpp",
+      "SparkEngine/Source/Game/Model.cpp",
+      "SparkEngine/Source/Game/PlaceholderMesh.h",
+      "SparkEngine/Source/Game/PlaneObject.cpp",
+      "SparkEngine/Source/Game/PyramidObject.cpp",
+      "SparkEngine/Source/Game/RampObject.cpp",
+      "SparkEngine/Source/Game/SphereObject.cpp",
+      "SparkEngine/Source/Game/WallObject.cpp",
+      "SparkEngine/Source/Graphics/AssetPipelineConsoleOps.cpp",
+      "SparkEngine/Source/Graphics/AssetPipelineLinuxStreaming.cpp",
+      "SparkEngine/Source/Graphics/AssetTypesLinux.cpp",
+      "SparkEngine/Source/Graphics/AssetTypesLinuxMedia.cpp",
+      "SparkEngine/Source/Graphics/AssetTypesWindowsMedia.cpp",
+      "SparkEngine/Source/Graphics/MaterialConsoleOps.cpp",
+      "SparkEngine/Source/Graphics/MaterialSystem.cpp",
+      "SparkEngine/Source/Graphics/MaterialSystem.h",
+      "SparkEngine/Source/Graphics/Mesh.h",
+      "SparkEngine/Source/Graphics/MeshLinux.cpp",
+      "SparkEngine/Source/Graphics/MeshTypes.h",
+      "SparkEngine/Source/Graphics/MeshWindows.cpp",
+      "SparkEngine/Source/Graphics/PBRMaterialLightingLinux.cpp",
+      "SparkEngine/Source/Graphics/PBRMaterialLightingWindows.cpp",
+      "SparkEngine/Source/Graphics/Shader.h",
+      "SparkEngine/Source/Graphics/ShaderConsoleOps.cpp",
+      "SparkEngine/Source/SceneManager/SceneManager.h",
+      "SparkEngine/Source/Utils/CompressionUtils.cpp",
+      "SparkEngine/Source/Utils/CrashReportUploader.cpp",
+      "SparkEngine/Source/Utils/CrashReportUploader.h"
+    ]
+  }
+}

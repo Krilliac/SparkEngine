@@ -157,6 +157,7 @@
 - [Golden Image Testing](advanced/Golden-Image-Testing.md)
 - [Utilities](advanced/Utilities.md)
 - [Testing](advanced/Testing.md)
+- [Fuzz Policy and Parser Security](advanced/Fuzz-Policy-and-Parser-Security.md)
 - [Codebase Statistics](advanced/Codebase-Statistics.md)
 - [Codebase Health](advanced/Codebase-Health.md)
 - [Error Handling Patterns](advanced/Error-Handling-Patterns.md)

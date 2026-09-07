@@ -1,16 +1,45 @@
 {
-  "passed": true,
-  "total_parsers": 48,
-  "fuzzed": 0,
-  "blocked": 48,
-  "untrusted_file_parsers": 41,
-  "untrusted_network_parsers": 3,
-  "unclassified_source_count": 116,
-  "hard_errors": [],
-  "warnings": [
-    "reflection-serializer: trusted-internal parser handles common external formats (['.json']) \u2014 verify trust boundary classification",
-    "UNCLASSIFIED source files with parser patterns (116):\n  SparkEngine/Source/Audio/OpenALAudioEngine.cpp\n  SparkEngine/Source/Core/DynamicPluginHost.cpp\n  SparkEngine/Source/Core/FileIntegrity.cpp\n  SparkEngine/Source/Core/GamePackager.cpp\n  SparkEngine/Source/Core/ModuleManager.cpp\n  SparkEngine/Source/Core/SparkEngineWindows.cpp\n  SparkEngine/Source/Core/StartupSplash.cpp\n  SparkEngine/Source/Engine/AI/NavMesh.cpp\n  SparkEngine/Source/Engine/Animation/AnimationSystem.cpp\n  SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp\n  SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp\n  SparkEngine/Source/Engine/Scripting/ScriptHotReload.h\n  SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp\n  SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp\n  SparkEngine/Source/Game/CubeObject.cpp\n  SparkEngine/Source/Game/GameObject.cpp\n  SparkEngine/Source/Game/PlaceholderMesh.h\n  SparkEngine/Source/Game/PlaneObject.cpp\n  SparkEngine/Source/Game/PyramidObject.cpp\n  SparkEngine/Source/Game/RampObject.cpp\n  SparkEngine/Source/Game/SphereObject.cpp\n  SparkEngine/Source/Game/WallObject.cpp\n  SparkEngine/Source/Graphics/AssetMetadataLinux.cpp\n  SparkEngine/Source/Graphics/AssetMetadataWindows.cpp\n  SparkEngine/Source/Graphics/AssetPipelineConsoleOps.cpp\n  SparkEngine/Source/Graphics/AssetPipelineLinuxStreaming.cpp\n  SparkEngine/Source/Graphics/AssetTypesLinuxMedia.cpp\n  SparkEngine/Source/Graphics/AssetTypesWindows.cpp\n  SparkEngine/Source/Graphics/AssetTypesWindowsMedia.cpp\n  SparkEngine/Source/Graphics/FoliageRenderer.cpp"
+  "closure_blockers": [
+    "46 inventoried parsers have no fuzz target",
+    "82 detected candidates await classification",
+    "no corpus/resource budget is bound to a runnable fuzz target"
   ],
-  "check_date": "2026-09-07",
-  "ci_mode": false
+  "corpus": {
+    "bound_target_count": 0,
+    "corpus_count": 0,
+    "max_staleness_days": 90,
+    "seed_bytes": 0,
+    "seed_count": 0
+  },
+  "inventory": {
+    "blocked_count": 46,
+    "candidate_count": 133,
+    "deferred_candidate_count": 82,
+    "excluded_subtrees": [
+      "SparkEngine/Source/Engine/Networking",
+      "SparkEngine/Source/Engine/Scripting",
+      "GameModules/SparkGameMMOFPS/Source/Net",
+      "GameModules/SparkGameVisualScript"
+    ],
+    "fuzzed_count": 0,
+    "parser_count": 46,
+    "scan_roots": [
+      "SparkEngine/Source",
+      "SparkEditor/Source",
+      "SparkShaderCompiler/src",
+      "SparkInstaller/src",
+      "SparkCrashReporter/src",
+      "SparkAssetPipelineCore/src",
+      "SparkCooker/src",
+      "SparkWorker/src",
+      "SparkBuild/src",
+      "SparkLauncher/src",
+      "SparkConsole/src",
+      "GameModules"
+    ],
+    "unclassified_candidate_count": 0
+  },
+  "passed": true,
+  "policy_complete": false,
+  "schema_version": 1
 }

@@ -44,6 +44,27 @@ env:
 
 jobs:
   # ===========================================================================
+  # Security — blocking SEC-120 parser inventory and fuzz-policy contract
+  # ===========================================================================
+  fuzz-policy:
+    name: "Fuzz policy"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Configure fuzz-policy checks
+      run: cmake -S tools/fuzz-policy -B build/fuzz-policy
+
+    - name: Run blocking fuzz-policy target
+      run: cmake --build build/fuzz-policy --target check-fuzz-policy
+
+    - name: Run adversarial policy tests
+      run: ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error
+
+  # ===========================================================================
   # CI Tooling — prove report parsers and generated repository statistics
   # ===========================================================================
   validate-ci-tools:
@@ -3024,6 +3045,7 @@ jobs:
     name: "CI Error Report"
     if: always()
     needs:
+      - fuzz-policy
       - validate-ci-tools
       - check-format
       - validate-prompts
@@ -3191,6 +3213,7 @@ jobs:
     name: "Required CI Gate"
     if: always()
     needs:
+      - fuzz-policy
       - validate-ci-tools
       - check-format
       - validate-prompts
