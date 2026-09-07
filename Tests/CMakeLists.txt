@@ -1488,6 +1488,13 @@ if(Python3_Interpreter_FOUND)
         TIMEOUT 120)
 
     add_test(
+        NAME SparkGeneratedArtifactHygiene
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_generated_artifact_hygiene.py)
+    set_tests_properties(SparkGeneratedArtifactHygiene PROPERTIES
+        LABELS "release;hygiene;python"
+        TIMEOUT 30)
+
+    add_test(
         NAME SparkOrchestrationProcessHarness
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/SparkDaemon/tests/test_orchestration_process_harness.py)

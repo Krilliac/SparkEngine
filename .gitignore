@@ -483,6 +483,9 @@ mmo_data.db
 spark_trace.json
 ThirdParty/dxvk/
 
+# Runtime test locks are process-local output and must never enter source control.
+Saves/*.db.lock
+
 # Transient screenshots captured by live editor/engine test runs under
 # Xvfb — these are ephemeral artifacts and should never be committed.
 tmp-screenshots/
