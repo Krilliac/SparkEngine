@@ -244,7 +244,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 | [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **open** | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
 | [`SEC-100`](#sec-100--close-critical-remote-administration-and-runtime-security-paths) Close critical remote-administration and runtime security paths | P0 | **open** | — | `CI-100`, `OPS-100`, `RDY-000` |
-| [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **open** | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
+| [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **in-progress** | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
 | [`SEC-120`](#sec-120--fuzz-and-bound-every-stable-v1-untrusted-file-and-package-parser) Fuzz and bound every stable-v1 untrusted file and package parser | P0 | **open** | `CI-100`, `SEC-110` | `NET-100`, `ASSET-220`, `SAVE-230` |
 | [`OPS-100`](#ops-100--secure-and-complete-crash-reporting-telemetry-delivery-and-symbol-operations) Secure and complete crash reporting, telemetry delivery, and symbol operations | P0 | **open** | — | `SEC-100`, `CI-100`, `RDY-000` |
 
@@ -1316,7 +1316,7 @@ ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure --no-te
 
 ### SEC-110 — Establish software supply-chain and dependency policy
 
-**Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
 Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates.
@@ -1330,11 +1330,18 @@ Workflow actions use mutable major tags, dependency inventories disagree, CodeQL
 
 - `.github/workflows`
 - `ThirdParty/dependencies.lock`
+- `ThirdParty/supply-chain.lock`
+- `ThirdParty/POLICY.md`
+- `tools/check-supply-chain.py`
+- `cmake/SparkThirdPartyAudit.cmake`
 - `VERSIONS.txt`
 - `.github/codeql/codeql-config.yml`
 
 **Entry points**
 
+- `ThirdParty/supply-chain.lock`
+- `tools/check-supply-chain.py`
+- `tools/check-thirdparty-manifest-sync.sh`
 - `ThirdParty/dependencies.lock`
 - `.github/workflows/build.yml`
 - `.github/workflows/codeql.yml`
@@ -1358,7 +1365,11 @@ Workflow actions use mutable major tags, dependency inventories disagree, CodeQL
 **Required commands**
 
 ```bash
-python3 tools/check-thirdparty-manifest-sync.sh
+python3 tools/check-supply-chain.py
+python3 tools/check-supply-chain.py --json
+python3 -m pytest Tests/test_check_supply_chain.py -v
+bash tools/check-thirdparty-manifest-sync.sh
+python3 Tests/Tools/test_check_thirdparty_manifest_sync.py
 syft packages dir:.
 osv-scanner --lockfile ThirdParty/dependencies.lock
 ```
@@ -1366,7 +1377,7 @@ osv-scanner --lockfile ThirdParty/dependencies.lock
 **Automated evidence**
 
 - Test selectors: `DependencyManifest_*`, `WorkflowPins_*`
-- Required CI jobs: `dependency-policy`, `analyze`, `secret-scan`, `license-scan`
+- Required CI jobs: `check-supply-chain`, `check-thirdparty-manifest`, `validate-ci-tools`, `analyze`, `dependency-policy`, `secret-scan`, `license-scan`
 - Performance / reliability budgets:
   - Security scans complete inside merge/release SLAs
 
@@ -1374,7 +1385,7 @@ osv-scanner --lockfile ThirdParty/dependencies.lock
 
 - Documentation:
   - `SECURITY.md`
-  - `ThirdParty/README.md`
+  - `ThirdParty/POLICY.md`
 - Readiness contract:
   - G06
   - G07

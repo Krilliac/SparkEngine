@@ -1,925 +1,1420 @@
 #!/usr/bin/env python3
 """Adversarial tests for tools/check-supply-chain.py.
 
-Tests verify the checker is fail-closed: every kind of drift, tampering,
-path escape, schema violation, or policy violation produces an error or
-exit 2, never a silent pass.
+Every negative case starts from a fake repository that the real checker passes
+cleanly, mutates exactly one thing, and requires the checker to fail.  A test
+that would still pass with the guard it names deleted is not a test, so the
+suite is built so that the mutation is the only difference from green.
+
+Nothing here writes inside the SparkEngine repository.  Fixtures live in
+temporary directories and are removed on teardown.
 """
 
 from __future__ import annotations
 
-import copy
-import hashlib
+import importlib.util
 import json
 import os
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
-import textwrap
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 TESTS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = TESTS_DIR.parent
+CHECKER_REL = "tools/check-supply-chain.py"
+AUDIT_CMAKE_REL = "cmake/SparkThirdPartyAudit.cmake"
 
-import importlib.util
 _spec = importlib.util.spec_from_file_location(
-    "check_supply_chain",
-    str(PROJECT_ROOT / "tools" / "check-supply-chain.py"),
+    "check_supply_chain", str(PROJECT_ROOT / CHECKER_REL),
 )
 sc = importlib.util.module_from_spec(_spec)
 sys.modules["check_supply_chain"] = sc
 _spec.loader.exec_module(sc)
 
-
-def _real_lockfile() -> dict:
-    lockpath = PROJECT_ROOT / sc.LOCKFILE_REL
-    with open(lockpath) as f:
-        return json.loads(f.read(), object_pairs_hook=sc._reject_duplicate_keys)
+IN_CI = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
 
 
-def _make_lockfile(**overrides) -> dict:
-    base = {
-        "version": 1,
-        "description": "test lockfile",
-        "submodule_gitlinks": {},
-        "managed_vendored_dirs": [],
-        "project_owned_dirs": [],
-        "sentinel_files": {},
-    }
-    base.update(overrides)
-    return base
+def _require(tool: str) -> str:
+    """A gate that cannot run is not a gate. In CI, missing tooling fails."""
+    path = shutil.which(tool)
+    if path:
+        return path
+    message = f"required tool not found on PATH: {tool}"
+    if IN_CI:
+        raise AssertionError(message)
+    raise unittest.SkipTest(message)
+
+
+def _require_yaml():
+    try:
+        import yaml  # noqa: PLC0415
+    except ImportError as exc:
+        if IN_CI:
+            raise AssertionError("PyYAML is required in CI") from exc
+        raise unittest.SkipTest("PyYAML not installed")
+    return yaml
+
+
+LICENSE_TEXT = """MIT License
+
+Copyright (c) 2026 SparkEngine supply-chain fixture
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+"""
+
+MANIFEST_TEXT = """# Fixture dependency manifest.
+set(SPARK_THIRDPARTY_AUDIT_ENTRIES
+    "demo|https://github.com/example/demo|v1.2.3 (vendored snapshot)|MIT|ThirdParty/Utils/demo|demo.h,demo_impl.cpp|SPARK_HAS_DEMO|SparkEngine/Source/DemoStub.cpp|WARN|ThirdParty/Utils/demo/LICENSE"
+)
+"""
+
+WORKFLOW_TEXT = """name: fixture
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: |
+          echo 'uses: actions/checkout@v4 is script text, not a key'
+"""
+
+CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+
+LOCK_SKELETON = {
+    "version": 2,
+    "description": "fixture lockfile",
+    "submodule_gitlinks": {},
+    "managed_vendored_dirs": ["ThirdParty/Utils/demo"],
+    "project_owned_dirs": {
+        "ThirdParty/Local": "First-party fixture directory authored in this repository.",
+    },
+    "allowed_root_files": [
+        "ThirdParty/POLICY.md",
+        "ThirdParty/dependencies.lock",
+        "ThirdParty/supply-chain.lock",
+    ],
+    "tree_digests": {},
+    "sentinel_files": {},
+    "action_pins": {},
+}
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Schema validation
+# Fake repository fixture
 # ═══════════════════════════════════════════════════════════════════════
 
-class TestDuplicateJsonKeys(unittest.TestCase):
-    def test_duplicate_key_rejected(self):
-        raw = '{"version": 1, "version": 2}'
-        with self.assertRaises(SystemExit) as ctx:
-            json.loads(raw, object_pairs_hook=sc._reject_duplicate_keys)
-        self.assertEqual(ctx.exception.code, 2)
+class _Baseline:
+    """A fake repository the real checker passes, built once and copied."""
 
-    def test_duplicate_sentinel_key_rejected(self):
-        raw = json.dumps({
-            "version": 1,
-            "description": "x",
-            "submodule_gitlinks": {},
-            "managed_vendored_dirs": [],
-            "project_owned_dirs": [],
-            "sentinel_files": {},
-        })
-        raw_dup = raw[:-1] + ', "sentinel_files": {}}'
-        with self.assertRaises(SystemExit) as ctx:
-            json.loads(raw_dup, object_pairs_hook=sc._reject_duplicate_keys)
-        self.assertEqual(ctx.exception.code, 2)
+    path: Path | None = None
+    _holder: tempfile.TemporaryDirectory | None = None
 
+    @classmethod
+    def get(cls) -> Path:
+        if cls.path is None:
+            cls._holder = tempfile.TemporaryDirectory(prefix="spark-sc-baseline-")
+            cls.path = cls._build(Path(cls._holder.name) / "repo")
+        return cls.path
+
+    @classmethod
+    def _build(cls, repo: Path) -> Path:
+        git = _require("git")
+        _require("cmake")
+        _require_yaml()
+
+        def write(rel: str, content: str) -> None:
+            target = repo / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8", newline="\n")
+
+        (repo / "tools").mkdir(parents=True)
+        (repo / "cmake").mkdir(parents=True)
+        shutil.copy2(PROJECT_ROOT / CHECKER_REL, repo / CHECKER_REL)
+        shutil.copy2(PROJECT_ROOT / AUDIT_CMAKE_REL, repo / AUDIT_CMAKE_REL)
+
+        write("ThirdParty/dependencies.lock", MANIFEST_TEXT)
+        write("ThirdParty/POLICY.md", "# fixture policy\n")
+        write("ThirdParty/Utils/demo/demo.h", "/* demo header */\n")
+        write("ThirdParty/Utils/demo/demo_impl.cpp", "/* demo impl */\n")
+        write("ThirdParty/Utils/demo/LICENSE", LICENSE_TEXT)
+        write("ThirdParty/Utils/demo/nested/deep/extra.h", "/* nested payload */\n")
+        write("ThirdParty/Local/notes.h", "/* first-party */\n")
+        write("ThirdParty/supply-chain.lock", json.dumps(LOCK_SKELETON, indent=2) + "\n")
+        write(".gitmodules", "")
+        write(".github/workflows/ci.yml", WORKFLOW_TEXT)
+        write("SparkEngine/Source/DemoStub.cpp", "// stub\n")
+
+        for args in (
+            ["init", "-q", "-b", "Working"],
+            ["config", "user.email", "fixture@example.invalid"],
+            ["config", "user.name", "Supply Chain Fixture"],
+            ["config", "commit.gpgsign", "false"],
+            ["config", "core.autocrlf", "false"],
+            ["add", "-A"],
+            ["commit", "-q", "-m", "baseline"],
+        ):
+            done = subprocess.run(
+                [git, *args], cwd=str(repo), capture_output=True, text=True, timeout=120
+            )
+            if done.returncode != 0:
+                raise AssertionError(f"git {args}: {done.stderr}")
+
+        done = subprocess.run(
+            [sys.executable, CHECKER_REL, "--update"],
+            cwd=str(repo), capture_output=True, text=True, timeout=300,
+        )
+        if done.returncode != 0:
+            raise AssertionError(
+                f"baseline --update failed:\n{done.stdout}\n{done.stderr}"
+            )
+        subprocess.run([git, "add", "-A"], cwd=str(repo), capture_output=True, timeout=120)
+        subprocess.run(
+            [git, "commit", "-q", "-m", "lockfile"],
+            cwd=str(repo), capture_output=True, timeout=120,
+        )
+        return repo
+
+
+class FakeRepoCase(unittest.TestCase):
+    """Per-test copy of the passing baseline; mutate one thing, expect failure."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.baseline = _Baseline.get()
+        cls.git = _require("git")
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="spark-sc-case-")
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = Path(self._tmp.name) / "repo"
+        shutil.copytree(self.baseline, self.repo)
+
+    # ── mutation helpers ─────────────────────────────────────────────
+
+    def write(self, rel: str, content: str) -> None:
+        target = self.repo / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8", newline="\n")
+
+    def lock(self) -> dict:
+        return json.loads((self.repo / sc.LOCKFILE_REL).read_text(encoding="utf-8"))
+
+    def set_lock(self, data: dict) -> None:
+        self.write(sc.LOCKFILE_REL, json.dumps(data, indent=2) + "\n")
+
+    def git_run(self, *args: str) -> None:
+        done = subprocess.run(
+            [self.git, *args], cwd=str(self.repo),
+            capture_output=True, text=True, timeout=120,
+        )
+        if done.returncode != 0:
+            raise AssertionError(f"git {args}: {done.stderr}")
+
+    def commit(self, message: str = "mutation") -> None:
+        self.git_run("add", "-A")
+        self.git_run("commit", "-q", "-m", message)
+
+    # ── invocation ───────────────────────────────────────────────────
+
+    def check(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, CHECKER_REL, *args],
+            cwd=str(self.repo), capture_output=True, text=True, timeout=300,
+        )
+
+    def assert_baseline_passes(self) -> None:
+        done = self.check()
+        self.assertEqual(
+            done.returncode, 0,
+            f"baseline must pass before mutation\n{done.stdout}\n{done.stderr}",
+        )
+
+    def assert_violation(self, *needles: str) -> subprocess.CompletedProcess[str]:
+        done = self.check("--json")
+        self.assertEqual(
+            done.returncode, 1,
+            f"expected a policy violation (exit 1), got {done.returncode}\n"
+            f"{done.stdout}\n{done.stderr}",
+        )
+        payload = json.loads(done.stdout)
+        self.assertFalse(payload["passed"])
+        blob = json.dumps(payload["violations"])
+        for needle in needles:
+            self.assertIn(needle, blob, f"missing {needle!r} in {blob}")
+        return done
+
+    def assert_fatal(self, *needles: str) -> None:
+        done = self.check()
+        self.assertEqual(
+            done.returncode, 2,
+            f"expected checker-level failure (exit 2), got {done.returncode}\n"
+            f"{done.stdout}\n{done.stderr}",
+        )
+        for needle in needles:
+            self.assertIn(needle, done.stderr)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Baseline sanity — every negative case below depends on this being green
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestBaseline(FakeRepoCase):
+
+    def test_untouched_fixture_passes(self) -> None:
+        self.assert_baseline_passes()
+
+    def test_json_output_is_machine_readable(self) -> None:
+        done = self.check("--json")
+        self.assertEqual(done.returncode, 0)
+        payload = json.loads(done.stdout)
+        self.assertTrue(payload["passed"])
+        self.assertEqual(payload["violation_count"], 0)
+        self.assertGreaterEqual(payload["tree_digest_count"], 2)
+
+    def test_ci_flag_matches_default_verdict(self) -> None:
+        default = self.check("--json")
+        ci_mode = self.check("--ci", "--json")
+        self.assertEqual(default.returncode, ci_mode.returncode)
+        self.assertEqual(json.loads(default.stdout), json.loads(ci_mode.stdout))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Complete tracked inventory — the two-level walk's blind spots
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestTrackedInventory(FakeRepoCase):
+
+    def test_payload_nested_below_depth_two_is_detected(self) -> None:
+        self.write("ThirdParty/Utils/demo/nested/deep/backdoor.h", "/* payload */\n")
+        self.commit()
+        self.assert_violation("tracked tree digest drift")
+
+    def test_content_added_inside_a_managed_dir_is_detected(self) -> None:
+        self.write("ThirdParty/Utils/demo/extra_impl.cpp", "/* payload */\n")
+        self.commit()
+        self.assert_violation("tracked tree digest drift")
+
+    def test_content_added_inside_a_project_owned_dir_is_detected(self) -> None:
+        self.write("ThirdParty/Local/injected.h", "/* payload */\n")
+        self.commit()
+        self.assert_violation("tracked tree digest drift")
+
+    def test_edit_to_an_unsentinelled_file_is_detected(self) -> None:
+        self.write("ThirdParty/Utils/demo/nested/deep/extra.h", "/* tampered */\n")
+        self.commit()
+        self.assert_violation("tracked tree digest drift")
+
+    def test_file_at_depth_one_of_an_undeclared_dir_is_detected(self) -> None:
+        self.write("ThirdParty/Rogue/toolchain.cmake", "# payload\n")
+        self.commit()
+        self.assert_violation("tracked file is in no declared container")
+
+    def test_dot_prefixed_directory_is_detected(self) -> None:
+        self.write("ThirdParty/.build/payload.cmake", "# payload\n")
+        self.commit()
+        self.assert_violation("tracked file is in no declared container")
+
+    def test_dot_prefixed_root_file_is_detected(self) -> None:
+        self.write("ThirdParty/.toolchain.cmake", "# payload\n")
+        self.commit()
+        self.assert_violation("tracked file is in no declared container")
+
+    def test_undeclared_root_file_is_detected(self) -> None:
+        self.write("ThirdParty/EVIL.md", "payload at the root\n")
+        self.commit()
+        self.assert_violation("tracked file is in no declared container")
+
+    def test_untracked_payload_is_detected(self) -> None:
+        self.write("ThirdParty/Utils/demo/untracked.h", "/* payload */\n")
+        self.assert_violation("worktree differs from the index")
+
+    def test_worktree_edit_without_commit_is_detected(self) -> None:
+        self.write("ThirdParty/Utils/demo/nested/deep/extra.h", "/* tampered */\n")
+        self.assert_violation("worktree differs from the index")
+
+    def test_deleted_payload_is_detected(self) -> None:
+        (self.repo / "ThirdParty/Utils/demo/nested/deep/extra.h").unlink()
+        self.assert_violation("worktree differs from the index")
+
+    def test_declared_container_with_no_tracked_files_is_rejected(self) -> None:
+        data = self.lock()
+        data["managed_vendored_dirs"].append("ThirdParty/Future")
+        data["tree_digests"]["ThirdParty/Future"] = {
+            "digest": "0" * 64, "file_count": 0,
+        }
+        self.set_lock(data)
+        self.assert_violation("holds no tracked files")
+
+    def test_tree_digest_covers_every_non_submodule_container(self) -> None:
+        data = self.lock()
+        del data["tree_digests"]["ThirdParty/Local"]
+        self.set_lock(data)
+        self.assert_violation("has no tree digest")
+
+    def test_file_count_drift_alone_is_detected(self) -> None:
+        data = self.lock()
+        data["tree_digests"]["ThirdParty/Local"]["file_count"] += 1
+        self.set_lock(data)
+        self.assert_violation("file count drift", "ThirdParty/Local")
+
+    def test_digest_for_unknown_container_is_rejected(self) -> None:
+        data = self.lock()
+        data["tree_digests"]["ThirdParty/Nowhere"] = {
+            "digest": "a" * 64, "file_count": 1,
+        }
+        self.set_lock(data)
+        self.assert_violation("not a declared non-submodule")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Container model — categories must not overlap, nest, or alias
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestContainerModel(FakeRepoCase):
+
+    def test_cross_category_overlap_is_rejected(self) -> None:
+        data = self.lock()
+        data["project_owned_dirs"]["ThirdParty/Utils/demo"] = (
+            "claiming a vendored directory as first-party"
+        )
+        self.set_lock(data)
+        self.assert_violation("categories must be disjoint")
+
+    def test_nested_containers_are_rejected(self) -> None:
+        data = self.lock()
+        data["managed_vendored_dirs"].append("ThirdParty/Utils/demo/nested")
+        data["tree_digests"]["ThirdParty/Utils/demo/nested"] = {
+            "digest": "0" * 64, "file_count": 0,
+        }
+        self.set_lock(data)
+        self.assert_violation("nested inside container")
+
+    def test_case_variant_container_alias_is_rejected(self) -> None:
+        data = self.lock()
+        data["managed_vendored_dirs"].append("ThirdParty/Utils/DEMO")
+        data["tree_digests"]["ThirdParty/Utils/DEMO"] = {
+            "digest": "0" * 64, "file_count": 0,
+        }
+        self.set_lock(data)
+        self.assert_violation("case-variant alias")
+
+    def test_project_owned_dir_requires_a_justification(self) -> None:
+        data = self.lock()
+        data["project_owned_dirs"]["ThirdParty/Local"] = "mine"
+        self.set_lock(data)
+        self.assert_fatal("recorded justification")
+
+    def test_declared_container_missing_from_disk_is_rejected(self) -> None:
+        shutil.rmtree(self.repo / "ThirdParty/Local")
+        self.assert_violation("does not exist on disk")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Link and reparse-point hygiene
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestLinkHygiene(FakeRepoCase):
+
+    def _make_outside_tree(self) -> Path:
+        outside = Path(self._tmp.name) / "outside"
+        (outside / "payload").mkdir(parents=True)
+        (outside / "payload" / "evil.h").write_text("/* outside */\n", encoding="utf-8")
+        return outside / "payload"
+
+    @unittest.skipUnless(sys.platform == "win32", "junctions are a Windows concept")
+    def test_directory_junction_is_rejected(self) -> None:
+        target = self._make_outside_tree()
+        link = self.repo / "ThirdParty" / "Junction"
+        done = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True, text=True, timeout=60,
+        )
+        if done.returncode != 0:
+            self.fail(f"could not create junction: {done.stdout}{done.stderr}")
+        # A junction reports is_symlink() == False and stat() clears the
+        # reparse bit, so only an lstat-based check can see it.
+        self.assertFalse(link.is_symlink())
+        self.assertIsNotNone(sc.link_reason(link))
+        self.assert_violation("reparse point")
+
+    @unittest.skipUnless(sys.platform == "win32", "junctions are a Windows concept")
+    def test_junction_replacing_a_managed_dir_is_rejected(self) -> None:
+        target = self._make_outside_tree()
+        managed = self.repo / "ThirdParty" / "Local"
+        shutil.rmtree(managed)
+        done = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(managed), str(target)],
+            capture_output=True, text=True, timeout=60,
+        )
+        if done.returncode != 0:
+            self.fail(f"could not create junction: {done.stdout}{done.stderr}")
+        self.assert_violation("reparse point")
+
+    def test_directory_symlink_is_rejected(self) -> None:
+        target = self._make_outside_tree()
+        link = self.repo / "ThirdParty" / "Linked"
+        try:
+            os.symlink(str(target), str(link), target_is_directory=True)
+        except (OSError, NotImplementedError) as exc:
+            if IN_CI:
+                self.fail(f"symlink creation must work in CI: {exc}")
+            self.skipTest(f"symlink creation unavailable: {exc}")
+        self.assert_violation("symbolic link rejected")
+
+    def test_file_symlink_over_a_sentinel_is_rejected(self) -> None:
+        outside = Path(self._tmp.name) / "outside.h"
+        outside.write_text("/* outside */\n", encoding="utf-8")
+        sentinel = self.repo / "ThirdParty/Utils/demo/demo.h"
+        sentinel.unlink()
+        try:
+            os.symlink(str(outside), str(sentinel))
+        except (OSError, NotImplementedError) as exc:
+            if IN_CI:
+                self.fail(f"symlink creation must work in CI: {exc}")
+            self.skipTest(f"symlink creation unavailable: {exc}")
+        self.assert_violation("symbolic link rejected")
+
+    def test_link_reason_reports_missing_paths_instead_of_swallowing(self) -> None:
+        reason = sc.link_reason(self.repo / "ThirdParty" / "does-not-exist")
+        self.assertIsNotNone(reason)
+        self.assertIn("cannot lstat", reason)
+
+    def test_link_reason_accepts_a_plain_file(self) -> None:
+        self.assertIsNone(sc.link_reason(self.repo / "ThirdParty/Utils/demo/demo.h"))
+
+
+class TestContainment(unittest.TestCase):
+    """assert_regular_file_no_escape must separate its failure modes."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="spark-sc-contain-")
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name) / "root"
+        self.root.mkdir()
+        self.root_resolved = self.root.resolve(strict=True)
+
+    def test_plain_file_inside_root_is_accepted(self) -> None:
+        target = self.root / "ok.txt"
+        target.write_text("hello", encoding="utf-8")
+        self.assertIsNone(
+            sc.assert_regular_file_no_escape(target, self.root_resolved)
+        )
+
+    def test_missing_file_is_reported_as_a_stat_failure(self) -> None:
+        reason = sc.assert_regular_file_no_escape(
+            self.root / "missing.txt", self.root_resolved
+        )
+        self.assertIn("cannot lstat", reason)
+
+    def test_directory_is_not_a_regular_file(self) -> None:
+        (self.root / "dir").mkdir()
+        reason = sc.assert_regular_file_no_escape(
+            self.root / "dir", self.root_resolved
+        )
+        self.assertEqual(reason, "not a regular file")
+
+    def test_hardlink_is_rejected(self) -> None:
+        outside = Path(self._tmp.name) / "outside.txt"
+        outside.write_text("secret", encoding="utf-8")
+        inside = self.root / "hard.txt"
+        try:
+            os.link(str(outside), str(inside))
+        except (OSError, NotImplementedError, AttributeError) as exc:
+            self.skipTest(f"hardlink creation unavailable: {exc}")
+        reason = sc.assert_regular_file_no_escape(inside, self.root_resolved)
+        self.assertIsNotNone(reason, "a hardlinked file is not contained by the root")
+        self.assertIn("hardlink", reason)
+
+    def test_symlink_escaping_root_is_rejected(self) -> None:
+        outside = Path(self._tmp.name) / "outside.txt"
+        outside.write_text("secret", encoding="utf-8")
+        inside = self.root / "link.txt"
+        try:
+            os.symlink(str(outside), str(inside))
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"symlink creation unavailable: {exc}")
+        reason = sc.assert_regular_file_no_escape(inside, self.root_resolved)
+        self.assertEqual(reason, "symbolic link rejected")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# GitHub Actions pinning — structural, not line-regex
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestActionPinning(FakeRepoCase):
+
+    def _workflow(self, body: str) -> None:
+        self.write(".github/workflows/ci.yml", body)
+        self.commit()
+
+    HEADER = "name: fixture\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n"
+
+    def test_unpinned_tag_is_rejected(self) -> None:
+        self._workflow(self.HEADER + "      - uses: actions/checkout@v4\n")
+        self.assert_violation("unpinned action")
+
+    def test_quoted_uses_key_is_rejected(self) -> None:
+        # A line regex looking for `uses:` never fires on a quoted key.
+        self._workflow(self.HEADER + '      - "uses": actions/checkout@v4\n')
+        self.assert_violation("unpinned action")
+
+    def test_quoted_uses_key_with_valid_sha_is_still_identity_checked(self) -> None:
+        self._workflow(
+            self.HEADER + f'      - "uses": attacker/backdoor@{"a" * 40}\n'
+        )
+        self.assert_violation("action_pins")
+
+    def test_value_on_continuation_line_is_rejected(self) -> None:
+        self._workflow(self.HEADER + "      - uses:\n          actions/checkout@v4\n")
+        self.assert_violation("unpinned action")
+
+    def test_space_before_colon_is_rejected(self) -> None:
+        self._workflow(self.HEADER + "      - uses : actions/checkout@v4\n")
+        self.assert_violation("unpinned action")
+
+    def test_flow_mapping_step_is_rejected(self) -> None:
+        self._workflow(self.HEADER + "      - {uses: actions/checkout@v4}\n")
+        self.assert_violation("unpinned action")
+
+    def test_explicit_key_syntax_is_rejected(self) -> None:
+        self._workflow(self.HEADER + "      - ? uses\n        : actions/checkout@v4\n")
+        self.assert_violation("unpinned action")
+
+    def test_anchor_alias_indirection_is_rejected(self) -> None:
+        self._workflow(
+            "name: fixture\non: [push]\nenv:\n  PIN: &p actions/checkout@v4\n"
+            "jobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n"
+            "      - {uses: *p}\n"
+        )
+        self.assert_violation("unpinned action")
+
+    def test_merge_key_indirection_is_rejected(self) -> None:
+        self._workflow(
+            "name: fixture\non: [push]\n"
+            "x-base: &base\n  uses: actions/checkout@v4\n"
+            "jobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n"
+            "      - <<: *base\n        name: innocuous\n"
+        )
+        self.assert_violation("unpinned action")
+
+    def test_block_scalar_behind_quoted_key_is_rejected(self) -> None:
+        self._workflow(self.HEADER + '      - "uses": >-\n          actions/checkout@v4\n')
+        self.assert_violation("unpinned action")
+
+    def test_job_level_reusable_workflow_must_be_pinned(self) -> None:
+        self._workflow(
+            "name: fixture\non: [push]\njobs:\n  call:\n"
+            '    "uses": attacker/evil/.github/workflows/w.yml@main\n'
+        )
+        self.assert_violation("unpinned action")
+
+    def test_runtime_expression_cannot_be_pinned(self) -> None:
+        self._workflow(
+            self.HEADER + "      - uses: ${{ env.ACTION_REF }}\n"
+        )
+        self.assert_violation("computed at runtime")
+
+    def test_uppercase_sha_is_rejected(self) -> None:
+        self._workflow(self.HEADER + f"      - uses: actions/checkout@{'A' * 40}\n")
+        self.assert_violation("unpinned action")
+
+    def test_unknown_owner_with_valid_sha_is_rejected(self) -> None:
+        self._workflow(self.HEADER + f"      - uses: attacker/backdoor@{'b' * 40}\n")
+        self.assert_violation("not in supply-chain.lock action_pins")
+
+    def test_known_owner_with_unrecorded_sha_is_rejected(self) -> None:
+        self._workflow(self.HEADER + f"      - uses: actions/checkout@{'c' * 40}\n")
+        self.assert_violation("not a recorded pin")
+
+    def test_docker_tag_reference_is_rejected(self) -> None:
+        self._workflow(self.HEADER + "      - uses: docker://alpine:latest\n")
+        self.assert_violation("digest-pinned")
+
+    def test_docker_digest_reference_is_accepted(self) -> None:
+        self._workflow(
+            self.HEADER + f"      - uses: docker://alpine@sha256:{'d' * 64}\n"
+        )
+        self.assert_baseline_passes()
+
+    def test_local_action_without_definition_is_rejected(self) -> None:
+        self._workflow(self.HEADER + "      - uses: ./.github/actions/missing\n")
+        self.assert_violation("no action.yml")
+
+    def test_local_action_path_escape_is_rejected(self) -> None:
+        self._workflow(self.HEADER + "      - uses: ./../evil\n")
+        self.assert_violation("local action path")
+
+    def test_composite_action_definition_is_scanned(self) -> None:
+        self.write(
+            ".github/actions/setup/action.yml",
+            "name: setup\nruns:\n  using: composite\n  steps:\n"
+            "    - uses: attacker/backdoor@v9\n",
+        )
+        self.write(self.HEADER and ".github/workflows/ci.yml",
+                   self.HEADER + "      - uses: ./.github/actions/setup\n")
+        self.commit()
+        self.assert_violation("unpinned action", "action.yml")
+
+    def test_workflow_in_subdirectory_is_scanned(self) -> None:
+        self.write(
+            ".github/workflows/sub/nested.yml",
+            self.HEADER + "      - uses: actions/checkout@v4\n",
+        )
+        self.commit()
+        self.assert_violation("unpinned action", "nested.yml")
+
+    def test_uses_inside_a_run_script_is_not_a_false_positive(self) -> None:
+        self._workflow(
+            self.HEADER
+            + f"      - uses: actions/checkout@{CHECKOUT_SHA}\n"
+            + "      - run: |\n          echo 'uses: actions/checkout@v4'\n"
+        )
+        self.assert_baseline_passes()
+
+    def test_quoted_valid_pin_is_not_a_false_positive(self) -> None:
+        self._workflow(
+            self.HEADER + f'      - uses: "actions/checkout@{CHECKOUT_SHA}"\n'
+        )
+        self.assert_baseline_passes()
+
+    def test_flow_mapping_with_valid_pin_is_not_a_false_positive(self) -> None:
+        self._workflow(
+            self.HEADER + f"      - {{uses: actions/checkout@{CHECKOUT_SHA}}}\n"
+        )
+        self.assert_baseline_passes()
+
+    def test_undecodable_workflow_fails_rather_than_crashing(self) -> None:
+        (self.repo / ".github/workflows/ci.yml").write_bytes(
+            b"\xff\xfe" + "name: x\n".encode("utf-16-le")
+        )
+        self.commit()
+        self.assert_violation("cannot decode workflow file")
+
+    def test_unparseable_workflow_yaml_is_a_violation(self) -> None:
+        self._workflow("name: fixture\n  bad: [unclosed\n")
+        self.assert_violation("cannot parse workflow YAML")
+
+    def test_missing_workflows_directory_is_an_error_not_a_warning(self) -> None:
+        shutil.rmtree(self.repo / ".github/workflows")
+        self.commit()
+        self.assert_violation("workflows directory not found")
+
+
+class TestUsesTraversal(unittest.TestCase):
+    """_iter_uses must find keys and ignore look-alike values."""
+
+    def test_finds_nested_uses_keys(self) -> None:
+        document = {
+            "jobs": {
+                "a": {"steps": [{"uses": "x/y@1"}, {"run": "uses: fake/one@2"}]},
+                "b": {"uses": "p/q@3"},
+            }
+        }
+        found = sorted(value for _, value in sc._iter_uses(document))
+        self.assertEqual(found, ["p/q@3", "x/y@1"])
+
+    def test_ignores_uses_text_inside_scalar_values(self) -> None:
+        document = {"jobs": {"a": {"steps": [{"run": "uses: evil/act@v1"}]}}}
+        self.assertEqual(list(sc._iter_uses(document)), [])
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Reconciliation across supply-chain.lock, dependencies.lock, .gitmodules
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestReconciliation(FakeRepoCase):
+
+    def _set_manifest(self, entry: str) -> None:
+        self.write(
+            "ThirdParty/dependencies.lock",
+            "set(SPARK_THIRDPARTY_AUDIT_ENTRIES\n"
+            f'    "{entry}"\n'
+            ")\n",
+        )
+        self.commit()
+
+    BASE_FIELDS = [
+        "demo", "https://github.com/example/demo", "v1.2.3 (vendored snapshot)",
+        "MIT", "ThirdParty/Utils/demo", "demo.h,demo_impl.cpp", "SPARK_HAS_DEMO",
+        "SparkEngine/Source/DemoStub.cpp", "WARN", "ThirdParty/Utils/demo/LICENSE",
+    ]
+
+    def entry(self, **overrides: str) -> str:
+        fields = list(self.BASE_FIELDS)
+        names = [
+            "name", "source", "version", "license", "local_path",
+            "required", "macro", "fallback", "severity", "notices",
+        ]
+        for key, value in overrides.items():
+            fields[names.index(key)] = value
+        return "|".join(fields)
+
+    def test_managed_container_without_a_manifest_entry_is_detected(self) -> None:
+        data = self.lock()
+        data["managed_vendored_dirs"].append("ThirdParty/Extra")
+        self.set_lock(data)
+        self.write("ThirdParty/Extra/thing.h", "/* payload */\n")
+        self.commit()
+        done = self.check("--json")
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("has no dependencies.lock entry", done.stdout)
+
+    def test_dependency_outside_thirdparty_is_an_error_not_a_skip(self) -> None:
+        self._set_manifest(self.entry(local_path="vendor/evil"))
+        self.assert_violation("must live under ThirdParty/")
+
+    def test_manifest_path_with_dot_dot_is_rejected(self) -> None:
+        self._set_manifest(self.entry(local_path="ThirdParty/Utils/demo/../../etc"))
+        self.assert_violation("dot-segment")
+
+    def test_manifest_prefix_subpath_is_not_accepted_as_exact(self) -> None:
+        self._set_manifest(self.entry(local_path="ThirdParty/Utils/demo/nested"))
+        self.assert_violation("not an exact container")
+
+    def test_duplicate_dependency_name_is_detected(self) -> None:
+        self.write(
+            "ThirdParty/dependencies.lock",
+            "set(SPARK_THIRDPARTY_AUDIT_ENTRIES\n"
+            f'    "{self.entry()}"\n'
+            f'    "{self.entry(local_path="ThirdParty/Local")}"\n'
+            ")\n",
+        )
+        self.commit()
+        self.assert_violation("duplicate dependency name")
+
+    def test_duplicate_local_path_is_detected(self) -> None:
+        self.write(
+            "ThirdParty/dependencies.lock",
+            "set(SPARK_THIRDPARTY_AUDIT_ENTRIES\n"
+            f'    "{self.entry()}"\n'
+            f'    "{self.entry(name="demo2")}"\n'
+            ")\n",
+        )
+        self.commit()
+        self.assert_violation("shares its path with")
+
+    def test_case_variant_manifest_alias_is_detected(self) -> None:
+        self.write(
+            "ThirdParty/dependencies.lock",
+            "set(SPARK_THIRDPARTY_AUDIT_ENTRIES\n"
+            f'    "{self.entry()}"\n'
+            f'    "{self.entry(name="demo2", local_path="ThirdParty/Utils/DEMO")}"\n'
+            ")\n",
+        )
+        self.commit()
+        self.assert_violation("case-variant alias")
+
+    def test_manifest_entry_appended_after_the_closing_paren_is_seen(self) -> None:
+        # A text scrape stops at the first `)`; CMake evaluates the whole file.
+        self.write(
+            "ThirdParty/dependencies.lock",
+            "set(SPARK_THIRDPARTY_AUDIT_ENTRIES\n"
+            f'    "{self.entry()}"\n'
+            ")\n"
+            "list(APPEND SPARK_THIRDPARTY_AUDIT_ENTRIES\n"
+            f'    "{self.entry(name="smuggled", local_path="ThirdParty/Smuggled")}"\n'
+            ")\n",
+        )
+        self.commit()
+        self.assert_violation("not an exact container")
+
+    def test_manifest_entry_built_from_a_variable_is_seen(self) -> None:
+        self.write(
+            "ThirdParty/dependencies.lock",
+            f'set(_hidden "{self.entry(name="hidden", local_path="ThirdParty/Hidden")}")\n'
+            "set(SPARK_THIRDPARTY_AUDIT_ENTRIES\n"
+            f'    "{self.entry()}"\n'
+            '    "${_hidden}"\n'
+            ")\n",
+        )
+        self.commit()
+        self.assert_violation("not an exact container")
+
+    def test_notice_not_tracked_as_a_sentinel_is_detected(self) -> None:
+        self.write("ThirdParty/Utils/demo/EXTRA-LICENSE", LICENSE_TEXT)
+        self._set_manifest(
+            self.entry(notices="ThirdParty/Utils/demo/EXTRA-LICENSE")
+        )
+        done = self.check("--json")
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("not a sentinel", done.stdout)
+
+    def test_notice_typed_as_source_is_detected(self) -> None:
+        data = self.lock()
+        data["sentinel_files"]["ThirdParty/Utils/demo/LICENSE"]["type"] = "source"
+        self.set_lock(data)
+        self.assert_violation("only 'license' sentinels get content validation")
+
+    def test_missing_required_file_is_detected(self) -> None:
+        self._set_manifest(self.entry(required="demo.h,absent.h"))
+        self.assert_violation("required file does not exist")
+
+    def test_invalid_severity_is_rejected_by_cmake(self) -> None:
+        self._set_manifest(self.entry(severity="INFO"))
+        self.assert_fatal("Invalid severity")
+
+    def test_non_https_source_is_detected(self) -> None:
+        self._set_manifest(self.entry(source="git://example.invalid/demo"))
+        self.assert_violation("must be an https:// URL")
+
+    def test_empty_license_field_is_detected(self) -> None:
+        self._set_manifest(self.entry(license=""))
+        self.assert_violation("has no license")
+
+    def test_nonexistent_fallback_path_is_detected(self) -> None:
+        self._set_manifest(
+            self.entry(fallback="SparkEngine/Source/DoesNotExist.cpp")
+        )
+        self.assert_violation("fallback path that does not exist")
+
+    def test_descriptive_fallback_prose_is_not_a_false_positive(self) -> None:
+        self._set_manifest(
+            self.entry(fallback="NullRHI/headless fallback when unavailable")
+        )
+        self.assert_baseline_passes()
+
+    def test_project_owned_dir_claimed_as_a_dependency_is_detected(self) -> None:
+        self.write("ThirdParty/Local/LICENSE", LICENSE_TEXT)
+        self._set_manifest(
+            self.entry(
+                local_path="ThirdParty/Local",
+                required="notes.h",
+                notices="ThirdParty/Local/LICENSE",
+            )
+        )
+        self.assert_violation("cannot also be a third-party dependency")
+
+
+class TestGitmodulesReconciliation(FakeRepoCase):
+
+    def test_submodule_in_gitmodules_but_not_lock_is_detected(self) -> None:
+        self.write(
+            ".gitmodules",
+            '[submodule "ThirdParty/New/dep"]\n'
+            "\tpath = ThirdParty/New/dep\n"
+            "\turl = https://example.invalid/dep.git\n",
+        )
+        self.commit()
+        self.assert_violation("not in supply-chain.lock")
+
+    def test_submodule_in_lock_but_not_gitmodules_is_detected(self) -> None:
+        data = self.lock()
+        data["submodule_gitlinks"]["ThirdParty/Ghost"] = "e" * 40
+        self.set_lock(data)
+        self.assert_violation("not in .gitmodules")
+
+    def test_non_https_submodule_url_is_detected(self) -> None:
+        self.write(
+            ".gitmodules",
+            '[submodule "ThirdParty/New/dep"]\n'
+            "\tpath = ThirdParty/New/dep\n"
+            "\turl = git://example.invalid/dep.git\n",
+        )
+        self.commit()
+        self.assert_violation("url must be https://")
+
+    def test_submodule_outside_thirdparty_is_detected(self) -> None:
+        self.write(
+            ".gitmodules",
+            '[submodule "vendor/dep"]\n'
+            "\tpath = vendor/dep\n"
+            "\turl = https://example.invalid/dep.git\n",
+        )
+        self.commit()
+        self.assert_violation("not in allowed roots")
+
+    def test_submodule_without_a_path_is_detected(self) -> None:
+        self.write(
+            ".gitmodules",
+            '[submodule "nameless"]\n\turl = https://example.invalid/dep.git\n',
+        )
+        self.commit()
+        self.assert_violation("declares no path")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Sentinel integrity
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestSentinelIntegrity(FakeRepoCase):
+
+    def test_content_hash_drift_is_detected(self) -> None:
+        data = self.lock()
+        data["sentinel_files"]["ThirdParty/Utils/demo/demo.h"]["sha256"] = "f" * 64
+        self.set_lock(data)
+        self.assert_violation("content hash mismatch")
+
+    def test_size_drift_is_detected(self) -> None:
+        data = self.lock()
+        data["sentinel_files"]["ThirdParty/Utils/demo/demo.h"]["size"] += 1
+        self.set_lock(data)
+        self.assert_violation("size mismatch")
+
+    def test_git_blob_drift_is_detected(self) -> None:
+        data = self.lock()
+        data["sentinel_files"]["ThirdParty/Utils/demo/demo.h"]["git_blob"] = "1" * 40
+        self.set_lock(data)
+        self.assert_violation("git blob drift")
+
+    def test_missing_sentinel_file_is_detected(self) -> None:
+        (self.repo / "ThirdParty/Utils/demo/demo.h").unlink()
+        self.assert_violation("cannot lstat")
+
+    def test_sentinel_outside_every_container_is_detected(self) -> None:
+        data = self.lock()
+        data["sentinel_files"]["ThirdParty/Nowhere/x.h"] = {
+            "sha256": "0" * 64, "git_blob": "0" * 40, "size": 1, "type": "source",
+        }
+        self.set_lock(data)
+        self.assert_violation("in no declared container")
+
+    def test_empty_sentinel_set_fails_closed(self) -> None:
+        data = self.lock()
+        data["sentinel_files"] = {}
+        self.set_lock(data)
+        self.assert_violation("no sentinel files in lockfile")
+
+    def test_license_without_copyright_is_rejected(self) -> None:
+        # A notice named by the manifest is validated by the CMake audit before
+        # the Python checks run, so this surfaces as a checker-level failure.
+        self.write(
+            "ThirdParty/Utils/demo/LICENSE",
+            "Permission is hereby granted to do anything at all, forever, "
+            "without restriction of any kind whatsoever, to any person or "
+            "entity obtaining a copy of this software package, including "
+            "the rights to use, copy, modify, merge, publish, distribute, "
+            "sublicense, and sell copies of it without attribution.\n",
+        )
+        self.assert_fatal("lacks a copyright statement")
+
+    def test_short_license_is_rejected(self) -> None:
+        self.write("ThirdParty/Utils/demo/LICENSE", "Copyright (c) 2026. MIT.\n")
+        self.assert_fatal("implausibly short")
+
+
+class TestLicenseContent(unittest.TestCase):
+    """_check_license_content guards license sentinels that are not notices."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="spark-sc-license-")
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "LICENSE"
+
+    def _messages(self, text: str) -> str:
+        self.path.write_text(text, encoding="utf-8", newline="\n")
+        result = sc.CheckResult()
+        sc._check_license_content(self.path, "ThirdParty/x/LICENSE", result)
+        return " | ".join(v.message for v in result.violations)
+
+    def test_valid_license_passes(self) -> None:
+        self.assertEqual(self._messages(LICENSE_TEXT), "")
+
+    def test_short_license_flagged(self) -> None:
+        self.assertIn("implausibly short", self._messages("Copyright 2026. MIT.\n"))
+
+    def test_missing_copyright_flagged(self) -> None:
+        text = ("Permission is hereby granted to use this software freely "
+                "and without restriction of any kind. " * 4)
+        self.assertIn("lacks copyright statement", self._messages(text))
+
+    def test_missing_operative_terms_flagged(self) -> None:
+        text = "Copyright (c) 2026 Example. " + ("All rights reserved. " * 20)
+        self.assertIn("lacks operative terms", self._messages(text))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# --update must produce a complete, verified lockfile
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestUpdateMode(FakeRepoCase):
+
+    def test_update_verifies_what_it_wrote(self) -> None:
+        # Break the tree so the freshly written lockfile cannot verify; the
+        # exit code must be the verification's, not an unconditional 0.
+        self.write("ThirdParty/Rogue/payload.h", "/* payload */\n")
+        self.commit()
+        done = self.check("--update")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("no declared container", done.stdout)
+
+    def test_update_refreshes_tree_digests(self) -> None:
+        self.write("ThirdParty/Utils/demo/nested/deep/extra.h", "/* changed */\n")
+        self.commit()
+        before = self.lock()["tree_digests"]["ThirdParty/Utils/demo"]["digest"]
+        done = self.check("--update")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        after = self.lock()["tree_digests"]["ThirdParty/Utils/demo"]["digest"]
+        self.assertNotEqual(before, after)
+
+    def test_update_discovers_new_required_files_as_sentinels(self) -> None:
+        self.write("ThirdParty/Utils/demo/demo_extra.h", "/* new entry point */\n")
+        self.write(
+            "ThirdParty/dependencies.lock",
+            MANIFEST_TEXT.replace(
+                "demo.h,demo_impl.cpp", "demo.h,demo_impl.cpp,demo_extra.h"
+            ),
+        )
+        self.commit()
+        done = self.check("--update")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn(
+            "ThirdParty/Utils/demo/demo_extra.h", self.lock()["sentinel_files"]
+        )
+
+    def test_update_refuses_a_missing_lockfile(self) -> None:
+        (self.repo / sc.LOCKFILE_REL).unlink()
+        done = self.check("--update")
+        self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
+        self.assertIn("cannot invent the container declarations", done.stderr)
+
+    def test_update_rejects_an_unjustified_project_owned_dir(self) -> None:
+        data = self.lock()
+        data["project_owned_dirs"]["ThirdParty/Laundered"] = "x"
+        self.set_lock(data)
+        done = self.check("--update")
+        self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
+        self.assertIn("recorded justification", done.stderr)
+
+    def test_update_cannot_launder_an_unpopulated_container(self) -> None:
+        data = self.lock()
+        data["project_owned_dirs"]["ThirdParty/Laundered"] = (
+            "an unjustifiable pre-authorisation of a path that does not exist"
+        )
+        self.set_lock(data)
+        done = self.check("--update", "--json")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("holds no tracked files", done.stdout)
+
+    def test_update_rejects_a_version_one_lockfile(self) -> None:
+        data = self.lock()
+        data["version"] = 1
+        self.set_lock(data)
+        done = self.check("--update")
+        self.assertEqual(done.returncode, 2)
+        self.assertIn("version", done.stderr)
+
+    def test_update_json_reports_what_it_wrote(self) -> None:
+        done = self.check("--update", "--json")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        payload = json.loads(done.stdout)
+        self.assertEqual(payload["updated"], sc.LOCKFILE_REL)
+        self.assertGreater(payload["sentinels_written"], 0)
+        self.assertTrue(payload["passed"])
+
+    def test_update_writes_a_readable_lockfile(self) -> None:
+        self.check("--update")
+        mode = stat.S_IMODE((self.repo / sc.LOCKFILE_REL).stat().st_mode)
+        self.assertTrue(mode & stat.S_IRUSR)
+        if os.name == "posix":
+            self.assertTrue(mode & stat.S_IRGRP, "regenerated lockfile lost group read")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Schema, bounds, and fail-closed behaviour
+# ═══════════════════════════════════════════════════════════════════════
 
 class TestSchemaValidation(unittest.TestCase):
-    def test_missing_version_exits_2(self):
-        with tempfile.TemporaryDirectory() as d:
-            lockpath = Path(d) / "ThirdParty"
-            lockpath.mkdir()
-            lf = lockpath / "supply-chain.lock"
-            lf.write_text(json.dumps({"description": "no version"}))
-            with patch.object(sc, "LOCKFILE_REL", "ThirdParty/supply-chain.lock"):
-                with self.assertRaises(SystemExit) as ctx:
-                    sc.load_lockfile(Path(d))
-                self.assertEqual(ctx.exception.code, 2)
 
-    def test_float_version_rejected(self):
-        """version: 1.0 (float) must not pass as version 1."""
-        with tempfile.TemporaryDirectory() as d:
-            lockpath = Path(d) / "ThirdParty"
-            lockpath.mkdir()
-            lf = lockpath / "supply-chain.lock"
-            lf.write_text(json.dumps({"version": 1.0}))
-            with patch.object(sc, "LOCKFILE_REL", "ThirdParty/supply-chain.lock"):
-                with self.assertRaises(SystemExit) as ctx:
-                    sc.load_lockfile(Path(d))
-                self.assertEqual(ctx.exception.code, 2)
+    @staticmethod
+    def _lock(**overrides) -> dict:
+        base = {
+            "version": 2,
+            "description": "test",
+            "submodule_gitlinks": {},
+            "managed_vendored_dirs": [],
+            "project_owned_dirs": {},
+            "allowed_root_files": [],
+            "tree_digests": {},
+            "sentinel_files": {},
+            "action_pins": {},
+        }
+        base.update(overrides)
+        return base
 
-    def test_string_version_rejected(self):
-        with tempfile.TemporaryDirectory() as d:
-            lockpath = Path(d) / "ThirdParty"
-            lockpath.mkdir()
-            lf = lockpath / "supply-chain.lock"
-            lf.write_text(json.dumps({"version": "1"}))
-            with patch.object(sc, "LOCKFILE_REL", "ThirdParty/supply-chain.lock"):
-                with self.assertRaises(SystemExit) as ctx:
-                    sc.load_lockfile(Path(d))
-                self.assertEqual(ctx.exception.code, 2)
-
-    def test_truncated_sha256_rejected(self):
-        data = _make_lockfile(sentinel_files={
-            "ThirdParty/test/file.h": {
-                "sha256": "abcd1234",
-                "git_blob": "a" * 40,
-                "size": 100,
-                "type": "source",
-            }
-        })
+    def _expect_fatal(self, data: dict) -> None:
         with self.assertRaises(SystemExit) as ctx:
-            sc._validate_lockfile_schema(data)
+            sc.validate_lockfile_schema(data)
         self.assertEqual(ctx.exception.code, 2)
 
-    def test_invalid_sentinel_type_rejected(self):
-        data = _make_lockfile(sentinel_files={
-            "ThirdParty/test/file.h": {
-                "sha256": "a" * 64,
-                "git_blob": "b" * 40,
-                "size": 100,
-                "type": "executable",
-            }
-        })
-        with self.assertRaises(SystemExit) as ctx:
-            sc._validate_lockfile_schema(data)
-        self.assertEqual(ctx.exception.code, 2)
+    def test_minimal_valid_schema_is_accepted(self) -> None:
+        sc.validate_lockfile_schema(self._lock())
 
-    def test_negative_size_rejected(self):
-        data = _make_lockfile(sentinel_files={
-            "ThirdParty/test/file.h": {
-                "sha256": "a" * 64,
-                "git_blob": "b" * 40,
-                "size": -1,
-                "type": "source",
-            }
-        })
-        with self.assertRaises(SystemExit) as ctx:
-            sc._validate_lockfile_schema(data)
-        self.assertEqual(ctx.exception.code, 2)
+    def test_truncated_sentinel_sha256_rejected(self) -> None:
+        self._expect_fatal(self._lock(sentinel_files={
+            "ThirdParty/x": {"sha256": "ab", "git_blob": "0" * 40,
+                             "size": 1, "type": "source"}}))
 
-    def test_missing_sha256_rejected(self):
-        data = _make_lockfile(sentinel_files={
-            "ThirdParty/test/file.h": {
-                "git_blob": "b" * 40,
-                "size": 100,
-                "type": "source",
-            }
-        })
-        with self.assertRaises(SystemExit) as ctx:
-            sc._validate_lockfile_schema(data)
-        self.assertEqual(ctx.exception.code, 2)
+    def test_missing_git_blob_rejected(self) -> None:
+        self._expect_fatal(self._lock(sentinel_files={
+            "ThirdParty/x": {"sha256": "0" * 64, "size": 1, "type": "source"}}))
 
+    def test_negative_sentinel_size_rejected(self) -> None:
+        self._expect_fatal(self._lock(sentinel_files={
+            "ThirdParty/x": {"sha256": "0" * 64, "git_blob": "0" * 40,
+                             "size": -1, "type": "source"}}))
 
-# ═══════════════════════════════════════════════════════════════════════
-# Path safety
-# ═══════════════════════════════════════════════════════════════════════
+    def test_boolean_size_rejected(self) -> None:
+        self._expect_fatal(self._lock(sentinel_files={
+            "ThirdParty/x": {"sha256": "0" * 64, "git_blob": "0" * 40,
+                             "size": True, "type": "source"}}))
+
+    def test_invalid_sentinel_type_rejected(self) -> None:
+        self._expect_fatal(self._lock(sentinel_files={
+            "ThirdParty/x": {"sha256": "0" * 64, "git_blob": "0" * 40,
+                             "size": 1, "type": "binary"}}))
+
+    def test_sentinel_outside_thirdparty_rejected(self) -> None:
+        self._expect_fatal(self._lock(sentinel_files={
+            "SparkEngine/x": {"sha256": "0" * 64, "git_blob": "0" * 40,
+                              "size": 1, "type": "source"}}))
+
+    def test_invalid_gitlink_sha_rejected(self) -> None:
+        self._expect_fatal(self._lock(submodule_gitlinks={"ThirdParty/x": "nope"}))
+
+    def test_uppercase_gitlink_sha_rejected(self) -> None:
+        self._expect_fatal(self._lock(submodule_gitlinks={"ThirdParty/x": "A" * 40}))
+
+    def test_duplicate_managed_dirs_rejected(self) -> None:
+        self._expect_fatal(self._lock(
+            managed_vendored_dirs=["ThirdParty/a", "ThirdParty/a"]))
+
+    def test_invalid_tree_digest_rejected(self) -> None:
+        self._expect_fatal(self._lock(
+            tree_digests={"ThirdParty/a": {"digest": "z" * 64, "file_count": 0}}))
+
+    def test_negative_file_count_rejected(self) -> None:
+        self._expect_fatal(self._lock(
+            tree_digests={"ThirdParty/a": {"digest": "0" * 64, "file_count": -1}}))
+
+    def test_allowed_root_file_must_be_at_the_root(self) -> None:
+        self._expect_fatal(self._lock(
+            allowed_root_files=["ThirdParty/Utils/deep.md"]))
+
+    def test_action_pin_key_must_be_owner_repo(self) -> None:
+        self._expect_fatal(self._lock(action_pins={"not-a-slug": ["0" * 40]}))
+
+    def test_action_pin_sha_must_be_lowercase_hex(self) -> None:
+        self._expect_fatal(self._lock(action_pins={"a/b": ["Z" * 40]}))
+
+    def test_empty_action_pin_list_rejected(self) -> None:
+        self._expect_fatal(self._lock(action_pins={"a/b": []}))
+
+    def test_project_owned_must_be_a_mapping(self) -> None:
+        self._expect_fatal(self._lock(project_owned_dirs=["ThirdParty/a"]))
+
+    def test_missing_field_rejected(self) -> None:
+        data = self._lock()
+        del data["tree_digests"]
+        self._expect_fatal(data)
+
 
 class TestPathValidation(unittest.TestCase):
-    def test_absolute_path_rejected(self):
-        err = sc.validate_repo_relative_path("/etc/passwd")
-        self.assertIsNotNone(err)
-        self.assertIn("absolute", err)
 
-    def test_dot_segment_rejected(self):
-        err = sc.validate_repo_relative_path("ThirdParty/../../../etc/passwd")
-        self.assertIsNotNone(err)
-        self.assertIn("..", err)
-
-    def test_backslash_rejected(self):
-        err = sc.validate_repo_relative_path("ThirdParty\\evil\\file.h")
-        self.assertIsNotNone(err)
-        self.assertIn("backslash", err)
-
-    def test_wrong_root_rejected(self):
-        err = sc.validate_repo_relative_path(
-            "src/evil.cpp", allowed_roots=frozenset({"ThirdParty"})
-        )
-        self.assertIsNotNone(err)
-        self.assertIn("allowed roots", err)
-
-    def test_valid_thirdparty_path(self):
-        err = sc.validate_repo_relative_path(
+    def test_valid_path_accepted(self) -> None:
+        self.assertIsNone(sc.validate_repo_relative_path(
             "ThirdParty/Utils/stb/stb_image.h",
-            allowed_roots=frozenset({"ThirdParty"}),
+            allowed_roots=sc.AUTHORITATIVE_ROOTS))
+
+    def test_absolute_rejected(self) -> None:
+        self.assertIsNotNone(sc.validate_repo_relative_path("/etc/passwd"))
+
+    def test_parent_traversal_rejected(self) -> None:
+        self.assertIsNotNone(
+            sc.validate_repo_relative_path("ThirdParty/../../etc/passwd"))
+
+    def test_current_dir_segment_rejected(self) -> None:
+        self.assertIsNotNone(sc.validate_repo_relative_path("ThirdParty/./x"))
+
+    def test_backslash_rejected(self) -> None:
+        self.assertIsNotNone(sc.validate_repo_relative_path("ThirdParty\\x"))
+
+    def test_trailing_slash_rejected(self) -> None:
+        self.assertIsNotNone(sc.validate_repo_relative_path("ThirdParty/x/"))
+
+    def test_empty_segment_rejected(self) -> None:
+        self.assertIsNotNone(sc.validate_repo_relative_path("ThirdParty//x"))
+
+    def test_null_byte_rejected(self) -> None:
+        self.assertIsNotNone(sc.validate_repo_relative_path("ThirdParty/x\x00y"))
+
+    def test_newline_rejected(self) -> None:
+        self.assertIsNotNone(sc.validate_repo_relative_path("ThirdParty/x\ny"))
+
+    def test_empty_rejected(self) -> None:
+        self.assertIsNotNone(sc.validate_repo_relative_path(""))
+
+    def test_wrong_root_rejected(self) -> None:
+        self.assertIsNotNone(sc.validate_repo_relative_path(
+            "SparkEngine/x", allowed_roots=sc.AUTHORITATIVE_ROOTS))
+
+
+class TestBounds(FakeRepoCase):
+    """Every input the checker reads must be bounded before it is read."""
+
+    def test_bounds_constants_are_declared(self) -> None:
+        for name in (
+            "MAX_LOCKFILE_BYTES", "MAX_MANIFEST_BYTES", "MAX_WORKFLOW_BYTES",
+            "MAX_SENTINEL_BYTES", "MAX_LICENSE_BYTES", "MAX_JSON_DEPTH",
+            "MAX_SENTINELS", "MAX_CONTAINERS", "MAX_SUBMODULES",
+            "MAX_MANIFEST_ENTRIES", "MAX_TRACKED_PATHS", "MAX_WALK_ENTRIES",
+            "MAX_WALK_DEPTH", "MAX_WORKFLOW_FILES", "MAX_VIOLATIONS",
+        ):
+            self.assertIsInstance(getattr(sc, name), int, name)
+            self.assertGreater(getattr(sc, name), 0, name)
+
+    def test_oversized_lockfile_is_rejected(self) -> None:
+        original = (self.repo / sc.LOCKFILE_REL).read_text(encoding="utf-8")
+        padding = " " * (sc.MAX_LOCKFILE_BYTES + 1)
+        (self.repo / sc.LOCKFILE_REL).write_text(
+            original.rstrip() + "\n" + padding, encoding="utf-8", newline="\n"
         )
-        self.assertIsNone(err)
+        self.assert_fatal("exceeding the")
 
-    def test_empty_path_rejected(self):
-        err = sc.validate_repo_relative_path("")
-        self.assertIsNotNone(err)
+    def test_deeply_nested_lockfile_json_is_rejected(self) -> None:
+        depth = sc.MAX_JSON_DEPTH + 5
+        payload = "[" * depth + "]" * depth
+        self.write(sc.LOCKFILE_REL, '{"version": 2, "nest": ' + payload + "}\n")
+        self.assert_fatal("")
 
-    def test_single_dot_rejected(self):
-        err = sc.validate_repo_relative_path("ThirdParty/./evil")
-        self.assertIsNotNone(err)
+    def test_undecodable_lockfile_is_rejected(self) -> None:
+        (self.repo / sc.LOCKFILE_REL).write_bytes(b"\xff\xfe\x00\x01 not utf-8")
+        self.assert_fatal("not valid UTF-8")
 
-    def test_windows_drive_letter_rejected(self):
-        err = sc.validate_repo_relative_path("C:/Windows/System32/cmd.exe")
-        self.assertIsNotNone(err)
-
-    def test_sentinel_outside_thirdparty_exits_2(self):
-        data = _make_lockfile(sentinel_files={
-            "../../.github/workflows/build.yml": {
-                "sha256": "a" * 64,
-                "git_blob": "b" * 40,
-                "size": 100,
-                "type": "source",
-            }
-        })
-        with self.assertRaises(SystemExit) as ctx:
-            sc._validate_lockfile_schema(data)
-        self.assertEqual(ctx.exception.code, 2)
-
-    def test_managed_dir_escape_exits_2(self):
-        data = _make_lockfile(managed_vendored_dirs=["../../secrets"])
-        with self.assertRaises(SystemExit) as ctx:
-            sc._validate_lockfile_schema(data)
-        self.assertEqual(ctx.exception.code, 2)
-
-
-class TestSymlinkRejection(unittest.TestCase):
-    @unittest.skipIf(sys.platform == "win32" and not os.environ.get("CI"),
-                     "symlink creation may require privileges on Windows")
-    def test_symlink_sentinel_rejected(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            target = root / "real_file.txt"
-            target.write_text("hello")
-            link = root / "ThirdParty" / "evil_link"
-            link.parent.mkdir(parents=True)
-            link.symlink_to(target)
-            err = sc.assert_regular_file_no_escape(link, root)
-            self.assertIsNotNone(err)
-            self.assertIn("symlink", err)
-
-    def test_nonexistent_file_rejected(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            err = sc.assert_regular_file_no_escape(root / "nope.txt", root)
-            self.assertIsNotNone(err)
-            self.assertIn("does not exist", err)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Submodule gitlinks
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestSubmoduleGitlinks(unittest.TestCase):
-    def test_empty_gitlinks_fails(self):
-        lockfile = _make_lockfile(submodule_gitlinks={})
-        result = sc.CheckResult()
-        sc.check_submodule_gitlinks(PROJECT_ROOT, lockfile, result)
-        self.assertFalse(result.passed)
-
-    def test_wrong_sha_fails(self):
-        lockfile = _real_lockfile()
-        first_key = next(iter(lockfile["submodule_gitlinks"]))
-        lockfile["submodule_gitlinks"][first_key] = "a" * 40
-        result = sc.CheckResult()
-        sc.check_submodule_gitlinks(PROJECT_ROOT, lockfile, result)
-        self.assertFalse(result.passed)
-        self.assertTrue(
-            any("gitlink drift" in v.message for v in result.violations)
+    def test_duplicate_json_keys_are_rejected(self) -> None:
+        self.write(
+            sc.LOCKFILE_REL,
+            '{"version": 2, "sentinel_files": {}, "sentinel_files": {}}\n',
         )
+        self.assert_fatal("duplicate JSON key")
 
-    def test_phantom_submodule_fails(self):
-        lockfile = _real_lockfile()
-        lockfile["submodule_gitlinks"]["ThirdParty/FakeLib"] = "b" * 40
+    def test_license_size_ceiling_is_below_the_sentinel_ceiling(self) -> None:
+        self.assertLess(sc.MAX_LICENSE_BYTES, sc.MAX_SENTINEL_BYTES)
+
+    def test_violation_list_is_capped(self) -> None:
         result = sc.CheckResult()
-        sc.check_submodule_gitlinks(PROJECT_ROOT, lockfile, result)
+        for index in range(sc.MAX_VIOLATIONS + 50):
+            result.error("test", f"p{index}", "boom")
+        self.assertLessEqual(len(result.violations), sc.MAX_VIOLATIONS + 1)
+        self.assertTrue(result.truncated)
         self.assertFalse(result.passed)
-        self.assertTrue(
-            any("not found" in v.message for v in result.violations)
+
+
+class TestFailClosed(FakeRepoCase):
+
+    def test_missing_lockfile_exits_two(self) -> None:
+        (self.repo / sc.LOCKFILE_REL).unlink()
+        self.assert_fatal("cannot lstat")
+
+    def test_corrupt_lockfile_exits_two(self) -> None:
+        self.write(sc.LOCKFILE_REL, "{ not json\n")
+        self.assert_fatal("cannot parse lockfile")
+
+    def test_wrong_lockfile_version_exits_two(self) -> None:
+        data = self.lock()
+        data["version"] = 99
+        self.set_lock(data)
+        self.assert_fatal("unsupported lockfile version")
+
+    def test_missing_manifest_exits_two(self) -> None:
+        (self.repo / "ThirdParty/dependencies.lock").unlink()
+        self.assert_fatal("")
+
+    def test_missing_gitmodules_exits_two(self) -> None:
+        (self.repo / ".gitmodules").unlink()
+        self.assert_fatal("cannot lstat")
+
+    def test_not_in_a_git_repo_exits_two(self) -> None:
+        outside = Path(self._tmp.name) / "not-a-repo"
+        (outside / "tools").mkdir(parents=True)
+        shutil.copy2(PROJECT_ROOT / CHECKER_REL, outside / CHECKER_REL)
+        done = subprocess.run(
+            [sys.executable, CHECKER_REL],
+            cwd=str(outside), capture_output=True, text=True, timeout=120,
         )
+        self.assertIn(done.returncode, (2,), done.stdout + done.stderr)
 
-    def test_correct_gitlinks_pass(self):
-        lockfile = _real_lockfile()
-        result = sc.CheckResult()
-        sc.check_submodule_gitlinks(PROJECT_ROOT, lockfile, result)
-        errs = [v for v in result.violations if v.category == "submodule"
-                and v.severity == "error"]
-        self.assertEqual(errs, [])
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Sentinel files
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestSentinelFiles(unittest.TestCase):
-    def test_wrong_hash_fails(self):
-        lockfile = _real_lockfile()
-        first = next(iter(lockfile["sentinel_files"]))
-        lockfile["sentinel_files"][first]["sha256"] = "f" * 64
-        result = sc.CheckResult()
-        sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
-        self.assertFalse(result.passed)
-        self.assertTrue(any("content hash" in v.message for v in result.violations))
-
-    def test_wrong_size_fails(self):
-        lockfile = _real_lockfile()
-        first = next(iter(lockfile["sentinel_files"]))
-        lockfile["sentinel_files"][first]["size"] = 1
-        result = sc.CheckResult()
-        sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
-        self.assertFalse(result.passed)
-        self.assertTrue(any("size mismatch" in v.message for v in result.violations))
-
-    def test_missing_sentinel_fails(self):
-        lockfile = _real_lockfile()
-        lockfile["sentinel_files"]["ThirdParty/nonexistent/file.h"] = {
-            "sha256": "a" * 64,
-            "git_blob": "b" * 40,
-            "size": 100,
-            "type": "source",
-        }
-        result = sc.CheckResult()
-        sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
-        self.assertFalse(result.passed)
-
-    def test_correct_sentinels_pass(self):
-        lockfile = _real_lockfile()
-        result = sc.CheckResult()
-        sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
-        errs = [v for v in result.violations
-                if v.category in ("sentinel", "integrity") and v.severity == "error"]
-        self.assertEqual(errs, [])
-
-    def test_empty_sentinels_fails(self):
-        lockfile = _make_lockfile(sentinel_files={})
-        result = sc.CheckResult()
-        sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
-        self.assertFalse(result.passed)
-
-    def test_truncated_hash_never_matches(self):
-        lockfile = _real_lockfile()
-        first = next(iter(lockfile["sentinel_files"]))
-        real_hash = lockfile["sentinel_files"][first]["sha256"]
-        lockfile["sentinel_files"][first]["sha256"] = real_hash[:32] + "0" * 32
-        result = sc.CheckResult()
-        sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
-        self.assertFalse(result.passed)
-
-    def test_git_blob_drift_detected(self):
-        lockfile = _real_lockfile()
-        first = next(iter(lockfile["sentinel_files"]))
-        if lockfile["sentinel_files"][first].get("git_blob"):
-            lockfile["sentinel_files"][first]["git_blob"] = "c" * 40
-            result = sc.CheckResult()
-            sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
-            self.assertFalse(result.passed)
-            self.assertTrue(
-                any("git blob drift" in v.message for v in result.violations)
-            )
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# EOL parity — git blob identity must be platform-stable
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestEOLParity(unittest.TestCase):
-    def test_git_blob_hash_is_platform_stable(self):
-        """git hash-object produces the same hash regardless of checkout CRLF."""
-        lockfile = _real_lockfile()
-        for rel_path, entry in lockfile["sentinel_files"].items():
-            expected_blob = entry.get("git_blob")
-            if not expected_blob:
-                continue
-            actual_blob = sc.git_blob_hash(rel_path, PROJECT_ROOT)
-            self.assertEqual(
-                actual_blob, expected_blob,
-                f"git blob hash mismatch for {rel_path} — "
-                f"possible EOL or .gitattributes issue",
-            )
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# License validation
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestLicenseValidation(unittest.TestCase):
-    def test_short_license_fails(self):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt",
-                                          delete=False) as f:
-            f.write("MIT License\nCopyright 2026\n")
-        try:
-            result = sc.CheckResult()
-            sc._check_license_content(Path(f.name), "test-license", result)
-            self.assertFalse(result.passed)
-            self.assertTrue(any("implausibly short" in v.message
-                                for v in result.violations))
-        finally:
-            os.unlink(f.name)
-
-    def test_no_copyright_fails(self):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt",
-                                          delete=False) as f:
-            f.write(
-                "Permission is hereby granted, free of charge, to any person "
-                "obtaining a copy of this software.\n" * 10
-            )
-        try:
-            result = sc.CheckResult()
-            sc._check_license_content(Path(f.name), "test", result)
-            self.assertTrue(
-                any("copyright" in v.message for v in result.violations)
-            )
-        finally:
-            os.unlink(f.name)
-
-    def test_no_terms_fails(self):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt",
-                                          delete=False) as f:
-            f.write("Copyright 2026 Test Author\n" * 15)
-        try:
-            result = sc.CheckResult()
-            sc._check_license_content(Path(f.name), "test", result)
-            self.assertTrue(
-                any("operative terms" in v.message for v in result.violations)
-            )
-        finally:
-            os.unlink(f.name)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Action pinning
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestActionPins(unittest.TestCase):
-    def _make_workflow_root(self, tmpdir, content):
-        root = Path(tmpdir)
-        wf_dir = root / ".github" / "workflows"
-        wf_dir.mkdir(parents=True)
-        (wf_dir / "test.yml").write_text(content)
-        return root
-
-    def test_unpinned_action_fails(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = self._make_workflow_root(d,
-                "jobs:\n  build:\n    steps:\n"
-                "    - uses: actions/checkout@v4\n")
-            result = sc.CheckResult()
-            sc.check_action_pins(root, result)
-            self.assertFalse(result.passed)
-            self.assertTrue(any("unpinned" in v.message for v in result.violations))
-
-    def test_pinned_action_passes(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = self._make_workflow_root(d,
-                "jobs:\n  build:\n    steps:\n"
-                "    - uses: actions/checkout@"
-                "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\n")
-            result = sc.CheckResult()
-            sc.check_action_pins(root, result)
-            self.assertTrue(result.passed)
-
-    def test_local_action_skipped(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = self._make_workflow_root(d,
-                "jobs:\n  build:\n    steps:\n"
-                "    - uses: ./.github/actions/local\n")
-            result = sc.CheckResult()
-            sc.check_action_pins(root, result)
-            self.assertTrue(result.passed)
-
-    def test_tag_only_pin_fails(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = self._make_workflow_root(d,
-                "jobs:\n  build:\n    steps:\n"
-                "    - uses: actions/upload-artifact@v4.3.1\n")
-            result = sc.CheckResult()
-            sc.check_action_pins(root, result)
-            self.assertFalse(result.passed)
-
-    def test_yaml_extension_scanned(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            wf_dir = root / ".github" / "workflows"
-            wf_dir.mkdir(parents=True)
-            (wf_dir / "test.yaml").write_text(
-                "jobs:\n  build:\n    steps:\n"
-                "    - uses: actions/checkout@v4\n")
-            result = sc.CheckResult()
-            sc.check_action_pins(root, result)
-            self.assertFalse(result.passed)
-
-    def test_comment_line_ignored(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = self._make_workflow_root(d,
-                "jobs:\n  build:\n    steps:\n"
-                "    # uses: actions/checkout@v4\n"
-                "    - uses: actions/checkout@"
-                "3d3c42e5aac5ba805825da76410c181273ba90b1\n")
-            result = sc.CheckResult()
-            sc.check_action_pins(root, result)
-            self.assertTrue(result.passed)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# .gitmodules consistency
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestGitmodulesConsistency(unittest.TestCase):
-    def test_extra_in_gitmodules_fails(self):
-        lockfile = _real_lockfile()
-        first_key = next(iter(lockfile["submodule_gitlinks"]))
-        del lockfile["submodule_gitlinks"][first_key]
-        result = sc.CheckResult()
-        sc.check_gitmodules_consistency(PROJECT_ROOT, lockfile, result)
-        self.assertFalse(result.passed)
-        self.assertTrue(
-            any("not in supply-chain.lock" in v.message for v in result.violations)
-        )
-
-    def test_extra_in_lockfile_fails(self):
-        lockfile = _real_lockfile()
-        lockfile["submodule_gitlinks"]["ThirdParty/Phantom/lib"] = "c" * 40
-        result = sc.CheckResult()
-        sc.check_gitmodules_consistency(PROJECT_ROOT, lockfile, result)
-        self.assertFalse(result.passed)
-        self.assertTrue(
-            any("not in .gitmodules" in v.message for v in result.violations)
-        )
-
-    def test_consistent_passes(self):
-        lockfile = _real_lockfile()
-        result = sc.CheckResult()
-        sc.check_gitmodules_consistency(PROJECT_ROOT, lockfile, result)
-        errs = [v for v in result.violations
-                if v.category == "gitmodules" and v.severity == "error"]
-        self.assertEqual(errs, [])
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Unmanaged directories
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestUnmanagedDirs(unittest.TestCase):
-    def test_all_dirs_managed(self):
-        lockfile = _real_lockfile()
-        result = sc.CheckResult()
-        sc.check_unmanaged_dirs(PROJECT_ROOT, lockfile, result)
-        inv_errors = [v for v in result.violations
-                      if v.category == "inventory" and v.severity == "error"]
-        self.assertEqual(inv_errors, [], [v.message for v in inv_errors])
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Manifest reconciliation
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestManifestReconciliation(unittest.TestCase):
-    def test_manifest_notices_covered(self):
-        lockfile = _real_lockfile()
-        result = sc.CheckResult()
-        sc.check_manifest_reconciliation(PROJECT_ROOT, lockfile, result)
-        manifest_errors = [v for v in result.violations
-                           if v.category == "manifest" and v.severity == "error"]
-        self.assertEqual(manifest_errors, [], [v.message for v in manifest_errors])
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Git command failure (fail-closed)
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestGitFailureModes(unittest.TestCase):
-    def test_git_cmd_raises_on_failure(self):
+    def test_git_command_failure_is_fatal_not_silent(self) -> None:
         with self.assertRaises(RuntimeError):
-            sc.git_cmd(["log", "--nonexistent-flag-that-should-fail"],
-                       PROJECT_ROOT)
-
-    def test_submodule_check_fatal_on_git_failure(self):
-        lockfile = _real_lockfile()
-        with patch.object(sc, "git_ls_tree_thirdparty",
-                          side_effect=RuntimeError("simulated")):
-            with self.assertRaises(SystemExit) as ctx:
-                result = sc.CheckResult()
-                sc.check_submodule_gitlinks(PROJECT_ROOT, lockfile, result)
-            self.assertEqual(ctx.exception.code, 2)
-
-    def test_gitmodules_fatal_on_git_failure(self):
-        lockfile = _real_lockfile()
-        with patch.object(sc, "git_cmd",
-                          side_effect=RuntimeError("simulated")):
-            with self.assertRaises(SystemExit) as ctx:
-                result = sc.CheckResult()
-                sc.check_gitmodules_consistency(PROJECT_ROOT, lockfile, result)
-            self.assertEqual(ctx.exception.code, 2)
+            sc.git_cmd(["cat-file", "-e", "0" * 40], self.repo)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Fail-closed: missing/corrupt lockfile
+# Real-repository assertions
 # ═══════════════════════════════════════════════════════════════════════
 
-class TestFailClosed(unittest.TestCase):
-    def _run_checker_in_dir(self, tmpdir):
-        import shutil
-        root = Path(tmpdir)
-        (root / "tools").mkdir()
-        shutil.copy(
-            PROJECT_ROOT / "tools" / "check-supply-chain.py",
-            root / "tools" / "check-supply-chain.py",
-        )
-        return subprocess.run(
-            [sys.executable, str(root / "tools" / "check-supply-chain.py")],
-            capture_output=True, text=True, cwd=str(root), timeout=30,
+class TestRealRepository(unittest.TestCase):
+    """Read-only assertions about this repository's own lockfile."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        _require("git")
+        cls.lock = json.loads(
+            (PROJECT_ROOT / sc.LOCKFILE_REL).read_text(encoding="utf-8")
         )
 
-    def test_missing_lockfile_exits_2(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            subprocess.run(["git", "init"], cwd=str(root),
-                           capture_output=True, timeout=10)
-            (root / "ThirdParty").mkdir()
-            result = self._run_checker_in_dir(d)
-            self.assertEqual(result.returncode, 2)
+    def test_lockfile_is_current_schema_version(self) -> None:
+        self.assertEqual(self.lock["version"], sc.LOCKFILE_VERSION)
 
-    def test_corrupt_lockfile_exits_2(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            subprocess.run(["git", "init"], cwd=str(root),
-                           capture_output=True, timeout=10)
-            tp = root / "ThirdParty"
-            tp.mkdir()
-            (tp / "supply-chain.lock").write_text("{invalid json!!!")
-            result = self._run_checker_in_dir(d)
-            self.assertEqual(result.returncode, 2)
+    def test_every_non_submodule_container_has_a_tree_digest(self) -> None:
+        containers = set(self.lock["managed_vendored_dirs"]) | set(
+            self.lock["project_owned_dirs"]
+        )
+        self.assertEqual(containers - set(self.lock["tree_digests"]), set())
 
-    def test_wrong_version_exits_2(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            subprocess.run(["git", "init"], cwd=str(root),
-                           capture_output=True, timeout=10)
-            tp = root / "ThirdParty"
-            tp.mkdir()
-            (tp / "supply-chain.lock").write_text(json.dumps({"version": 999}))
-            result = self._run_checker_in_dir(d)
-            self.assertEqual(result.returncode, 2)
-
-    def test_not_in_git_repo_exits_2(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            (root / "ThirdParty").mkdir()
-            tp = root / "ThirdParty"
-            (tp / "supply-chain.lock").write_text(
-                json.dumps({"version": 1})
+    def test_every_tracked_thirdparty_path_is_accounted_for(self) -> None:
+        """The coverage claim is a total, not a floor."""
+        tracked = sc.git_tracked_thirdparty(PROJECT_ROOT)
+        containers = set(self.lock["managed_vendored_dirs"]) | set(
+            self.lock["project_owned_dirs"]
+        ) | set(self.lock["submodule_gitlinks"])
+        allowed = set(self.lock["allowed_root_files"])
+        unaccounted = [
+            entry.path for entry in tracked
+            if entry.path not in allowed
+            and not any(
+                entry.path == c or entry.path.startswith(c + "/") for c in containers
             )
-            result = self._run_checker_in_dir(d)
-            self.assertEqual(result.returncode, 2)
+        ]
+        self.assertEqual(unaccounted, [], "unaccounted tracked ThirdParty paths")
 
+    def test_digest_file_counts_sum_to_the_tracked_payload(self) -> None:
+        tracked = sc.git_tracked_thirdparty(PROJECT_ROOT)
+        payload = [e for e in tracked if e.mode in sc.GIT_FILE_MODES]
+        allowed = set(self.lock["allowed_root_files"])
+        expected = len([e for e in payload if e.path not in allowed])
+        counted = sum(v["file_count"] for v in self.lock["tree_digests"].values())
+        self.assertEqual(counted, expected)
 
-# ═══════════════════════════════════════════════════════════════════════
-# Case/canonical alias detection
-# ═══════════════════════════════════════════════════════════════════════
+    def test_gitlink_count_matches_gitmodules(self) -> None:
+        modules = sc._parse_gitmodules(PROJECT_ROOT, PROJECT_ROOT.resolve())
+        paths = {f["path"] for f in modules.values() if f.get("path")}
+        self.assertEqual(paths, set(self.lock["submodule_gitlinks"]))
 
-class TestCaseAliases(unittest.TestCase):
-    def test_case_variant_paths_detected_as_distinct(self):
-        """Two sentinel paths differing only in case must be treated as distinct."""
-        lockfile = _real_lockfile()
-        first = next(iter(lockfile["sentinel_files"]))
-        upper_variant = first.upper()
-        if upper_variant != first:
-            lockfile["sentinel_files"][upper_variant] = {
-                "sha256": "a" * 64,
-                "git_blob": "b" * 40,
-                "size": 1,
-                "type": "source",
-            }
-            result = sc.CheckResult()
-            sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
-            self.assertFalse(result.passed)
+    def test_every_action_pin_sha_is_lowercase_forty_hex(self) -> None:
+        for repo, shas in self.lock["action_pins"].items():
+            for sha in shas:
+                self.assertRegex(sha, r"^[0-9a-f]{40}$", repo)
 
-
-# ═══════════════════════════════════════════════════════════════════════
-# End-to-end
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestEndToEnd(unittest.TestCase):
-    def test_full_check_passes(self):
-        result = subprocess.run(
-            [sys.executable, str(PROJECT_ROOT / "tools" / "check-supply-chain.py")],
-            capture_output=True, text=True, cwd=str(PROJECT_ROOT), timeout=60,
-        )
-        self.assertEqual(
-            result.returncode, 0,
-            f"Supply-chain check failed:\n{result.stdout}\n{result.stderr}",
-        )
-
-    def test_json_output_valid(self):
-        result = subprocess.run(
-            [sys.executable,
-             str(PROJECT_ROOT / "tools" / "check-supply-chain.py"), "--json"],
-            capture_output=True, text=True, cwd=str(PROJECT_ROOT), timeout=60,
-        )
-        self.assertEqual(result.returncode, 0)
-        data = json.loads(result.stdout)
-        self.assertTrue(data["passed"])
-        self.assertEqual(data["violation_count"], 0)
-
-    def test_ci_mode_identical(self):
-        result = subprocess.run(
-            [sys.executable,
-             str(PROJECT_ROOT / "tools" / "check-supply-chain.py"), "--ci"],
-            capture_output=True, text=True, cwd=str(PROJECT_ROOT), timeout=60,
-        )
-        self.assertEqual(result.returncode, 0)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Malformed manifest entries
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestMalformedManifest(unittest.TestCase):
-    def test_wrong_field_count_flagged(self):
-        lockfile = _real_lockfile()
-        result = sc.CheckResult()
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            tp = root / "ThirdParty"
-            tp.mkdir()
-            (tp / "dependencies.lock").write_text(textwrap.dedent("""\
-                set(SPARK_THIRDPARTY_AUDIT_ENTRIES
-                    "bad|entry|only|three|fields"
-                )
-            """))
-            sc.check_manifest_reconciliation(root, lockfile, result)
-            self.assertTrue(
-                any("malformed" in v.message for v in result.violations)
+    def test_git_blob_identity_is_platform_stable(self) -> None:
+        """Catches a .gitattributes or autocrlf change that shifts blob ids."""
+        paths = sorted(self.lock["sentinel_files"])
+        actual = sc.git_blob_hashes(paths, PROJECT_ROOT)
+        for path in paths:
+            self.assertEqual(
+                actual[path], self.lock["sentinel_files"][path]["git_blob"], path
             )
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Atomic update
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestAtomicUpdate(unittest.TestCase):
-    def test_update_produces_valid_lockfile(self):
-        result = subprocess.run(
-            [sys.executable,
-             str(PROJECT_ROOT / "tools" / "check-supply-chain.py"), "--update"],
-            capture_output=True, text=True, cwd=str(PROJECT_ROOT), timeout=60,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        verify = subprocess.run(
-            [sys.executable,
-             str(PROJECT_ROOT / "tools" / "check-supply-chain.py"), "--json"],
-            capture_output=True, text=True, cwd=str(PROJECT_ROOT), timeout=60,
-        )
-        self.assertEqual(verify.returncode, 0, verify.stderr)
-        data = json.loads(verify.stdout)
-        self.assertTrue(data["passed"])
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Adversarial repair — git_blob_hash fail-open
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestGitBlobFailClosed(unittest.TestCase):
-    """Verify that git hash-object failure is an error, not a silent pass."""
-
-    def test_blob_hash_failure_produces_error(self):
-        lockfile = _real_lockfile()
-        with patch.object(sc, "git_blob_hash", return_value=""):
-            result = sc.CheckResult()
-            sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
-            blob_errors = [v for v in result.violations
-                           if "hash-object failed" in v.message
-                           or "blob" in v.message.lower()]
-            sentinels_with_blob = sum(
-                1 for e in lockfile["sentinel_files"].values()
-                if e.get("git_blob")
-            )
-            self.assertGreater(len(blob_errors), 0,
-                               "git_blob_hash failure must produce an error, not pass silently")
-            self.assertEqual(len(blob_errors), sentinels_with_blob,
-                             "every sentinel with a git_blob must report a failure")
-
-    def test_blob_hash_failure_on_single_file(self):
-        lockfile = _real_lockfile()
-        first = next(iter(lockfile["sentinel_files"]))
-        original_fn = sc.git_blob_hash
-
-        def selective_fail(path, cwd):
-            if path == first:
-                return ""
-            return original_fn(path, cwd)
-
-        with patch.object(sc, "git_blob_hash", side_effect=selective_fail):
-            result = sc.CheckResult()
-            sc.check_sentinel_files(PROJECT_ROOT, lockfile, result)
-            blob_errors = [v for v in result.violations
-                           if "hash-object failed" in v.message]
-            self.assertEqual(len(blob_errors), 1)
-            self.assertIn(first, blob_errors[0].path)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Adversarial repair — action pin comment injection
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestActionPinCommentInjection(unittest.TestCase):
-    """Verify that a SHA in a YAML comment cannot fool the pin checker."""
-
-    def _make_workflow_root(self, tmpdir, content):
-        root = Path(tmpdir)
-        wf_dir = root / ".github" / "workflows"
-        wf_dir.mkdir(parents=True)
-        (wf_dir / "test.yml").write_text(content)
-        return root
-
-    def test_sha_in_comment_does_not_pass(self):
-        fake_sha = "a" * 40
-        with tempfile.TemporaryDirectory() as d:
-            root = self._make_workflow_root(d,
-                "jobs:\n  build:\n    steps:\n"
-                f"    - uses: evil/action@v1 # uses: foo/bar@{fake_sha}\n")
-            result = sc.CheckResult()
-            sc.check_action_pins(root, result)
-            self.assertFalse(result.passed,
-                             "unpinned action with SHA in comment must be rejected")
-            self.assertTrue(any("unpinned" in v.message for v in result.violations))
-
-    def test_sha_in_comment_variant_hash_only(self):
-        fake_sha = "b" * 40
-        with tempfile.TemporaryDirectory() as d:
-            root = self._make_workflow_root(d,
-                "jobs:\n  build:\n    steps:\n"
-                f"    - uses: evil/action@v1 # {fake_sha}\n")
-            result = sc.CheckResult()
-            sc.check_action_pins(root, result)
-            self.assertFalse(result.passed)
-
-    def test_legitimate_pinned_action_with_comment_passes(self):
-        real_sha = "3d3c42e5aac5ba805825da76410c181273ba90b1"
-        with tempfile.TemporaryDirectory() as d:
-            root = self._make_workflow_root(d,
-                "jobs:\n  build:\n    steps:\n"
-                f"    - uses: actions/checkout@{real_sha} # v7\n")
-            result = sc.CheckResult()
-            sc.check_action_pins(root, result)
-            self.assertTrue(result.passed,
-                            "legitimate SHA-pinned action with version comment must pass")
-
-    def test_strip_yaml_comment_helper(self):
-        self.assertEqual(sc._strip_yaml_comment("uses: foo@abc # v1"), "uses: foo@abc")
-        self.assertEqual(sc._strip_yaml_comment("uses: foo@abc"), "uses: foo@abc")
-        self.assertEqual(sc._strip_yaml_comment("# full comment"), "# full comment")
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Adversarial repair — sentinel coverage enforcement
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestSentinelCoverage(unittest.TestCase):
-    """Verify that managed dirs without sentinels are flagged."""
-
-    def test_managed_dir_without_sentinel_flagged(self):
-        lockfile = _make_lockfile(
-            managed_vendored_dirs=["ThirdParty/Uncovered"],
-            sentinel_files={
-                "ThirdParty/Other/file.h": {
-                    "sha256": "a" * 64,
-                    "git_blob": "b" * 40,
-                    "size": 100,
-                    "type": "source",
-                }
-            },
-        )
-        result = sc.CheckResult()
-        sc.check_sentinel_coverage(lockfile, result)
-        self.assertFalse(result.passed)
-        self.assertTrue(
-            any("no sentinel files" in v.message for v in result.violations))
-        self.assertTrue(
-            any("ThirdParty/Uncovered" in v.path for v in result.violations))
-
-    def test_managed_dir_with_sentinel_passes(self):
-        lockfile = _make_lockfile(
-            managed_vendored_dirs=["ThirdParty/Covered"],
-            sentinel_files={
-                "ThirdParty/Covered/file.h": {
-                    "sha256": "a" * 64,
-                    "git_blob": "b" * 40,
-                    "size": 100,
-                    "type": "source",
-                }
-            },
-        )
-        result = sc.CheckResult()
-        sc.check_sentinel_coverage(lockfile, result)
-        self.assertTrue(result.passed)
-
-    def test_real_lockfile_has_full_coverage(self):
-        lockfile = _real_lockfile()
-        result = sc.CheckResult()
-        sc.check_sentinel_coverage(lockfile, result)
-        coverage_errors = [v for v in result.violations
-                           if v.category == "coverage" and v.severity == "error"]
-        self.assertEqual(coverage_errors, [],
-                         f"real lockfile has uncovered dirs: "
-                         f"{[v.path for v in coverage_errors]}")
-
-    def test_empty_managed_dirs_passes(self):
-        lockfile = _make_lockfile(managed_vendored_dirs=[], sentinel_files={})
-        result = sc.CheckResult()
-        sc.check_sentinel_coverage(lockfile, result)
-        coverage_errors = [v for v in result.violations
-                           if v.category == "coverage"]
-        self.assertEqual(coverage_errors, [])
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)

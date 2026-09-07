@@ -152,6 +152,27 @@ function(spark_thirdparty_validate_manifest_schema manifest_file)
     message(STATUS "[ThirdParty Audit] Manifest schema valid (${_entry_count} entries)")
 endfunction()
 
+function(spark_thirdparty_export_entries manifest_file output_file)
+    # Emit the fully expanded entry list so external checkers reconcile against
+    # what CMake actually evaluates rather than against a text scrape of the
+    # manifest. Variable expansions, list appends after the closing paren, and
+    # multi-line records are all resolved here; a text-only parser sees none of
+    # them and reports a clean tree it never examined.
+    spark_thirdparty_validate_manifest_schema("${manifest_file}")
+    include("${manifest_file}")
+
+    set(_export_body "")
+    foreach(_entry IN LISTS SPARK_THIRDPARTY_AUDIT_ENTRIES)
+        if(_entry MATCHES "\n")
+            message(FATAL_ERROR
+                "[ThirdParty Audit] Manifest entry contains a newline and cannot be exported: ${_entry}")
+        endif()
+        string(APPEND _export_body "${_entry}\n")
+    endforeach()
+
+    file(WRITE "${output_file}" "${_export_body}")
+endfunction()
+
 function(spark_thirdparty_generate_notice manifest_file output_file)
     spark_thirdparty_validate_manifest_schema("${manifest_file}")
     include("${manifest_file}")
@@ -297,6 +318,11 @@ if(SPARK_THIRDPARTY_AUDIT_VALIDATE_ONLY)
         message(FATAL_ERROR "SPARK_THIRDPARTY_MANIFEST is required in validation-only mode")
     endif()
     spark_thirdparty_validate_manifest_schema("${SPARK_THIRDPARTY_MANIFEST}")
+    if(DEFINED SPARK_THIRDPARTY_ENTRIES_OUTPUT)
+        spark_thirdparty_export_entries(
+            "${SPARK_THIRDPARTY_MANIFEST}"
+            "${SPARK_THIRDPARTY_ENTRIES_OUTPUT}")
+    endif()
     if(DEFINED SPARK_THIRDPARTY_NOTICE_OUTPUT)
         spark_thirdparty_generate_notice(
             "${SPARK_THIRDPARTY_MANIFEST}"

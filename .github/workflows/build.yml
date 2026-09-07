@@ -111,6 +111,9 @@ jobs:
     - name: Test Spark CLI
       run: python3 -m unittest discover -s Tools/spark-cli/tests -p "test_*.py" -v
 
+    - name: Test ThirdParty manifest-sync gate
+      run: python3 Tests/Tools/test_check_thirdparty_manifest_sync.py
+
     - name: Verify every test source is registered
       run: bash tools/check-test-registration.sh
 
@@ -357,6 +360,17 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
+
+    # The checker parses workflows with a real YAML parser and expands the
+    # dependency manifest through CMake. Both are hard requirements: it exits 2
+    # rather than degrading to a scan that would report a clean result it never
+    # established, so they are installed explicitly instead of assumed.
+    - name: Install supply-chain checker dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-yaml cmake
+        python3 -c "import yaml; print('PyYAML', yaml.__version__)"
+        cmake --version
 
     - name: Supply-chain policy check
       run: python3 tools/check-supply-chain.py
@@ -3203,6 +3217,6 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["validate-ci-tools","check-format","validate-prompts","check-thirdparty-manifest","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","build-windows-shipping","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["validate-ci-tools","check-format","validate-prompts","check-thirdparty-manifest","check-supply-chain","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","build-windows-shipping","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py

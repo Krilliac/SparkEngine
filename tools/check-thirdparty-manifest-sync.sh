@@ -120,11 +120,46 @@ if echo "$CHANGED_FILES" | grep -Fxq "$MANIFEST"; then
     manifest_changed=true
 fi
 
-# Trigger 1: third-party directories changed (vendor update / submodule pointer update / file edits)
+# Governance metadata at the ThirdParty root describes policy, not dependency
+# payload. POLICY.md, README.md, and supply-chain.lock carry no vendored code
+# and no dependency wiring, so editing them alone cannot introduce dependency
+# drift and must not force a dependencies.lock bump. Every other path under
+# ThirdParty/ still triggers, including any new root-level file, any path whose
+# case differs from an entry below, and any change that touches payload
+# alongside governance.
+#
+# This exemption is only safe because tools/check-supply-chain.py independently
+# reconciles supply-chain.lock against dependencies.lock, .gitmodules, and the
+# on-disk tree in BOTH directions. A supply-chain.lock edit that silently widens
+# the managed set is caught there, not here. Do not widen this list without
+# adding the matching reconciliation there first.
+THIRDPARTY_GOVERNANCE_PATHS=(
+    "ThirdParty/POLICY.md"
+    "ThirdParty/README.md"
+    "ThirdParty/supply-chain.lock"
+)
+
+# Trigger 1: third-party dependency payload changed (vendor update / submodule
+# pointer update / file edits). Governance-only edits do not count.
 thirdparty_changed=false
-if echo "$CHANGED_FILES" | grep -qE '^ThirdParty/'; then
-    thirdparty_changed=true
-fi
+while IFS= read -r changed_path; do
+    [ -n "$changed_path" ] || continue
+    case "$changed_path" in
+        ThirdParty/*) ;;
+        *) continue ;;
+    esac
+    is_governance_path=false
+    for governance_path in "${THIRDPARTY_GOVERNANCE_PATHS[@]}"; do
+        if [ "$changed_path" = "$governance_path" ]; then
+            is_governance_path=true
+            break
+        fi
+    done
+    if [ "$is_governance_path" = false ]; then
+        thirdparty_changed=true
+        break
+    fi
+done <<< "$CHANGED_FILES"
 
 # Trigger 2: dependency wiring changed in build config.
 # Tokens are intentionally specific to third-party references; broader

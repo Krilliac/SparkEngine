@@ -5528,7 +5528,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 23,
+    "jobCount": 24,
     "jobs": [
       {
         "id": "validate-ci-tools",
@@ -5553,7 +5553,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 29,
+        "stepCount": 30,
         "steps": [
           {
             "index": 0,
@@ -5773,6 +5773,18 @@
           },
           {
             "index": 18,
+            "name": "Test ThirdParty manifest-sync gate",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "20b1682609fdd8b9"
+          },
+          {
+            "index": 19,
             "name": "Verify every test source is registered",
             "id": "",
             "uses": "",
@@ -5784,7 +5796,7 @@
             "runDigest": "4033bf80ea364bbe"
           },
           {
-            "index": 19,
+            "index": 20,
             "name": "Test asset integrity verifier",
             "id": "",
             "uses": "",
@@ -5796,7 +5808,7 @@
             "runDigest": "38617105f0d02d2c"
           },
           {
-            "index": 20,
+            "index": 21,
             "name": "Verify repository asset integrity baseline",
             "id": "",
             "uses": "",
@@ -5808,7 +5820,7 @@
             "runDigest": "24c6f12eaf03dec2"
           },
           {
-            "index": 21,
+            "index": 22,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -5820,7 +5832,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 22,
+            "index": 23,
             "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
@@ -5832,7 +5844,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 23,
+            "index": 24,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -5844,7 +5856,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 24,
+            "index": 25,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -5856,7 +5868,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 25,
+            "index": 26,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5868,7 +5880,7 @@
             "runDigest": ""
           },
           {
-            "index": 26,
+            "index": 27,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -5880,7 +5892,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 27,
+            "index": 28,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -5895,7 +5907,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 28,
+            "index": 29,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6096,6 +6108,81 @@
             "hasRun": true,
             "env": [],
             "runDigest": "a61e00fe7caad789"
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
+      {
+        "id": "check-supply-chain",
+        "name": "",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": "absent",
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {},
+        "stepCount": 4,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Install supply-chain checker dependencies",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "12dd60e56974d6fc"
+          },
+          {
+            "index": 2,
+            "name": "Supply-chain policy check",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "72080a1dd7dc2af5"
+          },
+          {
+            "index": 3,
+            "name": "Supply-chain adversarial tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "f25071ce762995a8"
           }
         ],
         "envNames": [],
@@ -9106,6 +9193,7 @@
           "check-format",
           "validate-prompts",
           "check-thirdparty-manifest",
+          "check-supply-chain",
           "build-linux-asan",
           "build-linux-tsan",
           "telemetry-integration",
@@ -9403,6 +9491,7 @@
           "check-format",
           "validate-prompts",
           "check-thirdparty-manifest",
+          "check-supply-chain",
           "build-linux-asan",
           "build-linux-tsan",
           "telemetry-integration",
@@ -9461,6 +9550,25 @@
       }
     ],
     "cmakeInvocations": [
+      {
+        "job": "check-supply-chain",
+        "step": "Install supply-chain checker dependencies",
+        "stepIndex": 1,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "other",
+        "command": "cmake --version",
+        "commandProvenance": "literal",
+        "commandIndex": 0
+      },
       {
         "job": "build-linux-asan",
         "step": "Configure CMake (ASan + UBSan + LSan)",
@@ -13434,7 +13542,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 23,
+        "stepIndex": 24,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -13462,7 +13570,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 24,
+        "stepIndex": 25,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -13661,8 +13769,8 @@
       }
     ],
     "summary": {
-      "jobCount": 23,
-      "matrixLegCount": 31,
+      "jobCount": 24,
+      "matrixLegCount": 32,
       "pathFilteredEventCount": 0,
       "configureCount": 25,
       "buildCount": 25,
@@ -13670,7 +13778,7 @@
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,
-      "blockingJobCount": 15,
+      "blockingJobCount": 16,
       "advisoryJobCount": 3,
       "conditionalJobCount": 5,
       "builtOsConfigurationPairs": [

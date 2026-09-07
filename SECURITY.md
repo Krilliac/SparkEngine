@@ -51,24 +51,28 @@ The following are **not** in scope:
 ## Supply-Chain Security
 
 Third-party dependencies are governed by [`ThirdParty/POLICY.md`](ThirdParty/POLICY.md)
-and enforced by `tools/check-supply-chain.py`, a required CI gate on every push
-and pull request. The checker verifies:
+and enforced by `tools/check-supply-chain.py` in the required
+`check-supply-chain` CI job. The checker verifies:
 
-- **Content integrity**: SHA-256 hashes and git blob identity for 39 sentinel
-  files (entry-point headers, implementation files, license texts)
-- **Submodule identity**: Exact gitlink SHAs for 6 git submodules, reconciled
-  bidirectionally against `.gitmodules`
-- **Directory inventory**: Every directory under `ThirdParty/` must be declared
-  as a managed vendored directory, project-owned directory, or submodule
-- **Action pinning**: All GitHub Actions workflow references must use full
-  40-character commit SHAs
-- **License coverage**: Every dependency must have a license file with copyright
-  and operative terms
-- **Manifest reconciliation**: License notices referenced in
-  `ThirdParty/dependencies.lock` must be tracked as sentinel files
-- **Fail-closed verification**: missing or malformed policy data, schema errors,
-  Git failures, and path-escape attempts are errors; policy violations exit 1
-  and verifier failures exit 2.
+- **Complete tracked payload coverage:** every tracked `ThirdParty/` path is
+  assigned to exactly one declared container. Each non-submodule container has a
+  SHA-256 tree digest over its complete `(mode, blob, path)` set, so tracked
+  additions, edits, deletions, and renames at any depth are detected.
+- **Content and submodule identity:** declared sentinel files have SHA-256, Git
+  blob, and size checks; gitlink SHAs reconcile bidirectionally with
+  `.gitmodules`.
+- **Link hygiene:** symbolic links, Windows reparse points, hardlinked
+  sentinels, and containment escapes are rejected.
+- **Structured action pinning:** workflow and composite-action YAML is parsed,
+  not line-scanned. External actions must be lockfile-authorized full-SHA pins,
+  Docker actions must be digest-pinned, and local actions must resolve to
+  `action.yml`.
+- **Manifest reconciliation:** CMake expands `ThirdParty/dependencies.lock`,
+  which is then reconciled bidirectionally with the supply-chain lock across
+  identity, license, feature, fallback, and notice metadata.
+- **Resource bounds and fail-closed behavior:** policy inputs and traversals are
+  bounded; malformed, unsafe, or unverifiable data fails rather than falling
+  back to a weaker check.
 
 Verification: `python tools/check-supply-chain.py`
 CI job: `check-supply-chain` in `.github/workflows/build.yml`
@@ -80,6 +84,8 @@ CI job: `check-supply-chain` in `.github/workflows/build.yml`
 - Required secret-scanning enforcement
 - CodeQL coverage for every shipped product
 - A formal severity-exception schema with owner and expiry
+- SPDX allowlist enforcement and policy for third-party code outside
+  `ThirdParty/`
 
 ## Credit
 

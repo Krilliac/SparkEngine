@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "description": "Authoritative supply-chain content lockfile. Verified by tools/check-supply-chain.py on every CI run. Update with: python tools/check-supply-chain.py --update",
   "submodule_gitlinks": {
     "ThirdParty/AI/recastnavigation": "9f4ce64458dfae86e1239c525ddc219c4e9e06f1",
@@ -11,7 +11,6 @@
   },
   "managed_vendored_dirs": [
     "ThirdParty/Audio/miniaudio",
-    "ThirdParty/OpenGL/GL",
     "ThirdParty/Physics/JoltPhysics",
     "ThirdParty/Utils/cgltf",
     "ThirdParty/Utils/json",
@@ -22,10 +21,75 @@
     "ThirdParty/VulkanMemoryAllocator",
     "ThirdParty/glad"
   ],
-  "project_owned_dirs": [
-    "ThirdParty/ECS/entt_stub",
-    "ThirdParty/Licenses"
+  "project_owned_dirs": {
+    "ThirdParty/ECS/entt_stub": "First-party minimal EnTT-compatible stub authored in this repository; used as the CMake fallback include path when the entt submodule is absent.",
+    "ThirdParty/Licenses": "First-party collection of license notice texts copied from submodule dependencies so the notices survive an uninitialised submodule checkout.",
+    "ThirdParty/OpenGL/GL": "First-party minimal GL/GLX headers authored in this repository as a fallback for hosts without libgl-dev; not vendored upstream code, so it has no dependencies.lock provenance entry.",
+    "ThirdParty/Scripting/patches": "First-party AngelScript integration patches and compatibility headers applied by the top-level CMake configuration; they are repository-authored integration material, not an upstream vendored dependency."
+  },
+  "allowed_root_files": [
+    "ThirdParty/POLICY.md",
+    "ThirdParty/dependencies.lock",
+    "ThirdParty/supply-chain.lock"
   ],
+  "tree_digests": {
+    "ThirdParty/Audio/miniaudio": {
+      "digest": "c5dc0fb84af0c04256bc537c6ba3eefb6859bad45d595a7111ccfbf57893fa84",
+      "file_count": 3
+    },
+    "ThirdParty/ECS/entt_stub": {
+      "digest": "e6bdc82439032869b8b4253d28afa2c5b3d343b4648bba31ef5e1724043e3d65",
+      "file_count": 1
+    },
+    "ThirdParty/Licenses": {
+      "digest": "a434291e70aca16dbc83ae9d81a1e4466df1a930026d83fcb766c044452fe6c0",
+      "file_count": 6
+    },
+    "ThirdParty/OpenGL/GL": {
+      "digest": "9e48a292728a4133072206dd7f0d5f96cd6e2acbd3e4e4f57d1e688d43a0e5fc",
+      "file_count": 4
+    },
+    "ThirdParty/Physics/JoltPhysics": {
+      "digest": "06b5b6114d28b25e3bcdabd37fd2de5d6b5011d08f899b4774357a55e3758f8c",
+      "file_count": 1240
+    },
+    "ThirdParty/Scripting/patches": {
+      "digest": "d9cc2c676d74d480816c204a2b75b7adf2af9572f160e386bf673a2d928c0e4e",
+      "file_count": 3
+    },
+    "ThirdParty/Utils/cgltf": {
+      "digest": "cf521eb5782573637ab21d8b3fe8851a34fb5d56e55fe72e6912d47e92fd3e3a",
+      "file_count": 3
+    },
+    "ThirdParty/Utils/json": {
+      "digest": "1d07bcda482d85b618027363009a90c1a3bba21c60141d7087ee71730ecd0f49",
+      "file_count": 2
+    },
+    "ThirdParty/Utils/stb": {
+      "digest": "f34101878d6bcc48ff6f6ac577c2eebb9b5b203d4799edbc9395568af0852d5d",
+      "file_count": 4
+    },
+    "ThirdParty/Utils/tinyexr": {
+      "digest": "7ec3eb6ef2dc206c560517f45bba888483b8f6dee2fb98f1e3266d4f82d8fadb",
+      "file_count": 5
+    },
+    "ThirdParty/Utils/tinyobjloader": {
+      "digest": "bb660a44d0446c0f2b855c4b22f7f1db3cc5453fceccee4c970a5fa2bfa6eb2a",
+      "file_count": 2
+    },
+    "ThirdParty/Utils/zstd": {
+      "digest": "9e89d08eebb521062ef281b98644b91ce0e6518aa57495be5490a86b6d16c834",
+      "file_count": 3
+    },
+    "ThirdParty/VulkanMemoryAllocator": {
+      "digest": "4300e811d2c11b13ce3452e7973ea40369530aecbc043bfe480e6184952ed1ee",
+      "file_count": 2
+    },
+    "ThirdParty/glad": {
+      "digest": "c4d791773a5839a56daf3a0a39f1793dbcc3381a49e0e7c89f027c2556dfe2d5",
+      "file_count": 5
+    }
+  },
   "sentinel_files": {
     "ThirdParty/Audio/miniaudio/LICENSE": {
       "sha256": "c53c3dc44b331940d63f27902c0c38949f4871d62c63fffbef57441ab32ebffe",
@@ -261,5 +325,46 @@
       "size": 643578,
       "type": "source"
     }
+  },
+  "action_pins": {
+    "actions/ai-inference": [
+      "2c43c91ae16266ca159d311430343c67a5ffa222"
+    ],
+    "actions/attest": [
+      "1e69f48acb82d1966a394da916b4c1698aa569d6"
+    ],
+    "actions/attest-build-provenance": [
+      "4d101475d8b20a2381f78447822ac1eab6504dd8"
+    ],
+    "actions/cache": [
+      "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+    ],
+    "actions/checkout": [
+      "3d3c42e5aac5ba805825da76410c181273ba90b1"
+    ],
+    "actions/download-artifact": [
+      "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+    ],
+    "actions/github-script": [
+      "3a2844b7e9c422d3c10d287c895573f7108da1b3"
+    ],
+    "actions/upload-artifact": [
+      "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+    ],
+    "anchore/sbom-action": [
+      "3ad7283483fc7af8ff2b4ea19663c2d5ca935e26"
+    ],
+    "github/codeql-action": [
+      "cdf488f595d80d6e07e03d4674febd5ab45fa938"
+    ],
+    "microsoft/msvc-code-analysis-action": [
+      "04825f6d9e00f87422d6bf04e1a38b1f3ed60d99"
+    ],
+    "microsoft/setup-msbuild": [
+      "30375c66a4eea26614e0d39710365f22f8b0af57"
+    ],
+    "softprops/action-gh-release": [
+      "3d0d9888cb7fd7b750713d6e236d1fcb99157228"
+    ]
   }
 }
