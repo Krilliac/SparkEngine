@@ -9,8 +9,8 @@
  * representation written by the out-of-line basic_string::__init stays
  * poisoned and __msan_test_shadow returns >= 0; with the instrumented runtime
  * it returns -1. No uninitialised value is read here, so halt_on_error is
- * irrelevant. In every other build the tests are count-preserving stubs
- * (same pattern as TestVulkanLavapipe.cpp).
+ * irrelevant. In every other build the tests explicitly skip: registration
+ * alone is not evidence that MemorySanitizer instrumentation was verified.
  */
 
 #include "TestFramework.h"
@@ -39,7 +39,7 @@ TEST(MSanCanary_TestTranslationUnitIsInstrumented)
     probe = 1;
     EXPECT_EQ(__msan_test_shadow(&probe, sizeof probe), -1);
 #else
-    EXPECT_TRUE(true);
+    SKIP_TEST("MemorySanitizer instrumentation is unavailable in this build");
 #endif
 }
 
@@ -57,6 +57,6 @@ TEST(MSanCanary_LibcxxStoresUpdateShadow)
     EXPECT_EQ(__msan_test_shadow(onHeap.get(), sizeof(std::string)), -1);
     EXPECT_EQ(__msan_test_shadow(onHeap->data(), onHeap->size()), -1);
 #else
-    EXPECT_TRUE(true);
+    SKIP_TEST("MemorySanitizer instrumentation is unavailable in this build");
 #endif
 }
