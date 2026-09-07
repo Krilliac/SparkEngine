@@ -1,48 +1,65 @@
 #!/usr/bin/env python3
-"""Asset integrity manifest generator and verifier for SparkEngine.
+"""Deterministic, fail-closed integrity checks for packaged SparkEngine assets.
 
-Generates deterministic SHA-256 integrity manifests and verifies them
-against the filesystem with strict path safety, traversal protection,
-symlink/junction rejection, case-collision detection, and completeness
-checking.
+The caller, never manifest data, selects the root being verified. A verification
+walks the directory tree once, opens each accepted regular file, hashes from the
+descriptor, and checks fingerprint stability around the read.
 
-Usage:
-    python3 tools/asset-integrity/verify_asset_integrity.py generate Assets
-    python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json
-    python3 tools/asset-integrity/verify_asset_integrity.py check-all
+TOCTOU limitations (honest boundary):
+- The fingerprint uses (dev, ino, size, mtime_ns, mode). A same-inode rewrite
+  that restores the original mtime and size is not detected.
+- The walk is non-atomic: files added or removed between scandir() and read are
+  missed or stale. A directory swapped after scandir() but before the leaf stat
+  may expose unexpected content.
+- This is a repository-content gate, not proof that the verified snapshot was
+  consumed atomically by package assembly. Immutable handoff requires a separate
+  mechanism (e.g. content-addressed staging or sealed archive).
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import ntpath
 import os
+import re
 import stat
 import sys
-from pathlib import Path, PurePosixPath
+import tempfile
+import unicodedata
+from pathlib import Path
+from typing import Any, Iterable
+
 
 MANIFEST_SCHEMA_VERSION = 1
 HASH_ALGORITHM = "sha256"
 MANIFEST_FILENAME = "assets.integrity.json"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+MAX_MANIFEST_BYTES = 64 * 1024 * 1024
+MAX_ENTRY_COUNT = 100_000
+MAX_DIRECTORY_ENTRY_COUNT = 200_000
+MAX_PATH_BYTES = 1024
+MAX_FILE_BYTES = 4 * 1024 * 1024 * 1024
+MAX_TOTAL_BYTES = 64 * 1024 * 1024 * 1024
+MAX_DIRECTORY_DEPTH = 128
+HASH_CHUNK_BYTES = 1024 * 1024
 
-KNOWN_MANIFESTS: list[dict[str, str]] = [
-    {"manifest": "Assets/assets.integrity.json", "root": "Assets"},
-]
-
-IGNORED_FILENAMES = frozenset({
-    MANIFEST_FILENAME,
-    ".gitkeep",
-    ".gitignore",
-    "Thumbs.db",
-    ".DS_Store",
-    "desktop.ini",
-})
+KNOWN_MANIFESTS = (("Assets/assets.integrity.json", "Assets"),)
+ROOT_IGNORES = frozenset({MANIFEST_FILENAME})
+TEMPLATE_ROOT_METADATA = frozenset({"README.md", "manifest.json"})
+INVALID_WINDOWS_CHARS = frozenset('<>:"|?*')
+RESERVED_WINDOWS_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
+SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
+FILE_ATTRIBUTE_REPARSE_POINT = 0x400
 
 
 class IntegrityError:
-    """A single integrity check failure."""
+    """A stable, printable integrity failure."""
 
     __slots__ = ("path", "category", "message")
 
@@ -58,556 +75,760 @@ class IntegrityError:
         return f"[{self.category}] {self.path}: {self.message}"
 
 
-def _is_safe_path(relative: str) -> str | None:
-    """Return an error message if the relative path is unsafe, else None."""
-    if not relative:
-        return "empty path"
-    if os.path.isabs(relative):
-        return "absolute path"
-    for ch in relative:
-        cp = ord(ch)
-        if cp < 0x20 or cp == 0x7F:
-            return f"control character U+{cp:04X}"
-    parts = PurePosixPath(relative).parts
-    if ".." in parts:
-        return "path traversal (..)"
-    if any(p in (".", "") for p in parts):
-        return "degenerate path segment"
-    if relative != relative.strip():
-        return "leading or trailing whitespace"
-    if "//" in relative:
-        return "consecutive separators"
-    if "\\" in relative:
-        return "backslash separator"
-    reserved_names = frozenset({
-        "CON", "PRN", "AUX", "NUL",
-        *(f"COM{i}" for i in range(1, 10)),
-        *(f"LPT{i}" for i in range(1, 10)),
-    })
-    for part in parts:
-        stem = part.split(".")[0].upper()
-        if stem in reserved_names:
-            return f"reserved Windows device name: {part}"
-    return None
+class ManifestFormatError(ValueError):
+    """Raised when bounded manifest parsing or schema validation fails."""
 
 
-def _is_symlink_or_junction(path: Path) -> bool:
-    """Detect symlinks, junctions, and reparse points.
+def _duplicate_rejecting_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ManifestFormatError(f"duplicate JSON object key: {key!r}")
+        result[key] = value
+    return result
 
-    Uses lstat to avoid following the reparse point itself.
-    """
-    try:
-        linfo = path.lstat()
-    except OSError:
-        return False
-    if stat.S_ISLNK(linfo.st_mode):
-        return True
-    if sys.platform == "win32":
+
+def _read_bounded_json(path: Path, *, limit: int = MAX_MANIFEST_BYTES) -> Any:
+    path = _absolute_lexical(path)
+    for component in _path_chain(path):
         try:
-            FILE_ATTRIBUTE_REPARSE_POINT = 0x400
-            attrs = linfo.st_file_attributes  # type: ignore[attr-defined]
-            if attrs & FILE_ATTRIBUTE_REPARSE_POINT:
-                return True
-        except AttributeError:
-            pass
-    return False
-
-
-def _check_ancestry_for_reparse(path: Path, root: Path) -> Path | None:
-    """Walk from path up to root checking for symlinks/junctions.
-
-    Returns the offending path or None if clean.
-    """
-    current = path
-    root_resolved = root.resolve()
-    while True:
-        if _is_symlink_or_junction(current):
-            return current
-        if current.resolve() == root_resolved or current == current.parent:
-            break
-        current = current.parent
-    return None
-
-
-def _file_sha256(path: Path) -> str:
-    """Compute SHA-256 hex digest of a file."""
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
+            component_info = component.lstat()
+        except OSError as exc:
+            raise ManifestFormatError(f"cannot inspect path component {component}: {exc}") from exc
+        if _stat_is_reparse(component_info):
+            raise ManifestFormatError(f"path component is a symlink/junction/reparse point: {component}")
+    try:
+        before_path = path.lstat()
+    except OSError as exc:
+        raise ManifestFormatError(f"cannot inspect file: {exc}") from exc
+    if _stat_is_reparse(before_path) or not stat.S_ISREG(before_path.st_mode):
+        raise ManifestFormatError("must be a non-reparse regular file")
+    if before_path.st_size > limit:
+        raise ManifestFormatError(
+            f"file is {before_path.st_size} bytes; limit is {limit} bytes")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd: int | None = None
+    try:
+        fd = os.open(path, flags)
+        before_fd = os.fstat(fd)
+        if not stat.S_ISREG(before_fd.st_mode) or _fingerprint(before_path) != _fingerprint(before_fd):
+            raise ManifestFormatError("file changed between inspection and open")
+        chunks: list[bytes] = []
+        consumed = 0
         while True:
-            chunk = f.read(1 << 16)
+            chunk = os.read(fd, min(HASH_CHUNK_BYTES, limit + 1 - consumed))
             if not chunk:
                 break
-            h.update(chunk)
-    return h.hexdigest()
+            chunks.append(chunk)
+            consumed += len(chunk)
+            if consumed > limit:
+                raise ManifestFormatError(f"file exceeds {limit}-byte limit")
+        after_fd = os.fstat(fd)
+    except OSError as exc:
+        raise ManifestFormatError(f"cannot read file: {exc}") from exc
+    finally:
+        if fd is not None:
+            os.close(fd)
+    try:
+        after_path = path.lstat()
+    except OSError as exc:
+        raise ManifestFormatError(f"file changed after read: {exc}") from exc
+    if _stat_is_reparse(after_path) or not (
+        _fingerprint(before_path)
+        == _fingerprint(before_fd)
+        == _fingerprint(after_fd)
+        == _fingerprint(after_path)
+    ):
+        raise ManifestFormatError("file changed or was replaced during read")
+    raw = b"".join(chunks)
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ManifestFormatError(f"not valid UTF-8: {exc}") from exc
+    try:
+        return json.loads(text, object_pairs_hook=_duplicate_rejecting_object)
+    except (json.JSONDecodeError, ManifestFormatError) as exc:
+        raise ManifestFormatError(str(exc)) from exc
 
 
-def _normalize_relative(root: Path, full: Path) -> str:
-    """Produce a forward-slash-separated relative path."""
-    rel = full.relative_to(root)
-    return str(PurePosixPath(rel))
+def _canonical_relative_path(value: Any) -> tuple[str | None, str | None]:
+    """Return (canonical_path, error), using Windows-portable path semantics."""
+    if not isinstance(value, str):
+        return None, "path must be a string"
+    if not value:
+        return None, "empty path"
+    try:
+        encoded = value.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        return None, f"path is not valid Unicode: {exc}"
+    if len(encoded) > MAX_PATH_BYTES:
+        return None, f"UTF-8 path exceeds {MAX_PATH_BYTES} bytes"
+    if value != unicodedata.normalize("NFC", value):
+        return None, "path is not NFC-normalized"
+    if value.startswith("/") or ntpath.isabs(value) or ntpath.splitdrive(value)[0]:
+        return None, "absolute or drive-qualified path"
+    if "\\" in value:
+        return None, "backslash separator"
+    parts = value.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        return None, "empty, dot, or traversal path segment"
+    for part in parts:
+        if part != part.strip() or part.endswith((".", " ")):
+            return None, f"non-canonical whitespace or trailing dot in segment: {part!r}"
+        for char in part:
+            cp = ord(char)
+            if cp < 0x20 or cp == 0x7F:
+                return None, f"control character U+{cp:04X}"
+            if char in INVALID_WINDOWS_CHARS:
+                return None, f"Windows-invalid character {char!r}"
+        # Windows resolves device names after trimming and before the first dot.
+        device_stem = part.split(".", 1)[0].rstrip(" .").upper()
+        if device_stem in RESERVED_WINDOWS_NAMES:
+            return None, f"reserved Windows device name: {part}"
+    canonical = "/".join(parts)
+    if canonical != value:
+        return None, "path is not canonical"
+    return canonical, None
 
 
-def scan_directory(root: Path) -> tuple[list[dict], list[IntegrityError]]:
-    """Walk a directory tree and produce integrity entries + errors.
+def _path_identity(path: str) -> str:
+    return unicodedata.normalize("NFC", path).casefold()
 
-    Returns (entries, errors) where entries is a sorted list of
-    {path, sha256, size} dicts and errors is a list of problems found.
-    """
-    root = root.resolve()
-    if not root.is_dir():
-        return [], [IntegrityError(str(root), "missing", "root directory does not exist")]
 
-    reparse = _check_ancestry_for_reparse(root, root.parent)
-    if reparse is not None:
-        return [], [IntegrityError(str(reparse), "symlink",
-                                   "root directory ancestry contains a symlink or junction")]
+def _stat_is_reparse(info: os.stat_result) -> bool:
+    attrs = getattr(info, "st_file_attributes", 0)
+    return stat.S_ISLNK(info.st_mode) or bool(attrs & FILE_ATTRIBUTE_REPARSE_POINT)
 
-    entries: list[dict] = []
-    errors: list[IntegrityError] = []
-    case_map: dict[str, str] = {}
 
-    for dirpath_str, dirnames, filenames in os.walk(root, followlinks=False):
-        dirpath = Path(dirpath_str)
+def _absolute_lexical(path: Path) -> Path:
+    return Path(os.path.abspath(os.fspath(path)))
 
-        rel_dir = _normalize_relative(root, dirpath) if dirpath != root else ""
 
-        if _is_symlink_or_junction(dirpath) and dirpath != root:
+def _path_chain(path: Path) -> Iterable[Path]:
+    absolute = _absolute_lexical(path)
+    anchor = Path(absolute.anchor)
+    current = anchor
+    for part in absolute.parts[1:]:
+        current = current / part
+        yield current
+
+
+def _prepare_root(root: Path) -> tuple[Path | None, Path | None, list[IntegrityError]]:
+    """Validate every existing lexical component before resolving the root."""
+    absolute = _absolute_lexical(root)
+    for component in _path_chain(absolute):
+        try:
+            info = component.lstat()
+        except OSError as exc:
+            return None, None, [IntegrityError(str(component), "root", str(exc))]
+        if _stat_is_reparse(info):
+            return None, None, [IntegrityError(
+                str(component), "reparse", "root ancestry contains a symlink/junction/reparse point")]
+    try:
+        info = absolute.lstat()
+        if not stat.S_ISDIR(info.st_mode):
+            return None, None, [IntegrityError(str(absolute), "root", "root is not a directory")]
+        resolved = absolute.resolve(strict=True)
+    except OSError as exc:
+        return None, None, [IntegrityError(str(absolute), "root", str(exc))]
+    return absolute, resolved, []
+
+
+def _checked_candidate(
+    root: Path, root_resolved: Path, relative: str, *, want_directory: bool
+) -> tuple[Path | None, os.stat_result | None, IntegrityError | None]:
+    """Check each component without following it, then prove containment."""
+    current = root
+    parts = relative.split("/") if relative else []
+    for index, part in enumerate(parts):
+        current = current / part
+        try:
+            info = current.lstat()
+        except OSError as exc:
+            return None, None, IntegrityError(relative, "io-error", str(exc))
+        if _stat_is_reparse(info):
+            return None, None, IntegrityError(
+                relative, "reparse", f"component is a symlink/junction/reparse point: {current}")
+        is_leaf = index == len(parts) - 1
+        if not is_leaf and not stat.S_ISDIR(info.st_mode):
+            return None, None, IntegrityError(relative, "non-regular", "parent component is not a directory")
+    try:
+        resolved = current.resolve(strict=True)
+        resolved.relative_to(root_resolved)
+    except (OSError, ValueError) as exc:
+        return None, None, IntegrityError(relative, "traversal", f"path escapes or cannot resolve: {exc}")
+    try:
+        leaf_info = current.lstat()
+    except OSError as exc:
+        return None, None, IntegrityError(relative, "io-error", str(exc))
+    expected = stat.S_ISDIR if want_directory else stat.S_ISREG
+    if not expected(leaf_info.st_mode):
+        kind = "directory" if want_directory else "regular file"
+        return None, None, IntegrityError(relative, "non-regular", f"expected {kind}")
+    return current, leaf_info, None
+
+
+def _fingerprint(info: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_size,
+        getattr(info, "st_mtime_ns", int(info.st_mtime * 1_000_000_000)),
+        info.st_mode,
+    )
+
+
+def _hash_fd(fd: int, *, max_bytes: int = MAX_FILE_BYTES) -> str:
+    digest = hashlib.sha256()
+    consumed = 0
+    while True:
+        remaining = max_bytes + 1 - consumed
+        chunk = os.read(fd, min(HASH_CHUNK_BYTES, remaining))
+        if not chunk:
+            return digest.hexdigest()
+        consumed += len(chunk)
+        if consumed > max_bytes:
+            raise OSError(f"file grew past {max_bytes}-byte limit during hash")
+        digest.update(chunk)
+
+
+def _read_regular_file(
+    root: Path, root_resolved: Path, relative: str
+) -> tuple[dict[str, Any] | None, IntegrityError | None]:
+    candidate, before_path, error = _checked_candidate(
+        root, root_resolved, relative, want_directory=False)
+    if error is not None or candidate is None or before_path is None:
+        return None, error
+    if before_path.st_size > MAX_FILE_BYTES:
+        return None, IntegrityError(relative, "resource-limit", f"file exceeds {MAX_FILE_BYTES} bytes")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd: int | None = None
+    try:
+        fd = os.open(candidate, flags)
+        before_fd = os.fstat(fd)
+        if not stat.S_ISREG(before_fd.st_mode):
+            return None, IntegrityError(relative, "non-regular", "opened object is not a regular file")
+        if _fingerprint(before_path) != _fingerprint(before_fd):
+            return None, IntegrityError(relative, "io-race", "file changed between inspection and open")
+        _, confirmed_path, confirmed_error = _checked_candidate(
+            root, root_resolved, relative, want_directory=False)
+        if confirmed_error is not None or confirmed_path is None:
+            return None, IntegrityError(
+                relative,
+                "io-race",
+                f"path components changed before read: {confirmed_error or 'missing path'}",
+            )
+        if _fingerprint(confirmed_path) != _fingerprint(before_fd):
+            return None, IntegrityError(relative, "io-race", "path changed before read")
+        if before_fd.st_size > MAX_FILE_BYTES:
+            return None, IntegrityError(relative, "resource-limit", f"file exceeds {MAX_FILE_BYTES} bytes")
+        digest = _hash_fd(fd, max_bytes=before_fd.st_size)
+        after_fd = os.fstat(fd)
+    except OSError as exc:
+        return None, IntegrityError(relative, "io-error", str(exc))
+    finally:
+        if fd is not None:
+            os.close(fd)
+    try:
+        after_path = candidate.lstat()
+    except OSError as exc:
+        return None, IntegrityError(relative, "io-race", f"path changed after read: {exc}")
+    if _stat_is_reparse(after_path):
+        return None, IntegrityError(relative, "io-race", "path became a reparse point during read")
+    if not (_fingerprint(before_path) == _fingerprint(before_fd) == _fingerprint(after_fd) == _fingerprint(after_path)):
+        return None, IntegrityError(relative, "io-race", "file changed or was replaced during read")
+    return {"path": relative, "sha256": digest, "size": before_fd.st_size}, None
+
+
+def scan_directory(
+    root: Path, *, ignored_root_paths: frozenset[str] = ROOT_IGNORES
+) -> tuple[list[dict[str, Any]], list[IntegrityError]]:
+    """Capture one bounded, deterministic snapshot without following reparses."""
+    root, root_resolved, errors = _prepare_root(root)
+    if errors or root is None or root_resolved is None:
+        return [], errors
+
+    entries: list[dict[str, Any]] = []
+    identities: dict[str, str] = {}
+    total_bytes = 0
+    node_count = 0
+    stopped = False
+
+    def register(relative: str) -> bool:
+        canonical, problem = _canonical_relative_path(relative)
+        if problem is not None or canonical is None:
+            errors.append(IntegrityError(relative, "path-safety", problem or "invalid path"))
+            return False
+        identity = _path_identity(canonical)
+        previous = identities.get(identity)
+        if previous is not None and previous != canonical:
             errors.append(IntegrityError(
-                rel_dir, "symlink",
-                "directory is a symlink or junction"))
-            dirnames.clear()
-            continue
+                canonical, "case-collision", f"portable alias collides with {previous!r}"))
+            return False
+        identities[identity] = canonical
+        return True
 
-        dirs_to_remove = []
-        for d in dirnames:
-            child = dirpath / d
-            if _is_symlink_or_junction(child):
-                child_rel = _normalize_relative(root, child)
-                errors.append(IntegrityError(
-                    child_rel, "symlink",
-                    "directory is a symlink or junction"))
-                dirs_to_remove.append(d)
-        for d in dirs_to_remove:
-            dirnames.remove(d)
-
-        dirnames.sort()
-
-        for filename in sorted(filenames):
-            if filename in IGNORED_FILENAMES:
-                continue
-
-            full = dirpath / filename
-
-            if _is_symlink_or_junction(full):
-                rel = _normalize_relative(root, full)
-                errors.append(IntegrityError(
-                    rel, "symlink", "file is a symlink"))
-                continue
-
-            rel = _normalize_relative(root, full)
-
-            path_err = _is_safe_path(rel)
-            if path_err is not None:
-                errors.append(IntegrityError(rel, "path-safety", path_err))
-                continue
-
-            real = full.resolve()
-            if not str(real).startswith(str(root)):
-                errors.append(IntegrityError(
-                    rel, "traversal",
-                    f"resolved path escapes root: {real}"))
-                continue
-
-            lower_key = rel.lower()
-            if lower_key in case_map:
-                existing = case_map[lower_key]
-                if existing != rel:
-                    errors.append(IntegrityError(
-                        rel, "case-collision",
-                        f"collides with '{existing}' on case-insensitive filesystems"))
-            else:
-                case_map[lower_key] = rel
-
+    def walk(directory: Path, relative_dir: str, depth: int) -> None:
+        nonlocal node_count, total_bytes, stopped
+        if stopped:
+            return
+        if depth > MAX_DIRECTORY_DEPTH:
+            errors.append(IntegrityError(relative_dir, "resource-limit", "directory depth limit exceeded"))
+            stopped = True
+            return
+        if relative_dir:
+            _, _, error = _checked_candidate(
+                root, root_resolved, relative_dir, want_directory=True)
+            if error is not None:
+                errors.append(error)
+                return
+        try:
+            children = []
+            with os.scandir(directory) as iterator:
+                for child in iterator:
+                    node_count += 1
+                    if node_count > MAX_DIRECTORY_ENTRY_COUNT:
+                        errors.append(IntegrityError(
+                            relative_dir or ".",
+                            "resource-limit",
+                            f"filesystem node count exceeds {MAX_DIRECTORY_ENTRY_COUNT}",
+                        ))
+                        stopped = True
+                        return
+                    children.append(child)
+            children.sort(key=lambda item: item.name)
+        except OSError as exc:
+            errors.append(IntegrityError(relative_dir or ".", "io-error", str(exc)))
+            return
+        for child in children:
+            relative = f"{relative_dir}/{child.name}" if relative_dir else child.name
             try:
-                size = full.stat().st_size
-                sha = _file_sha256(full)
-            except OSError as e:
-                errors.append(IntegrityError(rel, "io-error", str(e)))
+                info = child.stat(follow_symlinks=False)
+            except OSError as exc:
+                if relative not in ignored_root_paths:
+                    errors.append(IntegrityError(relative, "io-error", str(exc)))
                 continue
+            if relative in ignored_root_paths:
+                if _stat_is_reparse(info) or not stat.S_ISREG(info.st_mode):
+                    errors.append(IntegrityError(
+                        relative, "concealed-payload",
+                        "ignored root path is not a regular file"))
+                continue
+            if not register(relative):
+                continue
+            if _stat_is_reparse(info):
+                errors.append(IntegrityError(
+                    relative, "reparse", "symlink/junction/reparse point is forbidden"))
+                continue
+            if stat.S_ISDIR(info.st_mode):
+                walk(Path(child.path), relative, depth + 1)
+                continue
+            if not stat.S_ISREG(info.st_mode):
+                errors.append(IntegrityError(relative, "non-regular", "filesystem object is not a regular file"))
+                continue
+            if len(entries) >= MAX_ENTRY_COUNT:
+                errors.append(IntegrityError(relative, "resource-limit", f"entry count exceeds {MAX_ENTRY_COUNT}"))
+                stopped = True
+                return
+            entry, error = _read_regular_file(root, root_resolved, relative)
+            if error is not None or entry is None:
+                errors.append(error or IntegrityError(relative, "io-error", "unknown read failure"))
+                continue
+            if total_bytes + entry["size"] > MAX_TOTAL_BYTES:
+                errors.append(IntegrityError(relative, "resource-limit", f"snapshot exceeds {MAX_TOTAL_BYTES} bytes"))
+                stopped = True
+                return
+            total_bytes += entry["size"]
+            entries.append(entry)
 
-            entries.append({
-                "path": rel,
-                "sha256": sha,
-                "size": size,
-            })
-
-    entries.sort(key=lambda e: e["path"])
+    walk(root, "", 0)
+    entries.sort(key=lambda entry: entry["path"])
+    errors.sort(key=lambda error: (error.path, error.category, error.message))
     return entries, errors
 
 
-def generate_manifest(root: Path) -> tuple[dict, list[IntegrityError]]:
-    """Generate a complete integrity manifest for a directory tree."""
+def generate_manifest(root: Path) -> tuple[dict[str, Any], list[IntegrityError]]:
     entries, errors = scan_directory(root)
     manifest = {
         "version": MANIFEST_SCHEMA_VERSION,
         "algorithm": HASH_ALGORITHM,
-        "root": root.name,
+        "root": _absolute_lexical(root).name,
         "fileCount": len(entries),
         "entries": entries,
     }
     return manifest, errors
 
 
-def write_manifest(manifest: dict, output: Path) -> None:
-    """Write manifest as deterministic JSON."""
-    text = json.dumps(manifest, indent=2, sort_keys=False, ensure_ascii=True)
-    if not text.endswith("\n"):
-        text += "\n"
-    output.write_text(text, encoding="utf-8", newline="\n")
+def manifest_bytes(manifest: dict[str, Any]) -> bytes:
+    return (json.dumps(manifest, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
 
 
-def load_manifest(path: Path) -> dict:
-    """Load and validate a manifest file's structure."""
-    text = path.read_text(encoding="utf-8")
-    data = json.loads(text)
+def write_manifest(manifest: dict[str, Any], output: Path) -> None:
+    """Write deterministic bytes. Callers must already have a clean snapshot."""
+    output.write_bytes(manifest_bytes(manifest))
+
+
+def load_manifest(path: Path) -> dict[str, Any]:
+    data = _read_bounded_json(path)
     if not isinstance(data, dict):
-        raise ValueError("manifest root is not an object")
-    version = data.get("version")
-    if version != MANIFEST_SCHEMA_VERSION:
-        raise ValueError(f"unsupported manifest version: {version}")
-    algo = data.get("algorithm")
-    if algo != HASH_ALGORITHM:
-        raise ValueError(f"unsupported algorithm: {algo}")
+        raise ManifestFormatError("manifest root must be an object")
+    if data.get("version") != MANIFEST_SCHEMA_VERSION:
+        raise ManifestFormatError(f"unsupported manifest version: {data.get('version')!r}")
+    if data.get("algorithm") != HASH_ALGORITHM:
+        raise ManifestFormatError(f"unsupported algorithm: {data.get('algorithm')!r}")
+    root_metadata = data.get("root")
+    if not isinstance(root_metadata, str) or not root_metadata:
+        raise ManifestFormatError("root must be a non-empty string")
     entries = data.get("entries")
     if not isinstance(entries, list):
-        raise ValueError("entries is not an array")
+        raise ManifestFormatError("entries must be an array")
+    if len(entries) > MAX_ENTRY_COUNT:
+        raise ManifestFormatError(f"entry count exceeds {MAX_ENTRY_COUNT}")
+    file_count = data.get("fileCount")
+    if isinstance(file_count, bool) or not isinstance(file_count, int) or file_count < 0:
+        raise ManifestFormatError("fileCount must be a non-negative integer")
+    if file_count != len(entries):
+        raise ManifestFormatError(f"fileCount={file_count} but entries has {len(entries)} items")
+
+    paths: set[str] = set()
+    identities: dict[str, str] = {}
+    previous_path: str | None = None
+    total_bytes = 0
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise ManifestFormatError(f"entry {index} must be an object")
+        if set(entry) != {"path", "sha256", "size"}:
+            raise ManifestFormatError(f"entry {index} must contain exactly path, sha256, and size")
+        relative, problem = _canonical_relative_path(entry.get("path"))
+        if problem is not None or relative is None:
+            raise ManifestFormatError(f"entry {index} has unsafe path: {problem}")
+        if relative in paths:
+            raise ManifestFormatError(f"duplicate entry path: {relative}")
+        identity = _path_identity(relative)
+        if identity in identities:
+            raise ManifestFormatError(
+                f"portable path alias: {relative!r} collides with {identities[identity]!r}")
+        if previous_path is not None and relative <= previous_path:
+            raise ManifestFormatError("entries must be strictly sorted by path")
+        digest = entry.get("sha256")
+        if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
+            raise ManifestFormatError(f"entry {index} sha256 must be 64 lowercase hex characters")
+        size = entry.get("size")
+        if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+            raise ManifestFormatError(f"entry {index} size must be a non-negative integer")
+        if size > MAX_FILE_BYTES:
+            raise ManifestFormatError(f"entry {index} exceeds per-file size limit")
+        total_bytes += size
+        if total_bytes > MAX_TOTAL_BYTES:
+            raise ManifestFormatError("declared total size exceeds limit")
+        paths.add(relative)
+        identities[identity] = relative
+        previous_path = relative
     return data
 
 
-def verify_manifest(manifest_path: Path) -> list[IntegrityError]:
-    """Verify a manifest against the filesystem.
-
-    Checks:
-    - Every declared file exists with correct hash and size
-    - No undeclared files exist in the root
-    - Path safety for every entry
-    - Case-collision detection
-    - Symlink/junction/traversal rejection
-    """
-    errors: list[IntegrityError] = []
-
+def verify_manifest(manifest_path: Path, root: Path) -> list[IntegrityError]:
+    """Verify a manifest against a caller-authorized root in one disk scan."""
     try:
-        manifest = load_manifest(manifest_path)
-    except (json.JSONDecodeError, ValueError, OSError) as e:
-        return [IntegrityError(str(manifest_path), "manifest-load", str(e))]
+        manifest = load_manifest(_absolute_lexical(manifest_path))
+    except (ManifestFormatError, OSError) as exc:
+        return [IntegrityError(str(manifest_path), "manifest-load", str(exc))]
 
-    root_name = manifest.get("root", "")
-    root = manifest_path.parent / root_name
-    if root_name == manifest_path.parent.name:
-        root = manifest_path.parent
+    absolute_root = _absolute_lexical(root)
+    if manifest["root"] != absolute_root.name:
+        return [IntegrityError(
+            str(manifest_path), "root-metadata",
+            f"manifest root {manifest['root']!r} does not exactly match caller root {absolute_root.name!r}")]
 
-    if not root.is_dir():
-        return [IntegrityError(str(root), "missing", "manifest root directory does not exist")]
+    disk_entries, scan_errors = scan_directory(absolute_root)
+    if scan_errors:
+        return scan_errors
 
-    root = root.resolve()
-
-    reparse = _check_ancestry_for_reparse(root, root.parent)
-    if reparse is not None:
-        errors.append(IntegrityError(str(reparse), "symlink",
-                                     "root directory ancestry contains a symlink or junction"))
-
-    declared_entries = manifest.get("entries", [])
-    declared_paths: set[str] = set()
-    case_map: dict[str, str] = {}
-
-    for entry in declared_entries:
-        rel = entry.get("path", "")
-
-        if rel in declared_paths:
-            errors.append(IntegrityError(rel, "duplicate", "duplicate path in manifest"))
-            continue
-        declared_paths.add(rel)
-
-        path_err = _is_safe_path(rel)
-        if path_err is not None:
-            errors.append(IntegrityError(rel, "path-safety", path_err))
-            continue
-
-        lower_key = rel.lower()
-        if lower_key in case_map:
-            existing = case_map[lower_key]
-            if existing != rel:
-                errors.append(IntegrityError(
-                    rel, "case-collision",
-                    f"collides with '{existing}' on case-insensitive filesystems"))
-        else:
-            case_map[lower_key] = rel
-
-        full = root / rel.replace("/", os.sep)
-
-        if not full.exists():
-            errors.append(IntegrityError(rel, "missing", "file not found on disk"))
-            continue
-
-        if _is_symlink_or_junction(full):
-            errors.append(IntegrityError(rel, "symlink", "file is a symlink or junction"))
-            continue
-
-        real = full.resolve()
-        if not str(real).startswith(str(root)):
-            errors.append(IntegrityError(rel, "traversal",
-                                         f"resolved path escapes root: {real}"))
-            continue
-
-        try:
-            actual_size = full.stat().st_size
-            actual_sha = _file_sha256(full)
-        except OSError as e:
-            errors.append(IntegrityError(rel, "io-error", str(e)))
-            continue
-
-        expected_sha = entry.get("sha256", "")
-        expected_size = entry.get("size", -1)
-
-        if actual_sha != expected_sha:
+    declared = {entry["path"]: entry for entry in manifest["entries"]}
+    disk = {entry["path"]: entry for entry in disk_entries}
+    errors: list[IntegrityError] = []
+    for relative in sorted(declared.keys() - disk.keys()):
+        errors.append(IntegrityError(relative, "missing", "declared file is absent from snapshot"))
+    for relative in sorted(disk.keys() - declared.keys()):
+        errors.append(IntegrityError(relative, "undeclared", "snapshot file is absent from manifest"))
+    for relative in sorted(declared.keys() & disk.keys()):
+        expected = declared[relative]
+        actual = disk[relative]
+        if expected["size"] != actual["size"]:
             errors.append(IntegrityError(
-                rel, "hash-mismatch",
-                f"expected {expected_sha}, actual {actual_sha}"))
-
-        if actual_size != expected_size:
+                relative, "size-mismatch", f"expected {expected['size']}, actual {actual['size']}"))
+        if expected["sha256"] != actual["sha256"]:
             errors.append(IntegrityError(
-                rel, "size-mismatch",
-                f"expected {expected_size}, actual {actual_size}"))
-
-    disk_entries, scan_errors = scan_directory(root)
-    errors.extend(scan_errors)
-
-    disk_paths = {e["path"] for e in disk_entries}
-    undeclared = disk_paths - declared_paths
-    for path in sorted(undeclared):
-        errors.append(IntegrityError(path, "undeclared", "file on disk is not in manifest"))
-
-    file_count = manifest.get("fileCount")
-    if file_count is not None and file_count != len(declared_entries):
-        errors.append(IntegrityError(
-            str(manifest_path), "count-mismatch",
-            f"fileCount={file_count} but entries has {len(declared_entries)} items"))
-
+                relative, "hash-mismatch", f"expected {expected['sha256']}, actual {actual['sha256']}"))
     return errors
+
+
+def _validate_lock(lock_path: Path) -> dict[str, str]:
+    data = _read_bounded_json(lock_path)
+    if not isinstance(data, dict):
+        raise ManifestFormatError("template lock root must be an object")
+    if data.get("version") != 1 or data.get("algorithm") != HASH_ALGORITHM:
+        raise ManifestFormatError("template lock requires version 1 and sha256")
+    assets = data.get("assets")
+    if not isinstance(assets, dict):
+        raise ManifestFormatError("template lock assets must be an object")
+    if len(assets) > MAX_ENTRY_COUNT:
+        raise ManifestFormatError(f"template lock exceeds {MAX_ENTRY_COUNT} entries")
+    result: dict[str, str] = {}
+    identities: dict[str, str] = {}
+    for key, digest in assets.items():
+        canonical, problem = _canonical_relative_path(key)
+        if problem is not None or canonical is None:
+            raise ManifestFormatError(f"unsafe template lock path {key!r}: {problem}")
+        identity = _path_identity(canonical)
+        if identity in identities:
+            raise ManifestFormatError(
+                f"template lock path alias: {canonical!r} collides with {identities[identity]!r}")
+        if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
+            raise ManifestFormatError(f"invalid sha256 for template lock path {canonical!r}")
+        identities[identity] = canonical
+        result[canonical] = digest
+    return result
+
+
+def _validate_template_manifest(path: Path, template_name: str) -> dict[str, str]:
+    data = _read_bounded_json(path)
+    if not isinstance(data, dict):
+        raise ManifestFormatError("template manifest root must be an object")
+    if data.get("manifestVersion") != 1:
+        raise ManifestFormatError("template manifest requires manifestVersion 1")
+    if data.get("package") != template_name:
+        raise ManifestFormatError(
+            f"package {data.get('package')!r} does not exactly match {template_name!r}")
+    assets = data.get("assets")
+    if not isinstance(assets, list):
+        raise ManifestFormatError("template manifest assets must be an array")
+    if len(assets) > MAX_ENTRY_COUNT:
+        raise ManifestFormatError(f"template manifest exceeds {MAX_ENTRY_COUNT} entries")
+    result: dict[str, str] = {}
+    identities: dict[str, str] = {}
+    for index, row in enumerate(assets):
+        if not isinstance(row, dict):
+            raise ManifestFormatError(f"template asset row {index} must be an object")
+        relative, problem = _canonical_relative_path(row.get("path"))
+        if problem is not None or relative is None:
+            raise ManifestFormatError(f"template asset row {index} has unsafe path: {problem}")
+        digest = row.get("sha256")
+        if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
+            raise ManifestFormatError(f"template asset row {index} has invalid sha256")
+        identity = _path_identity(relative)
+        if relative in result:
+            raise ManifestFormatError(f"duplicate template asset path: {relative}")
+        if identity in identities:
+            raise ManifestFormatError(
+                f"template asset path alias: {relative!r} collides with {identities[identity]!r}")
+        identities[identity] = relative
+        result[relative] = digest
+    return result
 
 
 def verify_template_manifests(repo_root: Path) -> list[IntegrityError]:
-    """Cross-validate template asset manifests against the lock file."""
-    errors: list[IntegrityError] = []
-    lock_path = repo_root / "Templates" / "assets.lock.json"
-
-    if not lock_path.is_file():
-        errors.append(IntegrityError(str(lock_path), "missing", "template lock file not found"))
-        return errors
-
+    """Require exact manifest == lock == disk equality for every template."""
+    repo, repo_resolved, root_errors = _prepare_root(repo_root)
+    if root_errors or repo is None or repo_resolved is None:
+        return root_errors
+    templates, _, error = _checked_candidate(
+        repo, repo_resolved, "Templates", want_directory=True)
+    if error is not None or templates is None:
+        return [error or IntegrityError("Templates", "missing", "template root missing")]
+    lock_path, _, error = _checked_candidate(
+        repo, repo_resolved, "Templates/assets.lock.json", want_directory=False)
+    if error is not None or lock_path is None:
+        return [error or IntegrityError("Templates/assets.lock.json", "missing", "lock missing")]
     try:
-        lock_data = json.loads(lock_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as e:
-        errors.append(IntegrityError(str(lock_path), "manifest-load", str(e)))
-        return errors
+        lock = _validate_lock(lock_path)
+    except ManifestFormatError as exc:
+        return [IntegrityError("Templates/assets.lock.json", "manifest-load", str(exc))]
 
-    lock_assets = lock_data.get("assets", {})
-    templates_root = repo_root / "Templates"
+    errors: list[IntegrityError] = []
+    declared_global: dict[str, str] = {}
+    disk_global: dict[str, str] = {}
+    try:
+        template_children = sorted(os.scandir(templates), key=lambda item: item.name)
+    except OSError as exc:
+        return [IntegrityError("Templates", "io-error", str(exc))]
 
-    manifest_files = sorted(templates_root.glob("*/Assets/manifest.json"))
-    case_map: dict[str, str] = {}
-
-    for mf in manifest_files:
+    templates_seen = 0
+    for child in template_children:
         try:
-            mdata = json.loads(mf.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as e:
-            errors.append(IntegrityError(str(mf), "manifest-load", str(e)))
+            info = child.stat(follow_symlinks=False)
+        except OSError as exc:
+            errors.append(IntegrityError(f"Templates/{child.name}", "io-error", str(exc)))
             continue
+        if not stat.S_ISDIR(info.st_mode):
+            continue
+        template_name, problem = _canonical_relative_path(child.name)
+        if problem is not None or template_name is None:
+            errors.append(IntegrityError(f"Templates/{child.name}", "path-safety", problem or "invalid path"))
+            continue
+        if _stat_is_reparse(info):
+            errors.append(IntegrityError(
+                f"Templates/{template_name}", "reparse", "template directory is a reparse point"))
+            continue
+        assets_relative = f"Templates/{template_name}/Assets"
+        assets_dir, _, assets_error = _checked_candidate(
+            repo, repo_resolved, assets_relative, want_directory=True)
+        if assets_error is not None or assets_dir is None:
+            errors.append(assets_error or IntegrityError(assets_relative, "missing", "Assets directory missing"))
+            continue
+        templates_seen += 1
+        manifest_relative = f"{assets_relative}/manifest.json"
+        manifest_path, _, manifest_error = _checked_candidate(
+            repo, repo_resolved, manifest_relative, want_directory=False)
+        if manifest_error is not None or manifest_path is None:
+            errors.append(manifest_error or IntegrityError(manifest_relative, "missing", "manifest missing"))
+            continue
+        try:
+            declared = _validate_template_manifest(manifest_path, template_name)
+        except ManifestFormatError as exc:
+            errors.append(IntegrityError(manifest_relative, "manifest-load", str(exc)))
+            continue
+        disk_entries, scan_errors = scan_directory(
+            assets_dir, ignored_root_paths=TEMPLATE_ROOT_METADATA)
+        if scan_errors:
+            errors.extend(IntegrityError(
+                f"{template_name}/Assets/{item.path}", item.category, item.message)
+                for item in scan_errors)
+            continue
+        disk = {item["path"]: item["sha256"] for item in disk_entries}
+        for relative, digest in declared.items():
+            declared_global[f"{template_name}/Assets/{relative}"] = digest
+        for relative, digest in disk.items():
+            disk_global[f"{template_name}/Assets/{relative}"] = digest
 
-        template_dir = mf.parent.parent
-        template_name = template_dir.name
-        assets_dir = mf.parent
+    if templates_seen == 0:
+        errors.append(IntegrityError("Templates", "missing", "no template Assets directories found"))
+    if errors:
+        return sorted(errors, key=lambda item: (item.path, item.category, item.message))
 
-        for asset in mdata.get("assets", []):
-            rel_path = asset.get("path", "")
-            declared_hash = asset.get("sha256", "")
-
-            path_err = _is_safe_path(rel_path)
-            if path_err is not None:
-                errors.append(IntegrityError(
-                    f"{template_name}/Assets/{rel_path}", "path-safety", path_err))
-                continue
-
-            lock_key = f"{template_name}/Assets/{rel_path}"
-
-            lower_key = lock_key.lower()
-            if lower_key in case_map:
-                existing = case_map[lower_key]
-                if existing != lock_key:
-                    errors.append(IntegrityError(
-                        lock_key, "case-collision",
-                        f"collides with '{existing}'"))
-            else:
-                case_map[lower_key] = lock_key
-
-            lock_hash = lock_assets.get(lock_key)
-            if lock_hash is None:
-                errors.append(IntegrityError(
-                    lock_key, "lock-missing",
-                    "manifest asset is not present in lock file"))
-            elif lock_hash != declared_hash:
-                errors.append(IntegrityError(
-                    lock_key, "lock-mismatch",
-                    f"manifest hash {declared_hash} != lock hash {lock_hash}"))
-
-            disk_path = assets_dir / rel_path.replace("/", os.sep)
-            if not disk_path.exists():
-                errors.append(IntegrityError(lock_key, "missing", "file not found on disk"))
-                continue
-
-            if _is_symlink_or_junction(disk_path):
-                errors.append(IntegrityError(lock_key, "symlink", "file is a symlink"))
-                continue
-
-            real = disk_path.resolve()
-            templates_resolved = templates_root.resolve()
-            if not str(real).startswith(str(templates_resolved)):
-                errors.append(IntegrityError(
-                    lock_key, "traversal",
-                    f"resolved path escapes Templates root: {real}"))
-                continue
-
-            try:
-                actual_hash = _file_sha256(disk_path)
-            except OSError as e:
-                errors.append(IntegrityError(lock_key, "io-error", str(e)))
-                continue
-
-            if actual_hash != declared_hash:
-                errors.append(IntegrityError(
-                    lock_key, "hash-mismatch",
-                    f"expected {declared_hash}, actual {actual_hash}"))
-
+    for key in sorted(declared_global.keys() - disk_global.keys()):
+        errors.append(IntegrityError(key, "missing", "template manifest entry is absent from disk"))
+    for key in sorted(disk_global.keys() - declared_global.keys()):
+        errors.append(IntegrityError(key, "undeclared", "template disk asset is absent from manifest"))
+    for key in sorted(declared_global.keys() & disk_global.keys()):
+        if declared_global[key] != disk_global[key]:
+            errors.append(IntegrityError(
+                key, "hash-mismatch", f"manifest {declared_global[key]}, disk {disk_global[key]}"))
+    for key in sorted(declared_global.keys() - lock.keys()):
+        errors.append(IntegrityError(key, "lock-missing", "template manifest entry is absent from lock"))
+    for key in sorted(lock.keys() - declared_global.keys()):
+        errors.append(IntegrityError(key, "lock-extra", "lock entry is absent from template manifests"))
+    for key in sorted(declared_global.keys() & lock.keys()):
+        if declared_global[key] != lock[key]:
+            errors.append(IntegrityError(
+                key, "lock-mismatch", f"manifest {declared_global[key]}, lock {lock[key]}"))
     return errors
 
 
+def verify_repository(repo_root: Path) -> list[IntegrityError]:
+    repo_root = _absolute_lexical(repo_root)
+    errors: list[IntegrityError] = []
+    for manifest_relative, root_relative in KNOWN_MANIFESTS:
+        errors.extend(verify_manifest(repo_root / manifest_relative, repo_root / root_relative))
+    errors.extend(verify_template_manifests(repo_root))
+    return errors
+
+
+def _print_errors(errors: list[IntegrityError]) -> None:
+    for error in errors:
+        print(f"  {error}", file=sys.stderr)
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
-    """Generate an integrity manifest for a directory."""
-    root = Path(args.root).resolve()
-    if not root.is_dir():
-        print(f"Error: '{args.root}' is not a directory", file=sys.stderr)
+    root = _absolute_lexical(Path(args.root))
+    expected_output = root / MANIFEST_FILENAME
+    output = _absolute_lexical(Path(args.output)) if args.output else expected_output
+    if output != expected_output:
+        print(
+            f"Refusing output {output}: generation may only replace {expected_output}",
+            file=sys.stderr,
+        )
         return 1
-
-    print(f"Scanning {root}...")
     manifest, errors = generate_manifest(root)
-
     if errors:
-        print(f"\n{len(errors)} error(s) found during scan:", file=sys.stderr)
-        for e in errors:
-            print(f"  {e}", file=sys.stderr)
-        if any(e.category in ("symlink", "traversal", "path-safety") for e in errors):
-            print("\nRefusing to generate manifest with safety errors.", file=sys.stderr)
-            return 1
-
-    output = Path(args.output) if args.output else root / MANIFEST_FILENAME
-    write_manifest(manifest, output)
+        print(f"Refusing generation after {len(errors)} scan error(s):", file=sys.stderr)
+        _print_errors(errors)
+        return 1
+    payload = manifest_bytes(manifest)
+    _, _, root_errors = _prepare_root(root)
+    if root_errors:
+        print("Refusing generation because the root changed after scanning:", file=sys.stderr)
+        _print_errors(root_errors)
+        return 1
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=root.parent,
+            prefix=f".{root.name}-asset-integrity-",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+            temporary = Path(stream.name)
+        os.replace(temporary, output)
+    except OSError as exc:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+        print(f"Cannot write manifest: {exc}", file=sys.stderr)
+        return 1
     print(f"Generated {output} with {manifest['fileCount']} entries")
     return 0
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
-    """Verify an integrity manifest."""
-    manifest_path = Path(args.manifest).resolve()
-    if not manifest_path.is_file():
-        print(f"Error: '{args.manifest}' is not a file", file=sys.stderr)
-        return 1
-
-    print(f"Verifying {manifest_path}...")
-    errors = verify_manifest(manifest_path)
-
+    errors = verify_manifest(Path(args.manifest), Path(args.root))
     if errors:
-        print(f"\n{len(errors)} error(s):", file=sys.stderr)
-        for e in errors:
-            print(f"  {e}", file=sys.stderr)
+        print(f"FAILED: {len(errors)} error(s)", file=sys.stderr)
+        _print_errors(errors)
         return 1
-
-    manifest = load_manifest(manifest_path)
-    print(f"OK: {manifest.get('fileCount', '?')} entries verified")
+    manifest = load_manifest(_absolute_lexical(Path(args.manifest)))
+    print(f"OK: {manifest['fileCount']} entries verified")
     return 0
 
 
 def cmd_check_all(args: argparse.Namespace) -> int:
-    """Verify all known manifests and template cross-validation."""
-    repo_root = Path(args.repo_root).resolve() if args.repo_root else REPO_ROOT
-    overall_errors: list[IntegrityError] = []
-    checks_run = 0
-
-    for known in KNOWN_MANIFESTS:
-        manifest_path = repo_root / known["manifest"]
-        if manifest_path.is_file():
-            print(f"Verifying {known['manifest']}...")
-            errors = verify_manifest(manifest_path)
-            overall_errors.extend(errors)
-            checks_run += 1
-            if errors:
-                print(f"  FAIL: {len(errors)} error(s)")
-            else:
-                m = load_manifest(manifest_path)
-                print(f"  OK: {m.get('fileCount', '?')} entries")
-        else:
-            overall_errors.append(IntegrityError(
-                known["manifest"], "missing", "expected manifest not found"))
-            print(f"  MISSING: {known['manifest']}")
-
-    print(f"\nCross-validating template manifests...")
-    template_errors = verify_template_manifests(repo_root)
-    overall_errors.extend(template_errors)
-    checks_run += 1
-    if template_errors:
-        print(f"  FAIL: {len(template_errors)} error(s)")
-    else:
-        print(f"  OK")
-
-    print(f"\n{'='*60}")
-    if overall_errors:
-        print(f"FAILED: {len(overall_errors)} error(s) across {checks_run} checks")
-        for e in overall_errors:
-            print(f"  {e}", file=sys.stderr)
+    repo_root = Path(args.repo_root) if args.repo_root else REPO_ROOT
+    errors = verify_repository(repo_root)
+    if errors:
+        print(f"FAILED: {len(errors)} error(s)", file=sys.stderr)
+        _print_errors(errors)
         return 1
-    else:
-        print(f"PASSED: {checks_run} checks, all clean")
-        return 0
+    print("OK: first-party and template asset integrity checks passed")
+    return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="SparkEngine asset integrity manifest tool")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(description="SparkEngine asset integrity tool")
+    commands = parser.add_subparsers(dest="command", required=True)
 
-    gen = subparsers.add_parser("generate",
-                                help="Generate an integrity manifest")
-    gen.add_argument("root", help="Root directory to scan")
-    gen.add_argument("-o", "--output", help="Output path (default: <root>/assets.integrity.json)")
+    generate = commands.add_parser("generate", help="Generate the fixed-root manifest")
+    generate.add_argument("root", help="Caller-authorized asset root")
+    generate.add_argument("-o", "--output", help="Must equal <root>/assets.integrity.json")
+    generate.set_defaults(handler=cmd_generate)
 
-    ver = subparsers.add_parser("verify",
-                                help="Verify a manifest against disk")
-    ver.add_argument("manifest", help="Path to manifest JSON")
+    verify = commands.add_parser("verify", help="Verify a manifest and explicit root")
+    verify.add_argument("manifest", help="Manifest JSON path")
+    verify.add_argument("--root", required=True, help="Caller-authorized asset root")
+    verify.set_defaults(handler=cmd_verify)
 
-    chk = subparsers.add_parser("check-all",
-                                help="Verify all known manifests")
-    chk.add_argument("--repo-root",
-                     help="Repository root (default: auto-detect)")
+    check_all = commands.add_parser("check-all", help="Verify all repository asset contracts")
+    check_all.add_argument("--repo-root", help="Repository root (default: auto-detect)")
+    check_all.set_defaults(handler=cmd_check_all)
 
     args = parser.parse_args()
-
-    if args.command == "generate":
-        return cmd_generate(args)
-    elif args.command == "verify":
-        return cmd_verify(args)
-    elif args.command == "check-all":
-        return cmd_check_all(args)
-    return 1
+    return int(args.handler(args))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

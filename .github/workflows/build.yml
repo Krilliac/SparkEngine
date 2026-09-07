@@ -114,6 +114,12 @@ jobs:
     - name: Verify every test source is registered
       run: bash tools/check-test-registration.sh
 
+    - name: Test asset integrity verifier
+      run: python3 -m pytest Tests/Tools/test_asset_integrity.py -v --tb=short
+
+    - name: Verify repository asset integrity baseline
+      run: python3 tools/asset-integrity/verify_asset_integrity.py check-all --repo-root .
+
     - name: Validate model and template asset contracts
       run: python3 Tools/model_pipeline/validate_models.py --repo-root .
 

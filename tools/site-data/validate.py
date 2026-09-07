@@ -2047,7 +2047,7 @@ class Validator:
                 if not callable(verifier):
                     self.error("tools/asset-integrity/verify_asset_integrity.py", "asset integrity verifier exposes no verify_manifest function")
                     return
-                errors = verifier(integrity_manifest)
+                errors = verifier(integrity_manifest, REPO_ROOT / "Assets")
             except Exception as exc:  # noqa: BLE001 - a gate must report tool load failures.
                 self.error("tools/asset-integrity/verify_asset_integrity.py", f"asset integrity verifier failed: {exc}")
                 return

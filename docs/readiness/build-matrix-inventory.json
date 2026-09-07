@@ -5553,7 +5553,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 27,
+        "stepCount": 29,
         "steps": [
           {
             "index": 0,
@@ -5785,6 +5785,30 @@
           },
           {
             "index": 19,
+            "name": "Test asset integrity verifier",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "38617105f0d02d2c"
+          },
+          {
+            "index": 20,
+            "name": "Verify repository asset integrity baseline",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "24c6f12eaf03dec2"
+          },
+          {
+            "index": 21,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -5796,7 +5820,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 20,
+            "index": 22,
             "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
@@ -5808,7 +5832,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 21,
+            "index": 23,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -5820,7 +5844,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 22,
+            "index": 24,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -5832,7 +5856,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 23,
+            "index": 25,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5844,7 +5868,7 @@
             "runDigest": ""
           },
           {
-            "index": 24,
+            "index": 26,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -5856,7 +5880,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 25,
+            "index": 27,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -5871,7 +5895,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 26,
+            "index": 28,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -13410,7 +13434,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 21,
+        "stepIndex": 23,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -13438,7 +13462,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 22,
+        "stepIndex": 24,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",

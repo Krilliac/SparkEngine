@@ -856,8 +856,8 @@
     },
     {
       "path": "Engine/Branding/generate_splash.py",
-      "sha256": "a1a4d61767901bcb54827e299e2af38b39d1d6de86fa3681467403b46b617f36",
-      "size": 10502
+      "sha256": "ea4f5ab43120db812de7442bd8876f6a900ff13feba1add75c167eb6350d1948",
+      "size": 10246
     },
     {
       "path": "Engine/Branding/sparkengine_splash.wav",
@@ -881,8 +881,8 @@
     },
     {
       "path": "Engine/Branding/sparkengine_wordmark.svg",
-      "sha256": "7678e89acb5228df4239d30cce3a278e26ef46f3d72b67d92df416c6c76074b0",
-      "size": 517
+      "sha256": "37fc983ecf273c88b8f8399e66a8f9740b2f7e7ed1f0395687a08e08c97bb795",
+      "size": 509
     },
     {
       "path": "Engine/Branding/sparkengine_wordmark_transparent.png",
@@ -891,248 +891,248 @@
     },
     {
       "path": "MMO/asset_manifest.json",
-      "sha256": "31eea569533188f26923ab4d01754c5fc2fea814061445d3085b9cce236970e5",
-      "size": 5146
+      "sha256": "603e6c0c3c3af5d1e6bda1ce2426a74e4dd45d3ae4fd67362792382e29fbe37d",
+      "size": 4974
     },
     {
       "path": "MMOFPS/ATTRIBUTION.md",
-      "sha256": "d89215677fc8d7af380f6aaeadf48c2e66113fa8e58b563d60000e1f1603f370",
-      "size": 2295
+      "sha256": "65318dd2c40c9003642cba3e0a56b91263817aa3dfa480bdd6a3a53ab134426b",
+      "size": 2270
     },
     {
       "path": "MMOFPS/Data/classes.json",
-      "sha256": "bc16888767ebfffe05363f075cd28397b41728b2837e5f5617934d05081cbf6c",
-      "size": 3887
+      "sha256": "0898636e3a8f5187c88abab8a75fd9be92bb3bc8f4d1d62040a96cb9162e8fc4",
+      "size": 3739
     },
     {
       "path": "MMOFPS/Data/continents.json",
-      "sha256": "525c7c5d71686f3f638269af1819835f49ff931325014a3d5827eab8a2e7d135",
-      "size": 2591
+      "sha256": "21f9b9fd79f5407343039cbcfcbe6c82fa69a2b6d8fc5b3041cefad245896087",
+      "size": 2557
     },
     {
       "path": "MMOFPS/Data/decor.json",
-      "sha256": "ab648609bd24639b78d1d3983add289ce0a6a372e829bbc2855803dc375d9e54",
-      "size": 11378
+      "sha256": "51a2b4674fe435bc2fa6feced2245e25a9d4cd49fc9b66a35f30cb8174032b8f",
+      "size": 11256
     },
     {
       "path": "MMOFPS/Data/deployables.json",
-      "sha256": "08d9f77858ba142b44f7f56bf0053d51342440cd939e9f0dc83b419351e8abc7",
-      "size": 1403
+      "sha256": "6bc86f14769fa84cdfab2105b8cdd01f673ad0ce795bea7ecfd6a4111d95f036",
+      "size": 1345
     },
     {
       "path": "MMOFPS/Data/factions.json",
-      "sha256": "0473489a65beb6cade532f54227b5f992566aa5659d7f8bda43676c4bc80c99e",
-      "size": 1476
+      "sha256": "9108c528f8217e341c7c0c60793f5b2a37e1026afac9a117d24b504e06bdb029",
+      "size": 1450
     },
     {
       "path": "MMOFPS/Data/presentation.json",
-      "sha256": "f590f0a5fd7d8a9b0f357461674e54945b18292fc0db72040f1d09f9ee4f4131",
-      "size": 2687
+      "sha256": "f00518a722de4c0c681a037786092db949c098f704a11cbfa86fcae07ec9219f",
+      "size": 2577
     },
     {
       "path": "MMOFPS/Data/regions.json",
-      "sha256": "ff3b46f6c7cb44b0cfb8005b215c4528f22adb41b2acdf37cdbdea246faab5eb",
-      "size": 4395
+      "sha256": "b6a1157572af2e4fe7f9dd718946b7d4c33ef41bde20a0011ae1f58b1763c432",
+      "size": 4337
     },
     {
       "path": "MMOFPS/Data/regions_highlands.json",
-      "sha256": "811aed12b8740ecd5d4cbac4e3fcc0ff8968d6aca4f14920ae4af54cd3e4fe21",
-      "size": 4273
+      "sha256": "bf092a9233875aee972f7fa3b655429e6f7a97b37e249f8ac413f121809dc264",
+      "size": 4242
     },
     {
       "path": "MMOFPS/Data/suits.json",
-      "sha256": "f4489d4db3afe57492ee0530b7240b383687821fce2ba03d78277808f6925360",
-      "size": 1074
+      "sha256": "eb779473e0207a03e2e1710041e784b21b7e9be60f99787bf0c0e7927450c7f3",
+      "size": 1045
     },
     {
       "path": "MMOFPS/Data/vehicles.json",
-      "sha256": "2e1e176dc8d52308262a72ac5cbd8bc9d2a07dd0e352c59e3dd64c430f81fed6",
-      "size": 3032
+      "sha256": "ca06db04081679d6d86cf70844af460f8aed224db61f4d4432ab3005aee8c7ef",
+      "size": 2911
     },
     {
       "path": "MMOFPS/Data/weapons.json",
-      "sha256": "18cf6edfe2f15d49789e40c636038b3d13d4359971b1b8d33955d860debded1d",
-      "size": 26200
+      "sha256": "37ed36a1624608e340731ebe15e4e77657aa2ec9b6bf6b63f030f358520e82ae",
+      "size": 25316
     },
     {
       "path": "MMOFPS/asset_manifest.json",
-      "sha256": "c7f272a3b4c9d0af8c162029ea53032e8046ed3dee6832877f7b9757d17e738d",
-      "size": 35007
+      "sha256": "a73a7cc5b2e91edc5d67e7dd58eb8e4affcbbfd37582a62ed0ac514aa4f581bf",
+      "size": 33976
     },
     {
       "path": "Materials/Concrete.json",
-      "sha256": "c2c14b450c5b26d11f6eb0c7e7a0a9e7c2021a06a86bd93b16e302d18cb0bc31",
-      "size": 207
+      "sha256": "1dab64caa39cc84c73a350c33d4e69b62bca779824e083f88f93e5e38103d84a",
+      "size": 199
     },
     {
       "path": "Materials/Default.json",
-      "sha256": "2ace8417aa1641b47a3655f141ce45a5830e1b280a64a0037745a0961f72b064",
-      "size": 213
+      "sha256": "b787d0417e4271eca40c2db8d7742e12c0200a9bb9b87dfc9a8640e23a9f51ef",
+      "size": 205
     },
     {
       "path": "Materials/MMO/ArenaSand.json",
-      "sha256": "a8d706107e184c3ead50a937058b06f10e999302455cc29fcc6f264035ea869c",
-      "size": 245
+      "sha256": "9e2f00e0b37b9ec29f398b83628b584d0e0fb8fd377b7674ed80209dc47bdcc0",
+      "size": 235
     },
     {
       "path": "Materials/MMO/Cobblestone.json",
-      "sha256": "b3c721df0cab41066d052d02b2fb3747ef6528ae6fa4553dc20f9d724eb16dea",
-      "size": 253
+      "sha256": "38dbb95974aa421b66d4b71f7b88f71503fec0fd2565670f9996122b70384cf8",
+      "size": 243
     },
     {
       "path": "Materials/MMO/DungeonStone.json",
-      "sha256": "2ea5bd323ccb18312d8d9128f2c66d9093004ff9030d4e9f1d11959af248e455",
-      "size": 294
+      "sha256": "8be12417fc4557d18e7fdd193f29db2f960d8afa1d254f32da4a0bf4ed2eca6f",
+      "size": 283
     },
     {
       "path": "Materials/MMO/Fabric.json",
-      "sha256": "a3ab2523d0861084f66091b6170853ed8272b5f7ebefbd030765848422555fb9",
-      "size": 212
+      "sha256": "be870cab7aba9945f7582173820387b2711d4620b56afe05d526aae68422412a",
+      "size": 203
     },
     {
       "path": "Materials/MMO/Foliage.json",
-      "sha256": "6055b406227dd358970c5a2d563cdc66188b88cfde9ba40e73569a1ab9270bce",
-      "size": 289
+      "sha256": "7634684d826347c1784044aaa5227f90695b6cebfe4281b1f751cc7872708c4e",
+      "size": 277
     },
     {
       "path": "Materials/MMO/NPC_Guard.json",
-      "sha256": "78838dd8e10f9fa37b3151672ebe45771c41a21311713068865b504af775ffa0",
-      "size": 218
+      "sha256": "8b32caf299f5c99e23755e72972862a659cc96778bfa069a847b3d9b30fd1475",
+      "size": 209
     },
     {
       "path": "Materials/MMO/Rock.json",
-      "sha256": "bcd87ca6f7822b7cb3f7d8db9228406ad9a19bf906f124ce51e1e1bd366a8031",
-      "size": 214
+      "sha256": "e139fa70c7641a33d992624ff8e325b5c5135cd238a447a8dfd34c0ec0225db4",
+      "size": 205
     },
     {
       "path": "Materials/MMO/Stone.json",
-      "sha256": "7f1ef78e967bd101535b884c7b13b031eb4592a9700fc38d3cdb1273c182adba",
-      "size": 207
+      "sha256": "aea63dbd1a01a7308049ebae1e813da7c981dc8d104fe246d9545f75cbdf69f4",
+      "size": 198
     },
     {
       "path": "Materials/MMOFPS/Structure_AlloyDark.json",
-      "sha256": "c4c2d90129d162a4b1d8255b9e73e5ac8fd9bbcc037b7d69cfa530e3d69e4290",
-      "size": 351
+      "sha256": "ffce789bf71679912d75043d73039c9b7c3377d5295cfd5d8af9b3ec588fab0e",
+      "size": 339
     },
     {
       "path": "Materials/MMOFPS/Structure_AlloyWorn.json",
-      "sha256": "e3f96c617024a5ffe9a224aa5de85c0f773add28b65bee5d0331bd6591fbca94",
-      "size": 351
+      "sha256": "053ae982103fd7a03483fb20e9df0da4589dd679b7b33315ecede2941e343a1e",
+      "size": 339
     },
     {
       "path": "Materials/MMOFPS/Structure_Concrete.json",
-      "sha256": "6207b8d39cf96bdb8cee0dd29f03e803067156d4cd7fdc4ed4368ec3417c3a46",
-      "size": 348
+      "sha256": "3f7cdb35d84dabf62bb018f287720eece990513481814411b0e10111a0d7440a",
+      "size": 335
     },
     {
       "path": "Materials/MMOFPS/Structure_Metal.json",
-      "sha256": "e51021291d84f159c91b9cd8f1f53ec99b1de0500d0aaab0b12201940fb25afd",
-      "size": 336
+      "sha256": "b99de97b74e301a3059a80acbcda0f2d40df14dd7f8e94c199057a2391642486",
+      "size": 323
     },
     {
       "path": "Materials/MMOFPS/Structure_Panel.json",
-      "sha256": "76e069b53c6ab6baf81304252910732de11f92b8fb9571dc92ea50b2bc8db4ae",
-      "size": 336
+      "sha256": "fd3e38e0a9c96f5211b62f1a99fd767726f35c6d352f986b73172961e241c1bc",
+      "size": 323
     },
     {
       "path": "Materials/MMOFPS/Structure_Sanctuary.json",
-      "sha256": "3cd95fa2e052e4dab4633ef5dd64cac7c9420ca97443c294f5456ac22540b063",
-      "size": 348
+      "sha256": "5f796840e020635d0a5e8d7d24b40707de77e8c0747c93a8cf3659d3c21a71de",
+      "size": 336
     },
     {
       "path": "Materials/MMOFPS/Structure_TrimColonial.json",
-      "sha256": "eb027e960cd744116518dff663000adde2d30f3e2a88dfb01a2f605e2b10cb3a",
-      "size": 363
+      "sha256": "73719e14f2b3a8b24ebae8309350f8de49712660809a9a5fdf219c7f26ed2a77",
+      "size": 351
     },
     {
       "path": "Materials/MMOFPS/Terrain_Glass.json",
-      "sha256": "e207808ab71d667baabd86d6af379b7e86d253f2effaf05fcec47caf54a42b18",
-      "size": 321
+      "sha256": "dc9d9d2c4055c49c0ccf86ab70e101fa78f2f062caf854e56ba550cd3a86641f",
+      "size": 309
     },
     {
       "path": "Materials/MMOFPS/Terrain_Grass.json",
-      "sha256": "b16641d72fd791a30fd2b903eb9640ed708cfb9a96304d06f988aa6119b824ed",
-      "size": 327
+      "sha256": "e40b642acdf22601344929b736a81c4969fdbda94195a4dd179c3ffd4bc0dc91",
+      "size": 314
     },
     {
       "path": "Materials/MMOFPS/Terrain_Gravel.json",
-      "sha256": "5aa528fc495d5dd7e812b4ea205011219e09469e030783be8e878eb0d1df1edd",
-      "size": 331
+      "sha256": "b8a2e1ef558ddd435acebdbba80fcba4a4d1d78e42e65f33ee61bdf28fae7193",
+      "size": 318
     },
     {
       "path": "Materials/MMOFPS/Terrain_Rock.json",
-      "sha256": "8e5cd5c5a6abc4f613ebbfa7959ab411bea07647808e081a8565b44e4c5b01d4",
-      "size": 323
+      "sha256": "39e64623014bd47795c6e5da2c4ff20466dbb4cda9f45da81c2265dbac71e61a",
+      "size": 310
     },
     {
       "path": "Materials/MMOFPS/Terrain_Salt.json",
-      "sha256": "cc5489f10f7d142afe07a3943225b10cdfce1513c87d62bd3d1587b5c597776d",
-      "size": 317
+      "sha256": "72c4c3733a24d2b2b3d64fc55069a3ea488325b020797d53f96a68edcf49d7b1",
+      "size": 305
     },
     {
       "path": "Materials/MMOFPS/Terrain_Sand.json",
-      "sha256": "5e19bbe6553e399bb9273adf9c5ed79fbb9b7e7f4cbe4796931158a5f029d03e",
-      "size": 323
+      "sha256": "587792276eeff989cf8a9bda72b662b7da9d08b5c791b4a78582bb713af959b6",
+      "size": 310
     },
     {
       "path": "Materials/MMOFPS/Vehicle_AUC.json",
-      "sha256": "2e2438aae78aa3c667a01d9e5152c16740e85ad0e8e82f5f5c531cbd3a13a2b5",
-      "size": 344
+      "sha256": "c5ec1f4aedfb2ece369872a385e62968f58e1114f24d3a8deb66edffcde04f9f",
+      "size": 332
     },
     {
       "path": "Materials/MMOFPS/Vehicle_HLX.json",
-      "sha256": "35646773bd8a85c0ad24648a05c905d48a5ed5fd21cabe63f8dfe7a339a5943d",
-      "size": 344
+      "sha256": "6eb110eaf62eac9fd38bfa3be1846f70a24d21045f9ccccc318367135fb7babd",
+      "size": 332
     },
     {
       "path": "Materials/MMOFPS/Vehicle_MRA.json",
-      "sha256": "bf73eb1425d652cca41130d795a33aa8de98be24ac0b1e4b126ff422df44f1ce",
-      "size": 344
+      "sha256": "505649ca68a896ba62e7884b249d0e87c7b6dc87a816bc0879eca1e33a627c79",
+      "size": 332
     },
     {
       "path": "Materials/MMOFPS/Weapon_AUC.json",
-      "sha256": "b2be52af47202200f67415cdd3b385ded421337d6fb643fb94f7a15f1b325a4f",
-      "size": 336
+      "sha256": "0b965db9f91114e1cf6bef67ba6af6544c08d6b9c75425a661f5325d79aa0d96",
+      "size": 324
     },
     {
       "path": "Materials/MMOFPS/Weapon_Common.json",
-      "sha256": "0ae003ed4171e092b22087fe37a9332dde2894bc51fbc45120993c4b855e95a4",
-      "size": 349
-    },
-    {
-      "path": "Materials/MMOFPS/Weapon_HLX.json",
-      "sha256": "d7b13be17eab1339e8b2ba26776ebca61300b649f157d87552e75c2af9d408d4",
+      "sha256": "1e4326667f2752d68927ddf79d6a16e4d0ddecf1fcc085657f551bcec7777450",
       "size": 337
     },
     {
+      "path": "Materials/MMOFPS/Weapon_HLX.json",
+      "sha256": "4ac6db5c3c8cf2128548b7580170c7ed5d24b3a4c5650581ec888960e8f4d4b4",
+      "size": 325
+    },
+    {
       "path": "Materials/MMOFPS/Weapon_MRA.json",
-      "sha256": "4df313fc98bb9afda4610cddf003ed65664357e37e63250db3719f766dd8a6f5",
-      "size": 336
+      "sha256": "9acaec91d1191225a6379b08c487cb5fa443b0ea3d0ae170e50b32e7d21d361f",
+      "size": 324
     },
     {
       "path": "Materials/MMOFPS/Weapon_Mounted.json",
-      "sha256": "1b9a39924f65287cca80e779a518945fa314cdc8b71634a20fa5877627d11b98",
-      "size": 352
+      "sha256": "6a6d8ac8811f53612f1e4379270f14cd47f4b1fb0cf5f85f06c98191bdea536e",
+      "size": 340
     },
     {
       "path": "Materials/Metal.json",
-      "sha256": "e537464927a23487049b510aec26fadcbe5d136e19493ea3b042bb7ca2d9146b",
-      "size": 204
+      "sha256": "d7df87e3337b585b46a8ff0e00f4e724e37a2053bbdb433a35ebeb476c491d18",
+      "size": 196
     },
     {
       "path": "Materials/Terrain_Dirt.json",
-      "sha256": "8cc26e0f87f598192ba21c0e65f4111bdb9d34272b6be4f681268da53b7cfefe",
-      "size": 211
+      "sha256": "72c1cbbe847233c13f22d4639a94331a58fdc32037a67db9dc746b0a41db7731",
+      "size": 203
     },
     {
       "path": "Materials/Terrain_Grass.json",
-      "sha256": "d630c883d480452019bf2348ee15bb9e2586a127dd7f6015da66dd3b8ceff725",
-      "size": 212
+      "sha256": "efb5bc39dc3a0a187effed9e73c3a13b46014bfd5d7ebc3ae9b8df4d29ea2cce",
+      "size": 204
     },
     {
       "path": "Materials/Wood.json",
-      "sha256": "8f5933083ffafc4c652a17e1ffa44dbe0abec1e61f5cf2e3770f5bbd0edbb60e",
-      "size": 202
+      "sha256": "fa0c6d460fa86fbf8c74f0b8ca3ba098f68cf99a2050a4c3f0046ab924ac520c",
+      "size": 194
     },
     {
       "path": "Models/Cube.mtl",
@@ -1146,8 +1146,8 @@
     },
     {
       "path": "Models/Generated/starter_assets_manifest.json",
-      "sha256": "7a24cb1477a0ddaa6636b9224d9072733d27df211ff9d9e898319a40cf5299a9",
-      "size": 39206
+      "sha256": "5d1524e49cedf4bc2214b506e0a7fe1331d7cafe1fb823a14fd48d4fb2f6e298",
+      "size": 37795
     },
     {
       "path": "Models/MMO/alchemy_shop.mtl",
@@ -1821,8 +1821,8 @@
     },
     {
       "path": "Models/MMOFPS/weapons/README_charm_mounts.md",
-      "sha256": "45688e1b7dab6c79bcac8d4a5f3b12446e2fb760f958f351d3541cf3995f4f82",
-      "size": 998
+      "sha256": "17849f97b8ecc3b01c5ba315af052ae1f2256b79f6f4c262ac57b8200b0b7bb6",
+      "size": 980
     },
     {
       "path": "Models/MMOFPS/weapons/T_Props_Batch1_BaseColor.png",
@@ -2676,58 +2676,58 @@
     },
     {
       "path": "Scenes/Default.scene",
-      "sha256": "76bdcae8151908dde2232a1c8a80eb6fd7c4f4aa34ea03f6b1942d5ae16d2b5f",
-      "size": 3897
+      "sha256": "c6449eb813493aced40574d240ab6f907e7c38aa99150acc8ea839dad6fde891",
+      "size": 3752
     },
     {
       "path": "Scenes/MMO/battleground.scene",
-      "sha256": "7cc3de1fcdcd8e18400dec0fe5adec563832e5140fea31c76830c8c7ac17ff8c",
-      "size": 5084
+      "sha256": "f7cce0d5f33748c8fe23d9e8c68cfcb4705abe7c2f79d8a69c1023e30babc370",
+      "size": 4930
     },
     {
       "path": "Scenes/MMO/shadow_crypt.scene",
-      "sha256": "72c62058bbaa4c09e6a592e60d6996fbc9750570cdb0d00e8c49c22f6e2ff7d2",
-      "size": 5430
+      "sha256": "2bca1312d6259a701f9f762e1352e13323b390a4a5ef6637178c92297fe4b4fb",
+      "size": 5264
     },
     {
       "path": "Scenes/MMO/town_square.scene",
-      "sha256": "8243f9087956e866fed2cd9230d1a7a9e349c02e69f5fdbf54278f5d42e0724b",
-      "size": 8436
+      "sha256": "72049ec14b8a4a8131efab498ee5f144c820a19918b89eaebd56eb387fe99362",
+      "size": 8186
     },
     {
       "path": "Scenes/MMO/wilderness.scene",
-      "sha256": "d212ce460e15aaea51c4d87ff26c7ec0c98d2bde4fca9591d5587f512b57edca",
-      "size": 5821
+      "sha256": "5cc278c427b086ec172f186eb5d90613c89e483b095cd60177d052315f18fa44",
+      "size": 5645
     },
     {
       "path": "Scenes/MMOFPS/cindral_wastes.scene",
-      "sha256": "abb3b9039204d3107bc4a91d7a34d30e167d1d101c1db751887cd83b11aaa109",
-      "size": 28660
+      "sha256": "aae6455d3fbe3f1b7501e4bb6a25e399ec041e3c78435e2460131a8daa1ad7e2",
+      "size": 27528
     },
     {
       "path": "Scenes/MMOFPS/sanctuary_haven.scene",
-      "sha256": "6eba9fada9302ebcb514ee38ef8524939395b68b7603927c940c7202444c5fd9",
-      "size": 5930
+      "sha256": "2e15d6c3f45f857a6e68aa860b95eb0cb2a71f4418311e3ea281302fa79e9c8a",
+      "size": 5732
     },
     {
       "path": "Scenes/MMOFPS/veyra_highlands.scene",
-      "sha256": "a0d4c314b6ce9d4c5e2fda3234869accaa07e9b5f774314faf765d7af05f4827",
-      "size": 34637
+      "sha256": "5aa0b124cfb84b1df1557a00bc3f673c47110f3b722e25ee4cef7a2a4da2a765",
+      "size": 33285
     },
     {
       "path": "Scenes/combat_arena.scene",
-      "sha256": "a6d8d91696d76ad012e52fadff0f0c82a85ad8abc4c3ba9fe83457d8e7e6ba45",
-      "size": 6219
+      "sha256": "de59f80bc688ec508cac0292f6bc564885be38cdcbd4d930507feed25e558fd4",
+      "size": 5871
     },
     {
       "path": "Scenes/level1.scene",
-      "sha256": "e24b73a4acc2fe5e810eafc3369b9302cd3e26c7f29062984f9b82ff7da86ca6",
-      "size": 11450
+      "sha256": "59d2b309543e16dd0f669a19397cc8c3775abb66f35b51dcb96102dc0b329b95",
+      "size": 10792
     },
     {
       "path": "Scripts/PlayerController.as",
-      "sha256": "51851f99a43d96ba4dee3dc1639288c87a16461d5b5543393c1f46a873849668",
-      "size": 1380
+      "sha256": "670822d61f49a1bd5932275afd2ad536acd01341f0052524a9927de7cf73ea34",
+      "size": 1333
     },
     {
       "path": "Textures/Decals/MMOFPS/crest_auc.png",

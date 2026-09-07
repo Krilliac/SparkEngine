@@ -6,6 +6,13 @@ The Game Packaging code provides a local staging pipeline that can copy engine o
 
 ## Overview
 
+> **Current readiness boundary:** the repository asset-integrity check is a
+> blocking preflight, but `GamePackager` does not yet consume an immutable
+> handle-based snapshot produced by that verification. A passing
+> `Assets/assets.integrity.json` check must not be described as proof of the
+> packaged input. RDY-020 remains open until the in-profile package smoke and
+> verified-input handoff are implemented.
+
 | Class | Responsibility |
 |-------|---------------|
 | `GamePackager` | Singleton orchestrating local staging: config validation, raw asset/binary copying, optional `.pdb` removal, and size-only manifest generation |
