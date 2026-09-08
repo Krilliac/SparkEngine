@@ -854,6 +854,25 @@ TEST(Telemetry_SpoolRecovery_HostileArtifactRejection)
     EXPECT_TRUE(fs::exists(nonRegular.Artifact() / "caller-owned.txt"));
 }
 
+TEST(Telemetry_SpoolPathPolicy_TrustedRootAliasRewritesOnlyExactPrefix)
+{
+    TempTelemetrySpool fixture("trusted-root-alias");
+    const fs::path trustedAlias = fixture.Root() / "var";
+    const fs::path trustedTarget = fixture.Root() / "private" / "var";
+    const fs::path requestedDirectory = trustedAlias / "folders" / "session";
+    const fs::path expectedDirectory = trustedTarget / "folders" / "session";
+
+    EXPECT_EQ(Spark::TelemetryDetail::TelemetrySpoolPathPolicy::NormalizeTrustedRootAlias(
+                  requestedDirectory, trustedAlias, trustedTarget),
+              expectedDirectory);
+    EXPECT_EQ(Spark::TelemetryDetail::TelemetrySpoolPathPolicy::NormalizeTrustedRootAlias(
+                  fixture.Root() / "variable" / "session", trustedAlias, trustedTarget),
+              fixture.Root() / "variable" / "session");
+    EXPECT_EQ(Spark::TelemetryDetail::TelemetrySpoolPathPolicy::NormalizeTrustedRootAlias(
+                  fs::path("var") / "session", trustedAlias, trustedTarget),
+              fs::path("var") / "session");
+}
+
 TEST(Telemetry_SpoolRecovery_SymlinkRejection)
 {
     auto& telemetry = Spark::TelemetrySystem::GetInstance();

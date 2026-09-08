@@ -27,6 +27,33 @@
 
 namespace Spark::TelemetryDetail
 {
+    namespace TelemetrySpoolPathPolicy
+    {
+        std::filesystem::path NormalizeTrustedRootAlias(const std::filesystem::path& path,
+                                                        const std::filesystem::path& trustedAlias,
+                                                        const std::filesystem::path& trustedTarget)
+        {
+            const auto normalizedPath = path.lexically_normal();
+            const auto normalizedAlias = trustedAlias.lexically_normal();
+            const auto normalizedTarget = trustedTarget.lexically_normal();
+            if (!normalizedPath.is_absolute() || !normalizedAlias.is_absolute() || !normalizedTarget.is_absolute())
+                return normalizedPath;
+
+            auto pathComponent = normalizedPath.begin();
+            for (auto aliasComponent = normalizedAlias.begin(); aliasComponent != normalizedAlias.end();
+                 ++aliasComponent, ++pathComponent)
+            {
+                if (pathComponent == normalizedPath.end() || *pathComponent != *aliasComponent)
+                    return normalizedPath;
+            }
+
+            auto result = normalizedTarget;
+            for (; pathComponent != normalizedPath.end(); ++pathComponent)
+                result /= *pathComponent;
+            return result;
+        }
+    } // namespace TelemetrySpoolPathPolicy
+
     TelemetrySpoolResult TelemetrySpool::InspectDeferredCleanupDirectory(std::string_view directory)
     {
         std::filesystem::path candidate{std::string(directory)};
@@ -158,6 +185,13 @@ namespace Spark::TelemetryDetail
         if (error || configured.empty())
             return TelemetrySpoolResult::Rejected;
         configured = configured.lexically_normal();
+#ifdef __APPLE__
+        // Darwin exposes its temporary-directory hierarchy through the trusted
+        // system alias /var -> /private/var. Substitute only that exact root
+        // prefix; every caller-controlled descendant is still walked below.
+        configured = TelemetrySpoolPathPolicy::NormalizeTrustedRootAlias(configured, std::filesystem::path("/var"),
+                                                                         std::filesystem::path("/private/var"));
+#endif
         bool directoryExists = false;
         if (!PathExists(configured, directoryExists))
             return TelemetrySpoolResult::IoFailure;

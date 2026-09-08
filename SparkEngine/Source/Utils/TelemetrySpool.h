@@ -16,6 +16,19 @@ namespace Spark
 
     namespace TelemetryDetail
     {
+        namespace TelemetrySpoolPathPolicy
+        {
+            /**
+             * @brief Replace one exact leading trusted root alias without resolving descendants.
+             *
+             * This is a lexical component-prefix substitution. It intentionally does not call
+             * canonical(), weakly_canonical(), or resolve any caller-controlled child component.
+             */
+            [[nodiscard]] std::filesystem::path NormalizeTrustedRootAlias(const std::filesystem::path& path,
+                                                                          const std::filesystem::path& trustedAlias,
+                                                                          const std::filesystem::path& trustedTarget);
+        } // namespace TelemetrySpoolPathPolicy
+
         enum class TelemetrySpoolResult : uint8_t
         {
             Success,
