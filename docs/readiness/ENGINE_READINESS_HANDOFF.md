@@ -600,7 +600,7 @@ Several modules reference missing music/models/scenes, depend on path case that 
 
 ```bash
 python3 tools/asset-integrity/verify_asset_integrity.py check-all
-python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json
+python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json --root Assets
 python3 tools/site-data/validate.py --assets
 python3 Tests/Tools/test_asset_integrity.py
 ctest --test-dir build/windows-shipping -L profile-package --output-on-failure --no-tests=error
