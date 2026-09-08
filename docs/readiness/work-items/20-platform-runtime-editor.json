@@ -86,9 +86,9 @@
           "type": "infrastructure",
           "description": "Support-matrix schema, evidence schema, and fail-closed validator",
           "paths": [
-            "tools/platform-cert/support_matrix_schema.json",
-            "tools/platform-cert/evidence_schema.json",
-            "tools/platform-cert/validate_certification.py"
+            "Tools/platform-cert/support_matrix_schema.json",
+            "Tools/platform-cert/evidence_schema.json",
+            "Tools/platform-cert/validate_certification.py"
           ],
           "commit": "pending"
         },

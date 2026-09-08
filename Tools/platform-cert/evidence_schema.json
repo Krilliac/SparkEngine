@@ -33,7 +33,7 @@
     },
     "collector": {
       "type": "object",
-      "required": ["type", "identity"],
+      "required": ["type", "identity", "provenance", "attestation"],
       "additionalProperties": false,
       "properties": {
         "type": {
@@ -42,11 +42,91 @@
         },
         "identity": {
           "type": "string",
+          "minLength": 8,
+          "maxLength": 512,
           "description": "CI run URL, operator name, or automation script path."
         },
         "runId": {
           "type": "string",
+          "pattern": "^[0-9]{1,20}$",
           "description": "CI run ID if applicable."
+        },
+        "provenance": {
+          "type": "object",
+          "required": [
+            "repository",
+            "workflow",
+            "runId",
+            "runAttempt",
+            "jobId",
+            "checkoutAt",
+            "commitSha"
+          ],
+          "additionalProperties": false,
+          "description": "Where this record was produced. Bound to an externally supplied revision; a record whose provenance does not match the expected repository, workflow and SHA cannot certify.",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$",
+              "description": "owner/name, e.g. from GITHUB_REPOSITORY."
+            },
+            "workflow": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Workflow name, e.g. from GITHUB_WORKFLOW."
+            },
+            "runId": {
+              "type": "string",
+              "pattern": "^[0-9]{1,20}$",
+              "description": "Run identifier, e.g. from GITHUB_RUN_ID."
+            },
+            "runAttempt": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "description": "Run attempt, e.g. from GITHUB_RUN_ATTEMPT."
+            },
+            "jobId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Job identifier, e.g. from GITHUB_JOB."
+            },
+            "checkoutAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When the source was checked out. Evidence must be collected strictly after this instant."
+            },
+            "commitSha": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$",
+              "description": "Revision the collector checked out, e.g. from GITHUB_SHA."
+            }
+          }
+        },
+        "attestation": {
+          "type": "object",
+          "required": ["predicateType", "bundleSha256", "signedAt"],
+          "additionalProperties": false,
+          "description": "Binds this record to the measured content of the evidence bundle.",
+          "properties": {
+            "predicateType": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200,
+              "description": "Attestation predicate URI."
+            },
+            "bundleSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "SHA-256 over the sorted (path, sha256) list of every artifact this record declares."
+            },
+            "signedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
         }
       }
     },
@@ -61,9 +141,9 @@
           "additionalProperties": false,
           "properties": {
             "family": { "enum": ["windows", "linux", "macos"] },
-            "version": { "type": "string" },
-            "build": { "type": "string" },
-            "locale": { "type": "string" }
+            "version": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "build": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "locale": { "type": "string", "minLength": 2, "maxLength": 35 }
           }
         },
         "arch": { "enum": ["x86_64", "aarch64"] },
@@ -72,10 +152,11 @@
           "required": ["model", "features"],
           "additionalProperties": false,
           "properties": {
-            "model": { "type": "string" },
+            "model": { "type": "string", "minLength": 1, "maxLength": 200 },
             "features": {
               "type": "array",
-              "items": { "type": "string" }
+              "maxItems": 128,
+              "items": { "type": "string", "minLength": 1, "maxLength": 40 }
             }
           }
         },
@@ -84,7 +165,7 @@
           "required": ["totalMb"],
           "additionalProperties": false,
           "properties": {
-            "totalMb": { "type": "integer", "minimum": 1 }
+            "totalMb": { "type": "integer", "minimum": 1, "maximum": 16777216 }
           }
         },
         "gpu": {
@@ -93,11 +174,11 @@
           "additionalProperties": false,
           "properties": {
             "api": { "enum": ["d3d11", "d3d12", "vulkan", "opengl", "metal", "nullrhi"] },
-            "device": { "type": "string" },
+            "device": { "type": "string", "minLength": 1, "maxLength": 200 },
             "vendor": { "enum": ["nvidia", "amd", "intel", "apple", "microsoft", "mesa", "none"] },
-            "driverVersion": { "type": "string" },
-            "featureLevel": { "type": "string" },
-            "vramMb": { "type": "integer", "minimum": 0 }
+            "driverVersion": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "featureLevel": { "type": "string", "minLength": 1, "maxLength": 40 },
+            "vramMb": { "type": "integer", "minimum": 0, "maximum": 1048576 }
           }
         },
         "audio": {
@@ -106,8 +187,8 @@
           "additionalProperties": false,
           "properties": {
             "api": { "enum": ["xaudio2", "openal", "none"] },
-            "version": { "type": "string" },
-            "deviceName": { "type": "string" }
+            "version": { "type": "string", "minLength": 1, "maxLength": 40 },
+            "deviceName": { "type": "string", "minLength": 1, "maxLength": 200 }
           }
         },
         "compiler": {
@@ -116,9 +197,9 @@
           "additionalProperties": false,
           "properties": {
             "id": { "enum": ["msvc", "gcc", "clang", "apple-clang", "mingw"] },
-            "version": { "type": "string" },
-            "toolset": { "type": "string" },
-            "windowsSdkVersion": { "type": "string" }
+            "version": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "toolset": { "type": "string", "minLength": 1, "maxLength": 40 },
+            "windowsSdkVersion": { "type": "string", "minLength": 1, "maxLength": 40 }
           }
         }
       }
@@ -145,6 +226,7 @@
     },
     "dependencyClosure": {
       "type": "array",
+      "maxItems": 1000,
       "items": { "$ref": "#/$defs/RuntimeDependency" },
       "description": "Every runtime dependency the installed product requires."
     },
@@ -159,6 +241,7 @@
       "type": "object",
       "required": ["status", "durationMs"],
       "additionalProperties": false,
+      "description": "A single probe result. A 'pass' additionally requires exitCode 0, a positive duration, startedAt/completedAt chronology and at least one artifact -- see the validator; those cross-field rules are not expressible in Draft 2020-12.",
       "properties": {
         "status": {
           "enum": ["pass", "fail", "skip", "error"],
@@ -167,6 +250,7 @@
         "durationMs": {
           "type": "integer",
           "minimum": 0,
+          "maximum": 86400000,
           "description": "Wall-clock milliseconds the probe took."
         },
         "detail": {
@@ -176,12 +260,18 @@
         },
         "artifacts": {
           "type": "array",
+          "maxItems": 100,
           "items": {
             "type": "object",
             "required": ["path", "sha256", "sizeBytes"],
             "additionalProperties": false,
             "properties": {
-              "path": { "type": "string" },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "description": "Forward-slash relative path beneath the evidence bundle root. Resolved, opened without following links, and hashed by the validator; the declared digest and size must match the measured ones."
+              },
               "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
               "sizeBytes": { "type": "integer", "minimum": 0 }
             }
@@ -190,26 +280,48 @@
         },
         "exitCode": {
           "type": "integer",
-          "description": "Process exit code if applicable."
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "description": "Process exit code. Required and must be 0 when status is 'pass'."
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the probe began. Required when status is 'pass'."
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the probe finished. Required when status is 'pass'; must be after startedAt and consistent with durationMs."
         },
         "skipReason": {
           "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
           "description": "Required when status is 'skip'."
         }
       }
     },
     "RuntimeDependency": {
       "type": "object",
-      "required": ["name", "version", "source"],
+      "required": ["name", "version", "source", "path", "sha256", "sizeBytes"],
       "additionalProperties": false,
+      "description": "One entry of a real package scan. Every entry names a file inside the evidence bundle that the validator opens and measures; a dependency that cannot be measured cannot be claimed.",
       "properties": {
-        "name": { "type": "string" },
-        "version": { "type": "string" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 260 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 100 },
         "source": {
           "enum": ["system", "bundled", "vcredist", "directx", "sdk"],
           "description": "Where this dependency comes from."
         },
-        "path": { "type": "string" }
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Forward-slash relative path beneath the evidence bundle root."
+        },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "sizeBytes": { "type": "integer", "minimum": 0 }
       }
     }
   }

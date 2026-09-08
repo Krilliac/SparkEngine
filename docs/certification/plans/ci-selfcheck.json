@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "rowId": "ci-selfcheck",
+  "note": "Not a support-matrix row and never certifiable. This plan exists so the required CI job exercises the real collector-to-validator path on a real host at the exact commit under test: it runs a genuine command, captures its real output into a content-addressed artifact, and validates the record that results. A hosted CI runner has no GPU, no audio device and no clean Windows install, so it cannot supply evidence for any stable-v1 row; PLT-200 stays open until a physical host does.",
+  "provenance": {
+    "repository": "local/unset",
+    "workflow": "local",
+    "runId": "0",
+    "jobId": "local"
+  },
+  "probes": {
+    "dependency_closure": {
+      "command": ["python3", "Tools/platform-cert/dependency_authority.py", "--check"],
+      "timeoutSeconds": 120
+    }
+  }
+}

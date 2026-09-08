@@ -150,6 +150,12 @@ jobs:
     - name: Test ThirdParty manifest-sync gate
       run: python3 Tests/Tools/test_check_thirdparty_manifest_sync.py
 
+    - name: Platform certification validator
+      run: python3 -m pytest Tests/Tools/test_platform_certification.py -v --tb=short
+
+    - name: Validate certification matrix
+      run: python3 Tools/platform-cert/validate_certification.py --matrix-only --matrix docs/certification/support-matrix.json
+
     - name: Verify every test source is registered
       run: bash tools/check-test-registration.sh
 

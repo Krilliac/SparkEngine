@@ -1676,6 +1676,22 @@ if(Python3_Interpreter_FOUND)
     )
     set_tests_properties(SparkCliContract PROPERTIES LABELS "cli;integration" TIMEOUT 180)
 
+    add_test(
+        NAME PlatformCertification
+        COMMAND ${Python3_EXECUTABLE} -m pytest
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_platform_certification.py
+            -v --tb=short
+    )
+    set_tests_properties(PlatformCertification PROPERTIES LABELS "certification;integration" TIMEOUT 120)
+    add_test(
+        NAME PlatformCertMatrixOnly
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tools/platform-cert/validate_certification.py
+            --matrix-only
+            --matrix ${CMAKE_SOURCE_DIR}/docs/certification/support-matrix.json
+    )
+    set_tests_properties(PlatformCertMatrixOnly PROPERTIES LABELS "certification" TIMEOUT 30)
+
     set(_spark_cli_companion_targets
         SparkServer SparkGateway SparkDaemon SparkOrchestrator
         SparkCollabServer SparkCooker SparkWorker SparkAutomation)

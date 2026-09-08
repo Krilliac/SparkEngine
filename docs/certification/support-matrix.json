@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "profile": "stable-v1",
-  "commitSha": "360c05e883d4d5d1c0d050455a5cbb226cce3ffc",
+  "commitSha": "0000000000000000000000000000000000000000",
   "generatedAt": "2026-08-28T06:50:00Z",
   "rows": [
     {
@@ -46,7 +46,7 @@
         "uninstall",
         "dependency_closure"
       ],
-      "notes": "Primary certified row for stable-v1. All 13 evidence categories required."
+      "notes": "Declared primary row for stable-v1, not a certified one. All 13 evidence categories are required before it can certify."
     },
     {
       "id": "win11-x64-msvc143-nullrhi",
@@ -85,7 +85,7 @@
         "uninstall",
         "dependency_closure"
       ],
-      "notes": "Headless NullRHI row. Renderer/content/input/audio probes not required — NullRHI renders nothing."
+      "notes": "Declared headless NullRHI row, not a certified one. Renderer/content/input/audio probes do not apply because NullRHI rasterizes nothing."
     }
   ]
 }
