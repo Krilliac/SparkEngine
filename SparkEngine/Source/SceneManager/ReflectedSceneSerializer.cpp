@@ -7,8 +7,20 @@
 #include <fstream>
 #include <filesystem>
 #include <limits>
+#include <system_error>
 #include <unordered_map>
 #include <unordered_set>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 using nlohmann::json;
 
@@ -17,6 +29,114 @@ namespace Spark
 
     namespace
     {
+        constexpr int kCurrentSceneVersion = 1;
+
+        bool ReadTextFile(const std::filesystem::path& path, std::string& text)
+        {
+            std::ifstream input(path, std::ios::binary);
+            if (!input.is_open())
+                return false;
+            text.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+            return input.good() || input.eof();
+        }
+
+        bool FlushFileDurably(const std::filesystem::path& path, std::error_code& error)
+        {
+#if defined(_WIN32)
+            const HANDLE file = ::CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                              FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (file == INVALID_HANDLE_VALUE)
+            {
+                error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+                return false;
+            }
+
+            const bool flushed = ::FlushFileBuffers(file) != FALSE;
+            const DWORD flushError = flushed ? ERROR_SUCCESS : ::GetLastError();
+            ::CloseHandle(file);
+            if (!flushed)
+            {
+                error = std::error_code(static_cast<int>(flushError), std::system_category());
+                return false;
+            }
+            return true;
+#else
+            const int file = ::open(path.c_str(), O_RDONLY);
+            if (file < 0)
+            {
+                error = std::error_code(errno, std::generic_category());
+                return false;
+            }
+
+            const bool flushed = ::fsync(file) == 0;
+            const int flushError = flushed ? 0 : errno;
+            ::close(file);
+            if (!flushed)
+            {
+                error = std::error_code(flushError, std::generic_category());
+                return false;
+            }
+            return true;
+#endif
+        }
+
+        bool ReplaceFileAtomically(const std::filesystem::path& temporary, const std::filesystem::path& destination,
+                                   std::error_code& error)
+        {
+#if defined(_WIN32)
+            if (::MoveFileExW(temporary.c_str(), destination.c_str(),
+                              MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            {
+                return true;
+            }
+            error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            return false;
+#else
+            std::filesystem::rename(temporary, destination, error);
+            if (error)
+                return false;
+
+            const std::filesystem::path directory = destination.has_parent_path() ? destination.parent_path() : ".";
+#if defined(O_DIRECTORY)
+            const int directoryFile = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY);
+#else
+            const int directoryFile = ::open(directory.c_str(), O_RDONLY);
+#endif
+            if (directoryFile < 0)
+            {
+                error = std::error_code(errno, std::generic_category());
+                return false;
+            }
+            const bool flushed = ::fsync(directoryFile) == 0;
+            const int flushError = flushed ? 0 : errno;
+            ::close(directoryFile);
+            if (!flushed)
+            {
+                error = std::error_code(flushError, std::generic_category());
+                return false;
+            }
+            return true;
+#endif
+        }
+
+        bool WriteDurableText(const std::filesystem::path& path, const std::string& text, std::error_code& error)
+        {
+            std::ofstream output(path, std::ios::binary | std::ios::trunc);
+            if (!output.is_open())
+                return false;
+            output.write(text.data(), static_cast<std::streamsize>(text.size()));
+            output.close();
+            if (output.fail())
+                return false;
+            return FlushFileDurably(path, error);
+        }
+
+        void RemoveFileNoThrow(const std::filesystem::path& path)
+        {
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+
         // Components handled specially at the entity level, not in the generic "components" list.
         bool IsEntityLevel(const std::string& type)
         {
@@ -91,7 +211,7 @@ namespace Spark
     std::string SerializeWorld(const World& world)
     {
         json root;
-        root["version"] = 1;
+        root["version"] = kCurrentSceneVersion;
         json entities = json::array();
 
         auto& factory = ComponentFactory::Get();
@@ -144,13 +264,21 @@ namespace Spark
         {
             json root;
             root = json::parse(jsonText);
-            if (!root.contains("entities") || !root["entities"].is_array())
+            if (!root.is_object() || !root.contains("entities") || !root["entities"].is_array())
                 return false;
 
             // SparkEditor versions before the reflected serializer shipped
             // `sceneVersion` plus inline component values. Keep those projects
             // loadable and migrate naturally on their next explicit save.
-            const bool legacyScene = root.contains("sceneVersion") && !root.contains("version");
+            const bool hasCurrentVersion = root.contains("version");
+            const bool hasLegacyVersion = root.contains("sceneVersion");
+            if (hasCurrentVersion == hasLegacyVersion)
+                return false;
+
+            const char* versionField = hasCurrentVersion ? "version" : "sceneVersion";
+            if (!root[versionField].is_number_integer() || root[versionField].get<int64_t>() != kCurrentSceneVersion)
+                return false;
+            const bool legacyScene = hasLegacyVersion;
 
             auto& factory = ComponentFactory::Get();
             std::unordered_map<uint32_t, entt::entity> idMap; // serialized id -> live entity
@@ -291,19 +419,73 @@ namespace Spark
 
     bool SaveWorld(const World& world, const std::string& path)
     {
-        std::ofstream f(std::filesystem::u8path(path), std::ios::binary);
-        if (!f.is_open())
+        const std::filesystem::path destination = std::filesystem::u8path(path);
+        std::filesystem::path temporary = destination;
+        temporary += ".tmp";
+        std::filesystem::path backup = destination;
+        backup += ".bak";
+        std::filesystem::path backupTemporary = backup;
+        backupTemporary += ".tmp";
+
+        RemoveFileNoThrow(temporary);
+        RemoveFileNoThrow(backupTemporary);
+
+        const std::string serialized = SerializeWorld(world);
+        std::error_code error;
+        if (!WriteDurableText(temporary, serialized, error))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] durable staging write failed for %s: %s",
+                           path.c_str(), error.message().c_str());
+            RemoveFileNoThrow(temporary);
             return false;
-        f << SerializeWorld(world);
-        return f.good();
+        }
+
+        // Preserve the previous image only when it is a loadable scene. A
+        // corrupt destination must never displace the last known-good backup.
+        std::string previous;
+        if (ReadTextFile(destination, previous))
+        {
+            World validationWorld(World::EntityEventCleanupMode::Suppressed);
+            if (DeserializeInto(validationWorld, previous))
+            {
+                if (!WriteDurableText(backupTemporary, previous, error) ||
+                    !ReplaceFileAtomically(backupTemporary, backup, error))
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                                   "[ReflectedScene] previous-good backup failed for %s: %s", path.c_str(),
+                                   error.message().c_str());
+                    RemoveFileNoThrow(temporary);
+                    RemoveFileNoThrow(backupTemporary);
+                    return false;
+                }
+            }
+        }
+
+        if (!ReplaceFileAtomically(temporary, destination, error))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] atomic replace failed for %s: %s",
+                           path.c_str(), error.message().c_str());
+            RemoveFileNoThrow(temporary);
+            return false;
+        }
+        return true;
     }
 
     bool LoadWorld(World& world, const std::string& path)
     {
-        std::ifstream f(std::filesystem::u8path(path), std::ios::binary);
-        if (!f.is_open())
+        const std::filesystem::path primary = std::filesystem::u8path(path);
+        std::filesystem::path backup = primary;
+        backup += ".bak";
+
+        std::string text;
+        if (ReadTextFile(primary, text) && DeserializeInto(world, text))
+            return true;
+
+        if (!ReadTextFile(backup, text))
             return false;
-        std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] recovering %s from previous-good backup",
+                       path.c_str());
         return DeserializeInto(world, text);
     }
 

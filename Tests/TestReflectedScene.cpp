@@ -10,7 +10,46 @@
 #include "Core/Reflection.h"
 #include "SceneManager/ReflectedSceneSerializer.h"
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+
 using namespace Spark;
+
+namespace
+{
+    class TemporaryReflectedScene
+    {
+      public:
+        TemporaryReflectedScene()
+        {
+            const auto nonce = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+            m_path = std::filesystem::temp_directory_path() /
+                     ("spark_reflected_scene_" + std::to_string(nonce) + ".json");
+        }
+
+        ~TemporaryReflectedScene()
+        {
+            std::error_code ignored;
+            std::filesystem::remove(m_path, ignored);
+            std::filesystem::remove(m_path.string() + ".bak", ignored);
+            std::filesystem::remove(m_path.string() + ".tmp", ignored);
+            std::filesystem::remove(m_path.string() + ".bak.tmp", ignored);
+        }
+
+        const std::filesystem::path& Path() const { return m_path; }
+
+      private:
+        std::filesystem::path m_path;
+    };
+
+    std::string ReadSceneText(const std::filesystem::path& path)
+    {
+        std::ifstream input(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
+} // namespace
 
 TEST(ReflectedScene_RoundTrip_TransformAndMesh)
 {
@@ -228,6 +267,52 @@ TEST(ReflectedScene_RejectsDuplicateExplicitIdsWithoutMutation)
     World world;
     EXPECT_FALSE(Spark::DeserializeInto(world, duplicate));
     EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(0));
+}
+
+TEST(ReflectedScene_RejectsUnknownAndAmbiguousVersionsWithoutMutation)
+{
+    World world;
+    world.CreateEntity("KeepMe");
+
+    EXPECT_FALSE(DeserializeInto(world, R"json({"version":999,"entities":[]})json"));
+    EXPECT_FALSE(
+        DeserializeInto(world, R"json({"version":1,"sceneVersion":1,"entities":[]})json"));
+    EXPECT_FALSE(DeserializeInto(world, R"json({"entities":[]})json"));
+    EXPECT_FALSE(DeserializeInto(world, R"json({"sceneVersion":"1","entities":[]})json"));
+    EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));
+}
+
+TEST(ReflectedScene_SaveIsAtomicAndLoadRecoversPreviousGoodBackup)
+{
+    TemporaryReflectedScene file;
+
+    World first;
+    first.CreateEntity("First");
+    EXPECT_TRUE(SaveWorld(first, file.Path().string()));
+    EXPECT_FALSE(std::filesystem::exists(file.Path().string() + ".bak"));
+
+    const std::string firstImage = ReadSceneText(file.Path());
+    EXPECT_STR_CONTAINS(firstImage, "First");
+
+    World second;
+    second.CreateEntity("Second");
+    EXPECT_TRUE(SaveWorld(second, file.Path().string()));
+    EXPECT_STR_CONTAINS(ReadSceneText(file.Path()), "Second");
+    EXPECT_EQ(ReadSceneText(file.Path().string() + ".bak"), firstImage);
+    EXPECT_FALSE(std::filesystem::exists(file.Path().string() + ".tmp"));
+    EXPECT_FALSE(std::filesystem::exists(file.Path().string() + ".bak.tmp"));
+
+    {
+        std::ofstream corrupt(file.Path(), std::ios::binary | std::ios::trunc);
+        corrupt << R"({"version":999,"entities":[]})";
+    }
+
+    World recovered;
+    EXPECT_TRUE(LoadWorld(recovered, file.Path().string()));
+    EXPECT_EQ(recovered.GetEntityCount(), static_cast<size_t>(1));
+    const auto names = recovered.GetEntitiesWith<NameComponent>();
+    ASSERT_TRUE(names.begin() != names.end());
+    EXPECT_EQ(names.get<NameComponent>(*names.begin()).name, std::string("First"));
 }
 
 TEST(World_DestroyEntityRepairsHierarchyLinks)
