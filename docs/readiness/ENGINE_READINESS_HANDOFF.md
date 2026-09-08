@@ -1261,7 +1261,7 @@ grype sbom:sbom.spdx.json
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Dedicated-server chat can reach RCON dispatch without validating the configured password, making the current path unsafe for remote deployment.
+Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.
 
 **Dependency contract**
 

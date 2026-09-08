@@ -10,7 +10,7 @@
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Dedicated-server chat can reach RCON dispatch without validating the configured password, making the current path unsafe for remote deployment.",
+      "rationale": "Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.",
       "dependencies": [],
       "parallelWith": [
         "CI-100",
