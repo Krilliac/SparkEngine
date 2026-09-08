@@ -28,7 +28,6 @@ _MINIDUMP_MAGIC = b"MDMP"
 _MINIDUMP_MIN_SIZE = 32
 
 _SAFE_PLACEHOLDERS = {
-    "",
     "<redacted>",
     "redacted",
     "none",
