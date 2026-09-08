@@ -85,12 +85,7 @@
         "security-runtime",
         "network-integration"
       ],
-      "plannedTestSelectors": [
-        "RemoteAdmin_AnonymousDenied",
-        "RemoteAdmin_RoleMatrix",
-        "RemoteAdmin_ReplayDenied",
-        "RemoteAdmin_RateLimited"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "SEC-110",

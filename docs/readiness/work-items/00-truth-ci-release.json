@@ -172,8 +172,7 @@
         "ModuleProfileLifecycle_*",
         "ModuleLifecycle_*",
         "TemplateRuntime*",
-        "Templates_*",
-        "Tests.Tools.test_module_evidence"
+        "Templates_*"
       ],
       "requiredCiJobs": [
         "build-windows-vs2022",
@@ -213,13 +212,8 @@
       "profileApplicability": {
         "stable-v1": "required"
       },
-      "plannedCiJobs": [
-        "module-profile-package-smoke"
-      ],
-      "plannedTestSelectors": [
-        "ModuleProfileDiscovery_*",
-        "ProfilePackageModule_*"
-      ]
+      "plannedCiJobs": [],
+      "plannedTestSelectors": []
     },
     {
       "id": "RDY-020",

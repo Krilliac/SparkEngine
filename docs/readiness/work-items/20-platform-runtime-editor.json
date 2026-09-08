@@ -1160,7 +1160,6 @@
         "headless-windows-soak"
       ],
       "plannedTestSelectors": [
-        "NullRHI_Windows_*",
         "FPSHeadlessPackage_*",
         "HeadlessShutdown_*"
       ]

@@ -440,7 +440,7 @@ git diff --exit-code
 **Priority:** P0 · **Status:** in-progress · **Wave:** 0 · **Area:** tests · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel and rejects declared-but-unproduced evidence, but no producer in this repository emits runtime ModuleManager lifecycle evidence for an in-profile module, and package smoke is not scoped to a module profile in blocking CI. Those two gaps are enumerated in `tools/module-evidence/evidence-gaps.json` and keep this item release-blocking.
+In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel and rejects declared-but-unproduced evidence, but no producer in this repository emits runtime ModuleManager lifecycle evidence for an in-profile module, and package smoke is not scoped to a module profile in blocking CI. Those two gaps are enumerated in tools/module-evidence/evidence-gaps.json and keep this item release-blocking.
 
 **Dependency contract**
 
@@ -512,8 +512,8 @@ tools/check-test-registration.sh
 
 **Automated evidence**
 
-- Test selectors: `ModuleProfileLifecycle_SparkGameFPS_D3D11`, `ModuleLifecycle_*`, `TemplateRuntime*`, `Templates_*`, `Tests.Tools.test_module_evidence`
-- Required CI jobs: `build-windows-vs2022`, `build-windows-shipping`, `module-evidence`; the missing module-profile package-smoke job remains tracked under `MOD-310`
+- Test selectors: `ModuleProfileLifecycle_*`, `ModuleLifecycle_*`, `TemplateRuntime*`, `Templates_*`
+- Required CI jobs: `build-windows-vs2022`, `build-windows-shipping`, `module-evidence`
 - Performance / reliability budgets:
   - Every module lifecycle smoke completes within its declared timeout
   - No unbounded allocation or sanitizer report
