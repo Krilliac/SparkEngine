@@ -611,10 +611,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3292,
+      "line": 3295,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3288",
+          "id": "CMakeLists.txt:3291",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1347,11 +1347,20 @@
       "definitionScope": []
     },
     {
+      "name": "SPARK_ENABLE_FUZZ_POLICY_CHECKS",
+      "description": "Register the blocking SEC-120 fuzz-policy target and CTest checks (requires Python3)",
+      "default": "${BUILD_TESTS}",
+      "file": "cmake/SparkFuzzPolicy.cmake",
+      "line": 6,
+      "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
       "name": "SPARK_ENABLE_INSTALLED_SDK_TESTS",
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1455,
+      "line": 1513,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1378,10 +1387,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3292,
+      "line": 3295,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3288",
+          "id": "CMakeLists.txt:3291",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1413,7 +1422,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1261,
+      "line": 1267,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2342,7 +2351,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 697,
+      "line": 698,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2463,7 +2472,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 675,
+      "line": 676,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2587,7 +2596,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 776,
+      "line": 777,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2737,10 +2746,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 684,
+      "line": 685,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:683",
+          "id": "Tests/CMakeLists.txt:684",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -2832,7 +2841,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 695,
+      "line": 696,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2842,7 +2851,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 699,
+      "line": 700,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2894,7 +2903,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 781,
+      "line": 782,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2944,7 +2953,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 701,
+      "line": 702,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2976,7 +2985,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 771,
+      "line": 772,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2986,7 +2995,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 664,
+      "line": 665,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3074,6 +3083,26 @@
       ],
       "definitionScope": [],
       "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "check-fuzz-policy",
+      "kind": "utility",
+      "file": "cmake/SparkFuzzPolicy.cmake",
+      "line": 19,
+      "conditionFrames": [
+        {
+          "id": "cmake/SparkFuzzPolicy.cmake:18",
+          "branch": 0,
+          "branches": [
+            "NOT TARGET check-fuzz-policy"
+          ]
+        }
+      ],
+      "definitionScope": [
+        "spark_enable_fuzz_policy"
+      ],
+      "origin": "function-template",
       "resolved": true
     },
     {
@@ -3834,7 +3863,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 697,
+          "line": 698,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3980,7 +4009,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 675,
+          "line": 676,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4106,7 +4135,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 776,
+          "line": 777,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4376,7 +4405,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 684,
+          "line": 685,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4476,7 +4505,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 695,
+          "line": 696,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4494,7 +4523,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 699,
+          "line": 700,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4570,7 +4599,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 781,
+          "line": 782,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4660,7 +4689,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 701,
+          "line": 702,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4716,7 +4745,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 771,
+          "line": 772,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4734,7 +4763,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 664,
+          "line": 665,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4846,6 +4875,26 @@
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "check-fuzz-policy",
+      "kind": "utility",
+      "buildable": false,
+      "origins": [
+        "function-template"
+      ],
+      "declarations": [
+        {
+          "file": "cmake/SparkFuzzPolicy.cmake",
+          "line": 19,
+          "kind": "utility",
+          "origin": "function-template",
+          "definitionScope": [
+            "spark_enable_fuzz_policy"
+          ],
           "resolved": true
         }
       ]
@@ -5528,8 +5577,85 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 24,
+    "jobCount": 28,
     "jobs": [
+      {
+        "id": "fuzz-policy",
+        "name": "Fuzz policy",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": "absent",
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
+        "stepCount": 4,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Configure fuzz-policy checks",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "b22b3da5c91fad33"
+          },
+          {
+            "index": 2,
+            "name": "Run blocking fuzz-policy target",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "294c9a40d1798602"
+          },
+          {
+            "index": 3,
+            "name": "Run adversarial policy tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "02f0d4615a6259d9"
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
       {
         "id": "validate-ci-tools",
         "name": "Validate CI tooling",
@@ -5553,7 +5679,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 30,
+        "stepCount": 35,
         "steps": [
           {
             "index": 0,
@@ -5629,6 +5755,18 @@
           },
           {
             "index": 6,
+            "name": "Test release acceptance publication gate",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "cbb77367c2125ead"
+          },
+          {
+            "index": 7,
             "name": "Test the build-matrix exact-source status gate",
             "id": "",
             "uses": "",
@@ -5640,7 +5778,7 @@
             "runDigest": "49a6266d08a82878"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Test crash-consistent release download counters",
             "id": "",
             "uses": "",
@@ -5652,7 +5790,7 @@
             "runDigest": "660224552d6751a4"
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Test Windows package signature orchestration",
             "id": "",
             "uses": "",
@@ -5664,7 +5802,7 @@
             "runDigest": "4ecaca6b345e4746"
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Test native MSI qualification orchestration",
             "id": "",
             "uses": "",
@@ -5676,7 +5814,7 @@
             "runDigest": "9c8bed06b88ba1bd"
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Test exact release asset publication boundary",
             "id": "",
             "uses": "",
@@ -5688,7 +5826,7 @@
             "runDigest": "c1cda3d75fd3d19c"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Test release publication recovery",
             "id": "",
             "uses": "",
@@ -5700,7 +5838,7 @@
             "runDigest": "b5a4aee105620528"
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Test extracted portable-package validation",
             "id": "",
             "uses": "",
@@ -5712,7 +5850,7 @@
             "runDigest": "3cede89fce1f5dba"
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Test coverage evidence semantics",
             "id": "",
             "uses": "",
@@ -5724,7 +5862,7 @@
             "runDigest": "b870b844a6e610de"
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Test sanitizer pipeline exit propagation",
             "id": "",
             "uses": "",
@@ -5736,7 +5874,7 @@
             "runDigest": "e9e9310a91486157"
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Test workflow failure-propagation contract",
             "id": "",
             "uses": "",
@@ -5748,7 +5886,7 @@
             "runDigest": "f7233b3f14c1a94a"
           },
           {
-            "index": 16,
+            "index": 17,
             "name": "Test granular SparkTests wrapper failure recovery",
             "id": "",
             "uses": "",
@@ -5760,7 +5898,7 @@
             "runDigest": "326ef3bd02bde17a"
           },
           {
-            "index": 17,
+            "index": 18,
             "name": "Test Spark CLI",
             "id": "",
             "uses": "",
@@ -5772,7 +5910,7 @@
             "runDigest": "409c9f97b4a909ab"
           },
           {
-            "index": 18,
+            "index": 19,
             "name": "Test ThirdParty manifest-sync gate",
             "id": "",
             "uses": "",
@@ -5784,7 +5922,31 @@
             "runDigest": "20b1682609fdd8b9"
           },
           {
-            "index": 19,
+            "index": 20,
+            "name": "Platform certification validator",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "f8cdd5fef3a3accd"
+          },
+          {
+            "index": 21,
+            "name": "Validate certification matrix",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "edbea8f70422546c"
+          },
+          {
+            "index": 22,
             "name": "Verify every test source is registered",
             "id": "",
             "uses": "",
@@ -5796,7 +5958,7 @@
             "runDigest": "4033bf80ea364bbe"
           },
           {
-            "index": 20,
+            "index": 23,
             "name": "Test asset integrity verifier",
             "id": "",
             "uses": "",
@@ -5808,7 +5970,7 @@
             "runDigest": "38617105f0d02d2c"
           },
           {
-            "index": 21,
+            "index": 24,
             "name": "Verify repository asset integrity baseline",
             "id": "",
             "uses": "",
@@ -5820,7 +5982,31 @@
             "runDigest": "24c6f12eaf03dec2"
           },
           {
-            "index": 22,
+            "index": 25,
+            "name": "Validate module evidence manifest (declarative layer)",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "3207d199801cc28d"
+          },
+          {
+            "index": 26,
+            "name": "Run module evidence adversarial tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "1593673681e72374"
+          },
+          {
+            "index": 27,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -5832,7 +6018,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 23,
+            "index": 28,
             "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
@@ -5844,7 +6030,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 24,
+            "index": 29,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -5856,7 +6042,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 25,
+            "index": 30,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -5868,7 +6054,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 26,
+            "index": 31,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -5880,7 +6066,7 @@
             "runDigest": ""
           },
           {
-            "index": 27,
+            "index": 32,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -5892,7 +6078,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 28,
+            "index": 33,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -5907,7 +6093,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 29,
+            "index": 34,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6057,6 +6243,73 @@
             "hasRun": true,
             "env": [],
             "runDigest": "a6879513564fc2fb"
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
+      {
+        "id": "validate-ops100",
+        "name": "Validate OPS-100 secret policy",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": "absent",
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
+        "stepCount": 3,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Run OPS-100 policy and adversarial tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "PYTHONDONTWRITEBYTECODE"
+            ],
+            "runDigest": "428e2d9823978e6a"
+          },
+          {
+            "index": 2,
+            "name": "Upload OPS-100 test log",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
           }
         ],
         "envNames": [],
@@ -8854,6 +9107,71 @@
         "gating": "blocking"
       },
       {
+        "id": "performance-budget-governance",
+        "name": "Performance budget governance",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": "absent",
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
+        "stepCount": 3,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Run performance budget governance tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "320670a2c3fe90c4"
+          },
+          {
+            "index": 2,
+            "name": "Validate committed performance budget suite",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "b4a632ccc5611cdc"
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
+      {
         "id": "report-coverage",
         "name": "Coverage PR Comment",
         "runsOn": "ubuntu-24.04",
@@ -9189,9 +9507,12 @@
         "continueOnError": "absent",
         "timeoutMinutes": "absent",
         "needs": [
+          "fuzz-policy",
           "validate-ci-tools",
+          "performance-budget-governance",
           "check-format",
           "validate-prompts",
+          "validate-ops100",
           "check-thirdparty-manifest",
           "check-supply-chain",
           "build-linux-asan",
@@ -9474,6 +9795,135 @@
         "gating": "blocking"
       },
       {
+        "id": "module-evidence",
+        "name": "Module evidence (RDY-010)",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": "absent",
+        "needs": [
+          "build-linux-gcc"
+        ],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
+        "stepCount": 8,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Install configure dependencies",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "8369e8133538fbf2"
+          },
+          {
+            "index": 2,
+            "name": "Run module evidence adversarial tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "1593673681e72374"
+          },
+          {
+            "index": 3,
+            "name": "Configure the stable-v1 profile and collect CMake target evidence",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "1dfb48a05f412216"
+          },
+          {
+            "index": 4,
+            "name": "Download published JUnit evidence",
+            "id": "",
+            "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 5,
+            "name": "Validate module evidence against produced artifacts",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "MODULE_EVIDENCE_SHA"
+            ],
+            "runDigest": "8c69d39e24a5d1ae"
+          },
+          {
+            "index": 6,
+            "name": "Report the tracked evidence gaps that keep RDY-010 blocking",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "4c2bd5ce04468ee6"
+          },
+          {
+            "index": 7,
+            "name": "Upload module evidence",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
+      {
         "id": "required-ci-gate",
         "name": "Required CI Gate",
         "runsOn": "ubuntu-24.04",
@@ -9487,9 +9937,12 @@
         "continueOnError": "absent",
         "timeoutMinutes": "absent",
         "needs": [
+          "fuzz-policy",
           "validate-ci-tools",
+          "performance-budget-governance",
           "check-format",
           "validate-prompts",
+          "validate-ops100",
           "check-thirdparty-manifest",
           "check-supply-chain",
           "build-linux-asan",
@@ -9503,7 +9956,8 @@
           "clang-tidy",
           "todo-count",
           "build-installer",
-          "aggregate-test-stats"
+          "aggregate-test-stats",
+          "module-evidence"
         ],
         "failFast": "absent",
         "maxParallel": "absent",
@@ -9550,6 +10004,78 @@
       }
     ],
     "cmakeInvocations": [
+      {
+        "job": "fuzz-policy",
+        "step": "Configure fuzz-policy checks",
+        "stepIndex": 1,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -S tools/fuzz-policy -B build/fuzz-policy",
+        "commandProvenance": "literal",
+        "options": {},
+        "sourceDir": "tools/fuzz-policy",
+        "buildDir": "build/fuzz-policy",
+        "commandIndex": 0
+      },
+      {
+        "job": "fuzz-policy",
+        "step": "Run blocking fuzz-policy target",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/fuzz-policy --target check-fuzz-policy",
+        "commandProvenance": "literal",
+        "targets": [
+          "check-fuzz-policy"
+        ],
+        "configuration": "",
+        "buildDir": "build/fuzz-policy",
+        "preset": "",
+        "parallel": "",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
+        "job": "fuzz-policy",
+        "step": "Run adversarial policy tests",
+        "stepIndex": 3,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build/fuzz-policy",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
       {
         "job": "check-supply-chain",
         "step": "Install supply-chain checker dependencies",
@@ -11616,6 +12142,28 @@
     "unresolvedInvocations": [],
     "configureInvocations": [
       {
+        "job": "fuzz-policy",
+        "step": "Configure fuzz-policy checks",
+        "stepIndex": 1,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -S tools/fuzz-policy -B build/fuzz-policy",
+        "commandProvenance": "literal",
+        "options": {},
+        "sourceDir": "tools/fuzz-policy",
+        "buildDir": "build/fuzz-policy",
+        "commandIndex": 0
+      },
+      {
         "job": "build-linux-asan",
         "step": "Configure CMake (ASan + UBSan + LSan)",
         "stepIndex": 5,
@@ -12401,6 +12949,33 @@
     ],
     "buildInvocations": [
       {
+        "job": "fuzz-policy",
+        "step": "Run blocking fuzz-policy target",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/fuzz-policy --target check-fuzz-policy",
+        "commandProvenance": "literal",
+        "targets": [
+          "check-fuzz-policy"
+        ],
+        "configuration": "",
+        "buildDir": "build/fuzz-policy",
+        "preset": "",
+        "parallel": "",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
         "job": "build-linux-asan",
         "step": "Build",
         "stepIndex": 6,
@@ -13130,6 +13705,29 @@
     ],
     "testInvocations": [
       {
+        "job": "fuzz-policy",
+        "step": "Run adversarial policy tests",
+        "stepIndex": 3,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build/fuzz-policy",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
         "job": "telemetry-integration",
         "step": "Run telemetry spool integration test",
         "stepIndex": 4,
@@ -13542,7 +14140,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 24,
+        "stepIndex": 29,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -13570,7 +14168,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 25,
+        "stepIndex": 30,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -13769,16 +14367,16 @@
       }
     ],
     "summary": {
-      "jobCount": 24,
-      "matrixLegCount": 32,
+      "jobCount": 28,
+      "matrixLegCount": 36,
       "pathFilteredEventCount": 0,
-      "configureCount": 25,
-      "buildCount": 25,
-      "testCount": 16,
+      "configureCount": 26,
+      "buildCount": 26,
+      "testCount": 17,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,
-      "blockingJobCount": 16,
+      "blockingJobCount": 20,
       "advisoryJobCount": 3,
       "conditionalJobCount": 5,
       "builtOsConfigurationPairs": [
@@ -13807,6 +14405,28 @@
     "windows-shipping"
   ],
   "workflowCmakeConfigs": [
+    {
+      "job": "fuzz-policy",
+      "step": "Configure fuzz-policy checks",
+      "stepIndex": 1,
+      "matrix": {},
+      "matrixResolved": true,
+      "runnerOs": "linux",
+      "shell": "bash",
+      "jobIf": "absent",
+      "jobContinueOnError": "absent",
+      "stepIf": "absent",
+      "stepContinueOnError": "absent",
+      "gating": "blocking",
+      "tool": "cmake",
+      "kind": "configure",
+      "command": "cmake -S tools/fuzz-policy -B build/fuzz-policy",
+      "commandProvenance": "literal",
+      "options": {},
+      "sourceDir": "tools/fuzz-policy",
+      "buildDir": "build/fuzz-policy",
+      "commandIndex": 0
+    },
     {
       "job": "build-linux-asan",
       "step": "Configure CMake (ASan + UBSan + LSan)",

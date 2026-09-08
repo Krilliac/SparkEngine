@@ -148,7 +148,7 @@ class RepositoryInventoryTests(unittest.TestCase):
 
     def test_live_configures_are_expanded_per_matrix_leg_with_owners(self) -> None:
         configs = self.data["workflowCmakeConfigs"]
-        self.assertEqual(len(configs), 25)
+        self.assertEqual(len(configs), 26)
         self.assertEqual(
             sorted({entry["job"] for entry in configs}),
             [
@@ -165,6 +165,7 @@ class RepositoryInventoryTests(unittest.TestCase):
                 "build-windows-vs2026",
                 "clang-tidy",
                 "coverage",
+                "fuzz-policy",
                 "telemetry-integration",
             ],
         )

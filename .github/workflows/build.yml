@@ -3419,6 +3419,6 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","check-format","validate-prompts","check-thirdparty-manifest","check-supply-chain","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","build-windows-shipping","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","build-windows-shipping","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py

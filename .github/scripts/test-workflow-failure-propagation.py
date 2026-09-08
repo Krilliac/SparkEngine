@@ -6,8 +6,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -28,6 +30,58 @@ TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
 TEST_TELEMETRY_SPOOL = REPO_ROOT / "Tests" / "TestTelemetrySpool.cpp"
 TELEMETRY_EXPECTED_COUNT = 8
+REQUIRED_CI_JOBS = (
+    "fuzz-policy",
+    "validate-ci-tools",
+    "performance-budget-governance",
+    "check-format",
+    "validate-prompts",
+    "validate-ops100",
+    "check-thirdparty-manifest",
+    "check-supply-chain",
+    "build-linux-asan",
+    "build-linux-tsan",
+    "telemetry-integration",
+    "build-windows-vs2022",
+    "build-windows-shipping",
+    "build-linux-gcc",
+    "build-linux-clang",
+    "coverage",
+    "clang-tidy",
+    "todo-count",
+    "build-installer",
+    "aggregate-test-stats",
+    "module-evidence",
+)
+REQUIRED_CI_JOBS_JSON = json.dumps(REQUIRED_CI_JOBS, separators=(",", ":"))
+
+sys.path.insert(0, str(REPO_ROOT / "Tools"))
+
+from buildmatrix.workflow import WorkflowError, parse_workflow_yaml  # noqa: E402
+
+
+def bash_executable() -> str:
+    """Resolve Bash for release-workflow fixtures on GitHub and Windows hosts."""
+
+    found = shutil.which("bash")
+    if found:
+        return found
+    common = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+    if common.is_file():
+        return str(common)
+    raise FileNotFoundError("bash is required for release-workflow fixture execution")
+
+
+def local_release_fixture_script(script: str) -> str:
+    """Bind the Ubuntu-only ``python3`` metadata probe to the test interpreter on Windows."""
+
+    if os.name != "nt":
+        return script
+    command = "python3 - "
+    if script.count(command) != 1:
+        raise AssertionError("release metadata fixture must contain one python3 probe")
+    interpreter = shlex.quote(Path(sys.executable).as_posix())
+    return script.replace(command, f"{interpreter} - ", 1)
 
 
 def step_blocks(workflow: str) -> list[tuple[str, str]]:
@@ -424,6 +478,95 @@ def release_acceptance_recovery_errors(workflow: str) -> list[str]:
             errors.append(f"{step_name} arms unconditional recovery before acceptance PATCH dispatch")
         if f'trap - ERR\n        rm -f "${marker}"' not in step:
             errors.append(f"{step_name} does not clear its PATCH-attempt marker after recovery is disarmed")
+    return errors
+
+
+def release_package_gate_errors(workflow: str) -> list[str]:
+    """Reject advisory or error-suppressing release-package validation paths."""
+
+    try:
+        document = parse_workflow_yaml(workflow)
+    except WorkflowError as error:
+        return [f"release package workflow is not safely parseable: {error}"]
+
+    errors: list[str] = []
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["release package workflow must define a jobs mapping"]
+    if "defaults" in document:
+        errors.append("release package workflow must not use workflow-wide defaults")
+
+    required_steps = {
+        "Validate external package consumption": (
+            "cmake --install",
+            "ctest --test-dir smoke-build",
+            "--no-tests=error",
+        ),
+        "Build every template against the installed SDK": ("VerifyInstalledTemplates.cmake",),
+        "Validate staged package executable BOM": ("ValidateStagedPackageExecutables.cmake",),
+        "Generate CPack packages": ("cpack",),
+        "Extract and smoke-test portable package": (
+            "validate-extracted-package.py --preflight-archive",
+            "--package-root",
+            "ctest --test-dir package-smoke-build",
+            "--no-tests=error",
+            "VerifyInstalledTemplates.cmake",
+        ),
+    }
+
+    for job_name, expected_shell in (
+        ("build-windows", "pwsh"),
+        ("build-linux", None),
+        ("build-macos", None),
+    ):
+        job = jobs.get(job_name)
+        if not isinstance(job, dict):
+            errors.append(f"{job_name} is missing or not a mapping")
+            continue
+        for field in ("if", "continue-on-error", "defaults"):
+            if field in job:
+                errors.append(f"{job_name} package gate must not define {field}")
+
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            errors.append(f"{job_name} package gate must define a steps sequence")
+            continue
+
+        for step_name, fragments in required_steps.items():
+            matches = [
+                step
+                for step in steps
+                if isinstance(step, dict) and step.get("name") == step_name
+            ]
+            if len(matches) != 1:
+                errors.append(f"{job_name} must define {step_name!r} exactly once")
+                continue
+            step = matches[0]
+            for field in ("if", "continue-on-error", "defaults"):
+                if field in step:
+                    errors.append(f"{job_name}/{step_name} must not define {field}")
+            if expected_shell is None:
+                if "shell" in step:
+                    errors.append(f"{job_name}/{step_name} must use the runner default shell")
+            elif step.get("shell") != expected_shell:
+                errors.append(
+                    f"{job_name}/{step_name} must use exact shell: {expected_shell}"
+                )
+
+            run = step.get("run")
+            if not isinstance(run, str):
+                errors.append(f"{job_name}/{step_name} must have a runnable command block")
+                continue
+            for fragment in fragments:
+                if fragment not in run:
+                    errors.append(f"{job_name}/{step_name} is missing {fragment!r}")
+            if re.search(r"\|\|\s*(?:true|:)\b", run):
+                errors.append(f"{job_name}/{step_name} suppresses a package-gate failure")
+            if expected_shell is None and re.search(
+                r"(?mi)^\s*set\s+\+(?:e\b|o\s+(?:errexit|pipefail)\b)", run
+            ):
+                errors.append(f"{job_name}/{step_name} disables POSIX error propagation")
+
     return errors
 
 
@@ -846,13 +989,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
     if gate:
         if not exact_field(gate, "if", "always()"):
             errors.append("required-ci-gate must run under exact if: always()")
-        expected_dependencies = [
-            "fuzz-policy", "validate-ci-tools", "check-format", "validate-prompts", "check-thirdparty-manifest", "check-supply-chain",
-            "build-linux-asan", "build-linux-tsan", "telemetry-integration",
-            "build-windows-vs2022", "build-windows-shipping", "build-linux-gcc",
-            "build-linux-clang", "coverage", "clang-tidy", "todo-count",
-            "build-installer", "aggregate-test-stats",
-        ]
+        expected_dependencies = list(REQUIRED_CI_JOBS)
         needs_match = re.search(
             r"(?ms)^    needs:\n(?P<body>(?:      - [a-z0-9-]+\n)+)", gate
         )
@@ -861,7 +998,10 @@ def required_workflow_errors(workflow: str) -> list[str]:
             if needs_match else []
         )
         if actual_dependencies != expected_dependencies:
-            errors.append("required-ci-gate must preserve the exact ordered 18-job dependency inventory")
+            errors.append(
+                "required-ci-gate must preserve the exact ordered "
+                f"{len(REQUIRED_CI_JOBS)}-job dependency inventory"
+            )
         try:
             verifier = named_step(gate, "Verify every required job succeeded")
         except AssertionError as exc:
@@ -871,7 +1011,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 errors.append("required-ci-gate verifier has a conditional/error bypass")
             required_environment = (
                 "NEEDS_JSON: ${{ toJSON(needs) }}",
-                "EXPECTED_REQUIRED_JOBS_JSON: '[\"fuzz-policy\",\"validate-ci-tools\",\"check-format\",\"validate-prompts\",\"check-thirdparty-manifest\",\"check-supply-chain\",\"build-linux-asan\",\"build-linux-tsan\",\"telemetry-integration\",\"build-windows-vs2022\",\"build-windows-shipping\",\"build-linux-gcc\",\"build-linux-clang\",\"coverage\",\"clang-tidy\",\"todo-count\",\"build-installer\",\"aggregate-test-stats\"]'",
+                f"EXPECTED_REQUIRED_JOBS_JSON: '{REQUIRED_CI_JOBS_JSON}'",
                 "DEFERRED_REQUIRED_FAILURES_JSON: '{}'",
             )
             if verifier.count("env:") != 1 or any(
@@ -902,10 +1042,25 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
 
+    def test_required_ci_verifier_covers_every_declared_job(self) -> None:
+        document = parse_workflow_yaml(self.build)
+        gate = document["jobs"]["required-ci-gate"]
+        declared_jobs = gate["needs"]
+        verifier = next(
+            step
+            for step in gate["steps"]
+            if step.get("name") == "Verify every required job succeeded"
+        )
+        enforced_jobs = json.loads(verifier["env"]["EXPECTED_REQUIRED_JOBS_JSON"])
+        self.assertEqual(enforced_jobs, declared_jobs)
+
     def test_release_workflow_is_yaml_parseable(self) -> None:
         document = yaml.safe_load(self.release)
         self.assertIsInstance(document, dict)
         self.assertIn("jobs", document)
+
+    def test_git_bash_is_available_to_release_workflow_fixtures(self) -> None:
+        self.assertTrue(Path(bash_executable()).is_file())
 
     def test_ci_runs_release_acceptance_gate_regressions(self) -> None:
         validation = yaml_section(self.build, "validate-ci-tools", indent=2)
@@ -1729,7 +1884,9 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_release_metadata_requires_one_source_version_and_changelog_entry(self) -> None:
         block = named_step(self.release, "Compute release metadata")
-        script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        script = local_release_fixture_script(
+            textwrap.dedent(block.split("run: |\n", 1)[1])
+        )
         declaration = 'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n'
         heading = "## [1.2.3] - 2026-09-07\n\n### Fixed\n- Fixture release note.\n"
         cases = (
@@ -1757,7 +1914,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                     (root / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
                 output = root / "outputs"
                 completed = subprocess.run(
-                    [shutil.which("bash"), "-c", script], cwd=root, text=True, capture_output=True,
+                    [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
                     env={**os.environ, "EVENT_NAME": "repository_dispatch", "INPUT_RELEASE_TAG": tag,
                          "GITHUB_OUTPUT": str(output)},
                 )
@@ -1779,7 +1936,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                     'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n', encoding="utf-8")
                 output = root / "outputs"
                 completed = subprocess.run(
-                    [shutil.which("bash"), "-c", script], cwd=root, text=True, capture_output=True,
+                    [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
                     env={**os.environ, "EVENT_NAME": event, "INPUT_RELEASE_TAG": tag,
                          "GITHUB_OUTPUT": str(output)},
                 )
@@ -1823,6 +1980,41 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 with self.subTest(step=name, command=lines[end]):
                     self.assertLess(end + 1, len(lines), "Native status must be checked immediately")
                     self.assertRegex(lines[end + 1], r"^if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}$")
+
+    def test_release_package_gates_reject_advisory_conditional_or_shell_bypasses(self) -> None:
+        mutations = {
+            "advisory Linux package job": self.release.replace(
+                "  build-linux:\n    needs: [prepare]\n",
+                "  build-linux:\n    needs: [prepare]\n    continue-on-error: true\n",
+                1,
+            ),
+            "conditional Linux package smoke": self.release.replace(
+                "    - name: Extract and smoke-test portable package\n      run: |\n",
+                "    - name: Extract and smoke-test portable package\n      if: always()\n      run: |\n",
+                1,
+            ),
+            "Linux shell error suppression": self.release.replace(
+                "    - name: Extract and smoke-test portable package\n      run: |\n        archive_count=",
+                "    - name: Extract and smoke-test portable package\n      run: |\n        set +e\n        archive_count=",
+                1,
+            ),
+            "custom Linux shell suppresses failure": self.release.replace(
+                "    - name: Extract and smoke-test portable package\n      run: |\n",
+                "    - name: Extract and smoke-test portable package\n      shell: bash {0} || true\n      run: |\n",
+                1,
+            ),
+            "Windows package shell suppresses failure": self.release.replace(
+                "    - name: Extract and smoke-test portable package\n      shell: pwsh\n",
+                "    - name: Extract and smoke-test portable package\n      shell: pwsh -Command {0} || exit 0\n",
+                1,
+            ),
+        }
+
+        self.assertEqual(release_package_gate_errors(self.release), [])
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, self.release)
+                self.assertTrue(release_package_gate_errors(mutated), label)
 
     def test_native_msi_qualification_blocks_package_upload_and_retains_logs(self) -> None:
         windows = yaml_section(self.release, "build-windows", indent=2)
@@ -1898,8 +2090,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_release_matrix_selects_shipping_only_for_stable_windows(self) -> None:
         block = named_step(self.release, "Determine build configurations")
         script = textwrap.dedent(block.split("run: |\n", 1)[1])
-        bash = shutil.which("bash")
-        self.assertIsNotNone(bash)
+        bash = bash_executable()
         for stable, requested, status in (
             ("true", "both", 0), ("true", "release", 0), ("true", "debug", 1),
             ("false", "both", 0), ("false", "release", 0), ("false", "debug", 0),
@@ -1950,7 +2141,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                              "SparkEngine-7.8.9-Windows-AMD64-Release.zip"):
                     (extras / name).write_bytes(b"not a Shipping package")
                 completed = subprocess.run(
-                    [shutil.which("bash"), "-c", script], cwd=root, text=True, capture_output=True,
+                    [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
                     env={**os.environ, "IS_VERSIONED": "true", "RELEASE_VERSION": "7.8.9",
                          "GITHUB_OUTPUT": str(root / "outputs"), "GITHUB_STEP_SUMMARY": str(root / "summary")},
                 )
@@ -1988,10 +2179,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "staged installer version gate must normalize only a trailing CR before exact comparison",
         )
         command = command_match.group(1).replace("installer-version.txt", "-")
-        if os.name == "nt":
-            bash = Path(os.environ["ProgramFiles"]) / "Git" / "bin" / "bash.exe"
-        else:
-            bash = Path(shutil.which("bash") or "")
+        bash = Path(bash_executable())
         self.assertTrue(bash.is_file(), f"bash is unavailable: {bash}")
         environment = dict(os.environ)
         environment.update(EXPECTED_VERSION="7.8.9", EXPECTED_PLATFORM="Linux")

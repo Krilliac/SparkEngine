@@ -676,7 +676,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*603 test-bearing `.cpp`/`.mm` files, 7296 source-level test definitions*
+*603 test-bearing `.cpp`/`.mm` files, 7301 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1020,7 +1020,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkIntegration` | 32 |
 | `TestNetworkInterpolation` | 12 |
 | `TestNetworkMMOIntegration` | 11 |
-| `TestNetworkManagerEdgeCases` | 35 |
+| `TestNetworkManagerEdgeCases` | 37 |
 | `TestNetworkManagerIntegration` | 34 |
 | `TestNetworkManagerOrchestration` | 27 |
 | `TestNetworkManagerReal` | 23 |
@@ -1080,7 +1080,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestRTHandleSystem` | 15 |
 | `TestRandomEngine` | 11 |
 | `TestRecastIntegration` | 6 |
-| `TestReflectedScene` | 7 |
+| `TestReflectedScene` | 9 |
 | `TestReflectedSceneEmissiveHierarchy` | 6 |
 | `TestReflection` | 18 |
 | `TestReflectionProbeCache` | 16 |
@@ -1199,7 +1199,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTacticalPointSystem` | 4 |
 | `TestTelemetry` | 15 |
 | `TestTelemetryPhaseFF` | 7 |
-| `TestTelemetrySpool` | 8 |
+| `TestTelemetrySpool` | 9 |
 | `TestTemplateRuntimeReal` | 7 |
 | `TestTemplatesCompile` | 43 |
 | `TestTemporalEffects` | 11 |
