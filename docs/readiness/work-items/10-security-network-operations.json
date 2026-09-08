@@ -627,7 +627,7 @@
       "wave": 1,
       "area": "operations",
       "owner": "unassigned",
-      "rationale": "Crash manifests can write GitHub/SMTP credentials to plaintext temporary files, trust unsafe screenshot paths, and claim upload behavior that is not implemented; telemetry drops failures without durable retry.",
+      "rationale": "Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. OPS-100 remains open because networking/CURL builds retain a legacy in-process direct-upload configuration with reusable credentials, and controlled relay delivery, scoped authorization, release symbolication, privacy/retention review, and exact-SHA crash evidence are absent.",
       "dependencies": [],
       "parallelWith": [
         "SEC-100",
@@ -709,7 +709,7 @@
       ],
       "evidence": {
         "partialCompletion": "2026-08-28",
-        "scope": "Offline Python validation and truthful documentation only; this is not runtime delivery, consent, retention, or symbolication evidence.",
+        "scope": "Local C++ runtime, offline adversarial-validation, and configured CI-lane evidence only. The reporter rejects transport fields and is intentionally read-only; local telemetry has bounded spool/retry/drop accounting. This is not controlled-relay delivery, privacy/retention review, private-symbol publication, release-canary symbolication, or exact-SHA hosted evidence.",
         "tooling": [
           "tools/ops/secret_policy.py: JSON-aware recursive redaction (structural parse, redact sensitive values at any depth/type, re-serialize valid JSON); bounded linear lexer for generic-text credentials (multiword/quoted/escaped, per-line/document/secret ceilings); single-pass bounded PEM parser for RSA/EC/DSA/OPENSSH/ENCRYPTED/generic PRIVATE KEY families with label matching; location sanitization via keyed hashes to suppress secret-bearing paths; archive detection by ZIP magic bytes (not suffix) with minidump structure validation; explicit size/depth/count ceilings throughout",
           "tools/ops/validate_crash_package.py validates strict bounded manifests and referenced artifacts through a pinned authoritative root without modifying them",
@@ -720,14 +720,16 @@
           "Tests/Tools/test_ops100_crash_security.py covers cross-platform path spellings, junction/hardlink rejection, referenced artifacts, strict JSON, opaque binaries, and archive policy",
           "Tests/Tools/test_ops100_telemetry_spool.py covers unmatched-file accounting, hardlinks/junctions, dual retention clocks, strict schema/types, and reusable secrets",
           "Tests/Tools/test_ops100_redaction.py covers credential families, binary/ZIP handling, missing and unreadable inputs, stdout-only redaction, and performance regression",
-          "Tests/Tools/test_ops100_adversarial.py covers: (1) JSON structural parse/recursive redact with nested/brace/escaped/empty/oversized/adjacent-safe/malformed inputs; (2) bounded linear lexer with multiword/quoted/escaped/comma/semicolon/brace/oversized/backtracking/ceiling tests; (3) location safety with keyed-hash suppression of secret-bearing paths; (4) PEM single-pass parser for RSA/EC/DSA/OPENSSH/ENCRYPTED/generic/mismatched/unmatched/32MB-linear inputs; (5) archive magic detection for renamed ZIP, minidump validation, nested archive by magic; (6) scan race detection for concurrent addition/replacement, symlink/hardlink rejection; (7) CI gate registration with path coverage and required-gate inclusion; (8) docs/evidence accuracy with honest scope and open status"
+          "Tests/Tools/test_ops100_adversarial.py covers: (1) JSON structural parse/recursive redact with nested/brace/escaped/empty/oversized/adjacent-safe/malformed inputs; (2) bounded linear lexer with multiword/quoted/escaped/comma/semicolon/brace/oversized/backtracking/ceiling tests; (3) location safety with keyed-hash suppression of secret-bearing paths; (4) PEM single-pass parser for RSA/EC/DSA/OPENSSH/ENCRYPTED/generic/mismatched/unmatched/32MB-linear inputs; (5) archive magic detection for renamed ZIP, minidump validation, nested archive by magic; (6) scan race detection for concurrent addition/replacement, symlink/hardlink rejection; (7) CI gate registration with path coverage and required-gate inclusion; (8) docs/evidence accuracy with honest scope and open status",
+          "SparkCrashReporter/tests/CrashReporterManifestTests.cpp, exercised by SparkCrashReporter.ManifestCompatibility, proves transport fields are discarded, manifests omit them, the reporter is truthful and read-only, and path/identity/size/consent defenses reject hostile artifacts",
+          "Tests/TestTelemetrySpool.cpp, exercised by TelemetrySpool, proves C++ durable spool recovery, terminal rejection, retry boundaries, bounds/drop accounting, consent revocation, and hostile artifact rejection"
         ],
-        "ciGate": "validate-ops100 is a required job in .github/workflows/build.yml, running all four test suites via pytest and included in the required-ci-gate needs list",
+        "ciGate": "validate-ops100 is a required job in .github/workflows/build.yml, running all four policy suites via pytest and included in the required-ci-gate needs list. The telemetry-integration workflow job configures Linux Shipping, builds SparkTests, and runs TelemetrySpool; neither definition substitutes for a successful exact-SHA hosted record.",
         "remainingBlockers": [
-          "Crash reporter has no controlled relay, upload state machine, scoped authorization, private-symbol publication, or release symbolication canary",
-          "Telemetry C++ runtime has no durable bounded spool, retry, retention, or complete drop/failure accounting",
-          "Telemetry producer can pass the consent gate before revocation and enqueue after the revocation clear",
-          "crash-canary and telemetry-integration CI jobs are not established by this partial slice (validate-ops100 covers offline policy only)",
+          "Crash delivery has no controlled relay, scoped ephemeral authorization, private-symbol publication, or synthetic release-crash symbolication canary",
+          "Legacy in-process fallback still permits direct GitHub/SMTP/URL configuration in networking/CURL builds, so reusable client transport configuration is not eliminated across profiles",
+          "C++ telemetry spool/retry/drop accounting is locally tested, but no hosted outage/recovery evidence establishes documented end-to-end delivery and drop bounds",
+          "crash-security and crash-canary CI jobs are not defined; telemetry-integration is defined but lacks a successful exact-SHA hosted record",
           "Privacy/retention policy and operations runbook still require review"
         ]
       },
