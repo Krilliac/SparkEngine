@@ -823,6 +823,32 @@ class PublishedDocumentationHealthTests(unittest.TestCase):
         self.assertEqual("skipped", health["status"])
         self.assertNotEqual("current", health["status"])
 
+    def test_regeneration_uses_trusted_bash(self) -> None:
+        """A Windows Git Bash fallback must reach the isolated health process."""
+
+        observed: list[list[str]] = []
+
+        def write_health(
+            command: list[str], *, cwd: Path, environment: dict[str, str], timeout: int, label: str
+        ) -> SimpleNamespace:
+            observed.append(command)
+            self.assertEqual("C:/trusted/bash.exe", command[0])
+            self.assertEqual("update", command[-1])
+            self.assertEqual("isolated documentation health check", label)
+            self.assertEqual(site_generate.DOC_HEALTH_TIMEOUT_SECONDS, timeout)
+            self.assertTrue(cwd.name == "checkout")
+            Path(environment["SPARK_DOC_HEALTH_OUTPUT"]).write_text(json.dumps(self.payload()), encoding="utf-8")
+            return SimpleNamespace(returncode=0)
+
+        successful_git = SimpleNamespace(returncode=0, stdout="", stderr="")
+        with mock.patch.object(site_generate, "trusted_bash", return_value="C:/trusted/bash.exe"), \
+             mock.patch.object(site_generate, "run_bounded_process", side_effect=write_health), \
+             mock.patch.object(site_generate.subprocess, "run", side_effect=[successful_git, successful_git]):
+            health = site_generate.documentation_health(EXACT_SHA)
+
+        self.assertEqual("current", health["status"])
+        self.assertEqual(1, len(observed))
+
 
 class AssetIntegrityTests(unittest.TestCase):
     """The --assets gate must fail on tampering, not merely on absence."""

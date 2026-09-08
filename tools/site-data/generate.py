@@ -685,7 +685,7 @@ def documentation_health(commit: str, *, emit_to: Path | None = None) -> dict[st
                 environment.pop(key, None)
             environment["SPARK_DOC_HEALTH_OUTPUT"] = str(health_path)
             result = run_bounded_process(
-                ["bash", str(checkout / script_relative), "update"],
+                [trusted_bash(), str(checkout / script_relative), "update"],
                 cwd=checkout,
                 environment=environment,
                 timeout=DOC_HEALTH_TIMEOUT_SECONDS,
