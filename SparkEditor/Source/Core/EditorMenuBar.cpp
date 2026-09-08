@@ -71,6 +71,18 @@ namespace SparkEditor
     } // namespace
 #endif
 
+    namespace
+    {
+        void RenderUnavailableMenuItem(const char* label, const char* shortcut, const char* explanation)
+        {
+            ImGui::BeginDisabled();
+            ImGui::MenuItem(label, shortcut);
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("%s", explanation);
+        }
+    } // namespace
+
     void EditorUI::ShowOpenSceneDialog()
     {
         RequestDocumentTransition(DocumentTransitionAction::OpenSceneDialog);
@@ -249,23 +261,12 @@ namespace SparkEditor
             ShowNotification("Redo: " + redoDesc, "info");
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Cut", "Ctrl+X"))
-        {
-            ShowNotification("Cut operation!", "info");
-        }
-        if (ImGui::MenuItem("Copy", "Ctrl+C"))
-        {
-            ShowNotification("Copy operation!", "info");
-        }
-        if (ImGui::MenuItem("Paste", "Ctrl+V"))
-        {
-            ShowNotification("Paste operation!", "info");
-        }
+        RenderUnavailableMenuItem("Cut", "Ctrl+X", "Selection clipboard actions are not available in this editor build.");
+        RenderUnavailableMenuItem("Copy", "Ctrl+C", "Selection clipboard actions are not available in this editor build.");
+        RenderUnavailableMenuItem("Paste", "Ctrl+V", "Selection clipboard actions are not available in this editor build.");
         ImGui::Separator();
-        if (ImGui::MenuItem("Select All", "Ctrl+A"))
-        {
-            ShowNotification("Select All operation!", "info");
-        }
+        RenderUnavailableMenuItem("Select All", "Ctrl+A",
+                                  "Selection clipboard actions are not available in this editor build.");
         ImGui::Separator();
         if (ImGui::MenuItem(ICON_FA_SEARCH " Search...", "Ctrl+F"))
         {
@@ -639,19 +640,13 @@ namespace SparkEditor
             ShowNotification("Build & Cook panel opened", "info");
         }
         ImGui::Separator();
-        if (ImGui::MenuItem(ICON_FA_LIGHTBULB " Build Lighting"))
-        {
-            ShowNotification("Build Lighting started...", "info");
-        }
-        if (ImGui::MenuItem(ICON_FA_MAP " Build NavMesh"))
-        {
-            ShowNotification("Build NavMesh started...", "info");
-        }
+        RenderUnavailableMenuItem(ICON_FA_LIGHTBULB " Build Lighting", nullptr,
+                                  "Lighting builds are not available in this editor build. Use Build Settings for supported tasks.");
+        RenderUnavailableMenuItem(ICON_FA_MAP " Build NavMesh", nullptr,
+                                  "NavMesh builds are not available in this editor build. Use Build Settings for supported tasks.");
         ImGui::Separator();
-        if (ImGui::MenuItem(ICON_FA_HAMMER " Build All"))
-        {
-            ShowNotification("Build All started...", "info");
-        }
+        RenderUnavailableMenuItem(ICON_FA_HAMMER " Build All", nullptr,
+                                  "Build All is unavailable because lighting and NavMesh builds are not available yet.");
         if (ImGui::MenuItem(ICON_FA_FIRE " Cook Content"))
         {
             SetPanelVisible("BuildCook", true);
@@ -710,7 +705,7 @@ namespace SparkEditor
     }
 
     void EditorUI::RenderToolbarTransformTools(float btnSize, ImDrawList* dl, const ImVec4& accentTeal,
-                                               const ImVec4& pillBg)
+                                               const ImVec4& pillBg, const ImVec4& passiveHover)
     {
         ImVec2 btnDim(btnSize, btnSize);
 
@@ -726,8 +721,7 @@ namespace SparkEditor
             else
             {
                 ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      ImVec4(pillBg.x + 0.06f, pillBg.y + 0.06f, pillBg.z + 0.06f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
             }
             if (ImGui::Button(icon, btnDim))
                 SetTransformTool(tool);
@@ -752,8 +746,7 @@ namespace SparkEditor
 
         bool isLocal = (m_transformSpace == TransformSpace::Local);
         ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              ImVec4(pillBg.x + 0.06f, pillBg.y + 0.06f, pillBg.z + 0.06f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
         if (ImGui::Button(isLocal ? ICON_FA_CUBE " Local" : ICON_FA_GLOBE " World", ImVec2(80, btnSize)))
         {
             m_transformSpace = isLocal ? TransformSpace::World : TransformSpace::Local;
@@ -774,7 +767,8 @@ namespace SparkEditor
     }
 
     void EditorUI::RenderToolbarPlayControls(float btnSize, ImDrawList* dl, const ImVec4& playGreen,
-                                             const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg)
+                                             const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg,
+                                             const ImVec4& passiveHover)
     {
         ImVec2 btnDim(btnSize, btnSize);
 
@@ -793,8 +787,7 @@ namespace SparkEditor
         else
         {
             ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                  ImVec4(playGreen.x * 0.4f, playGreen.y * 0.4f, playGreen.z * 0.4f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
         }
         if (ImGui::Button(ICON_FA_PLAY, btnDim))
         {
@@ -827,8 +820,7 @@ namespace SparkEditor
         else
         {
             ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                  ImVec4(accentAmber.x * 0.3f, accentAmber.y * 0.3f, accentAmber.z * 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
         }
         if (ImGui::Button(ICON_FA_PAUSE, btnDim))
         {
@@ -846,8 +838,7 @@ namespace SparkEditor
         ImGui::SameLine();
 
         ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              ImVec4(stopRed.x * 0.3f, stopRed.y * 0.3f, stopRed.z * 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
         if (ImGui::Button(ICON_FA_STOP, btnDim))
         {
             if (m_playMode != PlayMode::Stopped)
@@ -905,9 +896,10 @@ namespace SparkEditor
             ImVec4 playGreen = theme.background.Lerp(theme.textSuccess, 0.28f).ToImVec4();
             ImVec4 stopRed = theme.textError.ToImVec4();
             ImVec4 pillBg = theme.button.ToImVec4();
+            ImVec4 passiveHover = theme.buttonHovered.ToImVec4();
 
-            RenderToolbarTransformTools(btnSize, dl, accentTeal, pillBg);
-            RenderToolbarPlayControls(btnSize, dl, playGreen, accentAmber, stopRed, pillBg);
+            RenderToolbarTransformTools(btnSize, dl, accentTeal, pillBg, passiveHover);
+            RenderToolbarPlayControls(btnSize, dl, playGreen, accentAmber, stopRed, pillBg, passiveHover);
             RenderToolbarSnapControls(btnSize, pillBg);
         }
         ImGui::End();

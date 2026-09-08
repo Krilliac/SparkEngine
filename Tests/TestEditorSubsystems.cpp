@@ -2502,6 +2502,7 @@ TEST(PluginManager_RejectsForwardMinorStableABIPlugin)
 #include <imgui.h>
 #include "Panels/InspectorPanel.h"
 #include "Core/EditorDockLayout.h"
+#include "Core/EditorNotificationManager.h"
 
 TEST(Gated_EditorDockLayout_ToolbarUsesContentHeightAndKeepsPanelsSeparate)
 {
@@ -2526,6 +2527,59 @@ TEST(Gated_EditorDockLayout_ToolbarUsesContentHeightAndKeepsPanelsSeparate)
         EXPECT_TRUE(nodes.bottom != nodes.center);
         ImGui::DockBuilderRemoveNode(root);
     }
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_EditorDockLayout_PreservesExistingTreeUntilExplicitReset)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    const ImGuiID root = 0x53444F43;
+    BuildEditorDockLayout(root, ImVec2(1280.0f, 720.0f));
+    EXPECT_FALSE(NeedsDefaultEditorDockLayout(root, false));
+    EXPECT_TRUE(NeedsDefaultEditorDockLayout(root, true));
+
+    ImGui::DockBuilderRemoveNode(root);
+    EXPECT_TRUE(NeedsDefaultEditorDockLayout(root, false));
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_EditorNotificationManager_WrapsLongMessagesWithoutOverlappingStack)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1280.0f, 720.0f);
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+
+    EditorNotificationManager notifications;
+    notifications.Show("The selected project could not be opened because its scene file is missing or unreadable. "
+                       "Check the project path and try opening it again.",
+                       "error");
+    notifications.Show("A second notification must begin below the full error message.", "info");
+
+    ImGui::NewFrame();
+    notifications.Render();
+
+    ImGuiWindow* first = ImGui::FindWindowByName("##Notification0");
+    ImGuiWindow* second = ImGui::FindWindowByName("##Notification1");
+    EXPECT_NE(first, nullptr);
+    EXPECT_NE(second, nullptr);
+    if (first && second)
+    {
+        EXPECT_GT(first->Size.y, 56.0f);
+        EXPECT_GE(second->Pos.y, first->Pos.y + first->Size.y + 7.5f);
+    }
+
+    ImGui::EndFrame();
     ImGui::DestroyContext(context);
     ImGui::SetCurrentContext(previous);
 }

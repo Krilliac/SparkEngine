@@ -1089,6 +1089,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/AssetProcessors.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorTheme.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorNotificationManager.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/AssetBrowserPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/GameViewPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/InspectorVectorControl.cpp"

@@ -66,6 +66,7 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
+#include <cstdio>
 #include <limits>
 #include <stdexcept>
 
@@ -689,11 +690,14 @@ namespace SparkEditor
         ImGuiID dockspaceId = ImGui::GetID("SparkDockSpace");
         ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
 
-        // Set up default layout on first frame
-        if (m_firstFrame)
+        // Preserve a dock tree loaded from ImGui settings. A reset remains an
+        // explicit destructive action, while a new workspace is still seeded.
+        if (m_firstFrame || m_defaultDockLayoutResetRequested)
         {
-            SetupDefaultDockLayout(dockspaceId);
+            if (NeedsDefaultEditorDockLayout(dockspaceId, m_defaultDockLayoutResetRequested))
+                SetupDefaultDockLayout(dockspaceId);
             m_firstFrame = false;
+            m_defaultDockLayoutResetRequested = false;
         }
 
         // Menu bar is rendered inside the dockspace window
@@ -910,60 +914,105 @@ namespace SparkEditor
             dl->AddLine(wp, ImVec2(wp.x + ws.x, wp.y),
                         ImGui::ColorConvertFloat4ToU32(theme.accent.WithAlpha(0.35f).ToImVec4()), 1.0f);
 
-            // Left: engine connection chip badge
+            const float contentLeft = ImGui::GetCursorPosX();
+            const float contentRight = contentLeft + ImGui::GetContentRegionAvail().x;
+            const float fps = m_stats.frameTime > 0.001f ? 1000.0f / m_stats.frameTime : 0.0f;
+            const ImVec4 fpsColor = fps >= 60.0f   ? theme.textSuccess.ToImVec4()
+                                  : fps >= 30.0f ? theme.textWarning.ToImVec4()
+                                                 : theme.textError.ToImVec4();
+
+            // Reserve the metrics column before rendering variable-length
+            // document context, so a long project or scene name cannot overlap it.
+            char fpsText[48]{};
+            char detailedMetricsText[128]{};
+            std::snprintf(fpsText, sizeof(fpsText), ICON_FA_TACHOMETER_ALT " %.0f FPS", fps);
+            std::snprintf(detailedMetricsText, sizeof(detailedMetricsText), "%.1fms  " ICON_FA_DATABASE " %d  #%llu",
+                          m_stats.frameTime, m_assetDatabaseSize, static_cast<unsigned long long>(m_frameNumber));
+            const float fpsWidth = ImGui::CalcTextSize(fpsText).x;
+            const float detailedMetricsWidth =
+                fpsWidth + 8.0f + ImGui::CalcTextSize(detailedMetricsText).x;
+            const float minimumContextWidth = ImGui::CalcTextSize(ICON_FA_CIRCLE).x;
+            const float contentWidth = contentRight - contentLeft;
+            const bool showDetailedMetrics = contentWidth >= detailedMetricsWidth + minimumContextWidth + 24.0f;
+            const bool showCompactMetrics =
+                !showDetailedMetrics && contentWidth >= fpsWidth + minimumContextWidth + 16.0f;
+            const float metricsWidth = showDetailedMetrics ? detailedMetricsWidth : (showCompactMetrics ? fpsWidth : 0.0f);
+            const float metricsStart = contentRight - metricsWidth;
+            const float contextRight = metricsWidth > 0.0f ? metricsStart - 12.0f : contentRight;
+            float contextCursor = contentLeft;
+            const float contextY = ImGui::GetCursorPosY();
+            bool hasContext = false;
+
+            auto renderContext = [&](const std::string& text, const ImVec4& color, const std::string& tooltip)
+            {
+                const float separatorWidth = hasContext ? ImGui::CalcTextSize(ICON_FA_CIRCLE).x + 16.0f : 0.0f;
+                const float textWidth = ImGui::CalcTextSize(text.c_str()).x;
+                if (contextCursor + separatorWidth + textWidth > contextRight)
+                    return false;
+                if (hasContext)
+                {
+                    ImGui::SetCursorPos(ImVec2(contextCursor, contextY));
+                    ImGui::TextColored(theme.textDisabled.ToImVec4(), ICON_FA_CIRCLE);
+                    contextCursor += separatorWidth;
+                }
+                ImGui::SetCursorPos(ImVec2(contextCursor, contextY));
+                ImGui::TextColored(color, "%s", text.c_str());
+                if (!tooltip.empty() && ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", tooltip.c_str());
+                contextCursor += textWidth + 12.0f;
+                hasContext = true;
+                return true;
+            };
+
+            auto renderContextWithFallback = [&](const std::string& text, const char* icon, const ImVec4& color,
+                                                 const std::string& tooltip)
+            {
+                if (renderContext(text, color, tooltip))
+                    return;
+                renderContext(icon, color, tooltip);
+            };
+
+            // Left: engine connection chip badge.
             ImVec4 statusColor =
                 m_engineConnected ? theme.textSuccess.ToImVec4() : theme.textError.ToImVec4();
-            ImGui::TextColored(statusColor, ICON_FA_CIRCLE);
-            ImGui::SameLine(0, 4);
-            ImGui::TextColored(theme.textSecondary.ToImVec4(), "%s",
-                               m_engineConnected ? "Connected" : "Disconnected");
+            const std::string connectionText = std::string(ICON_FA_CIRCLE) +
+                                               (m_engineConnected ? " Connected" : " Disconnected");
+            renderContextWithFallback(connectionText, ICON_FA_CIRCLE, statusColor,
+                                      m_engineConnected ? "Engine connected" : "Engine disconnected");
 
-            // Project name (dimmed secondary text)
+            // Project and scene retain full-value access through their fallback
+            // icons when the status bar is too narrow to show their full labels.
             if (m_projectManager && m_projectManager->HasOpenProject())
             {
-                ImGui::SameLine(0, 12);
-                ImGui::TextColored(theme.textDisabled.ToImVec4(), ICON_FA_CIRCLE);
-                ImGui::SameLine(0, 12);
-                ImGui::TextColored(theme.textSecondary.ToImVec4(), ICON_FA_FOLDER " %s",
-                                   m_projectManager->GetCurrentProject().name.c_str());
+                const std::string& projectName = m_projectManager->GetCurrentProject().name;
+                renderContextWithFallback(std::string(ICON_FA_FOLDER) + " " + projectName, ICON_FA_FOLDER,
+                                          theme.textSecondary.ToImVec4(), "Project: " + projectName);
             }
 
-            // Scene name
-            ImGui::SameLine(0, 12);
-            ImGui::TextColored(theme.textDisabled.ToImVec4(), ICON_FA_CIRCLE);
-            ImGui::SameLine(0, 12);
-            ImGui::TextColored(theme.text.ToImVec4(), ICON_FA_MAP " %s%s", m_currentSceneName.c_str(),
-                               sceneModified ? " *" : "");
+            const std::string sceneText = std::string(ICON_FA_MAP) + " " + m_currentSceneName +
+                                          (sceneModified ? " *" : "");
+            renderContextWithFallback(sceneText, ICON_FA_MAP, theme.text.ToImVec4(),
+                                      "Scene: " + m_currentSceneName + (sceneModified ? " (modified)" : ""));
 
-            ImGui::SameLine(0, 12);
-            ImGui::TextColored(theme.textDisabled.ToImVec4(), ICON_FA_CIRCLE);
-            ImGui::SameLine(0, 12);
-
-            // Center: tool + selection (secondary text)
+            // Center: tool + selection remains the first context detail to be
+            // omitted on narrow windows.
             const char* toolNames[] = {"Move", "Rotate", "Scale"};
-            ImGui::TextColored(theme.textSecondary.ToImVec4(), "%s | %d obj | %d sel",
-                               toolNames[(int)m_currentTool], liveObjectCount, liveSelectedCount);
+            renderContext(std::string(toolNames[static_cast<int>(m_currentTool)]) + " | " +
+                              std::to_string(liveObjectCount) + " obj | " + std::to_string(liveSelectedCount) + " sel",
+                          theme.textSecondary.ToImVec4(), {});
 
-            // Right: FPS + frame info
-            float fps = m_stats.frameTime > 0.001f ? 1000.0f / m_stats.frameTime : 0.0f;
-            ImVec4 fpsColor = fps >= 60.0f   ? theme.textSuccess.ToImVec4()
-                              : fps >= 30.0f ? theme.textWarning.ToImVec4()
-                                             : theme.textError.ToImVec4();
-
-            float rightOffset = ImGui::GetWindowWidth() - 380;
-            if (rightOffset > ImGui::GetCursorPosX())
+            // Right: FPS + frame info. The offset is derived from measured
+            // content rather than a fixed pixel constant.
+            if (metricsWidth > 0.0f)
             {
-                ImGui::SameLine(rightOffset);
+                ImGui::SetCursorPos(ImVec2(metricsStart, contextY));
+                ImGui::TextColored(fpsColor, "%s", fpsText);
+                if (showDetailedMetrics)
+                {
+                    ImGui::SameLine(0, 8);
+                    ImGui::TextColored(theme.textSecondary.ToImVec4(), "%s", detailedMetricsText);
+                }
             }
-            ImGui::TextColored(fpsColor, ICON_FA_TACHOMETER_ALT " %.0f", fps);
-            ImGui::SameLine(0, 4);
-            ImGui::TextColored(theme.textSecondary.ToImVec4(), "FPS");
-            ImGui::SameLine(0, 12);
-            ImGui::TextColored(theme.textSecondary.ToImVec4(), "%.1fms", m_stats.frameTime);
-            ImGui::SameLine(0, 12);
-            ImGui::TextColored(theme.textSecondary.ToImVec4(), ICON_FA_DATABASE " %d", m_assetDatabaseSize);
-            ImGui::SameLine(0, 12);
-            ImGui::TextColored(theme.textDisabled.ToImVec4(), "#%llu", (unsigned long long)m_frameNumber);
         }
         ImGui::End();
         ImGui::PopStyleColor();
@@ -1294,8 +1343,9 @@ namespace SparkEditor
         // Re-apply the current theme instead of resetting to bare defaults
         ApplyTheme(m_currentTheme);
 
-        // Force dock layout rebuild on next frame
-        m_firstFrame = true;
+        // Force the destructive default rebuild on the next frame. Startup
+        // initialization itself preserves any saved ImGui dock tree.
+        m_defaultDockLayoutResetRequested = true;
     }
 
     void EditorUI::ApplyTheme(const std::string& themeName)

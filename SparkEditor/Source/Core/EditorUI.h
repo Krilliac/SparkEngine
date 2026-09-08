@@ -318,6 +318,7 @@ namespace SparkEditor
         std::string m_currentTheme = "Ember Studio";
         bool m_showDemoWindow = false;
         bool m_firstFrame = true;
+        bool m_defaultDockLayoutResetRequested = false;
         bool m_showWelcomeScreen = true;
         // Dear ImGui docking settings must be loaded before any window is
         // begun for the frame.  Menu actions run while the dockspace window
@@ -468,9 +469,11 @@ namespace SparkEditor
         void RenderBuildMenu();
         void RenderHelpMenu();
         void RenderToolbar();
-        void RenderToolbarTransformTools(float btnSize, ImDrawList* dl, const ImVec4& accentTeal, const ImVec4& pillBg);
+        void RenderToolbarTransformTools(float btnSize, ImDrawList* dl, const ImVec4& accentTeal, const ImVec4& pillBg,
+                                         const ImVec4& passiveHover);
         void RenderToolbarPlayControls(float btnSize, ImDrawList* dl, const ImVec4& playGreen,
-                                       const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg);
+                                       const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg,
+                                       const ImVec4& passiveHover);
         void RenderToolbarSnapControls(float btnSize, const ImVec4& pillBg);
         void RenderStatusBar();
         void RenderPanels();

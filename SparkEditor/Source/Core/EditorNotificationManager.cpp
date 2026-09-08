@@ -48,12 +48,19 @@ namespace SparkEditor
     void EditorNotificationManager::Render()
     {
         const auto& theme = EditorTheme::GetCurrentThemeData();
-        const float NOTIFICATION_WIDTH = 340.0f;
-        const float NOTIFICATION_HEIGHT = 56.0f;
+        const float NOTIFICATION_MAX_WIDTH = 360.0f;
+        const float NOTIFICATION_MIN_HEIGHT = 56.0f;
         const float NOTIFICATION_SPACING = 8.0f;
+        const float NOTIFICATION_INSET = 16.0f;
+        const float NOTIFICATION_PADDING_Y = 12.0f;
+        const float NOTIFICATION_TEXT_LEFT = 40.0f;
+        const float NOTIFICATION_TEXT_RIGHT = 14.0f;
 
         ImGuiViewport* viewport = ImGui::GetMainViewport();
         float yOffset = viewport->WorkPos.y + 12.0f;
+        const float notificationWidth =
+            std::min(NOTIFICATION_MAX_WIDTH, std::max(1.0f, viewport->WorkSize.x - 2.0f * NOTIFICATION_INSET));
+        const float textWrapWidth = std::max(1.0f, notificationWidth - NOTIFICATION_TEXT_LEFT - NOTIFICATION_TEXT_RIGHT);
 
         for (size_t i = 0; i < m_notifications.size(); ++i)
         {
@@ -66,11 +73,14 @@ namespace SparkEditor
                 alpha = std::max(0.0f, notification.timeLeft / 0.5f);
             }
 
-            ImVec2 notificationPos(viewport->WorkPos.x + viewport->WorkSize.x - NOTIFICATION_WIDTH - 16.0f,
-                                   yOffset + i * (NOTIFICATION_HEIGHT + NOTIFICATION_SPACING));
+            const ImVec2 textSize = ImGui::CalcTextSize(notification.message.c_str(), nullptr, false, textWrapWidth);
+            const float notificationHeight =
+                std::max(NOTIFICATION_MIN_HEIGHT, textSize.y + 2.0f * NOTIFICATION_PADDING_Y);
+            ImVec2 notificationPos(viewport->WorkPos.x + viewport->WorkSize.x - notificationWidth - NOTIFICATION_INSET,
+                                   yOffset);
 
             ImGui::SetNextWindowPos(notificationPos);
-            ImGui::SetNextWindowSize(ImVec2(NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT));
+            ImGui::SetNextWindowSize(ImVec2(notificationWidth, notificationHeight));
             ImGui::SetNextWindowBgAlpha(0.95f * alpha);
 
             std::string windowName = "##Notification" + std::to_string(i);
@@ -119,17 +129,21 @@ namespace SparkEditor
                                             ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0.1f * alpha)),
                                             ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0.1f * alpha)));
 
-                // Content with padding past the stripe
-                ImGui::SetCursorPos(ImVec2(14, (NOTIFICATION_HEIGHT - ImGui::GetTextLineHeight()) * 0.5f));
-                ImGui::TextColored(accentColor, "%s", icon);
-                ImGui::SameLine(0, 8);
+                // Keep the icon vertically centered while the text starts at a
+                // stable top padding and can grow to multiple lines.
+                const ImVec2 iconPos(wp.x + 14.0f, wp.y + (notificationHeight - ImGui::GetTextLineHeight()) * 0.5f);
+                dl->AddText(iconPos, ImGui::ColorConvertFloat4ToU32(accentColor), icon);
+                ImGui::SetCursorPos(ImVec2(NOTIFICATION_TEXT_LEFT, NOTIFICATION_PADDING_Y));
+                ImGui::PushTextWrapPos(notificationWidth - NOTIFICATION_TEXT_RIGHT);
                 ImGui::PushStyleColor(ImGuiCol_Text, theme.text.WithAlpha(alpha).ToImVec4());
-                ImGui::TextWrapped("%s", notification.message.c_str());
+                ImGui::TextUnformatted(notification.message.c_str());
                 ImGui::PopStyleColor();
+                ImGui::PopTextWrapPos();
             }
             ImGui::End();
             ImGui::PopStyleColor(2);
             ImGui::PopStyleVar(2);
+            yOffset += notificationHeight + NOTIFICATION_SPACING;
         }
     }
 

@@ -18,6 +18,13 @@ namespace SparkEditor
         ImGuiID toolbar, left, right, bottom, center;
     };
 
+    /// Preserve an existing saved dock tree unless the user explicitly requests a reset.
+    inline bool NeedsDefaultEditorDockLayout(ImGuiID root, bool forceReset)
+    {
+        const ImGuiDockNode* existing = ImGui::DockBuilderGetNode(root);
+        return forceReset || existing == nullptr || existing->IsEmpty();
+    }
+
     /// Build geometry for first launch or explicit Reset Layout, never each frame.
     inline EditorDockNodes BuildEditorDockLayout(ImGuiID root, ImVec2 size)
     {
