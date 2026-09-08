@@ -6,6 +6,7 @@
  * Split from EditorUI.cpp for maintainability.
  */
 #include "EditorUI.h"
+#include "EditorDockLayout.h"
 #include "EditorPanel.h"
 #include "EditorPluginManager.h"
 #include "EditorIcons.h"
@@ -744,7 +745,7 @@ namespace SparkEditor
             ImGui::SameLine(0, 8);
             ImVec2 sepPos = ImGui::GetCursorScreenPos();
             dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
-                        ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
+                        ImGui::GetColorU32(ImGuiCol_Separator), 1.0f);
             ImGui::Dummy(ImVec2(2, btnSize));
             ImGui::SameLine(0, 8);
         }
@@ -766,7 +767,7 @@ namespace SparkEditor
         {
             ImVec2 sepPos = ImGui::GetCursorScreenPos();
             dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
-                        ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
+                        ImGui::GetColorU32(ImGuiCol_Separator), 1.0f);
             ImGui::Dummy(ImVec2(2, btnSize));
             ImGui::SameLine(0, 8);
         }
@@ -865,7 +866,7 @@ namespace SparkEditor
         {
             ImVec2 sepPos = ImGui::GetCursorScreenPos();
             dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
-                        ImGui::ColorConvertFloat4ToU32(ImVec4(0.1f, 0.69f, 0.74f, 0.25f)), 1.0f);
+                        ImGui::GetColorU32(ImGuiCol_Separator), 1.0f);
             ImGui::Dummy(ImVec2(2, btnSize));
             ImGui::SameLine(0, 8);
         }
@@ -886,23 +887,24 @@ namespace SparkEditor
 
     void EditorUI::RenderToolbar()
     {
+        const auto& theme = EditorTheme::GetCurrentThemeData();
         ImGuiWindowFlags toolbarFlags =
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse;
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, EditorToolbarPaddingY));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(3, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, theme.frameRounding);
 
         if (ImGui::Begin("##Toolbar", nullptr, toolbarFlags))
         {
-            float btnSize = 30.0f;
+            float btnSize = EditorToolbarButtonSize;
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
-            ImVec4 accentTeal(0.102f, 0.686f, 0.737f, 1.0f);
-            ImVec4 accentAmber(0.941f, 0.659f, 0.188f, 1.0f);
-            ImVec4 playGreen(0.239f, 0.839f, 0.549f, 1.0f);
-            ImVec4 stopRed(0.910f, 0.251f, 0.251f, 1.0f);
-            ImVec4 pillBg(0.157f, 0.173f, 0.212f, 1.0f);
+            ImVec4 accentTeal = theme.backgroundSelected.ToImVec4();
+            ImVec4 accentAmber = theme.background.Lerp(theme.textWarning, 0.28f).ToImVec4();
+            ImVec4 playGreen = theme.background.Lerp(theme.textSuccess, 0.28f).ToImVec4();
+            ImVec4 stopRed = theme.textError.ToImVec4();
+            ImVec4 pillBg = theme.button.ToImVec4();
 
             RenderToolbarTransformTools(btnSize, dl, accentTeal, pillBg);
             RenderToolbarPlayControls(btnSize, dl, playGreen, accentAmber, stopRed, pillBg);

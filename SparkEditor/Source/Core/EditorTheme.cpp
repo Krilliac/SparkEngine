@@ -23,6 +23,7 @@ namespace SparkEditor
     // Static member initialization
     std::unordered_map<std::string, EditorThemeData> EditorTheme::s_registeredThemes;
     std::string EditorTheme::s_currentThemeName;
+    EditorThemeData EditorTheme::s_currentThemeData;
     bool EditorTheme::s_enhancementsEnabled = false;
     bool EditorTheme::s_customFontsLoaded = false;
 
@@ -101,17 +102,18 @@ namespace SparkEditor
             InitializeDefaultThemes();
         }
 
-        auto it = s_registeredThemes.find(themeName);
-        if (it == s_registeredThemes.end())
+        const auto* theme = GetTheme(themeName);
+        if (!theme)
         {
-            std::cout << "[EditorTheme] Theme '" << themeName << "' not found, applying Spark Professional\n";
-            it = s_registeredThemes.find("Spark Professional");
-            if (it == s_registeredThemes.end())
+            std::cout << "[EditorTheme] Theme '" << themeName << "' not found, applying Ember Studio\n";
+            theme = GetTheme("Ember Studio");
+            if (!theme)
                 return false;
         }
 
-        ApplyToImGui(it->second);
-        s_currentThemeName = it->first;
+        ApplyToImGui(*theme);
+        s_currentThemeData = *theme;
+        s_currentThemeName = theme->name;
         std::cout << "[EditorTheme] Applied theme: " << s_currentThemeName << "\n";
         return true;
     }
@@ -119,6 +121,7 @@ namespace SparkEditor
     bool EditorTheme::ApplyTheme(const EditorThemeData& theme)
     {
         ApplyToImGui(theme);
+        s_currentThemeData = theme;
         s_currentThemeName = theme.name;
         return true;
     }
@@ -133,6 +136,7 @@ namespace SparkEditor
         {
             names.push_back(name);
         }
+        std::sort(names.begin(), names.end());
         return names;
     }
 
@@ -141,11 +145,26 @@ namespace SparkEditor
         if (s_registeredThemes.empty())
             InitializeDefaultThemes();
         auto it = s_registeredThemes.find(themeName);
+        // Explicit custom registrations win. Legacy built-in names remain valid
+        // for launch settings without multiplying entries in the theme picker.
+        if (it == s_registeredThemes.end())
+        {
+            static const std::unordered_map<std::string, std::string> aliases = {
+                {"Spark Professional", "Ember Studio"}, {"Spark Ember", "Ember Studio"},
+                {"Orange Accent", "Ember Studio"}, {"Spark Fusion", "Cobalt Forge"},
+                {"Unreal Pro", "Cobalt Forge"}, {"Blue Accent", "Cobalt Forge"},
+                {"Unity Pro", "Graphite Signal"}, {"VS Pro", "Graphite Signal"},
+                {"JetBrains", "Graphite Signal"}};
+            const auto alias = aliases.find(themeName);
+            if (alias != aliases.end())
+                it = s_registeredThemes.find(alias->second);
+        }
         return (it != s_registeredThemes.end()) ? &it->second : nullptr;
     }
 
     bool EditorTheme::RegisterTheme(const EditorThemeData& theme)
     {
+        InitializeDefaultThemes();
         s_registeredThemes[theme.name] = theme;
         return true;
     }
@@ -153,6 +172,11 @@ namespace SparkEditor
     const std::string& EditorTheme::GetCurrentThemeName()
     {
         return s_currentThemeName;
+    }
+
+    const EditorThemeData& EditorTheme::GetCurrentThemeData()
+    {
+        return s_currentThemeData;
     }
 
     bool EditorTheme::CreateBlendedTheme(const std::string& theme1, const std::string& theme2, float blend,
@@ -259,6 +283,7 @@ namespace SparkEditor
 
         // Checkbox / Radio
         c[ImGuiCol_CheckMark] = theme.accent.ToImVec4();
+        c[ImGuiCol_CheckboxSelectedBg] = theme.backgroundSelected.ToImVec4();
 
         // Slider
         c[ImGuiCol_SliderGrab] = theme.accent.WithAlpha(0.8f).ToImVec4();
@@ -288,8 +313,10 @@ namespace SparkEditor
         c[ImGuiCol_Tab] = theme.tab.ToImVec4();
         c[ImGuiCol_TabHovered] = theme.tabHovered.ToImVec4();
         c[ImGuiCol_TabSelected] = theme.tabActive.ToImVec4();
+        c[ImGuiCol_TabSelectedOverline] = theme.accent.ToImVec4();
         c[ImGuiCol_TabDimmed] = theme.tabUnfocused.ToImVec4();
         c[ImGuiCol_TabDimmedSelected] = theme.tabActive.Darken(0.15f).ToImVec4();
+        c[ImGuiCol_TabDimmedSelectedOverline] = theme.borderAccent.WithAlpha(0.45f).ToImVec4();
 
         // Docking — accent preview, deep empty background
         c[ImGuiCol_DockingPreview] = theme.accent.WithAlpha(0.5f).ToImVec4();
@@ -332,21 +359,74 @@ namespace SparkEditor
     static EditorThemeData CreateSparkFusionThemeImpl();
     static EditorThemeData CreateSparkEmberThemeImpl();
 
+    // Shared semantic mapping keeps the three studio palettes consistent across widgets.
+    static EditorThemeData CreateStudioTheme(const char* name, const char* dark, const char* background,
+                                             const char* raised, const char* border, const char* text,
+                                             const char* muted, const char* accent, const char* secondary,
+                                             const char* success)
+    {
+        auto t = CreateSparkEmberThemeImpl();
+        t.name = name;
+        t.description = "Refined studio palette with consistent editor chrome";
+        t.backgroundDark = ThemeColor::FromHex(dark);
+        t.background = ThemeColor::FromHex(background);
+        t.backgroundLight = t.backgroundHeader = ThemeColor::FromHex(raised);
+        t.border = t.borderSeparator = ThemeColor::FromHex(border);
+        t.borderLight = t.border.Lighten(0.12f);
+        t.text = t.titleBarText = ThemeColor::FromHex(text);
+        t.textSecondary = ThemeColor::FromHex(muted);
+        t.textDisabled = t.textSecondary.Darken(0.15f);
+        t.accent = t.textAccent = t.borderAccent = t.focus = ThemeColor::FromHex(accent);
+        t.accentSecondary = ThemeColor::FromHex(secondary);
+        t.textSuccess = ThemeColor::FromHex(success);
+        t.backgroundAccent = t.background.Lerp(t.accent, 0.12f);
+        t.backgroundHover = t.background.Lerp(t.accent, 0.18f);
+        t.backgroundActive = t.backgroundSelected = t.background.Lerp(t.accent, 0.28f);
+        t.button = t.backgroundLight;
+        t.buttonHovered = t.backgroundHover;
+        t.buttonActive = t.backgroundActive;
+        t.buttonDisabled = t.background;
+        t.frame = t.backgroundDark;
+        t.frameHovered = t.backgroundHover;
+        t.frameActive = t.backgroundActive;
+        t.titleBar = t.titleBarActive = t.menuBar = t.backgroundDark;
+        t.menuItem = t.background;
+        t.menuItemHovered = t.backgroundHover;
+        t.scrollbar = t.backgroundDark;
+        t.scrollbarGrab = t.border;
+        t.scrollbarGrabHovered = t.borderLight;
+        t.scrollbarGrabActive = t.accent;
+        t.tab = t.tabUnfocused = t.backgroundDark;
+        t.tabHovered = t.backgroundHover;
+        t.tabActive = t.backgroundSelected;
+        t.selection = t.accent.WithAlpha(0.30f);
+        t.drop = t.accentSecondary.WithAlpha(0.70f);
+        t.graph1 = t.accent;
+        t.graph2 = t.accentSecondary;
+        t.graph3 = t.textSuccess;
+        t.graph4 = t.textWarning;
+        t.graph5 = t.textError;
+        return t;
+    }
+
     void EditorTheme::InitializeDefaultThemes()
     {
+        // Registration is also a public entry point. Initialize built-ins before
+        // accepting custom palettes, without recursing through RegisterTheme.
+        static bool initialized = false;
+        if (initialized)
+            return;
+        initialized = true;
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing default editor themes");
-        RegisterTheme(CreateSparkThemeImpl());
-        RegisterTheme(CreateSparkFusionThemeImpl());
-        RegisterTheme(CreateSparkEmberThemeImpl());
-        RegisterTheme(CreateUnityProTheme());
-        RegisterTheme(CreateUnrealProTheme());
-        RegisterTheme(CreateVSProTheme());
-        RegisterTheme(CreateJetBrainsTheme());
+        RegisterTheme(CreateStudioTheme("Ember Studio", "#110e0d", "#1a1716", "#24201e", "#3c3733",
+                                       "#efeeeb", "#918b85", "#f1823a", "#68d3ee", "#74d291"));
+        RegisterTheme(CreateStudioTheme("Cobalt Forge", "#0b1017", "#151f2a", "#202e3d", "#314557",
+                                       "#e6eef7", "#94a8bb", "#55c2e8", "#a99aff", "#6fdaa8"));
+        RegisterTheme(CreateStudioTheme("Graphite Signal", "#101113", "#1b1c1f", "#282a2f", "#46484e",
+                                       "#ececef", "#a8aab1", "#c9d1dd", "#78d3b2", "#a7d472"));
         RegisterTheme(CreateProfessionalLightTheme());
         RegisterTheme(CreateHighContrastTheme());
-        RegisterTheme(CreateBlueAccentTheme());
-        RegisterTheme(CreateOrangeAccentTheme());
     }
 
     // -------------------------------------------------------------------

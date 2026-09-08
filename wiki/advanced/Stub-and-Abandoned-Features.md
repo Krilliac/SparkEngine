@@ -79,7 +79,7 @@ could never report occlusion is retired: both trace `WorldStatic` hits once a
 | `SparkEditor/Source/Lighting/LightingTools*.{h,cpp}` | No production caller. `BakeLightmaps` wrote a fixed radial ramp in texture space (nothing scene-derived) and `GenerateLightProbes` discarded its probes -- no lightmap baking or light probes are claimed anywhere now. |
 | `SparkEditor/Source/Animation/*` (timeline, clip manager, curve, playback) | No production caller. |
 | `SparkEditor/Source/AssetBrowser/AssetDatabase.{h,cpp}` | No production caller. |
-| `Tests/TestAssetDatabase.cpp`, `Tests/TestPrefabManager.cpp` | Decoy tests that included no production header; `Tests/TestEditorSubsystemsReal.cpp` covers the real `PrefabManager`. |
+| Former AssetDatabase and PrefabManager test stubs | Decoy tests that included no production header; `Tests/TestEditorSubsystemsReal.cpp` covers the real `PrefabManager`. |
 | `GameModules/SparkGameFPS/Source/Game/{Console,Terrain,ArenaBuilder}.*` | Unreachable in-game console overlay, unreferenced terrain, and an `ArenaBuilder` whose body was entirely commented out. |
 | `Shaders/Compiled/Basic{VS,PS}.cso`, `SparkEngine/Shaders/Compiled/Basic{VS,PS}.cso` | Prebuilt bytecode is no longer shipped; the basic shaders are compiled from source (`GraphicsDeviceResourcesWindowsShaders.cpp` embeds them; `Shaders/HLSL/BasicVS.hlsl` / `BasicPS.hlsl` are the on-disk copies for the Linux/RHI path). |
 

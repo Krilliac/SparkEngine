@@ -538,52 +538,6 @@ namespace SparkEditor
     // Drawing Helpers
     // ============================================================================
 
-    void InspectorPanel::DrawVec3Control(const char* label, float* values, float resetValue, float speed)
-    {
-        ImVec4 xColor(0.9f, 0.2f, 0.2f, 1.0f);
-        ImVec4 yColor(0.2f, 0.8f, 0.2f, 1.0f);
-        ImVec4 zColor(0.2f, 0.4f, 0.9f, 1.0f);
-
-        ImGui::PushID(label);
-        ImGui::Text("%s", label);
-        ImGui::SameLine(90);
-
-        float width = (ImGui::GetContentRegionAvail().x - 60) / 3.0f;
-
-        // X
-        ImGui::PushStyleColor(ImGuiCol_Button, xColor);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
-        if (ImGui::Button("X", ImVec2(20, 20)))
-            values[0] = resetValue;
-        ImGui::PopStyleColor(2);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(width);
-        ImGui::DragFloat("##X", &values[0], speed);
-        ImGui::SameLine();
-
-        // Y
-        ImGui::PushStyleColor(ImGuiCol_Button, yColor);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
-        if (ImGui::Button("Y", ImVec2(20, 20)))
-            values[1] = resetValue;
-        ImGui::PopStyleColor(2);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(width);
-        ImGui::DragFloat("##Y", &values[1], speed);
-        ImGui::SameLine();
-
-        // Z
-        ImGui::PushStyleColor(ImGuiCol_Button, zColor);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.5f, 1.0f, 1.0f));
-        if (ImGui::Button("Z", ImVec2(20, 20)))
-            values[2] = resetValue;
-        ImGui::PopStyleColor(2);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(width);
-        ImGui::DragFloat("##Z", &values[2], speed);
-
-        ImGui::PopID();
-    }
 
     // ============================================================================
     // Object Properties

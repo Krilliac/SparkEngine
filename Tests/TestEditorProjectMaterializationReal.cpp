@@ -16,6 +16,7 @@
  */
 
 #include "TestFramework.h"
+#include "Fixtures/ScopedEditorProfile.h"
 
 #include "Core/ProjectManager.h"
 
@@ -146,7 +147,7 @@ TEST(ProjectMaterialization_RewritesThePackageTokenInServiceConfigs)
     ASSERT_FALSE(StageBuiltFPSStarterTemplateRoot(engineRoot).empty());
 
     fs::create_directories(scratch / "Projects");
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     manager.SetEngineRoot(engineRoot.string());
     EXPECT_TRUE(manager.CreateProject("TokenGame", (scratch / "Projects").string(), ProjectTemplate::FirstPerson,
@@ -187,7 +188,7 @@ TEST(ProjectMaterialization_LeavesBuildOutputDistLogsAndSavesBehind)
     ASSERT_TRUE(fs::is_regular_file(package / "dist" / "FPSStarter.dll"));
 
     fs::create_directories(scratch / "Projects");
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     manager.SetEngineRoot(engineRoot.string());
     EXPECT_TRUE(manager.CreateProject("CleanGame", (scratch / "Projects").string(), ProjectTemplate::FirstPerson,
@@ -275,7 +276,7 @@ TEST(ProjectMaterialization_OpeningATemplatePackageNeverRewritesIt)
     const std::string before = ReadTextFile(document);
     EXPECT_STR_CONTAINS(before, "\"lastModified\": 0");
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     manager.SetEngineRoot(engineRoot.string());
     EXPECT_TRUE(manager.OpenProject(document.string()));

@@ -61,7 +61,7 @@ Expected: no dirty or unrepresented source enters the cleanup set.
 - Consumes: `GH_TOKEN`, `GITHUB_REPOSITORY`, `RELEASE_ID`, `RELEASE_TAG`, `TARGET_SHA`, `IS_VERSIONED`, `EXPECTED_ASSETS_FILE`, and `EXPECTED_DIGESTS_FILE`.
 - Produces: one `draft: false` API PATCH only after draft release state, exact asset names/digests, tag target, and a successful Required CI Gate are proven.
 
-- [ ] **Step 1: Apply and inspect the isolated candidate**
+- [x] **Step 1: Apply and inspect the isolated candidate**
 
 ```powershell
 git cherry-pick --no-commit 9b33ae8658b387dc75e821c464b6f5030b299452
@@ -70,7 +70,7 @@ git diff --cached -- .github/scripts/release-acceptance-gate.py .github/scripts/
 
 Expected: bare publication PATCH steps are replaced by one isolated acceptance-gate invocation after existing release safeguards.
 
-- [ ] **Step 2: Run the gate's negative-case suite**
+- [x] **Step 2: Run the gate's negative-case suite**
 
 ```powershell
 $env:PYTHONDONTWRITEBYTECODE='1'
@@ -79,7 +79,7 @@ python .github/scripts/test-release-acceptance-gate.py
 
 Expected: tag drift, asset-digest tampering, stale CI, duplicate assets, malformed input, and optimization-mode cases fail closed.
 
-- [ ] **Step 3: Verify workflow preservation and commit**
+- [x] **Step 3: Verify workflow preservation and commit**
 
 ```powershell
 python .github/scripts/test-workflow-failure-propagation.py
@@ -89,6 +89,14 @@ git commit -m "fix(release): add fail-closed acceptance gate"
 ```
 
 Expected: all existing stable-v1, exact-CI, canonical-badge, and SEC-120 safeguards remain and the resulting commit is local only.
+
+Completed as reviewed integration commit `8ecc7d1379080c79fe7c0afa18926f255d9f3c3f`
+(`fix(ci): harden release acceptance publication gate`), incorporating the isolated
+candidate with review corrections. Local re-verification on 2026-09-07 passed
+47 acceptance-gate tests and 60 workflow-failure-propagation tests. Windows fixture
+execution required Git Bash and a process-local `python3` mapping to installed
+Python, since the Windows Store alias was not a usable interpreter. These local
+regressions do not prove hosted CI, publication, or stable-v1 readiness.
 
 ### Task 3: Remove only proven-redundant worktrees
 

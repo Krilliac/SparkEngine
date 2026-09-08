@@ -9,11 +9,13 @@
 #include "Utils/CrashReportUploader.h"
 #include "Utils/FreezeDetector.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 // =============================================================================
 // utils-05 — the hash must recognise the format the engine itself writes
@@ -184,22 +186,36 @@ TEST(CrashRedaction_AnEmptyContextIsReportedAsHavingNoRules)
 
 namespace
 {
-    /// The artifact root InstallCrashHandler() creates: temp/spark_crash_<pid>_<random>.
-    std::filesystem::path FindCrashArtifactDirectory()
+    /// Artifact roots InstallCrashHandler() creates: temp/spark_crash_<pid>_<random>.
+    std::vector<std::filesystem::path> FindCrashArtifactDirectories()
     {
         namespace fs = std::filesystem;
+        std::vector<fs::path> directories;
         std::error_code error;
         const fs::path temp = fs::temp_directory_path(error);
         if (error)
-            return {};
+            return directories;
 
         const std::string prefix = "spark_crash_" + std::to_string(GetCurrentProcessId()) + "_";
         for (fs::directory_iterator it(temp, error), end; !error && it != end; it.increment(error))
         {
             if (it->is_directory(error) && it->path().filename().string().rfind(prefix, 0) == 0)
-                return it->path();
+                directories.push_back(it->path());
         }
-        return {};
+        return directories;
+    }
+
+    /// Select the artifact root created by the current InstallCrashHandler() call.
+    std::filesystem::path FindNewCrashArtifactDirectory(const std::vector<std::filesystem::path>& existingDirectories)
+    {
+        const std::vector<std::filesystem::path> currentDirectories = FindCrashArtifactDirectories();
+        const auto found = std::find_if(currentDirectories.begin(), currentDirectories.end(),
+                                        [&existingDirectories](const std::filesystem::path& candidate)
+                                        {
+                                            return std::find(existingDirectories.begin(), existingDirectories.end(),
+                                                             candidate) == existingDirectories.end();
+                                        });
+        return found == currentDirectories.end() ? std::filesystem::path{} : *found;
     }
 
     /// Number of .log artifacts in @p directory whose text contains @p token.
@@ -229,6 +245,11 @@ namespace
 
 TEST(CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot)
 {
+    // Engine-lifecycle tests can install the crash handler before this test.
+    // Capture those roots so that this test validates the fresh installation,
+    // rather than an arbitrary older directory for the same process ID.
+    const auto artifactDirectoriesBeforeInstall = FindCrashArtifactDirectories();
+
     // The suite installs its own unhandled-exception filter to report crashing
     // tests; InstallCrashHandler() replaces it, so put it back afterwards.
     LPTOP_LEVEL_EXCEPTION_FILTER harnessFilter = SetUnhandledExceptionFilter(nullptr);
@@ -248,7 +269,7 @@ TEST(CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot)
     InstallCrashHandler(config);
     SetUnhandledExceptionFilter(harnessFilter);
 
-    const std::filesystem::path artifacts = FindCrashArtifactDirectory();
+    const std::filesystem::path artifacts = FindNewCrashArtifactDirectory(artifactDirectoriesBeforeInstall);
     ASSERT_FALSE(artifacts.empty());
 
     // Gated entry point with the toggle off: logs, writes no report.

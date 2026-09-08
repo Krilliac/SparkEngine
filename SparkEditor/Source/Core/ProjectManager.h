@@ -112,6 +112,9 @@ namespace SparkEditor
     {
       public:
         ProjectManager();
+        /// [editor thread] Use a caller-selected recent-project history directory.
+        /// The manager owns the path value, not the directory's lifetime.
+        explicit ProjectManager(std::string editorDataDirectory);
         ~ProjectManager();
 
         bool Initialize();
@@ -207,8 +210,9 @@ namespace SparkEditor
         void SaveRecentProjectsList();
         void AddToRecentProjects(const std::string& projectName, const std::string& sparkprojectPath);
 
-        static std::string GetRecentProjectsFilePath();
+        std::string GetRecentProjectsFilePath() const;
 
+        std::string m_editorDataDirectory;
         ProjectInfo m_currentProject;
         // The project document is not required to share the display name.
         // Preserve the exact normalized file selected/created so SaveProject()

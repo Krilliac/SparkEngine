@@ -924,7 +924,11 @@ namespace SparkEditor
         }
     } // namespace
 
-    ProjectManager::ProjectManager() = default;
+    ProjectManager::ProjectManager() : ProjectManager(GetEditorDataDirectory()) {}
+    ProjectManager::ProjectManager(std::string editorDataDirectory)
+        : m_editorDataDirectory(editorDataDirectory.empty() ? GetEditorDataDirectory() : std::move(editorDataDirectory))
+    {
+    }
     ProjectManager::~ProjectManager() = default;
 
     bool ProjectManager::Initialize()
@@ -932,7 +936,7 @@ namespace SparkEditor
         std::cout << "ProjectManager::Initialize()\n";
 
         // Ensure editor data directory exists
-        std::string editorDataDir = GetEditorDataDirectory();
+        const std::string& editorDataDir = m_editorDataDirectory;
         try
         {
             fs::create_directories(editorDataDir);
@@ -2410,9 +2414,9 @@ namespace SparkEditor
 #endif
     }
 
-    std::string ProjectManager::GetRecentProjectsFilePath()
+    std::string ProjectManager::GetRecentProjectsFilePath() const
     {
-        return PathToUtf8(PathFromUtf8(GetEditorDataDirectory()) / "RecentProjects.json");
+        return PathToUtf8(PathFromUtf8(m_editorDataDirectory) / "RecentProjects.json");
     }
 
     void ProjectManager::LoadRecentProjectsList()

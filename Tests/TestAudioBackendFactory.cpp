@@ -80,6 +80,8 @@ TEST(AudioBackendFactory_OpenALExplicitOnNonWindows)
 #ifndef SPARK_PLATFORM_WINDOWS
     auto backend = CreateAudioBackend(AudioBackendType::OpenAL, nullptr);
     EXPECT_TRUE(backend != nullptr);
+#else
+    SKIP_TEST("Explicit OpenAL backend selection is covered on non-Windows platforms");
 #endif
 }
 

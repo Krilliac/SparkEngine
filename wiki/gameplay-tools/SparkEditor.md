@@ -4,7 +4,7 @@ SparkEditor is a required Windows build product and authoring surface in the blo
 
 ![SparkEditor default layout](../../docs/screenshots/editor-overview.png)
 
-*SparkEditor default layout — Hierarchy, Scene View, Inspector, Asset Browser, and Console panels with the Spark Professional dark theme.*
+*SparkEditor layout preview — Hierarchy, Scene View, Inspector, Asset Browser, and Console panels shown with the legacy Spark Professional palette.*
 
 ### Welcome Screen
 
@@ -633,18 +633,28 @@ Operations use `ExecuteCommand()` and implement `EditorCommand::Execute()` / `Un
 
 ## Theme System
 
-The `EditorTheme` class (`Core/EditorTheme.h`) provides professional theming with 8 built-in themes:
+Select a palette from **Help > Themes**; it applies immediately to ImGui widgets,
+the toolbar, the status bar, and notification toasts. **Ember Studio** is the startup default.
+Use `SparkEditor.exe --theme "Cobalt Forge"` (or another exact name below) to
+override the startup palette. Menu selections currently apply for the running
+session; they are not saved as a startup preference.
+
+The `EditorTheme` class (`Core/EditorTheme.h`) registers these built-in themes:
 
 | Theme | Description |
 |-------|-------------|
-| Unity Pro | Unity-inspired dark theme |
-| Unreal Pro | Unreal Engine-inspired dark theme |
-| VS Pro | Visual Studio-inspired dark theme |
-| JetBrains | JetBrains IDE-inspired theme |
+| Ember Studio | Warm charcoal, ember accent, cyan data highlights (default) |
+| Cobalt Forge | Cool slate, cyan accent, violet data highlights |
+| Graphite Signal | Neutral graphite, silver accent, mint data highlights |
 | Professional Light | Light theme for well-lit environments |
 | High Contrast | Accessibility-focused high-contrast theme |
-| Blue Accent | Custom blue accent dark theme |
-| Orange Accent | Custom orange accent dark theme |
+
+Retired built-in names remain accepted as compatibility aliases without extra
+picker entries: Spark Professional, Spark Ember, and Orange Accent resolve to
+Ember Studio; Spark Fusion, Unreal Pro, and Blue Accent resolve to Cobalt Forge;
+Unity Pro, VS Pro, and JetBrains resolve to Graphite Signal. Explicitly registered
+custom themes retain their names and take precedence over compatibility aliases.
+Unknown names fall back to Ember Studio.
 
 ### Theme Data Structure
 
@@ -662,10 +672,10 @@ The `EditorThemeData` struct contains 60+ color properties organized into groups
 
 ```cpp
 // Apply a built-in theme
-EditorTheme::ApplyTheme("UnityPro");
+EditorTheme::ApplyTheme("Ember Studio");
 
 // Create a blended theme
-EditorTheme::CreateBlendedTheme("UnityPro", "UnrealPro", 0.5f, "HybridTheme");
+EditorTheme::CreateBlendedTheme("Unity Pro", "Unreal Pro", 0.5f, "HybridTheme");
 
 // Export/import custom themes
 ThemeCustomizer::ExportTheme(theme, "MyTheme.json");
@@ -796,8 +806,12 @@ leaves a dump but does not offer scene recovery.
 
 ### Theme colors look wrong
 
-1. Call `EditorTheme::ApplyProfessionalEnhancements()` after applying the theme.
-2. Verify custom fonts loaded successfully via `EditorTheme::ApplyCustomFonts()`.
+1. Re-select the palette from **Help > Themes** and check the selected menu item.
+2. For missing fonts or icons, check the startup log from `EditorFonts::LoadFonts()`
+   and the packaged `EditorAssets/Fonts` directory beside the executable.
+   Fonts are loaded at startup; changing the palette does not reload the font atlas.
+3. Report any panel that retains a fixed color across palettes; custom drawing
+   should use the active theme's semantic colors or ImGui style colors.
 
 ### Time of Day
 

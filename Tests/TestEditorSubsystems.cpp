@@ -7,6 +7,7 @@
  */
 
 #include "TestFramework.h"
+#include "Fixtures/ScopedEditorProfile.h"
 #include "Core/EditorTheme.h"
 #include "Core/TutorialSystem.h"
 #include "Workflow/EditorWorkflow.h"
@@ -849,6 +850,41 @@ namespace
     }
 } // namespace
 
+TEST(ProjectManager_ExplicitDataDirectoriesKeepHistorySeparate)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-profile-isolation-" + std::to_string(stamp));
+    const fs::path firstDir = root / "first";
+    const fs::path secondDir = root / "second";
+    fs::create_directories(firstDir);
+    const std::string original = R"({"recentProjects":[{"name":"Profile A","path":"missing.sparkproject","engineVersion":"1.0","lastOpened":1}]})";
+    {
+        std::ofstream seed(firstDir / "RecentProjects.json");
+        seed << original;
+    }
+    ProjectManager first(TestPathUtf8(firstDir));
+    ProjectManager second(TestPathUtf8(secondDir));
+    EXPECT_TRUE(first.Initialize());
+    EXPECT_TRUE(second.Initialize());
+    const auto recent = first.GetRecentProjects();
+    EXPECT_EQ(recent.size(), static_cast<size_t>(1));
+    if (!recent.empty())
+        EXPECT_EQ(recent.front().name, std::string("Profile A"));
+    EXPECT_TRUE(second.GetRecentProjects().empty());
+    second.Shutdown();
+    EXPECT_TRUE(fs::is_regular_file(secondDir / "RecentProjects.json"));
+    {
+        std::ifstream input(firstDir / "RecentProjects.json");
+        const std::string after((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        EXPECT_EQ(after, original);
+    }
+    first.Shutdown();
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
 TEST(ProjectManager_TemplateName)
 {
     const auto descriptors = ProjectManager::GetProjectTemplateDescriptors();
@@ -895,7 +931,7 @@ TEST(ProjectManager_AllRegisteredTemplatesCreateMappedPhysicalPackages)
         std::filesystem::temp_directory_path() / ("spark-template-catalog-test-" + std::to_string(stamp));
     std::filesystem::create_directories(parent);
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     manager.SetEngineRoot(sourceRoot.string());
     size_t callbackCount = 0;
@@ -988,7 +1024,7 @@ TEST(ProjectManager_DisplayNameProducesSafeModuleAndCanonicalProjectDocument)
     const std::filesystem::path destination = parent / std::filesystem::u8path(displayName);
     const std::filesystem::path canonicalProject = destination / std::filesystem::u8path(displayName + ".sparkproject");
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     manager.SetEngineRoot(sourceRoot.string());
     EXPECT_TRUE(manager.CreateProject(displayName, parent.string(), ProjectTemplate::Empty));
@@ -1033,7 +1069,7 @@ TEST(ProjectManager_GeneratedFallbackUsesProjectIdentityInsteadOfStagingName)
     std::filesystem::create_directories(emptyEngineRoot);
     std::filesystem::create_directories(projects);
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     manager.SetEngineRoot(emptyEngineRoot.string());
     ASSERT_TRUE(manager.CreateProject("Fallback Playable", projects.string(), ProjectTemplate::FirstPerson,
@@ -1076,7 +1112,7 @@ TEST(ProjectManager_CreateReplacementClosesPreviousProjectForFallbackAndPhysical
     std::filesystem::create_directories(emptyEngineRoot);
     std::filesystem::create_directories(projects);
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     manager.SetEngineRoot(emptyEngineRoot.string());
     ASSERT_TRUE(manager.CreateProject("Initial", projects.string(), ProjectTemplate::Blank3D));
@@ -1120,7 +1156,7 @@ TEST(ProjectManager_LegacyAndCustomProjectsDoNotAcquireBlankTemplateIdentity)
     std::ofstream(legacyDocument)
         << "{\n  \"name\": \"Legacy\",\n  \"version\": \"1.0.0\",\n  \"modules\": [],\n  \"scenes\": []\n}\n";
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     ASSERT_TRUE(manager.OpenProject(legacyDocument.string()));
     EXPECT_FALSE(manager.GetCurrentProject().hasTemplateIdentity);
@@ -1161,7 +1197,7 @@ TEST(ProjectManager_FailedCreationIsTransactionalAndCleansStaging)
     const std::filesystem::path brokenCatalog = parent / "BrokenCatalog";
     std::filesystem::create_directories(projects);
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     manager.SetEngineRoot(sourceRoot.string());
     ASSERT_TRUE(manager.CreateProject("Baseline", projects.string(), ProjectTemplate::Blank3D));
@@ -1239,7 +1275,7 @@ TEST(ProjectManager_FailedCreationIsTransactionalAndCleansStaging)
 
 TEST(ProjectManager_Initialize)
 {
-    ProjectManager pm;
+    SparkEditor::Testing::IsolatedProjectManager pm;
     bool ok = pm.Initialize();
     EXPECT_TRUE(ok);
     pm.Shutdown();
@@ -1247,7 +1283,7 @@ TEST(ProjectManager_Initialize)
 
 TEST(ProjectManager_NoOpenProject)
 {
-    ProjectManager pm;
+    SparkEditor::Testing::IsolatedProjectManager pm;
     pm.Initialize();
     EXPECT_FALSE(pm.HasOpenProject());
     pm.Shutdown();
@@ -1255,7 +1291,7 @@ TEST(ProjectManager_NoOpenProject)
 
 TEST(ProjectManager_PathHelpers)
 {
-    ProjectManager pm;
+    SparkEditor::Testing::IsolatedProjectManager pm;
     pm.Initialize();
 
     std::string assets = pm.GetProjectAssetsPath();
@@ -1273,7 +1309,7 @@ TEST(ProjectManager_PathHelpers)
 
 TEST(ProjectManager_RecentProjects)
 {
-    ProjectManager pm;
+    SparkEditor::Testing::IsolatedProjectManager pm;
     pm.Initialize();
 
     auto recent = pm.GetRecentProjects();
@@ -1290,7 +1326,7 @@ TEST(ProjectManager_CreateProject_WritesLoadableReflectedScene)
         std::filesystem::temp_directory_path() / ("spark-project-test-" + std::to_string(stamp));
     std::filesystem::create_directories(parent);
 
-    ProjectManager pm;
+    SparkEditor::Testing::IsolatedProjectManager pm;
     pm.Initialize();
     pm.SetEngineRoot(sourceRoot.string());
     EXPECT_TRUE(pm.CreateProject("Playable", parent.string(), ProjectTemplate::FirstPerson, "test"));
@@ -1348,7 +1384,7 @@ TEST(ProjectManager_CreateProject_WritesLoadableReflectedScene)
     EXPECT_TRUE(ProjectManager::GetActiveProjectPath().empty());
 
     const std::string expectedProjectFile = (parent / "Playable" / "Playable.sparkproject").string();
-    ProjectManager reloaded;
+    SparkEditor::Testing::IsolatedProjectManager reloaded;
     reloaded.Initialize();
     EXPECT_TRUE(reloaded.OpenProject(expectedProjectFile));
     EXPECT_TRUE(std::filesystem::is_regular_file(moduleSource));
@@ -1390,7 +1426,7 @@ TEST(ProjectManager_ProjectMetadataEscapesRoundTrip)
     }
 
     const std::string expectedName = std::string("Recent \"Project\"\nLine\tTab Caf") + "\xC3\xA9 \xF0\x9F\x9A\x80";
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     EXPECT_TRUE(manager.OpenProject(projectFile.string()));
     const ProjectInfo& info = manager.GetCurrentProject();
@@ -1405,7 +1441,8 @@ TEST(ProjectManager_ProjectMetadataEscapesRoundTrip)
     EXPECT_TRUE(std::filesystem::is_regular_file(projectFile));
     EXPECT_FALSE(std::filesystem::exists(root / (expectedName + ".sparkproject")));
 
-    ProjectManager roundTrip;
+    // Reopen the same isolated profile to verify persisted recent-project metadata.
+    ProjectManager roundTrip(TestPathUtf8(manager.ProfileDirectory()));
     roundTrip.Initialize();
     const auto recent = roundTrip.GetRecentProjects();
     const auto found = std::find_if(recent.begin(), recent.end(),
@@ -1435,7 +1472,7 @@ TEST(ProjectManager_RecentProjectPathsNormalizeForAddAndRemove)
     std::ofstream(projectFile) << "{\n  \"name\": \"Normalized\",\n  \"version\": \"1.0.0\"\n}\n";
     const std::filesystem::path alternate = root / "nested" / ".." / "Normalized.sparkproject";
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     EXPECT_TRUE(manager.OpenProject(alternate.string()));
     EXPECT_TRUE(manager.OpenProject(projectFile.string()));
@@ -1464,7 +1501,7 @@ TEST(ProjectManager_RecordOpenedScenePersistsProjectRelativePath)
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     const std::filesystem::path parent =
         std::filesystem::temp_directory_path() / ("spark-record-scene-test-" + std::to_string(stamp));
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     EXPECT_TRUE(manager.CreateProject("Recorded", parent.string(), ProjectTemplate::Blank3D));
     const std::filesystem::path root = parent / "Recorded";
@@ -1482,7 +1519,7 @@ TEST(ProjectManager_RecordOpenedScenePersistsProjectRelativePath)
     manager.RemoveRecentProject((root / "Recorded.sparkproject").string());
     manager.Shutdown();
 
-    ProjectManager reopened;
+    SparkEditor::Testing::IsolatedProjectManager reopened;
     reopened.Initialize();
     EXPECT_TRUE(reopened.OpenProject((root / "Recorded.sparkproject").string()));
     EXPECT_EQ(reopened.GetCurrentProject().lastOpenedScene, std::string("Scenes/Sub/Saved.sparkscene"));
@@ -1499,7 +1536,7 @@ TEST(ProjectManager_RecordOpenedSceneSupportsUnicodeProjectPaths)
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     const std::filesystem::path parent = std::filesystem::temp_directory_path() /
                                          std::filesystem::u8path("spark-unicode-\xC3\xA9-" + std::to_string(stamp));
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     EXPECT_TRUE(manager.CreateProject("UnicodeProject", TestPathUtf8(parent), ProjectTemplate::Blank3D));
 
@@ -1543,7 +1580,7 @@ TEST(ProjectManager_RecordOpenedSceneDoesNotRewriteAlreadyCurrentScene)
         return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     };
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     ASSERT_TRUE(manager.OpenProject(projectFile.string()));
     const std::string before = readProject();
@@ -1577,7 +1614,7 @@ TEST(ProjectManager_ExplicitSaveStillPersistsLastModified)
            "  \"lastModified\": 0,\n  \"modules\": [\"Explicit\"],\n"
            "  \"scenes\": [\"Scenes/Default.sparkscene\"]\n}\n";
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     ASSERT_TRUE(manager.OpenProject(projectFile.string()));
     EXPECT_EQ(manager.GetCurrentProject().lastModified, static_cast<uint64_t>(0));
@@ -1586,7 +1623,7 @@ TEST(ProjectManager_ExplicitSaveStillPersistsLastModified)
     manager.RemoveRecentProject(projectFile.string());
     manager.Shutdown();
 
-    ProjectManager reopened;
+    SparkEditor::Testing::IsolatedProjectManager reopened;
     reopened.Initialize();
     ASSERT_TRUE(reopened.OpenProject(projectFile.string()));
     EXPECT_TRUE(reopened.GetCurrentProject().lastModified > 0);
@@ -1603,7 +1640,7 @@ TEST(ProjectManager_ResolveProjectScenePathRejectsTraversalBeforeLoad)
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     const std::filesystem::path parent =
         std::filesystem::temp_directory_path() / ("spark-scene-containment-test-" + std::to_string(stamp));
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     ASSERT_TRUE(manager.CreateProject("Contained", parent.string(), ProjectTemplate::Blank3D));
     const std::filesystem::path root = parent / "Contained";
@@ -1649,7 +1686,7 @@ TEST(ProjectManager_FailedProjectSwitchPreservesCurrentProjectAndDefersCloseCall
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     const std::filesystem::path parent =
         std::filesystem::temp_directory_path() / ("spark-transactional-open-test-" + std::to_string(stamp));
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     ASSERT_TRUE(manager.CreateProject("Current", parent.string(), ProjectTemplate::Blank3D));
     const std::string currentPath = manager.GetCurrentProject().path;
@@ -1685,7 +1722,7 @@ TEST(ProjectManager_CommittedSwitchSurvivesThrowingLifecycleCallbacks)
     std::ofstream(firstProject) << "{\"name\":\"First\",\"version\":\"1.0.0\",\"modules\":[],\"scenes\":[]}";
     std::ofstream(secondProject) << "{\"name\":\"Second\",\"version\":\"1.0.0\",\"modules\":[],\"scenes\":[]}";
 
-    ProjectManager manager;
+    SparkEditor::Testing::IsolatedProjectManager manager;
     manager.Initialize();
     ASSERT_TRUE(manager.OpenProject(firstProject.string()));
 
@@ -2462,6 +2499,68 @@ TEST(PluginManager_RejectsForwardMinorStableABIPlugin)
 
 #ifdef SPARK_TEST_HAS_IMGUI
 
+#include <imgui.h>
+#include "Panels/InspectorPanel.h"
+#include "Core/EditorDockLayout.h"
+
+TEST(Gated_EditorDockLayout_ToolbarUsesContentHeightAndKeepsPanelsSeparate)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    for (float height : {720.0f, 1080.0f, 2160.0f})
+    {
+        const ImGuiID root = 0x53444F43;
+        const auto nodes = BuildEditorDockLayout(root, ImVec2(1280, height));
+        const auto* toolbar = ImGui::DockBuilderGetNode(nodes.toolbar);
+        EXPECT_TRUE(toolbar != nullptr);
+        if (toolbar)
+        {
+            EXPECT_NEAR(toolbar->Size.y, 42.0f, 1.0f);
+            EXPECT_TRUE((toolbar->LocalFlags & ImGuiDockNodeFlags_NoTabBar) != 0);
+        }
+        EXPECT_TRUE(nodes.center != nodes.toolbar);
+        EXPECT_TRUE(nodes.left != nodes.center);
+        EXPECT_TRUE(nodes.right != nodes.center);
+        EXPECT_TRUE(nodes.bottom != nodes.center);
+        ImGui::DockBuilderRemoveNode(root);
+    }
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+
+TEST(Gated_InspectorVectorControl_FitsPanelWithoutChangingValues)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    auto& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+    io.DisplaySize = ImVec2(1024, 768);
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0, textureHeight = 0;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+    for (float panelWidth : {180.0f, 280.0f, 520.0f})
+    {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(panelWidth, 300));
+        ImGui::Begin("Inspector geometry", nullptr, ImGuiWindowFlags_NoSavedSettings);
+        const float rightEdge = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+        float values[] = {1.25f, -2.5f, 3.75f};
+        InspectorPanel::DrawVec3Control("Position", values, 0.0f, 0.1f);
+        EXPECT_TRUE(ImGui::GetItemRectMax().x <= rightEdge + 0.5f);
+        EXPECT_TRUE(ImGui::GetItemRectSize().x >= 32.0f);
+        EXPECT_NEAR(values[0], 1.25f, 0.0001f);
+        EXPECT_NEAR(values[1], -2.5f, 0.0001f);
+        EXPECT_NEAR(values[2], 3.75f, 0.0001f);
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
 #include "Panels/AssetBrowserPanel.h"
 #include "Search/CommandPalette.h"
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -2569,6 +2668,76 @@ TEST(Gated_EditorTheme_GetAvailableThemes)
 {
     auto themes = EditorTheme::GetAvailableThemes();
     EXPECT_TRUE(!themes.empty());
+    EXPECT_TRUE(std::is_sorted(themes.begin(), themes.end()));
+    for (const char* name : {"Ember Studio", "Cobalt Forge", "Graphite Signal", "Professional Light", "High Contrast"})
+        EXPECT_TRUE(std::find(themes.begin(), themes.end(), name) != themes.end());
+    for (const char* name : {"Spark Professional", "Spark Fusion", "Spark Ember", "Unity Pro", "Unreal Pro",
+                             "VS Pro", "JetBrains", "Blue Accent", "Orange Accent"})
+        EXPECT_TRUE(std::find(themes.begin(), themes.end(), name) == themes.end());
+}
+
+TEST(Gated_EditorTheme_RetiredNamesResolveWithoutPickerDuplicates)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    const std::pair<const char*, const char*> aliases[] = {
+        {"Spark Professional", "Ember Studio"}, {"Spark Ember", "Ember Studio"},
+        {"Orange Accent", "Ember Studio"}, {"Spark Fusion", "Cobalt Forge"},
+        {"Unreal Pro", "Cobalt Forge"}, {"Blue Accent", "Cobalt Forge"},
+        {"Unity Pro", "Graphite Signal"}, {"VS Pro", "Graphite Signal"},
+        {"JetBrains", "Graphite Signal"}};
+    for (const auto& [oldName, replacement] : aliases)
+    {
+        const auto* resolved = EditorTheme::GetTheme(oldName);
+        EXPECT_TRUE(resolved != nullptr);
+        if (resolved)
+            EXPECT_EQ(resolved->name, std::string(replacement));
+        EXPECT_TRUE(EditorTheme::ApplyTheme(oldName));
+        EXPECT_EQ(EditorTheme::GetCurrentThemeName(), std::string(replacement));
+    }
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_EditorTheme_StudioPalettesApplyToLiveStyle)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    for (const char* name : {"Ember Studio", "Cobalt Forge", "Graphite Signal", "Ember Studio"})
+    {
+        EXPECT_TRUE(EditorTheme::ApplyTheme(name));
+        EXPECT_EQ(EditorTheme::GetCurrentThemeName(), std::string(name));
+        const auto& active = EditorTheme::GetCurrentThemeData();
+        EXPECT_EQ(active.name, std::string(name));
+        const auto& colors = ImGui::GetStyle().Colors;
+        EXPECT_NEAR(colors[ImGuiCol_WindowBg].x, active.background.r, 0.0001f);
+        EXPECT_NEAR(colors[ImGuiCol_Text].y, active.text.g, 0.0001f);
+        EXPECT_NEAR(colors[ImGuiCol_ButtonActive].z, active.buttonActive.b, 0.0001f);
+        EXPECT_NEAR(colors[ImGuiCol_CheckboxSelectedBg].x, active.backgroundSelected.r, 0.0001f);
+        EXPECT_NEAR(colors[ImGuiCol_CheckboxSelectedBg].y, active.backgroundSelected.g, 0.0001f);
+        EXPECT_NEAR(colors[ImGuiCol_CheckboxSelectedBg].z, active.backgroundSelected.b, 0.0001f);
+        EXPECT_NEAR(colors[ImGuiCol_TabSelectedOverline].x, active.accent.r, 0.0001f);
+    }
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_EditorTheme_CustomSnapshotAndFallbackStayConsistent)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    auto custom = EditorTheme::CreateUnityProTheme();
+    custom.name = "Unregistered live test palette";
+    custom.accent = ThemeColor(0.17f, 0.32f, 0.81f);
+    EXPECT_TRUE(EditorTheme::ApplyTheme(custom));
+    custom.accent.r = 0.9f;
+    EXPECT_EQ(EditorTheme::GetCurrentThemeData().name, custom.name);
+    EXPECT_NEAR(EditorTheme::GetCurrentThemeData().accent.r, 0.17f, 0.0001f);
+    EXPECT_TRUE(EditorTheme::ApplyTheme("Missing test palette"));
+    EXPECT_EQ(EditorTheme::GetCurrentThemeName(), std::string("Ember Studio"));
+    EXPECT_EQ(EditorTheme::GetCurrentThemeData().name, EditorTheme::GetCurrentThemeName());
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
 }
 
 TEST(Gated_EditorTheme_CreateBlendedTheme)

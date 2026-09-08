@@ -11,6 +11,7 @@
  *  - WeatherFogPanel shows the engine weather preset and reports "not connected"
  *  - SceneStatisticsPanel counts entities in a real World (no sample constants)
  *  - SearchPanel finds live World entities (no sample entity table)
+ *  - CSGEditorPanel drives the real CSG brush registry and mesh builder
  *  - WeaponEditorPanel Reset restores the starting values
  *  - ObjectPlacementPanel placement routes to the document entity creator
  *
@@ -29,6 +30,7 @@
 #include "Graphics/WeatherSystem.h"
 
 #include "Panels/ModdingPanel.h"
+#include "Panels/CSGEditorPanel.h"
 #include "Panels/ObjectPlacementPanel.h"
 #include "Panels/ReplayPanel.h"
 #include "Panels/SaveSystemPanel.h"
@@ -406,6 +408,34 @@ TEST(EditorPanels_SearchPanelSearchesTheLiveWorld)
     // A name that exists in neither the World nor any demo table finds nothing.
     panel.Search("ZzQqNoSuchEntity");
     EXPECT_TRUE(panel.GetResults().empty());
+}
+
+TEST(EditorPanels_CSGEditorPanelDrivesTheRealCsgSystem)
+{
+    auto& csg = Spark::LevelDesign::CSGSystem::GetInstance();
+    csg.Shutdown();
+    csg.Initialize();
+
+    SparkEditor::CSGEditorPanel panel;
+    EXPECT_TRUE(panel.Initialize());
+    panel.SetAutoRebuildEnabled(false);
+
+    const uint32_t brushId = panel.CreateBrush(Spark::LevelDesign::BrushShape::Box, {2.0f, 3.0f, 4.0f});
+    EXPECT_GT(brushId, 0u);
+    EXPECT_EQ(panel.GetBrushCount(), 1u);
+    EXPECT_EQ(panel.GetSelectedBrush(), brushId);
+    EXPECT_NE(csg.GetBrush(brushId), nullptr);
+
+    panel.RebuildMesh();
+    EXPECT_GT(panel.GetLastMesh().triangleCount, 0u);
+
+    EXPECT_TRUE(panel.RemoveBrushById(brushId));
+    EXPECT_EQ(panel.GetBrushCount(), 0u);
+    EXPECT_EQ(panel.GetSelectedBrush(), 0u);
+    EXPECT_EQ(csg.GetBrush(brushId), nullptr);
+
+    panel.Shutdown();
+    csg.Shutdown();
 }
 
 TEST(EditorPanels_WeaponEditorResetRestoresStartingValues)

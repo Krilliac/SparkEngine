@@ -7,6 +7,7 @@
  */
 
 #include "EditorUI.h"
+#include "EditorDockLayout.h"
 #include "Engine/ECS/Components/CoreComponents.h"
 #include "SceneManager/ReflectedSceneSerializer.h" // Spark::SaveWorld/LoadWorld — full-fidelity scene round-trip (C4)
 #include "EditorTheme.h"
@@ -212,8 +213,8 @@ namespace SparkEditor
                 }
             }
 
-            // Apply startup theme (CLI --theme override, else Spark Ember — matches hi-fi design)
-            const std::string themeName = config.startupTheme.empty() ? "Spark Ember" : config.startupTheme;
+            // Apply startup theme (CLI --theme override, else Ember Studio — matches hi-fi design)
+            const std::string themeName = config.startupTheme.empty() ? "Ember Studio" : config.startupTheme;
             console.LogInfo("Applying theme: " + themeName);
             ApplyTheme(themeName);
             console.LogSuccess("Theme applied");
@@ -732,22 +733,8 @@ namespace SparkEditor
     void EditorUI::SetupDefaultDockLayout(ImGuiID dockspaceId)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Setting up default dock layout");
-        ImGui::DockBuilderRemoveNode(dockspaceId);
-        ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
-        ImGui::DockBuilderSetNodeSize(dockspaceId, ImGui::GetMainViewport()->WorkSize);
-
-        ImGuiID dockMain = dockspaceId;
-        ImGuiID dockToolbar, dockLeft, dockRight, dockBottom, dockCenter;
-
-        // Give the toolbar its own shallow row. Docking it in the center made
-        // it a peer tab of Scene/Game View and could hide the canvas.
-        ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Up, 0.065f, &dockToolbar, &dockMain);
-        // Split: left 18% for Hierarchy (slim, like Unity/Unreal)
-        ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.18f, &dockLeft, &dockMain);
-        // Split: right 22% for Inspector (narrower, properties focused)
-        ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.22f, &dockRight, &dockMain);
-        // Split: bottom 25% for Console + Asset Browser (shorter, more viewport)
-        ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.25f, &dockBottom, &dockCenter);
+        const auto [dockToolbar, dockLeft, dockRight, dockBottom, dockCenter] =
+            BuildEditorDockLayout(dockspaceId, ImGui::GetMainViewport()->WorkSize);
 
         // Derive dock names from the live panels. Two hard-coded IDs here had
         // drifted (Hierarchy/Console), leaving those panels as tiny floating
@@ -895,6 +882,7 @@ namespace SparkEditor
     void EditorUI::RenderStatusBar()
     // NOTE: Intentionally exceeds 50-line guideline — linear UI layout code
     {
+        const auto& theme = EditorTheme::GetCurrentThemeData();
         ImGuiViewport* viewport = ImGui::GetMainViewport();
         float statusBarHeight = 26.0f;
         ImVec2 statusBarPos(viewport->WorkPos.x, viewport->WorkPos.y + viewport->WorkSize.y - statusBarHeight);
@@ -907,7 +895,7 @@ namespace SparkEditor
                                  ImGuiWindowFlags_NoDocking;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 4));
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.075f, 0.082f, 0.094f, 1.0f)); // Darker than main bg
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, theme.backgroundDark.ToImVec4()); // Darker than main bg
         if (ImGui::Begin("##StatusBar", nullptr, flags))
         {
             const int liveObjectCount = m_world ? static_cast<int>(m_world->GetEntityCount()) : m_sceneObjectCount;
@@ -916,51 +904,51 @@ namespace SparkEditor
             const bool sceneModified = IsSceneModified();
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
-            // Top edge accent line (subtle teal glow)
+            // Top edge accent line (selected theme)
             ImVec2 wp = ImGui::GetWindowPos();
             ImVec2 ws = ImGui::GetWindowSize();
             dl->AddLine(wp, ImVec2(wp.x + ws.x, wp.y),
-                        ImGui::ColorConvertFloat4ToU32(ImVec4(0.102f, 0.686f, 0.737f, 0.35f)), 1.0f);
+                        ImGui::ColorConvertFloat4ToU32(theme.accent.WithAlpha(0.35f).ToImVec4()), 1.0f);
 
             // Left: engine connection chip badge
             ImVec4 statusColor =
-                m_engineConnected ? ImVec4(0.239f, 0.839f, 0.549f, 1.0f) : ImVec4(0.910f, 0.251f, 0.251f, 1.0f);
+                m_engineConnected ? theme.textSuccess.ToImVec4() : theme.textError.ToImVec4();
             ImGui::TextColored(statusColor, ICON_FA_CIRCLE);
             ImGui::SameLine(0, 4);
-            ImGui::TextColored(ImVec4(0.533f, 0.565f, 0.627f, 1.0f), "%s",
+            ImGui::TextColored(theme.textSecondary.ToImVec4(), "%s",
                                m_engineConnected ? "Connected" : "Disconnected");
 
             // Project name (dimmed secondary text)
             if (m_projectManager && m_projectManager->HasOpenProject())
             {
                 ImGui::SameLine(0, 12);
-                ImGui::TextColored(ImVec4(0.306f, 0.329f, 0.384f, 1.0f), ICON_FA_CIRCLE);
+                ImGui::TextColored(theme.textDisabled.ToImVec4(), ICON_FA_CIRCLE);
                 ImGui::SameLine(0, 12);
-                ImGui::TextColored(ImVec4(0.533f, 0.565f, 0.627f, 1.0f), ICON_FA_FOLDER " %s",
+                ImGui::TextColored(theme.textSecondary.ToImVec4(), ICON_FA_FOLDER " %s",
                                    m_projectManager->GetCurrentProject().name.c_str());
             }
 
             // Scene name
             ImGui::SameLine(0, 12);
-            ImGui::TextColored(ImVec4(0.306f, 0.329f, 0.384f, 1.0f), ICON_FA_CIRCLE);
+            ImGui::TextColored(theme.textDisabled.ToImVec4(), ICON_FA_CIRCLE);
             ImGui::SameLine(0, 12);
-            ImGui::TextColored(ImVec4(0.847f, 0.863f, 0.902f, 1.0f), ICON_FA_MAP " %s%s", m_currentSceneName.c_str(),
+            ImGui::TextColored(theme.text.ToImVec4(), ICON_FA_MAP " %s%s", m_currentSceneName.c_str(),
                                sceneModified ? " *" : "");
 
             ImGui::SameLine(0, 12);
-            ImGui::TextColored(ImVec4(0.306f, 0.329f, 0.384f, 1.0f), ICON_FA_CIRCLE);
+            ImGui::TextColored(theme.textDisabled.ToImVec4(), ICON_FA_CIRCLE);
             ImGui::SameLine(0, 12);
 
             // Center: tool + selection (secondary text)
             const char* toolNames[] = {"Move", "Rotate", "Scale"};
-            ImGui::TextColored(ImVec4(0.533f, 0.565f, 0.627f, 1.0f), "%s | %d obj | %d sel",
+            ImGui::TextColored(theme.textSecondary.ToImVec4(), "%s | %d obj | %d sel",
                                toolNames[(int)m_currentTool], liveObjectCount, liveSelectedCount);
 
             // Right: FPS + frame info
             float fps = m_stats.frameTime > 0.001f ? 1000.0f / m_stats.frameTime : 0.0f;
-            ImVec4 fpsColor = fps >= 60.0f   ? ImVec4(0.239f, 0.839f, 0.549f, 1.0f)
-                              : fps >= 30.0f ? ImVec4(0.941f, 0.659f, 0.188f, 1.0f)
-                                             : ImVec4(0.910f, 0.251f, 0.251f, 1.0f);
+            ImVec4 fpsColor = fps >= 60.0f   ? theme.textSuccess.ToImVec4()
+                              : fps >= 30.0f ? theme.textWarning.ToImVec4()
+                                             : theme.textError.ToImVec4();
 
             float rightOffset = ImGui::GetWindowWidth() - 380;
             if (rightOffset > ImGui::GetCursorPosX())
@@ -969,13 +957,13 @@ namespace SparkEditor
             }
             ImGui::TextColored(fpsColor, ICON_FA_TACHOMETER_ALT " %.0f", fps);
             ImGui::SameLine(0, 4);
-            ImGui::TextColored(ImVec4(0.533f, 0.565f, 0.627f, 1.0f), "FPS");
+            ImGui::TextColored(theme.textSecondary.ToImVec4(), "FPS");
             ImGui::SameLine(0, 12);
-            ImGui::TextColored(ImVec4(0.416f, 0.443f, 0.502f, 1.0f), "%.1fms", m_stats.frameTime);
+            ImGui::TextColored(theme.textSecondary.ToImVec4(), "%.1fms", m_stats.frameTime);
             ImGui::SameLine(0, 12);
-            ImGui::TextColored(ImVec4(0.416f, 0.443f, 0.502f, 1.0f), ICON_FA_DATABASE " %d", m_assetDatabaseSize);
+            ImGui::TextColored(theme.textSecondary.ToImVec4(), ICON_FA_DATABASE " %d", m_assetDatabaseSize);
             ImGui::SameLine(0, 12);
-            ImGui::TextColored(ImVec4(0.306f, 0.329f, 0.384f, 1.0f), "#%llu", (unsigned long long)m_frameNumber);
+            ImGui::TextColored(theme.textDisabled.ToImVec4(), "#%llu", (unsigned long long)m_frameNumber);
         }
         ImGui::End();
         ImGui::PopStyleColor();
@@ -1117,6 +1105,11 @@ namespace SparkEditor
             m_showWelcomeScreen = false;
             return;
         }
+
+        // Let project selection finish before showing workspace onboarding.
+        // Two startup overlays otherwise obscure each other and dim the editor twice.
+        if (m_projectBrowserPanel && m_projectBrowserPanel->IsModalActive())
+            return;
 
         ImGui::OpenPopup("Welcome to SparkEngine");
 
@@ -1308,7 +1301,6 @@ namespace SparkEditor
     void EditorUI::ApplyTheme(const std::string& themeName)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Applying theme: %s", themeName.c_str());
-        m_currentTheme = themeName;
 
         if (!EditorTheme::ApplyTheme(themeName))
         {
@@ -1317,6 +1309,7 @@ namespace SparkEditor
             // Fallback to basic ImGui dark style
             ImGui::StyleColorsDark();
         }
+        m_currentTheme = EditorTheme::GetCurrentThemeName();
     }
 
     void EditorUI::ShowNotification(const std::string& message, const std::string& type, float duration)

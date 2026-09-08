@@ -21,18 +21,9 @@
 #include "Engine/LevelDesign/CSGSystem.h"
 
 #include <algorithm>
-#include <cstdio>
 #include <string>
 #include <vector>
 
-// The panel renders with Dear ImGui when available, and compiles as a
-// no-op in headless / test builds where ImGui is not linked.
-#if __has_include(<imgui.h>)
-#include <imgui.h>
-#define SPARK_CSG_PANEL_HAS_IMGUI 1
-#else
-#define SPARK_CSG_PANEL_HAS_IMGUI 0
-#endif
 
 namespace SparkEditor
 {
@@ -65,24 +56,7 @@ namespace SparkEditor
 
         void Update(float deltaTime) override { (void)deltaTime; }
 
-        void Render() override
-        {
-            // Without BeginPanel the widgets below land in ImGui's implicit fallback
-            // window instead of a dockable, titled panel like every other editor panel.
-            if (!BeginPanel())
-            {
-                EndPanel();
-                return;
-            }
-
-            auto& csg = Spark::LevelDesign::CSGSystem::GetInstance();
-            RenderBrushCreation(csg);
-            RenderBrushList(csg);
-            RenderBuildControls(csg);
-            RenderStatistics();
-
-            EndPanel();
-        }
+        void Render() override;
 
         void Shutdown() override { m_brushIds.clear(); }
 
@@ -195,100 +169,10 @@ namespace SparkEditor
         Spark::LevelDesign::CSGOperation GetDefaultBrushOperation() const { return m_brushOperation; }
 
       private:
-#if SPARK_CSG_PANEL_HAS_IMGUI
-        void RenderBrushCreation(Spark::LevelDesign::CSGSystem& /*csg*/)
-        {
-            ImGui::TextUnformatted("Create Brush");
-            ImGui::Separator();
-
-            const char* shapes[] = {"Box", "Cylinder", "Sphere", "Wedge", "Cone"};
-            int shapeIdx = static_cast<int>(m_brushShape);
-            if (ImGui::Combo("Shape", &shapeIdx, shapes, IM_ARRAYSIZE(shapes)))
-            {
-                if (shapeIdx >= 0 && shapeIdx < IM_ARRAYSIZE(shapes))
-                    m_brushShape = static_cast<Spark::LevelDesign::BrushShape>(shapeIdx);
-            }
-
-            float size[3] = {m_brushSize.x, m_brushSize.y, m_brushSize.z};
-            if (ImGui::DragFloat3("Size", size, 0.1f, 0.01f, 1000.0f))
-            {
-                m_brushSize = {size[0], size[1], size[2]};
-            }
-
-            const char* ops[] = {"Additive", "Subtractive", "Intersect"};
-            int opIdx = static_cast<int>(m_brushOperation);
-            if (ImGui::Combo("Operation", &opIdx, ops, IM_ARRAYSIZE(ops)))
-            {
-                if (opIdx >= 0 && opIdx < IM_ARRAYSIZE(ops))
-                    m_brushOperation = static_cast<Spark::LevelDesign::CSGOperation>(opIdx);
-            }
-
-            if (ImGui::Button("Create"))
-            {
-                CreateBrush(m_brushShape, m_brushSize, m_brushOperation);
-            }
-            ImGui::Spacing();
-        }
-
-        void RenderBrushList(Spark::LevelDesign::CSGSystem& csg)
-        {
-            ImGui::TextUnformatted("Brushes");
-            ImGui::Separator();
-
-            uint32_t toDelete = 0;
-            for (uint32_t id : m_brushIds)
-            {
-                const auto* brush = csg.GetBrush(id);
-                const bool selected = (id == m_selectedBrush);
-                char label[64];
-                std::snprintf(label, sizeof(label), "Brush %u%s", id, brush ? "" : " [missing]");
-                if (ImGui::Selectable(label, selected))
-                {
-                    m_selectedBrush = id;
-                }
-                ImGui::SameLine();
-                ImGui::PushID(static_cast<int>(id));
-                if (ImGui::SmallButton("X"))
-                {
-                    toDelete = id;
-                }
-                ImGui::PopID();
-            }
-            if (toDelete != 0)
-            {
-                RemoveBrushById(toDelete);
-            }
-            ImGui::Spacing();
-        }
-
-        void RenderBuildControls(Spark::LevelDesign::CSGSystem& /*csg*/)
-        {
-            ImGui::TextUnformatted("Build");
-            ImGui::Separator();
-            ImGui::Checkbox("Auto-rebuild", &m_autoRebuild);
-            ImGui::SameLine();
-            if (ImGui::Button("Rebuild Now"))
-            {
-                RebuildMesh();
-            }
-            ImGui::Spacing();
-        }
-
-        void RenderStatistics()
-        {
-            ImGui::TextUnformatted("Statistics");
-            ImGui::Separator();
-            ImGui::Text("Brushes:   %u", static_cast<unsigned>(m_brushIds.size()));
-            ImGui::Text("Triangles: %u", static_cast<unsigned>(m_lastMesh.triangleCount));
-            ImGui::Text("Vertices:  %u", static_cast<unsigned>(m_lastMesh.vertices.size()));
-            ImGui::Text("Selected:  %u", static_cast<unsigned>(m_selectedBrush));
-        }
-#else
-        void RenderBrushCreation(Spark::LevelDesign::CSGSystem& /*csg*/) {}
-        void RenderBrushList(Spark::LevelDesign::CSGSystem& /*csg*/) {}
-        void RenderBuildControls(Spark::LevelDesign::CSGSystem& /*csg*/) {}
-        void RenderStatistics() {}
-#endif
+        void RenderBrushCreation(Spark::LevelDesign::CSGSystem& csg);
+        void RenderBrushList(Spark::LevelDesign::CSGSystem& csg);
+        void RenderBuildControls(Spark::LevelDesign::CSGSystem& csg);
+        void RenderStatistics();
 
         uint32_t m_selectedBrush = 0;
         Spark::LevelDesign::BrushShape m_brushShape = Spark::LevelDesign::BrushShape::Box;

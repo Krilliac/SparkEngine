@@ -230,6 +230,8 @@ namespace SparkEditor
      * @brief Get current theme name
      */
         static const std::string& GetCurrentThemeName();
+        /// Snapshot of the last applied palette, including unregistered custom themes.
+        static const EditorThemeData& GetCurrentThemeData();
 
         /**
      * @brief Create and apply a custom interpolated theme between two themes
@@ -303,6 +305,7 @@ namespace SparkEditor
 
         static std::unordered_map<std::string, EditorThemeData> s_registeredThemes;
         static std::string s_currentThemeName;
+        static EditorThemeData s_currentThemeData;
         static bool s_enhancementsEnabled;
         static bool s_customFontsLoaded;
     };

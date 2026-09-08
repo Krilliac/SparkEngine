@@ -306,7 +306,7 @@ namespace SparkEditor
 
     void SceneViewPanel::RenderToolbar()
     {
-        ImVec4 accentBlue(0.176f, 0.549f, 0.941f, 1.0f);
+        const ImVec4 selectedButton = ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive);
         float btnSize = 24.0f;
         ImVec2 btnDim(btnSize, btnSize);
 
@@ -315,7 +315,7 @@ namespace SparkEditor
         {
             bool active = (m_gizmoMode == mode);
             if (active)
-                ImGui::PushStyleColor(ImGuiCol_Button, accentBlue);
+                ImGui::PushStyleColor(ImGuiCol_Button, selectedButton);
             if (ImGui::Button(icon, btnDim))
             {
                 // EditorUI owns the tool selection (main toolbar, W/E/R, command
@@ -389,7 +389,7 @@ namespace SparkEditor
         {
             const bool snapActive = m_snapEnabled;
             if (snapActive)
-                ImGui::PushStyleColor(ImGuiCol_Button, accentBlue);
+                ImGui::PushStyleColor(ImGuiCol_Button, selectedButton);
             if (ImGui::Button(ICON_FA_MAGNET, btnDim))
                 m_snapEnabled = !m_snapEnabled;
             if (snapActive)

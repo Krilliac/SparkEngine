@@ -6,6 +6,11 @@ SparkEngine includes a comprehensive set of gameplay systems built on top of the
 
 ## Module Extension vs Fork Policy
 
+The engine quest implementation separates runtime progression and rewards
+(`QuestSystem.cpp`) from save-state capture, validation, and transactional restore
+(`QuestPersistence.cpp`). Both implement the same `QuestSystem` interface; the
+split does not introduce a second quest registry or change the saved-state format.
+
 For governance on when gameplay behavior must extend engine systems (Quest/Dialogue) versus when module forks are
 acceptable (specialized Loot/Skill/Inventory domains), see:
 

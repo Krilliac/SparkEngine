@@ -676,7 +676,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*603 test-bearing `.cpp`/`.mm` files, 7289 source-level test definitions*
+*603 test-bearing `.cpp`/`.mm` files, 7296 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -848,9 +848,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorDocumentTransition` | 7 |
 | `TestEditorGizmoTransformReal` | 6 |
 | `TestEditorLayoutManager` | 13 |
-| `TestEditorPanelsRealBackends` | 11 |
+| `TestEditorPanelsRealBackends` | 12 |
 | `TestEditorProjectMaterializationReal` | 5 |
-| `TestEditorSubsystems` | 128 |
+| `TestEditorSubsystems` | 134 |
 | `TestEditorSubsystemsReal` | 16 |
 | `TestEditorUndoHierarchyReal` | 6 |
 | `TestEditorWindowManager` | 14 |
