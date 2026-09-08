@@ -44,7 +44,7 @@ declaration proves nothing. It is not runtime parser-safety or fuzz-coverage evi
 SEC-120 remains release-blocking, and `release.yml` enforces that with
 `check_fuzz_policy.py --require-closure`, because no production parser fuzz target,
 bounded seed corpus, sanitizer smoke campaign, or scheduled campaign is currently
-committed: 108 inventoried parsers are blocked and 149 detected candidates are still
+committed: 104 inventoried parsers are blocked and 151 detected candidates are still
 deferred. See `wiki/advanced/Fuzz-Policy-and-Parser-Security.md` for the exact scope,
 the reviewed exclusions, and the closure blockers.
 

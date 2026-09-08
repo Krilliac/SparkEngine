@@ -28,16 +28,16 @@
   ],
   "what_this_gate_does_not_prove": [
     "It is a structural contract check. It is not runtime parser safety, fuzz coverage, or crash-freedom evidence.",
-    "No production parser has a libFuzzer/AFL harness: fuzzed_count is 0 and 108 inventoried parsers are blocked.",
+    "No production parser has a libFuzzer/AFL harness: fuzzed_count is 0 and 104 inventoried parsers are blocked.",
     "No seed corpus or runtime resource budget is bound to a production fuzz target: corpus_count is 0.",
     "No ASan/UBSan fuzz smoke run and no scheduled campaign have been executed.",
-    "149 detected candidates are deferred with owner sec-120-parser-triage and expiry 2027-02-24; they are recorded, not classified.",
+    "151 detected candidates are deferred with owner sec-120-parser-triage and expiry 2027-02-24; they are recorded, not classified.",
     "27 inventoried source files are not matched by any detector pattern (detector_blind_spots in the snapshot): human review found them, the regexes would not have.",
     "Production entry-point behaviour has not been proven safe for malformed input."
   ],
   "closure_blockers": [
-    "108 inventoried parsers have no fuzz target",
-    "149 detected candidates await classification",
+    "104 inventoried parsers have no fuzz target",
+    "151 detected candidates await classification",
     "no corpus/resource budget is bound to a runnable fuzz target"
   ],
   "scope_boundaries": {
@@ -51,7 +51,7 @@
   "not_completed": [
     "No production parser has a libFuzzer/AFL harness.",
     "No seed corpus or runtime resource budget is bound to a production fuzz target.",
-    "The 149-file detected candidate backlog still requires manual classification.",
+    "The 151-file detected candidate backlog still requires manual classification.",
     "ASan/UBSan fuzz smoke and scheduled campaigns are not implemented.",
     "Production entry-point behaviour has not been proven safe for malformed input."
   ]
