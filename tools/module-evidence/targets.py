@@ -26,10 +26,10 @@ blocking** — this module never invents a permissive default.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+import provenance
 import strict_json
 
 CODEMODEL_KIND = "codemodel"
@@ -52,19 +52,33 @@ class TargetEvidenceUnavailable(RuntimeError):
 
 def write_query(build_dir: Path) -> Path:
     """Write the stateless File API query CMake reads during configure."""
+    import json as _json
     query_dir = build_dir / ".cmake" / "api" / "v1" / "query" / CLIENT_NAME
     query_dir.mkdir(parents=True, exist_ok=True)
     query_file = query_dir / "query.json"
     query_file.write_text(
-        json.dumps({"requests": [{"kind": CODEMODEL_KIND, "version": CODEMODEL_VERSION}]}),
+        _json.dumps({"requests": [{"kind": CODEMODEL_KIND, "version": CODEMODEL_VERSION}]}),
         encoding="utf-8",
     )
     return query_file
 
 
-def _read_json(path: Path) -> Any:
-    with open(path, encoding="utf-8") as handle:
-        return json.load(handle)
+def _check_containment(reply_dir: Path, json_file_ref: str, label: str) -> Path:
+    """Resolve a jsonFile reference and verify it stays inside reply_dir."""
+    resolved_reply = reply_dir.resolve()
+    target_path = (reply_dir / json_file_ref).resolve()
+    if resolved_reply not in target_path.parents and target_path != resolved_reply:
+        raise TargetEvidenceUnavailable(
+            f"{label}: jsonFile {json_file_ref!r} resolves to {target_path} "
+            f"which is outside the reply directory {resolved_reply} — "
+            f"path traversal in File API references is rejected"
+        )
+    if not target_path.is_file():
+        raise TargetEvidenceUnavailable(
+            f"{label}: jsonFile {json_file_ref!r} resolves to {target_path} "
+            f"which does not exist"
+        )
+    return target_path
 
 
 def _find_codemodel(reply_dir: Path) -> Path:
@@ -79,7 +93,7 @@ def _find_codemodel(reply_dir: Path) -> Path:
         raise TargetEvidenceUnavailable(
             f"no index-*.json in {reply_dir} — configure did not complete"
         )
-    index = _read_json(index_files[-1])
+    index = strict_json.load_file(index_files[-1])
     client = index.get("reply", {}).get(CLIENT_NAME, {})
     query_reply = client.get("query.json", {})
     if "error" in query_reply:
@@ -92,26 +106,28 @@ def _find_codemodel(reply_dir: Path) -> Path:
                 raise TargetEvidenceUnavailable(
                     f"codemodel response error: {response['error']}"
                 )
-            return reply_dir / response["jsonFile"]
-    # Fall back to a shared stateful reply if some other client asked for one.
-    shared = sorted(reply_dir.glob("codemodel-v2-*.json"))
-    if shared:
-        return shared[-1]
+            return _check_containment(
+                reply_dir, response["jsonFile"], "codemodel response"
+            )
     raise TargetEvidenceUnavailable(
-        f"no codemodel response found in {reply_dir}"
+        f"no codemodel response found in {reply_dir} for client "
+        f"{CLIENT_NAME!r} — only our own client reply is authoritative"
     )
 
 
 def extract_from_reply(reply_dir: Path) -> dict[str, dict[str, Any]]:
     """Build the target index from a CMake File API reply directory."""
     codemodel_path = _find_codemodel(reply_dir)
-    codemodel = _read_json(codemodel_path)
+    codemodel = strict_json.load_file(codemodel_path)
 
     index: dict[str, dict[str, Any]] = {}
     for configuration in codemodel.get("configurations", []):
         for target_ref in configuration.get("targets", []):
-            target_file = reply_dir / target_ref["jsonFile"]
-            target = _read_json(target_file)
+            json_file = target_ref.get("jsonFile", "")
+            target_file = _check_containment(
+                reply_dir, json_file, f"target {target_ref.get('name', '?')}"
+            )
+            target = strict_json.load_file(target_file)
             name = target.get("name", "")
             if not name:
                 continue
@@ -159,6 +175,7 @@ def extract_from_reply(reply_dir: Path) -> dict[str, dict[str, Any]]:
 def write_index(index: dict[str, dict[str, Any]], out_path: Path, *, commit_sha: str,
                 generated_at: str, source: str) -> None:
     """Serialise the extracted index as a portable evidence document."""
+    import json as _json
     document = {
         "schemaVersion": INDEX_SCHEMA_VERSION,
         "generatedAt": generated_at,
@@ -167,7 +184,7 @@ def write_index(index: dict[str, dict[str, Any]], out_path: Path, *, commit_sha:
         "targets": index,
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n",
+    out_path.write_text(_json.dumps(document, indent=2, sort_keys=True) + "\n",
                         encoding="utf-8")
 
 
@@ -193,6 +210,20 @@ def load_target_index(path: Path) -> dict[str, Any]:
         raise TargetEvidenceUnavailable(
             f"{path}: target evidence schemaVersion must be "
             f"{INDEX_SCHEMA_VERSION!r}, got {version!r}"
+        )
+    sha_errors = provenance.check_sha_shape(
+        document.get("commitSHA"), f"{path} commitSHA"
+    )
+    if sha_errors:
+        raise TargetEvidenceUnavailable(
+            f"target evidence provenance is invalid: {sha_errors[0]}"
+        )
+    ts_errors = provenance.check_rfc3339(
+        document.get("generatedAt"), f"{path} generatedAt"
+    )
+    if ts_errors:
+        raise TargetEvidenceUnavailable(
+            f"target evidence provenance is invalid: {ts_errors[0]}"
         )
     targets = document.get("targets")
     if not isinstance(targets, dict) or not targets:
@@ -225,6 +256,15 @@ def check_target(
         errors.append(
             f"{label}: CMake target {target_name!r} has type {ttype!r}; a game "
             f"module must build one of {sorted(SHARED_LIBRARY_TYPES)}"
+        )
+
+    source_dir = target.get("sourceDirectory", "")
+    expected_source_prefix = f"GameModules/{module_name}"
+    if source_dir and not source_dir.startswith(expected_source_prefix):
+        errors.append(
+            f"{label}: codemodel source directory {source_dir!r} does not "
+            f"start with {expected_source_prefix!r} — the configure-generated "
+            f"evidence claims a foreign source tree"
         )
 
     sources = target.get("sources", [])

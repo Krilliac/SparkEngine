@@ -29,6 +29,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -39,10 +40,80 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import lifecycle as lifecycle_mod  # noqa: E402
+import paths as paths_mod  # noqa: E402
 from provenance import resolve_head_sha  # noqa: E402
 from schema import expected_library_names  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+_ALLOWED_ENGINE_NAMES = re.compile(
+    r"^(?:SparkEngine|SparkConsole)(?:\.exe)?$", re.IGNORECASE
+)
+_SCRIPT_EXTENSIONS = frozenset({".cmd", ".bat", ".sh", ".ps1", ".py", ".pl", ".rb"})
+_SCRIPT_SIGNATURES = (b"#!", b"@echo", b"@ECHO", b"@rem", b"@REM")
+_MIN_ENGINE_SIZE = 4096
+
+
+def hash_engine_binary(engine: Path) -> str:
+    h = hashlib.sha256()
+    with open(engine, "rb") as f:
+        while True:
+            chunk = f.read(1 << 16)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def validate_engine_binary(engine: Path) -> str | None:
+    """Return an error string if `engine` is not a plausible SparkEngine binary."""
+    if not engine.is_file():
+        return (
+            f"engine executable not found at {engine} — lifecycle evidence "
+            f"requires a real build; there is nothing to run"
+        )
+    if paths_mod._is_reparse_point(engine):
+        return (
+            f"engine path {engine} is a symlink, junction, or reparse point — "
+            f"lifecycle evidence must be produced by a real engine binary, not "
+            f"an indirection that can point anywhere"
+        )
+    if engine.suffix.lower() in _SCRIPT_EXTENSIONS:
+        return (
+            f"engine path {engine.name!r} is a script ({engine.suffix}) — "
+            f"lifecycle evidence requires a compiled engine binary, not a "
+            f"script that can print arbitrary lifecycle markers"
+        )
+    if not _ALLOWED_ENGINE_NAMES.match(engine.name):
+        return (
+            f"engine filename {engine.name!r} does not match the expected "
+            f"pattern (SparkEngine, SparkEngine.exe, SparkConsole, "
+            f"SparkConsole.exe) — lifecycle evidence must come from the real "
+            f"engine executable"
+        )
+    try:
+        size = engine.stat().st_size
+    except OSError as exc:
+        return f"cannot stat engine binary {engine}: {exc}"
+    if size < _MIN_ENGINE_SIZE:
+        return (
+            f"engine binary {engine} is only {size} bytes — a compiled engine "
+            f"executable is orders of magnitude larger; this looks like a stub "
+            f"or script masquerading as a binary"
+        )
+    try:
+        with open(engine, "rb") as f:
+            header = f.read(64)
+    except OSError as exc:
+        return f"cannot read engine binary header: {exc}"
+    for sig in _SCRIPT_SIGNATURES:
+        if header.lstrip().startswith(sig):
+            return (
+                f"engine binary {engine} starts with script signature "
+                f"{sig!r} — lifecycle evidence requires a compiled executable"
+            )
+    return None
+
 
 TRACE_RE = re.compile(
     r"^\[module-lifecycle\]\s+(?P<module>[A-Za-z][A-Za-z0-9]*)\s+"
@@ -67,11 +138,9 @@ def parse_trace(text: str, module: str) -> dict[str, int]:
 def run_engine(engine: Path, module: str, frames: int, timeout: int,
                log_path: Path) -> tuple[str, str | None]:
     """Run the headless engine and return (captured output, error)."""
-    if not engine.is_file():
-        return "", (
-            f"engine executable not found at {engine} — lifecycle evidence "
-            f"requires a real build; there is nothing to run"
-        )
+    err = validate_engine_binary(engine)
+    if err:
+        return "", err
     cmd = [
         str(engine), "-headless", "-game", module,
         "-test-frames", str(frames),
@@ -105,8 +174,6 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--timeout", type=int, default=600)
-    parser.add_argument("--runner", default="headless-exec",
-                        choices=sorted(lifecycle_mod.VALID_RUNNERS))
     parser.add_argument("--commit-sha", default=None)
     args = parser.parse_args()
 
@@ -116,6 +183,13 @@ def main() -> int:
         if sha is None:
             print(f"FATAL: {err}", file=sys.stderr)
             return 1
+
+    engine_err = validate_engine_binary(args.engine)
+    if engine_err:
+        print(f"FATAL: {engine_err}", file=sys.stderr)
+        return 1
+    engine_digest = hash_engine_binary(args.engine)
+    engine_path_str = str(args.engine)
 
     records = []
     failures: list[str] = []
@@ -151,8 +225,10 @@ def main() -> int:
             ],
             "sourceDirectory": source_dir,
             "sourceTreeSHA": tree_sha,
-            "runner": args.runner,
+            "runner": "headless-exec",
             "phases": phases,
+            "engineSHA256": engine_digest,
+            "enginePath": engine_path_str,
         })
 
     if failures:

@@ -27,6 +27,7 @@ Absent evidence is a blocking gap.  It is never treated as a pass.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -66,8 +67,11 @@ OBSERVABLE_PHASES = frozenset(
 )
 
 REQUIRED_RECORD_KEYS = frozenset(
-    {"module", "sharedLibrary", "sourceDirectory", "sourceTreeSHA", "runner", "phases"}
+    {"module", "sharedLibrary", "sourceDirectory", "sourceTreeSHA", "runner",
+     "phases", "engineSHA256", "enginePath"}
 )
+
+ENGINE_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 VALID_RUNNERS = frozenset({"ctest", "spark-automation", "headless-exec"})
 
@@ -180,6 +184,20 @@ def check_record(
     if runner not in VALID_RUNNERS:
         errors.append(
             f"{label}: runner {runner!r} is not one of {sorted(VALID_RUNNERS)}"
+        )
+
+    engine_sha = record.get("engineSHA256")
+    if not isinstance(engine_sha, str) or not ENGINE_SHA256_RE.match(engine_sha):
+        errors.append(
+            f"{label}: engineSHA256 must be a 64-character lowercase hex digest "
+            f"of the engine binary that produced this evidence, got {engine_sha!r}"
+        )
+
+    engine_path = record.get("enginePath")
+    if not isinstance(engine_path, str) or not engine_path or len(engine_path) > 512:
+        errors.append(
+            f"{label}: enginePath must be a non-empty string (≤512 chars) "
+            f"naming the engine executable, got {engine_path!r}"
         )
 
     phases = record["phases"]

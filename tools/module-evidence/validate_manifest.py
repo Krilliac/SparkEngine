@@ -29,6 +29,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import artifacts
 import lifecycle as lifecycle_mod
 import paths as paths_mod
 import provenance
@@ -698,9 +699,16 @@ class ManifestValidator:
                         or btype not in EVIDENCE_PRODUCERS
                         or not isinstance(pattern, str)):
                     continue
-                if (self.repo_root / pattern).is_file():
+                artifact_path = self.repo_root / pattern
+                if artifact_path.is_file():
                     if btype in self.declared_gaps:
                         self._record_gap(btype, True, "")
+                        continue
+                    semantic_errors = artifacts.validate_artifact(
+                        artifact_path, btype, name if isinstance(name, str) else ""
+                    )
+                    for err in semantic_errors:
+                        self._err(f"module {name!r}: {err}")
                     continue
                 producer = EVIDENCE_PRODUCERS[btype]
                 self._record_gap(

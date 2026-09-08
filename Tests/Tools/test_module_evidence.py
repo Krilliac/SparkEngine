@@ -31,6 +31,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "module-evidence"))
 
+import artifacts  # noqa: E402
 import lifecycle as lifecycle_mod  # noqa: E402
 import paths as paths_mod  # noqa: E402
 import provenance  # noqa: E402
@@ -92,11 +93,34 @@ def build_fake_repo(root: Path) -> str:
     )
 
     # Artifacts a producer would have written.  They are build outputs, so they
-    # live outside version control; the validator requires them to exist.
-    for etype in ("junit-xml", "package-smoke-log"):
-        artifact = root / EVIDENCE_PRODUCERS[etype]["artifact"]
-        artifact.parent.mkdir(parents=True, exist_ok=True)
-        artifact.write_text("produced\n", encoding="utf-8")
+    # live outside version control; the validator requires them to exist and
+    # carry semantically valid content.
+    junit_path = root / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
+    junit_path.parent.mkdir(parents=True, exist_ok=True)
+    junit_path.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<testsuites tests="5" failures="0" errors="0">\n'
+        f'  <testsuite name="{INCLUDED}" tests="5" failures="0" errors="0">\n'
+        f'    <testcase name="test_load" classname="{INCLUDED}.Module"/>\n'
+        f'    <testcase name="test_init" classname="{INCLUDED}.Module"/>\n'
+        f'    <testcase name="test_update" classname="{INCLUDED}.Module"/>\n'
+        f'    <testcase name="test_unload" classname="{INCLUDED}.Module"/>\n'
+        f'    <testcase name="test_shutdown" classname="{INCLUDED}.Module"/>\n'
+        '  </testsuite>\n'
+        '</testsuites>\n',
+        encoding="utf-8",
+    )
+    smoke_path = root / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
+    smoke_path.parent.mkdir(parents=True, exist_ok=True)
+    smoke_path.write_text(
+        f"[package-smoke] {INCLUDED}\n"
+        f"[package-smoke] product=SparkEngine\n"
+        f"[package-smoke] module={INCLUDED}\n"
+        f"[package-smoke] library={INCLUDED}.dll\n"
+        f"[package-smoke] exit_code=0\n"
+        f"[package-smoke] PASS\n",
+        encoding="utf-8",
+    )
 
     _git(root, "init", "-q", "-b", "main")
     (root / ".gitignore").write_text("build/\n", encoding="utf-8")
@@ -150,7 +174,8 @@ def base_manifest(*, with_decoy: bool = False) -> dict[str, Any]:
 
 def target_index(*, name: str = INCLUDED, ttype: str = "SHARED_LIBRARY",
                  sources: list[str] | None = None,
-                 name_on_disk: str | None = None) -> dict[str, Any]:
+                 name_on_disk: str | None = None,
+                 source_directory: str | None = None) -> dict[str, Any]:
     if sources is None:
         sources = [f"GameModules/{name}/Source/Main.cpp"]
     return {
@@ -160,11 +185,16 @@ def target_index(*, name: str = INCLUDED, ttype: str = "SHARED_LIBRARY",
                 "name": name,
                 "type": ttype,
                 "nameOnDisk": name_on_disk or f"lib{name}.so",
+                "sourceDirectory": source_directory or f"GameModules/{name}",
                 "sources": sources,
                 "artifacts": [f"bin/lib{name}.so"],
             }
         },
     }
+
+
+FAKE_ENGINE_SHA256 = "a" * 64
+FAKE_ENGINE_PATH = "/usr/local/bin/SparkEngine"
 
 
 def lifecycle_evidence(repo: Path, sha: str, *, module: str = INCLUDED,
@@ -189,6 +219,8 @@ def lifecycle_evidence(repo: Path, sha: str, *, module: str = INCLUDED,
             "sourceTreeSHA": tree_sha,
             "runner": "ctest",
             "phases": phases,
+            "engineSHA256": FAKE_ENGINE_SHA256,
+            "enginePath": FAKE_ENGINE_PATH,
         }],
     }
 
@@ -524,6 +556,132 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         self.assertNotEqual(first, second)
         # Restore so later tests in this class see the original tree.
         _git(self.repo, "reset", "-q", "--hard", self.sha)
+
+
+# --------------------------------------------------------------------------
+# Engine binary authenticity — arbitrary marker printers are not engines
+# --------------------------------------------------------------------------
+class TestLifecycleAuthenticity(FixtureCase):
+
+    def test_script_cmd_rejected_as_engine(self) -> None:
+        from collect_lifecycle import validate_engine_binary
+        script = self.repo / "fake.cmd"
+        script.write_text("@echo off\necho hello\n", encoding="utf-8")
+        err = validate_engine_binary(script)
+        self.assertIsNotNone(err, "a .cmd script was accepted as an engine")
+        self.assertIn("script", err)
+
+    def test_script_bat_rejected_as_engine(self) -> None:
+        from collect_lifecycle import validate_engine_binary
+        script = self.repo / "fake.bat"
+        script.write_text("@echo off\n", encoding="utf-8")
+        err = validate_engine_binary(script)
+        self.assertIsNotNone(err)
+
+    def test_script_sh_rejected_as_engine(self) -> None:
+        from collect_lifecycle import validate_engine_binary
+        script = self.repo / "fake.sh"
+        script.write_text("#!/bin/sh\necho hello\n", encoding="utf-8")
+        err = validate_engine_binary(script)
+        self.assertIsNotNone(err)
+
+    def test_wrong_name_rejected_as_engine(self) -> None:
+        from collect_lifecycle import validate_engine_binary
+        binary = self.repo / "NotAnEngine.exe"
+        binary.write_bytes(b"\x00" * 8192)
+        err = validate_engine_binary(binary)
+        self.assertIsNotNone(err, "a binary with wrong name was accepted")
+        self.assertIn("pattern", err)
+
+    def test_tiny_file_rejected_as_engine(self) -> None:
+        from collect_lifecycle import validate_engine_binary
+        binary = self.repo / "SparkEngine.exe"
+        binary.write_bytes(b"\x00" * 100)
+        err = validate_engine_binary(binary)
+        self.assertIsNotNone(err, "a tiny binary was accepted as an engine")
+        self.assertIn("bytes", err)
+
+    def test_script_content_in_exe_rejected(self) -> None:
+        from collect_lifecycle import validate_engine_binary
+        binary = self.repo / "SparkEngine.exe"
+        binary.write_bytes(b"@echo off\r\n" + b"\x00" * 8192)
+        err = validate_engine_binary(binary)
+        self.assertIsNotNone(err, "a script disguised as .exe was accepted")
+        self.assertIn("script signature", err)
+
+    def test_shebang_content_in_binary_rejected(self) -> None:
+        from collect_lifecycle import validate_engine_binary
+        binary = self.repo / "SparkEngine"
+        binary.write_bytes(b"#!/bin/sh\necho lifecycle\n" + b"\x00" * 8192)
+        err = validate_engine_binary(binary)
+        self.assertIsNotNone(err)
+
+    def test_symlink_engine_rejected(self) -> None:
+        from collect_lifecycle import validate_engine_binary
+        real = self.repo / "RealEngine"
+        real.write_bytes(b"\x00" * 8192)
+        link = self.repo / "SparkEngine"
+        made = False
+        try:
+            os.symlink(str(real), str(link))
+            made = True
+        except (OSError, NotImplementedError):
+            pass
+        if not made:
+            self.skipTest("cannot create symlinks on this platform")
+        err = validate_engine_binary(link)
+        self.assertIsNotNone(err, "a symlinked engine was accepted")
+        self.assertIn("reparse point", err.lower() if "reparse" in err.lower() else err)
+
+    def test_nonexistent_engine_rejected(self) -> None:
+        from collect_lifecycle import validate_engine_binary
+        err = validate_engine_binary(self.repo / "no-such-binary")
+        self.assertIsNotNone(err)
+
+    def test_plausible_engine_binary_accepted(self) -> None:
+        from collect_lifecycle import validate_engine_binary
+        binary = self.repo / "SparkEngine.exe"
+        binary.write_bytes(b"MZ" + b"\x00" * 16384)
+        err = validate_engine_binary(binary)
+        self.assertIsNone(err, f"valid engine binary rejected: {err}")
+
+    def test_missing_engine_sha256_in_record_rejected(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        del ev["records"][0]["engineSHA256"]
+        errors = self.assertRejected(base_manifest(), "AUTH1",
+                                     lifecycle_evidence=ev)
+        self.assertTrue(any("engineSHA256" in e or "missing" in e for e in errors))
+
+    def test_missing_engine_path_in_record_rejected(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        del ev["records"][0]["enginePath"]
+        errors = self.assertRejected(base_manifest(), "AUTH2",
+                                     lifecycle_evidence=ev)
+        self.assertTrue(any("enginePath" in e or "missing" in e for e in errors))
+
+    def test_invalid_engine_sha256_rejected(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        ev["records"][0]["engineSHA256"] = "not-a-hash"
+        errors = self.assertRejected(base_manifest(), "AUTH3",
+                                     lifecycle_evidence=ev)
+        self.assertTrue(any("engineSHA256" in e for e in errors))
+
+    def test_empty_engine_path_rejected(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        ev["records"][0]["enginePath"] = ""
+        errors = self.assertRejected(base_manifest(), "AUTH4",
+                                     lifecycle_evidence=ev)
+        self.assertTrue(any("enginePath" in e for e in errors))
+
+    def test_engine_sha256_hash_function_deterministic(self) -> None:
+        from collect_lifecycle import hash_engine_binary
+        binary = self.repo / "SparkEngine.exe"
+        binary.write_bytes(b"MZ" + b"\x00" * 16384)
+        h1 = hash_engine_binary(binary)
+        h2 = hash_engine_binary(binary)
+        self.assertEqual(h1, h2)
+        self.assertEqual(len(h1), 64)
+        self.assertTrue(all(c in "0123456789abcdef" for c in h1))
 
 
 # --------------------------------------------------------------------------
@@ -1258,6 +1416,224 @@ class TestCIWiring(unittest.TestCase):
                 )
 
 
+class TestTargetContainment(FixtureCase):
+    """Adversarial tests for target evidence containment, provenance, and
+    strict JSON parsing — attacks exposed by rdy010_target_adversarial_probe.py."""
+
+    def _write_reply(self, reply: Path, *, codemodel_json_file: str = "codemodel-v2-abc.json",
+                     target_json_file: str = "target-X.json",
+                     target_content: str | None = None,
+                     codemodel_content: str | None = None,
+                     include_shared_fallback: bool = False) -> None:
+        """Build a minimal File API reply directory."""
+        if target_content is None:
+            target_content = json.dumps({
+                "name": "SparkGameFPS", "type": "SHARED_LIBRARY",
+                "nameOnDisk": "libSparkGameFPS.so",
+                "paths": {"source": "GameModules/SparkGameFPS"},
+                "sources": [{"path": "GameModules/SparkGameFPS/Source/Main.cpp"}],
+                "artifacts": [{"path": "bin/libSparkGameFPS.so"}],
+            })
+        if codemodel_content is None:
+            codemodel_content = json.dumps({
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{"name": "SparkGameFPS", "jsonFile": target_json_file}],
+                }]
+            })
+        reply.mkdir(parents=True, exist_ok=True)
+        (reply / target_json_file).write_text(target_content, encoding="utf-8")
+        (reply / codemodel_json_file).write_text(codemodel_content, encoding="utf-8")
+        (reply / "index-1.json").write_text(json.dumps({
+            "reply": {targets_mod.CLIENT_NAME: {"query.json": {
+                "responses": [{"kind": "codemodel",
+                               "jsonFile": codemodel_json_file}]
+            }}}
+        }), encoding="utf-8")
+        if include_shared_fallback:
+            (reply / "codemodel-v2-shared.json").write_text(
+                codemodel_content, encoding="utf-8")
+
+    def test_path_traversal_in_codemodel_jsonfile_is_rejected(self) -> None:
+        """A jsonFile with ../ escaping the reply directory must be blocked."""
+        with tempfile.TemporaryDirectory(prefix="spark-traversal-") as tmp:
+            reply = Path(tmp) / "reply"
+            reply.mkdir()
+            forged = Path(tmp) / "forged-codemodel.json"
+            forged.write_text(json.dumps({
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{"name": "SparkGameFPS", "jsonFile": "target-X.json"}],
+                }]
+            }), encoding="utf-8")
+            (reply / "target-X.json").write_text(json.dumps({
+                "name": "SparkGameFPS", "type": "SHARED_LIBRARY",
+                "nameOnDisk": "libSparkGameFPS.so",
+                "paths": {"source": "GameModules/SparkGameFPS"},
+                "sources": [{"path": "GameModules/SparkGameFPS/Source/Main.cpp"}],
+                "artifacts": [{"path": "bin/libSparkGameFPS.so"}],
+            }), encoding="utf-8")
+            (reply / "index-1.json").write_text(json.dumps({
+                "reply": {targets_mod.CLIENT_NAME: {"query.json": {
+                    "responses": [{"kind": "codemodel",
+                                   "jsonFile": "../forged-codemodel.json"}]
+                }}}
+            }), encoding="utf-8")
+            with self.assertRaises(targets_mod.TargetEvidenceUnavailable) as cm:
+                targets_mod.extract_from_reply(reply)
+            self.assertIn("path traversal", str(cm.exception).lower())
+
+    def test_path_traversal_in_target_jsonfile_is_rejected(self) -> None:
+        """A target jsonFile reference escaping the reply dir must be blocked."""
+        with tempfile.TemporaryDirectory(prefix="spark-traversal-") as tmp:
+            reply = Path(tmp) / "reply"
+            reply.mkdir()
+            forged_target = Path(tmp) / "forged-target.json"
+            forged_target.write_text(json.dumps({
+                "name": "SparkGameFPS", "type": "SHARED_LIBRARY",
+                "nameOnDisk": "libSparkGameFPS.so",
+                "paths": {"source": "GameModules/SparkGameFPS"},
+                "sources": [{"path": "GameModules/SparkGameFPS/Source/Main.cpp"}],
+                "artifacts": [{"path": "bin/libSparkGameFPS.so"}],
+            }), encoding="utf-8")
+            codemodel = reply / "codemodel-v2-abc.json"
+            codemodel.write_text(json.dumps({
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{"name": "SparkGameFPS",
+                                 "jsonFile": "../forged-target.json"}],
+                }]
+            }), encoding="utf-8")
+            (reply / "index-1.json").write_text(json.dumps({
+                "reply": {targets_mod.CLIENT_NAME: {"query.json": {
+                    "responses": [{"kind": "codemodel",
+                                   "jsonFile": "codemodel-v2-abc.json"}]
+                }}}
+            }), encoding="utf-8")
+            with self.assertRaises(targets_mod.TargetEvidenceUnavailable) as cm:
+                targets_mod.extract_from_reply(reply)
+            self.assertIn("path traversal", str(cm.exception).lower())
+
+    def test_duplicate_keys_in_target_json_are_rejected(self) -> None:
+        """Duplicate JSON keys (type shadowing) must be caught by strict_json."""
+        with tempfile.TemporaryDirectory(prefix="spark-dup-") as tmp:
+            reply = Path(tmp)
+            (reply / "target-X.json").write_text(
+                '{"name":"SparkGameFPS","type":"EXECUTABLE",'
+                '"type":"SHARED_LIBRARY","nameOnDisk":"libSparkGameFPS.so",'
+                '"paths":{"source":"GameModules/SparkGameFPS"},'
+                '"sources":[{"path":"GameModules/SparkGameFPS/Source/Main.cpp"}],'
+                '"artifacts":[{"path":"bin/libSparkGameFPS.so"}]}',
+                encoding="utf-8",
+            )
+            (reply / "codemodel-v2-abc.json").write_text(json.dumps({
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{"name": "SparkGameFPS", "jsonFile": "target-X.json"}],
+                }]
+            }), encoding="utf-8")
+            (reply / "index-1.json").write_text(json.dumps({
+                "reply": {targets_mod.CLIENT_NAME: {"query.json": {
+                    "responses": [{"kind": "codemodel",
+                                   "jsonFile": "codemodel-v2-abc.json"}]
+                }}}
+            }), encoding="utf-8")
+            with self.assertRaises((
+                targets_mod.TargetEvidenceUnavailable,
+                strict_json.StrictJSONError,
+            )):
+                targets_mod.extract_from_reply(reply)
+
+    def test_shared_reply_fallback_is_gone(self) -> None:
+        """Without a client-specific reply, existence of a shared codemodel
+        must not substitute — only our own client reply is authoritative."""
+        with tempfile.TemporaryDirectory(prefix="spark-fallback-") as tmp:
+            reply = Path(tmp)
+            (reply / "codemodel-v2-shared.json").write_text(json.dumps({
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{"name": "SparkGameFPS", "jsonFile": "target-X.json"}],
+                }]
+            }), encoding="utf-8")
+            (reply / "target-X.json").write_text(json.dumps({
+                "name": "SparkGameFPS", "type": "SHARED_LIBRARY",
+                "nameOnDisk": "libSparkGameFPS.so",
+                "paths": {"source": "GameModules/SparkGameFPS"},
+                "sources": [{"path": "GameModules/SparkGameFPS/Source/Main.cpp"}],
+                "artifacts": [{"path": "bin/libSparkGameFPS.so"}],
+            }), encoding="utf-8")
+            (reply / "index-1.json").write_text(json.dumps({
+                "reply": {"some-other-client": {"query.json": {
+                    "responses": [{"kind": "codemodel",
+                                   "jsonFile": "codemodel-v2-shared.json"}]
+                }}}
+            }), encoding="utf-8")
+            with self.assertRaises(targets_mod.TargetEvidenceUnavailable) as cm:
+                targets_mod.extract_from_reply(reply)
+            self.assertIn("authoritative", str(cm.exception))
+
+    def test_foreign_source_directory_in_codemodel_is_rejected(self) -> None:
+        """A target claiming source in C:/not-the-repository must be caught."""
+        foreign_index = target_index()
+        foreign_index["targets"]["SparkGameFPS"]["sourceDirectory"] = "C:/not-the-repository/GameModules/SparkGameFPS"
+        errors = targets_mod.check_target(
+            foreign_index, "SparkGameFPS", "SparkGameFPS",
+            {"windows": "SparkGameFPS.dll", "linux": "libSparkGameFPS.so"},
+            "forged",
+        )
+        self.assertTrue(
+            any("foreign source tree" in e for e in errors),
+            f"foreign source directory was not rejected: {errors}",
+        )
+
+    def test_load_target_index_rejects_malformed_commit_sha(self) -> None:
+        """Provenance with invalid commitSHA must be rejected."""
+        from datetime import datetime, timezone
+        with tempfile.TemporaryDirectory(prefix="spark-prov-") as tmp:
+            path = Path(tmp) / "targets.json"
+            targets_mod.write_index(
+                {"SparkGameFPS": {"name": "SparkGameFPS", "type": "SHARED_LIBRARY"}},
+                path,
+                commit_sha="NOT-A-VALID-SHA",
+                generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                source="test",
+            )
+            with self.assertRaises(targets_mod.TargetEvidenceUnavailable) as cm:
+                targets_mod.load_target_index(path)
+            self.assertIn("provenance", str(cm.exception).lower())
+
+    def test_load_target_index_rejects_malformed_generated_at(self) -> None:
+        """Provenance with invalid generatedAt must be rejected."""
+        with tempfile.TemporaryDirectory(prefix="spark-prov-") as tmp:
+            path = Path(tmp) / "targets.json"
+            targets_mod.write_index(
+                {"SparkGameFPS": {"name": "SparkGameFPS", "type": "SHARED_LIBRARY"}},
+                path,
+                commit_sha="a" * 40,
+                generated_at="not-a-timestamp",
+                source="test",
+            )
+            with self.assertRaises(targets_mod.TargetEvidenceUnavailable) as cm:
+                targets_mod.load_target_index(path)
+            self.assertIn("provenance", str(cm.exception).lower())
+
+    def test_load_target_index_accepts_valid_provenance(self) -> None:
+        """A well-formed document with valid provenance must load."""
+        from datetime import datetime, timezone
+        with tempfile.TemporaryDirectory(prefix="spark-prov-") as tmp:
+            path = Path(tmp) / "targets.json"
+            targets_mod.write_index(
+                {"SparkGameFPS": {"name": "SparkGameFPS", "type": "SHARED_LIBRARY",
+                                  "sources": ["a.cpp"], "artifacts": ["a.so"]}},
+                path,
+                commit_sha=self.sha,
+                generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                source="test",
+            )
+            doc = targets_mod.load_target_index(path)
+            self.assertIn("SparkGameFPS", doc["targets"])
+
+
 class TestCMakeFileAPI(unittest.TestCase):
     """The File API is the authority for target existence; prove it is read
     correctly, and that a configure actually discriminates."""
@@ -1371,6 +1747,171 @@ class TestCMakeFileAPI(unittest.TestCase):
                         "ProbeModule", index,
                         "target reported despite not being created",
                     )
+
+
+# --------------------------------------------------------------------------
+# Artifact semantic validation — the zero-byte bypass (rdy010_artifact_adversarial_probe)
+# --------------------------------------------------------------------------
+class TestArtifactSemanticValidation(FixtureCase):
+    """Zero-byte and trivially fabricated artifacts must be rejected."""
+
+    def _junit_xml(self, content: str) -> Path:
+        path = self.repo / "build" / "test-junit.xml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def _smoke_log(self, content: str) -> Path:
+        path = self.repo / "build" / "test-smoke.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    VALID_JUNIT = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<testsuites tests="5" failures="0" errors="0">\n'
+        '  <testsuite name="SparkGameFPS" tests="5" failures="0" errors="0">\n'
+        '    <testcase name="test_load" classname="SparkGameFPS.Module"/>\n'
+        '    <testcase name="test_init" classname="SparkGameFPS.Module"/>\n'
+        '    <testcase name="test_update" classname="SparkGameFPS.Module"/>\n'
+        '    <testcase name="test_unload" classname="SparkGameFPS.Module"/>\n'
+        '    <testcase name="test_shutdown" classname="SparkGameFPS.Module"/>\n'
+        '  </testsuite>\n'
+        '</testsuites>\n'
+    )
+    VALID_SMOKE = (
+        "[package-smoke] SparkGameFPS\n"
+        "[package-smoke] product=SparkEngine\n"
+        "[package-smoke] module=SparkGameFPS\n"
+        "[package-smoke] library=SparkGameFPS.dll\n"
+        "[package-smoke] exit_code=0\n"
+        "[package-smoke] PASS\n"
+    )
+
+    def test_zero_byte_junit_xml_is_rejected(self) -> None:
+        path = self._junit_xml("")
+        path.write_bytes(b"")
+        errors = artifacts.validate_junit_xml(path, INCLUDED)
+        self.assertTrue(any("zero bytes" in e for e in errors), errors)
+
+    def test_valid_junit_xml_is_accepted(self) -> None:
+        path = self._junit_xml(self.VALID_JUNIT)
+        errors = artifacts.validate_junit_xml(path, INCLUDED)
+        self.assertEqual(errors, [], f"valid JUnit XML rejected: {errors}")
+
+    def test_junit_xml_with_zero_tests_is_rejected(self) -> None:
+        path = self._junit_xml(
+            '<testsuites tests="0" failures="0" errors="0">'
+            '</testsuites>'
+        )
+        errors = artifacts.validate_junit_xml(path, INCLUDED)
+        self.assertTrue(any("zero tests" in e for e in errors), errors)
+
+    def test_junit_xml_with_no_testcases_is_rejected(self) -> None:
+        path = self._junit_xml(
+            '<testsuites tests="5" failures="0" errors="0">'
+            '</testsuites>'
+        )
+        errors = artifacts.validate_junit_xml(path, INCLUDED)
+        self.assertTrue(any("no <testcase>" in e for e in errors), errors)
+
+    def test_invalid_xml_is_rejected(self) -> None:
+        path = self._junit_xml("this is not xml at all {{{")
+        errors = artifacts.validate_junit_xml(path, INCLUDED)
+        self.assertTrue(
+            any("not valid XML" in e or "cannot be parsed" in e for e in errors),
+            errors,
+        )
+
+    def test_junit_xml_with_too_few_testcases_is_rejected(self) -> None:
+        path = self._junit_xml(
+            '<testsuites tests="1" failures="0" errors="0">'
+            '  <testsuite name="X" tests="1">'
+            '    <testcase name="t1" classname="X.Y"/>'
+            '  </testsuite>'
+            '</testsuites>'
+        )
+        errors = artifacts.validate_junit_xml(path, INCLUDED)
+        self.assertTrue(any("minimum" in e for e in errors), errors)
+
+    def test_junit_xml_with_entity_declaration_is_rejected(self) -> None:
+        path = self._junit_xml(
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE foo [\n'
+            '  <!ENTITY xxe "pwned">\n'
+            ']>\n'
+            '<testsuites tests="3" failures="0" errors="0">\n'
+            '  <testsuite name="X" tests="3">\n'
+            '    <testcase name="t1" classname="X.Y"/>\n'
+            '    <testcase name="t2" classname="X.Y"/>\n'
+            '    <testcase name="t3" classname="X.Y"/>\n'
+            '  </testsuite>\n'
+            '</testsuites>\n'
+        )
+        errors = artifacts.validate_junit_xml(path, INCLUDED)
+        self.assertTrue(
+            any("entity" in e.lower() or "not valid XML" in e for e in errors),
+            f"XXE entity declaration was accepted: {errors}",
+        )
+
+    def test_zero_byte_package_smoke_is_rejected(self) -> None:
+        path = self._smoke_log("")
+        path.write_bytes(b"")
+        errors = artifacts.validate_package_smoke(path, INCLUDED)
+        self.assertTrue(any("zero bytes" in e for e in errors), errors)
+
+    def test_valid_package_smoke_is_accepted(self) -> None:
+        path = self._smoke_log(self.VALID_SMOKE)
+        errors = artifacts.validate_package_smoke(path, INCLUDED)
+        self.assertEqual(errors, [], f"valid smoke log rejected: {errors}")
+
+    def test_package_smoke_without_module_name_is_rejected(self) -> None:
+        path = self._smoke_log(
+            "[package-smoke] SomeOtherModule\n"
+            "[package-smoke] product=SparkEngine\n"
+            "[package-smoke] module=SomeOtherModule\n"
+            "[package-smoke] exit_code=0\n"
+            "[package-smoke] PASS\n"
+        )
+        errors = artifacts.validate_package_smoke(path, INCLUDED)
+        self.assertTrue(any("does not mention" in e for e in errors), errors)
+
+    def test_package_smoke_without_pass_indicator_is_rejected(self) -> None:
+        path = self._smoke_log(
+            f"[package-smoke] {INCLUDED}\n"
+            f"[package-smoke] module={INCLUDED}\n"
+            f"[package-smoke] library={INCLUDED}.dll\n"
+            "[package-smoke] exit_code=1\n"
+            "[package-smoke] FAIL\n"
+        )
+        errors = artifacts.validate_package_smoke(path, INCLUDED)
+        self.assertTrue(any("pass indicator" in e for e in errors), errors)
+
+    def test_whitespace_only_smoke_log_is_rejected(self) -> None:
+        path = self._smoke_log("   \n  \n\n  \n")
+        errors = artifacts.validate_package_smoke(path, INCLUDED)
+        self.assertTrue(len(errors) > 0, "whitespace-only log accepted")
+
+    def test_artifact_dispatcher_routes_correctly(self) -> None:
+        path = self._junit_xml(self.VALID_JUNIT)
+        self.assertEqual(artifacts.validate_artifact(path, "junit-xml", INCLUDED), [])
+        self.assertEqual(
+            artifacts.validate_artifact(path, "cmake-target-index", INCLUDED), [])
+
+    def test_full_validator_rejects_zero_byte_artifacts(self) -> None:
+        """The full ManifestValidator must reject zero-byte evidence files."""
+        m = base_manifest()
+        junit = self.repo / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
+        junit.parent.mkdir(parents=True, exist_ok=True)
+        junit.write_bytes(b"")
+        smoke = self.repo / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
+        smoke.parent.mkdir(parents=True, exist_ok=True)
+        smoke.write_bytes(b"")
+        errors = self.validate(m)
+        self.assertTrue(
+            any("zero bytes" in e for e in errors),
+            f"zero-byte artifact was accepted by the full validator: {errors}",
+        )
 
 
 if __name__ == "__main__":
