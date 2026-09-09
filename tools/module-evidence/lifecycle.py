@@ -187,7 +187,7 @@ def check_record(
         )
 
     engine_sha = record.get("engineSHA256")
-    if not isinstance(engine_sha, str) or not ENGINE_SHA256_RE.match(engine_sha):
+    if not isinstance(engine_sha, str) or not ENGINE_SHA256_RE.fullmatch(engine_sha):
         errors.append(
             f"{label}: engineSHA256 must be a 64-character lowercase hex digest "
             f"of the engine binary that produced this evidence, got {engine_sha!r}"
@@ -201,7 +201,7 @@ def check_record(
         )
 
     module_sha = record.get("moduleSHA256")
-    if not isinstance(module_sha, str) or not ENGINE_SHA256_RE.match(module_sha):
+    if not isinstance(module_sha, str) or not ENGINE_SHA256_RE.fullmatch(module_sha):
         errors.append(
             f"{label}: moduleSHA256 must be a 64-character lowercase hex digest "
             f"of the loaded module binary, got {module_sha!r}"

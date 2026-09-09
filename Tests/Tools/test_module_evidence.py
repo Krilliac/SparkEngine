@@ -200,6 +200,15 @@ FAKE_MODULE_SHA256 = "b" * 64
 FAKE_MODULE_PATH = "/usr/local/lib/libSparkGameFPS.so"
 
 
+def pe_image() -> bytes:
+    """Minimal PE-shaped fixture; a bare MZ marker is not an executable."""
+    image = bytearray(8192)
+    image[:2] = b"MZ"
+    image[0x3C:0x40] = (0x80).to_bytes(4, "little")
+    image[0x80:0x84] = b"PE\0\0"
+    return bytes(image)
+
+
 def lifecycle_evidence(repo: Path, sha: str, *, module: str = INCLUDED,
                        phases: dict[str, int] | None = None,
                        tree_sha: str | None = None) -> dict[str, Any]:
@@ -596,7 +605,7 @@ class TestLifecycleAuthenticity(FixtureCase):
         binary.write_bytes(b"\x00" * 8192)
         err = validate_engine_binary(binary)
         self.assertIsNotNone(err, "a binary with wrong name was accepted")
-        self.assertIn("pattern", err)
+        self.assertIn("stable-v1", err)
 
     def test_tiny_file_rejected_as_engine(self) -> None:
         from collect_lifecycle import validate_engine_binary
@@ -646,7 +655,7 @@ class TestLifecycleAuthenticity(FixtureCase):
     def test_plausible_engine_binary_accepted(self) -> None:
         from collect_lifecycle import validate_engine_binary
         binary = self.repo / "SparkEngine.exe"
-        binary.write_bytes(b"MZ" + b"\x00" * 16384)
+        binary.write_bytes(pe_image())
         err = validate_engine_binary(binary)
         self.assertIsNone(err, f"valid engine binary rejected: {err}")
 
@@ -727,8 +736,8 @@ class TestLifecycleCollector(FixtureCase):
         root.mkdir(exist_ok=True)
         engine = root / "SparkEngine.exe"
         module = root / "SparkGameFPS.dll"
-        engine.write_bytes(b"MZ" + b"\0" * 8192)
-        module.write_bytes(b"MZ" + b"\0" * 8192)
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
         completed = subprocess.CompletedProcess([], 0, self.VALID_RECORD, "")
         with mock.patch("collect_lifecycle.subprocess.run", return_value=completed) as run:
             captured, err = run_engine(engine, module, INCLUDED, root, "d3d11", 30)
@@ -751,10 +760,10 @@ class TestLifecycleCollector(FixtureCase):
         root.mkdir(exist_ok=True)
         engine = root / "SparkEngine.exe"
         module = root / "SparkGameFPS.dll"
-        engine.write_bytes(b"MZ" + b"\0" * 8192)
-        module.write_bytes(b"MZ" + b"\0" * 8192)
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
         outside = self.repo / "SparkGameFPS.dll"
-        outside.write_bytes(b"MZ" + b"\0" * 8192)
+        outside.write_bytes(pe_image())
         self.assertIsNotNone(validate_image_pair(engine, outside, INCLUDED, root))
         script = root / "SparkGameFPS.cmd"
         script.write_text("@echo off\n", encoding="utf-8")
@@ -772,8 +781,8 @@ class TestLifecycleCollector(FixtureCase):
         root.mkdir(exist_ok=True)
         engine = root / "SparkEngine.exe"
         module = root / "SparkGameFPS.dll"
-        engine.write_bytes(b"MZ" + b"\0" * 8192)
-        module.write_bytes(b"MZ" + b"\0" * 8192)
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
         out = self.repo / "out" / "module-lifecycle.json"
         argv = ["collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
                 "--module-image", str(module), "--working-directory", str(root),
@@ -803,6 +812,122 @@ class TestLifecycleCollector(FixtureCase):
             errors = self.assertRejected(base_manifest(), f"collector-{key}",
                                          lifecycle_evidence=candidate)
             self.assertTrue(any(key in error or "missing" in error for error in errors))
+
+    def test_run_engine_rejects_marker_printer_and_nonstable_engine_identity(self) -> None:
+        from collect_lifecycle import run_engine
+        root = self.repo / "authenticated-package"
+        root.mkdir()
+        module = root / "SparkGameFPS.dll"
+        module.write_bytes(pe_image())
+        for name, content in (("SparkEngine.exe", b"MZ" + b"\0" * 8192),
+                              ("SparkConsole.exe", pe_image())):
+            engine = root / name
+            engine.write_bytes(content)
+            with self.subTest(engine=name), \
+                 mock.patch("collect_lifecycle.subprocess.run") as run:
+                _, error = run_engine(engine, module, INCLUDED, root, "d3d11", 30)
+            self.assertIsNotNone(error)
+            run.assert_not_called()
+
+    def test_run_engine_uses_canonical_paths_for_relative_arguments(self) -> None:
+        from collect_lifecycle import run_engine
+        root = self.repo / "relative-package"
+        root.mkdir()
+        engine = root / "SparkEngine.exe"
+        module = root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        completed = subprocess.CompletedProcess([], 0, self.VALID_RECORD, "")
+        previous = Path.cwd()
+        try:
+            os.chdir(self.repo)
+            with mock.patch("collect_lifecycle.subprocess.run", return_value=completed) as run:
+                _, error = run_engine(Path("relative-package/SparkEngine.exe"),
+                                      Path("relative-package/SparkGameFPS.dll"),
+                                      INCLUDED, Path("relative-package"), "d3d11", 30)
+        finally:
+            os.chdir(previous)
+        self.assertIsNone(error)
+        self.assertEqual(run.call_args.args[0][0], str(engine.resolve()))
+        self.assertEqual(run.call_args.args[0][2], str(module.resolve()))
+        self.assertEqual(run.call_args.kwargs["cwd"], str(root.resolve()))
+
+    def test_rejects_raw_root_and_intermediate_reparse_paths(self) -> None:
+        from collect_lifecycle import validate_image_pair
+        root = self.repo / "reparse-package"
+        root.mkdir()
+        engine = root / "SparkEngine.exe"
+        module = root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        root_link = self.repo / "reparse-root-link"
+        inner = root / "real-inner"
+        inner.mkdir()
+        (inner / "SparkEngine.exe").write_bytes(pe_image())
+        (inner / "SparkGameFPS.dll").write_bytes(pe_image())
+        inner_link = root / "inner-link"
+        try:
+            os.symlink(str(root), str(root_link), target_is_directory=True)
+            os.symlink(str(inner), str(inner_link), target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("cannot create symlinks on this platform")
+        self.assertIsNotNone(validate_image_pair(root_link / "SparkEngine.exe",
+                                                  root_link / "SparkGameFPS.dll",
+                                                  INCLUDED, root_link))
+        self.assertIsNotNone(validate_image_pair(inner_link / "SparkEngine.exe",
+                                                  inner_link / "SparkGameFPS.dll",
+                                                  INCLUDED, root))
+
+    def test_run_engine_rejects_image_mutation_after_launch(self) -> None:
+        from collect_lifecycle import run_engine
+        root = self.repo / "mutation-package"
+        root.mkdir()
+        engine = root / "SparkEngine.exe"
+        module = root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        completed = subprocess.CompletedProcess([], 0, self.VALID_RECORD, "")
+        with mock.patch("collect_lifecycle.subprocess.run", return_value=completed), \
+             mock.patch("collect_lifecycle.hash_engine_binary",
+                        side_effect=["a" * 64, "b" * 64, "c" * 64, "b" * 64]):
+            _, error = run_engine(engine, module, INCLUDED, root, "d3d11", 30)
+        self.assertIn("changed", error or "")
+
+    def test_main_clears_stale_output_after_hash_or_write_failure(self) -> None:
+        import collect_lifecycle
+        root = self.repo / "stale-package"
+        root.mkdir()
+        engine = root / "SparkEngine.exe"
+        module = root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        out = self.repo / "stale-out" / "module-lifecycle.json"
+        log = out.parent / "module-lifecycle-SparkGameFPS.log"
+        out.parent.mkdir()
+        argv = ["collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
+                "--module-image", str(module), "--working-directory", str(root),
+                "--rhi-backend", "d3d11", "--out", str(out), "--commit-sha", self.sha]
+        for patch_target in ("collect_lifecycle.hash_engine_binary",
+                             "collect_lifecycle._write_temp"):
+            out.write_text("stale-json", encoding="utf-8")
+            log.write_text("stale-log", encoding="utf-8")
+            with self.subTest(failure=patch_target), \
+                 mock.patch.object(sys, "argv", argv), \
+                 mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
+                            return_value=("c" * 40, None)), \
+                 mock.patch(patch_target, side_effect=OSError("injected failure")), \
+                 mock.patch("collect_lifecycle.subprocess.run", return_value=subprocess.CompletedProcess(
+                     [], 0, self.VALID_RECORD, "")):
+                self.assertEqual(collect_lifecycle.main(), 1)
+            self.assertFalse(out.exists())
+            self.assertFalse(log.exists())
+
+    def test_digest_rejects_trailing_newline(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        ev["records"][0]["moduleSHA256"] = "b" * 64 + "\n"
+        errors = self.assertRejected(base_manifest(), "digest-newline",
+                                     lifecycle_evidence=ev)
+        self.assertTrue(any("moduleSHA256" in error for error in errors))
 
 
 # --------------------------------------------------------------------------
