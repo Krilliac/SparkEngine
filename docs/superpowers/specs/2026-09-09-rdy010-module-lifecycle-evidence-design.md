@@ -33,6 +33,12 @@ because Git cannot consume a directory HANDLE as a working-directory
 capability; Windows remains available for collection, policy-only, and
 incomplete-gap checks.
 
+The configure-generated target index is held and parsed by the same rooted
+consumer path and its `commitSHA` must be an existing commit equal to the
+externally anchored expected revision. A target list replayed from an earlier
+configure therefore cannot combine with a current lifecycle record to create a
+positive release result.
+
 The Ubuntu Git subprocess starts from an inherited root descriptor and clears
 all `GIT_*` environment overrides while rejecting static gitdir, commondir, and
 alternates indirection. Git's internal child metadata lookups are nevertheless
