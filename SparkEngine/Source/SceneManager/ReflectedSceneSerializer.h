@@ -4,6 +4,7 @@
  */
 
 #pragma once
+#include <cstdint>
 #include <string>
 
 class World;
@@ -11,12 +12,24 @@ class World;
 namespace Spark
 {
 
+    /**
+     * Permissive loading preserves legacy authored scenes. StrictRecovery is
+     * reserved for crash-recovery records: every current-schema entity,
+     * component, and reflected field must be understood and restored.
+     */
+    enum class SceneDeserializeMode : uint8_t
+    {
+        Permissive,
+        StrictRecovery
+    };
+
     /// Serialize/deserialize a World to a reflection-driven JSON scene.
     /// Every component that is registered in ComponentFactory + TypeRegistry is
     /// handled generically — no per-type code. Field types beyond the scalar/
     /// string/vector set the reflection layer round-trips are logged and skipped.
     std::string SerializeWorld(const World& world);
-    bool DeserializeInto(World& world, const std::string& json);
+    bool DeserializeInto(World& world, const std::string& json,
+                         SceneDeserializeMode mode = SceneDeserializeMode::Permissive);
     /// Save through a durable staging file and atomically replace the target.
     /// A valid prior image is retained as `<path>.bak` for recovery.
     bool SaveWorld(const World& world, const std::string& path);

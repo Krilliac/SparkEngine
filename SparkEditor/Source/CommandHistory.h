@@ -213,6 +213,9 @@ namespace Spark::Editor
         /** @brief True if the scene has been modified since the last save. */
         bool IsModified() const { return m_manager.HasUnsavedChanges(); }
 
+        /** @brief Monotonic revision used by UI-owned recovery scheduling. */
+        [[nodiscard]] uint64_t GetEditSequence() const { return m_manager.GetEditSequence(); }
+
         /**
          * @brief Runtime guard for mutation paths that bypass command dispatch.
          */

@@ -206,6 +206,146 @@ namespace Spark
                 return &fields["farClip"];
             return nullptr;
         }
+
+        bool IsRoundTrippableField(const FieldInfo& field)
+        {
+            if (!field.serialized)
+                return false;
+            switch (field.type)
+            {
+            case FieldType::Bool:
+            case FieldType::Int:
+            case FieldType::Float:
+            case FieldType::Double:
+            case FieldType::String:
+            case FieldType::Vector2:
+            case FieldType::Vector3:
+            case FieldType::Vector4:
+            case FieldType::Enum:
+                return true;
+            default:
+                return false;
+            }
+        }
+
+        const FieldInfo* FindFieldBySerializedName(const TypeInfo& type, const std::string& name)
+        {
+            for (const FieldInfo& field : type.fields)
+            {
+                if (field.fieldName == name)
+                    return &field;
+            }
+            return nullptr;
+        }
+
+        bool ReadStrictEntityId(const json& value, uint32_t& id)
+        {
+            if (value.is_number_unsigned())
+            {
+                const uint64_t raw = value.get<uint64_t>();
+                if (raw > std::numeric_limits<uint32_t>::max())
+                    return false;
+                id = static_cast<uint32_t>(raw);
+                return static_cast<entt::entity>(id) != entt::null;
+            }
+            if (!value.is_number_integer())
+                return false;
+            const int64_t raw = value.get<int64_t>();
+            if (raw < 0 || static_cast<uint64_t>(raw) > std::numeric_limits<uint32_t>::max())
+                return false;
+            id = static_cast<uint32_t>(raw);
+            return static_cast<entt::entity>(id) != entt::null;
+        }
+
+        bool ReadStrictParentId(const json& value, int64_t& parentId)
+        {
+            if (value.is_number_integer())
+            {
+                parentId = value.get<int64_t>();
+                return parentId >= -1;
+            }
+            if (!value.is_number_unsigned())
+                return false;
+            const uint64_t raw = value.get<uint64_t>();
+            if (raw > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+                return false;
+            parentId = static_cast<int64_t>(raw);
+            return true;
+        }
+
+        bool ValidateStrictRecoveryDocument(const json& root, ComponentFactory& factory)
+        {
+            if (!root.is_object() || root.contains("sceneVersion") || !root.contains("version") ||
+                !root["version"].is_number_integer() || root["version"].get<int64_t>() != kCurrentSceneVersion ||
+                !root.contains("entities") || !root["entities"].is_array())
+            {
+                return false;
+            }
+
+            std::unordered_set<uint32_t> entityIds;
+            std::vector<int64_t> parentIds;
+            for (const json& entity : root["entities"])
+            {
+                if (!entity.is_object() || !entity.contains("id") || !entity.contains("name") ||
+                    !entity.contains("parent") || !entity.contains("components") || !entity["name"].is_string() ||
+                    !entity["components"].is_array())
+                {
+                    return false;
+                }
+
+                uint32_t entityId = 0;
+                int64_t parentId = -1;
+                if (!ReadStrictEntityId(entity["id"], entityId) || !entityIds.insert(entityId).second ||
+                    !ReadStrictParentId(entity["parent"], parentId))
+                {
+                    return false;
+                }
+                parentIds.push_back(parentId);
+
+                std::unordered_set<std::string> componentTypes;
+                for (const json& component : entity["components"])
+                {
+                    if (!component.is_object() || !component.contains("type") || !component["type"].is_string() ||
+                        !component.contains("fields") || !component["fields"].is_object())
+                    {
+                        return false;
+                    }
+
+                    const std::string type = component["type"].get<std::string>();
+                    if (type.empty() || IsEntityLevel(type) || !factory.IsRegistered(type) ||
+                        !componentTypes.insert(type).second)
+                    {
+                        return false;
+                    }
+
+                    const TypeInfo* typeInfo = TypeRegistry::Get().FindTypeByName(type);
+                    if (!typeInfo)
+                        return false;
+
+                    const json& fields = component["fields"];
+                    for (const auto& field : fields.items())
+                    {
+                        const FieldInfo* fieldInfo = FindFieldBySerializedName(*typeInfo, field.key);
+                        if (!fieldInfo || !IsRoundTrippableField(*fieldInfo) || !field.value.is_string())
+                            return false;
+                    }
+                    for (const FieldInfo& field : typeInfo->fields)
+                    {
+                        if (IsRoundTrippableField(field) && !fields.contains(field.fieldName))
+                            return false;
+                    }
+                }
+            }
+
+            for (const int64_t parentId : parentIds)
+            {
+                if (parentId >= 0 &&
+                    (static_cast<uint64_t>(parentId) > std::numeric_limits<uint32_t>::max() ||
+                     !entityIds.contains(static_cast<uint32_t>(parentId))))
+                    return false;
+            }
+            return true;
+        }
     } // namespace
 
     std::string SerializeWorld(const World& world)
@@ -258,7 +398,7 @@ namespace Spark
         return root.dump(2);
     }
 
-    bool DeserializeInto(World& world, const std::string& jsonText)
+    bool DeserializeInto(World& world, const std::string& jsonText, SceneDeserializeMode mode)
     {
         try
         {
@@ -281,6 +421,9 @@ namespace Spark
             const bool legacyScene = hasLegacyVersion;
 
             auto& factory = ComponentFactory::Get();
+            const bool strictRecovery = mode == SceneDeserializeMode::StrictRecovery;
+            if (strictRecovery && (!hasCurrentVersion || !ValidateStrictRecoveryDocument(root, factory)))
+                return false;
             std::unordered_map<uint32_t, entt::entity> idMap; // serialized id -> live entity
             const auto& entities = root["entities"];
 
@@ -362,16 +505,26 @@ namespace Spark
                         {
                             SPARK_LOG_WARN(Spark::LogCategory::Core,
                                            "[ReflectedScene] unknown component type '%s' skipped", type.c_str());
+                            if (strictRecovery)
+                                return false;
                             continue;
                         }
                         if (!factory.HasComponent(type, &world, (uint32_t)e))
                             factory.AddComponent(type, &world, (uint32_t)e);
                         void* comp = factory.GetComponentRaw(type, &world, (uint32_t)e);
                         if (!comp)
+                        {
+                            if (strictRecovery)
+                                return false;
                             continue;
+                        }
                         const TypeInfo* ti = TypeRegistry::Get().FindTypeByName(type);
                         if (!ti)
+                        {
+                            if (strictRecovery)
+                                return false;
                             continue;
+                        }
                         const json& fields = c.contains("fields") ? c["fields"] : c;
                         for (const FieldInfo& f : ti->fields)
                         {
@@ -383,10 +536,19 @@ namespace Spark
                                 legacyScene ? FindLegacyField(fields, type, f.fieldName)
                                             : (fields.contains(f.fieldName) ? &fields[f.fieldName] : nullptr);
                             if (!fieldValue)
+                            {
+                                if (strictRecovery && IsRoundTrippableField(f))
+                                    return false;
                                 continue;
+                            }
                             if (!legacyScene && !fieldValue->is_string())
+                            {
+                                if (strictRecovery)
+                                    return false;
                                 continue;
-                            SetFieldFromString(comp, f, JsonFieldValueToString(*fieldValue));
+                            }
+                            if (!SetFieldFromString(comp, f, JsonFieldValueToString(*fieldValue)) && strictRecovery)
+                                return false;
                         }
 
                         if (legacyScene && sourceType == "DirectionalLight")
@@ -405,8 +567,13 @@ namespace Spark
             {
                 auto it = idMap.find(p.parentId);
                 if (it == idMap.end())
+                {
+                    if (strictRecovery)
+                        return false;
                     continue;
-                world.SetParent(p.child, it->second);
+                }
+                if (!world.SetParent(p.child, it->second) && strictRecovery)
+                    return false;
             }
             return true;
         }

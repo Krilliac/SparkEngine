@@ -12,7 +12,9 @@
 #pragma once
 
 #include <imgui.h>
+#include <chrono>
 #include <cstdint>
+#include <deque>
 #include <vector>
 #include <string>
 #include <memory>
@@ -24,6 +26,7 @@
 #include "EditorLayoutManager.h"
 #include "EditorNotificationManager.h"
 #include "EditorCrashHandler.h"
+#include "EditorRecovery.h"
 #include "ProjectManager.h"
 #include "../UndoRedo/UndoRedoManager.h"
 #include "../CommandHistory.h"
@@ -240,7 +243,6 @@ namespace SparkEditor
 
         // Simple recovery
         bool HasRecoveryData();
-        bool ShowRecoveryDialog();
 
         // Exit request (set by File > Exit)
         bool IsExitRequested() const { return m_exitRequested; }
@@ -357,8 +359,24 @@ namespace SparkEditor
         std::vector<float> m_frameTimeHistory;
         static constexpr size_t MAX_FRAME_HISTORY = 60;
 
-        // Recovery
-        bool m_recoveryDataAvailable = false;
+        // Recovery records are captured only while EditorUI owns m_world. A
+        // valid pending snapshot blocks new captures until the user restores
+        // or discards it, so an older recovery record cannot be silently
+        // replaced before its explicit decision UI is shown.
+        std::unique_ptr<EditorRecoveryStore> m_recoveryStore;
+        EditorRecoveryController m_recoveryController;
+        EditorRecoveryCaptureGate m_recoveryCaptureGate;
+        std::deque<std::string> m_recentRecoveryOperations;
+        std::chrono::steady_clock::time_point m_lastRecoveryCapture{};
+        uint64_t m_lastCapturedSequence = 0;
+        uint64_t m_lastObservedEditSequence = 0;
+        size_t m_lastObservedUndoDepth = 0;
+        size_t m_lastObservedRedoDepth = 0;
+        bool m_recoveryRecordInvalid = false;
+        bool m_recoveryWriteFailureShown = false;
+        EditorRecoveryDialogState m_lastRenderedRecoveryDialogState = EditorRecoveryDialogState::Hidden;
+        static constexpr size_t kMaxRecoveryOperations = 50;
+        static constexpr std::chrono::seconds kRecoveryCaptureInterval{30};
 
         // Additional member variable for selected objects count
         int m_selectedObjectCount = 0;
@@ -443,6 +461,20 @@ namespace SparkEditor
         void ResetWorldAfterProjectClose();
         void ShowOpenSceneDialogNow();
         void RenderUnsavedChangesDialog();
+        std::string GetCanonicalActiveProjectIdentity() const;
+        std::string GetProjectRelativeCurrentScenePath() const;
+        void RecordRecoveryOperation(const std::string& description);
+        void ResetRecoveryCaptureTracking();
+        void ObserveDocumentHistoryForRecovery();
+        void CaptureRecoveryIfDue(bool force);
+        bool PersistRecoverySnapshotOnUiThread(uint64_t editSequence);
+        void OfferMatchingRecoveryForCurrentProject();
+        void ClearPendingRecoveryOffer();
+        void SuppressRecoveryAfterExplicitDocumentDiscard();
+        bool RestorePendingRecovery();
+        bool DiscardPendingRecovery();
+        void ClearMatchingRecoveryAfterSuccessfulSave();
+        void RenderRecoveryModal();
 
         /// @brief Re-point the panels that cache a raw ::World* (SceneView,
         /// Hierarchy) at the current m_world and clear selection. Must be

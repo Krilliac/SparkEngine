@@ -144,6 +144,11 @@ namespace SparkEditor
          */
         bool HasUnsavedChanges() const;
 
+        /// @brief Monotonic revision of every execute, merge, undo, and redo.
+        /// Cleared histories deliberately retain this value so document-level
+        /// recovery scheduling can distinguish a later mutation from a save.
+        [[nodiscard]] uint64_t GetEditSequence() const { return m_editSequence; }
+
         /**
          * @brief Set callback for when the stack changes
          * @param callback Function called whenever undo/redo state changes

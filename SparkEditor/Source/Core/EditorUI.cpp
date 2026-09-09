@@ -67,6 +67,7 @@
 #include <fstream>
 #include <chrono>
 #include <cstdio>
+#include <ctime>
 #include <limits>
 #include <stdexcept>
 
@@ -107,6 +108,30 @@ namespace SparkEditor
         {
             const std::u8string utf8 = value.generic_u8string();
             return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+        }
+
+        std::string FormatRecoveryCapturedTime(int64_t capturedUnixMilliseconds)
+        {
+            if (capturedUnixMilliseconds <= 0)
+                return "Unknown time";
+
+            const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(
+                                     std::chrono::milliseconds(capturedUnixMilliseconds))
+                                     .count();
+            const std::time_t timestamp = static_cast<std::time_t>(seconds);
+            std::tm localTime{};
+#ifdef _WIN32
+            if (localtime_s(&localTime, &timestamp) != 0)
+                return "Unknown time";
+#else
+            if (localtime_r(&timestamp, &localTime) == nullptr)
+                return "Unknown time";
+#endif
+
+            char buffer[64]{};
+            if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &localTime) == 0)
+                return "Unknown time";
+            return buffer;
         }
     } // namespace
 
@@ -269,6 +294,8 @@ namespace SparkEditor
         {
             console.LogWarning("Project manager initialization failed");
         }
+        m_recoveryStore = std::make_unique<EditorRecoveryStore>(
+            PathFromUtf8(ProjectManager::GetEditorDataDirectory()) / "Crashes");
         m_projectBrowserPanel = std::make_shared<ProjectBrowserPanel>(m_projectManager.get());
         m_projectBrowserPanel->SetOpenProjectRequestHandler([this](const std::string& projectPath)
                                                             { return RequestOpenProject(projectPath); });
@@ -406,12 +433,14 @@ namespace SparkEditor
                     NewSceneNow();
                 }
 
+                OfferMatchingRecoveryForCurrentProject();
                 ShowNotification("Project opened: " + project.name, "success");
             });
 
         m_projectManager->SetOnProjectClosed(
             [this](const ProjectInfo& project)
             {
+                ClearPendingRecoveryOffer();
                 if (auto gameViewIt = m_panels.find("GameView"); gameViewIt != m_panels.end())
                     if (auto* gameView = dynamic_cast<GameViewPanel*>(gameViewIt->second.get()))
                         gameView->SetFPSHUDPreviewEnabled(false);
@@ -536,6 +565,11 @@ namespace SparkEditor
 
         // Handle keyboard shortcuts for undo/redo, command palette, search
         HandleKeyboardShortcuts();
+
+        // SceneView, Hierarchy, Inspector, and keyboard undo/redo all use the
+        // shared CommandHistory. Observe its monotonic sequence after input so
+        // every document mutation is captured by this UI-owned World thread.
+        ObserveDocumentHistoryForRecovery();
     }
 
     void EditorUI::ProcessSceneShortcuts()
@@ -711,6 +745,7 @@ namespace SparkEditor
         RenderStatusBar();
         m_notificationManager->Render();
         RenderModalDialogs();
+        RenderRecoveryModal();
         RenderWelcomeScreen();
 
         // Render project browser modal (on top of everything)
@@ -772,6 +807,12 @@ namespace SparkEditor
         // still alive. This restores or commits the active snapshot and closes
         // the process-wide transient undo session before any World is replaced.
         StopPlayModeForDocumentTransition();
+
+        // A normal shutdown is still a healthy UI-thread boundary. Persist one
+        // last immutable snapshot while the project manager and live World are
+        // both available; a pending restore choice or invalid record remains
+        // untouched by CaptureRecoveryIfDue's guards.
+        CaptureRecoveryIfDue(true);
 
         // Shutdown panels using vector iteration since unordered_map doesn't have rbegin/rend
         std::vector<std::pair<std::string, std::shared_ptr<EditorPanel>>> panelVector(m_panels.begin(), m_panels.end());
@@ -1129,6 +1170,7 @@ namespace SparkEditor
         if (ImGui::Button("Discard", ImVec2(110.0f, 0.0f)))
         {
             const auto action = m_documentTransitionGuard.Resolve(UnsavedChangesDecision::Discard);
+            SuppressRecoveryAfterExplicitDocumentDiscard();
             ImGui::CloseCurrentPopup();
             ExecuteDocumentTransition(action);
         }
@@ -1445,49 +1487,470 @@ namespace SparkEditor
 
     bool EditorUI::HasRecoveryData()
     {
-        return m_recoveryDataAvailable;
+        return m_recoveryController.Snapshot() != nullptr;
     }
 
-    bool EditorUI::ShowRecoveryDialog()
+    std::string EditorUI::GetCanonicalActiveProjectIdentity() const
     {
-        if (!m_recoveryDataAvailable)
-            return false;
+        if (!m_projectManager || !m_projectManager->HasOpenProject())
+            return {};
 
-        bool recovered = false;
-        ImGui::OpenPopup("Recovery Available");
+        const std::string activeProjectPath = ProjectManager::GetActiveProjectPath();
+        if (activeProjectPath.empty())
+            return {};
 
-        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-        if (ImGui::BeginPopupModal("Recovery Available", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        try
         {
-            ImGui::Text("The editor detected unsaved changes from a previous session.");
-            ImGui::Text("Would you like to restore the previous state?");
-            ImGui::Separator();
-
-            if (ImGui::Button("Restore Previous Session", ImVec2(200, 0)))
+            std::error_code pathError;
+            const std::filesystem::path canonicalProject =
+                std::filesystem::weakly_canonical(PathFromUtf8(activeProjectPath), pathError);
+            if (pathError || canonicalProject.empty() || !std::filesystem::is_directory(canonicalProject, pathError) ||
+                pathError)
             {
-                // Attempt to load recovery data through the layout manager
-                if (m_layoutManager)
-                {
-                    recovered = m_layoutManager->LoadLayout("_recovery");
-                }
-                m_recoveryDataAvailable = false;
-                ImGui::CloseCurrentPopup();
+                return {};
             }
+            return PathToUtf8(canonicalProject.lexically_normal());
+        }
+        catch (...)
+        {
+            // Project identity must never fall back to the process working
+            // directory: a failed canonicalization means no recovery capture.
+            return {};
+        }
+    }
 
-            ImGui::SameLine();
+    std::string EditorUI::GetProjectRelativeCurrentScenePath() const
+    {
+        const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
+        if (projectIdentity.empty() || m_currentScenePath.empty())
+            return {};
 
-            if (ImGui::Button("Discard", ImVec2(100, 0)))
-            {
-                m_recoveryDataAvailable = false;
-                ImGui::CloseCurrentPopup();
-            }
+        try
+        {
+            const std::filesystem::path projectRoot = PathFromUtf8(projectIdentity);
+            std::filesystem::path scenePath = PathFromUtf8(m_currentScenePath);
+            if (scenePath.is_relative())
+                scenePath = projectRoot / scenePath;
 
-            ImGui::EndPopup();
+            std::error_code pathError;
+            scenePath = std::filesystem::weakly_canonical(scenePath, pathError);
+            if (pathError)
+                return {};
+
+            const std::filesystem::path relative =
+                std::filesystem::relative(scenePath, projectRoot, pathError).lexically_normal();
+            if (pathError || relative.empty() || relative.is_absolute() || *relative.begin() == "..")
+                return {};
+            return PathToUtf8(relative);
+        }
+        catch (...)
+        {
+            return {};
+        }
+    }
+
+    void EditorUI::RecordRecoveryOperation(const std::string& description)
+    {
+        if (description.empty())
+            return;
+
+        m_recentRecoveryOperations.push_back(description);
+        while (m_recentRecoveryOperations.size() > kMaxRecoveryOperations)
+            m_recentRecoveryOperations.pop_front();
+
+        if (m_crashHandler)
+            m_crashHandler->RecordOperation(description);
+    }
+
+    void EditorUI::ResetRecoveryCaptureTracking()
+    {
+        auto& history = Spark::Editor::CommandHistory::GetInstance();
+        m_lastCapturedSequence = history.GetEditSequence();
+        m_lastObservedEditSequence = history.GetEditSequence();
+        m_lastObservedUndoDepth = history.UndoCount();
+        m_lastObservedRedoDepth = history.RedoCount();
+        m_lastRecoveryCapture = std::chrono::steady_clock::time_point{};
+        m_recentRecoveryOperations.clear();
+        m_recoveryCaptureGate.ResetForNewDocument();
+        m_recoveryWriteFailureShown = false;
+    }
+
+    void EditorUI::ObserveDocumentHistoryForRecovery()
+    {
+        if (!m_world)
+            return;
+
+        auto& history = Spark::Editor::CommandHistory::GetInstance();
+        const uint64_t sequence = history.GetEditSequence();
+        const size_t undoDepth = history.UndoCount();
+        const size_t redoDepth = history.RedoCount();
+        if (sequence != m_lastObservedEditSequence)
+        {
+            m_recoveryCaptureGate.NoteNewMutation();
+            const bool wasUndo = undoDepth < m_lastObservedUndoDepth && redoDepth > m_lastObservedRedoDepth;
+            std::string description = wasUndo ? history.GetRedoDescription() : history.GetUndoDescription();
+            if (description.empty())
+                description = wasUndo ? history.GetUndoDescription() : history.GetRedoDescription();
+            RecordRecoveryOperation(description);
+
+            m_lastObservedEditSequence = sequence;
+            m_lastObservedUndoDepth = undoDepth;
+            m_lastObservedRedoDepth = redoDepth;
+            CaptureRecoveryIfDue(true);
+            return;
         }
 
-        return recovered;
+        m_lastObservedUndoDepth = undoDepth;
+        m_lastObservedRedoDepth = redoDepth;
+        CaptureRecoveryIfDue(false);
+    }
+
+    void EditorUI::CaptureRecoveryIfDue(bool force)
+    {
+        if (!m_world || !m_projectManager || !m_projectManager->HasOpenProject() || !m_recoveryStore ||
+            m_recoveryController.Snapshot() || !m_recoveryCaptureGate.AllowsCapture() || m_recoveryRecordInvalid ||
+            !IsSceneModified())
+        {
+            return;
+        }
+
+        auto& history = Spark::Editor::CommandHistory::GetInstance();
+        const uint64_t editSequence = history.GetEditSequence();
+        const auto now = std::chrono::steady_clock::now();
+        if (!force && editSequence == m_lastCapturedSequence &&
+            now - m_lastRecoveryCapture < kRecoveryCaptureInterval)
+        {
+            return;
+        }
+
+        PersistRecoverySnapshotOnUiThread(editSequence);
+    }
+
+    bool EditorUI::PersistRecoverySnapshotOnUiThread(uint64_t editSequence)
+    {
+        const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
+        if (projectIdentity.empty() || !m_world || !m_recoveryStore)
+            return false;
+
+        try
+        {
+            EditorRecoverySnapshot metadata;
+            metadata.projectIdentity = projectIdentity;
+            metadata.projectRelativeScene = GetProjectRelativeCurrentScenePath();
+            metadata.sceneDisplayName = m_currentSceneName.empty() ? "Untitled" : m_currentSceneName;
+            metadata.recentOperations.assign(m_recentRecoveryOperations.begin(), m_recentRecoveryOperations.end());
+            metadata.dirtySequence = editSequence;
+            metadata.capturedUnixMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                   std::chrono::system_clock::now().time_since_epoch())
+                                                   .count();
+
+            std::string error;
+            const EditorRecoverySnapshot snapshot =
+                CaptureRecoverySnapshotOnCallingThread(*m_world, std::move(metadata));
+            if (!m_recoveryStore->Save(snapshot, error))
+            {
+                if (!m_recoveryWriteFailureShown)
+                {
+                    ShowNotification("Recovery snapshot was not saved: " + error, "warning", 5.0f);
+                    m_recoveryWriteFailureShown = true;
+                }
+                return false;
+            }
+
+            m_lastCapturedSequence = editSequence;
+            m_lastRecoveryCapture = std::chrono::steady_clock::now();
+            m_recoveryWriteFailureShown = false;
+            return true;
+        }
+        catch (const std::exception& error)
+        {
+            if (!m_recoveryWriteFailureShown)
+            {
+                ShowNotification("Recovery snapshot was not saved: " + std::string(error.what()), "warning", 5.0f);
+                m_recoveryWriteFailureShown = true;
+            }
+            return false;
+        }
+    }
+
+    void EditorUI::OfferMatchingRecoveryForCurrentProject()
+    {
+        ClearPendingRecoveryOffer();
+        if (!m_recoveryStore)
+            return;
+
+        const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
+        if (projectIdentity.empty())
+            return;
+
+        EditorRecoveryLoadResult loaded = m_recoveryStore->LoadForProject(projectIdentity);
+        if ((loaded.state == EditorRecoveryLoadState::Primary || loaded.state == EditorRecoveryLoadState::Backup) &&
+            loaded.snapshot)
+        {
+            m_recoveryController.Offer(std::move(*loaded.snapshot),
+                                       loaded.state == EditorRecoveryLoadState::Backup);
+            return;
+        }
+
+        if (loaded.state == EditorRecoveryLoadState::Invalid)
+        {
+            m_recoveryRecordInvalid = true;
+            ShowNotification("Recovery record was retained but could not be read: " + loaded.error, "warning", 6.0f);
+        }
+    }
+
+    void EditorUI::ClearPendingRecoveryOffer()
+    {
+        // This is a project transition, not a user discard: the controller is
+        // state-only and the on-disk record deliberately remains untouched.
+        m_recoveryController.DismissAfterDiscard();
+        m_lastRenderedRecoveryDialogState = EditorRecoveryDialogState::Hidden;
+        m_recoveryRecordInvalid = false;
+    }
+
+    void EditorUI::SuppressRecoveryAfterExplicitDocumentDiscard()
+    {
+        // A discard in the unsaved-changes dialog is an explicit choice about
+        // the current document. Never recreate that document's recovery data
+        // during shutdown. A pending recovery offer is a separate explicit
+        // choice and must remain until the user restores or discards it there.
+        m_recoveryCaptureGate.SuppressAfterExplicitDiscard();
+        if (!m_recoveryStore || m_recoveryController.Snapshot())
+            return;
+
+        const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
+        if (projectIdentity.empty())
+            return;
+
+        std::string error;
+        if (!m_recoveryStore->ClearForProject(projectIdentity, error))
+        {
+            ShowNotification("Discarded document will not be re-captured, but matching recovery cleanup failed: " + error,
+                             "warning", 6.0f);
+        }
+    }
+
+    bool EditorUI::RestorePendingRecovery()
+    {
+        const EditorRecoverySnapshot* snapshot = m_recoveryController.Snapshot();
+        if (!snapshot)
+            return false;
+        if (!m_recoveryStore)
+        {
+            m_recoveryController.SetRestoreFailure("Recovery storage is not available");
+            return false;
+        }
+
+        const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
+        if (projectIdentity.empty())
+        {
+            m_recoveryController.SetRestoreFailure("Open the matching project before restoring recovery data");
+            return false;
+        }
+        if (snapshot->projectIdentity != projectIdentity)
+        {
+            m_recoveryController.SetRestoreFailure("Recovery data belongs to a different project and was not restored");
+            return false;
+        }
+
+        std::string restoreError;
+        std::unique_ptr<::World> restored = DeserializeRecoverySnapshotIntoFreshWorld(*snapshot, restoreError);
+        if (!restored)
+        {
+            m_recoveryController.SetRestoreFailure(restoreError);
+            return false;
+        }
+
+        std::string restoredScenePath;
+        std::string sceneName = "Recovered Scene";
+        if (!snapshot->projectRelativeScene.empty())
+        {
+            try
+            {
+                const std::filesystem::path relativeScene = PathFromUtf8(snapshot->projectRelativeScene);
+                std::filesystem::path resolvedScene;
+                std::string pathError;
+                if (!ResolvePathInsideProject(PathFromUtf8(projectIdentity), relativeScene, resolvedScene, pathError))
+                {
+                    m_recoveryController.SetRestoreFailure("Recovery scene path is outside the active project: " +
+                                                           pathError);
+                    return false;
+                }
+                restoredScenePath = PathToUtf8(resolvedScene);
+                const std::string derivedSceneName = PathToUtf8(relativeScene.stem());
+                if (!derivedSceneName.empty())
+                    sceneName = derivedSceneName;
+            }
+            catch (const std::exception& exception)
+            {
+                m_recoveryController.SetRestoreFailure("Recovery scene path could not be resolved: " +
+                                                       std::string(exception.what()));
+                return false;
+            }
+        }
+
+        const std::vector<std::string> previousOperations = snapshot->recentOperations;
+
+        // Swap only after the complete recovery document was deserialized in a
+        // fresh World. A parse or project-boundary failure above leaves the
+        // current World, panels, history, and on-disk record intact.
+        SwapWorld(std::move(restored));
+        m_currentScenePath = restoredScenePath;
+        // Snapshot display text is intentionally never used as a path or save
+        // name. The actual document name is derived from a contained relative
+        // scene, or a fixed safe name for an unsaved recovered document.
+        m_currentSceneName = sceneName;
+        m_sceneModified = true;
+        m_recentRecoveryOperations.assign(previousOperations.begin(), previousOperations.end());
+        while (m_recentRecoveryOperations.size() > kMaxRecoveryOperations)
+            m_recentRecoveryOperations.pop_front();
+        RecordRecoveryOperation("Restore recovery: " + sceneName);
+
+        m_recoveryController.DismissAfterRestore();
+        if (m_pluginManager)
+            m_pluginManager->NotifySceneLoad(m_currentScenePath.empty() ? m_currentSceneName : m_currentScenePath);
+
+        std::string cleanupError;
+        if (!m_recoveryStore->ClearForProject(projectIdentity, cleanupError))
+        {
+            ShowNotification("Recovered document restored; recovery cleanup failed: " + cleanupError, "warning", 6.0f);
+        }
+
+        // The recovered World is intentionally dirty until the user saves it.
+        // Re-capture immediately after clearing the consumed record so a crash
+        // in this unsaved restored session still has a durable snapshot.
+        CaptureRecoveryIfDue(true);
+        return true;
+    }
+
+    bool EditorUI::DiscardPendingRecovery()
+    {
+        const EditorRecoverySnapshot* snapshot = m_recoveryController.Snapshot();
+        if (!snapshot)
+            return false;
+        if (!m_recoveryStore)
+        {
+            m_recoveryController.SetRestoreFailure("Recovery storage is not available");
+            return false;
+        }
+
+        const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
+        if (projectIdentity.empty() || snapshot->projectIdentity != projectIdentity)
+        {
+            m_recoveryController.SetRestoreFailure("Recovery data does not match the active project");
+            return false;
+        }
+
+        std::string error;
+        if (!m_recoveryStore->ClearForProject(projectIdentity, error))
+        {
+            m_recoveryController.SetRestoreFailure("Recovery record could not be discarded: " + error);
+            return false;
+        }
+
+        m_recoveryController.DismissAfterDiscard();
+        ShowNotification("Recovery snapshot discarded", "info");
+        return true;
+    }
+
+    void EditorUI::ClearMatchingRecoveryAfterSuccessfulSave()
+    {
+        // A pending restore is an explicit decision the user has not made
+        // yet. Saving the newly opened base document must not silently erase
+        // that snapshot.
+        if (!m_recoveryStore || m_recoveryController.Snapshot())
+            return;
+
+        const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
+        if (projectIdentity.empty())
+            return;
+
+        std::string error;
+        if (!m_recoveryStore->ClearForProject(projectIdentity, error))
+        {
+            ShowNotification("Scene saved, but matching recovery data could not be cleared: " + error, "warning", 6.0f);
+        }
+        else
+        {
+            // A successful save is durable user data, so it is now safe to
+            // resume captures after clearing an unreadable old recovery record.
+            m_recoveryRecordInvalid = false;
+        }
+    }
+
+    void EditorUI::RenderRecoveryModal()
+    {
+        constexpr const char* popupTitle = "Unsaved Recovery Available";
+        const EditorRecoveryDialogState state = m_recoveryController.State();
+        if (state == EditorRecoveryDialogState::Hidden)
+        {
+            m_lastRenderedRecoveryDialogState = EditorRecoveryDialogState::Hidden;
+            return;
+        }
+
+        const EditorRecoverySnapshot* snapshot = m_recoveryController.Snapshot();
+        if (!snapshot)
+        {
+            m_lastRenderedRecoveryDialogState = EditorRecoveryDialogState::Hidden;
+            return;
+        }
+
+        // Open exactly once for each controller state transition; continually
+        // opening the popup would steal focus from Restore/Discard buttons.
+        if (state != m_lastRenderedRecoveryDialogState)
+        {
+            ImGui::OpenPopup(popupTitle);
+            m_lastRenderedRecoveryDialogState = state;
+        }
+
+        const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(540.0f, 0.0f), ImGuiCond_Appearing);
+        if (!ImGui::BeginPopupModal(popupTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            return;
+
+        ImGui::TextUnformatted("SparkEditor found an unsaved recovery snapshot for this project.");
+        ImGui::Spacing();
+        ImGui::Text("Scene: %s", snapshot->sceneDisplayName.c_str());
+        const std::string capturedTime = FormatRecoveryCapturedTime(snapshot->capturedUnixMilliseconds);
+        ImGui::Text("Captured: %s", capturedTime.c_str());
+        if (m_recoveryController.UsesBackup())
+        {
+            ImGui::TextColored(ImVec4(0.95f, 0.72f, 0.28f, 1.0f),
+                               "Using the last known-good backup snapshot");
+        }
+        if (!snapshot->recentOperations.empty())
+        {
+            ImGui::Spacing();
+            ImGui::TextDisabled("Last operation");
+            ImGui::TextWrapped("%s", snapshot->recentOperations.back().c_str());
+        }
+
+        if (state == EditorRecoveryDialogState::RestoreFailed)
+        {
+            ImGui::Spacing();
+            ImGui::Separator();
+            const std::string error(m_recoveryController.Error());
+            ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.32f, 1.0f), "Restore failed");
+            ImGui::TextWrapped("%s", error.c_str());
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextDisabled("Recovery is never restored automatically.");
+
+        if (ImGui::Button("Restore", ImVec2(150.0f, 0.0f)))
+        {
+            if (RestorePendingRecovery())
+                ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard", ImVec2(150.0f, 0.0f)))
+        {
+            if (DiscardPendingRecovery())
+                ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 
     bool EditorUI::ImportLayout(const std::string& filePath)
@@ -1727,6 +2190,7 @@ namespace SparkEditor
         m_currentSceneName = "Untitled";
         m_sceneModified = false;
         Spark::Editor::CommandHistory::GetInstance().MarkSaved();
+        RecordRecoveryOperation("New Scene");
         if (m_pluginManager)
             m_pluginManager->NotifySceneLoad("Untitled");
         ShowNotification("New scene created", "success");
@@ -1748,9 +2212,10 @@ namespace SparkEditor
             ShowNotification("Open a project first before saving a scene", "warning");
             return false;
         }
-        const std::string targetPath = m_currentScenePath.empty() ? m_projectManager->GetProjectScenesPath() + "/" +
-                                                                        m_currentSceneName + ".sparkscene"
-                                                                  : m_currentScenePath;
+        const std::string targetPath = m_currentScenePath.empty()
+                                           ? PathToUtf8(PathFromUtf8(m_projectManager->GetProjectScenesPath()) /
+                                                        (m_currentSceneName + ".sparkscene"))
+                                           : m_currentScenePath;
         if (!SaveCurrentScene(targetPath))
         {
             ShowNotification("Failed to save scene", "error");
@@ -1859,11 +2324,17 @@ namespace SparkEditor
         }
 
         const std::string after = Spark::SerializeWorld(*m_world);
+        const std::string description = "Create " + (name == "Empty" ? std::string("Entity") : name);
         auto& history = Spark::Editor::CommandHistory::GetInstance();
         history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
             [this, after, entity]() { RestoreWorldSnapshot(after, entity); },
-            [this, before, selectionBefore]() { RestoreWorldSnapshot(before, selectionBefore); },
-            "Create " + (name == "Empty" ? std::string("Entity") : name)));
+            [this, before, selectionBefore]() { RestoreWorldSnapshot(before, selectionBefore); }, description));
+        RecordRecoveryOperation(description);
+        m_recoveryCaptureGate.NoteNewMutation();
+        m_lastObservedEditSequence = history.GetEditSequence();
+        m_lastObservedUndoDepth = history.UndoCount();
+        m_lastObservedRedoDepth = history.RedoCount();
+        CaptureRecoveryIfDue(true);
         return true;
     }
 
@@ -1876,10 +2347,17 @@ namespace SparkEditor
         m_world->DestroyEntity(m_selectedEntity);
         m_selectedEntity = entt::null;
         const std::string after = Spark::SerializeWorld(*m_world);
+        constexpr const char* description = "Delete Entity";
         auto& history = Spark::Editor::CommandHistory::GetInstance();
         history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
             [this, after]() { RestoreWorldSnapshot(after, entt::null); },
-            [this, before, selectionBefore]() { RestoreWorldSnapshot(before, selectionBefore); }, "Delete Entity"));
+            [this, before, selectionBefore]() { RestoreWorldSnapshot(before, selectionBefore); }, description));
+        RecordRecoveryOperation(description);
+        m_recoveryCaptureGate.NoteNewMutation();
+        m_lastObservedEditSequence = history.GetEditSequence();
+        m_lastObservedUndoDepth = history.UndoCount();
+        m_lastObservedRedoDepth = history.RedoCount();
+        CaptureRecoveryIfDue(true);
         return true;
     }
 
@@ -1915,6 +2393,13 @@ namespace SparkEditor
         Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
             [this, after, selection]() { RestoreWorldSnapshot(after, selection); },
             [this, before, selection]() { RestoreWorldSnapshot(before, selection); }, description));
+        auto& history = Spark::Editor::CommandHistory::GetInstance();
+        RecordRecoveryOperation(description);
+        m_recoveryCaptureGate.NoteNewMutation();
+        m_lastObservedEditSequence = history.GetEditSequence();
+        m_lastObservedUndoDepth = history.UndoCount();
+        m_lastObservedRedoDepth = history.RedoCount();
+        CaptureRecoveryIfDue(true);
         return true;
     }
 
@@ -1938,6 +2423,7 @@ namespace SparkEditor
         // Install the new document. The previous World is freed here, after the
         // history that could reference it has already been cleared.
         m_world = std::move(newWorld);
+        ResetRecoveryCaptureTracking();
 
         // SceneView/Hierarchy cache a raw ::World*; re-point them at the new
         // World (also clears the now-foreign selection) so nothing dangles.
@@ -2065,25 +2551,26 @@ namespace SparkEditor
 
         try
         {
-            // A path outside the open project (for example the bare CWD-relative name a
-            // workflow step used to pass) must NOT become the editor's current scene path,
-            // or every later Ctrl+S is silently redirected away from the project scene.
-            // Decide this BEFORE writing: the write itself still succeeds and is still
-            // reported as a success, only the adoption of the path is withheld.
-            bool insideOpenProject = true;
-            if (m_projectManager && m_projectManager->HasOpenProject())
+            const bool insideOpenProject = m_projectManager && m_projectManager->HasOpenProject();
+            std::string resolvedPath = path;
+            if (insideOpenProject)
             {
-                std::error_code pathError;
-                const auto projectRoot =
-                    std::filesystem::weakly_canonical(PathFromUtf8(ProjectManager::GetActiveProjectPath()), pathError);
-                const auto candidate = std::filesystem::weakly_canonical(PathFromUtf8(path), pathError);
-                const auto relative = std::filesystem::relative(candidate, projectRoot, pathError).lexically_normal();
-                insideOpenProject =
-                    !pathError && !relative.empty() && !relative.is_absolute() && *relative.begin() != "..";
+                std::filesystem::path containedPath;
+                std::string pathError;
+                if (!ResolvePathInsideProject(PathFromUtf8(ProjectManager::GetActiveProjectPath()), PathFromUtf8(path),
+                                              containedPath, pathError))
+                {
+                    Spark::SimpleConsole::GetInstance().LogError(
+                        "Refusing to save scene outside the open project: " + pathError);
+                    return false;
+                }
+                resolvedPath = PathToUtf8(containedPath);
             }
 
-            // Ensure parent directory exists
-            auto parentPath = PathFromUtf8(path).parent_path();
+            // Containment is established above before any directory creation
+            // or file write. weakly_canonical resolves existing symlinks and
+            // junctions, so a lexical path cannot redirect a project save.
+            auto parentPath = PathFromUtf8(resolvedPath).parent_path();
             if (!parentPath.empty())
             {
                 std::filesystem::create_directories(parentPath);
@@ -2092,10 +2579,10 @@ namespace SparkEditor
             // Full-fidelity save via the reflection-driven scene serializer
             // (replaces the old lossy names-only JSON writer). The live ECS
             // World is the single source of truth for scene content.
-            if (!Spark::SaveWorld(*m_world, path))
+            if (!Spark::SaveWorld(*m_world, resolvedPath))
             {
                 auto& console = Spark::SimpleConsole::GetInstance();
-                console.LogError("Failed to save scene (Spark::SaveWorld): " + path);
+                console.LogError("Failed to save scene (Spark::SaveWorld): " + resolvedPath);
                 return false;
             }
 
@@ -2107,29 +2594,28 @@ namespace SparkEditor
 
             if (insideOpenProject)
             {
-                m_currentScenePath = path;
+                m_currentScenePath = resolvedPath;
 
                 if (m_projectManager && m_projectManager->HasOpenProject() &&
-                    !m_projectManager->RecordOpenedScene(path))
+                    !m_projectManager->RecordOpenedScene(resolvedPath))
                 {
                     Spark::SimpleConsole::GetInstance().LogWarning(
-                        "Scene saved, but project last-opened-scene metadata was not updated: " + path);
+                        "Scene saved, but project last-opened-scene metadata was not updated: " + resolvedPath);
                 }
-            }
-            else
-            {
-                Spark::SimpleConsole::GetInstance().LogWarning(
-                    "Scene written to '" + path +
-                    "', but it is outside the open project; the editor's current scene path is unchanged");
-            }
 
+                // A project-owned scene has reached durable storage and the
+                // document is marked clean above, so only its matching valid
+                // recovery record may now be removed. A pending recovery offer
+                // is intentionally preserved until Restore or Discard.
+                ClearMatchingRecoveryAfterSuccessfulSave();
+            }
             auto& console = Spark::SimpleConsole::GetInstance();
-            console.LogSuccess("Scene saved to: " + path);
+            console.LogSuccess("Scene saved to: " + resolvedPath);
 
             // Notify plugins of the scene save
             if (m_pluginManager)
             {
-                m_pluginManager->NotifySceneSave(path);
+                m_pluginManager->NotifySceneSave(resolvedPath);
             }
 
             return true;
@@ -2225,6 +2711,17 @@ namespace SparkEditor
             // primitives are the only intentionally unrooted mesh identities.
             mr.meshPath = "__spark_primitive_Cube.obj";
             SwapWorld(std::move(fresh));
+
+            // The seed is editor-provided onboarding content, not user work.
+            // CommandHistory deliberately preserves dirty state across a
+            // generic World swap, so establish an explicit clean baseline for
+            // this newly created document. Without it, initialization work
+            // performed before the graphics device arrives can make an
+            // untouched editor prompt to save on its first exit.
+            m_currentScenePath.clear();
+            m_currentSceneName = "Untitled";
+            m_sceneModified = false;
+            Spark::Editor::CommandHistory::GetInstance().MarkSaved();
         }
 
         auto it = m_panels.find("SceneView");
