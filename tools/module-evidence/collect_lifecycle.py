@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import ntpath
 import os
 import re
 import stat
@@ -202,7 +203,7 @@ def _native_final_path(handle: int) -> str:
         if length == 0:
             raise OSError(f"GetFinalPathNameByHandleW failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
         if length < size:
-            return _normalise_windows_final_path(buffer.value)
+            return _display_windows_final_path(buffer.value)
         size = int(length) + 1
 
 
@@ -406,14 +407,19 @@ def _is_pe_image(header: bytes, path: Path) -> bool:
         return False
 
 
+def _display_windows_final_path(value: str | Path) -> str:
+    """Normalize a handle-derived path for publication without changing its casing."""
+    path = str(value)
+    if path[:8].casefold() == "\\\\?\\unc\\":
+        path = "\\\\" + path[8:]
+    elif path[:4].casefold() == "\\\\?\\":
+        path = path[4:]
+    return ntpath.normpath(path)
+
+
 def _normalise_windows_final_path(value: str | Path) -> str:
-    """Compare a GetFinalPathNameByHandleW value with a canonical input path."""
-    path = os.path.normpath(str(value))
-    if path.startswith("\\\\?\\UNC\\"):
-        path = "\\\\" + path[len("\\\\?\\UNC\\"):]
-    elif path.startswith("\\\\?\\"):
-        path = path[len("\\\\?\\"):]
-    return os.path.normcase(os.path.normpath(path))
+    """Case-fold a handle-derived or canonical path for security comparisons only."""
+    return ntpath.normcase(_display_windows_final_path(value))
 
 
 def _lease_snapshot(lease: object) -> tuple[object, int]:

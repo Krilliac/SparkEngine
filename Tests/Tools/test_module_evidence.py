@@ -1358,8 +1358,28 @@ class TestLifecycleCollector(FixtureCase):
         self.assertEqual(out.read_text(encoding="utf-8"), "preexisting-json")
         self.assertEqual(log.read_text(encoding="utf-8"), "preexisting-log")
 
+    def test_display_final_path_preserves_leaf_case_while_comparisons_fold_case(self) -> None:
+        """Display paths retain the canonical image spelling; security comparisons do not."""
+        import collect_lifecycle
+
+        self.assertEqual(
+            collect_lifecycle._display_windows_final_path(
+                r"\\?\C:\verified-artifact\.\SparkEngine.exe"),
+            r"C:\verified-artifact\SparkEngine.exe",
+        )
+        self.assertEqual(
+            collect_lifecycle._display_windows_final_path(
+                r"\\?\UNC\server\share\verified-artifact\SparkGameFPS.dll"),
+            r"\\server\share\verified-artifact\SparkGameFPS.dll",
+        )
+        self.assertEqual(
+            collect_lifecycle._normalise_windows_final_path(
+                r"\\?\C:\verified-artifact\SparkEngine.exe"),
+            r"c:\verified-artifact\sparkengine.exe",
+        )
+
     def test_main_records_handle_derived_paths_and_digests(self) -> None:
-        """Published evidence must use lease metadata, never pre-launch Path.resolve values."""
+        """Published evidence keeps canonical lease-leaf casing for the consumer contract."""
         import collect_lifecycle
 
         out, argv = self._collector_main_fixture("handle-derived-record")
@@ -1369,12 +1389,14 @@ class TestLifecycleCollector(FixtureCase):
         module_digest = hashlib.sha256(module.read_bytes()).hexdigest()
         engine_image = collect_lifecycle.ImageVerification(
             digest=engine_digest,
-            final_path=r"\\?\C:\verified-artifact\SparkEngine.exe",
+            final_path=collect_lifecycle._display_windows_final_path(
+                r"\\?\C:\verified-artifact\.\SparkEngine.exe"),
             identity=collect_lifecycle.ImageIdentity(21, 701, engine.stat().st_size, 1),
         )
         module_image = collect_lifecycle.ImageVerification(
             digest=module_digest,
-            final_path=r"\\?\C:\verified-artifact\SparkGameFPS.dll",
+            final_path=collect_lifecycle._display_windows_final_path(
+                r"\\?\C:\verified-artifact\SparkGameFPS.dll"),
             identity=collect_lifecycle.ImageIdentity(21, 702, module.stat().st_size, 1),
         )
 
@@ -1393,9 +1415,22 @@ class TestLifecycleCollector(FixtureCase):
 
         record = json.loads(out.read_text(encoding="utf-8"))["records"][0]
         self.assertEqual(record["engineSHA256"], engine_digest)
-        self.assertEqual(record["enginePath"], engine_image.final_path)
+        self.assertEqual(record["enginePath"], r"C:\verified-artifact\SparkEngine.exe")
         self.assertEqual(record["moduleSHA256"], module_digest)
-        self.assertEqual(record["modulePath"], module_image.final_path)
+        self.assertEqual(record["modulePath"], r"C:\verified-artifact\SparkGameFPS.dll")
+
+        evidence = lifecycle_evidence(self.repo, self.sha)
+        evidence["records"][0]["enginePath"] = record["enginePath"]
+        evidence["records"][0]["modulePath"] = record["modulePath"]
+        self.assertAccepted(base_manifest(), lifecycle_evidence=evidence)
+
+        casing_alias = copy.deepcopy(evidence)
+        casing_alias["records"][0]["enginePath"] = r"C:\verified-artifact\sparkengine.exe"
+        errors = self.assertRejected(
+            base_manifest(), "collector-display-path-casing-alias",
+            lifecycle_evidence=casing_alias,
+        )
+        self.assertTrue(any("enginePath" in error for error in errors), errors)
 
     def test_parses_exact_standalone_terminal_record(self) -> None:
         from collect_lifecycle import parse_terminal_record
@@ -1798,6 +1833,7 @@ class TestLifecycleCollector(FixtureCase):
                 set_information.call_args.args[1:],
                 (collect_lifecycle._HANDLE_FLAG_INHERIT, 0),
             )
+            self.assertTrue(lease.final_path.endswith(r"\SparkEngine.exe"), lease.final_path)
             self.assertEqual(lease.sha256(), hashlib.sha256(pe_image()).hexdigest())
             with self.assertRaises(OSError):
                 engine.write_bytes(pe_image())
