@@ -947,17 +947,6 @@ class TestLifecycleCollector(FixtureCase):
             identity=collect_lifecycle.ImageIdentity(1, 2, module.stat().st_size, 1),
         )
         manifest_bytes = image_manifest.read_bytes()
-        output_paths = (self.repo, self.repo / "build", out.parent)
-        output_leases = [
-            FakeOutputDirectoryLease(
-                path,
-                identity=FakeLeaseIdentity(1, 4 + ordinal, 0),
-                attributes=collect_lifecycle._FILE_ATTRIBUTE_DIRECTORY,
-            )
-            for ordinal, path in enumerate(output_paths)
-        ]
-        output_opened: list[FakeOutputDirectoryLease] = []
-
         def manifest_lease_factory(path: Path) -> FakeImageLease:
             self.assertEqual(path, image_manifest)
             return FakeImageLease(
@@ -966,13 +955,6 @@ class TestLifecycleCollector(FixtureCase):
                 digest=hashlib.sha256(manifest_bytes).hexdigest(),
                 image=manifest_bytes,
             )
-
-        def output_lease_factory(path: Path) -> FakeOutputDirectoryLease:
-            expected = output_paths[len(output_opened)]
-            self.assertEqual(path, expected)
-            lease = output_leases[len(output_opened)]
-            output_opened.append(lease)
-            return lease
 
         with ExitStack() as stack:
             stack.enter_context(mock.patch.object(sys, "argv", argv))
@@ -1000,10 +982,6 @@ class TestLifecycleCollector(FixtureCase):
             stack.enter_context(mock.patch(
                 "collect_lifecycle.open_image_lease",
                 side_effect=manifest_lease_factory,
-            ))
-            stack.enter_context(mock.patch(
-                "collect_lifecycle.open_output_directory_lease",
-                side_effect=output_lease_factory,
             ))
             for patch in extra_patches:
                 stack.enter_context(patch)
@@ -1053,74 +1031,30 @@ class TestLifecycleCollector(FixtureCase):
 
         return leases, factory
 
-    @staticmethod
-    def _fdopen_that_fails(phase: str):
-        """Fail one real temporary stream operation but still close its descriptor."""
-        real_fdopen = os.fdopen
-
-        class FailingTempStream:
-            def __init__(self, stream) -> None:
-                self._stream = stream
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc_value, traceback) -> bool:
-                try:
-                    self._stream.close()
-                finally:
-                    if phase == "close":
-                        raise OSError("injected temporary close failure")
-                return False
-
-            def write(self, content: str) -> int:
-                if phase == "write":
-                    raise OSError("injected temporary write failure")
-                return self._stream.write(content)
-
-            def flush(self) -> None:
-                if phase == "flush":
-                    raise OSError("injected temporary flush failure")
-                self._stream.flush()
-
-        def failing_fdopen(descriptor: int, *args, **kwargs):
-            return FailingTempStream(real_fdopen(descriptor, *args, **kwargs))
-
-        return failing_fdopen
-
-    @staticmethod
-    def _replace_that_fails(ordinal: int):
-        """Return a replacement operation that fails only at the requested call."""
-        real_replace = os.replace
-
-        def fail_replace(source, destination):
-            fail_replace.call_count += 1
-            if fail_replace.call_count == ordinal:
-                raise OSError(f"injected replace {ordinal} failure")
-            return real_replace(source, destination)
-
-        fail_replace.call_count = 0
-        return fail_replace
-
     def test_main_cleans_all_transaction_artifacts_after_transient_stale_unlink_failure(
         self,
     ) -> None:
-        """A stale-clear failure must still run the shared cleanup transaction."""
+        """A stale-clear failure must still run the native-handle cleanup transaction."""
+        import collect_lifecycle
+
         out, argv = self._collector_main_fixture("stale-unlink")
         log = out.parent / "module-lifecycle-SparkGameFPS.log"
         out.write_text("stale-json", encoding="utf-8")
         log.write_text("stale-log", encoding="utf-8")
-        real_unlink = Path.unlink
+        real_clear = collect_lifecycle._clear_output_artifacts
         failed_once = False
 
-        def fail_only_the_initial_json_unlink(path: Path, *args, **kwargs):
+        def fail_only_the_initial_clear(directory, *paths):
             nonlocal failed_once
-            if path == out and not failed_once:
+            if not failed_once:
                 failed_once = True
-                raise OSError("injected stale JSON unlink failure")
-            return real_unlink(path, *args, **kwargs)
+                return "injected stale JSON handle-delete failure"
+            return real_clear(directory, *paths)
 
-        with mock.patch.object(Path, "unlink", new=fail_only_the_initial_json_unlink):
+        with mock.patch(
+            "collect_lifecycle._clear_output_artifacts",
+            side_effect=fail_only_the_initial_clear,
+        ):
             self.assertEqual(self._run_truthful_collector_main(argv), 1)
         self.assertTrue(failed_once, "the stale-clear failure injection was not exercised")
         self._assert_no_transaction_artifacts(out)
@@ -1128,7 +1062,9 @@ class TestLifecycleCollector(FixtureCase):
     def test_main_cleans_all_transaction_artifacts_after_each_publication_failure(
         self,
     ) -> None:
-        """A status or either atomic replacement failure cannot leave a partial pair."""
+        """A status or either direct-final write failure cannot leave a partial pair."""
+        import collect_lifecycle
+
         real_print = print
 
         def fail_final_status(*args, **kwargs):
@@ -1143,27 +1079,58 @@ class TestLifecycleCollector(FixtureCase):
         self._assert_no_transaction_artifacts(out)
 
         for ordinal in (1, 2):
-            with self.subTest(failure=f"replace-{ordinal}"):
-                out, argv = self._collector_main_fixture(f"publish-replace-{ordinal}")
-                replace_failure = self._replace_that_fails(ordinal)
+            with self.subTest(failure=f"direct-write-{ordinal}"):
+                out, argv = self._collector_main_fixture(f"publish-direct-write-{ordinal}")
+                real_write_output = collect_lifecycle._write_output_artifact
+
+                def fail_write_output(directory, final_path, content):
+                    fail_write_output.call_count += 1
+                    if fail_write_output.call_count == ordinal:
+                        raise OSError(f"injected direct output write {ordinal} failure")
+                    return real_write_output(directory, final_path, content)
+
+                fail_write_output.call_count = 0
                 self.assertEqual(self._run_truthful_collector_main(
-                    argv, mock.patch("collect_lifecycle.os.replace",
-                                    side_effect=replace_failure),
+                    argv, mock.patch(
+                        "collect_lifecycle._write_output_artifact",
+                        side_effect=fail_write_output,
+                    ),
                 ), 1)
-                self.assertEqual(replace_failure.call_count, ordinal)
+                self.assertEqual(fail_write_output.call_count, ordinal)
                 self._assert_no_transaction_artifacts(out)
 
-    def test_main_cleans_all_transaction_artifacts_after_temp_stream_failures(
+    def test_main_cleans_all_transaction_artifacts_after_direct_writer_failures(
         self,
     ) -> None:
-        """Write, flush, and close failures clean the temp created by _write_temp."""
+        """Native write/flush/close failures cannot leave a direct final leaf."""
+        import collect_lifecycle
+
         for phase in ("write", "flush", "close"):
             with self.subTest(phase=phase):
                 out, argv = self._collector_main_fixture(f"temp-{phase}")
+                if phase == "close":
+                    real_close = collect_lifecycle.OutputArtifactHandle.close
+
+                    def fail_first_close(artifact):
+                        if not getattr(fail_first_close, "failed", False):
+                            fail_first_close.failed = True
+                            raise OSError("injected direct writer close failure")
+                        return real_close(artifact)
+
+                    failure = mock.patch(
+                        "collect_lifecycle.OutputArtifactHandle.close",
+                        autospec=True,
+                        side_effect=fail_first_close,
+                    )
+                else:
+                    target = (
+                        "collect_lifecycle._WriteFile"
+                        if phase == "write"
+                        else "collect_lifecycle._FlushFileBuffers"
+                    )
+                    failure = mock.patch(target, return_value=False)
                 self.assertEqual(self._run_truthful_collector_main(
-                    argv,
-                    mock.patch("collect_lifecycle.os.fdopen",
-                               side_effect=self._fdopen_that_fails(phase)),
+                    argv, failure,
                 ), 1)
                 self._assert_no_transaction_artifacts(out)
 
@@ -1252,8 +1219,8 @@ class TestLifecycleCollector(FixtureCase):
                      mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
                      mock.patch("collect_lifecycle.resolve_head_sha",
                                 return_value=(self.sha, None)), \
-                     mock.patch("collect_lifecycle._clear_artifacts",
-                                wraps=collect_lifecycle._clear_artifacts) as clear, \
+                     mock.patch("collect_lifecycle._clear_output_artifacts",
+                                wraps=collect_lifecycle._clear_output_artifacts) as clear, \
                      mock.patch("collect_lifecycle.run_engine") as child:
                     self.assertEqual(collect_lifecycle.main(), 1)
                 clear.assert_not_called()
@@ -1281,8 +1248,8 @@ class TestLifecycleCollector(FixtureCase):
              mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
              mock.patch("collect_lifecycle.paths_mod._is_reparse_point",
                         side_effect=synthetic_reparse), \
-             mock.patch("collect_lifecycle._clear_artifacts",
-                        wraps=collect_lifecycle._clear_artifacts) as clear, \
+             mock.patch("collect_lifecycle._clear_output_artifacts",
+                        wraps=collect_lifecycle._clear_output_artifacts) as clear, \
              mock.patch("collect_lifecycle.run_engine") as child:
             self.assertEqual(collect_lifecycle.main(), 1)
 
@@ -1316,8 +1283,8 @@ class TestLifecycleCollector(FixtureCase):
                     identity_base=1000,
                 )
                 with mock.patch(
-                    "collect_lifecycle._clear_artifacts",
-                    wraps=collect_lifecycle._clear_artifacts,
+                    "collect_lifecycle._clear_output_artifacts",
+                    wraps=collect_lifecycle._clear_output_artifacts,
                 ) as clear:
                     self.assertEqual(self._run_truthful_collector_main(
                         argv,
@@ -1334,44 +1301,124 @@ class TestLifecycleCollector(FixtureCase):
         import collect_lifecycle
 
         out, argv = self._collector_main_fixture("output-lease-lifetime")
-        leases, output_factory = self._fake_output_namespace_factory(
-            out, identity_base=1010,
-        )
-        output_lease = leases[-1]
+        native_factory = collect_lifecycle.open_output_directory_lease
+        leases: list[collect_lifecycle.OutputDirectoryLease] = []
         events: list[str] = []
-        real_clear = collect_lifecycle._clear_artifacts
-        real_write = collect_lifecycle._write_temp
-        real_replace = os.replace
+        written_paths: list[Path] = []
+        real_clear = collect_lifecycle._clear_output_artifacts
+        real_write = collect_lifecycle._write_output_artifact
 
-        def observe_clear(*paths: Path) -> str | None:
+        def output_factory(path: Path):
+            lease = native_factory(path)
+            leases.append(lease)
+            return lease
+
+        def observe_clear(directory, *paths: Path) -> str | None:
             self.assertTrue(all(not lease.closed for lease in leases),
                             "namespace lease closed before cleanup")
             events.append("clear")
-            return real_clear(*paths)
+            return real_clear(directory, *paths)
 
-        def observe_write(final_path: Path, content: str, *, tracked_temps: set[Path]) -> Path:
+        def observe_write(directory, final_path: Path, content: str):
             self.assertTrue(all(not lease.closed for lease in leases),
-                            "namespace lease closed before temporary write")
+                            "namespace lease closed before direct-final write")
+            if final_path == out:
+                self.assertTrue(
+                    (out.parent / "module-lifecycle-SparkGameFPS.log").exists(),
+                    "authoritative JSON creation began before the audit leaf existed",
+                )
             events.append("write")
-            return real_write(final_path, content, tracked_temps=tracked_temps)
-
-        def observe_replace(source, destination) -> None:
-            self.assertTrue(all(not lease.closed for lease in leases),
-                            "namespace lease closed before replacement")
-            events.append("replace")
-            return real_replace(source, destination)
+            written_paths.append(final_path)
+            return real_write(directory, final_path, content)
 
         self.assertEqual(self._run_truthful_collector_main(
             argv,
             mock.patch("collect_lifecycle.open_output_directory_lease",
                        side_effect=output_factory),
-            mock.patch("collect_lifecycle._clear_artifacts", side_effect=observe_clear),
-            mock.patch("collect_lifecycle._write_temp", side_effect=observe_write),
-            mock.patch("collect_lifecycle.os.replace", side_effect=observe_replace),
+            mock.patch("collect_lifecycle._clear_output_artifacts", side_effect=observe_clear),
+            mock.patch("collect_lifecycle._write_output_artifact", side_effect=observe_write),
         ), 0)
-        self.assertEqual(events, ["clear", "write", "write", "replace", "replace"])
-        self.assertTrue(output_lease.closed)
+        self.assertEqual(events, ["clear", "write", "write"])
+        self.assertEqual(
+            written_paths,
+            [out.parent / "module-lifecycle-SparkGameFPS.log", out],
+        )
+        self.assertEqual(len(leases), 3)
         self.assertTrue(all(lease.closed for lease in leases))
+
+    def test_main_removes_pair_when_output_anchor_close_fails(self) -> None:
+        """A post-publication namespace-close error leaves no authoritative JSON."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("output-anchor-close-failure")
+        native_factory = collect_lifecycle.open_output_directory_lease
+        leases: list[collect_lifecycle.OutputDirectoryLease] = []
+        close_failures = 0
+        clear_calls = 0
+        real_clear = collect_lifecycle._clear_output_artifacts
+
+        def output_factory(path: Path):
+            lease = native_factory(path)
+            leases.append(lease)
+            if path == out.parent:
+                original_close = lease.close
+
+                def fail_once() -> None:
+                    nonlocal close_failures
+                    if close_failures == 0:
+                        close_failures += 1
+                        raise OSError("injected output-anchor close failure")
+                    original_close()
+
+                lease.close = fail_once  # type: ignore[method-assign]
+            return lease
+
+        def observe_clear(directory, *paths: Path) -> str | None:
+            nonlocal clear_calls
+            clear_calls += 1
+            return real_clear(directory, *paths)
+
+        self.assertEqual(self._run_truthful_collector_main(
+            argv,
+            mock.patch("collect_lifecycle.open_output_directory_lease",
+                       side_effect=output_factory),
+            mock.patch("collect_lifecycle._clear_output_artifacts",
+                       side_effect=observe_clear),
+        ), 1)
+
+        self.assertEqual(close_failures, 1)
+        self.assertEqual(
+            clear_calls, 1,
+            "cleanup after anchor release must use retained leaf handles, not paths",
+        )
+        self.assertTrue(all(lease.closed for lease in leases))
+        self._assert_no_transaction_artifacts(out)
+
+    def test_main_removes_pair_after_final_handle_validation_failure(self) -> None:
+        """A final identity/path verification failure cannot leave JSON accepted."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("output-final-validation-failure")
+        real_verify = collect_lifecycle.OutputArtifactHandle.verify
+        json_verifications = 0
+
+        def reject_second_json_verify(artifact, final_path: Path) -> None:
+            nonlocal json_verifications
+            if final_path == out:
+                json_verifications += 1
+                if json_verifications == 2:
+                    raise OSError("injected post-publication JSON handle validation failure")
+            real_verify(artifact, final_path)
+
+        with mock.patch(
+            "collect_lifecycle.OutputArtifactHandle.verify",
+            autospec=True,
+            side_effect=reject_second_json_verify,
+        ):
+            self.assertEqual(self._run_truthful_collector_main(argv), 1)
+
+        self.assertEqual(json_verifications, 2)
+        self._assert_no_transaction_artifacts(out)
 
     def test_manifest_lease_reads_held_bytes_not_replaced_path(self) -> None:
         """A manifest lease, not a later pathname read, supplies authority."""
@@ -1501,9 +1548,6 @@ class TestLifecycleCollector(FixtureCase):
         log = out.parent / "module-lifecycle-SparkGameFPS.log"
         out.write_text("preexisting-json", encoding="utf-8")
         log.write_text("preexisting-log", encoding="utf-8")
-        output_leases, output_factory = self._fake_output_namespace_factory(
-            out, identity_base=1020,
-        )
         with mock.patch.object(sys, "argv", argv), \
              mock.patch("collect_lifecycle.os.name", "nt"), \
              mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
@@ -1512,13 +1556,10 @@ class TestLifecycleCollector(FixtureCase):
              mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                         return_value=("c" * 40, None)), \
              mock.patch("collect_lifecycle.WINDOWS_IMAGE_LEASE_AVAILABLE", False), \
-             mock.patch("collect_lifecycle.open_output_directory_lease",
-                        side_effect=output_factory), \
              mock.patch("collect_lifecycle.run_engine") as child:
              self.assertEqual(collect_lifecycle.main(), 1)
 
         child.assert_not_called()
-        self.assertTrue(all(lease.closed for lease in output_leases))
         self._assert_no_transaction_artifacts(out)
 
     def test_main_clears_stale_pair_after_source_tree_failure(self) -> None:
@@ -1529,19 +1570,13 @@ class TestLifecycleCollector(FixtureCase):
         log = out.parent / "module-lifecycle-SparkGameFPS.log"
         out.write_text("preexisting-json", encoding="utf-8")
         log.write_text("preexisting-log", encoding="utf-8")
-        output_leases, output_factory = self._fake_output_namespace_factory(
-            out, identity_base=1030,
-        )
 
         self.assertEqual(self._run_truthful_collector_main(
             argv,
-            mock.patch("collect_lifecycle.open_output_directory_lease",
-                       side_effect=output_factory),
             mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                        return_value=(None, "injected source-tree failure")),
         ), 1)
 
-        self.assertTrue(all(lease.closed for lease in output_leases))
         self._assert_no_transaction_artifacts(out)
 
     def test_display_final_path_preserves_leaf_case_while_comparisons_fold_case(self) -> None:
@@ -2027,8 +2062,8 @@ class TestLifecycleCollector(FixtureCase):
             lease.close()
 
     @unittest.skipUnless(os.name == "nt", "native Windows directory leases are unavailable")
-    def test_native_output_namespace_leases_allow_child_replace_but_deny_anchor_renames(self) -> None:
-        """Leased root/build/output anchors permit child publication but cannot be swapped."""
+    def test_native_output_namespace_leases_deny_reparse_writes_and_publish_by_handle(self) -> None:
+        """Read-only anchors reject reparse-capable writes while handle I/O still transacts."""
         import collect_lifecycle
 
         if not collect_lifecycle.WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
@@ -2061,8 +2096,7 @@ class TestLifecycleCollector(FixtureCase):
                 args = call.args
                 self.assertEqual(args[1], collect_lifecycle._FILE_LIST_DIRECTORY |
                                  collect_lifecycle._FILE_READ_ATTRIBUTES)
-                self.assertEqual(args[2], collect_lifecycle._FILE_SHARE_READ |
-                                 collect_lifecycle._FILE_SHARE_WRITE)
+                self.assertEqual(args[2], collect_lifecycle._FILE_SHARE_READ)
                 self.assertEqual(args[4], collect_lifecycle._OPEN_EXISTING)
                 required_flags = (collect_lifecycle._FILE_FLAG_BACKUP_SEMANTICS |
                                   collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT)
@@ -2090,8 +2124,62 @@ class TestLifecycleCollector(FixtureCase):
             staged = directory / "staged.tmp"
             published = directory / "module-lifecycle-SparkGameFPS.log"
             staged.write_text("audit", encoding="utf-8")
-            os.replace(staged, published)
-            self.assertEqual(published.read_text(encoding="utf-8"), "audit")
+            with self.assertRaises(OSError):
+                os.replace(staged, published)
+            # A generic-write handle is the capability required to issue
+            # FSCTL_SET_REPARSE_POINT.  The anchor must deny acquiring it, so
+            # an in-place reparse attack cannot begin.
+            writer = native_create(
+                str(directory), collect_lifecycle._GENERIC_WRITE,
+                collect_lifecycle._FILE_SHARE_READ | collect_lifecycle._FILE_SHARE_WRITE,
+                None, collect_lifecycle._OPEN_EXISTING,
+                collect_lifecycle._FILE_FLAG_BACKUP_SEMANTICS |
+                collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT,
+                None,
+            )
+            self.assertIn(writer, (None, collect_lifecycle._INVALID_HANDLE_VALUE))
+            stale = directory / "module-lifecycle.json"
+            stale.write_text("stale", encoding="utf-8")
+            output_lease = leases[-1].lease
+            self.assertIsNone(collect_lifecycle._clear_output_artifacts(output_lease, stale))
+            self.assertFalse(stale.exists())
+            with mock.patch(
+                "collect_lifecycle._CreateFileW", wraps=native_create,
+            ) as direct_create:
+                published_artifact = collect_lifecycle._write_output_artifact(
+                    output_lease, published, "audit",
+                )
+            self.assertEqual(
+                len(direct_create.call_args_list), 1,
+                "direct final publication must not reopen its just-created leaf by path",
+            )
+            writer_args = direct_create.call_args_list[0].args
+            self.assertEqual(
+                writer_args[1],
+                collect_lifecycle._GENERIC_READ | collect_lifecycle._GENERIC_WRITE |
+                collect_lifecycle._FILE_READ_ATTRIBUTES | collect_lifecycle._DELETE,
+            )
+            self.assertEqual(writer_args[2], collect_lifecycle._FILE_SHARE_READ)
+            self.assertEqual(writer_args[4], collect_lifecycle._CREATE_NEW)
+            required_file_flags = (
+                collect_lifecycle._FILE_ATTRIBUTE_NORMAL |
+                collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT
+            )
+            self.assertEqual(
+                writer_args[5] & required_file_flags, required_file_flags,
+            )
+            backup_artifact = published_artifact.duplicate()
+            published_artifact.close()
+            self.assertEqual(
+                collect_lifecycle._native_read_at(
+                    backup_artifact._handle, 0, len("audit"),
+                ),
+                b"audit",
+            )
+            self.assertIsNone(collect_lifecycle._discard_output_artifacts(
+                [backup_artifact],
+            ))
+            self.assertFalse(published.exists())
             self.assertTrue(directory.is_dir())
             self.assertTrue(replacement.is_dir())
         finally:
@@ -2347,8 +2435,8 @@ class TestLifecycleCollector(FixtureCase):
                 "collect_lifecycle.run_engine",
                 return_value=(None, "injected post-validation engine failure"),
             )),
-            ("write-temp", mock.patch(
-                "collect_lifecycle._write_temp",
+            ("direct-write", mock.patch(
+                "collect_lifecycle._write_output_artifact",
                 side_effect=OSError("injected write failure"),
             )),
         )
