@@ -745,6 +745,16 @@ class TestLifecycleCollector(FixtureCase):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 parse_terminal_record(text, INCLUDED)
 
+    def test_rejects_marker_in_stderr_or_embedded_stream_copy(self) -> None:
+        from collect_lifecycle import parse_terminal_streams
+        self.assertEqual(parse_terminal_streams(self.VALID_RECORD, "", INCLUDED)["OnLoad"], 1)
+        for stdout, stderr in ((self.VALID_RECORD, self.VALID_RECORD),
+                               ("[info] " + self.VALID_RECORD, ""),
+                               (self.VALID_RECORD + "\nlog " + self.VALID_RECORD, ""),
+                               ("", self.VALID_RECORD)):
+            with self.subTest(stdout=stdout, stderr=stderr), self.assertRaises(ValueError):
+                parse_terminal_streams(stdout, stderr, INCLUDED)
+
     def test_run_command_and_environment_are_the_stable_v1_contract(self) -> None:
         from collect_lifecycle import run_engine
         root = self.repo / "package"
@@ -757,7 +767,7 @@ class TestLifecycleCollector(FixtureCase):
         with mock.patch("collect_lifecycle.subprocess.run", return_value=completed) as run:
             captured, err = run_engine(engine, module, INCLUDED, root, "d3d11", 30)
         self.assertIsNone(err)
-        self.assertEqual(captured, self.VALID_RECORD)
+        self.assertEqual(captured.stdout, self.VALID_RECORD)
         cmd = run.call_args.args[0]
         self.assertEqual(cmd, [
             str(engine), "-game", str(module), "-require-game",

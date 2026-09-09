@@ -31,6 +31,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -49,6 +50,17 @@ _SCRIPT_EXTENSIONS = frozenset({".cmd", ".bat", ".sh", ".ps1", ".py", ".pl", ".r
 _SCRIPT_SIGNATURES = (b"#!", b"@echo", b"@ECHO", b"@rem", b"@REM")
 _MIN_ENGINE_SIZE = 4096
 IMAGE_MANIFEST_SCHEMA = "spark-image-manifest-v1"
+LIFECYCLE_TOKEN = "SPARK_MODULE_LIFECYCLE"
+
+
+@dataclass(frozen=True)
+class EngineOutput:
+    stdout: str
+    stderr: str
+
+    @property
+    def audit_log(self) -> str:
+        return f"--- stdout ---\n{self.stdout}--- stderr ---\n{self.stderr}"
 
 
 def hash_engine_binary(engine: Path) -> str:
@@ -174,6 +186,12 @@ def _canonicalize_images(engine: Path, module_image: Path,
     images_raw = (("engine", _absolute_raw(engine)), ("module", _absolute_raw(module_image)))
     if not root_raw.is_dir() or paths_mod._is_reparse_point(root_raw):
         return None, f"working directory {root_raw} must be a real non-reparse directory"
+    anchor = Path(root_raw.anchor)
+    current = anchor
+    for component in root_raw.relative_to(anchor).parts:
+        current /= component
+        if paths_mod._is_reparse_point(current):
+            return None, f"working directory ancestor {current} is a reparse point"
     for role, raw_image in images_raw:
         try:
             relative = raw_image.relative_to(root_raw)
@@ -195,6 +213,19 @@ def _canonicalize_images(engine: Path, module_image: Path,
     if root not in canonical_engine.parents or root not in canonical_module.parents:
         return None, "canonical lifecycle image path escaped the working directory"
     return (root, canonical_engine, canonical_module), None
+
+
+def _canonical_manifest(path: Path, root: Path) -> tuple[Path | None, str | None]:
+    raw = _absolute_raw(path)
+    if paths_mod._is_reparse_point(raw) or not raw.is_file():
+        return None, "image manifest must be a regular non-reparse file"
+    try:
+        canonical = raw.resolve(strict=True)
+    except OSError as exc:
+        return None, f"cannot resolve image manifest: {exc}"
+    if root not in canonical.parents:
+        return None, "image manifest lies outside the artifact root"
+    return canonical, None
 
 
 def _validate_image(path: Path, root: Path, *, role: str,
@@ -247,7 +278,7 @@ def parse_terminal_record(text: str, module: str) -> dict[str, int]:
     record_re = re.compile(
         rf"^SPARK_MODULE_LIFECYCLE module={re.escape(module)} {fields}$"
     )
-    matching = [line for line in text.splitlines() if line.startswith("SPARK_MODULE_LIFECYCLE")]
+    matching = [line for line in text.splitlines() if LIFECYCLE_TOKEN in line]
     if len(matching) != 1:
         raise ValueError(f"expected exactly one standalone lifecycle record for {module}")
     match = record_re.fullmatch(matching[0])
@@ -260,33 +291,40 @@ def parse_terminal_record(text: str, module: str) -> dict[str, int]:
     return {phase: values[name] for name, phase in _TERMINAL_COUNTS}
 
 
+def parse_terminal_streams(stdout: str, stderr: str, module: str) -> dict[str, int]:
+    """Admit one direct host record only from stdout; stderr is never evidence."""
+    if LIFECYCLE_TOKEN in stderr:
+        raise ValueError("lifecycle marker appeared on stderr")
+    return parse_terminal_record(stdout, module)
+
+
 def run_engine(engine: Path, module_image: Path, module: str,
                working_directory: Path, rhi_backend: str,
-               timeout: int) -> tuple[str, str | None]:
+               timeout: int) -> tuple[EngineOutput, str | None]:
     """Run only the stable-v1 Windows lifecycle command."""
     if os.name != "nt":
-        return "", "stable-v1 lifecycle evidence is Windows-only"
+        return EngineOutput("", ""), "stable-v1 lifecycle evidence is Windows-only"
     if module != "SparkGameFPS":
-        return "", "stable-v1 lifecycle evidence accepts only module SparkGameFPS"
+        return EngineOutput("", ""), "stable-v1 lifecycle evidence accepts only module SparkGameFPS"
     if rhi_backend != "d3d11":
-        return "", "stable-v1 lifecycle evidence requires --rhi-backend d3d11"
+        return EngineOutput("", ""), "stable-v1 lifecycle evidence requires --rhi-backend d3d11"
     prepared, err = _canonicalize_images(engine, module_image, working_directory)
     if err:
-        return "", err
+        return EngineOutput("", ""), err
     assert prepared is not None
     root, engine, module_image = prepared
     err = validate_engine_binary(engine)
     if err:
-        return "", err
+        return EngineOutput("", ""), err
     err = _validate_image(module_image, root, role="module",
                           expected_name=expected_library_names(module)["windows"])
     if err:
-        return "", err
+        return EngineOutput("", ""), err
     try:
         before_engine = hash_engine_binary(engine)
         before_module = hash_engine_binary(module_image)
     except OSError as exc:
-        return "", f"cannot hash lifecycle image before launch: {exc}"
+        return EngineOutput("", ""), f"cannot hash lifecycle image before launch: {exc}"
     cmd = [
         str(engine), "-game", str(module_image), "-require-game",
         "-test-seconds", "1.0", "-threads", "2", "-window-size", "640x360",
@@ -301,11 +339,11 @@ def run_engine(engine: Path, module_image: Path, module: str,
                  "SPARK_D3D11_DRIVER": "warp"},
         )
     except subprocess.TimeoutExpired:
-        return "", f"engine run exceeded {timeout}s without completing"
+        return EngineOutput("", ""), f"engine run exceeded {timeout}s without completing"
     except OSError as exc:
-        return "", f"cannot launch engine: {exc}"
+        return EngineOutput("", ""), f"cannot launch engine: {exc}"
 
-    captured = (proc.stdout or "") + (proc.stderr or "")
+    captured = EngineOutput(proc.stdout or "", proc.stderr or "")
     try:
         if (hash_engine_binary(engine), hash_engine_binary(module_image)) != (before_engine, before_module):
             return captured, "engine or module image changed while the lifecycle run executed"
@@ -336,9 +374,15 @@ def _write_temp(final_path: Path, content: str) -> Path:
     final_path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temp_name = tempfile.mkstemp(prefix=f".{final_path.name}.", suffix=".tmp",
                                              dir=final_path.parent, text=True)
-    with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
-        stream.write(content)
-    return Path(temp_name)
+    temporary = Path(temp_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(content)
+            stream.flush()
+        return temporary
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def main() -> int:
@@ -383,7 +427,11 @@ def main() -> int:
             raise RuntimeError(err)
         assert prepared is not None
         root, engine, module_image = prepared
-        trusted_images, err = load_image_manifest(args.image_manifest, root, sha)
+        manifest_path, err = _canonical_manifest(args.image_manifest, root)
+        if err:
+            raise RuntimeError(err)
+        assert manifest_path is not None
+        trusted_images, err = load_image_manifest(manifest_path, root, sha)
         if err:
             raise RuntimeError(err)
         assert trusted_images is not None
@@ -408,7 +456,7 @@ def main() -> int:
                                    args.rhi_backend, args.timeout)
         if err:
             raise RuntimeError(err)
-        phases = parse_terminal_record(captured, module)
+        phases = parse_terminal_streams(captured.stdout, captured.stderr, module)
         try:
             if (hash_engine_binary(engine), hash_engine_binary(module_image)) != (engine_digest, module_digest):
                 raise RuntimeError("engine or module image changed during lifecycle collection")
@@ -432,14 +480,14 @@ def main() -> int:
             "commitSHA": sha,
             "records": [record],
         }
-        log_temp = _write_temp(log_path, captured)
+        log_temp = _write_temp(log_path, captured.audit_log)
         json_temp = _write_temp(out_path, json.dumps(document, indent=2, sort_keys=True) + "\n")
         os.replace(log_temp, log_path)
         log_temp = None
         os.replace(json_temp, out_path)
         json_temp = None
-        success = True
         print(f"OK: wrote {out_path} with 1 lifecycle record")
+        success = True
         return 0
     except (OSError, RuntimeError, ValueError) as exc:
         print(f"FATAL: lifecycle evidence could not be produced: {exc}", file=sys.stderr)
