@@ -1148,15 +1148,24 @@ def main() -> int:
             if root_authority is not None:
                 root_authority.verify()
 
-            if os.name == "nt" and lifecycle_evidence is not None:
-                print(
-                    "FATAL: positive lifecycle evidence validation requires the "
-                    "POSIX rooted release authority; Windows may collect evidence "
-                    "or run --policy-only/incomplete checks but cannot emit a "
-                    "release-attesting OK",
-                    file=sys.stderr,
-                )
-                return 1
+            if lifecycle_evidence is not None:
+                if not (args.expected_sha or os.environ.get("GITHUB_SHA")):
+                    print(
+                        "FATAL: positive lifecycle evidence validation requires an "
+                        "externally injected --expected-sha or GITHUB_SHA; a local "
+                        "Git-derived HEAD is not release authority",
+                        file=sys.stderr,
+                    )
+                    return 1
+                if os.name == "nt":
+                    print(
+                        "FATAL: positive lifecycle evidence validation requires the "
+                        "POSIX rooted release authority; Windows may collect evidence "
+                        "or run --policy-only/incomplete checks but cannot emit a "
+                        "release-attesting OK",
+                        file=sys.stderr,
+                    )
+                    return 1
 
             expected_sha, sha_error = (
                 _resolve_expected_sha_rooted(root_authority, args.expected_sha)

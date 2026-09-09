@@ -1291,7 +1291,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
     def test_main_blocks_positive_evidence_before_legacy_root_consumers(self) -> None:
         """Positive proof stops before mutable Git/source pathname consumers."""
         root = self.repo / "cli-post-read-root"
-        self._prepare_cli_evidence_root(root)
+        sha, _evidence_path, _fixture_manifest = self._prepare_cli_evidence_root(root)
         manifest_path = root / "cli-manifest.json"
         explicit_evidence = self.repo / "cli-post-read-explicit-evidence.json"
         explicit_evidence.write_text(
@@ -1310,6 +1310,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
                     "validate_manifest.py", "--repo-root", str(root),
                     "--manifest", str(manifest_path),
                     "--lifecycle-evidence", str(explicit_evidence),
+                    "--expected-sha", sha,
                 ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
@@ -1324,13 +1325,14 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
     def test_main_accepts_default_lifecycle_evidence_at_a_real_lexical_path(self) -> None:
         """Only the POSIX rooted release authority may emit a positive result."""
         root = self.repo / "cli-normal-root"
-        self._prepare_cli_evidence_root(root)
+        sha, _evidence_path, _fixture_manifest = self._prepare_cli_evidence_root(root)
         manifest_path = root / "cli-manifest.json"
         stdout = io.StringIO()
         stderr = io.StringIO()
         with mock.patch.object(sys, "argv", [
             "validate_manifest.py", "--repo-root", str(root),
             "--manifest", str(manifest_path),
+            "--expected-sha", sha,
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
@@ -1344,7 +1346,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
     def test_main_reads_default_target_index_through_held_root_bytes(self) -> None:
         """The release default cannot regress to a mutable target-index pathname."""
         root = self.repo / "cli-rooted-target-root"
-        self._prepare_cli_evidence_root(root)
+        sha, _evidence_path, _fixture_manifest = self._prepare_cli_evidence_root(root)
         manifest_path = root / "cli-manifest.json"
         original_reader = strict_json.NoFollowDirectoryLease.read_relative_bytes
         calls: list[str] = []
@@ -1363,6 +1365,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         ), mock.patch.object(sys, "argv", [
             "validate_manifest.py", "--repo-root", str(root),
             "--manifest", str(manifest_path),
+            "--expected-sha", sha,
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
@@ -1378,7 +1381,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
     def test_posix_main_reads_default_manifest_and_artifacts_through_root(self) -> None:
         """The release-shaped CLI consumes all default evidence below held root."""
         root = self.repo / "cli-rooted-defaults-root"
-        self._prepare_cli_evidence_root(root)
+        sha, _evidence_path, _fixture_manifest = self._prepare_cli_evidence_root(root)
         policy_dir = root / "tools" / "module-evidence"
         policy_dir.mkdir(parents=True, exist_ok=True)
         (policy_dir / "manifest.json").write_text(json.dumps(base_manifest()), encoding="utf-8")
@@ -1419,6 +1422,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         ), mock.patch.object(sys, "argv", [
             "validate_manifest.py", "--repo-root", str(root),
             "--allow-declared-gaps", "tools/module-evidence/evidence-gaps.json",
+            "--expected-sha", sha,
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
@@ -1432,6 +1436,23 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             EVIDENCE_PRODUCERS["junit-xml"]["artifact"],
             EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"],
         }.issubset(set(calls)), calls)
+
+    @unittest.skipIf(os.name == "nt", "POSIX external revision-anchor regression")
+    def test_posix_main_rejects_positive_lifecycle_without_external_sha_anchor(self) -> None:
+        """A local Git-derived HEAD cannot authorize a release-attesting result."""
+        root = self.repo / "cli-no-external-sha-root"
+        self._prepare_cli_evidence_root(root)
+        manifest_path = root / "cli-manifest.json"
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(root),
+            "--manifest", str(manifest_path),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertNotEqual(result, 0)
+        self.assertIn("externally injected --expected-sha", stderr.getvalue())
 
     def test_document_shape_is_rejected_by_loader_and_injected_validator(self) -> None:
         """Direct injection must not bypass the loader's closed document schema."""
