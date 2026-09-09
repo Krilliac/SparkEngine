@@ -591,10 +591,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     if (requireGame)
     {
         const ModuleManager::LifecycleEvidence evidence = ModuleManager::GetLastTeardownLifecycleEvidence();
-        WriteCommandOutput(
-            std::format("SPARK_MODULE_LIFECYCLE initialized={} updated={} fixed={} rendered={} unloaded={} faults={}\n",
-                        evidence.initialized, evidence.updated, evidence.fixedUpdated, evidence.rendered,
-                        evidence.unloaded, evidence.faults));
+        // Task 1 records the module's exact ModuleInfo name. The stable-v1
+        // wire contract instead identifies the shipped DLL target so it stays
+        // independent of display-name wording.
+        if (const auto* record = evidence.FindModule("Spark Arena - Engine Showcase"))
+        {
+            WriteCommandOutput(std::format(
+                "SPARK_MODULE_LIFECYCLE module=SparkGameFPS create={} load={} update={} fixed={} render={} unload={} destroy={} faults={}\n",
+                record->createModule, record->onLoad, record->onUpdate, record->onFixedUpdate,
+                record->onRender, record->onUnload, record->destroyModule, record->faults));
+        }
     }
 
     return requiredGameMissing ? 2 : loopExitCode;
