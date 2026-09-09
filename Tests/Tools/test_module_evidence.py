@@ -717,6 +717,56 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         with self.assertRaises(lifecycle_mod.LifecycleEvidenceAuthorityError):
             lifecycle_mod.load_lifecycle_evidence(missing)
 
+    def test_root_lease_reads_relative_bytes_without_path_reopen(self) -> None:
+        """A held repository root supplies exact bytes for a relative artifact."""
+        root = self.repo / "rooted-reader-root"
+        evidence = root / "build" / "module-evidence" / "module-targets.json"
+        evidence.parent.mkdir(parents=True)
+        payload = b'{"rooted": true}\n'
+        evidence.write_bytes(payload)
+
+        with strict_json.open_no_follow_directory_lease(root, label="test root") as lease:
+            actual = lease.read_relative_bytes(
+                "build/module-evidence/module-targets.json", max_bytes=1024,
+            )
+
+        self.assertEqual(actual, payload)
+
+    def test_root_lease_rejects_relative_reparse_ancestor(self) -> None:
+        """A child reparse cannot redirect a read rooted at the held repository."""
+        root = self.repo / "rooted-reader-reparse-root"
+        root.mkdir()
+        attacker = self.repo / "rooted-reader-attacker"
+        attacker.mkdir()
+        (attacker / "module-targets.json").write_text("{}", encoding="utf-8")
+        alias = root / "build"
+        try:
+            os.symlink(str(attacker), str(alias), target_is_directory=True)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"cannot create rooted relative reparse fixture: {exc}")
+
+        with strict_json.open_no_follow_directory_lease(root, label="test root") as lease:
+            with self.assertRaises(strict_json.NoFollowAuthorityError):
+                lease.read_relative_bytes("build/module-targets.json", max_bytes=1024)
+
+    @unittest.skipIf(os.name == "nt", "Windows root handles prevent the rename itself")
+    def test_posix_root_lease_reads_original_bytes_after_root_rename(self) -> None:
+        """POSIX rooted descriptors survive a root pathname replacement."""
+        root = self.repo / "rooted-reader-renamed-root"
+        evidence = root / "build" / "module-evidence" / "module-targets.json"
+        evidence.parent.mkdir(parents=True)
+        payload = b'{"original": true}\n'
+        evidence.write_bytes(payload)
+        moved = self.repo / "rooted-reader-moved-root"
+
+        with strict_json.open_no_follow_directory_lease(root, label="test root") as lease:
+            root.rename(moved)
+            actual = lease.read_relative_bytes(
+                "build/module-evidence/module-targets.json", max_bytes=1024,
+            )
+
+        self.assertEqual(actual, payload)
+
     def test_loader_classifies_malformed_present_evidence_as_fatal_rejection(self) -> None:
         path = self.repo / "malformed-lifecycle-evidence.json"
         path.write_text("{not valid JSON", encoding="utf-8")

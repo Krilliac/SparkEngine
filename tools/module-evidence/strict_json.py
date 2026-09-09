@@ -113,6 +113,31 @@ def lexical_absolute_no_follow_path(
     return Path(os.path.abspath(raw))
 
 
+def _validated_relative_components(relative: str) -> tuple[str, ...]:
+    """Return one literal slash-delimited path below a held directory handle."""
+    if not isinstance(relative, str) or not relative or "\0" in relative:
+        raise NoFollowAuthorityError(
+            "rooted relative path must be non-empty text without NUL"
+        )
+    drive, _tail = os.path.splitdrive(relative)
+    if drive or relative.startswith(("/", "\\")):
+        raise NoFollowAuthorityError(
+            f"rooted relative path must not be absolute: {relative!r}"
+        )
+    if "\\" in relative:
+        raise NoFollowAuthorityError(
+            f"rooted relative path must use forward slashes only: {relative!r}"
+        )
+    components = tuple(relative.split("/"))
+    for component in components:
+        if component in {"", ".", ".."} or ":" in component or \
+                "*" in component or "?" in component:
+            raise NoFollowAuthorityError(
+                f"rooted relative path has an unsafe component: {relative!r}"
+            )
+    return components
+
+
 def _classify_no_follow_leaf_open_error(path: Path | str, exc: OSError) -> StrictJSONError:
     """Classify an error from opening only the fixed final evidence leaf.
 
@@ -664,6 +689,84 @@ if os.name == "nt":
             probe.close()
 
 
+    def _read_relative_bytes_windows(
+        lease: "NoFollowDirectoryLease", components: tuple[str, ...], max_bytes: int,
+    ) -> bytes:
+        """Read a child file through the lease's final held directory HANDLE."""
+        temporary_handles: list[int] = []
+        failure: StrictJSONError | None = None
+        data: bytes | None = None
+        operation = "rooted relative ancestor open"
+        try:
+            current_handle = lease._handles[-1]
+            for component in components[:-1]:
+                current_handle = _windows_open_relative_no_follow(
+                    current_handle, component,
+                    _FILE_LIST_DIRECTORY | _FILE_READ_ATTRIBUTES,
+                    _FILE_ATTRIBUTE_DIRECTORY,
+                    _FILE_DIRECTORY_FILE | _FILE_FLAG_OPEN_REPARSE_POINT,
+                )
+                temporary_handles.append(current_handle)
+                _windows_directory_snapshot(current_handle, "rooted relative")
+
+            operation = "rooted relative final leaf open"
+            leaf_handle = _windows_open_relative_no_follow(
+                current_handle, components[-1],
+                _GENERIC_READ | _FILE_READ_ATTRIBUTES,
+                _FILE_ATTRIBUTE_NORMAL,
+                _FILE_NON_DIRECTORY_FILE | _FILE_FLAG_OPEN_REPARSE_POINT,
+            )
+            temporary_handles.append(leaf_handle)
+            operation = "rooted relative held leaf inspection or read"
+            before = _windows_file_snapshot(leaf_handle)
+            if before[4] & (_FILE_ATTRIBUTE_REPARSE_POINT | _FILE_ATTRIBUTE_DIRECTORY):
+                raise NoFollowAuthorityError(
+                    "rooted relative leaf is a reparse point or directory"
+                )
+            if before[5] != 1:
+                raise NoFollowAuthorityError(
+                    "rooted relative leaf has multiple hard links"
+                )
+            if before[2] > max_bytes:
+                raise StrictJSONError(
+                    f"rooted relative leaf is {before[2]} bytes, limit is {max_bytes}"
+                )
+            data = _read_windows_handle(leaf_handle, max_bytes)
+            after = _windows_file_snapshot(leaf_handle)
+            if before != after or after[2] != len(data):
+                raise NoFollowAuthorityError(
+                    "rooted relative leaf changed while its held file was read"
+                )
+        except StrictJSONError as exc:
+            failure = exc
+        except OSError as exc:
+            if operation == "rooted relative final leaf open":
+                failure = _classify_no_follow_leaf_open_error("/".join(components), exc)
+            else:
+                failure = NoFollowAuthorityError(
+                    f"unsafe {operation} for {'/'.join(components)}: {exc}"
+                )
+        finally:
+            close_errors: list[str] = []
+            for handle in reversed(temporary_handles):
+                if not _CloseHandle(handle):  # type: ignore[name-defined]
+                    close_errors.append(str(ctypes.get_last_error()))  # type: ignore[name-defined]
+        if failure is not None:
+            if close_errors:
+                raise NoFollowAuthorityError(
+                    f"{failure}; cannot close rooted relative handles: "
+                    f"{'; '.join(close_errors)}"
+                )
+            raise failure
+        if close_errors:
+            raise NoFollowAuthorityError(
+                "cannot close rooted relative handles: "
+                f"{'; '.join(close_errors)}"
+            )
+        assert data is not None
+        return data
+
+
 class NoFollowDirectoryLease:
     """Hold a component-by-component no-follow directory authority.
 
@@ -706,6 +809,32 @@ class NoFollowDirectoryLease:
             _verify_windows_directory_lease(self)  # type: ignore[name-defined]
         else:
             _verify_posix_directory_lease(self)
+
+    def read_relative_bytes(self, relative: str, *, max_bytes: int) -> bytes:
+        """Read a literal child file through this held root without path reopen."""
+        if self._closed:
+            raise NoFollowAuthorityError(
+                f"held {self.label} authority was already closed"
+            )
+        if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 0:
+            raise NoFollowAuthorityError("rooted relative byte limit must be non-negative")
+        components = _validated_relative_components(relative)
+        if os.name == "nt":
+            return _read_relative_bytes_windows(self, components, max_bytes)  # type: ignore[name-defined]
+        return _read_relative_bytes_posix(self, components, max_bytes)
+
+    def posix_git_cwd(self) -> tuple[str, tuple[int, ...]]:
+        """Return an inherited descriptor-rooted Git cwd on supported POSIX hosts."""
+        if self._closed:
+            raise NoFollowAuthorityError(
+                f"held {self.label} authority was already closed"
+            )
+        if os.name == "nt" or not os.path.isdir("/proc/self/fd"):
+            raise NoFollowAuthorityError(
+                "descriptor-rooted Git cwd is unavailable on this platform"
+            )
+        fd = self._handles[-1]
+        return f"/proc/self/fd/{fd}", (fd,)
 
     def close(self) -> None:
         """Release every held handle, retaining failed ones for a fatal retry."""
@@ -808,6 +937,81 @@ def _verify_posix_directory_lease(lease: NoFollowDirectoryLease) -> None:
             )
     finally:
         probe.close()
+
+
+def _read_relative_bytes_posix(
+    lease: NoFollowDirectoryLease, components: tuple[str, ...], max_bytes: int,
+) -> bytes:
+    """Read a child file through the lease's final held directory descriptor."""
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not no_follow or not directory or os.open not in os.supports_dir_fd:
+        raise NoFollowAuthorityError(
+            "secure rooted relative POSIX reader is unavailable"
+        )
+    temporary_fds: list[int] = []
+    failure: StrictJSONError | None = None
+    data: bytes | None = None
+    operation = "rooted relative ancestor open"
+    directory_flags = os.O_RDONLY | directory | no_follow | getattr(os, "O_CLOEXEC", 0)
+    try:
+        current_fd = lease._handles[-1]
+        for component in components[:-1]:
+            current_fd = os.open(component, directory_flags, dir_fd=current_fd)
+            temporary_fds.append(current_fd)
+            _posix_directory_snapshot(current_fd, "rooted relative")
+
+        leaf_flags = os.O_RDONLY | no_follow | getattr(os, "O_CLOEXEC", 0)
+        leaf_flags |= getattr(os, "O_NONBLOCK", 0)
+        operation = "rooted relative final leaf open"
+        leaf_fd = os.open(components[-1], leaf_flags, dir_fd=current_fd)
+        temporary_fds.append(leaf_fd)
+        operation = "rooted relative held leaf inspection or read"
+        before = _posix_snapshot(leaf_fd)
+        if not stat.S_ISREG(before[2]):
+            raise NoFollowAuthorityError("rooted relative leaf is not a regular file")
+        if before[6] != 1:
+            raise NoFollowAuthorityError("rooted relative leaf has multiple hard links")
+        if before[3] > max_bytes:
+            raise StrictJSONError(
+                f"rooted relative leaf is {before[3]} bytes, limit is {max_bytes}"
+            )
+        data = _read_open_descriptor(leaf_fd, max_bytes)
+        after = _posix_snapshot(leaf_fd)
+        if before != after or after[3] != len(data):
+            raise NoFollowAuthorityError(
+                "rooted relative leaf changed while its held file was read"
+            )
+    except StrictJSONError as exc:
+        failure = exc
+    except OSError as exc:
+        if operation == "rooted relative final leaf open":
+            failure = _classify_no_follow_leaf_open_error("/".join(components), exc)
+        else:
+            failure = NoFollowAuthorityError(
+                f"unsafe {operation} for {'/'.join(components)}: {exc}"
+            )
+    finally:
+        close_errors: list[str] = []
+        for fd in reversed(temporary_fds):
+            try:
+                os.close(fd)
+            except OSError as exc:
+                close_errors.append(str(exc))
+    if failure is not None:
+        if close_errors:
+            raise NoFollowAuthorityError(
+                f"{failure}; cannot close rooted relative descriptors: "
+                f"{'; '.join(close_errors)}"
+            )
+        raise failure
+    if close_errors:
+        raise NoFollowAuthorityError(
+            "cannot close rooted relative descriptors: "
+            f"{'; '.join(close_errors)}"
+        )
+    assert data is not None
+    return data
 
 
 def open_no_follow_directory_lease(
