@@ -74,6 +74,12 @@ def hash_engine_binary(engine: Path) -> str:
     return h.hexdigest()
 
 
+def image_identity(path: Path) -> tuple[int, int, int]:
+    """Portable file identity used with the manifest-bound hash epoch."""
+    stat_result = path.stat()
+    return stat_result.st_dev, stat_result.st_ino, stat_result.st_size
+
+
 def load_image_manifest(path: Path, root: Path, commit_sha: str) -> tuple[dict[str, str] | None, str | None]:
     """Load the narrowly-scoped upstream Release image identity manifest.
 
@@ -300,7 +306,7 @@ def parse_terminal_streams(stdout: str, stderr: str, module: str) -> dict[str, i
 
 def run_engine(engine: Path, module_image: Path, module: str,
                working_directory: Path, rhi_backend: str,
-               timeout: int) -> tuple[EngineOutput, str | None]:
+               timeout: int, expected_digests: tuple[str, str] | None = None) -> tuple[EngineOutput, str | None]:
     """Run only the stable-v1 Windows lifecycle command."""
     if os.name != "nt":
         return EngineOutput("", ""), "stable-v1 lifecycle evidence is Windows-only"
@@ -323,8 +329,11 @@ def run_engine(engine: Path, module_image: Path, module: str,
     try:
         before_engine = hash_engine_binary(engine)
         before_module = hash_engine_binary(module_image)
+        before_identity = (image_identity(engine), image_identity(module_image))
     except OSError as exc:
         return EngineOutput("", ""), f"cannot hash lifecycle image before launch: {exc}"
+    if expected_digests is not None and (before_engine, before_module) != expected_digests:
+        return EngineOutput("", ""), "image identity differs from the verified manifest epoch"
     cmd = [
         str(engine), "-game", str(module_image), "-require-game",
         "-test-seconds", "1.0", "-threads", "2", "-window-size", "640x360",
@@ -345,7 +354,9 @@ def run_engine(engine: Path, module_image: Path, module: str,
 
     captured = EngineOutput(proc.stdout or "", proc.stderr or "")
     try:
-        if (hash_engine_binary(engine), hash_engine_binary(module_image)) != (before_engine, before_module):
+        after = (hash_engine_binary(engine), hash_engine_binary(module_image))
+        after_identity = (image_identity(engine), image_identity(module_image))
+        if after != (before_engine, before_module) or after_identity != before_identity or (expected_digests is not None and after != expected_digests):
             return captured, "engine or module image changed while the lifecycle run executed"
     except OSError as exc:
         return captured, f"cannot hash lifecycle image after launch: {exc}"
@@ -453,15 +464,11 @@ def main() -> int:
         if tree_sha is None:
             raise RuntimeError(err)
         captured, err = run_engine(engine, module_image, module, root,
-                                   args.rhi_backend, args.timeout)
+                                   args.rhi_backend, args.timeout,
+                                   (engine_digest, module_digest))
         if err:
             raise RuntimeError(err)
         phases = parse_terminal_streams(captured.stdout, captured.stderr, module)
-        try:
-            if (hash_engine_binary(engine), hash_engine_binary(module_image)) != (engine_digest, module_digest):
-                raise RuntimeError("engine or module image changed during lifecycle collection")
-        except OSError as exc:
-            raise RuntimeError(f"cannot hash lifecycle image after launch: {exc}") from exc
         record = {
             "module": module,
             "sharedLibrary": expected_library_names(module)["windows"],
