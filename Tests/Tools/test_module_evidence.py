@@ -16,6 +16,7 @@ No repository file is modified.  Fixtures are built in temporary directories.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 import copy
 import hashlib
 import json
@@ -722,6 +723,171 @@ class TestLifecycleCollector(FixtureCase):
         "SPARK_MODULE_LIFECYCLE module=SparkGameFPS create=1 load=1 "
         "update=4 fixed=2 render=4 unload=1 destroy=1 faults=0"
     )
+
+    def _collector_main_fixture(self, name: str) -> tuple[Path, list[str]]:
+        """Build a truthful image pair for main() transaction tests."""
+        root = self.repo / name
+        root.mkdir()
+        engine = root / "SparkEngine.exe"
+        module = root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        out = self.repo / f"{name}-out" / "module-lifecycle.json"
+        image_manifest = write_image_manifest(root, engine, module, self.sha)
+        return out, [
+            "collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
+            "--module-image", str(module), "--working-directory", str(root),
+            "--rhi-backend", "d3d11", "--image-manifest", str(image_manifest),
+            "--out", str(out), "--commit-sha", self.sha,
+        ]
+
+    def _run_truthful_collector_main(
+        self, argv: list[str], *extra_patches: object
+    ) -> int:
+        """Run main's real publication path while isolating the engine process."""
+        import collect_lifecycle
+
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(sys, "argv", argv))
+            stack.enter_context(mock.patch("collect_lifecycle.os.name", "nt"))
+            stack.enter_context(mock.patch(
+                "collect_lifecycle.lifecycle_mod.source_tree_sha",
+                return_value=("c" * 40, None),
+            ))
+            stack.enter_context(mock.patch(
+                "collect_lifecycle.run_engine",
+                return_value=(
+                    collect_lifecycle.EngineOutput(self.VALID_RECORD, ""), None
+                ),
+            ))
+            for patch in extra_patches:
+                stack.enter_context(patch)
+            return collect_lifecycle.main()
+
+    def _assert_no_transaction_artifacts(self, out: Path) -> None:
+        log = out.parent / "module-lifecycle-SparkGameFPS.log"
+        self.assertFalse(out.exists(), f"partial JSON publication survived at {out}")
+        self.assertFalse(log.exists(), f"partial log publication survived at {log}")
+        for final_path in (out, log):
+            self.assertEqual(
+                list(final_path.parent.glob(f".{final_path.name}.*.tmp")), [],
+                f"temporary publication sibling survived for {final_path.name}",
+            )
+
+    @staticmethod
+    def _fdopen_that_fails(phase: str):
+        """Fail one real temporary stream operation but still close its descriptor."""
+        real_fdopen = os.fdopen
+
+        class FailingTempStream:
+            def __init__(self, stream) -> None:
+                self._stream = stream
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback) -> bool:
+                try:
+                    self._stream.close()
+                finally:
+                    if phase == "close":
+                        raise OSError("injected temporary close failure")
+                return False
+
+            def write(self, content: str) -> int:
+                if phase == "write":
+                    raise OSError("injected temporary write failure")
+                return self._stream.write(content)
+
+            def flush(self) -> None:
+                if phase == "flush":
+                    raise OSError("injected temporary flush failure")
+                self._stream.flush()
+
+        def failing_fdopen(descriptor: int, *args, **kwargs):
+            return FailingTempStream(real_fdopen(descriptor, *args, **kwargs))
+
+        return failing_fdopen
+
+    @staticmethod
+    def _replace_that_fails(ordinal: int):
+        """Return a replacement operation that fails only at the requested call."""
+        real_replace = os.replace
+
+        def fail_replace(source, destination):
+            fail_replace.call_count += 1
+            if fail_replace.call_count == ordinal:
+                raise OSError(f"injected replace {ordinal} failure")
+            return real_replace(source, destination)
+
+        fail_replace.call_count = 0
+        return fail_replace
+
+    def test_main_cleans_all_transaction_artifacts_after_transient_stale_unlink_failure(
+        self,
+    ) -> None:
+        """A stale-clear failure must still run the shared cleanup transaction."""
+        out, argv = self._collector_main_fixture("stale-unlink")
+        log = out.parent / "module-lifecycle-SparkGameFPS.log"
+        out.parent.mkdir()
+        out.write_text("stale-json", encoding="utf-8")
+        log.write_text("stale-log", encoding="utf-8")
+        real_unlink = Path.unlink
+        failed_once = False
+
+        def fail_only_the_initial_json_unlink(path: Path, *args, **kwargs):
+            nonlocal failed_once
+            if path == out and not failed_once:
+                failed_once = True
+                raise OSError("injected stale JSON unlink failure")
+            return real_unlink(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "unlink", new=fail_only_the_initial_json_unlink):
+            self.assertEqual(self._run_truthful_collector_main(argv), 1)
+        self.assertTrue(failed_once, "the stale-clear failure injection was not exercised")
+        self._assert_no_transaction_artifacts(out)
+
+    def test_main_cleans_all_transaction_artifacts_after_each_publication_failure(
+        self,
+    ) -> None:
+        """A status or either atomic replacement failure cannot leave a partial pair."""
+        real_print = print
+
+        def fail_final_status(*args, **kwargs):
+            if args and str(args[0]).startswith("OK: wrote "):
+                raise OSError("injected final status failure")
+            return real_print(*args, **kwargs)
+
+        out, argv = self._collector_main_fixture("publish-status")
+        self.assertEqual(self._run_truthful_collector_main(
+            argv, mock.patch("builtins.print", side_effect=fail_final_status),
+        ), 1)
+        self._assert_no_transaction_artifacts(out)
+
+        for ordinal in (1, 2):
+            with self.subTest(failure=f"replace-{ordinal}"):
+                out, argv = self._collector_main_fixture(f"publish-replace-{ordinal}")
+                replace_failure = self._replace_that_fails(ordinal)
+                self.assertEqual(self._run_truthful_collector_main(
+                    argv, mock.patch("collect_lifecycle.os.replace",
+                                    side_effect=replace_failure),
+                ), 1)
+                self.assertEqual(replace_failure.call_count, ordinal)
+                self._assert_no_transaction_artifacts(out)
+
+    def test_main_cleans_all_transaction_artifacts_after_temp_stream_failures(
+        self,
+    ) -> None:
+        """Write, flush, and close failures clean the temp created by _write_temp."""
+        for phase in ("write", "flush", "close"):
+            with self.subTest(phase=phase):
+                out, argv = self._collector_main_fixture(f"temp-{phase}")
+                self.assertEqual(self._run_truthful_collector_main(
+                    argv,
+                    mock.patch("collect_lifecycle.os.fdopen",
+                               side_effect=self._fdopen_that_fails(phase)),
+                ), 1)
+                self._assert_no_transaction_artifacts(out)
 
     def test_parses_exact_standalone_terminal_record(self) -> None:
         from collect_lifecycle import parse_terminal_record

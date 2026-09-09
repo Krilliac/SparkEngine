@@ -369,31 +369,62 @@ def run_engine(engine: Path, module_image: Path, module: str,
 
 
 def _clear_artifacts(*paths: Path) -> str | None:
-    """Remove only the two declared final artifacts, never a directory tree."""
+    """Remove only declared artifact files, attempting every path on failure."""
+    errors: list[str] = []
+    seen: set[Path] = set()
     for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
         try:
             if path.is_dir() and not paths_mod._is_reparse_point(path):
-                return f"artifact path {path} is a directory and cannot be safely cleared"
+                errors.append(
+                    f"artifact path {path} is a directory and cannot be safely cleared"
+                )
+                continue
             if path.exists() or paths_mod._is_reparse_point(path):
                 path.unlink()
-        except OSError as exc:
-            return f"cannot clear stale lifecycle artifact {path}: {exc}"
-    return None
+        except FileNotFoundError:
+            # A concurrent remover already achieved the required absent state.
+            continue
+        except (OSError, ValueError) as exc:
+            errors.append(f"cannot clear lifecycle artifact {path}: {exc}")
+    return "; ".join(errors) if errors else None
 
 
-def _write_temp(final_path: Path, content: str) -> Path:
+def _write_temp(final_path: Path, content: str, *, tracked_temps: set[Path]) -> Path:
+    """Stage content beside its destination and retain it for transaction cleanup."""
     final_path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temp_name = tempfile.mkstemp(prefix=f".{final_path.name}.", suffix=".tmp",
                                              dir=final_path.parent, text=True)
     temporary = Path(temp_name)
+    tracked_temps.add(temporary)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
             stream.write(content)
             stream.flush()
         return temporary
-    except BaseException:
-        temporary.unlink(missing_ok=True)
+    except BaseException as exc:
+        cleanup_error = _clear_artifacts(temporary)
+        if cleanup_error is None:
+            tracked_temps.discard(temporary)
+        else:
+            raise OSError(
+                f"cannot clean temporary lifecycle artifact {temporary}: {cleanup_error}"
+            ) from exc
         raise
+
+
+def _report_failure(message: str) -> None:
+    """Report failure without allowing a broken output stream to skip cleanup."""
+    try:
+        print(message, file=sys.stderr, flush=True)
+    except (OSError, ValueError):
+        try:
+            sys.stderr.write(message + "\n")
+            sys.stderr.flush()
+        except (OSError, ValueError):
+            pass
 
 
 def main() -> int:
@@ -411,15 +442,14 @@ def main() -> int:
     out_path = _absolute_raw(args.out)
     module = args.modules[0] if len(args.modules) == 1 else "invalid-module"
     log_path = out_path.parent / f"module-lifecycle-{module}.log"
-    cleared = _clear_artifacts(out_path, log_path)
-    if cleared:
-        print(f"FATAL: {cleared}", file=sys.stderr)
-        return 1
-
-    log_temp: Path | None = None
-    json_temp: Path | None = None
+    tracked_temps: set[Path] = set()
     success = False
+    result = 1
+    failure: str | None = None
     try:
+        cleared = _clear_artifacts(out_path, log_path)
+        if cleared:
+            raise RuntimeError(cleared)
         if os.name != "nt":
             raise RuntimeError("stable-v1 lifecycle evidence is Windows-only")
         if len(args.modules) != 1 or args.modules[0] != "SparkGameFPS":
@@ -487,27 +517,29 @@ def main() -> int:
             "commitSHA": sha,
             "records": [record],
         }
-        log_temp = _write_temp(log_path, captured.audit_log)
-        json_temp = _write_temp(out_path, json.dumps(document, indent=2, sort_keys=True) + "\n")
+        log_temp = _write_temp(log_path, captured.audit_log, tracked_temps=tracked_temps)
+        json_temp = _write_temp(
+            out_path, json.dumps(document, indent=2, sort_keys=True) + "\n",
+            tracked_temps=tracked_temps,
+        )
         os.replace(log_temp, log_path)
-        log_temp = None
+        tracked_temps.discard(log_temp)
         os.replace(json_temp, out_path)
-        json_temp = None
-        print(f"OK: wrote {out_path} with 1 lifecycle record")
+        tracked_temps.discard(json_temp)
+        # Flush now: a BrokenPipe must be treated as a failed publication.
+        print(f"OK: wrote {out_path} with 1 lifecycle record", flush=True)
         success = True
-        return 0
-    except (OSError, RuntimeError, ValueError) as exc:
-        print(f"FATAL: lifecycle evidence could not be produced: {exc}", file=sys.stderr)
-        return 1
+        result = 0
+    except Exception as exc:
+        failure = f"FATAL: lifecycle evidence could not be produced: {exc}"
     finally:
-        for temporary in (log_temp, json_temp):
-            if temporary is not None:
-                try:
-                    temporary.unlink(missing_ok=True)
-                except OSError:
-                    pass
         if not success:
-            _clear_artifacts(out_path, log_path)
+            cleanup_error = _clear_artifacts(out_path, log_path, *tracked_temps)
+            if cleanup_error:
+                _report_failure(f"FATAL: lifecycle evidence cleanup failed: {cleanup_error}")
+            if failure is not None:
+                _report_failure(failure)
+    return result
 
 
 if __name__ == "__main__":
