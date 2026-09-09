@@ -23,6 +23,7 @@
 #include "Core/Contracts.h"
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <memory>
 
@@ -62,6 +63,20 @@ struct DiscoveredModule
 class ModuleManager
 {
   public:
+    /** @brief Lifecycle callback counts for one new-style module, keyed by its exact ModuleInfo name. */
+    struct ModuleLifecycleRecord
+    {
+        std::string module;
+        uint64_t createModule = 0;
+        uint64_t onLoad = 0;
+        uint64_t onUpdate = 0;
+        uint64_t onFixedUpdate = 0;
+        uint64_t onRender = 0;
+        uint64_t onUnload = 0;
+        uint64_t destroyModule = 0;
+        uint64_t faults = 0;
+    };
+
     /** @brief Successfully completed module lifecycle callbacks for one manager lifetime. */
     struct LifecycleEvidence
     {
@@ -71,6 +86,17 @@ class ModuleManager
         uint64_t rendered = 0;
         uint64_t unloaded = 0;
         uint64_t faults = 0; ///< Guarded callback dispatches that threw or were disabled
+        std::vector<ModuleLifecycleRecord> modules;
+
+        const ModuleLifecycleRecord* FindModule(std::string_view module) const
+        {
+            for (const auto& record : modules)
+            {
+                if (record.module == module)
+                    return &record;
+            }
+            return nullptr;
+        }
     };
 
     enum class DiscoveryMode
@@ -314,6 +340,8 @@ class ModuleManager
 
     /** @brief Unload a single module entry */
     void UnloadEntry(LoadedModule& entry);
+
+    ModuleLifecycleRecord& FindOrCreateLifecycleRecord(std::string_view module);
 
     std::vector<LoadedModule> m_modules;
     Spark::LocalFileCache* m_fileCache = nullptr;

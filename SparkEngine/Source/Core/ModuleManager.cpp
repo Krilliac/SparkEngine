@@ -66,6 +66,26 @@ namespace
         target.rendered += source.rendered;
         target.unloaded += source.unloaded;
         target.faults += source.faults;
+        for (const auto& sourceRecord : source.modules)
+        {
+            auto targetRecord = std::find_if(target.modules.begin(), target.modules.end(),
+                                             [&sourceRecord](const ModuleManager::ModuleLifecycleRecord& record)
+                                             { return record.module == sourceRecord.module; });
+            if (targetRecord == target.modules.end())
+            {
+                target.modules.push_back(sourceRecord);
+                continue;
+            }
+
+            targetRecord->createModule += sourceRecord.createModule;
+            targetRecord->onLoad += sourceRecord.onLoad;
+            targetRecord->onUpdate += sourceRecord.onUpdate;
+            targetRecord->onFixedUpdate += sourceRecord.onFixedUpdate;
+            targetRecord->onRender += sourceRecord.onRender;
+            targetRecord->onUnload += sourceRecord.onUnload;
+            targetRecord->destroyModule += sourceRecord.destroyModule;
+            targetRecord->faults += sourceRecord.faults;
+        }
     }
 
     void PublishTeardownLifecycleEvidence(const ModuleManager::LifecycleEvidence& evidence)
@@ -916,6 +936,7 @@ bool ModuleManager::LoadModule(const std::string& path)
 
         console.LogSuccess(std::format("Loaded module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));
+        ++FindOrCreateLifecycleRecord(m_modules.back().name).createModule;
 #ifndef _WIN32
         stagedImage.Disarm();
 #endif
@@ -1291,6 +1312,7 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
                 faultIsolator.ResetSubsystem("ModuleFixed:" + entry.name);
             }
             ++m_lifecycleEvidence.initialized;
+            ++FindOrCreateLifecycleRecord(entry.name).onLoad;
             entry.initialized = true;
             console.LogSuccess("Module initialized: " + entry.name);
         }
@@ -1316,9 +1338,11 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
                            entry.name.c_str());
             entry.instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
+            ++FindOrCreateLifecycleRecord(entry.name).onUnload;
             if (entry.destroyFn)
             {
                 entry.destroyFn(entry.instance);
+                ++FindOrCreateLifecycleRecord(entry.name).destroyModule;
             }
             entry.instance = nullptr;
             entry.destroyFn = nullptr;
@@ -1337,10 +1361,14 @@ void ModuleManager::UpdateAll(float deltaTime)
             SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", {
                 entry.instance->OnUpdate(deltaTime);
                 ++m_lifecycleEvidence.updated;
+                ++FindOrCreateLifecycleRecord(entry.name).onUpdate;
                 callbackCompleted = true;
             });
             if (!callbackCompleted)
+            {
                 ++m_lifecycleEvidence.faults;
+                ++FindOrCreateLifecycleRecord(entry.name).faults;
+            }
         }
     }
 }
@@ -1356,10 +1384,14 @@ void ModuleManager::FixedUpdateAll(float fixedDeltaTime)
             SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", {
                 entry.instance->OnFixedUpdate(fixedDeltaTime);
                 ++m_lifecycleEvidence.fixedUpdated;
+                ++FindOrCreateLifecycleRecord(entry.name).onFixedUpdate;
                 callbackCompleted = true;
             });
             if (!callbackCompleted)
+            {
                 ++m_lifecycleEvidence.faults;
+                ++FindOrCreateLifecycleRecord(entry.name).faults;
+            }
         }
     }
 }
@@ -1381,10 +1413,14 @@ void ModuleManager::RenderAll()
             SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", {
                 entry.instance->OnRender();
                 ++m_lifecycleEvidence.rendered;
+                ++FindOrCreateLifecycleRecord(entry.name).onRender;
                 callbackCompleted = true;
             });
             if (!callbackCompleted)
+            {
                 ++m_lifecycleEvidence.faults;
+                ++FindOrCreateLifecycleRecord(entry.name).faults;
+            }
         }
     }
 }
@@ -1459,6 +1495,7 @@ void ModuleManager::ShutdownAllAfterPreflight()
             console.LogInfo("Shutting down module: " + it->name);
             it->instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
+            ++FindOrCreateLifecycleRecord(it->name).onUnload;
             it->initialized = false;
             // Console handlers a module registered under its own id live in the
             // host registry and outlive the DLL unless the host drops them. The
@@ -1645,6 +1682,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         {
             entry.instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
+            ++FindOrCreateLifecycleRecord(entry.name).onUnload;
         }
         UnloadEntry(entry);
         m_modules[index] = std::move(replacement);
@@ -1838,6 +1876,8 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
     if (entry.instance && entry.destroyFn)
     {
         entry.destroyFn(entry.instance);
+        if (entry.createFn)
+            ++FindOrCreateLifecycleRecord(entry.name).destroyModule;
     }
     entry.instance = nullptr;
     entry.createFn = nullptr;
@@ -1866,6 +1906,18 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
 #endif
         entry.transientImagePath.clear();
     }
+}
+
+ModuleManager::ModuleLifecycleRecord& ModuleManager::FindOrCreateLifecycleRecord(std::string_view module)
+{
+    for (auto& record : m_lifecycleEvidence.modules)
+    {
+        if (record.module == module)
+            return record;
+    }
+
+    m_lifecycleEvidence.modules.push_back({std::string(module)});
+    return m_lifecycleEvidence.modules.back();
 }
 
 std::vector<DiscoveredModule> ModuleManager::DiscoverModules(const std::string& directory) const

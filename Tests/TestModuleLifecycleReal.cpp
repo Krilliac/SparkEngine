@@ -232,3 +232,50 @@ TEST(ModuleLifecycle_ManifestStillReportsATrulyMissingModule)
     std::error_code ec;
     std::filesystem::remove_all(directory, ec);
 }
+
+TEST(ModuleLifecycle_RecordsSuccessfulNewStyleModuleCallbacks)
+{
+    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", false);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    manager.InitializeAll(&context);
+    manager.UpdateAll(1.0F / 60.0F);
+    manager.FixedUpdateAll(1.0F / 60.0F);
+    manager.RenderAll();
+    ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+
+    const auto evidence = manager.GetLifecycleEvidence();
+    const auto* record = evidence.FindModule("Spark Compatible ABI Fixture");
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->createModule, 1u);
+    EXPECT_EQ(record->onLoad, 1u);
+    EXPECT_GE(record->onUpdate, 1u);
+    EXPECT_GE(record->onFixedUpdate, 1u);
+    EXPECT_GE(record->onRender, 1u);
+    EXPECT_EQ(record->onUnload, 1u);
+    EXPECT_EQ(record->destroyModule, 1u);
+    EXPECT_EQ(record->faults, 0u);
+}
+
+TEST(ModuleLifecycle_RecordsFailedNewStyleModuleInitialization)
+{
+    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    manager.InitializeAll(&context);
+
+    const auto evidence = manager.GetLifecycleEvidence();
+    const auto* record = evidence.FindModule("Spark Compatible ABI Fixture");
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->createModule, 1u);
+    EXPECT_EQ(record->onLoad, 0u);
+    EXPECT_EQ(record->onUnload, 1u);
+    EXPECT_EQ(record->destroyModule, 1u);
+
+    manager.UnloadAll();
+}
