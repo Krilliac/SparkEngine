@@ -630,6 +630,7 @@ add_executable(SparkTests
     # Editor core sources (no ImGui dependency)
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorRecovery.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLayoutManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorWindowManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
@@ -958,6 +959,7 @@ target_sources(SparkTests PRIVATE
     TestConsoleProcessPipeReal.cpp
     TestCrashHandlerGatingReal.cpp
     TestEditorCrashHandlerFilterReal.cpp
+    TestEditorRecovery.cpp
     TestEngineWiringReal.cpp
     TestD3D11DeviceContractsReal.cpp
     TestEditorGizmoTransformReal.cpp
