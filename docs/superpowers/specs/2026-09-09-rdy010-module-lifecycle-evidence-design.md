@@ -19,9 +19,11 @@ The previous incompatible partial contracts have been reconciled:
   exact engine and module DLL against the artifact-root image manifest before
   producing its JSON and audit artifacts.
 
-No checked-in required same-workflow CI job yet runs the collector against the
-immutable Windows Release artifact at the exact SHA, so the validator still
-permits the declared lifecycle gap until that producer and consumer land.
+The checked-in required same-workflow CI job is configured to run the collector
+against the immutable Windows Release artifact at the exact SHA and feed its
+artifact to the Ubuntu consumer. No hosted successful exact-SHA run has yet
+been observed, so the workflow contract is implementation progress rather than
+release proof; package smoke remains independently owned by MOD-310.
 
 The validator now grants a positive lifecycle `OK` only through the rooted
 Ubuntu consumer path described in
@@ -150,7 +152,7 @@ requires their exact types/digests alongside the current source-tree and
 engine bindings. This proves what binary was launched; protected provenance of
 the workflow artifact remains CI-120's separate requirement.
 
-### Proposed CI data flow (not yet implemented)
+### Implemented CI data flow (hosted run pending)
 
 ```
 build-windows-vs2022 (Release) ──uploads exact runtime ZIP──▶ module-profile-lifecycle
@@ -158,14 +160,16 @@ module-profile-lifecycle ──uploads lifecycle JSON + log──▶ module-evid
 module-evidence ──validates target/JUnit/lifecycle evidence──▶ required-ci-gate
 ```
 
-`module-profile-lifecycle` will run on `windows-2022`, depend on the existing
-Windows build, download only its same-workflow `SparkEngine-Windows-VS2022-
-Release` artifact, expand it into a fresh directory, run the collector, and
-upload `build/module-evidence/module-lifecycle.json` plus its log with the
-exact SHA in the artifact name. `module-evidence` will depend on both the Linux
-JUnit producer and that job, download the lifecycle artifact, pass it to
+The checked-in `module-profile-lifecycle` job is configured to run on
+`windows-2022`, depend on the existing Windows build, download only its
+same-workflow
+`SparkEngine-Windows-VS2022-Release` artifact, expands it into a fresh
+directory, run the collector, and upload
+`build/module-evidence/module-lifecycle.json` plus its log with the exact SHA
+in the artifact name. `module-evidence` depends on both the Linux JUnit
+producer and that job, downloads the lifecycle artifact, passes it to
 `validate_manifest.py --repo-root "$GITHUB_WORKSPACE" --lifecycle-evidence`,
-and fail if it is absent, malformed, cross-SHA, or phase-incomplete. The
+and fails if it is absent, malformed, cross-SHA, or phase-incomplete. The
 non-policy consumer deliberately receives the explicit absolute workspace
 root, never `.`, because POSIX `getcwd()` can erase a symlink-bearing current
 directory spelling before no-follow validation begins. The required aggregate

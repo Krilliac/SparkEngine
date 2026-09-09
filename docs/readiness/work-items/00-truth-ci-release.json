@@ -102,7 +102,7 @@
       "wave": 0,
       "area": "tests",
       "owner": "unassigned",
-      "rationale": "In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, and has a real Windows lifecycle collector/host contract. However, no required same-workflow CI producer yet runs that collector from the immutable Windows Release artifact at the exact SHA, and package smoke is not scoped to a module profile in blocking CI. Those remaining gaps are enumerated in tools/module-evidence/evidence-gaps.json and keep this item release-blocking.",
+      "rationale": "In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, has a real Windows lifecycle collector/host contract, and defines a required same-workflow Windows Release producer plus Ubuntu consumer at the exact SHA. No hosted run has yet supplied the corresponding immutable lifecycle artifact and successful required-gate evidence, and package smoke is not scoped to a module profile in blocking CI. Those remaining gaps keep this item release-blocking.",
       "dependencies": [
         "RDY-000",
         "CI-100"
@@ -146,7 +146,7 @@
         "Bind every evidence declaration to the real output path of a real producer, and reject unproduced artifacts (done)",
         "Emit one direct SPARK_MODULE_LIFECYCLE host record after real module teardown so runtime lifecycle evidence can be produced (done)",
         "Keep the Windows D3D11 CTest that loads the in-profile module as a shared library and drives create/load/update/fixed/render/unload/destroy (done); Linux runtime parity is not claimed",
-        "Add the module-profile-lifecycle CI job that runs collect_lifecycle.py against the built engine (not started)",
+        "Keep the checked-in module-profile-lifecycle CI job required, and obtain a hosted exact-SHA Windows Release collector artifact plus successful Ubuntu consumer evidence (workflow contract implemented; hosted proof not yet observed)",
         "Scope package smoke to the module profile and add the module-profile-package-smoke CI job (tracked under MOD-310)",
         "Keep experimental-module lifecycle coverage open under RDY-015 rather than making it a stable-v1 prerequisite"
       ],
