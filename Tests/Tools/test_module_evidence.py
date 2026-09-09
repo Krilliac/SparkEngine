@@ -348,6 +348,17 @@ def lifecycle_evidence(repo: Path, sha: str, *, module: str = INCLUDED,
     }
 
 
+def target_index_for_revision(sha: str) -> dict[str, Any]:
+    """Add the external revision fields required by release target evidence."""
+    document = target_index()
+    document.update({
+        "commitSHA": sha,
+        "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "source": "test",
+    })
+    return document
+
+
 class FixtureCase(unittest.TestCase):
     """Base class owning one temporary repository for the whole class."""
 
@@ -367,12 +378,25 @@ class FixtureCase(unittest.TestCase):
         shutil.rmtree(cls._tmp, ignore_errors=True)
 
     def validate(self, manifest: dict[str, Any], **over: Any) -> list[str]:
+        default_target_index = target_index()
+        default_target_index.update({
+            "commitSHA": self.sha,
+            "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "source": "test",
+        })
         kwargs: dict[str, Any] = {
-            "target_index": target_index(),
+            "target_index": default_target_index,
             "lifecycle_evidence": lifecycle_evidence(self.repo, self.sha),
             "expected_sha": self.sha,
         }
         kwargs.update(over)
+        supplied_target_index = kwargs.get("target_index")
+        if isinstance(supplied_target_index, dict) and "commitSHA" not in supplied_target_index:
+            supplied_target_index.setdefault("commitSHA", self.sha)
+            supplied_target_index.setdefault(
+                "generatedAt", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+            supplied_target_index.setdefault("source", "test")
         return ManifestValidator(manifest, self.repo, **kwargs).validate()
 
     def assertRejected(self, manifest: dict[str, Any], case: str,
@@ -4344,6 +4368,30 @@ class TestProvenance(FixtureCase):
         finally:
             _git(self.repo, "reset", "-q", "--hard", self.sha)
 
+    def test_target_index_from_a_different_commit_is_rejected(self) -> None:
+        """A replayed configure index cannot pair with current lifecycle proof."""
+        (self.repo / "target-index-replay.txt").write_text("new revision", encoding="utf-8")
+        _git(self.repo, "add", "target-index-replay.txt")
+        _git(self.repo, "commit", "-q", "-m", "target index replay revision")
+        current = _git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        try:
+            stale_index = target_index()
+            stale_index.update({
+                "commitSHA": self.sha,
+                "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "source": "test",
+            })
+            errors = self.assertRejected(
+                base_manifest(), "target-index-stale-replay",
+                target_index=stale_index,
+                lifecycle_evidence=lifecycle_evidence(self.repo, current),
+                expected_sha=current,
+            )
+            self.assertTrue(any("target evidence commitSHA" in error for error in errors), errors)
+            self.assertTrue(any("stale evidence" in error for error in errors), errors)
+        finally:
+            _git(self.repo, "reset", "-q", "--hard", self.sha)
+
     def test_B35_null_generated_at_is_rejected(self) -> None:
         ev = lifecycle_evidence(self.repo, self.sha)
         ev["generatedAt"] = None
@@ -4492,7 +4540,7 @@ class TestEvidenceGapLedger(FixtureCase):
     def test_declared_gap_downgrades_absence_to_a_warning(self) -> None:
         v = ManifestValidator(
             base_manifest(), self.repo,
-            target_index=target_index(),
+            target_index=target_index_for_revision(self.sha),
             lifecycle_evidence=None, lifecycle_error="absent",
             expected_sha=self.sha,
             declared_gaps={"lifecycle-log": "RDY-010"},
@@ -4514,7 +4562,7 @@ class TestEvidenceGapLedger(FixtureCase):
         """The ledger may only shrink."""
         v = ManifestValidator(
             base_manifest(), self.repo,
-            target_index=target_index(),
+            target_index=target_index_for_revision(self.sha),
             lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
             expected_sha=self.sha,
             declared_gaps={"lifecycle-log": "RDY-010"},
@@ -5245,7 +5293,7 @@ class TestArtifactSemanticValidation(FixtureCase):
         with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
             errors = ManifestValidator(
                 m, self.repo,
-                target_index=target_index(),
+                target_index=target_index_for_revision(self.sha),
                 lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
                 expected_sha=self.sha,
                 root_authority=lease,
@@ -5267,7 +5315,7 @@ class TestArtifactSemanticValidation(FixtureCase):
         with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
             errors = ManifestValidator(
                 m, self.repo,
-                target_index=target_index(),
+                target_index=target_index_for_revision(self.sha),
                 lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
                 expected_sha=self.sha,
                 declared_gaps={"package-smoke-log": "MOD-310"},

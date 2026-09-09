@@ -684,6 +684,20 @@ class ManifestValidator:
         if "cmake-target-index" in self.declared_gaps:
             self._record_gap("cmake-target-index", True, "")
             return
+        target_binding_errors = (
+            provenance.check_revision_binding_rooted(
+                self.target_index.get("commitSHA"), self.expected_sha,
+                self.root_authority, "target evidence commitSHA",
+            ) if self.root_authority is not None and os.name != "nt"
+            else provenance.check_revision_binding(
+                self.target_index.get("commitSHA"), self.expected_sha,
+                self.repo_root, "target evidence commitSHA",
+            )
+        )
+        for error in target_binding_errors:
+            self._err(error)
+        if target_binding_errors:
+            return
         for mod in self._included_modules():
             name = mod.get("name")
             target = mod.get("cmakeTarget")
