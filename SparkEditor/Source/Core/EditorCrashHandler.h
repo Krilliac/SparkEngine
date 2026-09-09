@@ -9,11 +9,9 @@
 
 #include <string>
 #include <vector>
-#include <unordered_map>
 #include <functional>
 #include <chrono>
 #include <mutex>
-#include <thread>
 #include <cstdint>
 
 #ifdef _WIN32
@@ -48,23 +46,9 @@ namespace SparkEditor
     };
 
     /**
- * @brief Crash recovery data
- */
-    struct RecoveryData
-    {
-        std::string currentLayout;
-        std::vector<std::string> openFiles;
-        std::string currentProject;
-        std::string lastSavedScene;
-        std::unordered_map<std::string, std::string> editorSettings;
-        std::vector<std::string> recentOperations;
-    };
-
-    /**
  * @brief Crash handler callback types
  */
     using CrashCallback = std::function<void(const CrashInfo&)>;
-    using RecoveryCallback = std::function<RecoveryData()>;
     using AssertCallback = std::function<void(const std::string&, const std::string&, int, const std::string&)>;
 
     /**
@@ -72,8 +56,7 @@ namespace SparkEditor
  *
  * Provides comprehensive crash handling with:
  * - Integration with engine crash handler
- * - Editor state preservation
- * - Automatic recovery data saving
+ * - Editor diagnostic state preservation
  * - Detailed crash reporting
  * - Assert handling integration
  */
@@ -86,7 +69,6 @@ namespace SparkEditor
         void Shutdown();
 
         void SetCrashCallback(CrashCallback callback);
-        void SetRecoveryCallback(RecoveryCallback callback);
         void SetAssertCallback(AssertCallback callback);
 
         void HandleAssertion(const std::string& expression, const char* file, int line,
@@ -94,13 +76,6 @@ namespace SparkEditor
 
         void RecordOperation(const std::string& operation);
         void SetEditorState(const std::string& state);
-
-        bool SaveRecoveryData();
-        std::optional<RecoveryData> LoadRecoveryData();
-        bool HasRecoveryData();
-        void ClearRecoveryData();
-
-        void SetAutoSaveRecovery(bool enabled, float interval = 30.0f);
 
         struct CrashStats
         {
@@ -112,8 +87,6 @@ namespace SparkEditor
             std::chrono::system_clock::time_point lastCrash;
             std::string lastCrashType;
             float averageSessionTime = 0.0f;
-            int recoveryDataSaves = 0;
-            int successfulRecoveries = 0;
         };
         CrashStats GetStats() const;
 
@@ -143,7 +116,6 @@ namespace SparkEditor
         std::string GetThreadInfo();
         bool SaveCrashLog(const CrashInfo& crashInfo, const std::string& filePath);
         void UpdateStats(const CrashInfo& crashInfo);
-        void AutoSaveRecoveryThread();
 
       private:
         // State
@@ -153,7 +125,6 @@ namespace SparkEditor
 
         // Callbacks
         CrashCallback m_crashCallback;
-        RecoveryCallback m_recoveryCallback;
         AssertCallback m_assertCallback;
 
         // Recent operations tracking
@@ -161,12 +132,6 @@ namespace SparkEditor
         std::string m_currentEditorState;
         size_t m_maxOperations = 50;
         mutable std::mutex m_operationsMutex;
-
-        // Auto-save recovery
-        bool m_autoSaveEnabled = true;
-        float m_autoSaveInterval = 30.0f;
-        std::atomic<bool> m_shouldStopAutoSave{false};
-        std::thread m_autoSaveThread;
 
         // Statistics
         mutable CrashStats m_stats;

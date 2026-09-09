@@ -714,47 +714,6 @@ TEST(CrashHandler_RecordOperation)
     handler.Shutdown();
 }
 
-TEST(CrashHandler_SaveAndHasRecoveryData)
-{
-    std::filesystem::create_directories("TestCrashes");
-    auto& handler = EditorCrashHandler::GetInstance();
-    handler.Initialize("TestCrashes");
-
-    handler.SetRecoveryCallback(
-        []() -> RecoveryData
-        {
-            RecoveryData data;
-            data.currentProject = "TestProject";
-            data.openFiles.push_back("scene.spark");
-            return data;
-        });
-
-    bool saved = handler.SaveRecoveryData();
-    EXPECT_TRUE(saved);
-    EXPECT_TRUE(handler.HasRecoveryData());
-    handler.Shutdown();
-    std::filesystem::remove_all("TestCrashes");
-}
-
-TEST(CrashHandler_ClearRecoveryData)
-{
-    auto& handler = EditorCrashHandler::GetInstance();
-    handler.Initialize("TestCrashes");
-
-    handler.SetRecoveryCallback(
-        []() -> RecoveryData
-        {
-            RecoveryData data;
-            data.currentProject = "ClearTest";
-            return data;
-        });
-
-    handler.SaveRecoveryData();
-    handler.ClearRecoveryData();
-    EXPECT_FALSE(handler.HasRecoveryData());
-    handler.Shutdown();
-}
-
 TEST(CrashHandler_GetStats)
 {
     auto& handler = EditorCrashHandler::GetInstance();

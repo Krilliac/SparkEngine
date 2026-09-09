@@ -11,8 +11,6 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
-#include <optional>
-#include <thread>
 #include <chrono>
 #include <cerrno>
 #include <cstdint>
@@ -201,21 +199,6 @@ namespace SparkEditor
             s_instance = nullptr;
         }
 
-        // Ensure safe shutdown
-        m_shouldStopAutoSave = true;
-
-        if (m_autoSaveThread.joinable())
-        {
-            try
-            {
-                m_autoSaveThread.join();
-            }
-            catch (...)
-            {
-                // Detach if join fails to prevent blocking
-                m_autoSaveThread.detach();
-            }
-        }
     }
 
     bool EditorCrashHandler::Initialize(const std::string& crashDirectory, EditorLogger* logger)
@@ -232,7 +215,7 @@ namespace SparkEditor
 
 #ifdef _WIN32
         // Without this the whole Windows crash path below (ExceptionFilter ->
-        // HandleCrashInternal -> dump/log/recovery.json) is unreachable and the
+        // HandleCrashInternal -> dump/log) is unreachable and the
         // editor dies through the default OS handler with nothing written.
         std::error_code directoryError;
         std::filesystem::create_directories(m_crashDirectory, directoryError);
@@ -304,23 +287,6 @@ namespace SparkEditor
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorCrashHandler shutting down");
         std::cout << "EditorCrashHandler shutting down...\n";
 
-        // Signal auto-save thread to stop
-        m_shouldStopAutoSave = true;
-
-        // Wait for thread to finish with timeout to avoid deadlock
-        if (m_autoSaveThread.joinable())
-        {
-            try
-            {
-                m_autoSaveThread.join();
-            }
-            catch (...)
-            {
-                // If join fails, just detach to avoid blocking shutdown
-                m_autoSaveThread.detach();
-            }
-        }
-
         m_initialized = false;
         m_logger = nullptr;
 #ifdef _WIN32
@@ -340,11 +306,6 @@ namespace SparkEditor
     void EditorCrashHandler::SetCrashCallback(CrashCallback callback)
     {
         m_crashCallback = callback;
-    }
-
-    void EditorCrashHandler::SetRecoveryCallback(RecoveryCallback callback)
-    {
-        m_recoveryCallback = callback;
     }
 
     void EditorCrashHandler::SetAssertCallback(AssertCallback callback)
@@ -396,195 +357,6 @@ namespace SparkEditor
         m_currentEditorState = state;
     }
 
-    bool EditorCrashHandler::SaveRecoveryData()
-    {
-        if (!m_recoveryCallback)
-        {
-            return false;
-        }
-
-        try
-        {
-            RecoveryData data = m_recoveryCallback();
-
-            // Save recovery data to file
-            std::string recoveryFile = m_crashDirectory + "/recovery.json";
-            std::ofstream file(recoveryFile);
-            if (!file.is_open())
-            {
-                return false;
-            }
-
-            // Simple JSON-like format
-            file << "{\n";
-            file << "  \"currentLayout\": \"" << data.currentLayout << "\",\n";
-            file << "  \"currentProject\": \"" << data.currentProject << "\",\n";
-            file << "  \"lastSavedScene\": \"" << data.lastSavedScene << "\",\n";
-            file << "  \"openFiles\": [\n";
-            for (size_t i = 0; i < data.openFiles.size(); ++i)
-            {
-                file << "    \"" << data.openFiles[i] << "\"";
-                if (i < data.openFiles.size() - 1)
-                    file << ",";
-                file << "\n";
-            }
-            file << "  ],\n";
-            file << "  \"recentOperations\": [\n";
-            for (size_t i = 0; i < data.recentOperations.size(); ++i)
-            {
-                file << "    \"" << data.recentOperations[i] << "\"";
-                if (i < data.recentOperations.size() - 1)
-                    file << ",";
-                file << "\n";
-            }
-            file << "  ]\n";
-            file << "}\n";
-
-            file.close();
-
-            std::lock_guard<std::mutex> lock(m_statsMutex);
-            m_stats.recoveryDataSaves++;
-
-            return true;
-        }
-        catch (const std::exception& e)
-        {
-            std::cerr << "SaveRecoveryData failed: " << e.what() << "\n";
-            return false;
-        }
-        catch (...)
-        {
-            std::cerr << "SaveRecoveryData failed with unknown exception\n";
-            return false;
-        }
-    }
-
-    std::optional<RecoveryData> EditorCrashHandler::LoadRecoveryData()
-    {
-        try
-        {
-            std::string recoveryFile = m_crashDirectory + "/recovery.json";
-            std::ifstream file(recoveryFile);
-            if (!file.is_open())
-            {
-                return std::nullopt;
-            }
-
-            RecoveryData data;
-            std::string line;
-
-            // Simple parser for our JSON-like format
-            while (std::getline(file, line))
-            {
-                if (line.contains("\"currentLayout\""))
-                {
-                    size_t start = line.find(": \"") + 3;
-                    size_t end = line.find_last_of("\"");
-                    if (start < end)
-                    {
-                        data.currentLayout = line.substr(start, end - start);
-                    }
-                }
-                else if (line.contains("\"currentProject\""))
-                {
-                    size_t start = line.find(": \"") + 3;
-                    size_t end = line.find_last_of("\"");
-                    if (start < end)
-                    {
-                        data.currentProject = line.substr(start, end - start);
-                    }
-                }
-                else if (line.contains("\"lastSavedScene\""))
-                {
-                    size_t start = line.find(": \"") + 3;
-                    size_t end = line.find_last_of("\"");
-                    if (start < end)
-                    {
-                        data.lastSavedScene = line.substr(start, end - start);
-                    }
-                }
-                else if (line.contains("\"openFiles\""))
-                {
-                    std::string arrayLine;
-                    while (std::getline(file, arrayLine))
-                    {
-                        if (arrayLine.contains(']'))
-                            break;
-                        size_t qStart = arrayLine.find('\"');
-                        if (qStart == std::string::npos)
-                            continue;
-                        size_t qEnd = arrayLine.find('\"', qStart + 1);
-                        if (qEnd == std::string::npos)
-                            continue;
-                        data.openFiles.push_back(arrayLine.substr(qStart + 1, qEnd - qStart - 1));
-                    }
-                }
-                else if (line.contains("\"recentOperations\""))
-                {
-                    std::string arrayLine;
-                    while (std::getline(file, arrayLine))
-                    {
-                        if (arrayLine.contains(']'))
-                            break;
-                        size_t qStart = arrayLine.find('\"');
-                        if (qStart == std::string::npos)
-                            continue;
-                        size_t qEnd = arrayLine.find('\"', qStart + 1);
-                        if (qEnd == std::string::npos)
-                            continue;
-                        data.recentOperations.push_back(arrayLine.substr(qStart + 1, qEnd - qStart - 1));
-                    }
-                }
-            }
-
-            file.close();
-            return data;
-        }
-        catch (const std::exception& e)
-        {
-            std::cerr << "LoadRecoveryData failed: " << e.what() << "\n";
-            return std::nullopt;
-        }
-        catch (...)
-        {
-            std::cerr << "LoadRecoveryData failed with unknown exception\n";
-            return std::nullopt;
-        }
-    }
-
-    bool EditorCrashHandler::HasRecoveryData()
-    {
-        try
-        {
-            std::string recoveryFile = m_crashDirectory + "/recovery.json";
-            return std::filesystem::exists(recoveryFile);
-        }
-        catch (...)
-        {
-            return false;
-        }
-    }
-
-    void EditorCrashHandler::ClearRecoveryData()
-    {
-        try
-        {
-            std::string recoveryFile = m_crashDirectory + "/recovery.json";
-            if (std::filesystem::exists(recoveryFile))
-            {
-                std::filesystem::remove(recoveryFile);
-            }
-        }
-        catch (const std::exception& e)
-        {
-            std::cerr << "ClearRecoveryData failed: " << e.what() << "\n";
-        }
-        catch (...)
-        {
-            std::cerr << "ClearRecoveryData failed with unknown exception\n";
-        }
-    }
-
     EditorCrashHandler::CrashStats EditorCrashHandler::GetStats() const
     {
         std::lock_guard<std::mutex> lock(m_statsMutex);
@@ -616,25 +388,6 @@ namespace SparkEditor
     void EditorCrashHandler::TestAssertionHandler()
     {
         HandleAssertion("test_expression", __FILE__, __LINE__, "Test assertion for crash handler verification");
-    }
-
-    void EditorCrashHandler::AutoSaveRecoveryThread()
-    {
-        while (!m_shouldStopAutoSave)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(m_autoSaveInterval * 1000)));
-
-            if (!m_shouldStopAutoSave)
-            {
-                SaveRecoveryData();
-            }
-        }
-    }
-
-    void EditorCrashHandler::SetAutoSaveRecovery(bool enabled, float interval)
-    {
-        m_autoSaveEnabled = enabled;
-        m_autoSaveInterval = interval;
     }
 
     // =========================================================================
@@ -743,14 +496,6 @@ namespace SparkEditor
             catch (...)
             {
             }
-        }
-
-        try
-        {
-            SaveRecoveryData();
-        }
-        catch (...)
-        {
         }
 
         if (m_crashCallback)

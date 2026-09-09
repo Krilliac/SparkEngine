@@ -280,7 +280,12 @@ Replace CrashHandler_SaveAndHasRecoveryData and CrashHandler_ClearRecoveryData w
 Run:
 
 ~~~powershell
-$env:SPARK_TEST_NAME='EditorCrashHandler_,EditorRecovery_'
+$env:SPARK_TEST_NAME='EditorCrashHandler_'
+$env:SPARK_TEST_EXPECT_COUNT='2'
+& .\build\windows-release\bin\Release\SparkTests.exe --quiet --empty-is-error
+
+$env:SPARK_TEST_NAME='EditorRecovery_'
+$env:SPARK_TEST_EXPECT_COUNT='6'
 & .\build\windows-release\bin\Release\SparkTests.exe --quiet --empty-is-error
 ~~~
 
@@ -518,7 +523,10 @@ Keep EDT-210 open until the separate asset/package plan has exact-SHA package pr
 Run:
 
 ~~~powershell
-$env:SPARK_TEST_NAME='EditorRecovery_,EditorCrashHandler_'
+$env:SPARK_TEST_NAME='EditorRecovery_'
+& .\build\windows-shipping\bin\MinSizeRel\SparkTests.exe --quiet --empty-is-error
+
+$env:SPARK_TEST_NAME='EditorCrashHandler_'
 & .\build\windows-shipping\bin\MinSizeRel\SparkTests.exe --quiet --empty-is-error
 ctest --test-dir build/windows-shipping -C MinSizeRel -L editor-integration --output-on-failure --no-tests=error
 git diff --check
@@ -535,7 +543,7 @@ git commit -m "docs(editor): document recovery evidence"
 
 ## Final Verification
 
-- [ ] Run every EditorRecovery_ and EditorCrashHandler_ test with SPARK_TEST_NAME and --empty-is-error.
+- [ ] Run the EditorRecovery_ and EditorCrashHandler_ selectors separately with SPARK_TEST_NAME and --empty-is-error (the runner accepts one name filter at a time).
 - [ ] Run the full SparkTests suite in the affected Windows Release configuration.
 - [ ] Run the shipping editor-integration CTest label with --no-tests=error.
 - [ ] Inspect git diff --check and a targeted diff before each commit.

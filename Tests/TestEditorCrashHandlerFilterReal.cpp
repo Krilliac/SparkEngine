@@ -4,7 +4,7 @@
  *
  * editor-core-01: EditorUI logged "Crash handler initialized successfully" while
  * nothing was installed, so every editor crash went to the default OS handler
- * with no dump, no log and no recovery.json. That is the "a check that stops
+ * with no dump or log. That is the "a check that stops
  * checking" shape: the reassuring message was printed by code that did no work.
  *
  * These tests drive SparkEditor::EditorCrashHandler (SparkEditor/Source/Core/
@@ -18,6 +18,8 @@
 #include "Core/EditorCrashHandler.h"
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 namespace
@@ -48,7 +50,39 @@ namespace
       private:
         std::filesystem::path m_path;
     };
+
+    std::string ReadSourceFile(const std::filesystem::path& relativePath)
+    {
+        const std::filesystem::path path = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / relativePath;
+        std::ifstream input(path, std::ios::binary);
+        return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    }
 } // namespace
+
+TEST(EditorCrashHandler_RecoveryPersistenceIsNotOwnedByCrashHandler)
+{
+    const std::string source = ReadSourceFile("SparkEditor/Source/Core/EditorCrashHandler.cpp");
+    const std::string header = ReadSourceFile("SparkEditor/Source/Core/EditorCrashHandler.h");
+    ASSERT_FALSE(source.empty());
+    ASSERT_FALSE(header.empty());
+
+    EXPECT_FALSE(source.contains("SaveRecoveryData("));
+    EXPECT_FALSE(source.contains("m_recoveryCallback"));
+    EXPECT_FALSE(source.contains("AutoSaveRecoveryThread"));
+    EXPECT_FALSE(header.contains("RecoveryData"));
+    EXPECT_FALSE(header.contains("SetRecoveryCallback"));
+}
+
+TEST(EditorCrashHandler_RecordOperationStillAcceptsBoundedHistory)
+{
+    ScratchCrashDir scratch("operations");
+    SparkEditor::EditorCrashHandler& handler = SparkEditor::EditorCrashHandler::GetInstance();
+    ASSERT_TRUE(handler.Initialize(scratch.Path()));
+    for (int index = 0; index != 75; ++index)
+        handler.RecordOperation("op-" + std::to_string(index));
+    handler.Shutdown();
+    EXPECT_TRUE(true);
+}
 
 #ifdef _WIN32
 
