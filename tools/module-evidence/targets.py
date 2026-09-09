@@ -93,7 +93,9 @@ def _find_codemodel(reply_dir: Path) -> Path:
         raise TargetEvidenceUnavailable(
             f"no index-*.json in {reply_dir} — configure did not complete"
         )
-    index = strict_json.load_file(index_files[-1])
+    index = strict_json.load_file(
+        index_files[-1], limits=strict_json.MODULE_TARGET_LIMITS
+    )
     client = index.get("reply", {}).get(CLIENT_NAME, {})
     query_reply = client.get("query.json", {})
     if "error" in query_reply:
@@ -118,7 +120,9 @@ def _find_codemodel(reply_dir: Path) -> Path:
 def extract_from_reply(reply_dir: Path) -> dict[str, dict[str, Any]]:
     """Build the target index from a CMake File API reply directory."""
     codemodel_path = _find_codemodel(reply_dir)
-    codemodel = strict_json.load_file(codemodel_path)
+    codemodel = strict_json.load_file(
+        codemodel_path, limits=strict_json.MODULE_TARGET_LIMITS
+    )
 
     index: dict[str, dict[str, Any]] = {}
     for configuration in codemodel.get("configurations", []):
@@ -127,7 +131,9 @@ def extract_from_reply(reply_dir: Path) -> dict[str, dict[str, Any]]:
             target_file = _check_containment(
                 reply_dir, json_file, f"target {target_ref.get('name', '?')}"
             )
-            target = strict_json.load_file(target_file)
+            target = strict_json.load_file(
+                target_file, limits=strict_json.MODULE_TARGET_LIMITS
+            )
             name = target.get("name", "")
             if not name:
                 continue
@@ -200,7 +206,9 @@ def load_target_index(path: Path) -> dict[str, Any]:
             f"tools/module-evidence/collect_targets.py after a CMake configure"
         )
     try:
-        document = strict_json.load_file(path)
+        document = strict_json.load_file(
+            path, limits=strict_json.MODULE_TARGET_LIMITS
+        )
     except strict_json.StrictJSONError as exc:
         raise TargetEvidenceUnavailable(f"target evidence is unusable: {exc}") from exc
     if not isinstance(document, dict):

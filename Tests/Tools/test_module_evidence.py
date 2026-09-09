@@ -803,7 +803,25 @@ class TestStrictJSON(unittest.TestCase):
 
     def test_container_item_limit_is_enforced(self) -> None:
         with self.assertRaises(strict_json.StrictJSONError):
-            strict_json.loads(json.dumps({"a": list(range(1000))}))
+            strict_json.loads(
+                json.dumps(
+                    {"a": list(range(strict_json.DEFAULT_LIMITS.container_items + 1))}
+                )
+            )
+
+    def test_module_target_container_item_limit_is_enforced(self) -> None:
+        """The File API exception remains bounded for hostile artifacts."""
+        with self.assertRaises(strict_json.StrictJSONError):
+            strict_json.loads(
+                json.dumps(
+                    {
+                        "sources": list(
+                            range(strict_json.MODULE_TARGET_LIMITS.container_items + 1)
+                        )
+                    }
+                ),
+                limits=strict_json.MODULE_TARGET_LIMITS,
+            )
 
     def test_string_length_limit_is_enforced(self) -> None:
         with self.assertRaises(strict_json.StrictJSONError):
@@ -1543,6 +1561,34 @@ class TestTargetContainment(FixtureCase):
                 strict_json.StrictJSONError,
             )):
                 targets_mod.extract_from_reply(reply)
+
+    def test_cmake_target_with_more_than_512_sources_is_accepted(self) -> None:
+        """Real CMake File API targets can legitimately exceed 512 sources."""
+        source_count = 526
+        target_content = json.dumps({
+            "name": "SparkGameFPS", "type": "SHARED_LIBRARY",
+            "nameOnDisk": "libSparkGameFPS.so",
+            "paths": {"source": "GameModules/SparkGameFPS"},
+            "sources": [
+                {"path": f"GameModules/SparkGameFPS/Source/Unit{index}.cpp"}
+                for index in range(source_count)
+            ],
+            "artifacts": [{"path": "bin/libSparkGameFPS.so"}],
+        })
+        with tempfile.TemporaryDirectory(prefix="spark-many-sources-") as tmp:
+            reply = Path(tmp) / "reply"
+            self._write_reply(reply, target_content=target_content)
+            index = targets_mod.extract_from_reply(reply)
+            target_index_path = Path(tmp) / "module-targets.json"
+            targets_mod.write_index(
+                index,
+                target_index_path,
+                commit_sha=self.sha,
+                generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                source="test",
+            )
+            captured = targets_mod.load_target_index(target_index_path)
+        self.assertEqual(len(captured["targets"]["SparkGameFPS"]["sources"]), source_count)
 
     def test_shared_reply_fallback_is_gone(self) -> None:
         """Without a client-specific reply, existence of a shared codemodel

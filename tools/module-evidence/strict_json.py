@@ -56,6 +56,12 @@ CONTRACT_LIMITS = Limits(
     container_items=4096,
 )
 
+# CMake File API target documents and the normalized module-target evidence
+# written from them can legitimately list every compilation source in a large
+# target.  Keep that representation bounded against hostile artifacts while
+# allowing the current engine target (526 sources) to be recorded faithfully.
+MODULE_TARGET_LIMITS = Limits(container_items=2048)
+
 
 class StrictJSONError(ValueError):
     """A document that must be rejected before any semantic validation runs."""
