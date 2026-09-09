@@ -676,7 +676,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*603 test-bearing `.cpp`/`.mm` files, 7301 source-level test definitions*
+*604 test-bearing `.cpp`/`.mm` files, 7323 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -844,12 +844,13 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEcsCameraConsole` | 1 |
 | `TestEditorAutomation` | 9 |
 | `TestEditorCommands` | 8 |
-| `TestEditorCrashHandlerFilterReal` | 6 |
+| `TestEditorCrashHandlerFilterReal` | 8 |
 | `TestEditorDocumentTransition` | 7 |
 | `TestEditorGizmoTransformReal` | 6 |
 | `TestEditorLayoutManager` | 13 |
 | `TestEditorPanelsRealBackends` | 12 |
 | `TestEditorProjectMaterializationReal` | 5 |
+| `TestEditorRecovery` | 16 |
 | `TestEditorSubsystems` | 134 |
 | `TestEditorSubsystemsReal` | 16 |
 | `TestEditorUndoHierarchyReal` | 6 |
@@ -900,7 +901,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFreezeDetector` | 10 |
 | `TestFreezeSystem` | 5 |
 | `TestFrustumCulling` | 11 |
-| `TestFullEngineDiagnostics` | 7 |
+| `TestFullEngineDiagnostics` | 9 |
 | `TestGLSLPipelineIntegration` | 19 |
 | `TestGLTFStaticMeshLoader` | 9 |
 | `TestGPUClusterCulling` | 11 |
@@ -975,7 +976,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLocalizationSystem` | 6 |
 | `TestLockFreeRingAllocator` | 8 |
 | `TestLockFreeRingAllocatorReal` | 10 |
-| `TestLogger` | 18 |
+| `TestLogger` | 20 |
 | `TestLoggerSinksReal` | 4 |
 | `TestLootAndCrafting` | 11 |
 | `TestMMOAssetImport` | 16 |

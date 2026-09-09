@@ -1299,8 +1299,24 @@ done
 [[ "$(grep -Fc 'bash .github/scripts/run-sanitizer-tests.sh' "$WORKFLOW")" -eq 3 ]] && \
     pass "exactly three sanitizer runner invocations" || fail "sanitizer runner invocation count"
 grep -Fq -- '--warn-is-error --shuffle 123' "$WORKFLOW" && pass "workflow hardens flaky warnings and shuffle seed" || fail "workflow warn/shuffle contract"
-grep -Fq 'timeout-minutes: 90' "$WORKFLOW" && pass "sanitizer jobs have bounded job time" || fail "sanitizer job timeout"
-grep -Fq -- '--timeout-seconds 900' "$WORKFLOW" && pass "sanitizer test process timeout present" || fail "sanitizer process timeout"
+for sanitizer in asan tsan; do
+    section="$(awk -v job="build-linux-${sanitizer}" '
+        $0 == "  " job ":" { found = 1 }
+        found && $0 ~ /^  [A-Za-z0-9_-]+:$/ && $0 != "  " job ":" { exit }
+        found { print }
+    ' "$WORKFLOW")"
+    [[ "$section" == *"timeout-minutes: 90"* && "$section" == *"--timeout-seconds 900"* ]] && \
+        pass "${sanitizer} uses the required 90-minute/900-second bounds" || \
+        fail "${sanitizer} timeout policy"
+done
+msan_section="$(awk '
+    $0 == "  build-linux-msan:" { found = 1 }
+    found && $0 ~ /^  [A-Za-z0-9_-]+:$/ && $0 != "  build-linux-msan:" { exit }
+    found { print }
+' "$WORKFLOW")"
+[[ "$msan_section" == *"timeout-minutes: 120"* && "$msan_section" == *"--timeout-seconds 5400"* ]] && \
+    pass "MSan uses the measured 120-minute/5400-second bounds" || \
+    fail "MSan timeout policy"
 grep -Fq -- '--expected-sha "${{ github.sha }}"' "$WORKFLOW" && pass "workflow binds exact SHA" || fail "workflow exact SHA"
 grep -Fq 'test-results-linux-asan' "$WORKFLOW" && pass "ASan exact-commit artifact present" || fail "ASan aggregate artifact"
 grep -Fq 'test-results-linux-tsan' "$WORKFLOW" && pass "TSan exact-commit artifact present" || fail "TSan aggregate artifact"

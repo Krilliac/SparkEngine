@@ -19,11 +19,14 @@
 
 struct ScopedLoggerBaseline
 {
-    ScopedLoggerBaseline() = default;
+    ScopedLoggerBaseline() { Restore(); }
     ScopedLoggerBaseline(const ScopedLoggerBaseline&) = delete;
     ScopedLoggerBaseline& operator=(const ScopedLoggerBaseline&) = delete;
 
-    ~ScopedLoggerBaseline()
+    ~ScopedLoggerBaseline() { Restore(); }
+
+  private:
+    static void Restore()
     {
         // Mirrors TestMain: synchronous logger, exactly one stderr sink, Debug
         // level, automatic stack traces off. Keep the two in step.
@@ -32,6 +35,7 @@ struct ScopedLoggerBaseline
         logger.Shutdown();
         logger.Initialize(false);
         logger.AddSink(std::make_unique<Spark::StderrSink>());
+        logger.SetCategoryMask(Spark::kLogCategoryAll);
         logger.SetGlobalLevel(Spark::LogLevel::Debug);
         logger.SetStackTraceLevel(Spark::LogLevel::Off);
     }

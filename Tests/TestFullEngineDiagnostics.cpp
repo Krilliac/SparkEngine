@@ -50,6 +50,7 @@
 #include "Utils/GPUPerfCounters.h"
 #include "Utils/JobSystem.h"
 #include "Utils/Profiler.h"
+#include "Utils/SparkConsole.h"
 #include "Utils/Timer.h"
 #include "Core/FixedTimestepAccumulator.h"
 
@@ -61,10 +62,23 @@
 // ============================================================================
 
 static bool g_fullEngineInitialized = false;
+static EngineContext* g_fullEngineBoundContext = nullptr;
+
+static bool HasFullEngineBindings(const EngineContext* context)
+{
+    return context != nullptr && context->GetEventBus() != nullptr && context->GetWorld() != nullptr &&
+           context->GetPhysics() != nullptr && context->GetWeather() != nullptr && context->GetTimeOfDay() != nullptr &&
+           context->GetCoroutineScheduler() != nullptr && context->GetAbilities() != nullptr &&
+           context->GetConditions() != nullptr && context->GetInstances() != nullptr && context->GetDialogue() != nullptr &&
+           context->GetTween() != nullptr && context->GetSaveSystem() != nullptr && context->GetVFS() != nullptr &&
+           context->GetFileCache() != nullptr && context->GetDestruction() != nullptr &&
+           context->GetAreaStreaming() != nullptr;
+}
 
 static void InitFullEngine()
 {
-    if (g_fullEngineInitialized)
+    auto* currentContext = EngineContext::Get();
+    if (g_fullEngineInitialized && g_fullEngineBoundContext == currentContext && HasFullEngineBindings(currentContext))
         return;
 
     // --- EngineContext ---
@@ -193,7 +207,44 @@ static void InitFullEngine()
     // --- FixedTimestep ---
     Spark::FixedTimestepAccumulator::GetInstance().Initialize();
 
+    g_fullEngineBoundContext = ctx;
     g_fullEngineInitialized = true;
+}
+
+TEST(FullEngine_InitRebindsSubsystemsAfterEngineContextReplacement)
+{
+    InitFullEngine();
+
+    EngineContext::SetOwned(std::make_unique<EngineContext>());
+    auto* replacement = EngineContext::Get();
+    InitFullEngine();
+
+    EXPECT_TRUE(replacement->GetEventBus() != nullptr);
+    EXPECT_TRUE(replacement->GetWorld() != nullptr);
+    EXPECT_TRUE(replacement->GetPhysics() != nullptr);
+    EXPECT_TRUE(replacement->GetConditions() != nullptr);
+    EXPECT_TRUE(replacement->GetInstances() != nullptr);
+    EXPECT_TRUE(replacement->GetTween() != nullptr);
+}
+
+TEST(FullEngine_InitRebindsClearedSubsystemsInTheCurrentContext)
+{
+    InitFullEngine();
+    auto* context = EngineContext::Get();
+
+    context->SetAbilities(nullptr);
+    context->SetConditions(nullptr);
+    context->SetInstances(nullptr);
+    context->SetTween(nullptr);
+    context->SetVFS(nullptr);
+
+    InitFullEngine();
+
+    EXPECT_TRUE(context->GetAbilities() != nullptr);
+    EXPECT_TRUE(context->GetConditions() != nullptr);
+    EXPECT_TRUE(context->GetInstances() != nullptr);
+    EXPECT_TRUE(context->GetTween() != nullptr);
+    EXPECT_TRUE(context->GetVFS() != nullptr);
 }
 
 // ============================================================================
@@ -203,6 +254,7 @@ static void InitFullEngine()
 TEST(FullEngine_DiagRunAll)
 {
     InitFullEngine();
+    Spark::SimpleConsole::GetInstance().Clear();
 
     Spark::DiagReport report;
     Spark::DiagRunAll(report);

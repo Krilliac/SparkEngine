@@ -2757,6 +2757,8 @@ TEST(Gated_EditorTheme_CreateBlendedTheme)
 {
     EditorThemeData t1 = EditorTheme::CreateUnityProTheme();
     EditorThemeData t2 = EditorTheme::CreateUnrealProTheme();
+    t1.name = "Gated Blend Source A";
+    t2.name = "Gated Blend Source B";
     EditorTheme::RegisterTheme(t1);
     EditorTheme::RegisterTheme(t2);
 

@@ -373,6 +373,33 @@ TEST(Logger_StringToLogLevel)
 // Category Bitmask
 // =============================================================================
 
+TEST(Logger_ScopedBaselineRestoresCategoryMask)
+{
+    auto& logger = Spark::Logger::Get();
+    logger.Initialize(false);
+
+    {
+        ScopedLoggerBaseline loggerBaseline;
+        logger.SetCategoryMask(Spark::kLogCategoryNone);
+        EXPECT_FALSE(logger.ShouldLog(Spark::LogLevel::Fatal, Spark::LogCategory::Core));
+    }
+
+    EXPECT_EQ(logger.GetCategoryMask(), Spark::kLogCategoryAll);
+    EXPECT_TRUE(logger.ShouldLog(Spark::LogLevel::Debug, Spark::LogCategory::Core));
+}
+
+TEST(Logger_ScopedBaselineRestoresCategoryMaskOnEntry)
+{
+    auto& logger = Spark::Logger::Get();
+    logger.Initialize(false);
+    logger.SetCategoryMask(Spark::kLogCategoryNone);
+
+    ScopedLoggerBaseline loggerBaseline;
+
+    EXPECT_EQ(logger.GetCategoryMask(), Spark::kLogCategoryAll);
+    EXPECT_TRUE(logger.ShouldLog(Spark::LogLevel::Debug, Spark::LogCategory::Core));
+}
+
 TEST(Logger_CategoryBitmask)
 {
     ScopedLoggerBaseline loggerBaseline;

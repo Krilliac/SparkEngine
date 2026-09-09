@@ -1547,13 +1547,19 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         asan_section = self.build[asan_start:next_job]
         self.assertNotIn("continue-on-error", asan_section)
 
-    def test_sanitizer_jobs_and_test_processes_have_timeouts(self) -> None:
-        for sanitizer in ("asan", "tsan", "msan"):
+    def test_sanitizer_jobs_and_test_processes_have_policy_specific_timeouts(self) -> None:
+        for sanitizer in ("asan", "tsan"):
             start = self.build.index(f"build-linux-{sanitizer}:")
             next_job = self.build.index("\n  build-", start + 1)
             section = self.build[start:next_job]
             self.assertIn("timeout-minutes: 90", section)
             self.assertIn("--timeout-seconds 900", section)
+
+        msan_start = self.build.index("build-linux-msan:")
+        msan_next_job = self.build.index("\n  build-", msan_start + 1)
+        msan_section = self.build[msan_start:msan_next_job]
+        self.assertIn("timeout-minutes: 120", msan_section)
+        self.assertIn("--timeout-seconds 5400", msan_section)
 
     def test_required_sanitizers_use_warning_errors_and_exact_provenance(self) -> None:
         for name in ("Run Tests under ASan + UBSan + LSan", "Run Tests under TSan"):

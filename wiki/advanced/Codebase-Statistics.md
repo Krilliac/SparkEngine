@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-08.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-09.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
@@ -10,26 +10,26 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 320963 |
-| **SparkEditor/Source** | 102354 |
+| **SparkEngine/Source** | 321143 |
+| **SparkEditor/Source** | 103590 |
 | **GameModules** | 142612 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 182065 |
+| **Tests** | 182722 |
 | **SparkConsole/src** | 1701 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~775451** |
+| **Total C++ (excl. ThirdParty)** | **~777524** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1058 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1576 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1059 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1578 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 604 |
+| Test-bearing implementation files (.cpp/.mm) | 605 |
 | Wiki pages (.md) | 201 |
 
 ### Largest Top-Level Source Section
@@ -49,7 +49,7 @@ Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source
 | Physics | 10799 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
-| SceneManager | 2428 | 0.7% |
+| SceneManager | 2608 | 0.8% |
 | Enums | 1383 | 0.4% |
 | Game | 2828 | 0.8% |
 | Camera | 999 | 0.3% |
@@ -103,14 +103,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 102354 |
+| Total editor lines | 103590 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 604 |
-| TEST() definitions | 7302 |
+| Test files | 605 |
+| TEST() definitions | 7324 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -186,8 +186,8 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
+| `EditorUI.cpp` | 2870 |
 | `ProjectManager.cpp` | 2590 |
-| `EditorUI.cpp` | 2323 |
 | `JSONSceneSerializer.cpp` | 2010 |
 | `VisualScriptPanel.cpp` | 1773 |
 | `CollaborativeEditSession.cpp` | 1696 |
