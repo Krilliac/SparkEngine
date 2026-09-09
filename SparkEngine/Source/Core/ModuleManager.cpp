@@ -936,7 +936,8 @@ bool ModuleManager::LoadModule(const std::string& path)
 
         console.LogSuccess(std::format("Loaded module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));
-        ++FindOrCreateLifecycleRecord(m_modules.back().name).createModule;
+        if (!m_modules.back().isLegacyAdapter)
+            ++FindOrCreateLifecycleRecord(m_modules.back().name).createModule;
 #ifndef _WIN32
         stagedImage.Disarm();
 #endif
@@ -1887,7 +1888,7 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
     if (entry.instance && entry.destroyFn)
     {
         entry.destroyFn(entry.instance);
-        if (entry.createFn)
+        if (entry.createFn && !entry.isLegacyAdapter)
             ++FindOrCreateLifecycleRecord(entry.name).destroyModule;
     }
     entry.instance = nullptr;

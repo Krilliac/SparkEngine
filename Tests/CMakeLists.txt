@@ -707,12 +707,14 @@ add_library(SparkMismatchedModuleFixture SHARED
     Fixtures/ModuleABI/MismatchedModule.cpp)
 add_library(SparkCompatibleModuleFixture SHARED
     Fixtures/ModuleABI/CompatibleModule.cpp)
+add_library(SparkLegacyModuleFixture SHARED
+    Fixtures/ModuleABI/LegacyModule.cpp)
 add_library(SparkModuleSiblingDependency SHARED
     Fixtures/ModuleABI/SiblingDependency.cpp)
 add_library(SparkSiblingDependentModuleFixture SHARED
     Fixtures/ModuleABI/SiblingDependentModule.cpp)
 
-foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkCompatibleModuleFixture)
+foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkCompatibleModuleFixture SparkLegacyModuleFixture)
     target_compile_features(${_module_fixture} PRIVATE cxx_std_23)
     target_compile_definitions(${_module_fixture} PRIVATE SPARK_MODULE_DLL)
     target_include_directories(${_module_fixture} PRIVATE
@@ -723,6 +725,9 @@ foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkCompatibleMod
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
 endforeach()
+
+target_include_directories(SparkLegacyModuleFixture PRIVATE
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
 
 target_compile_features(SparkModuleSiblingDependency PRIVATE cxx_std_23)
 target_compile_features(SparkSiblingDependentModuleFixture PRIVATE cxx_std_23)
@@ -755,13 +760,15 @@ math(EXPR SPARK_TEST_MISMATCHED_SDK_VERSION
 spark_configure_module_abi(SparkMismatchedModuleFixture
     SDK_VERSION "${SPARK_TEST_MISMATCHED_SDK_VERSION}")
 spark_configure_module_abi(SparkCompatibleModuleFixture)
+spark_configure_module_abi(SparkLegacyModuleFixture)
 spark_configure_module_abi(SparkSiblingDependentModuleFixture)
 
-add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture
+add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture SparkLegacyModuleFixture
     SparkSiblingDependentModuleFixture)
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_MISMATCHED_MODULE_PATH="$<TARGET_FILE:SparkMismatchedModuleFixture>"
     SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>"
+    SPARK_TEST_LEGACY_MODULE_PATH="$<TARGET_FILE:SparkLegacyModuleFixture>"
     SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH="$<TARGET_FILE:SparkSiblingDependentModuleFixture>")
 
 if(TARGET SparkGame AND NOT WIN32)

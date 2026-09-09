@@ -12,19 +12,18 @@
 #include "Core/ModuleManager.h"
 #include <Spark/Version.h>
 
-#include <array>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <string_view>
 
-#ifdef _WIN32
-#include <bcrypt.h>
-#endif
-
 #ifndef SPARK_TEST_COMPATIBLE_MODULE_PATH
 #error SPARK_TEST_COMPATIBLE_MODULE_PATH must name the compatible module fixture
+#endif
+
+#ifndef SPARK_TEST_LEGACY_MODULE_PATH
+#error SPARK_TEST_LEGACY_MODULE_PATH must name the legacy module fixture
 #endif
 
 namespace
@@ -137,89 +136,6 @@ namespace
                                    std::filesystem::copy_options::overwrite_existing, ec);
         return !ec;
     }
-
-#ifdef _WIN32
-    /** @brief Real dual-ABI FPS image, used as a legacy-only adapter fixture after scratch-copy export masking. */
-    std::filesystem::path LegacyAdapterFixturePath()
-    {
-        const std::filesystem::path compatibleFixture = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
-        std::filesystem::path legacyFixture = compatibleFixture.parent_path() / "SparkGameFPS";
-        legacyFixture += compatibleFixture.extension();
-        return legacyFixture;
-    }
-
-    bool CopyModuleImage(const std::filesystem::path& source, const std::filesystem::path& destination)
-    {
-        std::error_code ec;
-        std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing, ec);
-        if (ec)
-            return false;
-        std::filesystem::copy_file(SidecarPath(source), SidecarPath(destination),
-                                   std::filesystem::copy_options::overwrite_existing, ec);
-        return !ec;
-    }
-
-    /** @brief Make a scratch copy select the real CreateGameModule exports without changing the source image. */
-    bool HideNewStyleCreateExport(const std::filesystem::path& modulePath)
-    {
-        std::fstream image(modulePath, std::ios::in | std::ios::out | std::ios::binary);
-        if (!image)
-            return false;
-
-        const std::string exportName = "CreateModule";
-        std::string bytes((std::istreambuf_iterator<char>(image)), std::istreambuf_iterator<char>());
-        const size_t offset = bytes.find(exportName);
-        if (offset == std::string::npos)
-            return false;
-
-        image.clear();
-        // Keep the PE export-name table sorted: CreateGameModule < CreateZodule < DestroyModule.
-        // Changing its first letter would make GetProcAddress binary search miss later exports.
-        image.seekp(static_cast<std::streamoff>(offset + std::string_view("Create").size()));
-        image.put('Z');
-        if (!image)
-            return false;
-
-        image.close();
-        std::ifstream module(modulePath, std::ios::binary);
-        const std::string moduleBytes((std::istreambuf_iterator<char>(module)), std::istreambuf_iterator<char>());
-        if (!module)
-            return false;
-
-        BCRYPT_ALG_HANDLE algorithm = nullptr;
-        if (BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) < 0)
-            return false;
-        std::array<UCHAR, 32> hash{};
-        const NTSTATUS hashStatus = BCryptHash(algorithm, nullptr, 0,
-                                               reinterpret_cast<PUCHAR>(const_cast<char*>(moduleBytes.data())),
-                                               static_cast<ULONG>(moduleBytes.size()), hash.data(),
-                                               static_cast<ULONG>(hash.size()));
-        BCryptCloseAlgorithmProvider(algorithm, 0);
-        if (hashStatus < 0)
-            return false;
-
-        static constexpr char hexDigits[] = "0123456789abcdef";
-        std::string hashText;
-        hashText.reserve(hash.size() * 2);
-        for (const UCHAR byte : hash)
-        {
-            hashText.push_back(hexDigits[byte >> 4]);
-            hashText.push_back(hexDigits[byte & 0x0f]);
-        }
-
-        const std::filesystem::path sidecarPath = SidecarPath(modulePath);
-        std::ifstream sidecarIn(sidecarPath, std::ios::binary);
-        std::string sidecar((std::istreambuf_iterator<char>(sidecarIn)), std::istreambuf_iterator<char>());
-        const size_t hashOffset = sidecar.find("binary_sha256=");
-        if (!sidecarIn || hashOffset == std::string::npos)
-            return false;
-        sidecar.replace(hashOffset + std::string_view("binary_sha256=").size(), hashText.size(), hashText);
-
-        std::ofstream sidecarOut(sidecarPath, std::ios::binary | std::ios::trunc);
-        sidecarOut.write(sidecar.data(), static_cast<std::streamsize>(sidecar.size()));
-        return static_cast<bool>(sidecarOut);
-    }
-#endif
 
     /** @brief The module filename this host does NOT build, for the same fixture stem. */
     std::string ForeignPlatformModuleFilename()
@@ -368,29 +284,38 @@ TEST(ModuleLifecycle_RecordsFailedNewStyleModuleInitialization)
     manager.UnloadAll();
 }
 
-#ifdef _WIN32
-TEST(ModuleLifecycle_LegacyAdapterNeverCreatesLifecycleRecord)
+TEST(ModuleLegacyAdapter_SuccessCreatesNoLifecycleRecord)
 {
-    const std::filesystem::path directory = MakeScratchDirectory("SparkModuleLifecycleLegacyAdapter");
-    const std::filesystem::path source = LegacyAdapterFixturePath();
-    std::filesystem::path legacyPath = directory / source.filename();
-    ASSERT_TRUE(CopyModuleImage(source, legacyPath));
-    ASSERT_TRUE(HideNewStyleCreateExport(legacyPath));
+    const ScopedModuleEnvironment failOnLoad("SPARK_LEGACY_MODULE_FAIL_ON_LOAD", false);
 
     NullEngineContext context;
     ModuleManager manager;
-    ASSERT_TRUE(manager.LoadModule(PathToUtf8(legacyPath)));
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_LEGACY_MODULE_PATH));
     manager.InitializeAll(&context);
+    ASSERT_TRUE(manager.HasInitializedModules());
     manager.UpdateAll(1.0F / 60.0F);
     manager.FixedUpdateAll(1.0F / 60.0F);
     manager.RenderAll();
+    ASSERT_TRUE(manager.ShutdownAll());
     manager.UnloadAll();
 
     const auto evidence = manager.GetLifecycleEvidence();
-    EXPECT_EQ(evidence.FindModule("Spark Arena"), nullptr);
+    EXPECT_EQ(evidence.FindModule("Spark Legacy Adapter Fixture"), nullptr);
     EXPECT_TRUE(evidence.modules.empty());
-
-    std::error_code ec;
-    std::filesystem::remove_all(directory, ec);
 }
-#endif
+
+TEST(ModuleLegacyAdapter_FailedLoadCleanupCreatesNoLifecycleRecord)
+{
+    const ScopedModuleEnvironment failOnLoad("SPARK_LEGACY_MODULE_FAIL_ON_LOAD", true);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_LEGACY_MODULE_PATH));
+    manager.InitializeAll(&context);
+    EXPECT_FALSE(manager.HasInitializedModules());
+    manager.UnloadAll();
+
+    const auto evidence = manager.GetLifecycleEvidence();
+    EXPECT_EQ(evidence.FindModule("Spark Legacy Adapter Fixture"), nullptr);
+    EXPECT_TRUE(evidence.modules.empty());
+}
