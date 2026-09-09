@@ -113,12 +113,14 @@ def lexical_absolute_no_follow_path(
     return Path(os.path.abspath(raw))
 
 
-def _classify_no_follow_read_os_error(path: Path | str, exc: OSError) -> StrictJSONError:
-    """Classify only a genuine no-follow leaf absence as downgradeable.
+def _classify_no_follow_leaf_open_error(path: Path | str, exc: OSError) -> StrictJSONError:
+    """Classify an error from opening only the fixed final evidence leaf.
 
     ``NtCreateFile`` reports missing names as NTSTATUS rather than a Win32
     ``errno``.  Keep that mapping here alongside POSIX ``ENOENT`` so lifecycle
-    callers get a structured result instead of parsing messages.
+    callers get a structured result instead of parsing messages.  Callers must
+    never use this for root/ancestor, held-file, or read failures: those are
+    authority failures even when their platform error code resembles absence.
     """
     status = getattr(exc, "status", None)
     if isinstance(status, int) and (status & 0xFFFFFFFF) in {
@@ -295,6 +297,7 @@ def _read_file_no_follow_posix(path: Path | str, max_bytes: int) -> bytes:
     close_fds: list[int] = []
     data: bytes | None = None
     failure: StrictJSONError | None = None
+    operation = "root or ancestor open"
     try:
         root_flags = os.O_RDONLY | directory | no_follow | getattr(os, "O_CLOEXEC", 0)
         current_fd = os.open(os.path.sep, root_flags)
@@ -312,8 +315,10 @@ def _read_file_no_follow_posix(path: Path | str, max_bytes: int) -> bytes:
                 )
         leaf_flags = os.O_RDONLY | no_follow | getattr(os, "O_CLOEXEC", 0)
         leaf_flags |= getattr(os, "O_NONBLOCK", 0)
+        operation = "final lifecycle evidence leaf open"
         leaf_fd = os.open(components[-1], leaf_flags, dir_fd=current_fd)
         close_fds.append(leaf_fd)
+        operation = "held lifecycle evidence leaf inspection or read"
         before = _posix_snapshot(leaf_fd)
         if not stat.S_ISREG(before[2]):
             raise StrictJSONError("unsafe lifecycle evidence leaf is not a regular file")
@@ -330,7 +335,12 @@ def _read_file_no_follow_posix(path: Path | str, max_bytes: int) -> bytes:
     except StrictJSONError as exc:
         failure = exc
     except OSError as exc:
-        failure = _classify_no_follow_read_os_error(path, exc)
+        if operation == "final lifecycle evidence leaf open":
+            failure = _classify_no_follow_leaf_open_error(path, exc)
+        else:
+            failure = NoFollowAuthorityError(
+                f"unsafe no-follow lifecycle evidence {operation} for {path}: {exc}"
+            )
     finally:
         close_errors: list[str] = []
         for fd in reversed(close_fds):
@@ -452,6 +462,7 @@ if os.name == "nt":
         handles: list[int] = []
         data: bytes | None = None
         failure: StrictJSONError | None = None
+        operation = "root or ancestor open"
         try:
             root_handle = _CreateFileW(  # type: ignore[name-defined]
                 drive + "\\", _FILE_LIST_DIRECTORY | _FILE_READ_ATTRIBUTES | _SYNCHRONIZE,
@@ -483,6 +494,7 @@ if os.name == "nt":
                     raise StrictJSONError(
                         f"unsafe lifecycle evidence ancestor {component!r} is a reparse point or non-directory"
                     )
+            operation = "final lifecycle evidence leaf open"
             leaf_handle = _windows_open_relative_no_follow(
                 current_handle, components[-1],
                 _GENERIC_READ | _FILE_READ_ATTRIBUTES,
@@ -490,6 +502,7 @@ if os.name == "nt":
                 _FILE_NON_DIRECTORY_FILE | _FILE_FLAG_OPEN_REPARSE_POINT,
             )
             handles.append(leaf_handle)
+            operation = "held lifecycle evidence leaf inspection or read"
             before = _windows_file_snapshot(leaf_handle)
             if before[4] & (_FILE_ATTRIBUTE_REPARSE_POINT | _FILE_ATTRIBUTE_DIRECTORY):
                 raise StrictJSONError("unsafe lifecycle evidence leaf is a reparse point or directory")
@@ -506,7 +519,12 @@ if os.name == "nt":
         except StrictJSONError as exc:
             failure = exc
         except OSError as exc:
-            failure = _classify_no_follow_read_os_error(path, exc)
+            if operation == "final lifecycle evidence leaf open":
+                failure = _classify_no_follow_leaf_open_error(path, exc)
+            else:
+                failure = NoFollowAuthorityError(
+                    f"unsafe no-follow lifecycle evidence {operation} for {path}: {exc}"
+                )
         finally:
             close_errors: list[str] = []
             for handle in reversed(handles):

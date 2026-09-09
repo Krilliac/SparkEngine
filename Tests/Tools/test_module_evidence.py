@@ -711,6 +711,12 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             "a missing lifecycle leaf was misclassified as a fatal rejection",
         )
 
+    def test_loader_classifies_missing_ancestor_as_fatal_authority(self) -> None:
+        """A vanished parent is not evidence that only the final leaf is absent."""
+        missing = self.repo / "missing-lifecycle-parent" / "module-lifecycle.json"
+        with self.assertRaises(lifecycle_mod.LifecycleEvidenceAuthorityError):
+            lifecycle_mod.load_lifecycle_evidence(missing)
+
     def test_loader_classifies_malformed_present_evidence_as_fatal_rejection(self) -> None:
         path = self.repo / "malformed-lifecycle-evidence.json"
         path.write_text("{not valid JSON", encoding="utf-8")
@@ -981,6 +987,26 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         self.assertEqual(result, 0, stderr.getvalue())
         self.assertIn("KNOWN GAP: lifecycle-log", stderr.getvalue())
         self.assertIn("INCOMPLETE:", stdout.getvalue())
+
+    def test_main_rejects_missing_explicit_lifecycle_ancestor_even_with_a_declared_gap(self) -> None:
+        """Only the fixed leaf, never its parent chain, is a downgradeable gap."""
+        root = self.repo / "cli-missing-ancestor-root"
+        _sha, _evidence_path, manifest_path = self._prepare_cli_evidence_root(root)
+        gap_ledger = self._write_cli_lifecycle_gap_ledger("missing-ancestor")
+        missing = root / "missing-lifecycle-parent" / "module-lifecycle.json"
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(root),
+            "--manifest", str(manifest_path),
+            "--lifecycle-evidence", str(missing),
+            "--allow-declared-gaps", str(gap_ledger),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertNotEqual(result, 0)
+        self.assertIn("FATAL:", stderr.getvalue())
+        self.assertNotIn("KNOWN GAP:", stderr.getvalue())
 
     def test_main_rejects_repo_root_dot_segment_before_default_loader(self) -> None:
         """A root alias cannot be normalized before default evidence composition."""
