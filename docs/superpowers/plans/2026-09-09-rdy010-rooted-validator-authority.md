@@ -90,4 +90,10 @@ target/lifecycle/artifact consumers, rooted Ubuntu contract/source/Git reads,
 Ubuntu-only positive authority, Windows fail-closed positive validation, and
 cross-platform regressions. The remaining RDY-010 blocker is the required
 same-workflow exact-SHA CI producer; this plan does not claim that hosted
-evidence exists.
+evidence exists. Git metadata remains a runner-owned immutable control-plane
+precondition: the rooted Git launch rejects environment and static external
+metadata indirection, but cannot turn Git's own internal child-path lookups
+into descriptor capabilities. Positive lifecycle validation therefore requires
+an externally injected expected SHA and a protected Ubuntu job that owns the
+checkout, `.git` metadata/config/refs/objects, Git executable/PATH, and process
+environment for its full validation epoch.

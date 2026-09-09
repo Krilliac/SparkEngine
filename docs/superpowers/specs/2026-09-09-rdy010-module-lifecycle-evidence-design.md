@@ -33,6 +33,19 @@ because Git cannot consume a directory HANDLE as a working-directory
 capability; Windows remains available for collection, policy-only, and
 incomplete-gap checks.
 
+The Ubuntu Git subprocess starts from an inherited root descriptor and clears
+all `GIT_*` environment overrides while rejecting static gitdir, commondir, and
+alternates indirection. Git's internal child metadata lookups are nevertheless
+Git pathname operations, not descriptor-capability operations; `.git` metadata
+is therefore a runner-owned immutable control-plane precondition. The
+adversarial no-follow guarantee covers produced evidence and committed policy
+paths below the root, not a hostile concurrent writer mutating Git metadata.
+A positive result additionally requires `--expected-sha` or CI `GITHUB_SHA`;
+the protected Ubuntu release job owns the checkout, `.git` metadata/config,
+refs, objects, Git executable/PATH, and process environment for the validation
+epoch. This is not CI-120 producer authority: same-workflow provenance remains
+an open release blocker until externally attested evidence exists.
+
 ## Scope and non-goals
 
 In scope:
