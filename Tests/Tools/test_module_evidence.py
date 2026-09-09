@@ -4620,6 +4620,20 @@ class TestEvidenceGapLedger(FixtureCase):
         self.assertEqual(self._load([self._valid_gap()]),
                          {"lifecycle-log": "RDY-010"})
 
+    def test_repository_owned_ledger_comment_uses_contract_limits(self) -> None:
+        """Readiness prose may exceed artifact-string limits without weakening schema."""
+        from validate_manifest import load_declared_gaps
+        path = self.repo / "long-comment-gaps.json"
+        path.write_text(json.dumps({
+            "schemaVersion": "evidence-gaps-v1",
+            "comment": "x" * 600,
+            "gaps": [self._valid_gap()],
+        }), encoding="utf-8")
+        self.assertEqual(
+            load_declared_gaps(path, {"RDY-010"}),
+            {"lifecycle-log": "RDY-010"},
+        )
+
     def test_shipped_ledger_retains_only_unimplemented_lifecycle_independent_gaps(self) -> None:
         from schema import load_known_work_item_ids
         from validate_manifest import load_declared_gaps

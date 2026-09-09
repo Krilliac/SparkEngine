@@ -955,7 +955,9 @@ def load_declared_gaps_bytes(
     except UnicodeDecodeError as exc:
         raise ManifestError(f"{origin}: gap ledger is not UTF-8: {exc}") from exc
     try:
-        document = strict_json.loads(text, origin=origin)
+        document = strict_json.loads(
+            text, origin=origin, limits=strict_json.CONTRACT_LIMITS,
+        )
     except strict_json.StrictJSONError as exc:
         raise ManifestError(str(exc)) from exc
     return _validate_declared_gaps_document(document, origin, known_work_items)
@@ -965,7 +967,7 @@ def load_declared_gaps(path: Path, known_work_items: set[str]) -> dict[str, str]
     """Load a standalone declared-gap ledger through no-follow bytes."""
     try:
         data = strict_json.read_file_no_follow_bytes(
-            path, max_bytes=strict_json.DEFAULT_LIMITS.document_bytes,
+            path, max_bytes=strict_json.CONTRACT_LIMITS.document_bytes,
         )
     except strict_json.StrictJSONError as exc:
         raise ManifestError(str(exc)) from exc
