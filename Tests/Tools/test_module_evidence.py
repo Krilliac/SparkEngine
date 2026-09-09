@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import os
@@ -266,6 +266,34 @@ class FakeOutputDirectoryLease:
         return self.identity, self.attributes
 
     def close(self) -> None:
+        self.closed = True
+
+
+class FakeOutputArtifact:
+    """A test-only fixed-leaf authority used by explicit collector test seams."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.closed = False
+
+    def duplicate(self) -> FakeOutputArtifact:
+        if self.closed:
+            raise OSError("attempted to duplicate a closed fake output artifact")
+        return FakeOutputArtifact(self.path)
+
+    def verify(self, expected_path: Path) -> None:
+        if self.closed:
+            raise OSError("attempted to verify a closed fake output artifact")
+        if self.path != expected_path or not self.path.is_file():
+            raise OSError("fake output artifact no longer names its fixed leaf")
+
+    def close(self) -> None:
+        self.closed = True
+
+    def discard(self) -> None:
+        if self.closed:
+            return
+        self.path.unlink(missing_ok=True)
         self.closed = True
 
 
@@ -925,7 +953,9 @@ class TestLifecycleCollector(FixtureCase):
         ]
 
     def _run_truthful_collector_main(
-        self, argv: list[str], *extra_patches: object
+        self, argv: list[str], *extra_patches: object,
+        output_operations: object | None = None,
+        use_production_output_operations: bool = False,
     ) -> int:
         """Run main's real publication path while isolating the engine process."""
         import collect_lifecycle
@@ -956,9 +986,14 @@ class TestLifecycleCollector(FixtureCase):
                 image=manifest_bytes,
             )
 
+        if output_operations is None and not use_production_output_operations:
+            output_operations = self._fake_output_publication_operations(out)
+
         with ExitStack() as stack:
             stack.enter_context(mock.patch.object(sys, "argv", argv))
-            stack.enter_context(mock.patch("collect_lifecycle.os.name", "nt"))
+            stack.enter_context(mock.patch(
+                "collect_lifecycle._stable_v1_windows_platform", return_value=True,
+            ))
             stack.enter_context(mock.patch("collect_lifecycle.REPO_ROOT", self.repo))
             stack.enter_context(mock.patch(
                 "collect_lifecycle.resolve_head_sha", return_value=(self.sha, None),
@@ -983,6 +1018,11 @@ class TestLifecycleCollector(FixtureCase):
                 "collect_lifecycle.open_image_lease",
                 side_effect=manifest_lease_factory,
             ))
+            if output_operations is not None:
+                stack.enter_context(mock.patch(
+                    "collect_lifecycle._output_publication_operations_for_main",
+                    return_value=output_operations,
+                ))
             for patch in extra_patches:
                 stack.enter_context(patch)
             return collect_lifecycle.main()
@@ -1031,6 +1071,162 @@ class TestLifecycleCollector(FixtureCase):
 
         return leases, factory
 
+    def _fake_output_publication_operations(
+        self, out: Path, *,
+        lease_factory: Any | None = None,
+    ) -> object:
+        """Build an explicit test-only replacement for native output authority."""
+        import collect_lifecycle
+
+        if lease_factory is None:
+            _leases, lease_factory = self._fake_output_namespace_factory(out)
+
+        def validate_directory(directory: object) -> object:
+            if not isinstance(directory, FakeOutputDirectoryLease) or directory.closed:
+                raise OSError("test output authority is not a live fake directory lease")
+            return directory
+
+        def clear(directory: object, *paths: Path) -> str | None:
+            validate_directory(directory)
+            for path in paths:
+                path.unlink(missing_ok=True)
+            return None
+
+        def write(directory: object, final_path: Path, content: str) -> FakeOutputArtifact:
+            validate_directory(directory)
+            if final_path.parent != out.parent or final_path.name not in {
+                collect_lifecycle.LIFECYCLE_OUTPUT_FILENAME,
+                collect_lifecycle.LIFECYCLE_AUDIT_LOG_FILENAME,
+            }:
+                raise OSError("test output authority rejected a non-fixed output leaf")
+            final_path.write_text(content, encoding="utf-8")
+            return FakeOutputArtifact(final_path)
+
+        def discard(artifacts: list[FakeOutputArtifact]) -> str | None:
+            errors: list[str] = []
+            for artifact in reversed(artifacts):
+                try:
+                    artifact.discard()
+                except OSError as exc:
+                    errors.append(str(exc))
+            return "; ".join(errors) if errors else None
+
+        def close_in_order(artifacts: list[FakeOutputArtifact]) -> str | None:
+            for artifact in artifacts:
+                try:
+                    artifact.close()
+                except OSError as exc:
+                    return str(exc)
+            return None
+
+        def finalize_reserves(artifacts: list[FakeOutputArtifact]) -> str | None:
+            """Tests release fake reserves synchronously; production cannot."""
+            return close_in_order(artifacts)
+
+        return collect_lifecycle.OutputPublicationOperations(
+            lease_factory=lease_factory,
+            open_namespace=lambda root, directory: (
+                collect_lifecycle._open_output_namespace_leases(
+                    root, directory, lease_factory=lease_factory,
+                )
+            ),
+            validate_directory=validate_directory,
+            clear=clear,
+            write=write,
+            discard=discard,
+            close_in_order=close_in_order,
+            finalize_reserves=finalize_reserves,
+        )
+
+    def test_main_allows_explicit_fake_output_operations_without_native_bindings(self) -> None:
+        """Only a supplied test provider may replace unavailable native output authority."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("explicit-fake-output-operations")
+        operations = self._fake_output_publication_operations(out)
+        with mock.patch(
+            "collect_lifecycle.WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE", False,
+        ), mock.patch(
+            "collect_lifecycle.open_output_directory_lease",
+            side_effect=AssertionError("production native output factory was invoked"),
+        ):
+            self.assertEqual(self._run_truthful_collector_main(
+                argv, output_operations=operations,
+            ), 0)
+        self.assertTrue(out.is_file())
+        self.assertTrue((out.parent / "module-lifecycle-SparkGameFPS.log").is_file())
+
+    def test_main_rejects_unavailable_native_output_operations_without_test_provider(self) -> None:
+        """The production provider must fail closed when native output bindings are absent."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("unavailable-native-output-operations")
+        with mock.patch(
+            "collect_lifecycle.WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE", False,
+        ), mock.patch("collect_lifecycle.run_engine") as child:
+            self.assertEqual(self._run_truthful_collector_main(
+                argv, use_production_output_operations=True,
+            ), 1)
+        child.assert_not_called()
+        self._assert_no_transaction_artifacts(out)
+
+    def test_main_removes_both_leaves_when_reserve_handoff_fails(self) -> None:
+        """A pre-handoff reserve failure retains both exact leaves for rollback."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("late-retained-backup-close")
+        base = self._fake_output_publication_operations(out)
+        close_calls = 0
+
+        def fail_reserve_handoff(artifacts: list[FakeOutputArtifact]) -> str | None:
+            nonlocal close_calls
+            close_calls += 1
+            self.assertTrue(all(not artifact.closed for artifact in artifacts))
+            return "injected reserve handoff failure"
+
+        operations = collect_lifecycle.OutputPublicationOperations(
+            lease_factory=base.lease_factory,
+            open_namespace=base.open_namespace,
+            validate_directory=base.validate_directory,
+            clear=base.clear,
+            write=base.write,
+            discard=base.discard,
+            close_in_order=base.close_in_order,
+            finalize_reserves=fail_reserve_handoff,
+        )
+        with mock.patch(
+            "collect_lifecycle.WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE", False,
+        ):
+            self.assertEqual(self._run_truthful_collector_main(
+                argv, output_operations=operations,
+            ), 1)
+        self.assertEqual(close_calls, 1)
+        self._assert_no_transaction_artifacts(out)
+
+    def test_main_removes_both_leaves_when_primary_close_fails_after_release(self) -> None:
+        """Backup guards roll back both leaves after post-release primary close failure."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("primary-close-after-release")
+        leases, factory = self._fake_output_namespace_factory(out)
+        base = self._fake_output_publication_operations(out, lease_factory=factory)
+        close_calls = 0
+
+        def fail_primary_close(artifacts: list[FakeOutputArtifact]) -> str | None:
+            nonlocal close_calls
+            close_calls += 1
+            self.assertTrue(all(lease.closed for lease in leases))
+            self.assertTrue(all(not artifact.closed for artifact in artifacts))
+            return "injected post-release primary close failure"
+
+        operations = replace(base, close_in_order=fail_primary_close)
+        self.assertEqual(self._run_truthful_collector_main(
+            argv, output_operations=operations,
+        ), 1)
+        self.assertEqual(close_calls, 1)
+        self.assertTrue(all(lease.closed for lease in leases))
+        self._assert_no_transaction_artifacts(out)
+
     def test_main_cleans_all_transaction_artifacts_after_transient_stale_unlink_failure(
         self,
     ) -> None:
@@ -1041,7 +1237,8 @@ class TestLifecycleCollector(FixtureCase):
         log = out.parent / "module-lifecycle-SparkGameFPS.log"
         out.write_text("stale-json", encoding="utf-8")
         log.write_text("stale-log", encoding="utf-8")
-        real_clear = collect_lifecycle._clear_output_artifacts
+        base = self._fake_output_publication_operations(out)
+        real_clear = base.clear
         failed_once = False
 
         def fail_only_the_initial_clear(directory, *paths):
@@ -1051,11 +1248,10 @@ class TestLifecycleCollector(FixtureCase):
                 return "injected stale JSON handle-delete failure"
             return real_clear(directory, *paths)
 
-        with mock.patch(
-            "collect_lifecycle._clear_output_artifacts",
-            side_effect=fail_only_the_initial_clear,
-        ):
-            self.assertEqual(self._run_truthful_collector_main(argv), 1)
+        operations = replace(base, clear=fail_only_the_initial_clear)
+        self.assertEqual(self._run_truthful_collector_main(
+            argv, output_operations=operations,
+        ), 1)
         self.assertTrue(failed_once, "the stale-clear failure injection was not exercised")
         self._assert_no_transaction_artifacts(out)
 
@@ -1081,7 +1277,8 @@ class TestLifecycleCollector(FixtureCase):
         for ordinal in (1, 2):
             with self.subTest(failure=f"direct-write-{ordinal}"):
                 out, argv = self._collector_main_fixture(f"publish-direct-write-{ordinal}")
-                real_write_output = collect_lifecycle._write_output_artifact
+                base = self._fake_output_publication_operations(out)
+                real_write_output = base.write
 
                 def fail_write_output(directory, final_path, content):
                     fail_write_output.call_count += 1
@@ -1091,10 +1288,7 @@ class TestLifecycleCollector(FixtureCase):
 
                 fail_write_output.call_count = 0
                 self.assertEqual(self._run_truthful_collector_main(
-                    argv, mock.patch(
-                        "collect_lifecycle._write_output_artifact",
-                        side_effect=fail_write_output,
-                    ),
+                    argv, output_operations=replace(base, write=fail_write_output),
                 ), 1)
                 self.assertEqual(fail_write_output.call_count, ordinal)
                 self._assert_no_transaction_artifacts(out)
@@ -1102,36 +1296,30 @@ class TestLifecycleCollector(FixtureCase):
     def test_main_cleans_all_transaction_artifacts_after_direct_writer_failures(
         self,
     ) -> None:
-        """Native write/flush/close failures cannot leave a direct final leaf."""
-        import collect_lifecycle
+        """Write, flush, or writer-close failures cannot leave a direct final leaf."""
 
         for phase in ("write", "flush", "close"):
             with self.subTest(phase=phase):
                 out, argv = self._collector_main_fixture(f"temp-{phase}")
-                if phase == "close":
-                    real_close = collect_lifecycle.OutputArtifactHandle.close
+                base = self._fake_output_publication_operations(out)
+                write_calls = 0
 
-                    def fail_first_close(artifact):
-                        if not getattr(fail_first_close, "failed", False):
-                            fail_first_close.failed = True
-                            raise OSError("injected direct writer close failure")
-                        return real_close(artifact)
+                def fail_at_direct_writer_boundary(directory, final_path, content):
+                    nonlocal write_calls
+                    write_calls += 1
+                    if phase == "write":
+                        raise OSError("injected direct writer write failure")
+                    artifact = base.write(directory, final_path, content)
+                    if phase == "flush":
+                        raise OSError("injected direct writer flush failure")
+                    raise OSError("injected direct writer close failure")
 
-                    failure = mock.patch(
-                        "collect_lifecycle.OutputArtifactHandle.close",
-                        autospec=True,
-                        side_effect=fail_first_close,
-                    )
-                else:
-                    target = (
-                        "collect_lifecycle._WriteFile"
-                        if phase == "write"
-                        else "collect_lifecycle._FlushFileBuffers"
-                    )
-                    failure = mock.patch(target, return_value=False)
                 self.assertEqual(self._run_truthful_collector_main(
-                    argv, failure,
+                    argv, output_operations=replace(
+                        base, write=fail_at_direct_writer_boundary,
+                    ),
                 ), 1)
+                self.assertEqual(write_calls, 1)
                 self._assert_no_transaction_artifacts(out)
 
     def test_write_temp_closes_descriptor_when_fdopen_never_takes_ownership(self) -> None:
@@ -1215,7 +1403,7 @@ class TestLifecycleCollector(FixtureCase):
                     manifest: manifest.read_bytes(),
                 }
                 with mock.patch.object(sys, "argv", argv), \
-                     mock.patch("collect_lifecycle.os.name", "nt"), \
+                     mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
                      mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
                      mock.patch("collect_lifecycle.resolve_head_sha",
                                 return_value=(self.sha, None)), \
@@ -1239,22 +1427,21 @@ class TestLifecycleCollector(FixtureCase):
         out.write_text("protected-json", encoding="utf-8")
         log.write_text("protected-log", encoding="utf-8")
 
-        def synthetic_reparse(path: Path) -> bool:
-            return path == out.parent
-
-        with mock.patch.object(sys, "argv", argv), \
-             mock.patch("collect_lifecycle.os.name", "nt"), \
-             mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
-             mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
-             mock.patch("collect_lifecycle.paths_mod._is_reparse_point",
-                        side_effect=synthetic_reparse), \
-             mock.patch("collect_lifecycle._clear_output_artifacts",
-                        wraps=collect_lifecycle._clear_output_artifacts) as clear, \
-             mock.patch("collect_lifecycle.run_engine") as child:
-            self.assertEqual(collect_lifecycle.main(), 1)
+        leases, factory = self._fake_output_namespace_factory(
+            out,
+            output_attributes=(collect_lifecycle._FILE_ATTRIBUTE_DIRECTORY |
+                               collect_lifecycle._FILE_ATTRIBUTE_REPARSE_POINT),
+        )
+        base = self._fake_output_publication_operations(out, lease_factory=factory)
+        clear = mock.Mock(wraps=base.clear)
+        operations = replace(base, clear=clear)
+        child = mock.patch("collect_lifecycle.run_engine")
+        self.assertEqual(self._run_truthful_collector_main(
+            argv, child, output_operations=operations,
+        ), 1)
 
         clear.assert_not_called()
-        child.assert_not_called()
+        self.assertTrue(all(lease.closed for lease in leases))
         self.assertEqual(out.read_text(encoding="utf-8"), "protected-json")
         self.assertEqual(log.read_text(encoding="utf-8"), "protected-log")
 
@@ -1282,15 +1469,13 @@ class TestLifecycleCollector(FixtureCase):
                     output_final_path=final_path,
                     identity_base=1000,
                 )
-                with mock.patch(
-                    "collect_lifecycle._clear_output_artifacts",
-                    wraps=collect_lifecycle._clear_output_artifacts,
-                ) as clear:
-                    self.assertEqual(self._run_truthful_collector_main(
-                        argv,
-                        mock.patch("collect_lifecycle.open_output_directory_lease",
-                                   side_effect=factory),
-                    ), 1)
+                base = self._fake_output_publication_operations(
+                    out, lease_factory=factory,
+                )
+                clear = mock.Mock(wraps=base.clear)
+                self.assertEqual(self._run_truthful_collector_main(
+                    argv, output_operations=replace(base, clear=clear),
+                ), 1)
                 clear.assert_not_called()
                 self.assertTrue(all(lease.closed for lease in leases))
                 self.assertEqual(out.read_text(encoding="utf-8"), "protected-json")
@@ -1301,17 +1486,12 @@ class TestLifecycleCollector(FixtureCase):
         import collect_lifecycle
 
         out, argv = self._collector_main_fixture("output-lease-lifetime")
-        native_factory = collect_lifecycle.open_output_directory_lease
-        leases: list[collect_lifecycle.OutputDirectoryLease] = []
+        leases, factory = self._fake_output_namespace_factory(out)
         events: list[str] = []
         written_paths: list[Path] = []
-        real_clear = collect_lifecycle._clear_output_artifacts
-        real_write = collect_lifecycle._write_output_artifact
-
-        def output_factory(path: Path):
-            lease = native_factory(path)
-            leases.append(lease)
-            return lease
+        base = self._fake_output_publication_operations(out, lease_factory=factory)
+        real_clear = base.clear
+        real_write = base.write
 
         def observe_clear(directory, *paths: Path) -> str | None:
             self.assertTrue(all(not lease.closed for lease in leases),
@@ -1331,14 +1511,30 @@ class TestLifecycleCollector(FixtureCase):
             written_paths.append(final_path)
             return real_write(directory, final_path, content)
 
+        def observe_primary_close(artifacts: list[FakeOutputArtifact]) -> str | None:
+            self.assertTrue(all(lease.closed for lease in leases),
+                            "a final leaf guard closed before namespace release")
+            events.append("close-primary")
+            return base.close_in_order(artifacts)
+
+        def observe_reserve_finalize(artifacts: list[FakeOutputArtifact]) -> str | None:
+            self.assertTrue(all(lease.closed for lease in leases),
+                            "a reserve finalized before namespace release")
+            events.append("finalize-reserves")
+            return base.finalize_reserves(artifacts)
+
         self.assertEqual(self._run_truthful_collector_main(
             argv,
-            mock.patch("collect_lifecycle.open_output_directory_lease",
-                       side_effect=output_factory),
-            mock.patch("collect_lifecycle._clear_output_artifacts", side_effect=observe_clear),
-            mock.patch("collect_lifecycle._write_output_artifact", side_effect=observe_write),
+            output_operations=replace(
+                base, clear=observe_clear, write=observe_write,
+                close_in_order=observe_primary_close,
+                finalize_reserves=observe_reserve_finalize,
+            ),
         ), 0)
-        self.assertEqual(events, ["clear", "write", "write"])
+        self.assertEqual(
+            events,
+            ["clear", "write", "write", "close-primary", "finalize-reserves"],
+        )
         self.assertEqual(
             written_paths,
             [out.parent / "module-lifecycle-SparkGameFPS.log", out],
@@ -1351,27 +1547,21 @@ class TestLifecycleCollector(FixtureCase):
         import collect_lifecycle
 
         out, argv = self._collector_main_fixture("output-anchor-close-failure")
-        native_factory = collect_lifecycle.open_output_directory_lease
-        leases: list[collect_lifecycle.OutputDirectoryLease] = []
+        leases, factory = self._fake_output_namespace_factory(out)
         close_failures = 0
         clear_calls = 0
-        real_clear = collect_lifecycle._clear_output_artifacts
+        base = self._fake_output_publication_operations(out, lease_factory=factory)
+        real_clear = base.clear
+        original_close = leases[-1].close
 
-        def output_factory(path: Path):
-            lease = native_factory(path)
-            leases.append(lease)
-            if path == out.parent:
-                original_close = lease.close
+        def fail_once() -> None:
+            nonlocal close_failures
+            if close_failures == 0:
+                close_failures += 1
+                raise OSError("injected output-anchor close failure")
+            original_close()
 
-                def fail_once() -> None:
-                    nonlocal close_failures
-                    if close_failures == 0:
-                        close_failures += 1
-                        raise OSError("injected output-anchor close failure")
-                    original_close()
-
-                lease.close = fail_once  # type: ignore[method-assign]
-            return lease
+        leases[-1].close = fail_once  # type: ignore[method-assign]
 
         def observe_clear(directory, *paths: Path) -> str | None:
             nonlocal clear_calls
@@ -1379,27 +1569,21 @@ class TestLifecycleCollector(FixtureCase):
             return real_clear(directory, *paths)
 
         self.assertEqual(self._run_truthful_collector_main(
-            argv,
-            mock.patch("collect_lifecycle.open_output_directory_lease",
-                       side_effect=output_factory),
-            mock.patch("collect_lifecycle._clear_output_artifacts",
-                       side_effect=observe_clear),
+            argv, output_operations=replace(base, clear=observe_clear),
         ), 1)
 
         self.assertEqual(close_failures, 1)
         self.assertEqual(
-            clear_calls, 1,
-            "cleanup after anchor release must use retained leaf handles, not paths",
+            clear_calls, 2,
+            "the early stale clear and rooted rollback must both retain output authority",
         )
         self.assertTrue(all(lease.closed for lease in leases))
         self._assert_no_transaction_artifacts(out)
 
     def test_main_removes_pair_after_final_handle_validation_failure(self) -> None:
         """A final identity/path verification failure cannot leave JSON accepted."""
-        import collect_lifecycle
-
         out, argv = self._collector_main_fixture("output-final-validation-failure")
-        real_verify = collect_lifecycle.OutputArtifactHandle.verify
+        real_verify = FakeOutputArtifact.verify
         json_verifications = 0
 
         def reject_second_json_verify(artifact, final_path: Path) -> None:
@@ -1410,8 +1594,8 @@ class TestLifecycleCollector(FixtureCase):
                     raise OSError("injected post-publication JSON handle validation failure")
             real_verify(artifact, final_path)
 
-        with mock.patch(
-            "collect_lifecycle.OutputArtifactHandle.verify",
+        with mock.patch.object(
+            FakeOutputArtifact, "verify",
             autospec=True,
             side_effect=reject_second_json_verify,
         ):
@@ -1495,15 +1679,18 @@ class TestLifecycleCollector(FixtureCase):
                 self.VALID_RECORD, "stderr-without-newline", engine_image, module_image,
             ), None
 
+        output_operations = self._fake_output_publication_operations(out)
         with mock.patch.object(sys, "argv", argv), \
-             mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
              mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
              mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
              mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                         return_value=("c" * 40, None)), \
              mock.patch("collect_lifecycle.open_image_lease", side_effect=manifest_factory), \
-             mock.patch("collect_lifecycle.run_engine", side_effect=run_with_live_manifest):
+             mock.patch("collect_lifecycle.run_engine", side_effect=run_with_live_manifest), \
+             mock.patch("collect_lifecycle._output_publication_operations_for_main",
+                        return_value=output_operations):
             self.assertEqual(collect_lifecycle.main(), 0)
 
         self.assertEqual(opened, [lease])
@@ -1526,17 +1713,50 @@ class TestLifecycleCollector(FixtureCase):
             digest=hashlib.sha256(manifest_bytes).hexdigest(),
             image=manifest_bytes,
         )
+        output_operations = self._fake_output_publication_operations(out)
         with mock.patch.object(sys, "argv", argv), \
-             mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
              mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
              mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
              mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                         return_value=("c" * 40, None)), \
              mock.patch("collect_lifecycle.open_image_lease", return_value=lease), \
-             mock.patch("collect_lifecycle.run_engine", return_value=(None, "injected launch failure")):
+             mock.patch("collect_lifecycle.run_engine", return_value=(None, "injected launch failure")), \
+             mock.patch("collect_lifecycle._output_publication_operations_for_main",
+                        return_value=output_operations):
             self.assertEqual(collect_lifecycle.main(), 1)
 
+        self.assertTrue(lease.closed)
+        self._assert_no_transaction_artifacts(out)
+
+    def test_main_retries_manifest_close_after_a_failed_release(self) -> None:
+        """A failed manifest CloseHandle retains ownership for finally cleanup."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("manifest-close-retry")
+        manifest = Path(argv[argv.index("--image-manifest") + 1])
+        payload = manifest.read_bytes()
+        lease = FakeImageLease(
+            manifest,
+            identity=FakeLeaseIdentity(33, 906, len(payload)),
+            digest=hashlib.sha256(payload).hexdigest(), image=payload,
+        )
+        close_calls = 0
+
+        def fail_then_close() -> None:
+            nonlocal close_calls
+            close_calls += 1
+            if close_calls == 1:
+                raise OSError("injected manifest CloseHandle failure")
+            lease.closed = True
+
+        lease.close = fail_then_close  # type: ignore[method-assign]
+        self.assertEqual(self._run_truthful_collector_main(
+            argv,
+            mock.patch("collect_lifecycle.open_image_lease", return_value=lease),
+        ), 1)
+        self.assertEqual(close_calls, 2)
         self.assertTrue(lease.closed)
         self._assert_no_transaction_artifacts(out)
 
@@ -1548,15 +1768,18 @@ class TestLifecycleCollector(FixtureCase):
         log = out.parent / "module-lifecycle-SparkGameFPS.log"
         out.write_text("preexisting-json", encoding="utf-8")
         log.write_text("preexisting-log", encoding="utf-8")
+        output_operations = self._fake_output_publication_operations(out)
         with mock.patch.object(sys, "argv", argv), \
-             mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
              mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
              mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
              mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                         return_value=("c" * 40, None)), \
              mock.patch("collect_lifecycle.WINDOWS_IMAGE_LEASE_AVAILABLE", False), \
-             mock.patch("collect_lifecycle.run_engine") as child:
+             mock.patch("collect_lifecycle.run_engine") as child, \
+             mock.patch("collect_lifecycle._output_publication_operations_for_main",
+                        return_value=output_operations):
              self.assertEqual(collect_lifecycle.main(), 1)
 
         child.assert_not_called()
@@ -1745,7 +1968,7 @@ class TestLifecycleCollector(FixtureCase):
             self.assertFalse(opened[1].closed)
             return subprocess.CompletedProcess([], 0, self.VALID_RECORD, "")
 
-        with mock.patch("collect_lifecycle.os.name", "nt"), \
+        with mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.subprocess.run", side_effect=child):
             captured, error = run_engine(
                 engine, module, INCLUDED, root, "d3d11", 30,
@@ -1783,7 +2006,7 @@ class TestLifecycleCollector(FixtureCase):
             opened.append(lease)
             return lease
 
-        with mock.patch("collect_lifecycle.os.name", "nt"), \
+        with mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.subprocess.run", side_effect=OSError("launch denied")):
             _, error = run_engine(
                 engine, module, INCLUDED, root, "d3d11", 30,
@@ -1817,7 +2040,7 @@ class TestLifecycleCollector(FixtureCase):
                 return first
             raise OSError("second image lease denied")
 
-        with mock.patch("collect_lifecycle.os.name", "nt"), \
+        with mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.subprocess.run") as child:
             _, error = run_engine(
                 engine, module, INCLUDED, root, "d3d11", 30,
@@ -1854,7 +2077,7 @@ class TestLifecycleCollector(FixtureCase):
             opened.append(lease)
             return lease
 
-        with mock.patch("collect_lifecycle.os.name", "nt"), \
+        with mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.subprocess.run", return_value=subprocess.CompletedProcess(
                  [], 0, self.VALID_RECORD, "",
              )):
@@ -1890,7 +2113,7 @@ class TestLifecycleCollector(FixtureCase):
             opened.append(lease)
             return lease
 
-        with mock.patch("collect_lifecycle.os.name", "nt"), \
+        with mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.subprocess.run") as child:
             _, error = run_engine(
                 engine, module, INCLUDED, root, "d3d11", 30,
@@ -1929,7 +2152,7 @@ class TestLifecycleCollector(FixtureCase):
             opened.append(lease)
             return lease
 
-        with mock.patch("collect_lifecycle.os.name", "nt"), \
+        with mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.subprocess.run") as child:
             _, error = run_engine(
                 engine, module, INCLUDED, root, "d3d11", 30,
@@ -1951,7 +2174,7 @@ class TestLifecycleCollector(FixtureCase):
         module.write_bytes(pe_image())
         digest = hashlib.sha256(pe_image()).hexdigest()
 
-        with mock.patch("collect_lifecycle.os.name", "nt"), \
+        with mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.WINDOWS_IMAGE_LEASE_AVAILABLE", False), \
              mock.patch("collect_lifecycle.subprocess.run") as child:
             _, error = run_engine(
@@ -2013,13 +2236,16 @@ class TestLifecycleCollector(FixtureCase):
                     "--rhi-backend", "d3d11", "--image-manifest", str(image_manifest),
                     "--out", str(out), "--commit-sha", requested_sha,
                 ]
+                output_operations = self._fake_output_publication_operations(out)
                 with mock.patch.object(sys, "argv", argv), \
-                     mock.patch("collect_lifecycle.os.name", "nt"), \
+                     mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
                      mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
                      mock.patch("collect_lifecycle.resolve_head_sha", return_value=(head_sha, None)), \
                      mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                                 return_value=("c" * 40, None)), \
-                     mock.patch("collect_lifecycle.run_engine") as child:
+                     mock.patch("collect_lifecycle.run_engine") as child, \
+                     mock.patch("collect_lifecycle._output_publication_operations_for_main",
+                                return_value=output_operations):
                     self.assertEqual(collect_lifecycle.main(), 1)
                 child.assert_not_called()
                 self.assertFalse(out.exists())
@@ -2061,9 +2287,28 @@ class TestLifecycleCollector(FixtureCase):
         finally:
             lease.close()
 
+    @unittest.skipUnless(os.name == "nt", "native Windows handles are unavailable")
+    def test_image_lease_close_failure_keeps_retry_authority_live(self) -> None:
+        """A failed CloseHandle must not make a still-live image lease look closed."""
+        import collect_lifecycle
+
+        lease = collect_lifecycle.ImageLease(
+            self.repo / "close-retry.exe", 0x1234,
+            collect_lifecycle.ImageIdentity(1, 2, 3, 4), 0,
+            r"C:\verified-artifact\SparkEngine.exe",
+        )
+        with mock.patch("collect_lifecycle._CloseHandle", side_effect=(False, True)) as close, \
+             mock.patch("collect_lifecycle.ctypes.get_last_error", return_value=5):
+            with self.assertRaisesRegex(OSError, "CloseHandle failed"):
+                lease.close()
+            self.assertFalse(lease.closed)
+            lease.close()
+        self.assertTrue(lease.closed)
+        self.assertEqual(close.call_count, 2)
+
     @unittest.skipUnless(os.name == "nt", "native Windows directory leases are unavailable")
-    def test_native_output_namespace_leases_deny_reparse_writes_and_publish_by_handle(self) -> None:
-        """Read-only anchors reject reparse-capable writes while handle I/O still transacts."""
+    def test_native_output_namespace_leases_anchor_renames_and_publish_by_handle(self) -> None:
+        """Rooted no-follow I/O, rather than share flags, contains reparse mutation."""
         import collect_lifecycle
 
         if not collect_lifecycle.WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
@@ -2082,8 +2327,11 @@ class TestLifecycleCollector(FixtureCase):
         renamed_root = container / "renamed-root"
         replacement.mkdir()
         native_create = collect_lifecycle._CreateFileW
+        native_relative_create = collect_lifecycle._NtCreateFile
         native_set_information = collect_lifecycle._SetHandleInformation
         with mock.patch("collect_lifecycle._CreateFileW", wraps=native_create) as create, \
+             mock.patch("collect_lifecycle._NtCreateFile",
+                        wraps=native_relative_create) as relative_create, \
              mock.patch("collect_lifecycle._SetHandleInformation",
                         wraps=native_set_information) as set_information:
             leases, error = collect_lifecycle._open_output_namespace_leases(root, directory)
@@ -2091,16 +2339,39 @@ class TestLifecycleCollector(FixtureCase):
         self.assertIsNotNone(leases)
         assert leases is not None
         try:
-            self.assertEqual(len(create.call_args_list), 3)
-            for call in create.call_args_list:
+            self.assertEqual(len(create.call_args_list), 1)
+            root_args = create.call_args.args
+            self.assertEqual(
+                root_args[1],
+                collect_lifecycle._FILE_LIST_DIRECTORY |
+                collect_lifecycle._FILE_READ_ATTRIBUTES |
+                collect_lifecycle._SYNCHRONIZE,
+            )
+            self.assertEqual(root_args[2], collect_lifecycle._FILE_SHARE_READ)
+            self.assertEqual(root_args[4], collect_lifecycle._OPEN_EXISTING)
+            required_flags = (collect_lifecycle._FILE_FLAG_BACKUP_SEMANTICS |
+                              collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT)
+            self.assertEqual(root_args[5] & required_flags, required_flags)
+            self.assertEqual(len(relative_create.call_args_list), 2)
+            for expected_leaf, call in zip(("build", "module-evidence"),
+                                           relative_create.call_args_list, strict=True):
                 args = call.args
-                self.assertEqual(args[1], collect_lifecycle._FILE_LIST_DIRECTORY |
-                                 collect_lifecycle._FILE_READ_ATTRIBUTES)
-                self.assertEqual(args[2], collect_lifecycle._FILE_SHARE_READ)
-                self.assertEqual(args[4], collect_lifecycle._OPEN_EXISTING)
-                required_flags = (collect_lifecycle._FILE_FLAG_BACKUP_SEMANTICS |
-                                  collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT)
-                self.assertEqual(args[5] & required_flags, required_flags)
+                self.assertEqual(
+                    args[1],
+                    collect_lifecycle._FILE_LIST_DIRECTORY |
+                    collect_lifecycle._FILE_READ_ATTRIBUTES |
+                    collect_lifecycle._SYNCHRONIZE,
+                )
+                self.assertEqual(args[6], collect_lifecycle._FILE_SHARE_READ)
+                self.assertEqual(args[7], collect_lifecycle._FILE_OPEN_IF)
+                required_options = (
+                    collect_lifecycle._FILE_DIRECTORY_FILE |
+                    collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT |
+                    collect_lifecycle._FILE_SYNCHRONOUS_IO_NONALERT
+                )
+                self.assertEqual(args[8] & required_options, required_options)
+                object_name = args[2]._obj.ObjectName.contents
+                self.assertEqual(object_name.Buffer[:object_name.Length // 2], expected_leaf)
             self.assertEqual(set_information.call_count, 3)
             for call in set_information.call_args_list:
                 self.assertEqual(
@@ -2126,9 +2397,10 @@ class TestLifecycleCollector(FixtureCase):
             staged.write_text("audit", encoding="utf-8")
             with self.assertRaises(OSError):
                 os.replace(staged, published)
-            # A generic-write handle is the capability required to issue
-            # FSCTL_SET_REPARSE_POINT.  The anchor must deny acquiring it, so
-            # an in-place reparse attack cannot begin.
+            # This is a compatibility check only. FILE_SHARE_READ rejects an
+            # ordinary GENERIC_WRITE open, but FILE_WRITE_ATTRIBUTES can still
+            # mutate reparse metadata; the dedicated mutation test below proves
+            # containment comes from rooted FILE_OPEN_REPARSE_POINT operations.
             writer = native_create(
                 str(directory), collect_lifecycle._GENERIC_WRITE,
                 collect_lifecycle._FILE_SHARE_READ | collect_lifecycle._FILE_SHARE_WRITE,
@@ -2144,29 +2416,35 @@ class TestLifecycleCollector(FixtureCase):
             self.assertIsNone(collect_lifecycle._clear_output_artifacts(output_lease, stale))
             self.assertFalse(stale.exists())
             with mock.patch(
-                "collect_lifecycle._CreateFileW", wraps=native_create,
+                "collect_lifecycle._NtCreateFile", wraps=native_relative_create,
             ) as direct_create:
                 published_artifact = collect_lifecycle._write_output_artifact(
                     output_lease, published, "audit",
                 )
             self.assertEqual(
                 len(direct_create.call_args_list), 1,
-                "direct final publication must not reopen its just-created leaf by path",
+                "direct final publication must use exactly one rooted child open",
             )
             writer_args = direct_create.call_args_list[0].args
             self.assertEqual(
                 writer_args[1],
                 collect_lifecycle._GENERIC_READ | collect_lifecycle._GENERIC_WRITE |
-                collect_lifecycle._FILE_READ_ATTRIBUTES | collect_lifecycle._DELETE,
+                collect_lifecycle._FILE_READ_ATTRIBUTES | collect_lifecycle._DELETE |
+                collect_lifecycle._SYNCHRONIZE,
             )
-            self.assertEqual(writer_args[2], collect_lifecycle._FILE_SHARE_READ)
-            self.assertEqual(writer_args[4], collect_lifecycle._CREATE_NEW)
-            required_file_flags = (
-                collect_lifecycle._FILE_ATTRIBUTE_NORMAL |
-                collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT
+            self.assertEqual(writer_args[6], collect_lifecycle._FILE_SHARE_READ)
+            self.assertEqual(writer_args[7], collect_lifecycle._FILE_CREATE)
+            required_file_options = (
+                collect_lifecycle._FILE_NON_DIRECTORY_FILE |
+                collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT |
+                collect_lifecycle._FILE_SYNCHRONOUS_IO_NONALERT
             )
             self.assertEqual(
-                writer_args[5] & required_file_flags, required_file_flags,
+                writer_args[8] & required_file_options, required_file_options,
+            )
+            self.assertEqual(
+                writer_args[2]._obj.RootDirectory, output_lease._handle,
+                "direct final publication must be rooted at the held output directory HANDLE",
             )
             backup_artifact = published_artifact.duplicate()
             published_artifact.close()
@@ -2188,6 +2466,288 @@ class TestLifecycleCollector(FixtureCase):
             )
         self.assertIsNone(close_error)
         self.assertTrue(all(anchor.lease.closed for anchor in leases))
+
+    @unittest.skipUnless(os.name == "nt", "native Windows output reserve tests are unavailable")
+    def test_native_process_lifetime_output_reserves_block_writes_until_exit(self) -> None:
+        """A detached final JSON HANDLE stays authoritative until its process exits."""
+        import collect_lifecycle
+
+        if not collect_lifecycle.WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
+            self.skipTest("native Windows output-directory lease binding is unavailable")
+        directory = self.repo / "native-process-lifetime-reserves"
+        directory.mkdir()
+        json_path = directory / collect_lifecycle.LIFECYCLE_OUTPUT_FILENAME
+        child_code = """
+import sys
+import time
+from pathlib import Path
+import collect_lifecycle as collector
+
+directory = Path(sys.argv[1])
+lease = collector.open_output_directory_lease(directory)
+audit = collector._write_output_artifact(
+    lease, directory / collector.LIFECYCLE_AUDIT_LOG_FILENAME, "audit\\n",
+)
+json_guard = collector._write_output_artifact(
+    lease, directory / collector.LIFECYCLE_OUTPUT_FILENAME, "{\\\"ok\\\": true}\\n",
+)
+audit_reserve = audit.duplicate()
+json_reserve = json_guard.duplicate()
+audit.close()
+json_guard.close()
+error = collector._handoff_output_reserves_to_process_exit(
+    [audit_reserve, json_reserve],
+)
+if error:
+    raise RuntimeError(error)
+lease.close()
+print("READY", flush=True)
+time.sleep(60)
+"""
+        module_directory = REPO_ROOT / "tools" / "module-evidence"
+        environment = dict(os.environ)
+        prior_pythonpath = environment.get("PYTHONPATH")
+        environment["PYTHONPATH"] = (
+            str(module_directory) + (os.pathsep + prior_pythonpath if prior_pythonpath else "")
+        )
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        process = subprocess.Popen(
+            [sys.executable, "-c", child_code, str(directory)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=environment,
+        )
+        try:
+            assert process.stdout is not None
+            self.assertEqual(process.stdout.readline().strip(), "READY")
+            writer = collect_lifecycle._CreateFileW(
+                str(json_path), collect_lifecycle._GENERIC_WRITE,
+                collect_lifecycle._FILE_SHARE_READ |
+                collect_lifecycle._FILE_SHARE_WRITE | 0x00000004,
+                None, collect_lifecycle._OPEN_EXISTING,
+                collect_lifecycle._FILE_ATTRIBUTE_NORMAL |
+                collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT,
+                None,
+            )
+            if writer not in (None, collect_lifecycle._INVALID_HANDLE_VALUE):
+                collect_lifecycle._CloseHandle(writer)
+                self.fail("a writer opened the JSON while the child reserve was live")
+        finally:
+            if process.poll() is None:
+                process.terminate()
+            try:
+                process.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate(timeout=10)
+        writer = collect_lifecycle._CreateFileW(
+            str(json_path), collect_lifecycle._GENERIC_WRITE,
+            collect_lifecycle._FILE_SHARE_READ |
+            collect_lifecycle._FILE_SHARE_WRITE | 0x00000004,
+            None, collect_lifecycle._OPEN_EXISTING,
+            collect_lifecycle._FILE_ATTRIBUTE_NORMAL |
+            collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT,
+            None,
+        )
+        self.assertNotIn(writer, (None, collect_lifecycle._INVALID_HANDLE_VALUE))
+        assert writer not in (None, collect_lifecycle._INVALID_HANDLE_VALUE)
+        self.assertTrue(collect_lifecycle._CloseHandle(writer))
+
+    @unittest.skipUnless(os.name == "nt", "native Windows rooted output tests are unavailable")
+    def test_native_rooted_output_authority_rejects_post_acquisition_reparse_mutation(self) -> None:
+        """FILE_WRITE_ATTRIBUTES reparse attacks cannot redirect rooted child operations."""
+        import ctypes
+        from ctypes import wintypes
+        import struct
+        import collect_lifecycle
+
+        if not collect_lifecycle.WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
+            self.skipTest("native Windows output-directory lease binding is unavailable")
+
+        fsctl_set_reparse_point = 0x000900A4
+        fsctl_delete_reparse_point = 0x000900AC
+        io_reparse_tag_mount_point = 0xA0000003
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        device_io_control = kernel32.DeviceIoControl
+        device_io_control.argtypes = [
+            wintypes.HANDLE, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD,
+            wintypes.LPVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+            wintypes.LPVOID,
+        ]
+        device_io_control.restype = wintypes.BOOL
+
+        def mount_point_data(target: Path) -> bytes:
+            substitute = ("\\??\\" + str(target)).encode("utf-16-le")
+            printable = str(target).encode("utf-16-le")
+            substitute_terminator = b"\0\0"
+            printable_terminator = b"\0\0"
+            data_length = (
+                8 + len(substitute) + len(substitute_terminator) +
+                len(printable) + len(printable_terminator)
+            )
+            return (
+                struct.pack(
+                    "<LHHHHHH",
+                    io_reparse_tag_mount_point, data_length, 0,
+                    0, len(substitute),
+                    len(substitute) + len(substitute_terminator), len(printable),
+                ) +
+                substitute + substitute_terminator + printable + printable_terminator
+            )
+
+        def set_mount_point(handle: int, target: Path) -> None:
+            data = mount_point_data(target)
+            buffer = ctypes.create_string_buffer(data)
+            returned = wintypes.DWORD()
+            if not device_io_control(
+                handle, fsctl_set_reparse_point, buffer, len(data),
+                None, 0, ctypes.byref(returned), None,
+            ):
+                self.fail(
+                    "FILE_WRITE_ATTRIBUTES did not permit FSCTL_SET_REPARSE_POINT: "
+                    f"{ctypes.get_last_error()}"
+                )
+
+        def clear_mount_point(handle: int) -> None:
+            data = struct.pack("<LHH", io_reparse_tag_mount_point, 0, 0)
+            buffer = ctypes.create_string_buffer(data)
+            returned = wintypes.DWORD()
+            if not device_io_control(
+                handle, fsctl_delete_reparse_point, buffer, len(data),
+                None, 0, ctypes.byref(returned), None,
+            ):
+                self.fail(f"FSCTL_DELETE_REPARSE_POINT failed: {ctypes.get_last_error()}")
+
+        def open_write_attributes(path: Path) -> int:
+            handle = collect_lifecycle._CreateFileW(
+                str(path),
+                collect_lifecycle._FILE_WRITE_ATTRIBUTES,
+                collect_lifecycle._FILE_SHARE_READ | collect_lifecycle._FILE_SHARE_WRITE,
+                None,
+                collect_lifecycle._OPEN_EXISTING,
+                collect_lifecycle._FILE_FLAG_BACKUP_SEMANTICS |
+                collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT,
+                None,
+            )
+            self.assertNotIn(handle, (None, collect_lifecycle._INVALID_HANDLE_VALUE))
+            return handle
+
+        def close_handles(handles: list[object]) -> None:
+            error = collect_lifecycle._close_image_leases(handles)
+            self.assertIsNone(error, error)
+
+        container = self.repo / "native-rooted-reparse-container"
+        container.mkdir()
+        victim = container / "victim"
+        victim.mkdir()
+
+        # Root: acquire it once by full path, mutate it in place, then ensure
+        # its rooted child acquisition neither follows the junction nor creates
+        # a victim child.
+        root = container / "root"
+        root.mkdir()
+        root_lease = collect_lifecycle.open_output_directory_lease(root)
+        root_writer = open_write_attributes(root)
+        try:
+            set_mount_point(root_writer, victim)
+            with self.assertRaisesRegex(OSError, "0xC0000280"):
+                collect_lifecycle._open_relative_output_directory(
+                    root_lease, root / "build", "build",
+                )
+            self.assertFalse((victim / "build").exists())
+        finally:
+            clear_mount_point(root_writer)
+            collect_lifecycle._CloseHandle(root_writer)
+            close_handles([root_lease])
+
+        # Build: root-relative acquisition succeeds normally, but a mutation
+        # after that acquisition cannot redirect the output-directory child.
+        root = container / "build-root"
+        root.mkdir()
+        root_lease = collect_lifecycle.open_output_directory_lease(root)
+        build = root / "build"
+        build_lease = collect_lifecycle._open_relative_output_directory(
+            root_lease, build, "build",
+        )
+        build_writer = open_write_attributes(build)
+        try:
+            set_mount_point(build_writer, victim)
+            with self.assertRaisesRegex(OSError, "0xC0000280"):
+                collect_lifecycle._open_relative_output_directory(
+                    build_lease, build / "module-evidence", "module-evidence",
+                )
+            self.assertFalse((victim / "module-evidence").exists())
+        finally:
+            clear_mount_point(build_writer)
+            collect_lifecycle._CloseHandle(build_writer)
+            close_handles([build_lease, root_lease])
+
+        # Output: after every ancestor is pinned, FILE_WRITE_ATTRIBUTES can
+        # still set a junction. Rooted FILE_CREATE and FILE_OPEN cleanup must
+        # fail closed and leave external fixed-name victims untouched.
+        root = container / "output-root"
+        root.mkdir()
+        leases, error = collect_lifecycle._open_output_namespace_leases(
+            root, root / "build" / "module-evidence",
+        )
+        self.assertIsNone(error)
+        assert leases is not None
+        output_directory = root / "build" / "module-evidence"
+        output_lease = leases[-1].lease
+        output_writer = open_write_attributes(output_directory)
+        victim_json = victim / collect_lifecycle.LIFECYCLE_OUTPUT_FILENAME
+        victim_log = victim / collect_lifecycle.LIFECYCLE_AUDIT_LOG_FILENAME
+        victim_json.write_text("victim-json", encoding="utf-8")
+        victim_log.write_text("victim-log", encoding="utf-8")
+        try:
+            set_mount_point(output_writer, victim)
+            with self.assertRaisesRegex(OSError, "0xC0000280"):
+                collect_lifecycle._write_output_artifact(
+                    output_lease,
+                    output_directory / collect_lifecycle.LIFECYCLE_AUDIT_LOG_FILENAME,
+                    "attacker",
+                )
+            clear_error = collect_lifecycle._clear_output_artifacts(
+                output_lease,
+                output_directory / collect_lifecycle.LIFECYCLE_OUTPUT_FILENAME,
+                output_directory / collect_lifecycle.LIFECYCLE_AUDIT_LOG_FILENAME,
+            )
+            self.assertIsNotNone(clear_error)
+            self.assertIn("0xC0000280", clear_error)
+            self.assertEqual(victim_json.read_text(encoding="utf-8"), "victim-json")
+            self.assertEqual(victim_log.read_text(encoding="utf-8"), "victim-log")
+        finally:
+            clear_mount_point(output_writer)
+            collect_lifecycle._CloseHandle(output_writer)
+            close_handles([anchor.lease for anchor in leases])
+
+        # A fixed leaf that is itself a reparse point must also be opened as
+        # the reparse object and rejected, never followed to a victim.
+        leaf_root = container / "leaf-root"
+        leaf_root.mkdir()
+        leases, error = collect_lifecycle._open_output_namespace_leases(
+            leaf_root, leaf_root / "build" / "module-evidence",
+        )
+        self.assertIsNone(error)
+        assert leases is not None
+        output_directory = leaf_root / "build" / "module-evidence"
+        output_lease = leases[-1].lease
+        leaf = output_directory / collect_lifecycle.LIFECYCLE_OUTPUT_FILENAME
+        leaf.mkdir()
+        leaf_writer = open_write_attributes(leaf)
+        leaf_victim = victim / "leaf-victim"
+        leaf_victim.mkdir()
+        try:
+            set_mount_point(leaf_writer, leaf_victim)
+            clear_error = collect_lifecycle._clear_output_artifacts(output_lease, leaf)
+            self.assertIsNotNone(clear_error)
+            self.assertTrue(leaf_victim.is_dir())
+        finally:
+            clear_mount_point(leaf_writer)
+            collect_lifecycle._CloseHandle(leaf_writer)
+            leaf.rmdir()
+            close_handles([anchor.lease for anchor in leases])
 
     def test_rejects_outside_script_and_reparse_images(self) -> None:
         from collect_lifecycle import validate_image_pair
@@ -2323,15 +2883,18 @@ class TestLifecycleCollector(FixtureCase):
                 "--module-image", str(module), "--working-directory", str(root),
                 "--rhi-backend", "d3d11", "--image-manifest", str(bad_manifest),
                 "--out", str(out), "--commit-sha", self.sha]
+        output_operations = self._fake_output_publication_operations(out)
         with mock.patch.object(sys, "argv", argv), \
-             mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True), \
              mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
              mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
              mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
              mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                         return_value=("c" * 40, None)), \
              mock.patch("collect_lifecycle.open_image_lease", side_effect=lease_factory), \
-             mock.patch("collect_lifecycle.subprocess.run") as child:
+             mock.patch("collect_lifecycle.subprocess.run") as child, \
+             mock.patch("collect_lifecycle._output_publication_operations_for_main",
+                        return_value=output_operations):
              self.assertEqual(collect_lifecycle.main(), 1)
         child.assert_not_called()
         self.assertEqual(opened, [lease, engine_lease, module_lease])
@@ -2418,7 +2981,7 @@ class TestLifecycleCollector(FixtureCase):
 
         completed = subprocess.CompletedProcess([], 0, self.VALID_RECORD, "")
         with mock.patch("collect_lifecycle.subprocess.run", return_value=completed), \
-             mock.patch("collect_lifecycle.os.name", "nt"):
+             mock.patch("collect_lifecycle._stable_v1_windows_platform", return_value=True):
             _, error = run_engine(
                 engine, module, INCLUDED, root, "d3d11", 30,
                 expected_digests=(engine_digest, module_digest), lease_factory=factory,
@@ -2430,21 +2993,27 @@ class TestLifecycleCollector(FixtureCase):
         """Once all paths/manifests validate, later failures remove stale evidence."""
         out, argv = self._collector_main_fixture("stale-post-validation")
         log = out.parent / "module-lifecycle-SparkGameFPS.log"
-        failures = (
-            ("run-engine", mock.patch(
-                "collect_lifecycle.run_engine",
-                return_value=(None, "injected post-validation engine failure"),
-            )),
-            ("direct-write", mock.patch(
-                "collect_lifecycle._write_output_artifact",
-                side_effect=OSError("injected write failure"),
-            )),
-        )
-        for name, failure in failures:
+        for name in ("run-engine", "direct-write"):
             out.write_text("stale-json", encoding="utf-8")
             log.write_text("stale-log", encoding="utf-8")
             with self.subTest(failure=name):
-                self.assertEqual(self._run_truthful_collector_main(argv, failure), 1)
+                if name == "run-engine":
+                    self.assertEqual(self._run_truthful_collector_main(
+                        argv,
+                        mock.patch(
+                            "collect_lifecycle.run_engine",
+                            return_value=(None, "injected post-validation engine failure"),
+                        ),
+                    ), 1)
+                else:
+                    base = self._fake_output_publication_operations(out)
+
+                    def fail_write(directory, final_path, content):
+                        raise OSError("injected direct output write failure")
+
+                    self.assertEqual(self._run_truthful_collector_main(
+                        argv, output_operations=replace(base, write=fail_write),
+                    ), 1)
             self.assertFalse(out.exists())
             self.assertFalse(log.exists())
 

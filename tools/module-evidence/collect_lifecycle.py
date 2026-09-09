@@ -24,6 +24,12 @@ Usage:
 ``<ABSOLUTE_WORKING_DIRECTORY>`` and ``<ABSOLUTE_REPO_ROOT>`` are literal
 placeholders: release automation must supply those exact absolute paths.  The
 collector accepts no alternate manifest filename or output namespace.
+
+Completion contract:
+    The ``OK: wrote ...`` line is progress, not a commit signal. Automation
+    must wait for this collector process to exit successfully. On success the
+    collector deliberately retains final-file guards until Windows ExitProcess
+    closes them; it makes no claim of a durable lock after the process exits.
 """
 
 from __future__ import annotations
@@ -73,28 +79,51 @@ _WINDOWS_RESERVED_NAMES = frozenset(
 _GENERIC_READ = 0x80000000
 _GENERIC_WRITE = 0x40000000
 _DELETE = 0x00010000
+_SYNCHRONIZE = 0x00100000
 _FILE_LIST_DIRECTORY = 0x00000001
 _FILE_READ_ATTRIBUTES = 0x0080
+_FILE_WRITE_ATTRIBUTES = 0x0100
 _FILE_SHARE_READ = 0x00000001
 _FILE_SHARE_WRITE = 0x00000002
 _CREATE_NEW = 1
 _OPEN_EXISTING = 3
+_FILE_OPEN = 1
+_FILE_CREATE = 2
+_FILE_OPEN_IF = 3
 _FILE_ATTRIBUTE_NORMAL = 0x00000080
 _FILE_ATTRIBUTE_DIRECTORY = 0x00000010
 _FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
 _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
 _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 _FILE_FLAG_SEQUENTIAL_SCAN = 0x08000000
+_FILE_DIRECTORY_FILE = 0x00000001
+_FILE_NON_DIRECTORY_FILE = 0x00000040
+_FILE_SYNCHRONOUS_IO_NONALERT = 0x00000020
+_OBJ_CASE_INSENSITIVE = 0x00000040
 _HANDLE_FLAG_INHERIT = 0x00000001
 _DUPLICATE_SAME_ACCESS = 0x00000002
 _FILE_BEGIN = 0
 _FILE_DISPOSITION_INFO = 4
 _ERROR_FILE_NOT_FOUND = 2
 _ERROR_PATH_NOT_FOUND = 3
+_STATUS_OBJECT_NAME_NOT_FOUND = 0xC0000034
+_STATUS_OBJECT_PATH_NOT_FOUND = 0xC000003A
 
 
 WINDOWS_IMAGE_LEASE_AVAILABLE = False
 WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE = False
+# Successful CLI publication keeps one exact file HANDLE per final leaf alive
+# until Windows tears down this collector process.  The integers are retained
+# explicitly because OutputArtifactHandle intentionally has no destructor: a
+# Python GC cycle must never close an accepted evidence guard early.
+_PROCESS_LIFETIME_OUTPUT_RESERVE_HANDLES: list[int] = []
+
+
+def _stable_v1_windows_platform() -> bool:
+    """Keep the CLI platform gate injectable without mutating global ``os.name``."""
+    return os.name == "nt"
+
+
 if os.name == "nt":
     try:
         import ctypes
@@ -117,7 +146,31 @@ if os.name == "nt":
         class _FILE_DISPOSITION_INFORMATION(ctypes.Structure):
             _fields_ = [("DeleteFile", ctypes.c_ubyte)]
 
+        class _UNICODE_STRING(ctypes.Structure):
+            _fields_ = [
+                ("Length", ctypes.c_ushort),
+                ("MaximumLength", ctypes.c_ushort),
+                ("Buffer", wintypes.LPWSTR),
+            ]
+
+        class _OBJECT_ATTRIBUTES(ctypes.Structure):
+            _fields_ = [
+                ("Length", wintypes.ULONG),
+                ("RootDirectory", wintypes.HANDLE),
+                ("ObjectName", ctypes.POINTER(_UNICODE_STRING)),
+                ("Attributes", wintypes.ULONG),
+                ("SecurityDescriptor", wintypes.LPVOID),
+                ("SecurityQualityOfService", wintypes.LPVOID),
+            ]
+
+        class _IO_STATUS_BLOCK(ctypes.Structure):
+            _fields_ = [
+                ("Status", wintypes.LONG),
+                ("Information", ctypes.c_size_t),
+            ]
+
         _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        _ntdll = ctypes.WinDLL("ntdll", use_last_error=True)
         _CreateFileW = _kernel32.CreateFileW
         _CreateFileW.argtypes = [
             wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
@@ -175,6 +228,14 @@ if os.name == "nt":
             wintypes.HANDLE, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD,
         ]
         _SetFileInformationByHandle.restype = wintypes.BOOL
+        _NtCreateFile = _ntdll.NtCreateFile
+        _NtCreateFile.argtypes = [
+            ctypes.POINTER(wintypes.HANDLE), wintypes.DWORD,
+            ctypes.POINTER(_OBJECT_ATTRIBUTES), ctypes.POINTER(_IO_STATUS_BLOCK),
+            ctypes.POINTER(ctypes.c_longlong), wintypes.DWORD, wintypes.DWORD,
+            wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID, wintypes.ULONG,
+        ]
+        _NtCreateFile.restype = wintypes.LONG
         _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
         WINDOWS_IMAGE_LEASE_AVAILABLE = True
         WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE = True
@@ -313,9 +374,13 @@ class ImageLease:
     def close(self) -> None:
         if self._closed:
             return
-        self._closed = True
         if not _CloseHandle(self._handle):  # type: ignore[name-defined]
             raise OSError(f"CloseHandle failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+        # A failed CloseHandle leaves ownership with this object.  Keep the
+        # lease live so the caller can retry or retain its fail-closed cleanup
+        # authority; marking it closed first would both lose that authority and
+        # misreport a still-open native handle.
+        self._closed = True
 
     def __enter__(self) -> ImageLease:
         return self
@@ -326,7 +391,7 @@ class ImageLease:
 
 
 class OutputDirectoryLease:
-    """A Windows namespace anchor that excludes later write, rename, and delete opens."""
+    """A Windows HANDLE pinning one directory object for rooted child operations."""
 
     def __init__(self, path: Path, handle: int, identity: ImageIdentity,
                  attributes: int, final_path: str) -> None:
@@ -468,6 +533,29 @@ class OutputNamespaceLease:
     identity: object
 
 
+@dataclass(frozen=True)
+class OutputPublicationOperations:
+    """Native publication authority, or an explicitly supplied test double.
+
+    main never chooses a weaker path-based implementation itself. Production
+    obtains this object only from _output_publication_operations_for_main,
+    which requires the complete native Windows binding. Platform-independent
+    transaction tests may inject a complete fake object at that one boundary.
+    """
+
+    lease_factory: Callable[[Path], object]
+    open_namespace: Callable[
+        [Path, Path],
+        tuple[tuple[OutputNamespaceLease, ...] | None, str | None],
+    ]
+    validate_directory: Callable[[object], object]
+    clear: Callable[..., str | None]
+    write: Callable[[object, Path, str], object]
+    discard: Callable[[list[object]], str | None]
+    close_in_order: Callable[[list[object]], str | None]
+    finalize_reserves: Callable[[list[object]], str | None]
+
+
 def open_image_lease(path: Path) -> ImageLease:
     """Open a Windows image read lease that denies subsequent writes/deletes."""
     if os.name != "nt" or not WINDOWS_IMAGE_LEASE_AVAILABLE:
@@ -498,17 +586,16 @@ def open_image_lease(path: Path) -> ImageLease:
 
 
 def open_output_directory_lease(path: Path) -> OutputDirectoryLease:
-    """Open a Windows directory lease that excludes later write/rename/delete opens."""
+    """Open a Windows directory HANDLE used only as a rooted child authority."""
     if os.name != "nt" or not WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
         raise OSError("native Windows output-directory leases are required but unavailable")
-    # Keep only FILE_SHARE_READ.  A write-sharing directory handle can be used
-    # to issue FSCTL_SET_REPARSE_POINT in place, so merely denying DELETE would
-    # still let a pathname-based cleanup escape the fixed namespace.  Direct
-    # fixed-leaf CREATE_NEW files below are written through their own handles;
-    # stale cleanup is likewise performed only through no-follow leaf handles.
+    # Keep the conservative FILE_SHARE_READ mode, but do not treat a share
+    # mode as reparse protection: FILE_WRITE_ATTRIBUTES can still authorize an
+    # in-place metadata mutation. Safety comes from every child open below
+    # being rooted at this specific HANDLE and using FILE_OPEN_REPARSE_POINT.
     handle = _CreateFileW(  # type: ignore[name-defined]
         str(path),
-        _FILE_LIST_DIRECTORY | _FILE_READ_ATTRIBUTES,
+        _FILE_LIST_DIRECTORY | _FILE_READ_ATTRIBUTES | _SYNCHRONIZE,
         _FILE_SHARE_READ,
         None,
         _OPEN_EXISTING,
@@ -520,6 +607,107 @@ def open_output_directory_lease(path: Path) -> OutputDirectoryLease:
     try:
         if not _SetHandleInformation(handle, _HANDLE_FLAG_INHERIT, 0):  # type: ignore[name-defined]
             raise OSError(f"SetHandleInformation failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+        identity, attributes = _native_identity(handle)
+        final_path = _native_final_path(handle)
+        return OutputDirectoryLease(path, handle, identity, attributes, final_path)
+    except BaseException:
+        _CloseHandle(handle)  # type: ignore[name-defined]
+        raise
+
+
+def _ntstatus_text(status: int) -> str:
+    """Format an NTSTATUS without incorrectly consulting GetLastError."""
+    return f"0x{int(status) & 0xFFFFFFFF:08X}"
+
+
+def _native_relative_output_name(
+    directory: OutputDirectoryLease, path: Path, allowed_leaves: frozenset[str],
+) -> str:
+    """Bind an NT-rooted operation to one exact direct child of a held directory."""
+    if os.name != "nt" or not WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
+        raise OSError("native Windows output operations are required but unavailable")
+    if not isinstance(directory, OutputDirectoryLease) or directory.closed:
+        raise OSError("lifecycle output directory is not held by a live native lease")
+    expected_parent = _absolute_raw(directory.path)
+    if _absolute_raw(path.parent) != expected_parent:
+        raise OSError("lifecycle output operation escaped its held directory")
+    leaf_name = path.name
+    if leaf_name not in allowed_leaves:
+        raise OSError("lifecycle output operation used a non-fixed namespace leaf")
+    if any(separator in leaf_name for separator in ("\\", "/")) or leaf_name in {".", ".."}:
+        raise OSError("lifecycle output operation used an unsafe relative leaf")
+    return leaf_name
+
+
+def _nt_create_file_relative(
+    directory: OutputDirectoryLease, leaf_name: str, desired_access: int,
+    create_disposition: int, file_attributes: int, create_options: int,
+    *, missing_ok: bool = False,
+) -> int | None:
+    """Open one child through a held directory HANDLE, never through its pathname."""
+    name_bytes = leaf_name.encode("utf-16-le")
+    if not name_bytes or len(name_bytes) > 0xFFFF:
+        raise OSError("lifecycle output relative leaf is not representable as UNICODE_STRING")
+    buffer = ctypes.create_unicode_buffer(leaf_name)  # type: ignore[name-defined]
+    object_name = _UNICODE_STRING(  # type: ignore[name-defined]
+        len(name_bytes), len(name_bytes),
+        ctypes.cast(buffer, wintypes.LPWSTR),  # type: ignore[name-defined]
+    )
+    attributes = _OBJECT_ATTRIBUTES(  # type: ignore[name-defined]
+        ctypes.sizeof(_OBJECT_ATTRIBUTES), directory._handle, ctypes.pointer(object_name),  # type: ignore[name-defined]
+        _OBJ_CASE_INSENSITIVE, None, None,
+    )
+    io_status = _IO_STATUS_BLOCK()  # type: ignore[name-defined]
+    handle = wintypes.HANDLE()  # type: ignore[name-defined]
+    status = _NtCreateFile(  # type: ignore[name-defined]
+        ctypes.byref(handle),
+        desired_access | _SYNCHRONIZE,
+        ctypes.byref(attributes),
+        ctypes.byref(io_status),
+        None,
+        file_attributes,
+        _FILE_SHARE_READ,
+        create_disposition,
+        create_options | _FILE_SYNCHRONOUS_IO_NONALERT | _FILE_FLAG_OPEN_REPARSE_POINT,
+        None,
+        0,
+    )
+    status_value = int(status)
+    if status_value < 0:
+        if missing_ok and (status_value & 0xFFFFFFFF) in {
+            _STATUS_OBJECT_NAME_NOT_FOUND, _STATUS_OBJECT_PATH_NOT_FOUND,
+        }:
+            return None
+        raise OSError(
+            f"NtCreateFile could not open lifecycle output child {leaf_name!r}: "
+            f"{_ntstatus_text(status_value)}"
+        )
+    raw_handle = handle.value
+    if raw_handle in (None, _INVALID_HANDLE_VALUE):  # type: ignore[name-defined]
+        raise OSError("NtCreateFile returned an invalid lifecycle output handle")
+    try:
+        if not _SetHandleInformation(raw_handle, _HANDLE_FLAG_INHERIT, 0):  # type: ignore[name-defined]
+            raise OSError(f"SetHandleInformation failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+    except BaseException:
+        _CloseHandle(raw_handle)  # type: ignore[name-defined]
+        raise
+    return raw_handle
+
+
+def _open_relative_output_directory(
+    parent: OutputDirectoryLease, path: Path, component: str,
+) -> OutputDirectoryLease:
+    """Open or create one fixed output ancestor through its held parent HANDLE."""
+    leaf_name = _native_relative_output_name(parent, path, frozenset({component}))
+    handle = _nt_create_file_relative(
+        parent, leaf_name,
+        _FILE_LIST_DIRECTORY | _FILE_READ_ATTRIBUTES,
+        _FILE_OPEN_IF,
+        _FILE_ATTRIBUTE_DIRECTORY,
+        _FILE_DIRECTORY_FILE | _FILE_FLAG_OPEN_REPARSE_POINT,
+    )
+    assert handle is not None
+    try:
         identity, attributes = _native_identity(handle)
         final_path = _native_final_path(handle)
         return OutputDirectoryLease(path, handle, identity, attributes, final_path)
@@ -981,16 +1169,10 @@ def _validate_output_namespace(raw_output: str, repo_root: Path) -> tuple[tuple[
         return None, f"cannot resolve repository root for lifecycle evidence: {exc}"
     if _normalise_windows_final_path(resolved_root) != _normalise_windows_final_path(root):
         return None, "repository root for lifecycle evidence resolves through an alias"
-    current = root
-    for component in LIFECYCLE_OUTPUT_DIRECTORY:
-        current, error = _require_exact_nonreparse_directory(
-            current, component, create_if_missing=True,
-        )
-        if error:
-            return None, error
-        assert current is not None
-    if current != output_directory:
-        return None, "lifecycle output directory did not resolve to the fixed namespace"
+    # Do not inspect, create, or resolve descendants by their paths here. The
+    # production namespace walk opens the root once and then acquires build and
+    # module-evidence relative to those held parent handles, so a concurrent
+    # reparse change cannot redirect a pre-lease mkdir or a later acquisition.
     if _same_output_identity(output, log):
         return None, "lifecycle JSON and audit-log paths must be distinct"
     for path in (output, log):
@@ -1012,7 +1194,14 @@ def _open_output_namespace_leases(
     repo_root: Path, output_directory: Path,
     *, lease_factory: Callable[[Path], object] | None = None,
 ) -> tuple[tuple[OutputNamespaceLease, ...] | None, str | None]:
-    """Lease every mutable directory anchor from repository root to output."""
+    """Lease every mutable output anchor, rooted from one absolute repository open.
+
+    A supplied factory is an explicit test seam only. Production opens the
+    repository root once by absolute path, then opens or creates build and
+    module-evidence relative to the already-held parent HANDLE. That prevents a
+    post-root-open reparse replacement from redirecting a descendant acquisition
+    before its own handle exists.
+    """
     root = _absolute_raw(repo_root)
     expected_paths = (
         root,
@@ -1021,18 +1210,55 @@ def _open_output_namespace_leases(
     )
     if output_directory != expected_paths[-1]:
         return None, "lifecycle output directory is not the fixed namespace anchor"
-    factory = lease_factory or open_output_directory_lease
     acquired: list[OutputNamespaceLease] = []
     opened: list[object] = []
     try:
-        for path in expected_paths:
-            lease = factory(path)
-            opened.append(lease)
-            identity, error = _validate_leased_output_directory(lease, path)
+        if lease_factory is not None:
+            # Test doubles deliberately provide all three anchors. This path
+            # is reachable only through OutputPublicationOperations injection;
+            # the production provider always follows the native relative walk.
+            for path in expected_paths:
+                lease = lease_factory(path)
+                opened.append(lease)
+                identity, error = _validate_leased_output_directory(lease, path)
+                if error:
+                    raise OSError(error)
+                assert identity is not None
+                acquired.append(OutputNamespaceLease(path, lease, identity))
+        else:
+            root_lease = open_output_directory_lease(expected_paths[0])
+            opened.append(root_lease)
+            root_identity, error = _validate_leased_output_directory(
+                root_lease, expected_paths[0],
+            )
             if error:
                 raise OSError(error)
-            assert identity is not None
-            acquired.append(OutputNamespaceLease(path, lease, identity))
+            assert root_identity is not None
+            acquired.append(OutputNamespaceLease(expected_paths[0], root_lease, root_identity))
+
+            build_lease = _open_relative_output_directory(
+                root_lease, expected_paths[1], LIFECYCLE_OUTPUT_DIRECTORY[0],
+            )
+            opened.append(build_lease)
+            build_identity, error = _validate_leased_output_directory(
+                build_lease, expected_paths[1],
+            )
+            if error:
+                raise OSError(error)
+            assert build_identity is not None
+            acquired.append(OutputNamespaceLease(expected_paths[1], build_lease, build_identity))
+
+            output_lease = _open_relative_output_directory(
+                build_lease, expected_paths[2], LIFECYCLE_OUTPUT_DIRECTORY[1],
+            )
+            opened.append(output_lease)
+            output_identity, error = _validate_leased_output_directory(
+                output_lease, expected_paths[2],
+            )
+            if error:
+                raise OSError(error)
+            assert output_identity is not None
+            acquired.append(OutputNamespaceLease(expected_paths[2], output_lease, output_identity))
     except OSError as exc:
         close_error = _close_image_leases(opened)
         suffix = f"; cannot close partial output namespace leases: {close_error}" if close_error else ""
@@ -1055,12 +1281,13 @@ def _validate_output_pair_under_namespace_leases(
         )
         if error:
             return error
-    if _same_output_identity(output, log):
+    if output.parent != leases[-1].path or log.parent != leases[-1].path:
+        return "lifecycle output pair escaped the held fixed namespace"
+    if output.name != LIFECYCLE_OUTPUT_FILENAME or \
+       log.name != LIFECYCLE_AUDIT_LOG_FILENAME:
+        return "lifecycle output pair does not use the fixed artifact leaves"
+    if output == log:
         return "lifecycle JSON and audit-log paths must be distinct"
-    for path in (output, log):
-        error = _validate_output_leaf(path)
-        if error:
-            return error
     return None
 
 
@@ -1219,17 +1446,10 @@ def _close_image_leases(leases: list[object]) -> str | None:
 
 def _native_output_leaf_name(directory: OutputDirectoryLease, path: Path) -> str:
     """Bind a native output operation to one fixed leaf below its held directory."""
-    if os.name != "nt" or not WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
-        raise OSError("native Windows output operations are required but unavailable")
-    if not isinstance(directory, OutputDirectoryLease) or directory.closed:
-        raise OSError("lifecycle output directory is not held by a live native lease")
-    expected_parent = _absolute_raw(directory.path)
-    if _absolute_raw(path.parent) != expected_parent:
-        raise OSError("lifecycle output operation escaped its held directory")
-    leaf_name = path.name
-    if leaf_name not in {LIFECYCLE_OUTPUT_FILENAME, LIFECYCLE_AUDIT_LOG_FILENAME}:
-        raise OSError("lifecycle output operation used a non-fixed artifact leaf")
-    return leaf_name
+    return _native_relative_output_name(
+        directory, path,
+        frozenset({LIFECYCLE_OUTPUT_FILENAME, LIFECYCLE_AUDIT_LOG_FILENAME}),
+    )
 
 
 def _native_handle_matches_output_path(handle: int, expected_path: Path) -> None:
@@ -1253,23 +1473,17 @@ def _open_existing_output_artifact(
 ) -> OutputArtifactHandle | None:
     """Open one existing fixed output leaf without traversing a leaf reparse point."""
     leaf_name = _native_output_leaf_name(directory, path)
-    handle = _CreateFileW(  # type: ignore[name-defined]
-        str(path),
+    handle = _nt_create_file_relative(
+        directory, leaf_name,
         _GENERIC_READ | _FILE_READ_ATTRIBUTES | _DELETE,
-        _FILE_SHARE_READ,
-        None,
-        _OPEN_EXISTING,
-        _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT,
-        None,
+        _FILE_OPEN,
+        _FILE_ATTRIBUTE_NORMAL,
+        _FILE_NON_DIRECTORY_FILE | _FILE_FLAG_OPEN_REPARSE_POINT,
+        missing_ok=True,
     )
-    if handle in (None, _INVALID_HANDLE_VALUE):  # type: ignore[name-defined]
-        error = ctypes.get_last_error()  # type: ignore[name-defined]
-        if error in {_ERROR_FILE_NOT_FOUND, _ERROR_PATH_NOT_FOUND}:
-            return None
-        raise OSError(f"CreateFileW could not open lifecycle output {path}: {error}")
+    if handle is None:
+        return None
     try:
-        if not _SetHandleInformation(handle, _HANDLE_FLAG_INHERIT, 0):  # type: ignore[name-defined]
-            raise OSError(f"SetHandleInformation failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
         identity, attributes = _native_identity(handle)
         _native_handle_matches_output_path(handle, path)
         final_path = _native_final_path(handle)
@@ -1333,34 +1547,27 @@ def _write_output_artifact(
 ) -> OutputArtifactHandle:
     """Create one fixed final leaf, flush it, close its writer, then retain deletion authority.
 
-    This intentionally does not stage/rename.  A ``FILE_SHARE_READ``-only
-    directory anchor prevents new write/delete/reparse opens after namespace
-    authorization, while ``CREATE_NEW`` prevents an existing final leaf from
-    being followed or overwritten.  The audit log is called first by
+    This intentionally does not stage/rename. The directory HANDLE, rather
+    than its mutable pathname, is the RootDirectory for the FILE_CREATE open;
+    FILE_OPEN_REPARSE_POINT prevents a fixed leaf reparse point from being
+    followed, while FILE_CREATE prevents an existing final leaf from being
+    overwritten. The audit log is called first by
     :func:`main`; only a fully written and closed audit log permits creation of
     the authoritative JSON leaf.
     """
-    _native_output_leaf_name(directory, final_path)
+    leaf_name = _native_output_leaf_name(directory, final_path)
     content.encode("utf-8")  # Fail before CREATE_NEW if the payload is invalid.
-    handle = _CreateFileW(  # type: ignore[name-defined]
-        str(final_path),
+    handle = _nt_create_file_relative(
+        directory, leaf_name,
         _GENERIC_READ | _GENERIC_WRITE | _FILE_READ_ATTRIBUTES | _DELETE,
-        _FILE_SHARE_READ,
-        None,
-        _CREATE_NEW,
-        _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT,
-        None,
+        _FILE_CREATE,
+        _FILE_ATTRIBUTE_NORMAL,
+        _FILE_NON_DIRECTORY_FILE | _FILE_FLAG_OPEN_REPARSE_POINT,
     )
-    if handle in (None, _INVALID_HANDLE_VALUE):  # type: ignore[name-defined]
-        raise OSError(
-            f"CreateFileW could not create lifecycle output {final_path}: "
-            f"{ctypes.get_last_error()}"  # type: ignore[name-defined]
-        )
-    writer = OutputArtifactHandle(handle, directory, final_path.name)
+    assert handle is not None
+    writer = OutputArtifactHandle(handle, directory, leaf_name)
     guard: OutputArtifactHandle | None = None
     try:
-        if not _SetHandleInformation(handle, _HANDLE_FLAG_INHERIT, 0):  # type: ignore[name-defined]
-            raise OSError(f"SetHandleInformation failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
         _native_handle_matches_output_path(handle, final_path)
         _write_output_bytes(handle, content)
         _native_handle_matches_output_path(handle, final_path)
@@ -1381,35 +1588,126 @@ def _write_output_artifact(
         raise
 
 
-def _discard_output_artifacts(artifacts: list[OutputArtifactHandle]) -> str | None:
+def _discard_output_artifacts(artifacts: list[object]) -> str | None:
     """Delete every staged/published output through the handles that own them."""
     errors: list[str] = []
     for artifact in reversed(artifacts):
-        if artifact.closed:
+        if getattr(artifact, "closed", False):
             continue
         try:
-            artifact.discard()
+            discard = getattr(artifact, "discard", None)
+            if not callable(discard):
+                raise OSError("lifecycle output artifact has no discard operation")
+            discard()
         except OSError as exc:
             errors.append(str(exc))
             try:
-                artifact.close()
+                close = getattr(artifact, "close", None)
+                if not callable(close):
+                    raise OSError("lifecycle output artifact has no close operation")
+                close()
             except OSError as close_exc:
                 errors.append(str(close_exc))
     return "; ".join(errors) if errors else None
 
 
-def _close_output_artifacts_in_order(artifacts: list[OutputArtifactHandle]) -> str | None:
+def _close_output_artifacts_in_order(artifacts: list[object]) -> str | None:
     """Close fixed leaves in commit order, preserving later cleanup authority on error."""
     for artifact in artifacts:
-        if artifact.closed:
+        if getattr(artifact, "closed", False):
             continue
         try:
-            artifact.close()
+            close = getattr(artifact, "close", None)
+            if not callable(close):
+                raise OSError("lifecycle output artifact has no close operation")
+            close()
         except OSError as exc:
             # Stop immediately: the remaining handle(s) are the only
             # path-independent deletion authority after namespace release.
             return str(exc)
     return None
+
+
+def _handoff_output_reserves_to_process_exit(artifacts: list[object]) -> str | None:
+    """Retain one raw native HANDLE per final leaf until ExitProcess closes it.
+
+    This is deliberately the production CLI's final commit handoff, not an
+    ``atexit`` close sequence.  Closing the final audit and JSON guards one at
+    a time would recreate a window where one leaf is no longer protected while
+    the collector still has work left to do.  After a successful handoff the
+    process exit itself is the commit boundary; callers must not treat the
+    earlier ``OK`` stdout line as a completed publication signal.
+    """
+    if os.name != "nt" or not WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
+        return "native Windows output reserve handoff is unavailable"
+    expected_leaves = (
+        LIFECYCLE_AUDIT_LOG_FILENAME,
+        LIFECYCLE_OUTPUT_FILENAME,
+    )
+    if len(artifacts) != len(expected_leaves):
+        return "lifecycle output reserve handoff received an incomplete leaf pair"
+    handles: list[int] = []
+    for artifact, expected_leaf in zip(artifacts, expected_leaves, strict=True):
+        if not isinstance(artifact, OutputArtifactHandle) or artifact.closed:
+            return "lifecycle output reserve handoff received a closed or non-native handle"
+        if artifact.leaf_name != expected_leaf:
+            return "lifecycle output reserve handoff received a non-fixed leaf"
+        handles.append(artifact._handle)
+    try:
+        # OutputArtifactHandle has no __del__; after callers clear their
+        # wrappers these raw values deliberately remain valid in the process
+        # handle table until Windows ExitProcess releases them together with
+        # the rest of this short-lived CLI's handles.
+        _PROCESS_LIFETIME_OUTPUT_RESERVE_HANDLES.extend(handles)
+    except MemoryError:
+        return "cannot retain lifecycle output reserve handles until process exit"
+    return None
+
+
+def _release_output_namespace_leases(
+    leases: tuple[OutputNamespaceLease, ...],
+) -> str | None:
+    """Release root, build, then output while retaining rooted cleanup on failure.
+
+    The output directory is deliberately last. If closing root or build fails,
+    its output HANDLE remains a safe relative authority; if closing that final
+    HANDLE fails, the native CloseHandle contract leaves it usable for rollback.
+    A caller must perform rollback before the ordinary best-effort final close.
+    """
+    for anchor in leases:
+        closer = getattr(anchor.lease, "close", None)
+        if not callable(closer):
+            return "lifecycle output namespace lease has no close operation"
+        try:
+            closer()
+        except Exception as exc:
+            return str(exc)
+    return None
+
+
+def _validate_native_output_directory_authority(directory: object) -> OutputDirectoryLease:
+    """Reject anything but the held native directory handle in production."""
+    if os.name != "nt" or not WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
+        raise OSError("native Windows output operations are required but unavailable")
+    if not isinstance(directory, OutputDirectoryLease) or directory.closed:
+        raise OSError("lifecycle output namespace requires a live native Windows directory lease")
+    return directory
+
+
+def _output_publication_operations_for_main() -> OutputPublicationOperations:
+    """Return the production-only output authority; tests must inject explicitly."""
+    if os.name != "nt" or not WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
+        raise OSError("native Windows output-directory leases are required but unavailable")
+    return OutputPublicationOperations(
+        lease_factory=open_output_directory_lease,
+        open_namespace=_open_output_namespace_leases,
+        validate_directory=_validate_native_output_directory_authority,
+        clear=_clear_output_artifacts,
+        write=_write_output_artifact,
+        discard=_discard_output_artifacts,
+        close_in_order=_close_output_artifacts_in_order,
+        finalize_reserves=_handoff_output_reserves_to_process_exit,
+    )
 
 
 def run_engine(
@@ -1424,7 +1722,7 @@ def run_engine(
     lease_factory: Callable[[Path], object] | None = None,
 ) -> tuple[EngineOutput, str | None]:
     """Run stable-v1 while native handles pin both manifest-bound images."""
-    if os.name != "nt":
+    if not _stable_v1_windows_platform():
         return EngineOutput("", ""), "stable-v1 lifecycle evidence is Windows-only"
     if module != "SparkGameFPS":
         return EngineOutput("", ""), "stable-v1 lifecycle evidence accepts only module SparkGameFPS"
@@ -1628,12 +1926,12 @@ def main() -> int:
     out_path: Path | None = None
     log_path: Path | None = None
     output_namespace_leases: tuple[OutputNamespaceLease, ...] | None = None
-    output_directory_lease: OutputDirectoryLease | None = None
+    output_directory_lease: object | None = None
+    output_operations: OutputPublicationOperations | None = None
     manifest_lease: object | None = None
-    output_primary_artifacts: list[OutputArtifactHandle] = []
-    output_backup_artifacts: list[OutputArtifactHandle] = []
+    output_primary_artifacts: list[object] = []
+    output_backup_artifacts: list[object] = []
     cleanup_authorized = False
-    output_release_attempted = False
     success = False
     result = 1
     failure: str | None = None
@@ -1642,7 +1940,7 @@ def main() -> int:
             raise RuntimeError("stable-v1 lifecycle evidence accepts only module SparkGameFPS")
         if args.rhi_backend != "d3d11":
             raise RuntimeError("stable-v1 lifecycle evidence requires --rhi-backend d3d11")
-        if os.name != "nt":
+        if not _stable_v1_windows_platform():
             raise RuntimeError("stable-v1 lifecycle evidence is Windows-only")
         for label, value in (
             ("--engine", args.engine),
@@ -1670,27 +1968,30 @@ def main() -> int:
         )
         if raw_collision_error:
             raise RuntimeError(raw_collision_error)
-        output_namespace_leases, err = _open_output_namespace_leases(
+        # This is the only publication abstraction boundary.  Production
+        # obtains a strictly native Windows provider; tests must deliberately
+        # inject their own complete provider instead of inducing a fallback.
+        output_operations = _output_publication_operations_for_main()
+        output_namespace_leases, err = output_operations.open_namespace(
             _absolute_raw(REPO_ROOT), out_path.parent,
         )
         if err:
             raise RuntimeError(err)
         assert output_namespace_leases is not None
         candidate_output_directory = output_namespace_leases[-1].lease
-        if not isinstance(candidate_output_directory, OutputDirectoryLease):
-            raise RuntimeError(
-                "lifecycle output namespace requires a live native Windows directory lease"
-            )
-        output_directory_lease = candidate_output_directory
+        output_directory_lease = output_operations.validate_directory(
+            candidate_output_directory,
+        )
         err = _validate_output_pair_under_namespace_leases(
             output_namespace_leases, out_path, log_path,
         )
         if err:
             raise RuntimeError(err)
-        # From this point onward, cleanup targets are fixed leaf names inside a
-        # live directory handle that denies a later rename or replacement.
+        # From this point onward, cleanup targets are fixed leaf names opened
+        # relative to a live directory HANDLE. Sharing flags alone do not
+        # prevent metadata/reparse mutations; rooted no-follow opens do.
         cleanup_authorized = True
-        cleared = _clear_output_artifacts(output_directory_lease, out_path, log_path)
+        cleared = output_operations.clear(output_directory_lease, out_path, log_path)
         if cleared:
             raise RuntimeError(cleared)
         sha, err = resolve_collection_sha(args.commit_sha)
@@ -1742,9 +2043,9 @@ def main() -> int:
         # the child has exited, and run_engine has completed its post-run
         # identity checks.  A close failure is fatal before publication.
         close_error = _close_image_leases([manifest_lease])
-        manifest_lease = None
         if close_error:
             raise RuntimeError(f"cannot close image manifest lease: {close_error}")
+        manifest_lease = None
         phases = parse_terminal_streams(captured.stdout, captured.stderr, "SparkGameFPS")
         record = {
             "module": "SparkGameFPS",
@@ -1774,29 +2075,41 @@ def main() -> int:
         # leaf.  It is flushed and its writer closed before CREATE_NEW can
         # create the JSON evidence leaf, so no valid JSON can outlive an
         # incomplete audit trail.
-        audit_guard = _write_output_artifact(
+        audit_guard = output_operations.write(
             output_directory_lease, log_path, captured.audit_log,
         )
         output_primary_artifacts.append(audit_guard)
-        output_backup_artifacts.append(audit_guard.duplicate())
-        json_guard = _write_output_artifact(
+        duplicate = getattr(audit_guard, "duplicate", None)
+        if not callable(duplicate):
+            raise RuntimeError("lifecycle output artifact has no duplicate operation")
+        output_backup_artifacts.append(duplicate())
+        json_guard = output_operations.write(
             output_directory_lease, out_path,
             json.dumps(document, indent=2, sort_keys=True) + "\n",
         )
         output_primary_artifacts.append(json_guard)
-        output_backup_artifacts.append(json_guard.duplicate())
+        duplicate = getattr(json_guard, "duplicate", None)
+        if not callable(duplicate):
+            raise RuntimeError("lifecycle output artifact has no duplicate operation")
+        output_backup_artifacts.append(duplicate())
         for artifact, final_path in (
             (audit_guard, log_path), (json_guard, out_path),
             (output_backup_artifacts[0], log_path),
             (output_backup_artifacts[1], out_path),
         ):
-            artifact.verify(final_path)
+            verify = getattr(artifact, "verify", None)
+            if not callable(verify):
+                raise RuntimeError("lifecycle output artifact has no verify operation")
+            verify(final_path)
         err = _validate_output_pair_under_namespace_leases(
             output_namespace_leases, out_path, log_path,
         )
         if err:
             raise RuntimeError(err)
         # Flush now: a BrokenPipe must be treated as a failed publication.
+        # This is progress only, not a commit notification. The exact-file
+        # guards remain live until namespace release and process-exit handoff
+        # below have both succeeded.
         print(f"OK: wrote {out_path} with 1 lifecycle record", flush=True)
         success = True
         result = 0
@@ -1811,23 +2124,15 @@ def main() -> int:
                 success = False
                 result = 1
         if success and output_namespace_leases is not None:
-            # Close the first ownership copy while all directory anchors remain
-            # live.  If it fails, the duplicate handles still own both exact
-            # leaves and the pathname cleanup route is still safe.
-            close_error = _close_output_artifacts_in_order(output_primary_artifacts)
-            if close_error:
-                close_failure = f"cannot close primary lifecycle output handles: {close_error}"
-                failure = f"FATAL: {close_failure}"
-                success = False
-                result = 1
-        if success and output_namespace_leases is not None:
-            # Keep the duplicate leaf handles alive across this release.  A
-            # close failure can have closed some root/build/output anchors, so
-            # any later cleanup must operate through those retained file
-            # handles rather than re-resolving a pathname.
-            output_release_attempted = True
-            close_error = _close_image_leases(
-                [anchor.lease for anchor in output_namespace_leases],
+            # The exact audit/JSON guards remain live across namespace release.
+            # They retain exact-file rollback authority if release fails and
+            # exclude newly opened ordinary write-data handles.  Do not treat
+            # their share mode as metadata/reparse protection: a
+            # FILE_WRITE_ATTRIBUTES handle (or a malicious writer opened
+            # beforehand) is outside that guarantee.  Consumers must await
+            # process exit and perform their own no-follow validation.
+            close_error = _release_output_namespace_leases(
+                output_namespace_leases,
             )
             if close_error:
                 close_failure = f"cannot close lifecycle output namespace leases: {close_error}"
@@ -1837,18 +2142,35 @@ def main() -> int:
             else:
                 output_namespace_leases = None
         if success:
-            # Audit first, JSON second: if the audit close fails the JSON
-            # guard remains live for deletion; if JSON close fails, it alone
-            # remains live, so an authoritative JSON cannot survive.
-            close_error = _close_output_artifacts_in_order(output_backup_artifacts)
+            assert output_operations is not None
+            # Redundant primary handles can close only after namespace release:
+            # the backup pair still locks both exact leaves, and any close
+            # failure can delete both through those still-live backups.
+            close_error = output_operations.close_in_order(output_primary_artifacts)
             if close_error:
-                close_failure = f"cannot close retained lifecycle output handles: {close_error}"
+                close_failure = f"cannot close primary lifecycle output handles: {close_error}"
                 failure = f"FATAL: {close_failure}"
                 success = False
                 result = 1
+        if success:
+            assert output_operations is not None
+            # Production transfers one raw backup HANDLE per leaf to the
+            # process-lifetime registry. Test providers instead synchronously
+            # release their fakes. Do not close the real final pair one at a
+            # time: Windows ExitProcess is the CLI commit boundary.
+            handoff_error = output_operations.finalize_reserves(output_backup_artifacts)
+            if handoff_error:
+                failure = f"FATAL: cannot finalize lifecycle output reserves: {handoff_error}"
+                success = False
+                result = 1
+            else:
+                output_primary_artifacts.clear()
+                output_backup_artifacts.clear()
         if not success:
-            artifact_cleanup_error = _discard_output_artifacts(
-                output_primary_artifacts + output_backup_artifacts,
+            artifact_cleanup_error = (
+                output_operations.discard(
+                    output_primary_artifacts + output_backup_artifacts,
+                ) if output_operations is not None else None
             )
             if artifact_cleanup_error:
                 cleanup_failure = (
@@ -1856,26 +2178,20 @@ def main() -> int:
                     f"{artifact_cleanup_error}"
                 )
                 failure = f"{failure}; {cleanup_failure}" if failure else f"FATAL: {cleanup_failure}"
-            # Once output-anchor release has begun, its reverse close may have
-            # released an ancestor.  Never re-resolve the output pathname in
-            # that state; retained native leaf handles above are authoritative.
-            if cleanup_authorized and not output_release_attempted and \
-               out_path is not None and log_path is not None and \
-               output_namespace_leases is not None and output_directory_lease is not None:
-                namespace_error = _validate_output_pair_under_namespace_leases(
-                    output_namespace_leases, out_path, log_path,
+            # A rooted output HANDLE remains sufficient even after root/build
+            # release has started. Never re-resolve the full output pathname
+            # during rollback; if an in-place reparse mutation makes rooted
+            # opens fail, report the containment failure rather than following
+            # the attacker-controlled target.
+            if cleanup_authorized and out_path is not None and log_path is not None and \
+               output_directory_lease is not None and \
+               not getattr(output_directory_lease, "closed", True):
+                assert output_operations is not None
+                cleanup_error = output_operations.clear(
+                    output_directory_lease, out_path, log_path,
                 )
-                if namespace_error:
-                    _report_failure(
-                        "FATAL: lifecycle evidence cleanup skipped because the fixed "
-                        f"output namespace is no longer safe: {namespace_error}"
-                    )
-                else:
-                    cleanup_error = _clear_output_artifacts(
-                        output_directory_lease, out_path, log_path,
-                    )
-                    if cleanup_error:
-                        _report_failure(f"FATAL: lifecycle evidence cleanup failed: {cleanup_error}")
+                if cleanup_error:
+                    _report_failure(f"FATAL: lifecycle evidence cleanup failed: {cleanup_error}")
             if output_namespace_leases is not None:
                 close_error = _close_image_leases(
                     [anchor.lease for anchor in output_namespace_leases],
