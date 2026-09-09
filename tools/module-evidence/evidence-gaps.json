@@ -1,12 +1,7 @@
 {
   "schemaVersion": "evidence-gaps-v1",
-  "comment": "Evidence RDY-010 requires that no producer in this repository can currently generate. Each gap is acknowledged, tracked, and release-blocking. The validator downgrades exactly these types to warnings so blocking CI can enforce everything else; it fails if an undeclared gap appears, and it also fails once a declared gap's evidence becomes available, so this ledger can only shrink. RDY-010 stays open until it is empty.",
+  "comment": "Each remaining RDY-010 evidence gap is acknowledged, tracked, and release-blocking. The validator downgrades exactly these absent types to warnings so blocking CI can enforce everything else; it fails if an undeclared gap appears, and it also fails once a declared gap's evidence becomes available, so this ledger can only shrink. The lifecycle producer/consumer workflow contract is implemented but requires a hosted exact-SHA run before it is release evidence; profile-scoped package smoke remains owned by MOD-310. RDY-010 stays open until no required gap or unhosted proof remains.",
   "gaps": [
-    {
-      "evidenceType": "lifecycle-log",
-      "trackedUnder": "RDY-010",
-      "reason": "The Windows host now emits one direct SPARK_MODULE_LIFECYCLE record after normal teardown, and tools/module-evidence/collect_lifecycle.py authenticates the exact Windows engine/DLL package before producing fixed lifecycle evidence. No required same-workflow CI producer yet runs that collector from the immutable Windows Release artifact at the exact SHA; this remaining producer gap keeps RDY-010 open. Profile-scoped package smoke remains independently tracked under MOD-310."
-    },
     {
       "evidenceType": "package-smoke-log",
       "trackedUnder": "MOD-310",

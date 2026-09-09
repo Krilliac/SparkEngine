@@ -1452,6 +1452,33 @@ jobs:
         } elseif (Test-Path "build/bin") {
           Copy-Item "build/bin/*" $outDir -Recurse -Force
         }
+        $engine = Join-Path $outDir "SparkEngine.exe"
+        $module = Join-Path $outDir "SparkGameFPS.dll"
+        foreach ($image in @($engine, $module)) {
+          if (-not (Test-Path -LiteralPath $image -PathType Leaf)) {
+            throw "required module lifecycle runtime image is missing: $image"
+          }
+        }
+        $images = @(
+          [ordered]@{
+            path = "SparkEngine.exe"
+            sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $engine).Hash.ToLowerInvariant()
+          },
+          [ordered]@{
+            path = "SparkGameFPS.dll"
+            sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $module).Hash.ToLowerInvariant()
+          }
+        )
+        $imageManifest = [ordered]@{
+          schemaVersion = "spark-image-manifest-v1"
+          commitSHA = "${{ github.sha }}"
+          images = $images
+        } | ConvertTo-Json -Depth 5
+        [System.IO.File]::WriteAllText(
+          (Join-Path $outDir "module-lifecycle-images.json"),
+          "$imageManifest`n",
+          [System.Text.UTF8Encoding]::new($false)
+        )
         Compress-Archive -Path $outDir -DestinationPath "SparkEngine-Windows-${{ matrix.config }}.zip"
 
     - name: Upload Build Artifacts
@@ -3297,6 +3324,73 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
+  # RDY-010 real Windows module lifecycle producer. It consumes only the exact
+  # same-workflow Release package from build-windows-vs2022, authenticates its
+  # engine/DLL hashes through the package manifest, and uploads evidence only
+  # after the collector process has returned successfully.
+  # ===========================================================================
+  module-profile-lifecycle:
+    name: "Module lifecycle (SparkGameFPS / Windows Release)"
+    needs: [build-windows-vs2022]
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Download exact Windows Release runtime artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: SparkEngine-Windows-VS2022-Release
+          path: ${{ runner.temp }}\module-profile-lifecycle-artifact
+
+      - name: Expand and verify lifecycle runtime package
+        shell: pwsh
+        run: |
+          $download = Join-Path $env:RUNNER_TEMP "module-profile-lifecycle-artifact"
+          $archives = @(Get-ChildItem -LiteralPath $download -Filter "*.zip" -File)
+          if ($archives.Count -ne 1) {
+            throw "expected exactly one Windows Release runtime ZIP, found $($archives.Count)"
+          }
+          $expanded = Join-Path $env:RUNNER_TEMP "module-profile-lifecycle-runtime"
+          Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath $expanded -Force
+          $runtime = Join-Path $expanded "SparkEngine-Windows-Release"
+          foreach ($required in @("SparkEngine.exe", "SparkGameFPS.dll", "module-lifecycle-images.json")) {
+            if (-not (Test-Path -LiteralPath (Join-Path $runtime $required) -PathType Leaf)) {
+              throw "exact Windows Release runtime artifact is missing $required"
+            }
+          }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "MODULE_LIFECYCLE_RUNTIME=$runtime" -Encoding utf8
+
+      - name: Collect exact-SHA SparkGameFPS lifecycle evidence
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:GITHUB_WORKSPACE "build\module-evidence\module-lifecycle.json"
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $out) | Out-Null
+          python tools/module-evidence/collect_lifecycle.py `
+            --engine (Join-Path $env:MODULE_LIFECYCLE_RUNTIME "SparkEngine.exe") `
+            --module SparkGameFPS `
+            --module-image (Join-Path $env:MODULE_LIFECYCLE_RUNTIME "SparkGameFPS.dll") `
+            --working-directory $env:MODULE_LIFECYCLE_RUNTIME `
+            --image-manifest (Join-Path $env:MODULE_LIFECYCLE_RUNTIME "module-lifecycle-images.json") `
+            --rhi-backend d3d11 `
+            --out $out `
+            --commit-sha "${{ github.sha }}"
+
+      - name: Upload lifecycle evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: module-profile-lifecycle-${{ github.sha }}
+          path: |
+            build/module-evidence/module-lifecycle.json
+            build/module-evidence/module-lifecycle-SparkGameFPS.log
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: error
+
+  # ===========================================================================
   # RDY-010. Proves the stable-v1 module profile against evidence a producer
   # really generated, rather than against text in the manifest:
   #   * a real configure of the profile, read back through the CMake File API,
@@ -3310,7 +3404,7 @@ jobs:
   # ===========================================================================
   module-evidence:
     name: "Module evidence (RDY-010)"
-    needs: [build-linux-gcc]
+    needs: [build-linux-gcc, module-profile-lifecycle]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -3344,12 +3438,19 @@ jobs:
         with:
           name: test-results-linux-gcc-Release
 
+      - name: Download exact lifecycle evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: module-profile-lifecycle-${{ github.sha }}
+          path: build/module-evidence
+
       - name: Validate module evidence against produced artifacts
         env:
           MODULE_EVIDENCE_SHA: ${{ github.sha }}
         run: |
           python3 tools/module-evidence/validate_manifest.py \
             --repo-root "$GITHUB_WORKSPACE" \
+            --lifecycle-evidence "$GITHUB_WORKSPACE/build/module-evidence/module-lifecycle.json" \
             --expected-sha "$MODULE_EVIDENCE_SHA" \
             --allow-declared-gaps tools/module-evidence/evidence-gaps.json
 
@@ -3375,6 +3476,8 @@ jobs:
           name: module-evidence
           path: |
             build/module-evidence/module-targets.json
+            build/module-evidence/module-lifecycle.json
+            build/module-evidence/module-lifecycle-SparkGameFPS.log
             tools/module-evidence/evidence-gaps.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
@@ -3400,6 +3503,7 @@ jobs:
       - build-linux-tsan
       - telemetry-integration
       - build-windows-vs2022
+      - module-profile-lifecycle
       - build-windows-shipping
       - build-linux-gcc
       - build-linux-clang
@@ -3418,6 +3522,6 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","build-windows-shipping","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py

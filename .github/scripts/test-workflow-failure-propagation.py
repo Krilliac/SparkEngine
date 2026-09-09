@@ -43,6 +43,7 @@ REQUIRED_CI_JOBS = (
     "build-linux-tsan",
     "telemetry-integration",
     "build-windows-vs2022",
+    "module-profile-lifecycle",
     "build-windows-shipping",
     "build-linux-gcc",
     "build-linux-clang",

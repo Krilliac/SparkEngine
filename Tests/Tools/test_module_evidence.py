@@ -4620,7 +4620,7 @@ class TestEvidenceGapLedger(FixtureCase):
         self.assertEqual(self._load([self._valid_gap()]),
                          {"lifecycle-log": "RDY-010"})
 
-    def test_shipped_ledger_is_valid_and_nonempty(self) -> None:
+    def test_shipped_ledger_retains_only_unimplemented_lifecycle_independent_gaps(self) -> None:
         from schema import load_known_work_item_ids
         from validate_manifest import load_declared_gaps
         ids, err = load_known_work_item_ids(REPO_ROOT)
@@ -4629,7 +4629,8 @@ class TestEvidenceGapLedger(FixtureCase):
             REPO_ROOT / "tools" / "module-evidence" / "evidence-gaps.json", ids)
         self.assertNotEqual(gaps, {},
                             "an empty ledger would mean RDY-010 is closeable")
-        self.assertIn("lifecycle-log", gaps)
+        self.assertNotIn("lifecycle-log", gaps)
+        self.assertIn("package-smoke-log", gaps)
 
 
 class TestCIWiring(unittest.TestCase):
@@ -4688,6 +4689,40 @@ class TestCIWiring(unittest.TestCase):
         self.assertIn('--repo-root "$GITHUB_WORKSPACE"', block)
         self.assertNotIn("--repo-root .", block)
         self.assertNotIn("--target-evidence", block)
+
+    def test_windows_lifecycle_producer_uses_exact_release_artifact_contract(self) -> None:
+        """RDY-010 needs a real same-workflow Windows lifecycle producer."""
+        self.assertIn("\n  module-profile-lifecycle:\n", self.workflow)
+        producer = self._job_block("module-profile-lifecycle")
+        self.assertIn("needs: [build-windows-vs2022]", producer)
+        self.assertIn("runs-on: windows-2022", producer)
+        self.assertIn("SparkEngine-Windows-VS2022-Release", producer)
+        self.assertIn("collect_lifecycle.py", producer)
+        self.assertIn("--image-manifest", producer)
+        self.assertIn("module-profile-lifecycle-${{ github.sha }}", producer)
+        self.assertIn("if-no-files-found: error", producer)
+
+    def test_windows_release_package_emits_lifecycle_image_manifest(self) -> None:
+        """The producer must authenticate the actual engine/DLL artifact bytes."""
+        windows_build = self._job_block("build-windows-vs2022")
+        self.assertIn("module-lifecycle-images.json", windows_build)
+        self.assertIn("Get-FileHash", windows_build)
+        self.assertIn("spark-image-manifest-v1", windows_build)
+
+    def test_module_evidence_consumes_lifecycle_producer_artifact(self) -> None:
+        """The Ubuntu release consumer waits for and reads exact lifecycle JSON."""
+        block = self._job_block("module-evidence")
+        self.assertIn("needs: [build-linux-gcc, module-profile-lifecycle]", block)
+        self.assertIn("module-profile-lifecycle-${{ github.sha }}", block)
+        self.assertIn("--lifecycle-evidence", block)
+        self.assertIn("module-lifecycle.json", block)
+
+    def test_required_gate_includes_lifecycle_producer(self) -> None:
+        """A skipped Windows producer cannot disappear behind the aggregate gate."""
+        gate = self.workflow[self.workflow.index("\n  required-ci-gate:\n"):]
+        needs = gate[gate.index("needs:"):gate.index("runs-on:")]
+        self.assertIn("- module-profile-lifecycle", needs)
+        self.assertIn('"module-profile-lifecycle"', gate)
 
     def test_gate_consumes_really_produced_junit_evidence(self) -> None:
         block = self._job_block("module-evidence")
