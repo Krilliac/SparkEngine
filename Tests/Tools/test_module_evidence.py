@@ -5167,6 +5167,32 @@ class TestArtifactSemanticValidation(FixtureCase):
 
         self.assertEqual(errors, [], errors)
 
+    @unittest.skipIf(os.name == "nt", "POSIX rooted artifact-ratchet regression")
+    def test_rooted_artifact_branch_rejects_a_stale_declared_gap(self) -> None:
+        """A rooted present artifact must trip the same ledger ratchet as paths."""
+        m = base_manifest()
+        junit = self.repo / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
+        junit.parent.mkdir(parents=True, exist_ok=True)
+        junit.write_text(self.VALID_JUNIT, encoding="utf-8")
+        smoke = self.repo / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
+        smoke.parent.mkdir(parents=True, exist_ok=True)
+        smoke.write_text(self.VALID_SMOKE, encoding="utf-8")
+
+        with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
+            errors = ManifestValidator(
+                m, self.repo,
+                target_index=target_index(),
+                lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
+                expected_sha=self.sha,
+                declared_gaps={"package-smoke-log": "MOD-310"},
+                root_authority=lease,
+            ).validate()
+
+        self.assertTrue(
+            any("recorded as a known evidence gap" in error for error in errors),
+            errors,
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

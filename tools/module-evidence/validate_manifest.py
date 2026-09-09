@@ -736,6 +736,9 @@ class ManifestValidator:
                             f"{pattern!r} authority rejected: {exc}"
                         )
                         continue
+                    if btype in self.declared_gaps:
+                        self._record_gap(btype, True, "")
+                        continue
                     semantic_errors = artifacts.validate_artifact_bytes(
                         data, Path(pattern).name, btype,
                         name if isinstance(name, str) else "",
