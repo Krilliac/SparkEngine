@@ -165,7 +165,6 @@ add_executable(SparkTests
     TestModuleHotReload.cpp
     TestConsoleRBAC.cpp
     TestNetworkIntegration.cpp
-    TestNetworkStack.cpp
     TestConnectionTimeout.cpp
     TestRecastIntegration.cpp
     TestAudioBackendFactory.cpp
@@ -270,7 +269,6 @@ add_executable(SparkTests
     TestSparkError.cpp
     TestThreadDebugger.cpp
     TestCollisionSystem.cpp
-    TestNetworkSecurity.cpp
     TestSubTickInput.cpp
     TestBehaviorTreeNodes.cpp
     TestAIBudgetLimiter.cpp
@@ -431,7 +429,6 @@ add_executable(SparkTests
     TestLODGeneratorPhaseGG.cpp
     TestTextureCompressorPhaseGG.cpp
     TestDatablockRegistryPhaseHH.cpp
-    TestNetworkSecurityPhaseHH.cpp
     TestAIDirectorPhaseII.cpp
     TestHLODBuilderPhaseII.cpp
     TestAngleUtilsReal.cpp
@@ -681,6 +678,18 @@ target_link_libraries(SparkDebugHookTeardownProbe PRIVATE SparkEngineLib)
 add_dependencies(SparkTests SparkDebugHookTeardownProbe)
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_DEBUG_HOOK_TEARDOWN_PROBE_PATH="$<TARGET_FILE:SparkDebugHookTeardownProbe>")
+
+# The stable-v1 Windows shipping profile deliberately disables networking.
+# Keep this public-header include contract independently buildable so a
+# networking-only type cannot leak into that profile through an unguarded
+# header dependency.
+if(NOT ENABLE_NETWORKING)
+    add_executable(SparkNetworkingDisabledCompileContract
+        Fixtures/NetworkingDisabledCompileContract.cpp)
+    target_compile_features(SparkNetworkingDisabledCompileContract PRIVATE cxx_std_23)
+    target_include_directories(SparkNetworkingDisabledCompileContract PRIVATE
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
+endif()
 
 if(TARGET SparkGatewayCore)
     add_executable(SparkGatewayTopologyProbe
@@ -1145,7 +1154,11 @@ endif()
 # Propagate engine feature defines so tests can gate on them
 if(ENABLE_NETWORKING)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_NETWORKING)
-    target_sources(SparkTests PRIVATE harden/Test_net-world_migration.cpp)
+    target_sources(SparkTests PRIVATE
+        TestNetworkStack.cpp
+        TestNetworkSecurity.cpp
+        TestNetworkSecurityPhaseHH.cpp
+        harden/Test_net-world_migration.cpp)
 endif()
 if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_PHYSICS)
@@ -1379,6 +1392,14 @@ add_test(
         -DSPARK_LIFECYCLE_PARSER_SELF_TEST=ON
         -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkModuleProfileLifecycle.cmake
 )
+
+if(TARGET SparkNetworkingDisabledCompileContract)
+    add_test(NAME SparkNetworkingDisabledCompileContract
+        COMMAND $<TARGET_FILE:SparkNetworkingDisabledCompileContract>)
+    set_tests_properties(SparkNetworkingDisabledCompileContract PROPERTIES
+        LABELS "networking;build-contract"
+        TIMEOUT 10)
+endif()
 set_tests_properties(ModuleProfileLifecycleParserContract PROPERTIES
     LABELS "module-profile;stable-v1;d3d11;unit"
     TIMEOUT 10)

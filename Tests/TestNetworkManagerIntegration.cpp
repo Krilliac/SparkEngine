@@ -82,11 +82,13 @@ namespace Spark::Net
             (void)manager.ProcessIncoming();
         }
 
+#ifdef ENABLE_NETWORKING
         static bool DeserializeMessageForTest(const NetworkManager& manager, const std::vector<uint8_t>& data,
                                               NetworkMessage& message)
         {
             return manager.DeserializeMessage(data.data(), data.size(), message);
         }
+#endif
     };
 } // namespace Spark::Net
 
@@ -110,13 +112,14 @@ TEST(NetworkClientIdPolicy_ReservedBoundaryNeverBecomesGenerated)
 TEST(NetworkManager_Initialize_Succeeds)
 {
     auto& nm = NetworkManager::GetInstance();
+    nm.Shutdown();
     bool ok = nm.Initialize();
-#ifdef ENABLE_NETWORKING
     EXPECT_TRUE(ok);
     EXPECT_TRUE(nm.IsInitialized());
-#else
-    // Stub always returns false
-    EXPECT_FALSE(ok);
+#ifndef ENABLE_NETWORKING
+    // The shipping profile preserves in-process lifecycle behavior but does
+    // not create a native endpoint.
+    EXPECT_EQ(nm.GetBoundPort(), static_cast<uint16_t>(0));
 #endif
     nm.Shutdown();
 }

@@ -28,6 +28,8 @@
 
 #pragma once
 
+#ifdef ENABLE_NETWORKING
+
 #include "ITransport.h"
 #include "UDPTransport.h"
 #include "SteamTransport.h"
@@ -232,3 +234,5 @@ namespace Spark::Net
     };
 
 } // namespace Spark::Net
+
+#endif // ENABLE_NETWORKING

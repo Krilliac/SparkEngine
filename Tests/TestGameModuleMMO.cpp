@@ -26,6 +26,13 @@
 #include <cmath>
 #include <limits>
 
+// Later game-module headers can include Windows.h after MMOChatSystem has
+// declared its SendMessage overloads. Keep the Win32 alias out of the calls
+// below so this test remains a real MMOChatSystem API consumer.
+#ifdef SendMessage
+#undef SendMessage
+#endif
+
 using namespace MMO;
 
 namespace

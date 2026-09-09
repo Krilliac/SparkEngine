@@ -11,9 +11,11 @@
  * - Lag compensation (hitbox rewinding)
  * - Reliable and unreliable message channels
  *
- * All networking code is guarded by ENABLE_NETWORKING. When the flag is
- * not defined, a minimal stub NetworkManager is provided so that the rest
- * of the engine compiles without linker errors.
+ * When ENABLE_NETWORKING is not defined, NetworkManager retains its
+ * deterministic in-process lifecycle, message queues, and state-machine
+ * behavior, but never opens a native socket or exposes a bound port. This
+ * lets non-network builds exercise local orchestration without claiming an
+ * OS-backed network endpoint exists.
  */
 
 #pragma once

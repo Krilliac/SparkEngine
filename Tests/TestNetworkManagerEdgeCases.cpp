@@ -639,7 +639,11 @@ TEST(NetworkManager_ConcurrentSnapshotsSendAndStopAreSerialized)
     auto& nm = NetworkManager::GetInstance();
     ASSERT_TRUE(nm.Initialize());
     ASSERT_TRUE(nm.StartServer(0, 4));
+#ifdef ENABLE_NETWORKING
     EXPECT_TRUE(nm.GetBoundPort() != 0);
+#else
+    EXPECT_EQ(nm.GetBoundPort(), static_cast<uint16_t>(0));
+#endif
 
     std::atomic<bool> start{false};
     std::thread updater(
@@ -695,7 +699,11 @@ TEST(NetworkManager_EphemeralPortChurnIsReleaseSafe)
     for (int cycle = 0; cycle < 12; ++cycle)
     {
         ASSERT_TRUE(nm.StartServer(0, 2));
+#ifdef ENABLE_NETWORKING
         EXPECT_TRUE(nm.GetBoundPort() != 0);
+#else
+        EXPECT_EQ(nm.GetBoundPort(), static_cast<uint16_t>(0));
+#endif
         nm.StopServer();
         EXPECT_EQ(nm.GetBoundPort(), static_cast<uint16_t>(0));
     }
