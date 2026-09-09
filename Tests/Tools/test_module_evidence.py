@@ -50,6 +50,24 @@ from validate_manifest import ManifestValidator, load_manifest  # noqa: E402
 INCLUDED = "SparkGameFPS"
 DECOY = "SparkGameDecoy"
 PROFILE = "stable-v1"
+PACKAGE_SMOKE_TEST_SHA = "0123456789abcdef0123456789abcdef01234567"
+PACKAGE_SMOKE_TEST_DIGEST = "a" * 64
+
+
+def package_smoke_record(module: str, commit_sha: str) -> str:
+    """Hand-authored canonical package evidence; never derived from the parser."""
+    return (
+        "[package-smoke] schema=package-smoke-v1\n"
+        "[package-smoke] product=SparkEngine\n"
+        f"[package-smoke] module={module}\n"
+        "[package-smoke] profile=stable-v1\n"
+        f"[package-smoke] commit_sha={commit_sha}\n"
+        f"[package-smoke] msi_sha256={PACKAGE_SMOKE_TEST_DIGEST}\n"
+        "[package-smoke] backend=nullrhi result=PASS\n"
+        "[package-smoke] backend=d3d11-warp result=PASS\n"
+        "[package-smoke] exit_code=0\n"
+        "[package-smoke] PASS\n"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -119,23 +137,15 @@ def build_fake_repo(root: Path) -> str:
     )
     smoke_path = root / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
     smoke_path.parent.mkdir(parents=True, exist_ok=True)
-    smoke_path.write_text(
-        f"[package-smoke] {INCLUDED}\n"
-        f"[package-smoke] product=SparkEngine\n"
-        f"[package-smoke] module={INCLUDED}\n"
-        f"[package-smoke] library={INCLUDED}.dll\n"
-        f"[package-smoke] exit_code=0\n"
-        f"[package-smoke] PASS\n",
-        encoding="utf-8",
-    )
-
     _git(root, "init", "-q", "-b", "main")
     (root / ".gitignore").write_text("build/\n", encoding="utf-8")
     _git(root, "config", "user.email", "test@example.invalid")
     _git(root, "config", "user.name", "Test")
     _git(root, "add", "-A")
     _git(root, "commit", "-q", "-m", "fixture")
-    return _git(root, "rev-parse", "HEAD").stdout.strip()
+    sha = _git(root, "rev-parse", "HEAD").stdout.strip()
+    smoke_path.write_text(package_smoke_record(INCLUDED, sha), encoding="utf-8")
+    return sha
 
 
 def module_entry(name: str, *, included: bool) -> dict[str, Any]:
@@ -1425,10 +1435,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         )
         smoke = root / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
         smoke.parent.mkdir(parents=True, exist_ok=True)
-        smoke.write_text(
-            "SparkGameFPS\nmodule=SparkGameFPS\nexit_code=0\nPASS\n",
-            encoding="utf-8",
-        )
+        smoke.write_text(package_smoke_record(INCLUDED, sha), encoding="utf-8")
         original_reader = strict_json.NoFollowDirectoryLease.read_relative_bytes
         calls: list[tuple[str, int]] = []
 
@@ -5185,14 +5192,7 @@ class TestArtifactSemanticValidation(FixtureCase):
         '  </testsuite>\n'
         '</testsuites>\n'
     )
-    VALID_SMOKE = (
-        "[package-smoke] SparkGameFPS\n"
-        "[package-smoke] product=SparkEngine\n"
-        "[package-smoke] module=SparkGameFPS\n"
-        "[package-smoke] library=SparkGameFPS.dll\n"
-        "[package-smoke] exit_code=0\n"
-        "[package-smoke] PASS\n"
-    )
+    VALID_SMOKE = package_smoke_record(INCLUDED, PACKAGE_SMOKE_TEST_SHA)
 
     def test_zero_byte_junit_xml_is_rejected(self) -> None:
         path = self._junit_xml("")
@@ -5263,13 +5263,158 @@ class TestArtifactSemanticValidation(FixtureCase):
     def test_zero_byte_package_smoke_is_rejected(self) -> None:
         path = self._smoke_log("")
         path.write_bytes(b"")
-        errors = artifacts.validate_package_smoke(path, INCLUDED)
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
         self.assertTrue(any("zero bytes" in e for e in errors), errors)
+
+    def test_oversized_package_smoke_is_rejected_before_payload_read(self) -> None:
+        """An untrusted oversized path must not allocate its payload before rejection."""
+        path = self._smoke_log("placeholder")
+        oversized = mock.Mock(st_size=artifacts.MAX_ARTIFACT_BYTES + 1)
+        with mock.patch.object(Path, "stat", return_value=oversized), \
+                mock.patch.object(Path, "read_bytes", return_value=b"") as read_bytes:
+            errors = artifacts.validate_package_smoke(
+                path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+            )
+        self.assertFalse(read_bytes.called, "oversized package artifact payload was read")
+        self.assertTrue(any("exceeding" in error for error in errors), errors)
 
     def test_valid_package_smoke_is_accepted(self) -> None:
         path = self._smoke_log(self.VALID_SMOKE)
-        errors = artifacts.validate_package_smoke(path, INCLUDED)
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
         self.assertEqual(errors, [], f"valid smoke log rejected: {errors}")
+
+    def test_package_smoke_requires_an_expected_revision(self) -> None:
+        """A standalone parser caller cannot accept an unbound package observation."""
+        path = self._smoke_log(self.VALID_SMOKE)
+        errors = artifacts.validate_package_smoke(path, INCLUDED)
+        self.assertNotEqual(errors, [], "package smoke without an expected revision was accepted")
+
+    def test_package_smoke_rejects_legacy_freeform_pass_text(self) -> None:
+        """A generic passing CTest log is not proof of a packaged FPS runtime."""
+        path = self._smoke_log(
+            "[package-smoke] SparkGameFPS\n"
+            "[package-smoke] product=SparkEngine\n"
+            "[package-smoke] module=SparkGameFPS\n"
+            "[package-smoke] library=SparkGameFPS.dll\n"
+            "[package-smoke] exit_code=0\n"
+            "[package-smoke] PASS\n"
+        )
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(any("required field" in error for error in errors), errors)
+
+    def test_package_smoke_requires_both_installed_backend_results(self) -> None:
+        """A one-backend package run cannot stand in for the stable-v1 contract."""
+        path = self._smoke_log(self.VALID_SMOKE.replace(
+            "[package-smoke] backend=d3d11-warp result=PASS\n", "",
+        ))
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(any("backend:d3d11-warp" in error for error in errors), errors)
+
+    def test_package_smoke_rejects_duplicate_identity_claims(self) -> None:
+        """Conflicting module identities must not be hidden behind a passing line."""
+        path = self._smoke_log(
+            self.VALID_SMOKE + "[package-smoke] module=SparkGameDecoy\n",
+        )
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(any("duplicates field 'module'" in error for error in errors), errors)
+
+    def test_package_smoke_rejects_duplicate_every_canonical_field(self) -> None:
+        """Duplicate detection applies to success, identity, and backend fields alike."""
+        cases = (
+            ("[package-smoke] schema=package-smoke-v1\n", "schema"),
+            ("[package-smoke] product=SparkEngine\n", "product"),
+            (f"[package-smoke] module={INCLUDED}\n", "module"),
+            ("[package-smoke] profile=stable-v1\n", "profile"),
+            (f"[package-smoke] commit_sha={PACKAGE_SMOKE_TEST_SHA}\n", "commit_sha"),
+            (f"[package-smoke] msi_sha256={PACKAGE_SMOKE_TEST_DIGEST}\n", "msi_sha256"),
+            ("[package-smoke] backend=nullrhi result=PASS\n", "backend:nullrhi"),
+            ("[package-smoke] backend=d3d11-warp result=PASS\n", "backend:d3d11-warp"),
+            ("[package-smoke] exit_code=0\n", "exit_code"),
+            ("[package-smoke] PASS\n", "PASS"),
+        )
+        for record, field in cases:
+            with self.subTest(field=field):
+                path = self._smoke_log(self.VALID_SMOKE.replace(record, record + record, 1))
+                errors = artifacts.validate_package_smoke(
+                    path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+                )
+                self.assertTrue(
+                    any(f"duplicates field '{field}'" in error for error in errors),
+                    errors,
+                )
+
+    def test_package_smoke_rejects_a_non_shipping_profile(self) -> None:
+        """Evidence from an experimental package cannot satisfy stable-v1."""
+        path = self._smoke_log(self.VALID_SMOKE.replace(
+            "[package-smoke] profile=stable-v1\n",
+            "[package-smoke] profile=experimental\n",
+        ))
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(any("field 'profile'" in error for error in errors), errors)
+
+    def test_package_smoke_requires_a_lowercase_msi_digest(self) -> None:
+        """A non-canonical digest cannot identify an immutable package artifact."""
+        path = self._smoke_log(self.VALID_SMOKE.replace(
+            PACKAGE_SMOKE_TEST_DIGEST,
+            PACKAGE_SMOKE_TEST_DIGEST.upper(),
+        ))
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(any("MSI SHA-256" in error for error in errors), errors)
+
+    def test_package_smoke_requires_terminal_pass_record(self) -> None:
+        """A success marker before later fields cannot terminate package evidence."""
+        path = self._smoke_log(self.VALID_SMOKE.replace(
+            "[package-smoke] exit_code=0\n[package-smoke] PASS\n",
+            "[package-smoke] PASS\n[package-smoke] exit_code=0\n",
+        ))
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(any("terminal PASS" in error for error in errors), errors)
+
+    def test_package_smoke_rejects_blank_records_after_terminal_pass(self) -> None:
+        """Canonical package evidence has no hidden content after terminal PASS."""
+        path = self._smoke_log(self.VALID_SMOKE + "\n")
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(any("blank record" in error for error in errors), errors)
+
+    def test_package_smoke_rejects_unknown_and_malformed_backend_fields(self) -> None:
+        """Closed evidence cannot hide arbitrary fields or partial backend outcomes."""
+        unknown = self._smoke_log(
+            self.VALID_SMOKE.replace(
+                "[package-smoke] PASS\n",
+                "[package-smoke] unexpected=field\n[package-smoke] PASS\n",
+            ),
+        )
+        unknown_errors = artifacts.validate_package_smoke(
+            unknown, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(any("unknown field" in error for error in unknown_errors), unknown_errors)
+
+        malformed = self._smoke_log(self.VALID_SMOKE.replace(
+            "[package-smoke] backend=nullrhi result=PASS\n",
+            "[package-smoke] backend=nullrhi\n",
+        ))
+        malformed_errors = artifacts.validate_package_smoke(
+            malformed, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(any("malformed backend" in error for error in malformed_errors), malformed_errors)
 
     def test_package_smoke_without_module_name_is_rejected(self) -> None:
         path = self._smoke_log(
@@ -5279,8 +5424,10 @@ class TestArtifactSemanticValidation(FixtureCase):
             "[package-smoke] exit_code=0\n"
             "[package-smoke] PASS\n"
         )
-        errors = artifacts.validate_package_smoke(path, INCLUDED)
-        self.assertTrue(any("does not mention" in e for e in errors), errors)
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(any("module" in e.lower() for e in errors), errors)
 
     def test_package_smoke_without_pass_indicator_is_rejected(self) -> None:
         path = self._smoke_log(
@@ -5290,12 +5437,16 @@ class TestArtifactSemanticValidation(FixtureCase):
             "[package-smoke] exit_code=1\n"
             "[package-smoke] FAIL\n"
         )
-        errors = artifacts.validate_package_smoke(path, INCLUDED)
-        self.assertTrue(any("pass indicator" in e for e in errors), errors)
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
+        self.assertTrue(errors, "failing package-smoke log was accepted")
 
     def test_whitespace_only_smoke_log_is_rejected(self) -> None:
         path = self._smoke_log("   \n  \n\n  \n")
-        errors = artifacts.validate_package_smoke(path, INCLUDED)
+        errors = artifacts.validate_package_smoke(
+            path, INCLUDED, expected_sha=PACKAGE_SMOKE_TEST_SHA,
+        )
         self.assertTrue(len(errors) > 0, "whitespace-only log accepted")
 
     def test_artifact_dispatcher_routes_correctly(self) -> None:
@@ -5314,6 +5465,7 @@ class TestArtifactSemanticValidation(FixtureCase):
         self.assertEqual(
             artifacts.validate_artifact_bytes(
                 self.VALID_SMOKE.encode("utf-8"), "test-smoke.log", "package-smoke-log", INCLUDED,
+                expected_sha=PACKAGE_SMOKE_TEST_SHA,
             ),
             [],
         )
@@ -5341,7 +5493,7 @@ class TestArtifactSemanticValidation(FixtureCase):
         junit.write_text(self.VALID_JUNIT, encoding="utf-8")
         smoke = self.repo / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
         smoke.parent.mkdir(parents=True, exist_ok=True)
-        smoke.write_text(self.VALID_SMOKE, encoding="utf-8")
+        smoke.write_text(package_smoke_record(INCLUDED, self.sha), encoding="utf-8")
 
         with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
             errors = ManifestValidator(
@@ -5354,6 +5506,23 @@ class TestArtifactSemanticValidation(FixtureCase):
 
         self.assertEqual(errors, [], errors)
 
+    def test_full_validator_rejects_package_smoke_for_another_revision(self) -> None:
+        """A package log from another commit must not satisfy this release revision."""
+        m = base_manifest()
+        junit = self.repo / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
+        junit.parent.mkdir(parents=True, exist_ok=True)
+        junit.write_text(self.VALID_JUNIT, encoding="utf-8")
+        smoke = self.repo / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
+        smoke.parent.mkdir(parents=True, exist_ok=True)
+        smoke.write_text(package_smoke_record(INCLUDED, PACKAGE_SMOKE_TEST_SHA), encoding="utf-8")
+
+        errors = self.validate(m)
+
+        self.assertTrue(
+            any("commit" in error.lower() or "sha" in error.lower() for error in errors),
+            f"foreign-revision package smoke was accepted: {errors}",
+        )
+
     @unittest.skipIf(os.name == "nt", "POSIX rooted artifact-ratchet regression")
     def test_rooted_artifact_branch_rejects_a_stale_declared_gap(self) -> None:
         """A rooted present artifact must trip the same ledger ratchet as paths."""
@@ -5363,7 +5532,7 @@ class TestArtifactSemanticValidation(FixtureCase):
         junit.write_text(self.VALID_JUNIT, encoding="utf-8")
         smoke = self.repo / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
         smoke.parent.mkdir(parents=True, exist_ok=True)
-        smoke.write_text(self.VALID_SMOKE, encoding="utf-8")
+        smoke.write_text(package_smoke_record(INCLUDED, self.sha), encoding="utf-8")
 
         with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
             errors = ManifestValidator(

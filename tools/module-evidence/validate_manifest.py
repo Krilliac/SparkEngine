@@ -756,6 +756,7 @@ class ManifestValidator:
                     semantic_errors = artifacts.validate_artifact_bytes(
                         data, Path(pattern).name, btype,
                         name if isinstance(name, str) else "",
+                        expected_sha=self.expected_sha,
                     )
                     for err in semantic_errors:
                         self._err(f"module {name!r}: {err}")
@@ -766,7 +767,8 @@ class ManifestValidator:
                         self._record_gap(btype, True, "")
                         continue
                     semantic_errors = artifacts.validate_artifact(
-                        artifact_path, btype, name if isinstance(name, str) else ""
+                        artifact_path, btype, name if isinstance(name, str) else "",
+                        expected_sha=self.expected_sha,
                     )
                     for err in semantic_errors:
                         self._err(f"module {name!r}: {err}")

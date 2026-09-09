@@ -56,7 +56,6 @@ def _safe_parse_xml(path: Path) -> ET.ElementTree:
     return tree
 
 MIN_JUNIT_TESTCASES = 3
-MIN_SMOKE_LINES = 3
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 
 
@@ -283,62 +282,132 @@ def validate_junit_xml_bytes(data: bytes, leaf_name: str, module_name: str) -> l
     return errors
 
 
-_PASS_RE = re.compile(
-    r"(?:exit_code\s*=\s*0|(?:^|\s)PASS(?:\s|$)|(?:^|\s)OK(?:\s|$))",
-    re.IGNORECASE,
-)
+PACKAGE_SMOKE_PREFIX = "[package-smoke] "
+PACKAGE_SMOKE_SCHEMA = "package-smoke-v1"
+_SHA1_RE = re.compile(r"[0-9a-f]{40}")
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+_PACKAGE_SMOKE_FIXED_FIELDS = {
+    "schema": f"schema={PACKAGE_SMOKE_SCHEMA}",
+    "product": "product=SparkEngine",
+    "profile": "profile=stable-v1",
+    "backend:nullrhi": "backend=nullrhi result=PASS",
+    "backend:d3d11-warp": "backend=d3d11-warp result=PASS",
+    "exit_code": "exit_code=0",
+    "PASS": "PASS",
+}
+_PACKAGE_SMOKE_ALLOWED_FIELDS = frozenset({
+    *_PACKAGE_SMOKE_FIXED_FIELDS,
+    "module",
+    "commit_sha",
+    "msi_sha256",
+})
 
 
-def validate_package_smoke(path: Path, module_name: str) -> list[str]:
-    """Validate a package-smoke log carries real smoke-test evidence."""
+def _parse_package_smoke_fields(text: str, leaf_name: str) -> tuple[dict[str, str], list[str]]:
+    """Decode the closed line format without accepting decorative log output."""
+    fields: dict[str, str] = {}
     errors: list[str] = []
-    try:
-        size = path.stat().st_size
-    except OSError as exc:
-        return [f"package-smoke artifact {path.name} is unreadable: {exc}"]
-    if size == 0:
-        return [
-            f"package-smoke artifact {path.name} is zero bytes — an empty "
-            f"file is not package evidence"
-        ]
-    if size > MAX_ARTIFACT_BYTES:
-        return [
-            f"package-smoke artifact {path.name} is {size} bytes, exceeding "
-            f"the {MAX_ARTIFACT_BYTES} byte limit"
-        ]
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError as exc:
-        return [f"package-smoke artifact {path.name} is unreadable: {exc}"]
+    terminal_pass_seen = False
+    for number, raw_line in enumerate(text.splitlines(), start=1):
+        if not raw_line.strip():
+            errors.append(
+                f"package-smoke artifact {leaf_name} line {number} is a blank record"
+            )
+            continue
+        if terminal_pass_seen:
+            errors.append(
+                f"package-smoke artifact {leaf_name} line {number} appears after terminal PASS"
+            )
+        if not raw_line.startswith(PACKAGE_SMOKE_PREFIX):
+            errors.append(
+                f"package-smoke artifact {leaf_name} line {number} is not a canonical package-smoke record"
+            )
+            continue
+        record = raw_line[len(PACKAGE_SMOKE_PREFIX):]
+        if record == "PASS":
+            key = "PASS"
+        elif record.startswith("backend="):
+            parts = record.split(" ")
+            if len(parts) != 2 or not parts[0][len("backend="):] or not parts[1].startswith("result="):
+                errors.append(
+                    f"package-smoke artifact {leaf_name} line {number} has malformed backend result"
+                )
+                continue
+            key = f"backend:{parts[0][len('backend='):]}"
+        elif record.count("=") == 1 and " " not in record:
+            key = record.split("=", 1)[0]
+            if not key:
+                errors.append(
+                    f"package-smoke artifact {leaf_name} line {number} has an empty field name"
+                )
+                continue
+        else:
+            errors.append(
+                f"package-smoke artifact {leaf_name} line {number} has malformed record {record!r}"
+            )
+            continue
+        if key in fields:
+            errors.append(f"package-smoke artifact {leaf_name} duplicates field {key!r}")
+            continue
+        fields[key] = record
+        if key == "PASS":
+            terminal_pass_seen = True
+    return fields, errors
 
-    non_empty = [line for line in text.splitlines() if line.strip()]
-    if len(non_empty) < MIN_SMOKE_LINES:
+
+def _validate_package_smoke_text(
+    text: str, leaf_name: str, module_name: str, *, expected_sha: str | None,
+) -> list[str]:
+    """Require exact package identity and both installed backend observations."""
+    fields, errors = _parse_package_smoke_fields(text, leaf_name)
+    for key in sorted(set(fields) - _PACKAGE_SMOKE_ALLOWED_FIELDS):
+        errors.append(f"package-smoke artifact {leaf_name} has unknown field {key!r}")
+    for key, expected in _PACKAGE_SMOKE_FIXED_FIELDS.items():
+        actual = fields.get(key)
+        if actual is None:
+            errors.append(f"package-smoke artifact {leaf_name} is missing required field {key!r}")
+        elif actual != expected:
+            errors.append(
+                f"package-smoke artifact {leaf_name} field {key!r} must be {expected!r}, got {actual!r}"
+            )
+    module_record = fields.get("module")
+    expected_module = f"module={module_name}"
+    if module_record is None:
+        errors.append(f"package-smoke artifact {leaf_name} is missing required module identity")
+    elif module_record != expected_module:
         errors.append(
-            f"package-smoke log has only {len(non_empty)} non-empty line(s), "
-            f"minimum is {MIN_SMOKE_LINES} — a trivially short log is not "
-            f"meaningful evidence"
+            f"package-smoke artifact {leaf_name} module identity must be {module_name!r}, got {module_record!r}"
         )
-
-    has_module_ref = any(module_name in line for line in non_empty)
-    if not has_module_ref:
-        errors.append(
-            f"package-smoke log does not mention module {module_name!r} — "
-            f"evidence must identify the module it covers"
-        )
-
-    has_pass = any(_PASS_RE.search(line) for line in non_empty)
-    if not has_pass:
-        errors.append(
-            "package-smoke log contains no pass indicator (exit_code=0, "
-            "PASS, or OK) — evidence must record a successful outcome"
-        )
-
+    commit_record = fields.get("commit_sha")
+    if commit_record is None:
+        errors.append(f"package-smoke artifact {leaf_name} is missing required commit SHA")
+    else:
+        commit_sha = commit_record.removeprefix("commit_sha=")
+        if not _SHA1_RE.fullmatch(commit_sha):
+            errors.append(f"package-smoke artifact {leaf_name} has invalid lower-case commit SHA")
+        elif expected_sha is None:
+            errors.append(
+                "no expected package-smoke SHA was established, so package evidence "
+                "cannot be bound to the revision under test"
+            )
+        elif not _SHA1_RE.fullmatch(expected_sha):
+            errors.append("expected package-smoke SHA is not a lower-case 40-character Git revision")
+        elif commit_sha != expected_sha:
+            errors.append(
+                f"package-smoke artifact {leaf_name} commit SHA {commit_sha} does not match expected {expected_sha}"
+            )
+    digest_record = fields.get("msi_sha256")
+    if digest_record is None:
+        errors.append(f"package-smoke artifact {leaf_name} is missing required MSI SHA-256")
+    elif not _SHA256_RE.fullmatch(digest_record.removeprefix("msi_sha256=")):
+        errors.append(f"package-smoke artifact {leaf_name} has invalid lower-case MSI SHA-256")
     return errors
 
 
-def validate_package_smoke_bytes(data: bytes, leaf_name: str, module_name: str) -> list[str]:
+def validate_package_smoke_bytes(
+    data: bytes, leaf_name: str, module_name: str, *, expected_sha: str | None = None,
+) -> list[str]:
     """Validate package-smoke evidence from exact already-held bytes."""
-    errors: list[str] = []
     size = len(data)
     if size == 0:
         return [
@@ -349,47 +418,57 @@ def validate_package_smoke_bytes(data: bytes, leaf_name: str, module_name: str) 
             f"package-smoke artifact {leaf_name} is {size} bytes, exceeding "
             f"the {MAX_ARTIFACT_BYTES} byte limit"
         ]
-    text = data.decode("utf-8", errors="replace")
-    non_empty = [line for line in text.splitlines() if line.strip()]
-    if len(non_empty) < MIN_SMOKE_LINES:
-        errors.append(
-            f"package-smoke log has only {len(non_empty)} non-empty line(s), "
-            f"minimum is {MIN_SMOKE_LINES} — a trivially short log is not meaningful evidence"
-        )
-    if not any(module_name in line for line in non_empty):
-        errors.append(
-            f"package-smoke log does not mention module {module_name!r} — evidence must identify the module it covers"
-        )
-    if not any(_PASS_RE.search(line) for line in non_empty):
-        errors.append(
-            "package-smoke log contains no pass indicator (exit_code=0, PASS, or OK) — evidence must record a successful outcome"
-        )
-    return errors
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        return [f"package-smoke artifact {leaf_name} is not UTF-8: {exc}"]
+    return _validate_package_smoke_text(text, leaf_name, module_name, expected_sha=expected_sha)
+
+
+def validate_package_smoke(
+    path: Path, module_name: str, *, expected_sha: str | None = None,
+) -> list[str]:
+    """Validate a package-smoke log through the same closed byte contract."""
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        return [f"package-smoke artifact {path.name} is unreadable: {exc}"]
+    if size == 0:
+        return [
+            f"package-smoke artifact {path.name} is zero bytes — an empty file is not package evidence"
+        ]
+    if size > MAX_ARTIFACT_BYTES:
+        return [
+            f"package-smoke artifact {path.name} is {size} bytes, exceeding "
+            f"the {MAX_ARTIFACT_BYTES} byte limit"
+        ]
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        return [f"package-smoke artifact {path.name} is unreadable: {exc}"]
+    return validate_package_smoke_bytes(data, path.name, module_name, expected_sha=expected_sha)
 
 
 def validate_artifact_bytes(
     data: bytes, leaf_name: str, evidence_type: str, module_name: str,
+    *, expected_sha: str | None = None,
 ) -> list[str]:
     """Dispatch semantic validation for exact already-held artifact bytes."""
-    validators = {
-        "junit-xml": validate_junit_xml_bytes,
-        "package-smoke-log": validate_package_smoke_bytes,
-    }
-    validator = validators.get(evidence_type)
-    if validator is None:
-        return []
-    return validator(data, leaf_name, module_name)
+    if evidence_type == "junit-xml":
+        return validate_junit_xml_bytes(data, leaf_name, module_name)
+    if evidence_type == "package-smoke-log":
+        return validate_package_smoke_bytes(
+            data, leaf_name, module_name, expected_sha=expected_sha,
+        )
+    return []
 
 
 def validate_artifact(
-    path: Path, evidence_type: str, module_name: str
+    path: Path, evidence_type: str, module_name: str, *, expected_sha: str | None = None,
 ) -> list[str]:
     """Dispatch semantic validation for one evidence artifact."""
-    validators = {
-        "junit-xml": validate_junit_xml,
-        "package-smoke-log": validate_package_smoke,
-    }
-    validator = validators.get(evidence_type)
-    if validator is None:
-        return []
-    return validator(path, module_name)
+    if evidence_type == "junit-xml":
+        return validate_junit_xml(path, module_name)
+    if evidence_type == "package-smoke-log":
+        return validate_package_smoke(path, module_name, expected_sha=expected_sha)
+    return []
