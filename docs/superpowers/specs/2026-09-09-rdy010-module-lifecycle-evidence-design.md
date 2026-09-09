@@ -150,7 +150,7 @@ requires their exact types/digests alongside the current source-tree and
 engine bindings. This proves what binary was launched; protected provenance of
 the workflow artifact remains CI-120's separate requirement.
 
-### CI data flow
+### Proposed CI data flow (not yet implemented)
 
 ```
 build-windows-vs2022 (Release) ──uploads exact runtime ZIP──▶ module-profile-lifecycle
@@ -158,18 +158,18 @@ module-profile-lifecycle ──uploads lifecycle JSON + log──▶ module-evid
 module-evidence ──validates target/JUnit/lifecycle evidence──▶ required-ci-gate
 ```
 
-`module-profile-lifecycle` runs on `windows-2022`, depends on the existing
-Windows build, downloads only its same-workflow `SparkEngine-Windows-VS2022-
-Release` artifact, expands it into a fresh directory, runs the collector, and
-uploads `build/module-evidence/module-lifecycle.json` plus its log with the
-exact SHA in the artifact name. `module-evidence` depends on both the Linux
-JUnit producer and this job, downloads the lifecycle artifact, passes it to
+`module-profile-lifecycle` will run on `windows-2022`, depend on the existing
+Windows build, download only its same-workflow `SparkEngine-Windows-VS2022-
+Release` artifact, expand it into a fresh directory, run the collector, and
+upload `build/module-evidence/module-lifecycle.json` plus its log with the
+exact SHA in the artifact name. `module-evidence` will depend on both the Linux
+JUnit producer and that job, download the lifecycle artifact, pass it to
 `validate_manifest.py --repo-root "$GITHUB_WORKSPACE" --lifecycle-evidence`,
-and fails if it is absent, malformed, cross-SHA, or phase-incomplete. The
+and fail if it is absent, malformed, cross-SHA, or phase-incomplete. The
 non-policy consumer deliberately receives the explicit absolute workspace
 root, never `.`, because POSIX `getcwd()` can erase a symlink-bearing current
 directory spelling before no-follow validation begins. The required aggregate
-directly lists the new job, so a skipped or failed producer cannot disappear
+will directly list the new job, so a skipped or failed producer cannot disappear
 behind a green module-evidence result.
 
 ## Error handling and security invariants
