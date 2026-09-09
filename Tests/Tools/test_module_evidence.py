@@ -17,6 +17,7 @@ No repository file is modified.  Fixtures are built in temporary directories.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import shutil
@@ -207,6 +208,20 @@ def pe_image() -> bytes:
     image[0x3C:0x40] = (0x80).to_bytes(4, "little")
     image[0x80:0x84] = b"PE\0\0"
     return bytes(image)
+
+
+def write_image_manifest(root: Path, engine: Path, module: Path, sha: str,
+                         *, engine_digest: str | None = None) -> Path:
+    digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+    path = root / "image-manifest.json"
+    path.write_text(json.dumps({
+        "schemaVersion": "spark-image-manifest-v1", "commitSHA": sha,
+        "images": [
+            {"path": "SparkEngine.exe", "sha256": engine_digest or digest(engine)},
+            {"path": "SparkGameFPS.dll", "sha256": digest(module)},
+        ],
+    }), encoding="utf-8")
+    return path
 
 
 def lifecycle_evidence(repo: Path, sha: str, *, module: str = INCLUDED,
@@ -784,9 +799,11 @@ class TestLifecycleCollector(FixtureCase):
         engine.write_bytes(pe_image())
         module.write_bytes(pe_image())
         out = self.repo / "out" / "module-lifecycle.json"
+        image_manifest = write_image_manifest(root, engine, module, self.sha)
         argv = ["collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
                 "--module-image", str(module), "--working-directory", str(root),
-                "--rhi-backend", "d3d11", "--out", str(out), "--commit-sha", self.sha]
+                "--rhi-backend", "d3d11", "--image-manifest", str(image_manifest),
+                "--out", str(out), "--commit-sha", self.sha]
         for completed in (
             subprocess.CompletedProcess([], 1, "bad output", "failure"),
             subprocess.CompletedProcess([], 0, "malformed output", ""),
@@ -828,6 +845,26 @@ class TestLifecycleCollector(FixtureCase):
                 _, error = run_engine(engine, module, INCLUDED, root, "d3d11", 30)
             self.assertIsNotNone(error)
             run.assert_not_called()
+
+    def test_main_requires_trusted_manifest_and_rejects_digest_mismatch_before_launch(self) -> None:
+        import collect_lifecycle
+        root = self.repo / "manifest-package"
+        root.mkdir()
+        engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        out = self.repo / "manifest-out" / "module-lifecycle.json"
+        bad_manifest = write_image_manifest(root, engine, module, self.sha,
+                                            engine_digest="0" * 64)
+        argv = ["collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
+                "--module-image", str(module), "--working-directory", str(root),
+                "--rhi-backend", "d3d11", "--image-manifest", str(bad_manifest),
+                "--out", str(out), "--commit-sha", self.sha]
+        with mock.patch.object(sys, "argv", argv), \
+             mock.patch("collect_lifecycle.subprocess.run") as run:
+            self.assertEqual(collect_lifecycle.main(), 1)
+        run.assert_not_called()
+        self.assertFalse(out.exists())
 
     def test_run_engine_uses_canonical_paths_for_relative_arguments(self) -> None:
         from collect_lifecycle import run_engine
@@ -904,9 +941,11 @@ class TestLifecycleCollector(FixtureCase):
         out = self.repo / "stale-out" / "module-lifecycle.json"
         log = out.parent / "module-lifecycle-SparkGameFPS.log"
         out.parent.mkdir()
+        image_manifest = write_image_manifest(root, engine, module, self.sha)
         argv = ["collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
                 "--module-image", str(module), "--working-directory", str(root),
-                "--rhi-backend", "d3d11", "--out", str(out), "--commit-sha", self.sha]
+                "--rhi-backend", "d3d11", "--image-manifest", str(image_manifest),
+                "--out", str(out), "--commit-sha", self.sha]
         for patch_target in ("collect_lifecycle.hash_engine_binary",
                              "collect_lifecycle._write_temp"):
             out.write_text("stale-json", encoding="utf-8")

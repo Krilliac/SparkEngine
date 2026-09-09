@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import lifecycle as lifecycle_mod  # noqa: E402
 import paths as paths_mod  # noqa: E402
+import strict_json  # noqa: E402
 from provenance import resolve_head_sha  # noqa: E402
 from schema import expected_library_names  # noqa: E402
 
@@ -47,6 +48,7 @@ _ENGINE_NAME = "SparkEngine.exe"
 _SCRIPT_EXTENSIONS = frozenset({".cmd", ".bat", ".sh", ".ps1", ".py", ".pl", ".rb"})
 _SCRIPT_SIGNATURES = (b"#!", b"@echo", b"@ECHO", b"@rem", b"@REM")
 _MIN_ENGINE_SIZE = 4096
+IMAGE_MANIFEST_SCHEMA = "spark-image-manifest-v1"
 
 
 def hash_engine_binary(engine: Path) -> str:
@@ -58,6 +60,37 @@ def hash_engine_binary(engine: Path) -> str:
                 break
             h.update(chunk)
     return h.hexdigest()
+
+
+def load_image_manifest(path: Path, root: Path, commit_sha: str) -> tuple[dict[str, str] | None, str | None]:
+    """Load the narrowly-scoped upstream Release image identity manifest.
+
+    Task 4 must write exactly ``SparkEngine.exe`` and ``SparkGameFPS.dll`` with
+    artifact-root-relative paths and lowercase SHA-256 values for github.sha.
+    """
+    try:
+        document = strict_json.load_file(path)
+    except strict_json.StrictJSONError as exc:
+        return None, f"image manifest is unusable: {exc}"
+    if not isinstance(document, dict) or set(document) != {"schemaVersion", "commitSHA", "images"}:
+        return None, "image manifest has an invalid top-level schema"
+    if document["schemaVersion"] != IMAGE_MANIFEST_SCHEMA or document["commitSHA"] != commit_sha:
+        return None, "image manifest schemaVersion or commitSHA does not match this collection"
+    images = document["images"]
+    if not isinstance(images, list) or len(images) != 2:
+        return None, "image manifest must declare exactly two images"
+    expected = {"SparkEngine.exe", "SparkGameFPS.dll"}
+    values: dict[str, str] = {}
+    for image in images:
+        if not isinstance(image, dict) or set(image) != {"path", "sha256"}:
+            return None, "image manifest image schema is invalid"
+        artifact_path, digest = image["path"], image["sha256"]
+        if not isinstance(artifact_path, str) or artifact_path not in expected or \
+           Path(artifact_path).name != artifact_path or not isinstance(digest, str) or \
+           not lifecycle_mod.ENGINE_SHA256_RE.fullmatch(digest) or artifact_path in values:
+            return None, "image manifest image path or SHA-256 is invalid"
+        values[artifact_path] = digest
+    return values, None
 
 
 def validate_engine_binary(engine: Path) -> str | None:
@@ -315,6 +348,7 @@ def main() -> int:
     parser.add_argument("--module-image", type=Path, required=True)
     parser.add_argument("--working-directory", type=Path, required=True)
     parser.add_argument("--rhi-backend", required=True)
+    parser.add_argument("--image-manifest", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--commit-sha", default=None)
@@ -349,6 +383,10 @@ def main() -> int:
             raise RuntimeError(err)
         assert prepared is not None
         root, engine, module_image = prepared
+        trusted_images, err = load_image_manifest(args.image_manifest, root, sha)
+        if err:
+            raise RuntimeError(err)
+        assert trusted_images is not None
         if (err := validate_engine_binary(engine)) is not None:
             raise RuntimeError(err)
         if (err := _validate_image(module_image, root, role="module",
@@ -359,6 +397,9 @@ def main() -> int:
             module_digest = hash_engine_binary(module_image)
         except OSError as exc:
             raise RuntimeError(f"cannot hash lifecycle image before launch: {exc}") from exc
+        if (engine_digest, module_digest) != (trusted_images["SparkEngine.exe"],
+                                              trusted_images["SparkGameFPS.dll"]):
+            raise RuntimeError("image digest does not match the trusted image manifest")
         source_dir = f"GameModules/{module}/Source"
         tree_sha, err = lifecycle_mod.source_tree_sha(REPO_ROOT, sha, source_dir)
         if tree_sha is None:

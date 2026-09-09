@@ -123,16 +123,17 @@ def load_lifecycle_evidence(path: Path) -> dict[str, Any]:
         raise LifecycleEvidenceUnavailable(f"lifecycle evidence unusable: {exc}") from exc
     if not isinstance(document, dict):
         raise LifecycleEvidenceUnavailable(f"{path}: lifecycle evidence must be an object")
+    if set(document) != {"schemaVersion", "generatedAt", "commitSHA", "records"}:
+        raise LifecycleEvidenceUnavailable(f"{path}: lifecycle evidence has unknown or missing top-level keys")
     if document.get("schemaVersion") != LIFECYCLE_SCHEMA_VERSION:
         raise LifecycleEvidenceUnavailable(
             f"{path}: lifecycle evidence schemaVersion must be "
             f"{LIFECYCLE_SCHEMA_VERSION!r}, got {document.get('schemaVersion')!r}"
         )
     records = document.get("records")
-    if not isinstance(records, list) or not records:
+    if not isinstance(records, list) or len(records) != 1 or not isinstance(records[0], dict):
         raise LifecycleEvidenceUnavailable(
-            f"{path}: lifecycle evidence contains no records — an empty run "
-            f"is not a successful one"
+            f"{path}: stable-v1 lifecycle evidence must contain exactly one object record"
         )
     return document
 
