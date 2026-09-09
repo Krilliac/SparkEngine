@@ -118,6 +118,7 @@ class ManifestValidator:
         expected_sha: str | None = None,
         policy_only: bool = False,
         declared_gaps: dict[str, str] | None = None,
+        root_authority: strict_json.NoFollowDirectoryLease | None = None,
     ):
         # Evidence types acknowledged as having no producer yet, mapped to the
         # work item tracking each.  These are downgraded to warnings so that
@@ -134,6 +135,7 @@ class ManifestValidator:
         self.lifecycle_error = lifecycle_error
         self.expected_sha = expected_sha
         self.policy_only = policy_only
+        self.root_authority = root_authority
         self.errors: list[str] = []
         self.known_profiles: set[str] = set()
         self.known_work_items: set[str] = set()
@@ -700,6 +702,34 @@ class ManifestValidator:
                         or btype not in EVIDENCE_PRODUCERS
                         or not isinstance(pattern, str)):
                     continue
+                if self.root_authority is not None:
+                    try:
+                        data = self.root_authority.read_relative_bytes(
+                            pattern, max_bytes=artifacts.MAX_ARTIFACT_BYTES,
+                        )
+                    except strict_json.NoFollowEvidenceMissing:
+                        producer = EVIDENCE_PRODUCERS[btype]
+                        self._record_gap(
+                            btype, False,
+                            f"module {name!r}: declared {btype} evidence "
+                            f"{pattern!r} was not produced. It is written by "
+                            f"{producer['producer']} in CI job {producer['ciJob']}; a "
+                            "binding to an artifact that does not exist proves nothing.",
+                        )
+                        continue
+                    except strict_json.StrictJSONError as exc:
+                        self._err(
+                            f"module {name!r}: declared {btype} evidence "
+                            f"{pattern!r} authority rejected: {exc}"
+                        )
+                        continue
+                    semantic_errors = artifacts.validate_artifact_bytes(
+                        data, Path(pattern).name, btype,
+                        name if isinstance(name, str) else "",
+                    )
+                    for err in semantic_errors:
+                        self._err(f"module {name!r}: {err}")
+                    continue
                 artifact_path = self.repo_root / pattern
                 if artifact_path.is_file():
                     if btype in self.declared_gaps:
@@ -968,10 +998,24 @@ def main() -> int:
 
             if not args.policy_only:
                 try:
-                    path = args.target_evidence or (
-                        repo_root / EVIDENCE_PRODUCERS["cmake-target-index"]["artifact"]
-                    )
-                    target_index = targets_mod.load_target_index(Path(path))
+                    if args.target_evidence is None:
+                        assert root_authority is not None
+                        relative = EVIDENCE_PRODUCERS["cmake-target-index"]["artifact"]
+                        data = root_authority.read_relative_bytes(
+                            relative,
+                            max_bytes=strict_json.MODULE_TARGET_LIMITS.document_bytes,
+                        )
+                        target_index = targets_mod.load_target_index_bytes(
+                            data, str(repo_root / relative),
+                        )
+                    else:
+                        target_index = targets_mod.load_target_index(args.target_evidence)
+                except strict_json.NoFollowEvidenceMissing as exc:
+                    target_error = f"target evidence leaf is absent: {exc}"
+                except strict_json.StrictJSONError as exc:
+                    raise targets_mod.TargetEvidenceRejected(
+                        f"target evidence authority rejected: {exc}"
+                    ) from exc
                 except targets_mod.TargetEvidenceUnavailable as exc:
                     target_error = str(exc)
             if root_authority is not None:
@@ -992,12 +1036,16 @@ def main() -> int:
                 lifecycle_error=lifecycle_error,
                 expected_sha=expected_sha, policy_only=args.policy_only,
                 declared_gaps=declared_gaps,
+                root_authority=root_authority,
             )
             errors = validator.validate()
             if root_authority is not None:
                 root_authority.verify()
     except lifecycle_mod.LifecycleEvidenceRejected as exc:
         print(f"FATAL: lifecycle evidence rejected: {exc}", file=sys.stderr)
+        return 1
+    except targets_mod.TargetEvidenceRejected as exc:
+        print(f"FATAL: target evidence rejected: {exc}", file=sys.stderr)
         return 1
     except strict_json.NoFollowAuthorityError as exc:
         print(f"FATAL: repository or evidence authority rejected: {exc}", file=sys.stderr)

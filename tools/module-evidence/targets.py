@@ -42,12 +42,16 @@ INDEX_SCHEMA_VERSION = "module-targets-v1"
 
 
 class TargetEvidenceUnavailable(RuntimeError):
-    """No configure-generated target evidence could be read.
+    """The exact final target-evidence leaf is genuinely absent.
 
-    Raised rather than returning an empty index, so that a missing configure
-    can never be mistaken for "no targets were found, therefore nothing is
-    wrong".
+    This is the only target-evidence condition that may become a declared gap.
+    A present but malformed, reparse-bearing, or otherwise unsafe target index
+    is a rejection, not evidence that no configure ran.
     """
+
+
+class TargetEvidenceRejected(RuntimeError):
+    """Present target evidence cannot safely satisfy the release gate."""
 
 
 def write_query(build_dir: Path) -> Path:
@@ -194,51 +198,72 @@ def write_index(index: dict[str, dict[str, Any]], out_path: Path, *, commit_sha:
                         encoding="utf-8")
 
 
-def load_target_index(path: Path) -> dict[str, Any]:
-    """Load a previously extracted target-evidence document.
-
-    Raises TargetEvidenceUnavailable rather than degrading to a permissive
-    empty result, so an unconfigured tree blocks instead of passing.
-    """
-    if not path.is_file():
-        raise TargetEvidenceUnavailable(
-            f"target evidence not found at {path} — run "
-            f"tools/module-evidence/collect_targets.py after a CMake configure"
-        )
-    try:
-        document = strict_json.load_file(
-            path, limits=strict_json.MODULE_TARGET_LIMITS
-        )
-    except strict_json.StrictJSONError as exc:
-        raise TargetEvidenceUnavailable(f"target evidence is unusable: {exc}") from exc
+def _validate_target_index_document(document: Any, origin: str) -> dict[str, Any]:
+    """Validate one already-held target-evidence JSON document."""
     if not isinstance(document, dict):
-        raise TargetEvidenceUnavailable(f"{path}: target evidence must be an object")
+        raise TargetEvidenceRejected(f"{origin}: target evidence must be an object")
     version = document.get("schemaVersion")
     if version != INDEX_SCHEMA_VERSION:
-        raise TargetEvidenceUnavailable(
-            f"{path}: target evidence schemaVersion must be "
+        raise TargetEvidenceRejected(
+            f"{origin}: target evidence schemaVersion must be "
             f"{INDEX_SCHEMA_VERSION!r}, got {version!r}"
         )
     sha_errors = provenance.check_sha_shape(
-        document.get("commitSHA"), f"{path} commitSHA"
+        document.get("commitSHA"), f"{origin} commitSHA"
     )
     if sha_errors:
-        raise TargetEvidenceUnavailable(
+        raise TargetEvidenceRejected(
             f"target evidence provenance is invalid: {sha_errors[0]}"
         )
     ts_errors = provenance.check_rfc3339(
-        document.get("generatedAt"), f"{path} generatedAt"
+        document.get("generatedAt"), f"{origin} generatedAt"
     )
     if ts_errors:
-        raise TargetEvidenceUnavailable(
+        raise TargetEvidenceRejected(
             f"target evidence provenance is invalid: {ts_errors[0]}"
         )
     targets = document.get("targets")
     if not isinstance(targets, dict) or not targets:
-        raise TargetEvidenceUnavailable(
-            f"{path}: target evidence declares no targets"
+        raise TargetEvidenceRejected(
+            f"{origin}: target evidence declares no targets"
         )
     return document
+
+
+def load_target_index_bytes(data: bytes, origin: str) -> dict[str, Any]:
+    """Validate target evidence from exact bytes read by a held authority."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise TargetEvidenceRejected(
+            f"target evidence is present but not UTF-8: {exc}"
+        ) from exc
+    try:
+        document = strict_json.loads(
+            text, origin=origin, limits=strict_json.MODULE_TARGET_LIMITS,
+        )
+    except strict_json.StrictJSONError as exc:
+        raise TargetEvidenceRejected(
+            f"target evidence is present but unusable: {exc}"
+        ) from exc
+    return _validate_target_index_document(document, origin)
+
+
+def load_target_index(path: Path) -> dict[str, Any]:
+    """Load target evidence through exact no-follow file bytes."""
+    try:
+        data = strict_json.read_file_no_follow_bytes(
+            path, max_bytes=strict_json.MODULE_TARGET_LIMITS.document_bytes,
+        )
+    except strict_json.NoFollowEvidenceMissing as exc:
+        raise TargetEvidenceUnavailable(
+            f"target evidence leaf is absent: {exc}"
+        ) from exc
+    except strict_json.StrictJSONError as exc:
+        raise TargetEvidenceRejected(
+            f"target evidence authority rejected: {exc}"
+        ) from exc
+    return load_target_index_bytes(data, str(path))
 
 
 def check_target(

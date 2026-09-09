@@ -471,9 +471,13 @@ class TestTargetProof(FixtureCase):
                     target_index=target_index(name_on_disk=on_disk),
                 )
 
-    def test_unconfigured_tree_raises_rather_than_returning_empty(self) -> None:
-        with self.assertRaises(targets_mod.TargetEvidenceUnavailable):
+    def test_missing_target_ancestor_is_rejected_rather_than_returning_empty(self) -> None:
+        with self.assertRaises(targets_mod.TargetEvidenceRejected):
             targets_mod.load_target_index(self.repo / "nope" / "targets.json")
+
+    def test_missing_target_leaf_is_the_only_unavailable_case(self) -> None:
+        with self.assertRaises(targets_mod.TargetEvidenceUnavailable):
+            targets_mod.load_target_index(self.repo / "missing-targets.json")
 
     def test_codemodel_with_no_targets_raises(self) -> None:
         reply = self.repo / "emptyreply"
@@ -1228,6 +1232,34 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
 
         self.assertEqual(result, 0, stderr.getvalue())
         self.assertIn("OK: module evidence manifest is valid", stdout.getvalue())
+
+    def test_main_reads_default_target_index_through_held_root_bytes(self) -> None:
+        """The release default cannot regress to a mutable target-index pathname."""
+        root = self.repo / "cli-rooted-target-root"
+        self._prepare_cli_evidence_root(root)
+        manifest_path = root / "cli-manifest.json"
+        original_reader = strict_json.NoFollowDirectoryLease.read_relative_bytes
+        calls: list[str] = []
+
+        def record_reader(
+            lease: strict_json.NoFollowDirectoryLease, relative: str, *, max_bytes: int,
+        ) -> bytes:
+            calls.append(relative)
+            return original_reader(lease, relative, max_bytes=max_bytes)
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(
+            strict_json.NoFollowDirectoryLease, "read_relative_bytes",
+            autospec=True, side_effect=record_reader,
+        ), mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(root),
+            "--manifest", str(manifest_path),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertEqual(result, 0, stderr.getvalue())
+        self.assertIn("build/module-evidence/module-targets.json", calls)
 
     def test_document_shape_is_rejected_by_loader_and_injected_validator(self) -> None:
         """Direct injection must not bypass the loader's closed document schema."""
@@ -4412,6 +4444,7 @@ class TestCIWiring(unittest.TestCase):
         block = self._job_block("module-evidence")
         self.assertIn('--repo-root "$GITHUB_WORKSPACE"', block)
         self.assertNotIn("--repo-root .", block)
+        self.assertNotIn("--target-evidence", block)
 
     def test_gate_consumes_really_produced_junit_evidence(self) -> None:
         block = self._job_block("module-evidence")
@@ -4652,7 +4685,7 @@ class TestTargetContainment(FixtureCase):
                 generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 source="test",
             )
-            with self.assertRaises(targets_mod.TargetEvidenceUnavailable) as cm:
+            with self.assertRaises(targets_mod.TargetEvidenceRejected) as cm:
                 targets_mod.load_target_index(path)
             self.assertIn("provenance", str(cm.exception).lower())
 
@@ -4667,7 +4700,7 @@ class TestTargetContainment(FixtureCase):
                 generated_at="not-a-timestamp",
                 source="test",
             )
-            with self.assertRaises(targets_mod.TargetEvidenceUnavailable) as cm:
+            with self.assertRaises(targets_mod.TargetEvidenceRejected) as cm:
                 targets_mod.load_target_index(path)
             self.assertIn("provenance", str(cm.exception).lower())
 
@@ -4686,6 +4719,29 @@ class TestTargetContainment(FixtureCase):
             )
             doc = targets_mod.load_target_index(path)
             self.assertIn("SparkGameFPS", doc["targets"])
+
+    def test_load_target_index_rejects_reparse_leaf_without_reading_target(self) -> None:
+        """A target evidence symlink cannot redirect the release consumer."""
+        from datetime import datetime, timezone
+        with tempfile.TemporaryDirectory(prefix="spark-target-reparse-") as tmp:
+            root = Path(tmp)
+            target = root / "real-targets.json"
+            targets_mod.write_index(
+                {"SparkGameFPS": {"name": "SparkGameFPS", "type": "SHARED_LIBRARY"}},
+                target,
+                commit_sha=self.sha,
+                generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                source="test",
+            )
+            alias = root / "targets.json"
+            try:
+                os.symlink(str(target), str(alias))
+            except (OSError, NotImplementedError) as exc:
+                self.skipTest(f"cannot create target evidence reparse fixture: {exc}")
+
+            with self.assertRaises(targets_mod.TargetEvidenceRejected):
+                targets_mod.load_target_index(alias)
+            self.assertTrue(target.is_file(), "the real target index was altered")
 
 
 class TestCMakeFileAPI(unittest.TestCase):
@@ -4952,6 +5008,20 @@ class TestArtifactSemanticValidation(FixtureCase):
         self.assertEqual(
             artifacts.validate_artifact(path, "cmake-target-index", INCLUDED), [])
 
+    def test_held_byte_dispatcher_routes_correctly(self) -> None:
+        self.assertEqual(
+            artifacts.validate_artifact_bytes(
+                self.VALID_JUNIT.encode("utf-8"), "test-junit.xml", "junit-xml", INCLUDED,
+            ),
+            [],
+        )
+        self.assertEqual(
+            artifacts.validate_artifact_bytes(
+                self.VALID_SMOKE.encode("utf-8"), "test-smoke.log", "package-smoke-log", INCLUDED,
+            ),
+            [],
+        )
+
     def test_full_validator_rejects_zero_byte_artifacts(self) -> None:
         """The full ManifestValidator must reject zero-byte evidence files."""
         m = base_manifest()
@@ -4966,6 +5036,27 @@ class TestArtifactSemanticValidation(FixtureCase):
             any("zero bytes" in e for e in errors),
             f"zero-byte artifact was accepted by the full validator: {errors}",
         )
+
+    def test_full_validator_consumes_artifacts_from_held_root_bytes(self) -> None:
+        """Normal semantic artifacts stay valid when read from rooted bytes."""
+        m = base_manifest()
+        junit = self.repo / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
+        junit.parent.mkdir(parents=True, exist_ok=True)
+        junit.write_text(self.VALID_JUNIT, encoding="utf-8")
+        smoke = self.repo / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
+        smoke.parent.mkdir(parents=True, exist_ok=True)
+        smoke.write_text(self.VALID_SMOKE, encoding="utf-8")
+
+        with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
+            errors = ManifestValidator(
+                m, self.repo,
+                target_index=target_index(),
+                lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
+                expected_sha=self.sha,
+                root_authority=lease,
+            ).validate()
+
+        self.assertEqual(errors, [], errors)
 
 
 if __name__ == "__main__":

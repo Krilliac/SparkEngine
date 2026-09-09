@@ -1136,6 +1136,15 @@ def load_file(path: Path | str, *, limits: Limits = DEFAULT_LIMITS) -> Any:
     return loads(text, origin=str(path), limits=limits)
 
 
+def read_file_no_follow_bytes(path: Path | str, *, max_bytes: int) -> bytes:
+    """Read one path through no-follow authority without parsing its bytes."""
+    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 0:
+        raise NoFollowAuthorityError("no-follow byte limit must be non-negative")
+    if os.name == "nt":
+        return _read_file_no_follow_windows(path, max_bytes)
+    return _read_file_no_follow_posix(path, max_bytes)
+
+
 def load_file_no_follow(path: Path | str, *, limits: Limits = DEFAULT_LIMITS) -> Any:
     """Read one strict JSON document through held, no-follow filesystem authority.
 
@@ -1147,10 +1156,7 @@ def load_file_no_follow(path: Path | str, *, limits: Limits = DEFAULT_LIMITS) ->
     native rooted ``NtCreateFile`` binding; there is no weaker path-based
     fallback when that binding is unavailable.
     """
-    if os.name == "nt":
-        data = _read_file_no_follow_windows(path, limits.document_bytes)
-    else:
-        data = _read_file_no_follow_posix(path, limits.document_bytes)
+    data = read_file_no_follow_bytes(path, max_bytes=limits.document_bytes)
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError as exc:
