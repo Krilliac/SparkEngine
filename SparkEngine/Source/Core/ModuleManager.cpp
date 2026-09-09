@@ -1312,7 +1312,8 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
                 faultIsolator.ResetSubsystem("ModuleFixed:" + entry.name);
             }
             ++m_lifecycleEvidence.initialized;
-            ++FindOrCreateLifecycleRecord(entry.name).onLoad;
+            if (!entry.isLegacyAdapter)
+                ++FindOrCreateLifecycleRecord(entry.name).onLoad;
             entry.initialized = true;
             console.LogSuccess("Module initialized: " + entry.name);
         }
@@ -1338,11 +1339,13 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
                            entry.name.c_str());
             entry.instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
-            ++FindOrCreateLifecycleRecord(entry.name).onUnload;
+            if (!entry.isLegacyAdapter)
+                ++FindOrCreateLifecycleRecord(entry.name).onUnload;
             if (entry.destroyFn)
             {
                 entry.destroyFn(entry.instance);
-                ++FindOrCreateLifecycleRecord(entry.name).destroyModule;
+                if (!entry.isLegacyAdapter)
+                    ++FindOrCreateLifecycleRecord(entry.name).destroyModule;
             }
             entry.instance = nullptr;
             entry.destroyFn = nullptr;
@@ -1361,13 +1364,15 @@ void ModuleManager::UpdateAll(float deltaTime)
             SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", {
                 entry.instance->OnUpdate(deltaTime);
                 ++m_lifecycleEvidence.updated;
-                ++FindOrCreateLifecycleRecord(entry.name).onUpdate;
+                if (!entry.isLegacyAdapter)
+                    ++FindOrCreateLifecycleRecord(entry.name).onUpdate;
                 callbackCompleted = true;
             });
             if (!callbackCompleted)
             {
                 ++m_lifecycleEvidence.faults;
-                ++FindOrCreateLifecycleRecord(entry.name).faults;
+                if (!entry.isLegacyAdapter)
+                    ++FindOrCreateLifecycleRecord(entry.name).faults;
             }
         }
     }
@@ -1384,13 +1389,15 @@ void ModuleManager::FixedUpdateAll(float fixedDeltaTime)
             SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", {
                 entry.instance->OnFixedUpdate(fixedDeltaTime);
                 ++m_lifecycleEvidence.fixedUpdated;
-                ++FindOrCreateLifecycleRecord(entry.name).onFixedUpdate;
+                if (!entry.isLegacyAdapter)
+                    ++FindOrCreateLifecycleRecord(entry.name).onFixedUpdate;
                 callbackCompleted = true;
             });
             if (!callbackCompleted)
             {
                 ++m_lifecycleEvidence.faults;
-                ++FindOrCreateLifecycleRecord(entry.name).faults;
+                if (!entry.isLegacyAdapter)
+                    ++FindOrCreateLifecycleRecord(entry.name).faults;
             }
         }
     }
@@ -1413,13 +1420,15 @@ void ModuleManager::RenderAll()
             SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", {
                 entry.instance->OnRender();
                 ++m_lifecycleEvidence.rendered;
-                ++FindOrCreateLifecycleRecord(entry.name).onRender;
+                if (!entry.isLegacyAdapter)
+                    ++FindOrCreateLifecycleRecord(entry.name).onRender;
                 callbackCompleted = true;
             });
             if (!callbackCompleted)
             {
                 ++m_lifecycleEvidence.faults;
-                ++FindOrCreateLifecycleRecord(entry.name).faults;
+                if (!entry.isLegacyAdapter)
+                    ++FindOrCreateLifecycleRecord(entry.name).faults;
             }
         }
     }
@@ -1495,7 +1504,8 @@ void ModuleManager::ShutdownAllAfterPreflight()
             console.LogInfo("Shutting down module: " + it->name);
             it->instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
-            ++FindOrCreateLifecycleRecord(it->name).onUnload;
+            if (!it->isLegacyAdapter)
+                ++FindOrCreateLifecycleRecord(it->name).onUnload;
             it->initialized = false;
             // Console handlers a module registered under its own id live in the
             // host registry and outlive the DLL unless the host drops them. The
@@ -1682,7 +1692,8 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         {
             entry.instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
-            ++FindOrCreateLifecycleRecord(entry.name).onUnload;
+            if (!entry.isLegacyAdapter)
+                ++FindOrCreateLifecycleRecord(entry.name).onUnload;
         }
         UnloadEntry(entry);
         m_modules[index] = std::move(replacement);
