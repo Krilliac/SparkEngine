@@ -25,6 +25,7 @@ Absent run evidence is a blocking gap, never a pass.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -118,10 +119,39 @@ def run_rooted_git(
 ) -> subprocess.CompletedProcess[str]:
     """Run Git from an inherited POSIX descriptor-rooted checkout authority."""
     cwd, pass_fds = root.posix_git_cwd()
+    # A relative cwd is not authority if Git's environment can replace the
+    # repository, work tree, object store, index, or injected configuration.
+    # Preserve ordinary process settings (PATH/locale/etc.) but remove every
+    # Git-specific override and disable external system/global config files.
+    environment = {
+        key: value for key, value in os.environ.items()
+        if not key.startswith("GIT_")
+    }
+    environment["GIT_CONFIG_NOSYSTEM"] = "1"
+    environment["GIT_CONFIG_GLOBAL"] = os.devnull
+    # A checked-out release root must have a real .git directory below the held
+    # root. A worktree-style .git file, commondir, or alternates file can
+    # redirect object lookup outside that authority.
+    git_entries = root.list_relative_names(".git")
+    if "commondir" in git_entries:
+        raise strict_json.NoFollowAuthorityError(
+            "rooted Git rejects .git/commondir indirection"
+        )
+    if "objects" not in git_entries:
+        raise strict_json.NoFollowAuthorityError(
+            "rooted Git checkout has no .git/objects directory"
+        )
+    object_entries = root.list_relative_names(".git/objects")
+    if "info" in object_entries:
+        info_entries = root.list_relative_names(".git/objects/info")
+        if "alternates" in info_entries:
+            raise strict_json.NoFollowAuthorityError(
+                "rooted Git rejects .git/objects/info/alternates indirection"
+            )
     return subprocess.run(
         ["git", "-C", cwd, *arguments],
         capture_output=True, text=True, timeout=30, check=False,
-        pass_fds=pass_fds,
+        pass_fds=pass_fds, env=environment,
     )
 
 

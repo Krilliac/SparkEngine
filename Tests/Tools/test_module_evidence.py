@@ -846,6 +846,71 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         self.assertIsNone(tree_error)
         self.assertIsNotNone(tree_sha)
 
+    @unittest.skipIf(os.name == "nt", "POSIX rooted Git environment regression")
+    def test_posix_rooted_git_sanitizes_environment_overrides(self) -> None:
+        """GIT_DIR and related overrides cannot replace the held checkout."""
+        root = self.repo / "rooted-git-environment-root"
+        expected_sha = build_fake_repo(root)
+        attacker = self.repo / "rooted-git-environment-attacker"
+        build_fake_repo(attacker)
+        (attacker / "attacker-marker.txt").write_text("different rooted Git fixture\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(attacker), "add", "attacker-marker.txt"], check=True)
+        subprocess.run(
+            ["git", "-C", str(attacker), "-c", "user.email=test@example.invalid",
+             "-c", "user.name=Test", "commit", "-m", "attacker fixture"],
+            check=True, capture_output=True, text=True,
+        )
+        attacker_sha = subprocess.run(
+            ["git", "-C", str(attacker), "rev-parse", "HEAD"],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        self.assertNotEqual(expected_sha, attacker_sha)
+
+        with strict_json.open_no_follow_directory_lease(root, label="test root") as lease, \
+                mock.patch.dict(os.environ, {
+                    "GIT_DIR": str(attacker / ".git"),
+                    "GIT_WORK_TREE": str(attacker),
+                    "GIT_OBJECT_DIRECTORY": str(attacker / ".git" / "objects"),
+                    "GIT_CONFIG_COUNT": "1",
+                    "GIT_CONFIG_KEY_0": "core.worktree",
+                    "GIT_CONFIG_VALUE_0": str(attacker),
+                }, clear=False):
+            head, error = provenance.resolve_head_sha_rooted(lease)
+
+        self.assertIsNone(error)
+        self.assertEqual(head, expected_sha)
+
+    @unittest.skipIf(os.name == "nt", "POSIX rooted Git gitdir-file regression")
+    def test_posix_rooted_git_rejects_external_gitdir_file(self) -> None:
+        """A .git file cannot redirect rooted Git outside the held checkout."""
+        root = self.repo / "rooted-gitdir-file-root"
+        build_fake_repo(root)
+        external_git = self.repo / "rooted-gitdir-file-external"
+        (root / ".git").rename(external_git)
+        (root / ".git").write_text(f"gitdir: {external_git}\n", encoding="utf-8")
+
+        with strict_json.open_no_follow_directory_lease(root, label="test root") as lease:
+            with self.assertRaises(strict_json.NoFollowAuthorityError):
+                provenance.run_rooted_git(lease, "rev-parse", "HEAD")
+
+    @unittest.skipIf(os.name == "nt", "POSIX rooted Git indirection regression")
+    def test_posix_rooted_git_rejects_common_and_alternate_object_indirection(self) -> None:
+        """Git metadata links cannot redirect held-root object lookup."""
+        for name, relative in (
+            ("commondir", ".git/commondir"),
+            ("alternates", ".git/objects/info/alternates"),
+        ):
+            with self.subTest(name=name):
+                root = self.repo / f"rooted-git-{name}-root"
+                build_fake_repo(root)
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("/tmp/attacker-git\n", encoding="utf-8")
+
+                with strict_json.open_no_follow_directory_lease(root, label="test root") as lease:
+                    with self.assertRaises(strict_json.NoFollowAuthorityError):
+                        provenance.run_rooted_git(lease, "rev-parse", "HEAD")
+
     def test_loader_classifies_malformed_present_evidence_as_fatal_rejection(self) -> None:
         path = self.repo / "malformed-lifecycle-evidence.json"
         path.write_text("{not valid JSON", encoding="utf-8")
