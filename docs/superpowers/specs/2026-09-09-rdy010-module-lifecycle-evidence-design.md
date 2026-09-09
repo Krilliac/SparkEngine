@@ -23,12 +23,15 @@ No checked-in required same-workflow CI job yet runs the collector against the
 immutable Windows Release artifact at the exact SHA, so the validator still
 permits the declared lifecycle gap until that producer and consumer land.
 
-The current validator also deliberately fails closed if a lifecycle document
-is present: its committed-policy, source, and Git control-plane reads are being
-converted to rooted Ubuntu descriptor operations under
-`2026-09-09-rdy010-rooted-validator-authority.md`. Until that migration lands,
-no platform may emit a positive lifecycle `OK`; this prevents a path-based
-control-plane race from being represented as release evidence.
+The validator now grants a positive lifecycle `OK` only through the rooted
+Ubuntu consumer path described in
+`2026-09-09-rdy010-rooted-validator-authority.md`: manifest, gap ledger,
+registries, source checks, Git revision/tree queries, and produced artifacts
+are opened below held descriptor authority. Windows continues to collect the
+real lifecycle artifact, but its validator fails closed for a positive result
+because Git cannot consume a directory HANDLE as a working-directory
+capability; Windows remains available for collection, policy-only, and
+incomplete-gap checks.
 
 ## Scope and non-goals
 
@@ -158,12 +161,13 @@ behind a green module-evidence result.
   duplicate record, zero required count, nonzero fault count, or invalid
   binary/path identity.
 - The non-policy validator holds and re-verifies a component-by-component
-  no-follow repository-root authority around legacy root-relative checks. A
-  root reparse, malformed present evidence, or root replacement detected at a
-  verification boundary is fatal and cannot be softened by the temporary
-  declared-gap ledger; only a genuinely absent lifecycle leaf may remain a
-  tracked gap. This detects replacement around legacy path-based phases; it
-  does not claim those legacy reads form a single atomic rooted transaction.
+  no-follow repository-root authority. On Ubuntu, every success-relevant
+  in-tree evidence, policy, source, and Git read uses descriptor-rooted child
+  operations; a root reparse, malformed present evidence, or missing ancestor
+  is fatal and cannot be softened by the temporary declared-gap ledger. Only a
+  genuinely absent final lifecycle leaf may remain a tracked gap. Windows does
+  not claim a directory HANDLE-derived pathname can secure Git and therefore
+  cannot positively attest lifecycle evidence.
 - The terminal parser remains line-anchored and accepts no logger-prefixed
   records.
 - Evidence records remain bounded: one stable-v1 module record and fixed
