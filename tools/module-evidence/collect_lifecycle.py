@@ -103,7 +103,10 @@ _OBJ_CASE_INSENSITIVE = 0x00000040
 _HANDLE_FLAG_INHERIT = 0x00000001
 _DUPLICATE_SAME_ACCESS = 0x00000002
 _FILE_BEGIN = 0
-_FILE_DISPOSITION_INFO = 4
+_FILE_DISPOSITION_INFO_EX = 21
+_FILE_DISPOSITION_FLAG_DELETE = 0x00000001
+_FILE_DISPOSITION_FLAG_POSIX_SEMANTICS = 0x00000002
+_FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE = 0x00000010
 _ERROR_FILE_NOT_FOUND = 2
 _ERROR_PATH_NOT_FOUND = 3
 _STATUS_OBJECT_NAME_NOT_FOUND = 0xC0000034
@@ -143,8 +146,8 @@ if os.name == "nt":
                 ("nFileIndexLow", wintypes.DWORD),
             ]
 
-        class _FILE_DISPOSITION_INFORMATION(ctypes.Structure):
-            _fields_ = [("DeleteFile", ctypes.c_ubyte)]
+        class _FILE_DISPOSITION_INFORMATION_EX(ctypes.Structure):
+            _fields_ = [("Flags", wintypes.DWORD)]
 
         class _UNICODE_STRING(ctypes.Structure):
             _fields_ = [
@@ -509,16 +512,29 @@ class OutputArtifactHandle:
         self._closed = True
 
     def discard(self) -> None:
-        """Mark this exact open file object for deletion, then release it."""
+        """Unlink this exact open file object, even after a readonly metadata attack.
+
+        ``FileDispositionInfoEx`` is intentionally the only rollback primitive.
+        Its POSIX and IGNORE_READONLY flags remove the fixed directory entry by
+        this retained HANDLE without clearing attributes or reopening a mutable
+        pathname.  A foreign pre-open handle can still retain an unnamed stream
+        until it closes, but it cannot leave lifecycle evidence at the trusted
+        artifact pathname.  Older Windows targets that do not support these
+        flags fail closed rather than falling back to a TOCTOU-prone clear path.
+        """
         if self._closed:
             return
-        disposition = _FILE_DISPOSITION_INFORMATION(1)  # type: ignore[name-defined]
+        disposition = _FILE_DISPOSITION_INFORMATION_EX(  # type: ignore[name-defined]
+            _FILE_DISPOSITION_FLAG_DELETE |
+            _FILE_DISPOSITION_FLAG_POSIX_SEMANTICS |
+            _FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
+        )
         if not _SetFileInformationByHandle(  # type: ignore[name-defined]
-            self._handle, _FILE_DISPOSITION_INFO, ctypes.byref(disposition),  # type: ignore[name-defined]
+            self._handle, _FILE_DISPOSITION_INFO_EX, ctypes.byref(disposition),  # type: ignore[name-defined]
             ctypes.sizeof(disposition),  # type: ignore[name-defined]
         ):
             raise OSError(
-                "SetFileInformationByHandle(FileDispositionInfo) failed: "
+                "SetFileInformationByHandle(FileDispositionInfoEx) failed: "
                 f"{ctypes.get_last_error()}"  # type: ignore[name-defined]
             )
         self.close()

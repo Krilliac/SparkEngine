@@ -168,14 +168,9 @@ def check_document_shape(document: Any, label: str) -> list[str]:
 
 
 def load_lifecycle_evidence(path: Path) -> dict[str, Any]:
-    """Load a lifecycle evidence document, or raise."""
-    if not path.is_file():
-        raise LifecycleEvidenceUnavailable(
-            f"lifecycle evidence not found at {path} — a module's runtime "
-            f"phases are proven by running it, not by declaring them"
-        )
+    """Load lifecycle evidence from the exact held no-follow file bytes, or raise."""
     try:
-        document = strict_json.load_file(path)
+        document = strict_json.load_file_no_follow(path)
     except strict_json.StrictJSONError as exc:
         raise LifecycleEvidenceUnavailable(f"lifecycle evidence unusable: {exc}") from exc
     shape_errors = check_document_shape(document, str(path))

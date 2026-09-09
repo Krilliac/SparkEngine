@@ -660,6 +660,80 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         with self.assertRaises(lifecycle_mod.LifecycleEvidenceUnavailable):
             lifecycle_mod.load_lifecycle_evidence(path)
 
+    def test_loader_rejects_reparse_leaf_instead_of_reading_its_target(self) -> None:
+        """A lifecycle leaf reparse point cannot redirect the evidence reader."""
+        target = self.repo / "external-lifecycle-evidence.json"
+        target.write_text(
+            json.dumps(lifecycle_evidence(self.repo, self.sha)), encoding="utf-8",
+        )
+        leaf = self.repo / "module-lifecycle-reparse.json"
+        try:
+            os.symlink(str(target), str(leaf))
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"cannot create a lifecycle leaf reparse fixture: {exc}")
+
+        with self.assertRaisesRegex(
+            lifecycle_mod.LifecycleEvidenceUnavailable, "reparse|symlink|unsafe",
+        ):
+            lifecycle_mod.load_lifecycle_evidence(leaf)
+        self.assertTrue(target.is_file(), "the external evidence target was altered")
+
+    def test_loader_rejects_post_handoff_ancestor_swap_without_accepting_external_json(self) -> None:
+        """A producer-directory swap after exit must not redirect the validator."""
+        output_directory = self.repo / "build" / "module-evidence"
+        output_directory.mkdir(parents=True, exist_ok=True)
+        evidence_path = output_directory / "module-lifecycle.json"
+        evidence_path.write_text(
+            json.dumps(lifecycle_evidence(self.repo, self.sha)), encoding="utf-8",
+        )
+        external_directory = self.repo / "external-handoff-target"
+        external_directory.mkdir()
+        external_evidence = external_directory / evidence_path.name
+        attacker_document = lifecycle_evidence(self.repo, self.sha)
+        attacker_document["records"][0]["phases"]["OnUpdate"] = 999_999
+        attacker_payload = json.dumps(attacker_document)
+        external_evidence.write_text(attacker_payload, encoding="utf-8")
+        preserved_directory = self.repo / "module-evidence-before-swap"
+        output_directory.rename(preserved_directory)
+        try:
+            os.symlink(str(external_directory), str(output_directory), target_is_directory=True)
+        except (OSError, NotImplementedError) as exc:
+            preserved_directory.rename(output_directory)
+            self.skipTest(f"cannot create a lifecycle ancestor reparse fixture: {exc}")
+
+        with self.assertRaisesRegex(
+            lifecycle_mod.LifecycleEvidenceUnavailable, "reparse|symlink|unsafe",
+        ):
+            lifecycle_mod.load_lifecycle_evidence(evidence_path)
+        self.assertEqual(external_evidence.read_text(encoding="utf-8"), attacker_payload)
+
+    def test_loader_uses_held_no_follow_bytes_not_the_legacy_path_reader(self) -> None:
+        """The lifecycle consumer cannot regress to strict_json's path-reopen API."""
+        path = self.repo / "held-lifecycle-evidence.json"
+        expected = lifecycle_evidence(self.repo, self.sha)
+        path.write_text(json.dumps(expected), encoding="utf-8")
+
+        with mock.patch(
+            "strict_json.load_file",
+            side_effect=AssertionError("legacy path reader was invoked"),
+        ) as legacy_reader:
+            loaded = lifecycle_mod.load_lifecycle_evidence(path)
+
+        legacy_reader.assert_not_called()
+        self.assertEqual(loaded, expected)
+
+    @unittest.skipUnless(os.name == "nt", "native Windows consumer binding is unavailable")
+    def test_loader_fails_closed_without_native_no_follow_reader(self) -> None:
+        """Windows validation must not fall back to a path-following JSON read."""
+        path = self.repo / "unavailable-native-lifecycle-evidence.json"
+        path.write_text(json.dumps(lifecycle_evidence(self.repo, self.sha)), encoding="utf-8")
+
+        with mock.patch("strict_json._WINDOWS_NO_FOLLOW_READER_AVAILABLE", False):
+            with self.assertRaisesRegex(
+                lifecycle_mod.LifecycleEvidenceUnavailable, "unavailable",
+            ):
+                lifecycle_mod.load_lifecycle_evidence(path)
+
     def test_document_shape_is_rejected_by_loader_and_injected_validator(self) -> None:
         """Direct injection must not bypass the loader's closed document schema."""
         cases: list[tuple[str, Any]] = []
@@ -2466,6 +2540,98 @@ class TestLifecycleCollector(FixtureCase):
             )
         self.assertIsNone(close_error)
         self.assertTrue(all(anchor.lease.closed for anchor in leases))
+
+    @unittest.skipUnless(os.name == "nt", "native Windows readonly rollback tests are unavailable")
+    def test_native_exact_guard_deletes_readonly_artifact_without_path_reopen(self) -> None:
+        """FileDispositionInfoEx removes a hostile-readonly final leaf by its guard."""
+        import ctypes
+        from ctypes import wintypes
+        import collect_lifecycle
+
+        if not collect_lifecycle.WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
+            self.skipTest("native Windows output-directory lease binding is unavailable")
+
+        class FileBasicInformation(ctypes.Structure):
+            _fields_ = [
+                ("CreationTime", ctypes.c_longlong),
+                ("LastAccessTime", ctypes.c_longlong),
+                ("LastWriteTime", ctypes.c_longlong),
+                ("ChangeTime", ctypes.c_longlong),
+                ("FileAttributes", wintypes.DWORD),
+            ]
+
+        namespace, error = collect_lifecycle._open_output_namespace_leases(
+            self.repo, self.repo / "build" / "module-evidence",
+        )
+        self.assertIsNone(error)
+        assert namespace is not None
+        output_lease = namespace[-1].lease
+        guard = collect_lifecycle._write_output_artifact(
+            output_lease,
+            self.repo / "build" / "module-evidence" /
+            collect_lifecycle.LIFECYCLE_OUTPUT_FILENAME,
+            "{\"stale\": true}\n",
+        )
+        hostile = collect_lifecycle._CreateFileW(
+            str(self.repo / "build" / "module-evidence" /
+                collect_lifecycle.LIFECYCLE_OUTPUT_FILENAME),
+            collect_lifecycle._FILE_WRITE_ATTRIBUTES,
+            collect_lifecycle._FILE_SHARE_READ | collect_lifecycle._FILE_SHARE_WRITE | 0x00000004,
+            None,
+            collect_lifecycle._OPEN_EXISTING,
+            collect_lifecycle._FILE_ATTRIBUTE_NORMAL |
+            collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT,
+            None,
+        )
+        self.assertNotIn(hostile, (None, collect_lifecycle._INVALID_HANDLE_VALUE))
+        assert hostile not in (None, collect_lifecycle._INVALID_HANDLE_VALUE)
+        try:
+            basic = FileBasicInformation(-1, -1, -1, -1, 0x00000001)
+            self.assertTrue(
+                collect_lifecycle._SetFileInformationByHandle(
+                    hostile, 0, ctypes.byref(basic), ctypes.sizeof(basic),
+                ),
+                f"could not set hostile readonly attribute: {ctypes.get_last_error()}",
+            )
+            guard.discard()
+            self.assertFalse(
+                (self.repo / "build" / "module-evidence" /
+                 collect_lifecycle.LIFECYCLE_OUTPUT_FILENAME).exists(),
+                "readonly lifecycle artifact retained its pathname after guarded rollback",
+            )
+        finally:
+            if not guard.closed:
+                guard.close()
+            self.assertTrue(collect_lifecycle._CloseHandle(hostile))
+            close_error = collect_lifecycle._close_image_leases(
+                [anchor.lease for anchor in namespace],
+            )
+            self.assertIsNone(close_error)
+
+    @unittest.skipUnless(os.name == "nt", "native Windows readonly rollback tests are unavailable")
+    def test_exact_guard_requests_only_readonly_safe_disposition_flags(self) -> None:
+        """Rollback must not silently downgrade to legacy FileDispositionInfo."""
+        import ctypes
+        import collect_lifecycle
+
+        guard = collect_lifecycle.OutputArtifactHandle(
+            0x4567, object(), collect_lifecycle.LIFECYCLE_OUTPUT_FILENAME,
+        )
+        expected_flags = (
+            collect_lifecycle._FILE_DISPOSITION_FLAG_DELETE |
+            collect_lifecycle._FILE_DISPOSITION_FLAG_POSIX_SEMANTICS |
+            collect_lifecycle._FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE
+        )
+        with mock.patch("collect_lifecycle._SetFileInformationByHandle", return_value=True) as set_info, \
+             mock.patch("collect_lifecycle._CloseHandle", return_value=True):
+            guard.discard()
+
+        args = set_info.call_args.args
+        self.assertEqual(args[1], collect_lifecycle._FILE_DISPOSITION_INFO_EX)
+        disposition = ctypes.cast(
+            args[2], ctypes.POINTER(collect_lifecycle._FILE_DISPOSITION_INFORMATION_EX),
+        ).contents
+        self.assertEqual(disposition.Flags, expected_flags)
 
     @unittest.skipUnless(os.name == "nt", "native Windows output reserve tests are unavailable")
     def test_native_process_lifetime_output_reserves_block_writes_until_exit(self) -> None:
