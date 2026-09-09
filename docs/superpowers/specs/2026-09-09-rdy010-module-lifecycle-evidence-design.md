@@ -7,20 +7,21 @@ Close the `lifecycle-log` producer gap for the sole stable-v1 module,
 loads the exact built DLL. This design does not claim to close RDY-010: the
 separate `package-smoke-log` gap remains owned by MOD-310.
 
-## Current failure
+## Current collector contract
 
-The repository already has two incompatible partial contracts:
+The previous incompatible partial contracts have been reconciled:
 
 - `ModuleManager` counts aggregate successful lifecycle callbacks and the
-  Windows host prints `SPARK_MODULE_LIFECYCLE` after normal teardown for the
-  existing `ModuleProfileLifecycle_SparkGameFPS_D3D11` CTest.
-- `tools/module-evidence/collect_lifecycle.py` instead expects freely emitted
-  `[module-lifecycle] <module> <phase>` lines and invokes obsolete
-  `-headless -test-frames` arguments. It cannot launch the production Windows
-  path or produce its declared JSON artifact.
+  Windows host emits one direct `SPARK_MODULE_LIFECYCLE` record after normal
+  teardown for the existing `ModuleProfileLifecycle_SparkGameFPS_D3D11` CTest.
+- `tools/module-evidence/collect_lifecycle.py` accepts exactly that standalone
+  record, launches the production D3D11/WARP path, and authenticates the
+  exact engine and module DLL against the artifact-root image manifest before
+  producing its JSON and audit artifacts.
 
-No checked-in CI job runs the collector against a real stable-v1 DLL, and the
-module-evidence validator therefore permits the declared lifecycle gap.
+No checked-in required same-workflow CI job yet runs the collector against the
+immutable Windows Release artifact at the exact SHA, so the validator still
+permits the declared lifecycle gap until that producer and consumer land.
 
 ## Scope and non-goals
 
@@ -91,14 +92,21 @@ the actual module image and extracted runtime directory explicitly:
 
 ```
 python tools/module-evidence/collect_lifecycle.py \
-  --engine <runtime>/SparkEngine.exe \
+  --engine <absolute-runtime>\\SparkEngine.exe \
   --module SparkGameFPS \
-  --module-image <runtime>/SparkGameFPS.dll \
-  --working-directory <runtime> \
+  --module-image <absolute-runtime>\\SparkGameFPS.dll \
+  --working-directory <absolute-runtime> \
+  --image-manifest <absolute-runtime>\\module-lifecycle-images.json \
   --rhi-backend d3d11 \
-  --out build/module-evidence/module-lifecycle.json \
+  --out <absolute-checkout>\\build\\module-evidence\\module-lifecycle.json \
   --commit-sha <exact-sha>
 ```
+
+`<absolute-runtime>` and `<absolute-checkout>` are placeholders for exact
+absolute Windows path spellings. The manifest must be the fixed
+`module-lifecycle-images.json` file at the runtime root, and `--out` must be
+the fixed `build\\module-evidence\\module-lifecycle.json` path under the
+collector checkout.
 
 It launches the same bounded windowed command as the real CTest:
 `-game <DLL> -require-game -test-seconds 1.0 -threads 2 -window-size 640x360
@@ -127,10 +135,13 @@ Release` artifact, expands it into a fresh directory, runs the collector, and
 uploads `build/module-evidence/module-lifecycle.json` plus its log with the
 exact SHA in the artifact name. `module-evidence` depends on both the Linux
 JUnit producer and this job, downloads the lifecycle artifact, passes it to
-`validate_manifest.py --lifecycle-evidence`, and fails if it is absent,
-malformed, cross-SHA, or phase-incomplete. The required aggregate directly
-lists the new job, so a skipped or failed producer cannot disappear behind a
-green module-evidence result.
+`validate_manifest.py --repo-root "$GITHUB_WORKSPACE" --lifecycle-evidence`,
+and fails if it is absent, malformed, cross-SHA, or phase-incomplete. The
+non-policy consumer deliberately receives the explicit absolute workspace
+root, never `.`, because POSIX `getcwd()` can erase a symlink-bearing current
+directory spelling before no-follow validation begins. The required aggregate
+directly lists the new job, so a skipped or failed producer cannot disappear
+behind a green module-evidence result.
 
 ## Error handling and security invariants
 
@@ -139,6 +150,13 @@ green module-evidence result.
 - No success JSON after an engine exit, timeout, malformed terminal record,
   duplicate record, zero required count, nonzero fault count, or invalid
   binary/path identity.
+- The non-policy validator holds and re-verifies a component-by-component
+  no-follow repository-root authority around legacy root-relative checks. A
+  root reparse, malformed present evidence, or root replacement detected at a
+  verification boundary is fatal and cannot be softened by the temporary
+  declared-gap ledger; only a genuinely absent lifecycle leaf may remain a
+  tracked gap. This detects replacement around legacy path-based phases; it
+  does not claim those legacy reads form a single atomic rooted transaction.
 - The terminal parser remains line-anchored and accepts no logger-prefixed
   records.
 - Evidence records remain bounded: one stable-v1 module record and fixed

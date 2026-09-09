@@ -5,7 +5,7 @@
     {
       "evidenceType": "lifecycle-log",
       "trackedUnder": "RDY-010",
-      "reason": "No producer emits runtime ModuleManager lifecycle evidence. tools/module-evidence/collect_lifecycle.py exists and requires the engine to print '[module-lifecycle] <Module> <Phase>' for each entered phase, but ModuleManager does not yet emit that trace, and no CTest case loads SparkGameFPS as a shared library. Tests/TestModuleABI.cpp:609 is the only test that loads a real game module; it loads SparkGame, is guarded to non-Windows, and drives only load/init/shutdown/unload - never the tick phases."
+      "reason": "The Windows host now emits one direct SPARK_MODULE_LIFECYCLE record after normal teardown, and tools/module-evidence/collect_lifecycle.py authenticates the exact Windows engine/DLL package before producing fixed lifecycle evidence. No required same-workflow CI producer yet runs that collector from the immutable Windows Release artifact at the exact SHA; this remaining producer gap keeps RDY-010 open. Profile-scoped package smoke remains independently tracked under MOD-310."
     },
     {
       "evidenceType": "package-smoke-log",

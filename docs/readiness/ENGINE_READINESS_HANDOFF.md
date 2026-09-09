@@ -440,7 +440,7 @@ git diff --exit-code
 **Priority:** P0 · **Status:** in-progress · **Wave:** 0 · **Area:** tests · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel and rejects declared-but-unproduced evidence, but no producer in this repository emits runtime ModuleManager lifecycle evidence for an in-profile module, and package smoke is not scoped to a module profile in blocking CI. Those two gaps are enumerated in tools/module-evidence/evidence-gaps.json and keep this item release-blocking.
+In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, and has a real Windows lifecycle collector/host contract. However, no required same-workflow CI producer yet runs that collector from the immutable Windows Release artifact at the exact SHA, and package smoke is not scoped to a module profile in blocking CI. Those remaining gaps are enumerated in tools/module-evidence/evidence-gaps.json and keep this item release-blocking.
 
 **Dependency contract**
 
@@ -482,8 +482,8 @@ In-profile module tests compile subsets, tautologies, standalone mirrors, or rei
 - Prove CMake target existence from a configure-generated File API codemodel, never from text in CMakeLists.txt (done)
 - Require the exact lexical and canonical non-reparse path GameModules/<module>/Source for every module (done)
 - Bind every evidence declaration to the real output path of a real producer, and reject unproduced artifacts (done)
-- Emit a '[module-lifecycle] <Module> <Phase>' trace from ModuleManager so runtime lifecycle evidence can be produced (not started)
-- Add a CTest case that loads the in-profile module as a shared library and drives load, update, unload and shutdown on Windows and Linux (not started)
+- Emit one direct SPARK_MODULE_LIFECYCLE host record after real module teardown so runtime lifecycle evidence can be produced (done)
+- Keep the Windows D3D11 CTest that loads the in-profile module as a shared library and drives create/load/update/fixed/render/unload/destroy (done); Linux runtime parity is not claimed
 - Add the module-profile-lifecycle CI job that runs collect_lifecycle.py against the built engine (not started)
 - Scope package smoke to the module profile and add the module-profile-package-smoke CI job (tracked under MOD-310)
 - Keep experimental-module lifecycle coverage open under RDY-015 rather than making it a stable-v1 prerequisite
@@ -501,7 +501,7 @@ In-profile module tests compile subsets, tautologies, standalone mirrors, or rei
 python3 -m unittest Tests.Tools.test_module_evidence
 python3 tools/module-evidence/validate_manifest.py --repo-root . --policy-only
 python3 tools/module-evidence/collect_targets.py --build-dir build/module-evidence-configure --out build/module-evidence/module-targets.json --configure-arg -DBUILD_GAME_MODULES=ON
-python3 tools/module-evidence/validate_manifest.py --repo-root . --target-evidence build/module-evidence/module-targets.json --allow-declared-gaps tools/module-evidence/evidence-gaps.json
+python3 tools/module-evidence/validate_manifest.py --repo-root "$GITHUB_WORKSPACE" --target-evidence build/module-evidence/module-targets.json --allow-declared-gaps tools/module-evidence/evidence-gaps.json
 tools/check-module-evidence.sh
 cmake --preset windows-shipping -DBUILD_GAME_MODULES=ON -DENABLE_EDITOR=ON -DBUILD_TESTS=ON
 cmake --build --preset windows-shipping --config MinSizeRel --parallel 2

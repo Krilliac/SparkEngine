@@ -248,7 +248,7 @@ Add module-profile-lifecycle on windows-2022. It checks out source, downloads on
 Make module-evidence download this artifact and invoke:
 
 ~~~bash
-python3 tools/module-evidence/validate_manifest.py --repo-root . --target-evidence build/module-evidence/module-targets.json --lifecycle-evidence build/module-evidence/module-lifecycle.json --expected-sha "$MODULE_EVIDENCE_SHA" --allow-declared-gaps tools/module-evidence/evidence-gaps.json
+python3 tools/module-evidence/validate_manifest.py --repo-root "$GITHUB_WORKSPACE" --target-evidence build/module-evidence/module-targets.json --lifecycle-evidence "$GITHUB_WORKSPACE/build/module-evidence/module-lifecycle.json" --expected-sha "$MODULE_EVIDENCE_SHA" --allow-declared-gaps tools/module-evidence/evidence-gaps.json
 ~~~
 
 Delete only the lifecycle-log object from evidence-gaps.json; retain MOD-310 package-smoke-log. Set lifecycle producer metadata to the new job. Add module-profile-lifecycle to required-ci-gate needs and its exact expected-job JSON.
