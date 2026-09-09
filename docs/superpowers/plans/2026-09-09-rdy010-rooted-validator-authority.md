@@ -88,9 +88,12 @@ Plan saved to `docs/superpowers/plans/2026-09-09-rdy010-rooted-validator-authori
 Implemented locally on the canonical branch: rooted relative readers, held-byte
 target/lifecycle/artifact consumers, rooted Ubuntu contract/source/Git reads,
 Ubuntu-only positive authority, Windows fail-closed positive validation, and
-cross-platform regressions. The remaining RDY-010 blocker is the required
-same-workflow exact-SHA CI producer; this plan does not claim that hosted
-evidence exists. Git metadata remains a runner-owned immutable control-plane
+cross-platform regressions. The same-workflow exact-SHA producer/consumer
+workflow is checked in, but the remaining RDY-010 evidence blocker is a hosted
+successful producer-to-Ubuntu-consumer run; this plan does not claim that
+hosted evidence exists. Profile-scoped package smoke remains owned by MOD-310,
+and CI-120/protected external attestation remains a separate blocker. Git
+metadata remains a runner-owned immutable control-plane
 precondition: the rooted Git launch rejects environment and static external
 metadata indirection, but cannot turn Git's own internal child-path lookups
 into descriptor capabilities. Positive lifecycle validation therefore requires
