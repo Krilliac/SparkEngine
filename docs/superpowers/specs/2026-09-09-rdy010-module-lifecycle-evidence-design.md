@@ -28,8 +28,9 @@ In scope:
 
 - Capture module-scoped, post-teardown counts for `CreateModule`, `OnLoad`,
   `OnUpdate`, `OnFixedUpdate`, `OnRender`, `OnUnload`, and `DestroyModule`.
-- Emit exactly one host-owned, standalone structured record per loaded module
-  after teardown on the `-require-game` Windows execution path.
+- Emit exactly one host-owned, standalone structured record for the required
+  initialized game module after teardown on the `-require-game` Windows
+  execution path.
 - Make the collector launch that same real D3D11/WARP process using an exact
   DLL path from a downloaded Windows build artifact.
 - Add a named `module-profile-lifecycle` Windows CI job and make
@@ -68,16 +69,17 @@ teardown snapshot.
 
 ### Host-owned terminal record
 
-After ordinary Windows teardown, `SparkEngineWindows.cpp` writes one direct
-stdout record for every named module record:
+After ordinary Windows teardown, `SparkEngineWindows.cpp` selects the one
+initialized game-module record required by `-require-game` and writes one
+direct stdout record:
 
 ```
 SPARK_MODULE_LIFECYCLE module=SparkGameFPS create=1 load=1 update=4 fixed=2 render=4 unload=1 destroy=1 faults=0
 ```
 
 The record is emitted by the host after `ModuleManager` destruction, not via
-the logger and not by the module. The parser accepts only standalone complete
-records, rejects malformed/duplicate matching records, and requires exactly
+the logger and not by the module. The parser accepts only a standalone complete
+record, rejects malformed/duplicate matching records, and requires exactly
 one record for `SparkGameFPS` with positive create/load/update/unload/destroy
 counts, at least one fixed/update/render callback, and zero faults. A module
 attempting to print a spoofed line creates a duplicate and fails the run.

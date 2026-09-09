@@ -94,7 +94,8 @@ git commit -m "feat(modules): record per-module lifecycle evidence"
 
 **Interfaces:**
 - Consumes ModuleManager::GetLastTeardownLifecycleEvidence().modules.
-- Produces one direct record per module:
+- Produces one direct record for the initialized game module required by
+  `-require-game`:
 
 ~~~text
 SPARK_MODULE_LIFECYCLE module=SparkGameFPS create=1 load=1 update=4 fixed=2 render=4 unload=1 destroy=1 faults=0
@@ -118,7 +119,7 @@ Expected: old aggregate-only output is rejected.
 
 - [ ] **Step 3: Implement output and strict parser**
 
-In SparkEngineWindows.cpp, replace the old aggregate-only output in the existing requireGame teardown block with stable-name ordered records using WriteCommandOutput. Do not use SimpleConsole. In the CMake parser, select only exact module=SparkGameFPS lines, require exactly one, validate the nine numeric fields, and retain the exact single WARP device record requirement.
+In SparkEngineWindows.cpp, replace the old aggregate-only output in the existing requireGame teardown block by selecting the initialized game module's record and writing it with WriteCommandOutput. Do not use SimpleConsole. In the CMake parser, select only exact module=SparkGameFPS lines, require exactly one, validate the module field and all eight numeric fields, and retain the exact single WARP device record requirement.
 
 - [ ] **Step 4: Run production smoke green**
 
