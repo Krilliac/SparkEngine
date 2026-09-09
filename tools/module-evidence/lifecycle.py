@@ -95,11 +95,20 @@ _WINDOWS_RESERVED_NAMES = frozenset(
 
 
 class LifecycleEvidenceUnavailable(RuntimeError):
-    """No runtime lifecycle evidence could be read.
+    """The exact lifecycle evidence leaf is genuinely absent.
 
-    Raised rather than returning an empty result so that "nothing ran" can
-    never be mistaken for "nothing failed".
+    This is intentionally narrow: it is the only lifecycle loader outcome that
+    ``--allow-declared-gaps`` may downgrade.  A present but malformed or unsafe
+    artifact is not evidence of an absent producer.
     """
+
+
+class LifecycleEvidenceRejected(LifecycleEvidenceUnavailable):
+    """Present lifecycle evidence cannot safely be accepted by the release gate."""
+
+
+class LifecycleEvidenceAuthorityError(LifecycleEvidenceRejected):
+    """No held no-follow authority could safely establish the evidence bytes."""
 
 
 def source_tree_sha(repo_root: Path, commit_sha: str, source_directory: str) -> tuple[str | None, str | None]:
@@ -171,11 +180,21 @@ def load_lifecycle_evidence(path: Path) -> dict[str, Any]:
     """Load lifecycle evidence from the exact held no-follow file bytes, or raise."""
     try:
         document = strict_json.load_file_no_follow(path)
+    except strict_json.NoFollowEvidenceMissing as exc:
+        raise LifecycleEvidenceUnavailable(
+            f"lifecycle evidence leaf is absent: {exc}"
+        ) from exc
+    except strict_json.NoFollowAuthorityError as exc:
+        raise LifecycleEvidenceAuthorityError(
+            f"lifecycle evidence authority rejected: {exc}"
+        ) from exc
     except strict_json.StrictJSONError as exc:
-        raise LifecycleEvidenceUnavailable(f"lifecycle evidence unusable: {exc}") from exc
+        raise LifecycleEvidenceRejected(
+            f"lifecycle evidence is present but unusable: {exc}"
+        ) from exc
     shape_errors = check_document_shape(document, str(path))
     if shape_errors:
-        raise LifecycleEvidenceUnavailable("; ".join(shape_errors))
+        raise LifecycleEvidenceRejected("; ".join(shape_errors))
     assert isinstance(document, dict)
     return document
 

@@ -18,6 +18,7 @@ and nested level, and reports the JSON pointer of the offending node.
 from __future__ import annotations
 
 import json
+import errno
 import os
 import re
 import stat
@@ -70,6 +71,20 @@ class StrictJSONError(ValueError):
     """A document that must be rejected before any semantic validation runs."""
 
 
+class NoFollowEvidenceMissing(StrictJSONError):
+    """The exact no-follow evidence leaf does not exist.
+
+    This is deliberately the only no-follow reader condition that a caller may
+    map to a declared producer gap.  A caller must not treat a malformed,
+    unreadable, reparse-bearing, or otherwise untrustworthy *present* document
+    as though its producer simply never ran.
+    """
+
+
+class NoFollowAuthorityError(StrictJSONError):
+    """No safe held authority could be established or retained for a path."""
+
+
 def lexical_absolute_no_follow_path(
     path: Path | str, *, label: str = "path", allow_current_directory: bool = False,
 ) -> Path:
@@ -83,17 +98,47 @@ def lexical_absolute_no_follow_path(
     """
     raw = os.fspath(path)
     if not isinstance(raw, str) or not raw or "\0" in raw:
-        raise StrictJSONError(f"{label} must be a non-empty text path without NUL")
+        raise NoFollowAuthorityError(
+            f"{label} must be a non-empty text path without NUL"
+        )
     if allow_current_directory and raw in {".", "./", ".\\"}:
         return Path(os.path.abspath(raw))
     _drive, tail = os.path.splitdrive(raw)
     separator = r"[\\/]+" if os.name == "nt" else r"/+"
     if any(component in {".", ".."} for component in re.split(separator, tail) if component):
-        raise StrictJSONError(
+        raise NoFollowAuthorityError(
             f"{label} contains a dot or traversal segment; no-follow paths must "
             "preserve every raw component"
         )
     return Path(os.path.abspath(raw))
+
+
+def _classify_no_follow_read_os_error(path: Path | str, exc: OSError) -> StrictJSONError:
+    """Classify only a genuine no-follow leaf absence as downgradeable.
+
+    ``NtCreateFile`` reports missing names as NTSTATUS rather than a Win32
+    ``errno``.  Keep that mapping here alongside POSIX ``ENOENT`` so lifecycle
+    callers get a structured result instead of parsing messages.
+    """
+    status = getattr(exc, "status", None)
+    if isinstance(status, int) and (status & 0xFFFFFFFF) in {
+        0xC0000034,  # STATUS_OBJECT_NAME_NOT_FOUND
+        0xC000003A,  # STATUS_OBJECT_PATH_NOT_FOUND
+    }:
+        return NoFollowEvidenceMissing(
+            f"lifecycle evidence leaf is absent at {path}: {exc}"
+        )
+    error_numbers = {getattr(exc, "errno", None), getattr(exc, "winerror", None)}
+    # ENOTDIR is deliberately not absence: an attacker can replace an expected
+    # ancestor directory with a regular file.  Only a name/path that truly does
+    # not exist may be softened by the declared-gap ledger.
+    if error_numbers & {errno.ENOENT, 2, 3}:
+        return NoFollowEvidenceMissing(
+            f"lifecycle evidence leaf is absent at {path}: {exc}"
+        )
+    return NoFollowAuthorityError(
+        f"unsafe no-follow lifecycle evidence read for {path}: {exc}"
+    )
 
 
 if os.name == "nt":
@@ -192,6 +237,13 @@ if os.name == "nt":
         _NtCreateFile.restype = wintypes.LONG
         _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
         _WINDOWS_NO_FOLLOW_READER_AVAILABLE = True
+
+        class _WindowsNtCreateError(OSError):
+            """Preserve an NTSTATUS so missing names can be classified safely."""
+
+            def __init__(self, status: int) -> None:
+                self.status = status & 0xFFFFFFFF
+                super().__init__(f"NtCreateFile failed: 0x{self.status:08X}")
     except (AttributeError, ImportError, OSError):
         _WINDOWS_NO_FOLLOW_READER_AVAILABLE = False
 else:
@@ -230,7 +282,9 @@ def _read_file_no_follow_posix(path: Path | str, max_bytes: int) -> bytes:
     no_follow = getattr(os, "O_NOFOLLOW", 0)
     directory = getattr(os, "O_DIRECTORY", 0)
     if not no_follow or not directory or os.open not in os.supports_dir_fd:
-        raise StrictJSONError("secure no-follow POSIX evidence reader is unavailable")
+        raise NoFollowAuthorityError(
+            "secure no-follow POSIX evidence reader is unavailable"
+        )
     absolute = os.fspath(lexical_absolute_no_follow_path(
         path, label="lifecycle evidence path",
     ))
@@ -276,7 +330,7 @@ def _read_file_no_follow_posix(path: Path | str, max_bytes: int) -> bytes:
     except StrictJSONError as exc:
         failure = exc
     except OSError as exc:
-        failure = StrictJSONError(f"unsafe no-follow lifecycle evidence read for {path}: {exc}")
+        failure = _classify_no_follow_read_os_error(path, exc)
     finally:
         close_errors: list[str] = []
         for fd in reversed(close_fds):
@@ -286,10 +340,16 @@ def _read_file_no_follow_posix(path: Path | str, max_bytes: int) -> bytes:
                 close_errors.append(str(exc))
     if failure is not None:
         if close_errors:
-            raise StrictJSONError(f"{failure}; cannot close held evidence descriptors: {'; '.join(close_errors)}")
+            raise NoFollowAuthorityError(
+                f"{failure}; cannot close held evidence descriptors: "
+                f"{'; '.join(close_errors)}"
+            )
         raise failure
     if close_errors:
-        raise StrictJSONError(f"cannot close held lifecycle evidence descriptors: {'; '.join(close_errors)}")
+        raise NoFollowAuthorityError(
+            "cannot close held lifecycle evidence descriptors: "
+            f"{'; '.join(close_errors)}"
+        )
     assert data is not None
     return data
 
@@ -339,7 +399,7 @@ if os.name == "nt":
             None, 0,
         ))
         if status < 0:
-            raise OSError(f"NtCreateFile failed: 0x{status & 0xFFFFFFFF:08X}")
+            raise _WindowsNtCreateError(status)  # type: ignore[name-defined]
         raw_handle = handle.value
         if raw_handle in (None, _INVALID_HANDLE_VALUE):  # type: ignore[name-defined]
             raise OSError("NtCreateFile returned an invalid lifecycle evidence handle")
@@ -376,7 +436,9 @@ if os.name == "nt":
     def _read_file_no_follow_windows(path: Path | str, max_bytes: int) -> bytes:
         """Open a Windows file through a non-reparse RootDirectory HANDLE chain."""
         if not _WINDOWS_NO_FOLLOW_READER_AVAILABLE:
-            raise StrictJSONError("secure no-follow Windows evidence reader is unavailable")
+            raise NoFollowAuthorityError(
+                "secure no-follow Windows evidence reader is unavailable"
+            )
         absolute = os.fspath(lexical_absolute_no_follow_path(
             path, label="lifecycle evidence path",
         ))
@@ -397,7 +459,8 @@ if os.name == "nt":
                 _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OPEN_REPARSE_POINT, None,
             )
             if root_handle in (None, _INVALID_HANDLE_VALUE):  # type: ignore[name-defined]
-                raise OSError(f"CreateFileW could not open evidence volume: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+                error = ctypes.get_last_error()  # type: ignore[name-defined]
+                raise OSError(error, f"CreateFileW could not open evidence volume: {error}")
             root_handle = int(root_handle)
             handles.append(root_handle)
             _windows_set_noninheritable(root_handle)
@@ -443,7 +506,7 @@ if os.name == "nt":
         except StrictJSONError as exc:
             failure = exc
         except OSError as exc:
-            failure = StrictJSONError(f"unsafe no-follow lifecycle evidence read for {path}: {exc}")
+            failure = _classify_no_follow_read_os_error(path, exc)
         finally:
             close_errors: list[str] = []
             for handle in reversed(handles):
@@ -451,12 +514,298 @@ if os.name == "nt":
                     close_errors.append(str(ctypes.get_last_error()))  # type: ignore[name-defined]
         if failure is not None:
             if close_errors:
-                raise StrictJSONError(f"{failure}; cannot close held evidence handles: {'; '.join(close_errors)}")
+                raise NoFollowAuthorityError(
+                    f"{failure}; cannot close held evidence handles: "
+                    f"{'; '.join(close_errors)}"
+                )
             raise failure
         if close_errors:
-            raise StrictJSONError(f"cannot close held lifecycle evidence handles: {'; '.join(close_errors)}")
+            raise NoFollowAuthorityError(
+                "cannot close held lifecycle evidence handles: "
+                f"{'; '.join(close_errors)}"
+            )
         assert data is not None
         return data
+
+
+    def _windows_directory_snapshot(handle: int, label: str) -> tuple[int, int, int]:
+        """Return stable identity/attributes for one held non-reparse directory."""
+        snapshot = _windows_file_snapshot(handle)
+        attributes = snapshot[4]
+        if not attributes & _FILE_ATTRIBUTE_DIRECTORY or \
+                attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+            raise NoFollowAuthorityError(
+                f"unsafe held {label} directory is a reparse point or non-directory"
+            )
+        return snapshot[0], snapshot[1], attributes
+
+
+    def _close_windows_directory_handles(lease: "NoFollowDirectoryLease") -> None:
+        remaining: list[tuple[int, tuple[int, int, int]]] = []
+        errors: list[str] = []
+        for handle, snapshot in reversed(list(zip(lease._handles, lease._snapshots))):
+            if not _CloseHandle(handle):  # type: ignore[name-defined]
+                remaining.append((handle, snapshot))
+                errors.append(str(ctypes.get_last_error()))  # type: ignore[name-defined]
+        remaining.reverse()
+        lease._handles = [handle for handle, _snapshot in remaining]
+        lease._snapshots = [snapshot for _handle, snapshot in remaining]
+        if errors:
+            raise NoFollowAuthorityError(
+                "cannot close held no-follow directory handles: "
+                f"{'; '.join(errors)}"
+            )
+        lease._closed = True
+
+
+    def _open_no_follow_directory_lease_windows(
+        absolute: Path, label: str,
+    ) -> "NoFollowDirectoryLease":
+        """Hold every drive-rooted ancestor without following a reparse point."""
+        if not _WINDOWS_NO_FOLLOW_READER_AVAILABLE:
+            raise NoFollowAuthorityError(
+                "secure no-follow Windows directory authority is unavailable"
+            )
+        raw = os.fspath(absolute)
+        drive, tail = os.path.splitdrive(raw)
+        if not drive or drive.startswith("\\\\") or not tail.startswith("\\"):
+            raise NoFollowAuthorityError(
+                f"{label} must be an absolute drive-qualified path"
+            )
+        components = [component for component in tail.split("\\") if component]
+        if any(component in {".", ".."} for component in components):
+            raise NoFollowAuthorityError(
+                f"{label} contains an unsafe directory component"
+            )
+
+        handles: list[int] = []
+        snapshots: list[tuple[int, int, int]] = []
+        try:
+            root_handle = _CreateFileW(  # type: ignore[name-defined]
+                drive + "\\", _FILE_LIST_DIRECTORY | _FILE_READ_ATTRIBUTES | _SYNCHRONIZE,
+                _FILE_SHARE_READ, None, _OPEN_EXISTING,
+                _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OPEN_REPARSE_POINT, None,
+            )
+            if root_handle in (None, _INVALID_HANDLE_VALUE):  # type: ignore[name-defined]
+                error = ctypes.get_last_error()  # type: ignore[name-defined]
+                raise OSError(error, f"CreateFileW could not open {label} volume: {error}")
+            root_handle = int(root_handle)
+            handles.append(root_handle)
+            _windows_set_noninheritable(root_handle)
+            snapshots.append(_windows_directory_snapshot(root_handle, label))
+            current_handle = root_handle
+            for component in components:
+                current_handle = _windows_open_relative_no_follow(
+                    current_handle, component,
+                    _FILE_LIST_DIRECTORY | _FILE_READ_ATTRIBUTES,
+                    _FILE_ATTRIBUTE_DIRECTORY,
+                    _FILE_DIRECTORY_FILE | _FILE_FLAG_OPEN_REPARSE_POINT,
+                )
+                handles.append(current_handle)
+                snapshots.append(_windows_directory_snapshot(current_handle, label))
+        except BaseException as exc:
+            close_errors: list[str] = []
+            for handle in reversed(handles):
+                if not _CloseHandle(handle):  # type: ignore[name-defined]
+                    close_errors.append(str(ctypes.get_last_error()))  # type: ignore[name-defined]
+            if isinstance(exc, NoFollowAuthorityError):
+                raise
+            if isinstance(exc, OSError):
+                detail = f"cannot acquire held no-follow {label} authority at {absolute}: {exc}"
+            else:
+                detail = f"cannot acquire held no-follow {label} authority at {absolute}: {exc}"
+            if close_errors:
+                detail += f"; cannot close partial directory handles: {'; '.join(close_errors)}"
+            raise NoFollowAuthorityError(detail) from exc
+        return NoFollowDirectoryLease(absolute, label, handles, snapshots)
+
+
+    def _verify_windows_directory_lease(lease: "NoFollowDirectoryLease") -> None:
+        if not lease._handles or len(lease._handles) != len(lease._snapshots):
+            raise NoFollowAuthorityError(
+                f"held {lease.label} directory authority is incomplete"
+            )
+        for handle, expected in zip(lease._handles, lease._snapshots):
+            try:
+                actual = _windows_directory_snapshot(handle, lease.label)
+            except OSError as exc:
+                raise NoFollowAuthorityError(
+                    f"cannot inspect held {lease.label} authority: {exc}"
+                ) from exc
+            if actual != expected:
+                raise NoFollowAuthorityError(
+                    f"held {lease.label} directory identity or attributes changed"
+                )
+        probe = _open_no_follow_directory_lease_windows(lease.path, lease.label)
+        try:
+            if probe.identity != lease.identity:
+                raise NoFollowAuthorityError(
+                    f"{lease.label} no longer names the held directory identity"
+                )
+        finally:
+            probe.close()
+
+
+class NoFollowDirectoryLease:
+    """Hold a component-by-component no-follow directory authority.
+
+    The lease retains every opened ancestor, not merely the requested final
+    directory.  ``verify`` checks the held objects and then re-opens the raw
+    lexical component chain to prove the caller's spelling still reaches the
+    same terminal directory.  This detects a replacement around downstream
+    legacy path-consuming validation phases; it is not a claim that those
+    legacy readers become one atomic rooted transaction.
+    """
+
+    def __init__(
+        self, path: Path, label: str, handles: list[int],
+        snapshots: list[tuple[int, ...]],
+    ) -> None:
+        if not handles or len(handles) != len(snapshots):
+            raise NoFollowAuthorityError(
+                f"cannot establish empty or incomplete held {label} authority"
+            )
+        self.path = path
+        self.label = label
+        self._handles = handles
+        self._snapshots = snapshots
+        self.identity = tuple(snapshots[-1][:2])
+        self._closed = False
+
+    def __enter__(self) -> "NoFollowDirectoryLease":
+        return self
+
+    def __exit__(self, _type: object, _value: object, _traceback: object) -> None:
+        self.close()
+
+    def verify(self) -> None:
+        """Fail if held identity or the raw component chain changed."""
+        if self._closed:
+            raise NoFollowAuthorityError(
+                f"held {self.label} authority was already closed"
+            )
+        if os.name == "nt":
+            _verify_windows_directory_lease(self)  # type: ignore[name-defined]
+        else:
+            _verify_posix_directory_lease(self)
+
+    def close(self) -> None:
+        """Release every held handle, retaining failed ones for a fatal retry."""
+        if self._closed:
+            return
+        if os.name == "nt":
+            _close_windows_directory_handles(self)  # type: ignore[name-defined]
+        else:
+            _close_posix_directory_handles(self)
+
+
+def _posix_directory_snapshot(fd: int, label: str) -> tuple[int, int, int]:
+    info = os.fstat(fd)
+    if not stat.S_ISDIR(info.st_mode):
+        raise NoFollowAuthorityError(
+            f"unsafe held {label} directory is not a real directory"
+        )
+    return int(info.st_dev), int(info.st_ino), int(stat.S_IFMT(info.st_mode))
+
+
+def _close_posix_directory_handles(lease: NoFollowDirectoryLease) -> None:
+    remaining: list[tuple[int, tuple[int, ...]]] = []
+    errors: list[str] = []
+    for fd, snapshot in reversed(list(zip(lease._handles, lease._snapshots))):
+        try:
+            os.close(fd)
+        except OSError as exc:
+            remaining.append((fd, snapshot))
+            errors.append(str(exc))
+    remaining.reverse()
+    lease._handles = [fd for fd, _snapshot in remaining]
+    lease._snapshots = [snapshot for _fd, snapshot in remaining]
+    if errors:
+        raise NoFollowAuthorityError(
+            "cannot close held no-follow directory descriptors: "
+            f"{'; '.join(errors)}"
+        )
+    lease._closed = True
+
+
+def _open_no_follow_directory_lease_posix(
+    absolute: Path, label: str,
+) -> NoFollowDirectoryLease:
+    """Open every directory component through previously held descriptors."""
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not no_follow or not directory or os.open not in os.supports_dir_fd:
+        raise NoFollowAuthorityError(
+            "secure no-follow POSIX directory authority is unavailable"
+        )
+    components = [component for component in os.fspath(absolute).split(os.path.sep) if component]
+    handles: list[int] = []
+    snapshots: list[tuple[int, int, int]] = []
+    flags = os.O_RDONLY | directory | no_follow | getattr(os, "O_CLOEXEC", 0)
+    try:
+        current_fd = os.open(os.path.sep, flags)
+        handles.append(current_fd)
+        snapshots.append(_posix_directory_snapshot(current_fd, label))
+        for component in components:
+            current_fd = os.open(component, flags, dir_fd=current_fd)
+            handles.append(current_fd)
+            snapshots.append(_posix_directory_snapshot(current_fd, label))
+    except BaseException as exc:
+        close_errors: list[str] = []
+        for fd in reversed(handles):
+            try:
+                os.close(fd)
+            except OSError as close_exc:
+                close_errors.append(str(close_exc))
+        if isinstance(exc, NoFollowAuthorityError):
+            raise
+        detail = f"cannot acquire held no-follow {label} authority at {absolute}: {exc}"
+        if close_errors:
+            detail += f"; cannot close partial directory descriptors: {'; '.join(close_errors)}"
+        raise NoFollowAuthorityError(detail) from exc
+    return NoFollowDirectoryLease(absolute, label, handles, snapshots)
+
+
+def _verify_posix_directory_lease(lease: NoFollowDirectoryLease) -> None:
+    if not lease._handles or len(lease._handles) != len(lease._snapshots):
+        raise NoFollowAuthorityError(
+            f"held {lease.label} directory authority is incomplete"
+        )
+    for fd, expected in zip(lease._handles, lease._snapshots):
+        try:
+            actual = _posix_directory_snapshot(fd, lease.label)
+        except OSError as exc:
+            raise NoFollowAuthorityError(
+                f"cannot inspect held {lease.label} authority: {exc}"
+            ) from exc
+        if actual != expected:
+            raise NoFollowAuthorityError(
+                f"held {lease.label} directory identity or type changed"
+            )
+    probe = _open_no_follow_directory_lease_posix(lease.path, lease.label)
+    try:
+        if probe.identity != lease.identity:
+            raise NoFollowAuthorityError(
+                f"{lease.label} no longer names the held directory identity"
+            )
+    finally:
+        probe.close()
+
+
+def open_no_follow_directory_lease(
+    path: Path | str, *, label: str = "directory",
+) -> NoFollowDirectoryLease:
+    """Acquire a held, component-by-component no-follow directory authority.
+
+    This API deliberately has no path-only fallback on Windows.  It is used for
+    a repository root before non-policy lifecycle validation so that a final
+    root *or any ancestor* reparse point is rejected before an explicit evidence
+    file can cause later root-relative semantic/provenance work to run.
+    """
+    absolute = lexical_absolute_no_follow_path(path, label=label)
+    if os.name == "nt":
+        return _open_no_follow_directory_lease_windows(absolute, label)  # type: ignore[name-defined]
+    return _open_no_follow_directory_lease_posix(absolute, label)
 
 
 def _reject_constant(name: str) -> Any:

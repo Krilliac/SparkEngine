@@ -610,6 +610,22 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         manifest_path.write_text(json.dumps(base_manifest()), encoding="utf-8")
         return sha, evidence_path, manifest_path
 
+    def _write_cli_lifecycle_gap_ledger(self, name: str) -> Path:
+        """Write the one intentionally declared absence used by CLI regressions."""
+        path = self.repo / f"{name}-evidence-gaps.json"
+        path.write_text(json.dumps({
+            "schemaVersion": "evidence-gaps-v1",
+            "gaps": [{
+                "evidenceType": "lifecycle-log",
+                "trackedUnder": "RDY-010",
+                "reason": (
+                    "The fixture deliberately models a genuinely absent lifecycle "
+                    "producer while the RDY-010 gap remains tracked."
+                ),
+            }],
+        }), encoding="utf-8")
+        return path
+
 
     def test_B10_declared_phase_list_is_not_accepted_as_evidence(self) -> None:
         """The schema no longer even has a lifecyclePhases key to declare."""
@@ -685,6 +701,22 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         with self.assertRaises(lifecycle_mod.LifecycleEvidenceUnavailable):
             lifecycle_mod.load_lifecycle_evidence(path)
 
+    def test_loader_classifies_only_a_missing_leaf_as_downgradeable(self) -> None:
+        """A gap ledger may soften absence, never a present unsafe document."""
+        missing = self.repo / "missing-lifecycle-evidence.json"
+        with self.assertRaises(lifecycle_mod.LifecycleEvidenceUnavailable) as raised:
+            lifecycle_mod.load_lifecycle_evidence(missing)
+        self.assertNotIsInstance(
+            raised.exception, lifecycle_mod.LifecycleEvidenceRejected,
+            "a missing lifecycle leaf was misclassified as a fatal rejection",
+        )
+
+    def test_loader_classifies_malformed_present_evidence_as_fatal_rejection(self) -> None:
+        path = self.repo / "malformed-lifecycle-evidence.json"
+        path.write_text("{not valid JSON", encoding="utf-8")
+        with self.assertRaises(lifecycle_mod.LifecycleEvidenceRejected):
+            lifecycle_mod.load_lifecycle_evidence(path)
+
     def test_loader_rejects_reparse_leaf_instead_of_reading_its_target(self) -> None:
         """A lifecycle leaf reparse point cannot redirect the evidence reader."""
         target = self.repo / "external-lifecycle-evidence.json"
@@ -698,7 +730,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             self.skipTest(f"cannot create a lifecycle leaf reparse fixture: {exc}")
 
         with self.assertRaisesRegex(
-            lifecycle_mod.LifecycleEvidenceUnavailable, "reparse|symlink|unsafe",
+            lifecycle_mod.LifecycleEvidenceRejected, "reparse|symlink|unsafe",
         ):
             lifecycle_mod.load_lifecycle_evidence(leaf)
         self.assertTrue(target.is_file(), "the external evidence target was altered")
@@ -727,7 +759,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             self.skipTest(f"cannot create a lifecycle ancestor reparse fixture: {exc}")
 
         with self.assertRaisesRegex(
-            lifecycle_mod.LifecycleEvidenceUnavailable, "reparse|symlink|unsafe",
+            lifecycle_mod.LifecycleEvidenceRejected, "reparse|symlink|unsafe",
         ):
             lifecycle_mod.load_lifecycle_evidence(evidence_path)
         self.assertEqual(external_evidence.read_text(encoding="utf-8"), attacker_payload)
@@ -755,7 +787,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
 
         with mock.patch("strict_json._WINDOWS_NO_FOLLOW_READER_AVAILABLE", False):
             with self.assertRaisesRegex(
-                lifecycle_mod.LifecycleEvidenceUnavailable, "unavailable",
+                lifecycle_mod.LifecycleEvidenceAuthorityError, "unavailable",
             ):
                 lifecycle_mod.load_lifecycle_evidence(path)
 
@@ -767,6 +799,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         _attacker_sha, attacker_evidence, manifest_path = \
             self._prepare_cli_evidence_root(attacker_root)
         attacker_payload = attacker_evidence.read_text(encoding="utf-8")
+        gap_ledger = self._write_cli_lifecycle_gap_ledger("root-reparse")
 
         invoked_root = self.repo / "cli-root"
         trusted_root.rename(invoked_root)
@@ -783,6 +816,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         with mock.patch.object(sys, "argv", [
             "validate_manifest.py", "--repo-root", str(invoked_root),
             "--manifest", str(manifest_path),
+            "--allow-declared-gaps", str(gap_ledger),
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
@@ -790,13 +824,80 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             result, 0,
             "repo-root resolution followed the reparse target and accepted attacker evidence",
         )
-        self.assertIn("lifecycle evidence is unavailable", stderr.getvalue())
+        self.assertIn("FATAL:", stderr.getvalue())
+        self.assertNotIn("KNOWN GAP:", stderr.getvalue())
+        self.assertEqual(attacker_evidence.read_text(encoding="utf-8"), attacker_payload)
+
+    def test_main_rejects_explicit_normal_evidence_when_repo_root_is_a_reparse(self) -> None:
+        """An explicit evidence path cannot bypass repository-root authority."""
+        trusted_root = self.repo / "cli-explicit-root-before-swap"
+        attacker_root = self.repo / "cli-explicit-root-attacker"
+        self._prepare_cli_evidence_root(trusted_root)
+        _attacker_sha, attacker_evidence, manifest_path = \
+            self._prepare_cli_evidence_root(attacker_root)
+        attacker_payload = attacker_evidence.read_text(encoding="utf-8")
+
+        invoked_root = self.repo / "cli-explicit-root"
+        trusted_root.rename(invoked_root)
+        preserved_root = self.repo / "cli-explicit-root-preserved"
+        invoked_root.rename(preserved_root)
+        try:
+            os.symlink(str(attacker_root), str(invoked_root), target_is_directory=True)
+        except (OSError, NotImplementedError) as exc:
+            preserved_root.rename(invoked_root)
+            self.skipTest(f"cannot create a repo-root reparse fixture: {exc}")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(invoked_root),
+            "--manifest", str(manifest_path),
+            "--lifecycle-evidence", str(attacker_evidence),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertNotEqual(
+            result, 0,
+            "an explicit normal evidence path bypassed the reparse-bearing repository root",
+        )
+        self.assertIn("FATAL:", stderr.getvalue())
+        self.assertEqual(attacker_evidence.read_text(encoding="utf-8"), attacker_payload)
+
+    def test_main_rejects_repo_root_beneath_a_reparse_ancestor(self) -> None:
+        """A normal final root below a junction/symlink ancestor is still unsafe."""
+        trusted_parent = self.repo / "cli-root-ancestor-trusted"
+        attacker_parent = self.repo / "cli-root-ancestor-attacker"
+        trusted_root = trusted_parent / "repo"
+        attacker_root = attacker_parent / "repo"
+        self._prepare_cli_evidence_root(trusted_root)
+        _attacker_sha, attacker_evidence, manifest_path = \
+            self._prepare_cli_evidence_root(attacker_root)
+        attacker_payload = attacker_evidence.read_text(encoding="utf-8")
+
+        ancestor = self.repo / "cli-root-ancestor-link"
+        try:
+            os.symlink(str(attacker_parent), str(ancestor), target_is_directory=True)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"cannot create a repo-root ancestor reparse fixture: {exc}")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(ancestor / "repo"),
+            "--manifest", str(manifest_path),
+            "--lifecycle-evidence", str(attacker_evidence),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertNotEqual(result, 0)
+        self.assertIn("FATAL:", stderr.getvalue())
         self.assertEqual(attacker_evidence.read_text(encoding="utf-8"), attacker_payload)
 
     def test_main_rejects_explicit_lifecycle_dot_segment_before_loader(self) -> None:
         """An explicit dot segment cannot be normalized away before held loading."""
         root = self.repo / "cli-explicit-dot-root"
         _sha, evidence_path, manifest_path = self._prepare_cli_evidence_root(root)
+        gap_ledger = self._write_cli_lifecycle_gap_ledger("explicit-dot")
         explicit_alias = str(evidence_path.parent) + os.sep + "." + os.sep + evidence_path.name
         stdout = io.StringIO()
         stderr = io.StringIO()
@@ -804,6 +905,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             "validate_manifest.py", "--repo-root", str(root),
             "--manifest", str(manifest_path),
             "--lifecycle-evidence", explicit_alias,
+            "--allow-declared-gaps", str(gap_ledger),
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
@@ -820,6 +922,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         attacker_evidence = self.repo / "cli-explicit-reparse-target.json"
         attacker_payload = evidence_path.read_text(encoding="utf-8")
         attacker_evidence.write_text(attacker_payload, encoding="utf-8")
+        gap_ledger = self._write_cli_lifecycle_gap_ledger("explicit-reparse")
         alias = root / "explicit-lifecycle-reparse.json"
         try:
             os.symlink(str(attacker_evidence), str(alias))
@@ -832,12 +935,52 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             "validate_manifest.py", "--repo-root", str(root),
             "--manifest", str(manifest_path),
             "--lifecycle-evidence", str(alias),
+            "--allow-declared-gaps", str(gap_ledger),
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
         self.assertNotEqual(result, 0)
-        self.assertIn("lifecycle evidence is unavailable", stderr.getvalue())
+        self.assertIn("FATAL:", stderr.getvalue())
+        self.assertNotIn("KNOWN GAP:", stderr.getvalue())
         self.assertEqual(attacker_evidence.read_text(encoding="utf-8"), attacker_payload)
+
+    def test_main_rejects_malformed_present_evidence_even_with_a_declared_gap(self) -> None:
+        """The ledger ratchet applies only to absence, never malformed bytes."""
+        root = self.repo / "cli-malformed-root"
+        _sha, evidence_path, manifest_path = self._prepare_cli_evidence_root(root)
+        evidence_path.write_text("{not valid JSON", encoding="utf-8")
+        gap_ledger = self._write_cli_lifecycle_gap_ledger("malformed-present")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(root),
+            "--manifest", str(manifest_path),
+            "--allow-declared-gaps", str(gap_ledger),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertNotEqual(result, 0)
+        self.assertIn("FATAL:", stderr.getvalue())
+        self.assertNotIn("KNOWN GAP:", stderr.getvalue())
+
+    def test_main_allows_a_declared_gap_for_a_genuinely_absent_lifecycle_leaf(self) -> None:
+        """The release ledger remains compatible with an actually absent producer."""
+        root = self.repo / "cli-absent-root"
+        _sha, evidence_path, manifest_path = self._prepare_cli_evidence_root(root)
+        evidence_path.unlink()
+        gap_ledger = self._write_cli_lifecycle_gap_ledger("missing-leaf")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(root),
+            "--manifest", str(manifest_path),
+            "--allow-declared-gaps", str(gap_ledger),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertEqual(result, 0, stderr.getvalue())
+        self.assertIn("KNOWN GAP: lifecycle-log", stderr.getvalue())
+        self.assertIn("INCOMPLETE:", stdout.getvalue())
 
     def test_main_rejects_repo_root_dot_segment_before_default_loader(self) -> None:
         """A root alias cannot be normalized before default evidence composition."""
@@ -855,6 +998,144 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
 
         self.assertNotEqual(result, 0)
         self.assertIn("--repo-root contains a dot or traversal segment", stderr.getvalue())
+
+    def test_main_rejects_current_directory_root_for_lifecycle_validation(self) -> None:
+        """`.` is not authority-preserving on all supported platforms."""
+        root = self.repo / "cli-current-directory-root"
+        self._prepare_cli_evidence_root(root)
+        manifest_path = root / "cli-manifest.json"
+        original_cwd = os.getcwd()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        try:
+            os.chdir(root)
+            with mock.patch.object(sys, "argv", [
+                "validate_manifest.py", "--repo-root", ".",
+                "--manifest", str(manifest_path),
+            ]), redirect_stdout(stdout), redirect_stderr(stderr):
+                result = validate_manifest_mod.main()
+        finally:
+            os.chdir(original_cwd)
+
+        self.assertNotEqual(result, 0)
+        self.assertIn("--repo-root contains a dot or traversal segment", stderr.getvalue())
+
+    def test_main_rejects_symlinked_current_directory_root_for_lifecycle_validation(self) -> None:
+        """A physicalized POSIX getcwd must not erase a symlink-bearing `.` root."""
+        root = self.repo / "cli-symlinked-current-directory-root"
+        self._prepare_cli_evidence_root(root)
+        manifest_path = root / "cli-manifest.json"
+        alias = self.repo / "cli-symlinked-current-directory-alias"
+        try:
+            os.symlink(str(root), str(alias), target_is_directory=True)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"cannot create a current-directory reparse fixture: {exc}")
+
+        original_cwd = os.getcwd()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        try:
+            os.chdir(alias)
+            with mock.patch.object(sys, "argv", [
+                "validate_manifest.py", "--repo-root", ".",
+                "--manifest", str(manifest_path),
+            ]), redirect_stdout(stdout), redirect_stderr(stderr):
+                result = validate_manifest_mod.main()
+        finally:
+            os.chdir(original_cwd)
+
+        self.assertNotEqual(result, 0)
+        self.assertIn("--repo-root contains a dot or traversal segment", stderr.getvalue())
+
+    def test_main_allows_current_directory_root_for_policy_only_validation(self) -> None:
+        """Policy-only editing retains its established `--repo-root .` workflow."""
+        root = self.repo / "cli-policy-current-directory-root"
+        self._prepare_cli_evidence_root(root)
+        manifest_path = root / "cli-manifest.json"
+        original_cwd = os.getcwd()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        try:
+            os.chdir(root)
+            with mock.patch.object(sys, "argv", [
+                "validate_manifest.py", "--repo-root", ".",
+                "--manifest", str(manifest_path), "--policy-only",
+            ]), redirect_stdout(stdout), redirect_stderr(stderr):
+                result = validate_manifest_mod.main()
+        finally:
+            os.chdir(original_cwd)
+
+        self.assertEqual(result, 0, stderr.getvalue())
+        self.assertIn("POLICY-ONLY:", stdout.getvalue())
+
+    def test_main_detects_root_replacement_after_explicit_lifecycle_read(self) -> None:
+        """A post-read root swap is blocked or cannot turn provenance into success.
+
+        The legacy semantic validator still consumes some root-relative paths.
+        This test swaps the root from inside that provenance route, after an
+        explicit lifecycle file has been held and parsed, so final root identity
+        verification must reject the otherwise-valid run.
+        """
+        root = self.repo / "cli-post-read-root"
+        self._prepare_cli_evidence_root(root)
+        manifest_path = root / "cli-manifest.json"
+        explicit_evidence = self.repo / "cli-post-read-explicit-evidence.json"
+        explicit_evidence.write_text(
+            (root / EVIDENCE_PRODUCERS["lifecycle-log"]["artifact"])
+            .read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        preserved_root = self.repo / "cli-post-read-root-preserved"
+        original_source_tree_sha = lifecycle_mod.source_tree_sha
+        swapped = False
+        mutation_blocked = False
+
+        def swap_after_provenance_read(
+            repo_root: Path, commit_sha: str, source_directory: str,
+        ) -> tuple[str | None, str | None]:
+            nonlocal swapped, mutation_blocked
+            result = original_source_tree_sha(repo_root, commit_sha, source_directory)
+            if not swapped:
+                try:
+                    root.rename(preserved_root)
+                    os.symlink(str(preserved_root), str(root), target_is_directory=True)
+                except OSError as exc:
+                    # The Windows held directory authority intentionally omits
+                    # delete sharing, so the operating system can reject the
+                    # mutation before the portable post-phase verifier runs.
+                    if os.name == "nt" and getattr(exc, "winerror", None) in {5, 32}:
+                        mutation_blocked = True
+                        return result
+                    raise
+                except NotImplementedError as exc:
+                    raise unittest.SkipTest(
+                        f"cannot create the post-read reparse fixture: {exc}"
+                    ) from exc
+                swapped = True
+            return result
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(lifecycle_mod, "source_tree_sha", side_effect=swap_after_provenance_read), \
+                mock.patch.object(sys, "argv", [
+                    "validate_manifest.py", "--repo-root", str(root),
+                    "--manifest", str(manifest_path),
+                    "--lifecycle-evidence", str(explicit_evidence),
+                ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        if mutation_blocked:
+            self.assertFalse(swapped)
+            self.assertEqual(result, 0, stderr.getvalue())
+            self.assertIn("OK: module evidence manifest is valid", stdout.getvalue())
+            return
+
+        self.assertTrue(swapped, "the regression did not reach the provenance route")
+        self.assertNotEqual(
+            result, 0,
+            "a root replacement after lifecycle parsing was not detected before success",
+        )
+        self.assertIn("FATAL:", stderr.getvalue())
 
     def test_main_accepts_default_lifecycle_evidence_at_a_real_lexical_path(self) -> None:
         """The hardened CLI retains the normal default evidence success path."""
@@ -4049,6 +4330,12 @@ class TestCIWiring(unittest.TestCase):
 
     def test_module_evidence_binds_the_revision_under_test(self) -> None:
         self.assertIn("--expected-sha", self._job_block("module-evidence"))
+
+    def test_module_evidence_uses_an_explicit_absolute_workspace_root(self) -> None:
+        """The release gate must not rely on POSIX `getcwd()` for root authority."""
+        block = self._job_block("module-evidence")
+        self.assertIn('--repo-root "$GITHUB_WORKSPACE"', block)
+        self.assertNotIn("--repo-root .", block)
 
     def test_gate_consumes_really_produced_junit_evidence(self) -> None:
         block = self._job_block("module-evidence")

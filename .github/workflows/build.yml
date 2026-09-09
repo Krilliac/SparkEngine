@@ -3349,7 +3349,7 @@ jobs:
           MODULE_EVIDENCE_SHA: ${{ github.sha }}
         run: |
           python3 tools/module-evidence/validate_manifest.py \
-            --repo-root . \
+            --repo-root "$GITHUB_WORKSPACE" \
             --target-evidence build/module-evidence/module-targets.json \
             --expected-sha "$MODULE_EVIDENCE_SHA" \
             --allow-declared-gaps tools/module-evidence/evidence-gaps.json

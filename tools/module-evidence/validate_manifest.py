@@ -22,6 +22,7 @@ is reported as success.
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import os
 import sys
 from pathlib import Path
@@ -897,9 +898,14 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        # A non-policy invocation must retain every lexical component of its
+        # root.  On POSIX, getcwd() can already physicalize a symlink-bearing
+        # '.', so accepting '.' here would silently discard the caller's root
+        # authority before the no-follow chain begins.  Policy-only use remains
+        # an editing aid, never release proof, and keeps its established '.'.
         repo_root = strict_json.lexical_absolute_no_follow_path(
             args.repo_root if args.repo_root is not None else str(REPO_ROOT),
-            label="--repo-root", allow_current_directory=True,
+            label="--repo-root", allow_current_directory=args.policy_only,
         )
         lifecycle_path: Path | None = None
         if not args.policy_only:
@@ -913,55 +919,97 @@ def main() -> int:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 1
 
-    # Read lifecycle evidence before any path-consuming operation can resolve
-    # the user-supplied repository root.  The loader receives the unresolved
-    # lexical artifact path and opens each ancestor through held no-follow
-    # authority, so a root/ancestor reparse swap is rejected rather than
-    # converted into a clean attacker-controlled target path.
     lifecycle_evidence = lifecycle_error = None
-    if lifecycle_path is not None:
-        try:
-            lifecycle_evidence = lifecycle_mod.load_lifecycle_evidence(lifecycle_path)
-        except lifecycle_mod.LifecycleEvidenceUnavailable as exc:
-            lifecycle_error = str(exc)
+    target_index = target_error = None
+    declared_gaps: dict[str, str] = {}
+    errors: list[str] = []
+    validator: ManifestValidator | None = None
 
     try:
-        manifest = load_manifest(args.manifest)
+        # Acquire the root independently of whether lifecycle evidence is
+        # defaulted or explicit.  Keeping the component chain live and checking
+        # it around legacy root-relative reads makes a root replacement fatal;
+        # it does not pretend those older reads are one rooted transaction.
+        authority_context = (
+            strict_json.open_no_follow_directory_lease(
+                repo_root, label="--repo-root",
+            ) if not args.policy_only else nullcontext(None)
+        )
+        with authority_context as root_authority:
+            if root_authority is not None:
+                root_authority.verify()
+
+            # This must precede every path-consuming root operation.  Only a
+            # genuinely absent leaf can become a declared gap; unsafe or
+            # malformed present evidence is a fatal authority/rejection event.
+            if lifecycle_path is not None:
+                try:
+                    lifecycle_evidence = lifecycle_mod.load_lifecycle_evidence(
+                        lifecycle_path
+                    )
+                except lifecycle_mod.LifecycleEvidenceRejected:
+                    raise
+                except lifecycle_mod.LifecycleEvidenceUnavailable as exc:
+                    lifecycle_error = str(exc)
+            if root_authority is not None:
+                root_authority.verify()
+
+            manifest = load_manifest(args.manifest)
+            if root_authority is not None:
+                root_authority.verify()
+
+            if args.allow_declared_gaps:
+                known_items, _ = load_known_work_item_ids(repo_root)
+                declared_gaps = load_declared_gaps(
+                    args.allow_declared_gaps, known_items,
+                )
+            if root_authority is not None:
+                root_authority.verify()
+
+            if not args.policy_only:
+                try:
+                    path = args.target_evidence or (
+                        repo_root / EVIDENCE_PRODUCERS["cmake-target-index"]["artifact"]
+                    )
+                    target_index = targets_mod.load_target_index(Path(path))
+                except targets_mod.TargetEvidenceUnavailable as exc:
+                    target_error = str(exc)
+            if root_authority is not None:
+                root_authority.verify()
+
+            expected_sha, sha_error = _resolve_expected_sha(
+                repo_root, args.expected_sha,
+            )
+            if sha_error and not args.policy_only:
+                print(f"WARNING: {sha_error}", file=sys.stderr)
+            if root_authority is not None:
+                root_authority.verify()
+
+            validator = ManifestValidator(
+                manifest, repo_root,
+                target_index=target_index, target_error=target_error,
+                lifecycle_evidence=lifecycle_evidence,
+                lifecycle_error=lifecycle_error,
+                expected_sha=expected_sha, policy_only=args.policy_only,
+                declared_gaps=declared_gaps,
+            )
+            errors = validator.validate()
+            if root_authority is not None:
+                root_authority.verify()
+    except lifecycle_mod.LifecycleEvidenceRejected as exc:
+        print(f"FATAL: lifecycle evidence rejected: {exc}", file=sys.stderr)
+        return 1
+    except strict_json.NoFollowAuthorityError as exc:
+        print(f"FATAL: repository or evidence authority rejected: {exc}", file=sys.stderr)
+        return 1
     except ManifestError as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 1
+    except strict_json.StrictJSONError as exc:
+        print(f"FATAL: unusable evidence-gap ledger: {exc}", file=sys.stderr)
+        return 1
 
-    declared_gaps: dict[str, str] = {}
-    if args.allow_declared_gaps:
-        known_items, _ = load_known_work_item_ids(repo_root)
-        try:
-            declared_gaps = load_declared_gaps(args.allow_declared_gaps, known_items)
-        except (ManifestError, strict_json.StrictJSONError) as exc:
-            print(f"FATAL: unusable evidence-gap ledger: {exc}", file=sys.stderr)
-            return 1
-
-    target_index = target_error = None
-    if not args.policy_only:
-        try:
-            path = args.target_evidence or (
-                repo_root / EVIDENCE_PRODUCERS["cmake-target-index"]["artifact"]
-            )
-            target_index = targets_mod.load_target_index(Path(path))
-        except targets_mod.TargetEvidenceUnavailable as exc:
-            target_error = str(exc)
-
-    expected_sha, sha_error = _resolve_expected_sha(repo_root, args.expected_sha)
-    if sha_error and not args.policy_only:
-        print(f"WARNING: {sha_error}", file=sys.stderr)
-
-    validator = ManifestValidator(
-        manifest, repo_root,
-        target_index=target_index, target_error=target_error,
-        lifecycle_evidence=lifecycle_evidence, lifecycle_error=lifecycle_error,
-        expected_sha=expected_sha, policy_only=args.policy_only,
-        declared_gaps=declared_gaps,
-    )
-    errors = validator.validate()
+    assert validator is not None
 
     for warning in validator.warnings:
         print(f"KNOWN GAP: {warning}", file=sys.stderr)
