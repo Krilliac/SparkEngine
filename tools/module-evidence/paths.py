@@ -25,6 +25,8 @@ import os
 import stat
 from pathlib import Path, PurePosixPath
 
+import strict_json
+
 MODULE_ROOT_DIRNAME = "GameModules"
 MODULE_SOURCE_DIRNAME = "Source"
 
@@ -181,6 +183,46 @@ def check_source_directory(value: str, module_name: str, repo_root: Path) -> lis
     if errors:
         return errors
     return check_on_disk(value, repo_root)
+
+
+def check_source_directory_rooted(
+    value: str, module_name: str, root: strict_json.NoFollowDirectoryLease,
+) -> list[str]:
+    """Validate an exact source directory through held root-relative handles."""
+    errors = check_lexical(value, module_name)
+    if errors:
+        return errors
+    relative_parts: list[str] = []
+    for component in PurePosixPath(value).parts:
+        parent = "/".join(relative_parts)
+        try:
+            names = root.list_relative_names(parent)
+        except strict_json.StrictJSONError as exc:
+            return [
+                f"sourceDirectory {value!r}: rooted parent {parent or '<root>'!r} "
+                f"is unavailable or unsafe: {exc}"
+            ]
+        if component not in names:
+            case_match = [name for name in names if name.casefold() == component.casefold()]
+            if case_match:
+                return [
+                    f"sourceDirectory {value!r}: path segment {component!r} does not "
+                    f"match the on-disk name {case_match[0]!r} — exact case is required"
+                ]
+            return [
+                f"sourceDirectory {value!r}: path segment {component!r} does not "
+                f"exist under rooted parent {parent or '<root>'!r}"
+            ]
+        relative_parts.append(component)
+    try:
+        # A final listing opens the directory no-follow, proving that the last
+        # name is itself a real directory and not just a matching leaf.
+        root.list_relative_names("/".join(relative_parts))
+    except strict_json.StrictJSONError as exc:
+        return [
+            f"sourceDirectory {value!r}: rooted final directory is unavailable or unsafe: {exc}"
+        ]
+    return []
 
 
 def check_relative_artifact_path(value: str, label: str) -> list[str]:

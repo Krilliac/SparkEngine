@@ -137,6 +137,28 @@ def source_tree_sha(repo_root: Path, commit_sha: str, source_directory: str) -> 
     return sha, None
 
 
+def source_tree_sha_rooted(
+    root: strict_json.NoFollowDirectoryLease,
+    commit_sha: str,
+    source_directory: str,
+) -> tuple[str | None, str | None]:
+    """Resolve a module source tree through descriptor-rooted POSIX Git."""
+    spec = f"{commit_sha}:{source_directory}"
+    try:
+        proc = provenance.run_rooted_git(root, "rev-parse", spec)
+    except (OSError, subprocess.SubprocessError, strict_json.NoFollowAuthorityError) as exc:
+        return None, f"cannot run rooted git to hash {spec}: {exc}"
+    if proc.returncode != 0:
+        return None, (
+            f"rooted git cannot resolve {spec}: {proc.stderr.strip()} — the declared "
+            "source directory does not exist at the revision under test"
+        )
+    sha = proc.stdout.strip()
+    if not provenance.SHA_RE.match(sha):
+        return None, f"rooted git rev-parse {spec} returned {sha!r}"
+    return sha, None
+
+
 def check_document_shape(document: Any, label: str) -> list[str]:
     """Return errors unless a stable-v1 lifecycle document has one record.
 
@@ -176,10 +198,33 @@ def check_document_shape(document: Any, label: str) -> list[str]:
     return errors
 
 
-def load_lifecycle_evidence(path: Path) -> dict[str, Any]:
-    """Load lifecycle evidence from the exact held no-follow file bytes, or raise."""
+def load_lifecycle_evidence_bytes(data: bytes, origin: str) -> dict[str, Any]:
+    """Load lifecycle evidence from exact already-held bytes, or raise."""
     try:
-        document = strict_json.load_file_no_follow(path)
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise LifecycleEvidenceRejected(
+            f"lifecycle evidence is present but not UTF-8: {exc}"
+        ) from exc
+    try:
+        document = strict_json.loads(text, origin=origin)
+    except strict_json.StrictJSONError as exc:
+        raise LifecycleEvidenceRejected(
+            f"lifecycle evidence is present but unusable: {exc}"
+        ) from exc
+    shape_errors = check_document_shape(document, origin)
+    if shape_errors:
+        raise LifecycleEvidenceRejected("; ".join(shape_errors))
+    assert isinstance(document, dict)
+    return document
+
+
+def load_lifecycle_evidence(path: Path) -> dict[str, Any]:
+    """Load lifecycle evidence from exact no-follow file bytes, or raise."""
+    try:
+        data = strict_json.read_file_no_follow_bytes(
+            path, max_bytes=strict_json.DEFAULT_LIMITS.document_bytes,
+        )
     except strict_json.NoFollowEvidenceMissing as exc:
         raise LifecycleEvidenceUnavailable(
             f"lifecycle evidence leaf is absent: {exc}"
@@ -192,11 +237,7 @@ def load_lifecycle_evidence(path: Path) -> dict[str, Any]:
         raise LifecycleEvidenceRejected(
             f"lifecycle evidence is present but unusable: {exc}"
         ) from exc
-    shape_errors = check_document_shape(document, str(path))
-    if shape_errors:
-        raise LifecycleEvidenceRejected("; ".join(shape_errors))
-    assert isinstance(document, dict)
-    return document
+    return load_lifecycle_evidence_bytes(data, str(path))
 
 
 def _windows_final_path_error(value: Any, expected_leaf: str, label: str) -> str | None:

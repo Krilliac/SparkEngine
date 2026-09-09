@@ -62,7 +62,9 @@ from schema import (
     WORK_ITEM_ID_RE,
     expected_library_names,
     load_known_profile_ids,
+    load_known_profile_ids_rooted,
     load_known_work_item_ids,
+    load_known_work_item_ids_rooted,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -181,7 +183,10 @@ class ManifestValidator:
 
     def _load_contract(self) -> None:
         """Load the identity universes.  An unreadable contract is blocking."""
-        profiles, err = load_known_profile_ids(self.repo_root)
+        if self.root_authority is not None and os.name != "nt":
+            profiles, err = load_known_profile_ids_rooted(self.root_authority)
+        else:
+            profiles, err = load_known_profile_ids(self.repo_root)
         if err:
             self._err(
                 f"release profile registry unavailable: {err} — profile "
@@ -189,7 +194,10 @@ class ManifestValidator:
             )
         self.known_profiles = profiles
 
-        items, err = load_known_work_item_ids(self.repo_root)
+        if self.root_authority is not None and os.name != "nt":
+            items, err = load_known_work_item_ids_rooted(self.root_authority)
+        else:
+            items, err = load_known_work_item_ids(self.repo_root)
         if err:
             self._err(
                 f"work item registry unavailable: {err} — ownership and "
@@ -296,7 +304,12 @@ class ManifestValidator:
             self._check_shared_library(label, mod, name)
             src = mod.get("sourceDirectory")
             if isinstance(src, str):
-                for err in paths_mod.check_source_directory(src, name, self.repo_root):
+                source_errors = (
+                    paths_mod.check_source_directory_rooted(src, name, self.root_authority)
+                    if self.root_authority is not None and os.name != "nt"
+                    else paths_mod.check_source_directory(src, name, self.repo_root)
+                )
+                for err in source_errors:
                     self._err(f"{label}: {err}")
             else:
                 self._err(f"{label}.sourceDirectory must be a string")
@@ -782,10 +795,17 @@ class ManifestValidator:
             )
             return
 
-        for err in provenance.check_revision_binding(
-            self.lifecycle_evidence.get("commitSHA"), self.expected_sha,
-            self.repo_root, "lifecycle evidence commitSHA",
-        ):
+        revision_errors = (
+            provenance.check_revision_binding_rooted(
+                self.lifecycle_evidence.get("commitSHA"), self.expected_sha,
+                self.root_authority, "lifecycle evidence commitSHA",
+            ) if self.root_authority is not None and os.name != "nt"
+            else provenance.check_revision_binding(
+                self.lifecycle_evidence.get("commitSHA"), self.expected_sha,
+                self.repo_root, "lifecycle evidence commitSHA",
+            )
+        )
+        for err in revision_errors:
             self._err(err)
         for err in provenance.check_rfc3339(
             self.lifecycle_evidence.get("generatedAt"),
@@ -804,8 +824,13 @@ class ManifestValidator:
             if not (isinstance(name, str) and isinstance(src, str)
                     and isinstance(lib, dict)):
                 continue
-            tree_sha, err = lifecycle_mod.source_tree_sha(
-                self.repo_root, self.expected_sha, src
+            tree_sha, err = (
+                lifecycle_mod.source_tree_sha_rooted(
+                    self.root_authority, self.expected_sha, src,
+                ) if self.root_authority is not None and os.name != "nt"
+                else lifecycle_mod.source_tree_sha(
+                    self.repo_root, self.expected_sha, src,
+                )
             )
             if err:
                 self._err(f"module {name!r}: {err}")
@@ -818,44 +843,61 @@ class ManifestValidator:
 
 
 # -- loading ---------------------------------------------------------------
-def load_manifest(path: Path | str | None = None) -> dict[str, Any]:
-    if path is None:
-        path = REPO_ROOT / "tools" / "module-evidence" / "manifest.json"
+def load_manifest_bytes(data: bytes, origin: str) -> dict[str, Any]:
+    """Parse the policy manifest from exact already-held bytes."""
     try:
-        document = strict_json.load_file(Path(path))
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ManifestError(f"{origin}: manifest is not valid UTF-8: {exc}") from exc
+    try:
+        document = strict_json.loads(text, origin=origin)
     except strict_json.StrictJSONError as exc:
         raise ManifestError(str(exc)) from exc
     if not isinstance(document, dict):
-        raise ManifestError(f"{path}: manifest must be a JSON object")
+        raise ManifestError(f"{origin}: manifest must be a JSON object")
     return document
 
 
-def load_declared_gaps(path: Path, known_work_items: set[str]) -> dict[str, str]:
-    """Load the acknowledged evidence-gap ledger.
+def load_manifest(path: Path | str | None = None) -> dict[str, Any]:
+    """Load a standalone manifest path through exact no-follow bytes."""
+    if path is None:
+        path = REPO_ROOT / "tools" / "module-evidence" / "manifest.json"
+    try:
+        data = strict_json.read_file_no_follow_bytes(
+            Path(path), max_bytes=strict_json.DEFAULT_LIMITS.document_bytes,
+        )
+    except strict_json.StrictJSONError as exc:
+        raise ManifestError(str(exc)) from exc
+    return load_manifest_bytes(data, str(path))
+
+
+def _validate_declared_gaps_document(
+    document: object, origin: str, known_work_items: set[str],
+) -> dict[str, str]:
+    """Validate one already-held acknowledged evidence-gap ledger document.
 
     A malformed ledger is fatal rather than empty: silently reading zero gaps
     from a broken file would turn every gap back into a hard failure with no
     explanation, and — worse — a ledger that failed open would let anything
     through.
     """
-    document = strict_json.load_file(path)
     if not isinstance(document, dict):
-        raise ManifestError(f"{path}: gap ledger must be an object")
+        raise ManifestError(f"{origin}: gap ledger must be an object")
     if document.get("schemaVersion") != "evidence-gaps-v1":
         raise ManifestError(
-            f"{path}: schemaVersion must be 'evidence-gaps-v1', got "
+            f"{origin}: schemaVersion must be 'evidence-gaps-v1', got "
             f"{document.get('schemaVersion')!r}"
         )
     unknown = set(document) - {"schemaVersion", "comment", "gaps"}
     if unknown:
-        raise ManifestError(f"{path}: unknown keys {sorted(unknown)}")
+        raise ManifestError(f"{origin}: unknown keys {sorted(unknown)}")
     gaps = document.get("gaps")
     if not isinstance(gaps, list):
-        raise ManifestError(f"{path}: gaps must be an array")
+        raise ManifestError(f"{origin}: gaps must be an array")
 
     declared: dict[str, str] = {}
     for i, gap in enumerate(gaps):
-        label = f"{path}: gaps[{i}]"
+        label = f"{origin}: gaps[{i}]"
         if not isinstance(gap, dict):
             raise ManifestError(f"{label} must be an object")
         unknown = set(gap) - {"evidenceType", "trackedUnder", "reason"}
@@ -887,6 +929,32 @@ def load_declared_gaps(path: Path, known_work_items: set[str]) -> dict[str, str]
     return declared
 
 
+def load_declared_gaps_bytes(
+    data: bytes, origin: str, known_work_items: set[str],
+) -> dict[str, str]:
+    """Load the acknowledged gap ledger from exact already-held bytes."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ManifestError(f"{origin}: gap ledger is not UTF-8: {exc}") from exc
+    try:
+        document = strict_json.loads(text, origin=origin)
+    except strict_json.StrictJSONError as exc:
+        raise ManifestError(str(exc)) from exc
+    return _validate_declared_gaps_document(document, origin, known_work_items)
+
+
+def load_declared_gaps(path: Path, known_work_items: set[str]) -> dict[str, str]:
+    """Load a standalone declared-gap ledger through no-follow bytes."""
+    try:
+        data = strict_json.read_file_no_follow_bytes(
+            path, max_bytes=strict_json.DEFAULT_LIMITS.document_bytes,
+        )
+    except strict_json.StrictJSONError as exc:
+        raise ManifestError(str(exc)) from exc
+    return load_declared_gaps_bytes(data, str(path), known_work_items)
+
+
 def _resolve_expected_sha(repo_root: Path, explicit: str | None) -> tuple[str | None, str | None]:
     """Establish the revision under test from CI injection or the checkout."""
     candidate = explicit or os.environ.get("GITHUB_SHA") or None
@@ -896,6 +964,19 @@ def _resolve_expected_sha(repo_root: Path, explicit: str | None) -> tuple[str | 
             return None, errs[0]
         return candidate, None
     return provenance.resolve_head_sha(repo_root)
+
+
+def _resolve_expected_sha_rooted(
+    root: strict_json.NoFollowDirectoryLease, explicit: str | None,
+) -> tuple[str | None, str | None]:
+    """Establish the revision without reopening a mutable repository pathname."""
+    candidate = explicit or os.environ.get("GITHUB_SHA") or None
+    if candidate:
+        errs = provenance.check_sha_shape(candidate, "expected revision")
+        if errs:
+            return None, errs[0]
+        return candidate, None
+    return provenance.resolve_head_sha_rooted(root)
 
 
 def main() -> int:
@@ -974,9 +1055,26 @@ def main() -> int:
             # malformed present evidence is a fatal authority/rejection event.
             if lifecycle_path is not None:
                 try:
-                    lifecycle_evidence = lifecycle_mod.load_lifecycle_evidence(
-                        lifecycle_path
-                    )
+                    if args.lifecycle_evidence is None:
+                        assert root_authority is not None
+                        relative = EVIDENCE_PRODUCERS["lifecycle-log"]["artifact"]
+                        data = root_authority.read_relative_bytes(
+                            relative,
+                            max_bytes=strict_json.DEFAULT_LIMITS.document_bytes,
+                        )
+                        lifecycle_evidence = lifecycle_mod.load_lifecycle_evidence_bytes(
+                            data, str(repo_root / relative),
+                        )
+                    else:
+                        lifecycle_evidence = lifecycle_mod.load_lifecycle_evidence(
+                            lifecycle_path
+                        )
+                except strict_json.NoFollowEvidenceMissing as exc:
+                    lifecycle_error = f"lifecycle evidence leaf is absent: {exc}"
+                except strict_json.NoFollowAuthorityError as exc:
+                    raise lifecycle_mod.LifecycleEvidenceAuthorityError(
+                        f"lifecycle evidence authority rejected: {exc}"
+                    ) from exc
                 except lifecycle_mod.LifecycleEvidenceRejected:
                     raise
                 except lifecycle_mod.LifecycleEvidenceUnavailable as exc:
@@ -984,15 +1082,41 @@ def main() -> int:
             if root_authority is not None:
                 root_authority.verify()
 
-            manifest = load_manifest(args.manifest)
+            if args.manifest is None and root_authority is not None:
+                manifest_relative = "tools/module-evidence/manifest.json"
+                manifest = load_manifest_bytes(
+                    root_authority.read_relative_bytes(
+                        manifest_relative,
+                        max_bytes=strict_json.DEFAULT_LIMITS.document_bytes,
+                    ),
+                    str(repo_root / manifest_relative),
+                )
+            else:
+                manifest = load_manifest(args.manifest)
             if root_authority is not None:
                 root_authority.verify()
 
             if args.allow_declared_gaps:
-                known_items, _ = load_known_work_item_ids(repo_root)
-                declared_gaps = load_declared_gaps(
-                    args.allow_declared_gaps, known_items,
+                known_items, _ = (
+                    load_known_work_item_ids_rooted(root_authority)
+                    if root_authority is not None and os.name != "nt"
+                    else load_known_work_item_ids(repo_root)
                 )
+                ledger_relative = "tools/module-evidence/evidence-gaps.json"
+                requested_ledger = str(args.allow_declared_gaps).replace("\\", "/")
+                if root_authority is not None and os.name != "nt" and \
+                        requested_ledger == ledger_relative:
+                    declared_gaps = load_declared_gaps_bytes(
+                        root_authority.read_relative_bytes(
+                            ledger_relative,
+                            max_bytes=strict_json.DEFAULT_LIMITS.document_bytes,
+                        ),
+                        str(repo_root / ledger_relative), known_items,
+                    )
+                else:
+                    declared_gaps = load_declared_gaps(
+                        args.allow_declared_gaps, known_items,
+                    )
             if root_authority is not None:
                 root_authority.verify()
 
@@ -1021,18 +1145,20 @@ def main() -> int:
             if root_authority is not None:
                 root_authority.verify()
 
-            if lifecycle_evidence is not None:
+            if os.name == "nt" and lifecycle_evidence is not None:
                 print(
-                    "FATAL: positive lifecycle evidence validation is disabled "
-                    "until rooted control-plane reads are complete; the collector "
-                    "may produce evidence and --policy-only/incomplete checks remain "
-                    "available, but no platform may emit a release-attesting OK",
+                    "FATAL: positive lifecycle evidence validation requires the "
+                    "POSIX rooted release authority; Windows may collect evidence "
+                    "or run --policy-only/incomplete checks but cannot emit a "
+                    "release-attesting OK",
                     file=sys.stderr,
                 )
                 return 1
 
-            expected_sha, sha_error = _resolve_expected_sha(
-                repo_root, args.expected_sha,
+            expected_sha, sha_error = (
+                _resolve_expected_sha_rooted(root_authority, args.expected_sha)
+                if root_authority is not None and os.name != "nt"
+                else _resolve_expected_sha(repo_root, args.expected_sha)
             )
             if sha_error and not args.policy_only:
                 print(f"WARNING: {sha_error}", file=sys.stderr)

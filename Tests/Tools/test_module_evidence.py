@@ -40,6 +40,7 @@ import artifacts  # noqa: E402
 import lifecycle as lifecycle_mod  # noqa: E402
 import paths as paths_mod  # noqa: E402
 import provenance  # noqa: E402
+import schema as schema_mod  # noqa: E402
 import strict_json  # noqa: E402
 import targets as targets_mod  # noqa: E402
 import validate_manifest as validate_manifest_mod  # noqa: E402
@@ -771,6 +772,80 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
 
         self.assertEqual(actual, payload)
 
+    @unittest.skipIf(os.name == "nt", "POSIX descriptor-rooted Git regression")
+    def test_posix_root_lease_git_cwd_survives_root_rename(self) -> None:
+        """Git receives an inherited directory descriptor, not a rebuilt path."""
+        root = self.repo / "rooted-git-root"
+        expected_sha = build_fake_repo(root)
+        moved = self.repo / "rooted-git-root-moved"
+
+        with strict_json.open_no_follow_directory_lease(root, label="test root") as lease:
+            cwd, pass_fds = lease.posix_git_cwd()
+            root.rename(moved)
+            proc = subprocess.run(
+                ["git", "-C", cwd, "rev-parse", "HEAD"],
+                capture_output=True, check=False, text=True, timeout=30,
+                pass_fds=pass_fds,
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.strip(), expected_sha)
+
+    @unittest.skipIf(os.name == "nt", "POSIX rooted contract regression")
+    def test_posix_root_lease_reads_contracts_after_root_rename(self) -> None:
+        """Profile and work-item identities come from the held original root."""
+        root = self.repo / "rooted-contract-root"
+        build_fake_repo(root)
+        moved = self.repo / "rooted-contract-root-moved"
+
+        with strict_json.open_no_follow_directory_lease(root, label="test root") as lease:
+            root.rename(moved)
+            profiles, profile_error = schema_mod.load_known_profile_ids_rooted(lease)
+            items, item_error = schema_mod.load_known_work_item_ids_rooted(lease)
+
+        self.assertIsNone(profile_error)
+        self.assertIsNone(item_error)
+        self.assertIn("stable-v1", profiles)
+        self.assertIn("RDY-010", items)
+
+    @unittest.skipIf(os.name == "nt", "POSIX rooted source-directory regression")
+    def test_posix_root_lease_checks_source_after_root_rename(self) -> None:
+        """Source-directory identity is checked under the held original root."""
+        root = self.repo / "rooted-source-root"
+        build_fake_repo(root)
+        moved = self.repo / "rooted-source-root-moved"
+
+        with strict_json.open_no_follow_directory_lease(root, label="test root") as lease:
+            root.rename(moved)
+            errors = paths_mod.check_source_directory_rooted(
+                "GameModules/SparkGameFPS/Source", "SparkGameFPS", lease,
+            )
+
+        self.assertEqual(errors, [], errors)
+
+    @unittest.skipIf(os.name == "nt", "POSIX rooted provenance regression")
+    def test_posix_root_lease_binds_head_and_source_tree_after_root_rename(self) -> None:
+        """Revision and tree binding use descriptor-rooted Git after rename."""
+        root = self.repo / "rooted-provenance-root"
+        expected_sha = build_fake_repo(root)
+        moved = self.repo / "rooted-provenance-root-moved"
+
+        with strict_json.open_no_follow_directory_lease(root, label="test root") as lease:
+            root.rename(moved)
+            head, head_error = provenance.resolve_head_sha_rooted(lease)
+            binding_errors = provenance.check_revision_binding_rooted(
+                expected_sha, expected_sha, lease, "test commit",
+            )
+            tree_sha, tree_error = lifecycle_mod.source_tree_sha_rooted(
+                lease, expected_sha, "GameModules/SparkGameFPS/Source",
+            )
+
+        self.assertIsNone(head_error)
+        self.assertEqual(head, expected_sha)
+        self.assertEqual(binding_errors, [], binding_errors)
+        self.assertIsNone(tree_error)
+        self.assertIsNotNone(tree_sha)
+
     def test_loader_classifies_malformed_present_evidence_as_fatal_rejection(self) -> None:
         path = self.repo / "malformed-lifecycle-evidence.json"
         path.write_text("{not valid JSON", encoding="utf-8")
@@ -1174,11 +1249,15 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             result = validate_manifest_mod.main()
 
         source_tree.assert_not_called()
-        self.assertNotEqual(result, 0)
-        self.assertIn("rooted control-plane reads are complete", stderr.getvalue())
+        if os.name == "nt":
+            self.assertNotEqual(result, 0)
+            self.assertIn("POSIX rooted release authority", stderr.getvalue())
+        else:
+            self.assertEqual(result, 0, stderr.getvalue())
+            self.assertIn("OK: module evidence manifest is valid", stdout.getvalue())
 
     def test_main_accepts_default_lifecycle_evidence_at_a_real_lexical_path(self) -> None:
-        """No platform may emit a positive result before rooted control-plane reads."""
+        """Only the POSIX rooted release authority may emit a positive result."""
         root = self.repo / "cli-normal-root"
         self._prepare_cli_evidence_root(root)
         manifest_path = root / "cli-manifest.json"
@@ -1190,8 +1269,12 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
-        self.assertNotEqual(result, 0)
-        self.assertIn("rooted control-plane reads are complete", stderr.getvalue())
+        if os.name == "nt":
+            self.assertNotEqual(result, 0)
+            self.assertIn("POSIX rooted release authority", stderr.getvalue())
+        else:
+            self.assertEqual(result, 0, stderr.getvalue())
+            self.assertIn("OK: module evidence manifest is valid", stdout.getvalue())
 
     def test_main_reads_default_target_index_through_held_root_bytes(self) -> None:
         """The release default cannot regress to a mutable target-index pathname."""
@@ -1218,9 +1301,72 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
-        self.assertNotEqual(result, 0)
-        self.assertIn("rooted control-plane reads are complete", stderr.getvalue())
+        if os.name == "nt":
+            self.assertNotEqual(result, 0)
+            self.assertIn("POSIX rooted release authority", stderr.getvalue())
+        else:
+            self.assertEqual(result, 0, stderr.getvalue())
         self.assertIn("build/module-evidence/module-targets.json", calls)
+        self.assertIn("build/module-evidence/module-lifecycle.json", calls)
+
+    @unittest.skipIf(os.name == "nt", "POSIX rooted release-authority integration")
+    def test_posix_main_reads_default_manifest_and_artifacts_through_root(self) -> None:
+        """The release-shaped CLI consumes all default evidence below held root."""
+        root = self.repo / "cli-rooted-defaults-root"
+        self._prepare_cli_evidence_root(root)
+        policy_dir = root / "tools" / "module-evidence"
+        policy_dir.mkdir(parents=True, exist_ok=True)
+        (policy_dir / "manifest.json").write_text(json.dumps(base_manifest()), encoding="utf-8")
+        (policy_dir / "evidence-gaps.json").write_text(
+            json.dumps({"schemaVersion": "evidence-gaps-v1", "gaps": []}),
+            encoding="utf-8",
+        )
+        junit = root / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
+        junit.parent.mkdir(parents=True, exist_ok=True)
+        junit.write_text(
+            '<testsuites tests="3"><testsuite tests="3">'
+            '<testcase name="a" classname="SparkGameFPS"/>'
+            '<testcase name="b" classname="SparkGameFPS"/>'
+            '<testcase name="c" classname="SparkGameFPS"/>'
+            '</testsuite></testsuites>',
+            encoding="utf-8",
+        )
+        smoke = root / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
+        smoke.parent.mkdir(parents=True, exist_ok=True)
+        smoke.write_text(
+            "SparkGameFPS\nmodule=SparkGameFPS\nexit_code=0\nPASS\n",
+            encoding="utf-8",
+        )
+        original_reader = strict_json.NoFollowDirectoryLease.read_relative_bytes
+        calls: list[str] = []
+
+        def record_reader(
+            lease: strict_json.NoFollowDirectoryLease, relative: str, *, max_bytes: int,
+        ) -> bytes:
+            calls.append(relative)
+            return original_reader(lease, relative, max_bytes=max_bytes)
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(
+            strict_json.NoFollowDirectoryLease, "read_relative_bytes",
+            autospec=True, side_effect=record_reader,
+        ), mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(root),
+            "--allow-declared-gaps", "tools/module-evidence/evidence-gaps.json",
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertEqual(result, 0, stderr.getvalue())
+        self.assertIn("OK: module evidence manifest is valid", stdout.getvalue())
+        self.assertTrue({
+            "tools/module-evidence/manifest.json",
+            "tools/module-evidence/evidence-gaps.json",
+            "build/module-evidence/module-targets.json",
+            "build/module-evidence/module-lifecycle.json",
+            EVIDENCE_PRODUCERS["junit-xml"]["artifact"],
+            EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"],
+        }.issubset(set(calls)), calls)
 
     def test_document_shape_is_rejected_by_loader_and_injected_validator(self) -> None:
         """Direct injection must not bypass the loader's closed document schema."""
@@ -2470,6 +2616,7 @@ class TestLifecycleCollector(FixtureCase):
             with self.subTest(stdout=stdout, stderr=stderr), self.assertRaises(ValueError):
                 parse_terminal_streams(stdout, stderr, INCLUDED)
 
+    @unittest.skipUnless(os.name == "nt", "stable-v1 collector command contract is Windows-only")
     def test_run_command_and_environment_are_the_stable_v1_contract(self) -> None:
         from collect_lifecycle import run_engine
         root = self.repo / "package"
@@ -3555,6 +3702,7 @@ time.sleep(60)
         self.assertTrue(all(item.closed for item in opened))
         self.assertFalse(out.exists())
 
+    @unittest.skipUnless(os.name == "nt", "stable-v1 collector path contract is Windows-only")
     def test_run_engine_uses_canonical_paths_for_relative_arguments(self) -> None:
         from collect_lifecycle import run_engine
         root = self.repo / "relative-package"

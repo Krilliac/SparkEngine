@@ -30,6 +30,8 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import strict_json
+
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 # RFC 3339 section 5.6 date-time.  A trailing offset is mandatory: a naive
@@ -111,6 +113,34 @@ def resolve_head_sha(repo_root: Path) -> tuple[str | None, str | None]:
     return sha, None
 
 
+def run_rooted_git(
+    root: strict_json.NoFollowDirectoryLease, *arguments: str,
+) -> subprocess.CompletedProcess[str]:
+    """Run Git from an inherited POSIX descriptor-rooted checkout authority."""
+    cwd, pass_fds = root.posix_git_cwd()
+    return subprocess.run(
+        ["git", "-C", cwd, *arguments],
+        capture_output=True, text=True, timeout=30, check=False,
+        pass_fds=pass_fds,
+    )
+
+
+def resolve_head_sha_rooted(
+    root: strict_json.NoFollowDirectoryLease,
+) -> tuple[str | None, str | None]:
+    """Return HEAD through descriptor-rooted Git rather than a mutable path."""
+    try:
+        proc = run_rooted_git(root, "rev-parse", "HEAD")
+    except (OSError, subprocess.SubprocessError, strict_json.NoFollowAuthorityError) as exc:
+        return None, f"cannot run rooted git to resolve HEAD: {exc}"
+    if proc.returncode != 0:
+        return None, f"rooted git rev-parse HEAD failed: {proc.stderr.strip()}"
+    sha = proc.stdout.strip()
+    if not SHA_RE.match(sha):
+        return None, f"rooted git rev-parse HEAD returned an unexpected value: {sha!r}"
+    return sha, None
+
+
 def check_sha_exists(sha: str, repo_root: Path, label: str) -> list[str]:
     """The SHA must name a commit object that really exists in this repository.
 
@@ -128,6 +158,25 @@ def check_sha_exists(sha: str, repo_root: Path, label: str) -> list[str]:
         return [
             f"{label}: {sha!r} is not an object in this repository — an "
             f"arbitrary hex string is not evidence of a source revision"
+        ]
+    kind = proc.stdout.strip()
+    if kind != "commit":
+        return [f"{label}: {sha!r} is a {kind!r} object, not a commit"]
+    return []
+
+
+def check_sha_exists_rooted(
+    sha: str, root: strict_json.NoFollowDirectoryLease, label: str,
+) -> list[str]:
+    """Verify a commit object through descriptor-rooted POSIX Git authority."""
+    try:
+        proc = run_rooted_git(root, "cat-file", "-t", sha)
+    except (OSError, subprocess.SubprocessError, strict_json.NoFollowAuthorityError) as exc:
+        return [f"{label}: cannot verify {sha!r} through rooted Git: {exc}"]
+    if proc.returncode != 0:
+        return [
+            f"{label}: {sha!r} is not an object in the rooted repository — an "
+            "arbitrary hex string is not evidence of a source revision"
         ]
     kind = proc.stdout.strip()
     if kind != "commit":
@@ -161,5 +210,33 @@ def check_revision_binding(
             f"{label}: evidence was generated at {declared_sha} but the "
             f"revision under test is {expected_sha} — stale evidence cannot "
             f"stand in for the source being validated"
+        ]
+    return []
+
+
+def check_revision_binding_rooted(
+    declared_sha: object,
+    expected_sha: str | None,
+    root: strict_json.NoFollowDirectoryLease,
+    label: str,
+) -> list[str]:
+    """Bind evidence revision using descriptor-rooted Git object authority."""
+    errors = check_sha_shape(declared_sha, label)
+    if errors:
+        return errors
+    assert isinstance(declared_sha, str)
+    errors += check_sha_exists_rooted(declared_sha, root, label)
+    if errors:
+        return errors
+    if expected_sha is None:
+        return [
+            f"{label}: no expected revision was supplied — pass --expected-sha "
+            "so evidence is bound to a known revision"
+        ]
+    if declared_sha != expected_sha:
+        return [
+            f"{label}: evidence was generated at {declared_sha} but the "
+            f"revision under test is {expected_sha} — stale evidence cannot "
+            "stand in for the source being validated"
         ]
     return []

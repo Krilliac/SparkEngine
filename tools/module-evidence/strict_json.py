@@ -836,6 +836,19 @@ class NoFollowDirectoryLease:
         fd = self._handles[-1]
         return f"/proc/self/fd/{fd}", (fd,)
 
+    def list_relative_names(self, relative: str) -> list[str]:
+        """List one literal child directory through held POSIX authority."""
+        if self._closed:
+            raise NoFollowAuthorityError(
+                f"held {self.label} authority was already closed"
+            )
+        if os.name == "nt":
+            raise NoFollowAuthorityError(
+                "rooted directory enumeration is unavailable on Windows"
+            )
+        components = () if relative == "" else _validated_relative_components(relative)
+        return _list_relative_names_posix(self, components)
+
     def close(self) -> None:
         """Release every held handle, retaining failed ones for a fatal retry."""
         if self._closed:
@@ -1012,6 +1025,54 @@ def _read_relative_bytes_posix(
         )
     assert data is not None
     return data
+
+
+def _list_relative_names_posix(
+    lease: NoFollowDirectoryLease, components: tuple[str, ...],
+) -> list[str]:
+    """Enumerate one directory via held POSIX descriptors without path reopen."""
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not no_follow or not directory or os.open not in os.supports_dir_fd:
+        raise NoFollowAuthorityError(
+            "secure rooted relative POSIX directory reader is unavailable"
+        )
+    temporary_fds: list[int] = []
+    directory_flags = os.O_RDONLY | directory | no_follow | getattr(os, "O_CLOEXEC", 0)
+    failure: NoFollowAuthorityError | None = None
+    names: list[str] | None = None
+    try:
+        current_fd = lease._handles[-1]
+        for component in components:
+            current_fd = os.open(component, directory_flags, dir_fd=current_fd)
+            temporary_fds.append(current_fd)
+            _posix_directory_snapshot(current_fd, "rooted relative")
+        names = sorted(os.listdir(current_fd))
+    except OSError as exc:
+        failure = NoFollowAuthorityError(
+            f"unsafe rooted relative directory open/list for {'/'.join(components)}: {exc}"
+        )
+    finally:
+        close_errors: list[str] = []
+        for fd in reversed(temporary_fds):
+            try:
+                os.close(fd)
+            except OSError as exc:
+                close_errors.append(str(exc))
+    if failure is not None:
+        if close_errors:
+            raise NoFollowAuthorityError(
+                f"{failure}; cannot close rooted relative directory descriptors: "
+                f"{'; '.join(close_errors)}"
+            )
+        raise failure
+    if close_errors:
+        raise NoFollowAuthorityError(
+            "cannot close rooted relative directory descriptors: "
+            f"{'; '.join(close_errors)}"
+        )
+    assert names is not None
+    return names
 
 
 def open_no_follow_directory_lease(

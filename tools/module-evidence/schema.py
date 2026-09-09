@@ -198,3 +198,81 @@ def load_known_work_item_ids(repo_root: Path) -> tuple[set[str], str | None]:
             f"verified, so ownership claims must not be accepted"
         )
     return ids, None
+
+
+def _load_rooted_contract_json(
+    root: strict_json.NoFollowDirectoryLease, relative: str,
+) -> object:
+    """Decode a committed contract file through held relative bytes."""
+    data = root.read_relative_bytes(
+        relative, max_bytes=strict_json.CONTRACT_LIMITS.document_bytes,
+    )
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise strict_json.NoFollowAuthorityError(
+            f"rooted contract {relative!r} is not UTF-8: {exc}"
+        ) from exc
+    return strict_json.loads(
+        text, origin=relative, limits=strict_json.CONTRACT_LIMITS,
+    )
+
+
+def load_known_profile_ids_rooted(
+    root: strict_json.NoFollowDirectoryLease,
+) -> tuple[set[str], str | None]:
+    """Read release profile ids from held root-relative contract bytes."""
+    relative = "docs/site/readiness.json"
+    try:
+        document = _load_rooted_contract_json(root, relative)
+    except strict_json.StrictJSONError as exc:
+        return set(), f"cannot read rooted release profiles from {relative}: {exc}"
+    profiles = document.get("releaseProfiles") if isinstance(document, dict) else None
+    if not isinstance(profiles, list) or not profiles:
+        return set(), f"{relative} declares no releaseProfiles"
+    ids = {profile.get("id") for profile in profiles if isinstance(profile, dict) and profile.get("id")}
+    if not ids:
+        return set(), f"{relative} declares no usable release profile ids"
+    return ids, None
+
+
+def load_known_work_item_ids_rooted(
+    root: strict_json.NoFollowDirectoryLease,
+) -> tuple[set[str], str | None]:
+    """Read work-item ids through held POSIX root-relative authority."""
+    directory = "docs/readiness/work-items"
+    try:
+        names = root.list_relative_names(directory)
+    except strict_json.StrictJSONError as exc:
+        return set(), f"cannot list rooted work item directory {directory}: {exc}"
+    json_names = [name for name in names if name.endswith(".json")]
+    if not json_names:
+        return set(), (
+            f"no work items found under rooted {directory} — ownership cannot be "
+            "verified, so ownership claims must not be accepted"
+        )
+    ids: set[str] = set()
+    errors: list[str] = []
+    for name in json_names:
+        relative = f"{directory}/{name}"
+        try:
+            document = _load_rooted_contract_json(root, relative)
+        except strict_json.StrictJSONError as exc:
+            errors.append(f"{name}: {exc}")
+            continue
+        items = document.get("workItems") if isinstance(document, dict) else None
+        if items is None and isinstance(document, list):
+            items = document
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if isinstance(item, dict) and isinstance(item.get("id"), str):
+                ids.add(item["id"])
+    if errors:
+        return ids, "; ".join(errors)
+    if not ids:
+        return set(), (
+            f"no usable work items found under rooted {directory} — ownership cannot "
+            "be verified, so ownership claims must not be accepted"
+        )
+    return ids, None
