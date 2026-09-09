@@ -186,9 +186,13 @@ jobs:
             github.rest.repos.getCombinedStatusForRef({
               ...context.repo, ref: targetSha, per_page: 100,
             }),
-            github.rest.repos.listCommitStatusesForRef({
-              ...context.repo, ref: targetSha, per_page: 100,
-            }),
+            (async () => ({
+              data: await statusContract.loadBoundedCommitStatusHistory({
+                listPage: ({ page, per_page }) => github.rest.repos.listCommitStatusesForRef({
+                  ...context.repo, ref: targetSha, page, per_page,
+                }),
+              }),
+            }))(),
             github.rest.repos.get(context.repo),
           ]);
           const terminal = statusContract.hasTerminalReporterSet({
@@ -380,9 +384,13 @@ jobs:
             github.rest.repos.getCombinedStatusForRef({
               ...context.repo, ref: targetSha, per_page: 100,
             }),
-            github.rest.repos.listCommitStatusesForRef({
-              ...context.repo, ref: targetSha, per_page: 100,
-            }),
+            (async () => ({
+              data: await statusContract.loadBoundedCommitStatusHistory({
+                listPage: ({ page, per_page }) => github.rest.repos.listCommitStatusesForRef({
+                  ...context.repo, ref: targetSha, page, per_page,
+                }),
+              }),
+            }))(),
             github.rest.repos.get(context.repo),
           ]);
           const terminal = statusContract.hasTerminalReporterSet({
@@ -513,9 +521,13 @@ jobs:
             github.rest.repos.getCombinedStatusForRef({
               ...context.repo, ref: targetSha, per_page: 100,
             }),
-            github.rest.repos.listCommitStatusesForRef({
-              ...context.repo, ref: targetSha, per_page: 100,
-            }),
+            (async () => ({
+              data: await statusContract.loadBoundedCommitStatusHistory({
+                listPage: ({ page, per_page }) => github.rest.repos.listCommitStatusesForRef({
+                  ...context.repo, ref: targetSha, page, per_page,
+                }),
+              }),
+            }))(),
           ]);
           const liveTerminal = statusContract.hasTerminalReporterSet({
             combined: liveCombined.data,
@@ -620,11 +632,13 @@ jobs:
             const [finalWorkingResponse, currentBadgeResponse, statusesResponse] = await Promise.all([
               github.rest.repos.getCommit({...context.repo, ref: 'Working'}),
               github.rest.checks.get({...context.repo, check_run_id: checkId}),
-              github.rest.repos.listCommitStatusesForRef({
-                ...context.repo,
-                ref: targetSha,
-                per_page: 100,
-              }),
+              (async () => ({
+                data: await statusContract.loadBoundedCommitStatusHistory({
+                  listPage: ({ page, per_page }) => github.rest.repos.listCommitStatusesForRef({
+                    ...context.repo, ref: targetSha, page, per_page,
+                  }),
+                }),
+              }))(),
             ]);
             const finalWorking = finalWorkingResponse.data;
             if (String(finalWorking.sha || '').toLowerCase() !== targetSha) {
@@ -641,7 +655,8 @@ jobs:
               throw new Error('Current badge check changed before terminal success publication.');
             }
             const statuses = statusesResponse.data;
-            if (!Array.isArray(statuses) || statuses.length < 2 || statuses.length > 100) {
+            if (!Array.isArray(statuses) || statuses.length < 2 ||
+                statuses.length > statusContract.COMMIT_STATUS_HISTORY_MAX_RECORDS) {
               throw new Error('Terminal commit-status inventory is malformed or unbounded.');
             }
             for (const [statusContext, expected] of requiredStatuses) {
@@ -786,9 +801,13 @@ jobs:
             github.rest.repos.getCombinedStatusForRef({
               ...context.repo, ref: targetSha, per_page: 100,
             }),
-            github.rest.repos.listCommitStatusesForRef({
-              ...context.repo, ref: targetSha, per_page: 100,
-            }),
+            (async () => ({
+              data: await statusContract.loadBoundedCommitStatusHistory({
+                listPage: ({ page, per_page }) => github.rest.repos.listCommitStatusesForRef({
+                  ...context.repo, ref: targetSha, page, per_page,
+                }),
+              }),
+            }))(),
           ]);
           const liveTerminal = statusContract.hasTerminalReporterSet({
             combined: combinedResponse.data,
@@ -850,9 +869,13 @@ jobs:
               github.rest.repos.getCombinedStatusForRef({
                 ...context.repo, ref: targetSha, per_page: 100,
               }),
-              github.rest.repos.listCommitStatusesForRef({
-                ...context.repo, ref: targetSha, per_page: 100,
-              }),
+              (async () => ({
+                data: await statusContract.loadBoundedCommitStatusHistory({
+                  listPage: ({ page, per_page }) => github.rest.repos.listCommitStatusesForRef({
+                    ...context.repo, ref: targetSha, page, per_page,
+                  }),
+                }),
+              }))(),
             ]);
             const failureReportersRemainTerminal = statusContract.hasTerminalReporterSet({
               combined: postFailureCombined.data,
@@ -934,9 +957,13 @@ jobs:
             github.rest.repos.getCombinedStatusForRef({
               ...context.repo, ref: targetSha, per_page: 100,
             }),
-            github.rest.repos.listCommitStatusesForRef({
-              ...context.repo, ref: targetSha, per_page: 100,
-            }),
+            (async () => ({
+              data: await statusContract.loadBoundedCommitStatusHistory({
+                listPage: ({ page, per_page }) => github.rest.repos.listCommitStatusesForRef({
+                  ...context.repo, ref: targetSha, page, per_page,
+                }),
+              }),
+            }))(),
           ]);
           statusContract.hasTerminalReporterSet({
             combined: postCombined.data,

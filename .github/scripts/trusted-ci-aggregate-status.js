@@ -2,6 +2,10 @@
 
 const BOT_LOGIN = 'github-actions[bot]';
 const BOT_ID = 41898282;
+const COMMIT_STATUS_HISTORY_PAGE_SIZE = 100;
+const COMMIT_STATUS_HISTORY_MAX_PAGES = 10;
+const COMMIT_STATUS_HISTORY_MAX_RECORDS =
+    COMMIT_STATUS_HISTORY_PAGE_SIZE * COMMIT_STATUS_HISTORY_MAX_PAGES;
 const REPORTER_WORKFLOWS = Object.freeze({
     'Build Matrix Verifier': Object.freeze({
         workflowId: 349562521,
@@ -20,6 +24,41 @@ const normalizedWorkflowPath = value => typeof value === 'string' ? value.split(
 
 function hasTrustedCreator(status) {
     return isObject(status?.creator) && status.creator.login === BOT_LOGIN && status.creator.id === BOT_ID;
+}
+
+async function loadBoundedCommitStatusHistory({
+    listPage,
+    pageSize = COMMIT_STATUS_HISTORY_PAGE_SIZE,
+    maximumPages = COMMIT_STATUS_HISTORY_MAX_PAGES
+}) {
+    if (typeof listPage !== 'function' ||
+        !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100 ||
+        !Number.isInteger(maximumPages) || maximumPages < 1 ||
+        maximumPages > COMMIT_STATUS_HISTORY_MAX_PAGES ||
+        pageSize * maximumPages > COMMIT_STATUS_HISTORY_MAX_RECORDS) {
+        throw new Error('Commit-status history request is malformed.');
+    }
+
+    const statuses = [];
+    const seenIds = new Set();
+    for (let page = 1; page <= maximumPages; ++page) {
+        const response = await listPage({ page, per_page: pageSize });
+        const currentPage = response?.data;
+        if (!Array.isArray(currentPage) || currentPage.length > pageSize) {
+            throw new Error('Commit-status history page is malformed or unbounded.');
+        }
+        for (const status of currentPage) {
+            if (!isObject(status) || !Number.isInteger(status.id) || status.id < 1 || seenIds.has(status.id)) {
+                throw new Error('Commit-status history contains an invalid or duplicate status.');
+            }
+            seenIds.add(status.id);
+            statuses.push(status);
+        }
+        if (currentPage.length < pageSize) {
+            return statuses;
+        }
+    }
+    throw new Error('Commit-status history exceeds the authenticated page bound.');
 }
 
 function validateCreatedStatus(status, expected) {
@@ -54,7 +93,7 @@ function validateLatestPendingStatus({
     if (!normalizedTargetSha || combinedSha !== normalizedTargetSha ||
         !Number.isInteger(total) || total < 1 || total > 100 ||
         !Array.isArray(combinedStatuses) || combinedStatuses.length !== total ||
-        !Array.isArray(listed) || listed.length < 1 || listed.length > 100 ||
+        !Array.isArray(listed) || listed.length < 1 || listed.length > COMMIT_STATUS_HISTORY_MAX_RECORDS ||
         !Array.isArray(authorizedTargetUrls) || authorizedTargetUrls.some(value => typeof value !== 'string')) {
         throw new Error('The commit-status inventory is incomplete, malformed, or unbounded.');
     }
@@ -89,7 +128,7 @@ function hasTerminalReporterSet({ combined, listed, targetSha, contexts }) {
     if (!normalizedTargetSha || combinedSha !== normalizedTargetSha ||
         !Number.isInteger(total) || total < 1 || total > 100 ||
         !Array.isArray(statuses) || statuses.length !== total ||
-        !Array.isArray(listed) || listed.length < 1 || listed.length > 100 ||
+        !Array.isArray(listed) || listed.length < 1 || listed.length > COMMIT_STATUS_HISTORY_MAX_RECORDS ||
         !Array.isArray(contexts) || contexts.length !== 2 ||
         contexts.some(value => typeof value !== 'string' || !value)) {
         throw new Error('Terminal reporter readiness inventory is malformed.');
@@ -183,7 +222,7 @@ function hasCurrentPendingLease({
     if (!normalizedTargetSha || combinedSha !== normalizedTargetSha ||
         !Number.isInteger(total) || total < 1 || total > 100 ||
         !Array.isArray(statuses) || statuses.length !== total ||
-        !Array.isArray(listed) || listed.length < 1 || listed.length > 100 ||
+        !Array.isArray(listed) || listed.length < 1 || listed.length > COMMIT_STATUS_HISTORY_MAX_RECORDS ||
         typeof context !== 'string' || !context ||
         !Number.isInteger(ownPendingId) || ownPendingId < 1 ||
         typeof ownPendingTargetUrl !== 'string' || !ownPendingTargetUrl) {
@@ -257,9 +296,11 @@ async function publishValidatedTerminalStatus({
 }
 
 module.exports = Object.freeze({
+    COMMIT_STATUS_HISTORY_MAX_RECORDS,
     hasCurrentPendingLease,
     hasTerminalReporterSet,
     isExactCompletedReporterEvent,
+    loadBoundedCommitStatusHistory,
     publishValidatedTerminalStatus,
     validateCreatedStatus,
     validateLatestPendingStatus

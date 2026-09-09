@@ -1640,6 +1640,22 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_trusted_ci_badge_workflow_is_exact_and_fail_closed(self) -> None:
         aggregate = TRUSTED_CI_AGGREGATE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertEqual(
+            aggregate.count("statusContract.loadBoundedCommitStatusHistory"),
+            7,
+            "Every aggregate status-history read must use the bounded authenticated loader.",
+        )
+        self.assertEqual(
+            aggregate.count(
+                "listPage: ({ page, per_page }) => github.rest.repos.listCommitStatusesForRef"
+            ),
+            7,
+            "Every bounded history loader must bind its own GitHub status endpoint.",
+        )
+        self.assertIn(
+            "statuses.length > statusContract.COMMIT_STATUS_HISTORY_MAX_RECORDS",
+            aggregate,
+        )
         header = aggregate[: aggregate.index("jobs:")]
         self.assertIn('name: "Trusted Exact-Source CI"', aggregate)
         self.assertIn("push:\n    branches: [Working]", header)

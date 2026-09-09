@@ -271,6 +271,49 @@ assert.throws(() => contract.validateCreatedStatus(forgedCreator, {
 }));
 
 (async () => {
+    // Regression: GitHub's status-history endpoint is newest-first. An exact
+    // terminal reporter can fall onto page two after repeated aggregate runs;
+    // its authenticated record must still be available to the aggregate.
+    const buildReporter = readiness.listed.find(status => status.id === 711);
+    const codeqlReporter = readiness.listed.find(status => status.id === 712);
+    assert.ok(buildReporter);
+    assert.ok(codeqlReporter);
+    const firstHistoryPage = Array.from({ length: 100 }, (_, index) => ({
+        id: 1000 + index,
+        state: 'success',
+        context: `historic-${index}`,
+        target_url: `https://example.invalid/status/${index}`,
+        description: 'historic status',
+        creator: creator()
+    }));
+    firstHistoryPage[0] = buildReporter;
+    const historyCalls = [];
+    const pagedHistory = await contract.loadBoundedCommitStatusHistory({
+        listPage: async ({ page, per_page: perPage }) => {
+            historyCalls.push({ page, perPage });
+            return { data: page === 1 ? firstHistoryPage : page === 2 ? [codeqlReporter] : [] };
+        }
+    });
+    assert.deepStrictEqual(historyCalls, [
+        { page: 1, perPage: 100 },
+        { page: 2, perPage: 100 }
+    ]);
+    assert.strictEqual(pagedHistory.length, 101);
+    assert.strictEqual(contract.hasTerminalReporterSet({
+        combined: readiness.combined,
+        listed: pagedHistory,
+        targetSha: SHA,
+        contexts: REPORTER_CONTEXTS
+    }), true);
+
+    await assert.rejects(
+        contract.loadBoundedCommitStatusHistory({
+            listPage: async () => ({ data: [] }),
+            maximumPages: 11
+        }),
+        /Commit-status history request is malformed/
+    );
+
     const successfulCalls = [];
     const published = await contract.publishValidatedTerminalStatus({
         createStatus: async request => {
