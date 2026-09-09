@@ -198,9 +198,8 @@ def target_index(*, name: str = INCLUDED, ttype: str = "SHARED_LIBRARY",
 
 
 FAKE_ENGINE_SHA256 = "a" * 64
-FAKE_ENGINE_PATH = "/usr/local/bin/SparkEngine"
+FAKE_ENGINE_PATH = r"C:\verified-artifact\SparkEngine.exe"
 FAKE_MODULE_SHA256 = "b" * 64
-FAKE_MODULE_PATH = "/usr/local/lib/libSparkGameFPS.so"
 
 
 def pe_image() -> bytes:
@@ -275,21 +274,25 @@ def lifecycle_evidence(repo: Path, sha: str, *, module: str = INCLUDED,
     if phases is None:
         phases = {p: 1 for p in lifecycle_mod.REQUIRED_RUNTIME_PHASES}
         phases["OnUpdate"] = 120
+        # These are part of the stable-v1 headless collector contract even
+        # while older consumers only required the five lifecycle phases.
+        phases["OnFixedUpdate"] = 30
+        phases["OnRender"] = 120
     return {
         "schemaVersion": lifecycle_mod.LIFECYCLE_SCHEMA_VERSION,
         "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "commitSHA": sha,
         "records": [{
             "module": module,
-            "sharedLibrary": expected_library_names(module)["linux"],
+            "sharedLibrary": expected_library_names(module)["windows"],
             "sourceDirectory": f"GameModules/{module}/Source",
             "sourceTreeSHA": tree_sha,
-            "runner": "ctest",
+            "runner": "headless-exec",
             "phases": phases,
             "engineSHA256": FAKE_ENGINE_SHA256,
             "enginePath": FAKE_ENGINE_PATH,
             "moduleSHA256": FAKE_MODULE_SHA256,
-            "modulePath": FAKE_MODULE_PATH,
+            "modulePath": rf"C:\verified-artifact\{expected_library_names(module)['windows']}",
         }],
     }
 
@@ -608,6 +611,130 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         }), encoding="utf-8")
         with self.assertRaises(lifecycle_mod.LifecycleEvidenceUnavailable):
             lifecycle_mod.load_lifecycle_evidence(path)
+
+    def test_document_shape_is_rejected_by_loader_and_injected_validator(self) -> None:
+        """Direct injection must not bypass the loader's closed document schema."""
+        cases: list[tuple[str, Any]] = []
+
+        duplicate = lifecycle_evidence(self.repo, self.sha)
+        duplicate["records"].append(copy.deepcopy(duplicate["records"][0]))
+        cases.append(("duplicate record", duplicate))
+
+        extra = lifecycle_evidence(self.repo, self.sha)
+        extra_record = copy.deepcopy(extra["records"][0])
+        extra_record["module"] = DECOY
+        extra["records"].append(extra_record)
+        cases.append(("extra record", extra))
+
+        non_object = lifecycle_evidence(self.repo, self.sha)
+        non_object["records"].append("not a lifecycle record")
+        cases.append(("non-object record", non_object))
+
+        unknown_top_level = lifecycle_evidence(self.repo, self.sha)
+        unknown_top_level["unreviewed"] = True
+        cases.append(("unknown top-level key", unknown_top_level))
+
+        for case, document in cases:
+            with self.subTest(case=case):
+                path = self.repo / "lifecycle-shape.json"
+                path.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaises(lifecycle_mod.LifecycleEvidenceUnavailable):
+                    lifecycle_mod.load_lifecycle_evidence(path)
+                errors = self.assertRejected(
+                    base_manifest(), f"B10-shape-{case}",
+                    lifecycle_evidence=document,
+                )
+                self.assertTrue(errors, errors)
+
+    def test_source_directory_must_exactly_match_the_planned_collector_source(self) -> None:
+        """A same-tree alias cannot stand in for the collector's fixed source path."""
+        for source_directory in (
+            "GameModules/SparkGameFPS/Source/.",
+            "GameModules/SparkGameFPS/source",
+            "GameModules/SparkGameFPS/Source/./nested",
+        ):
+            with self.subTest(source_directory=source_directory):
+                evidence = lifecycle_evidence(self.repo, self.sha)
+                evidence["records"][0]["sourceDirectory"] = source_directory
+                errors = self.assertRejected(
+                    base_manifest(), "B10-source-directory",
+                    lifecycle_evidence=evidence,
+                )
+                self.assertTrue(any("sourceDirectory" in error for error in errors),
+                                errors)
+
+    def test_only_the_windows_headless_collector_runner_and_dll_are_accepted(self) -> None:
+        """CI test runners and Linux/manual DLL names are not release runtime proof."""
+        for field, value in (
+            ("runner", "ctest"),
+            ("runner", "spark-automation"),
+            ("sharedLibrary", "libSparkGameFPS.so"),
+            ("sharedLibrary", "SparkGameFPS-Manual.dll"),
+            ("sharedLibrary", "SparkGameFPS.DLL"),
+        ):
+            with self.subTest(field=field, value=value):
+                evidence = lifecycle_evidence(self.repo, self.sha)
+                evidence["records"][0][field] = value
+                errors = self.assertRejected(
+                    base_manifest(), "B10-windows-headless-contract",
+                    lifecycle_evidence=evidence,
+                )
+                self.assertTrue(any(field in error for error in errors), errors)
+
+    def test_paths_must_be_exact_windows_collector_final_paths(self) -> None:
+        """Host paths and Windows aliases must not be accepted as collector output."""
+        cases = (
+            ("enginePath", "/usr/local/bin/SparkEngine.exe"),
+            ("enginePath", "SparkEngine.exe"),
+            ("enginePath", r"C:\verified-artifact\NotSparkEngine.exe"),
+            ("enginePath", r"C:\verified-artifact\SparkEngine.exe:payload"),
+            ("enginePath", r"C:\verified-artifact\SparkEngine.exe "),
+            ("enginePath", r"C:\verified-artifact\sparkengine.exe"),
+            ("enginePath", r"C:\verified-artifact\.\SparkEngine.exe"),
+            ("modulePath", "/usr/local/lib/SparkGameFPS.dll"),
+            ("modulePath", "SparkGameFPS.dll"),
+            ("modulePath", r"C:\verified-artifact\NotSparkGameFPS.dll"),
+            ("modulePath", r"C:\verified-artifact\SparkGameFPS.dll:payload"),
+            ("modulePath", r"C:\verified-artifact\SparkGameFPS.dll "),
+            ("modulePath", r"C:\verified-artifact\sparkgamefps.dll"),
+            ("modulePath", r"C:\verified-artifact\.\SparkGameFPS.dll"),
+        )
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                evidence = lifecycle_evidence(self.repo, self.sha)
+                evidence["records"][0][field] = value
+                errors = self.assertRejected(
+                    base_manifest(), "B10-final-path",
+                    lifecycle_evidence=evidence,
+                )
+                self.assertTrue(any(field in error for error in errors), errors)
+
+    def test_extended_windows_final_paths_from_a_collector_are_accepted(self) -> None:
+        """The extended namespace spelling is a valid GetFinalPathNameW result."""
+        evidence = lifecycle_evidence(self.repo, self.sha)
+        evidence["records"][0]["enginePath"] = (
+            r"\\?\C:\verified-artifact\SparkEngine.exe"
+        )
+        evidence["records"][0]["modulePath"] = (
+            r"\\?\C:\verified-artifact\SparkGameFPS.dll"
+        )
+        self.assertAccepted(base_manifest(), lifecycle_evidence=evidence)
+
+    def test_fixed_and_render_phases_must_be_positive(self) -> None:
+        """A loaded module that never fixed-steps or renders is not stable-v1 proof."""
+        for phase in ("OnFixedUpdate", "OnRender"):
+            for count in (None, 0):
+                with self.subTest(phase=phase, count=count):
+                    evidence = lifecycle_evidence(self.repo, self.sha)
+                    if count is None:
+                        del evidence["records"][0]["phases"][phase]
+                    else:
+                        evidence["records"][0]["phases"][phase] = count
+                    errors = self.assertRejected(
+                        base_manifest(), "B10-fixed-render",
+                        lifecycle_evidence=evidence,
+                    )
+                    self.assertTrue(any(phase in error for error in errors), errors)
 
     def test_source_tree_sha_changes_when_source_changes(self) -> None:
         """The binding must actually discriminate."""

@@ -27,9 +27,10 @@ Absent evidence is a blocking gap.  It is never treated as a pass.
 
 from __future__ import annotations
 
+import ntpath
 import re
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import provenance
@@ -37,15 +38,15 @@ import strict_json
 
 LIFECYCLE_SCHEMA_VERSION = "module-lifecycle-v1"
 
-# Phases that must be observed to have really executed for an included module.
-# These are the four the acceptance criteria name — load, update, unload,
-# shutdown — expressed in the ABI's own vocabulary.  `CreateModule` and
-# `DestroyModule` are the free exports that bracket the module's existence;
-# `OnLoad`/`OnUpdate`/`OnUnload` are the virtuals that must be entered.
+# Phases that the stable-v1 Windows headless collector must observe.  The
+# free exports bracket the module's existence; the virtuals prove that the
+# loaded module advanced both simulation and rendering before orderly teardown.
 REQUIRED_RUNTIME_PHASES = (
     "CreateModule",
     "OnLoad",
     "OnUpdate",
+    "OnFixedUpdate",
+    "OnRender",
     "OnUnload",
     "DestroyModule",
 )
@@ -73,7 +74,24 @@ REQUIRED_RECORD_KEYS = frozenset(
 
 ENGINE_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
-VALID_RUNNERS = frozenset({"ctest", "spark-automation", "headless-exec"})
+LIFECYCLE_DOCUMENT_KEYS = frozenset(
+    {"schemaVersion", "generatedAt", "commitSHA", "records"}
+)
+
+# The stable-v1 release profile has one intentionally narrow runtime proof.
+# Accepting a generic test runner, Linux image, or another module's source tree
+# would turn a manually manufactured record into a release attestation.
+STABLE_V1_MODULE = "SparkGameFPS"
+STABLE_V1_SOURCE_DIRECTORY = "GameModules/SparkGameFPS/Source"
+STABLE_V1_SHARED_LIBRARY = "SparkGameFPS.dll"
+STABLE_V1_RUNNER = "headless-exec"
+STABLE_V1_ENGINE_LEAF = "SparkEngine.exe"
+STABLE_V1_MODULE_LEAF = "SparkGameFPS.dll"
+
+_WINDOWS_RESERVED_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL", *(f"COM{number}" for number in range(1, 10)),
+     *(f"LPT{number}" for number in range(1, 10))}
+)
 
 
 class LifecycleEvidenceUnavailable(RuntimeError):
@@ -110,6 +128,45 @@ def source_tree_sha(repo_root: Path, commit_sha: str, source_directory: str) -> 
     return sha, None
 
 
+def check_document_shape(document: Any, label: str) -> list[str]:
+    """Return errors unless a stable-v1 lifecycle document has one record.
+
+    The loader and injected-evidence path must apply the same closed-world
+    shape check.  Otherwise an in-memory caller can bypass the loader and let
+    a later mapping silently discard duplicate or non-object records.
+    """
+    if not isinstance(document, dict):
+        return [f"{label}: lifecycle evidence must be an object"]
+
+    errors: list[str] = []
+    present = set(document)
+    missing = LIFECYCLE_DOCUMENT_KEYS - present
+    unknown = present - LIFECYCLE_DOCUMENT_KEYS
+    if missing:
+        errors.append(f"{label}: lifecycle evidence missing top-level keys {sorted(missing)}")
+    if unknown:
+        errors.append(f"{label}: lifecycle evidence has unknown top-level keys {sorted(unknown)}")
+    if errors:
+        return errors
+
+    if document["schemaVersion"] != LIFECYCLE_SCHEMA_VERSION:
+        errors.append(
+            f"{label}: lifecycle evidence schemaVersion must be "
+            f"{LIFECYCLE_SCHEMA_VERSION!r}, got {document['schemaVersion']!r}"
+        )
+
+    records = document["records"]
+    if not isinstance(records, list) or len(records) != 1:
+        errors.append(
+            f"{label}: stable-v1 lifecycle evidence must contain exactly one record"
+        )
+    elif not isinstance(records[0], dict):
+        errors.append(
+            f"{label}: stable-v1 lifecycle evidence record must be an object"
+        )
+    return errors
+
+
 def load_lifecycle_evidence(path: Path) -> dict[str, Any]:
     """Load a lifecycle evidence document, or raise."""
     if not path.is_file():
@@ -121,26 +178,75 @@ def load_lifecycle_evidence(path: Path) -> dict[str, Any]:
         document = strict_json.load_file(path)
     except strict_json.StrictJSONError as exc:
         raise LifecycleEvidenceUnavailable(f"lifecycle evidence unusable: {exc}") from exc
-    if not isinstance(document, dict):
-        raise LifecycleEvidenceUnavailable(f"{path}: lifecycle evidence must be an object")
-    if set(document) != {"schemaVersion", "generatedAt", "commitSHA", "records"}:
-        raise LifecycleEvidenceUnavailable(f"{path}: lifecycle evidence has unknown or missing top-level keys")
-    if document.get("schemaVersion") != LIFECYCLE_SCHEMA_VERSION:
-        raise LifecycleEvidenceUnavailable(
-            f"{path}: lifecycle evidence schemaVersion must be "
-            f"{LIFECYCLE_SCHEMA_VERSION!r}, got {document.get('schemaVersion')!r}"
-        )
-    records = document.get("records")
-    if not isinstance(records, list) or len(records) != 1 or not isinstance(records[0], dict):
-        raise LifecycleEvidenceUnavailable(
-            f"{path}: stable-v1 lifecycle evidence must contain exactly one object record"
-        )
+    shape_errors = check_document_shape(document, str(path))
+    if shape_errors:
+        raise LifecycleEvidenceUnavailable("; ".join(shape_errors))
+    assert isinstance(document, dict)
     return document
+
+
+def _windows_final_path_error(value: Any, expected_leaf: str, label: str) -> str | None:
+    """Reject non-canonical or alias-prone Windows final path strings.
+
+    ``GetFinalPathNameByHandleW`` produces a drive-qualified path.  The
+    collector may preserve its extended ``\\\\?\\`` spelling in evidence, so
+    accept that one prefix while rejecting UNC, relative, Unix, ADS, dot, and
+    case-alias spellings.  ``PureWindowsPath`` and ``ntpath`` deliberately
+    parse the value as Windows syntax even when policy validation runs on a
+    Linux host.
+    """
+    if not isinstance(value, str) or isinstance(value, bool) or not value or len(value) > 512:
+        return (
+            f"{label} must be a non-empty string (≤512 chars) naming the "
+            f"Windows collector image, got {value!r}"
+        )
+    if "\0" in value:
+        return f"{label} contains a NUL byte"
+    if "/" in value:
+        return f"{label} must use a canonical Windows final path, not slash aliases"
+
+    canonical = value
+    if canonical.startswith("\\\\?\\"):
+        canonical = canonical[4:]
+        if canonical[:4].casefold() == "unc\\":
+            return f"{label} must be a drive-qualified Windows path, not UNC"
+    elif canonical.startswith("\\\\"):
+        return f"{label} must be a drive-qualified Windows path, not UNC"
+
+    drive, tail = ntpath.splitdrive(canonical)
+    if not re.fullmatch(r"[A-Za-z]:", drive) or not tail.startswith("\\"):
+        return f"{label} must be an absolute drive-qualified Windows path"
+    if canonical != ntpath.normpath(canonical):
+        return f"{label} is not a canonical Windows final path"
+
+    segments = tail[1:].split("\\")
+    if not segments or any(not segment for segment in segments):
+        return f"{label} is not a canonical Windows final path"
+    for segment in segments:
+        if segment in {".", ".."}:
+            return f"{label} contains a traversal or dot segment"
+        if ":" in segment:
+            return f"{label} contains an alternate-data-stream alias"
+        if segment.endswith((".", " ")):
+            return f"{label} contains a trailing-dot or trailing-space alias"
+        if any(character in segment for character in '<>"|?*'):
+            return f"{label} contains a Windows device or wildcard alias"
+        if segment.split(".", 1)[0].upper() in _WINDOWS_RESERVED_NAMES:
+            return f"{label} contains a reserved Windows device name {segment!r}"
+
+    parsed = PureWindowsPath(canonical)
+    if not parsed.is_absolute() or parsed.name != expected_leaf:
+        return (
+            f"{label} must exactly name the collector image {expected_leaf!r}, "
+            f"got {parsed.name!r}"
+        )
+    return None
 
 
 def check_record(
     record: Any,
     module_name: str,
+    expected_source_directory: str,
     expected_source_tree_sha: str,
     declared_libraries: dict[str, str],
     label: str,
@@ -166,6 +272,23 @@ def check_record(
             f"not {module_name!r}"
         )
 
+    if module_name != STABLE_V1_MODULE:
+        errors.append(
+            f"{label}: stable-v1 collector evidence is only defined for "
+            f"{STABLE_V1_MODULE!r}, not {module_name!r}"
+        )
+
+    if expected_source_directory != STABLE_V1_SOURCE_DIRECTORY:
+        errors.append(
+            f"{label}: stable-v1 manifest sourceDirectory must be "
+            f"{STABLE_V1_SOURCE_DIRECTORY!r}, got {expected_source_directory!r}"
+        )
+    if record["sourceDirectory"] != STABLE_V1_SOURCE_DIRECTORY:
+        errors.append(
+            f"{label}: sourceDirectory must exactly match the collector source "
+            f"{STABLE_V1_SOURCE_DIRECTORY!r}, got {record['sourceDirectory']!r}"
+        )
+
     if record["sourceTreeSHA"] != expected_source_tree_sha:
         errors.append(
             f"{label}: lifecycle evidence was produced for source tree "
@@ -174,17 +297,25 @@ def check_record(
             f"of the module does not prove anything about this one"
         )
 
-    if record["sharedLibrary"] not in set(declared_libraries.values()):
+    expected_windows_library = (
+        declared_libraries.get("windows") if isinstance(declared_libraries, dict) else None
+    )
+    if expected_windows_library != STABLE_V1_SHARED_LIBRARY:
         errors.append(
-            f"{label}: lifecycle evidence loaded {record['sharedLibrary']!r}, "
-            f"which is not among the declared shared libraries "
-            f"{sorted(set(declared_libraries.values()))}"
+            f"{label}: stable-v1 manifest windows sharedLibrary must be "
+            f"{STABLE_V1_SHARED_LIBRARY!r}, got {expected_windows_library!r}"
+        )
+    if record["sharedLibrary"] != STABLE_V1_SHARED_LIBRARY:
+        errors.append(
+            f"{label}: sharedLibrary must be the Windows collector DLL "
+            f"{STABLE_V1_SHARED_LIBRARY!r}, got {record['sharedLibrary']!r}"
         )
 
     runner = record["runner"]
-    if runner not in VALID_RUNNERS:
+    if runner != STABLE_V1_RUNNER:
         errors.append(
-            f"{label}: runner {runner!r} is not one of {sorted(VALID_RUNNERS)}"
+            f"{label}: runner must be the stable-v1 collector "
+            f"{STABLE_V1_RUNNER!r}, got {runner!r}"
         )
 
     engine_sha = record.get("engineSHA256")
@@ -195,11 +326,11 @@ def check_record(
         )
 
     engine_path = record.get("enginePath")
-    if not isinstance(engine_path, str) or not engine_path or len(engine_path) > 512:
-        errors.append(
-            f"{label}: enginePath must be a non-empty string (≤512 chars) "
-            f"naming the engine executable, got {engine_path!r}"
-        )
+    engine_path_error = _windows_final_path_error(
+        engine_path, STABLE_V1_ENGINE_LEAF, f"{label}: enginePath"
+    )
+    if engine_path_error:
+        errors.append(engine_path_error)
 
     module_sha = record.get("moduleSHA256")
     if not isinstance(module_sha, str) or not ENGINE_SHA256_RE.fullmatch(module_sha):
@@ -209,11 +340,11 @@ def check_record(
         )
 
     module_path = record.get("modulePath")
-    if not isinstance(module_path, str) or not module_path or len(module_path) > 512:
-        errors.append(
-            f"{label}: modulePath must be a non-empty string (≤512 chars) "
-            f"naming the loaded module binary, got {module_path!r}"
-        )
+    module_path_error = _windows_final_path_error(
+        module_path, STABLE_V1_MODULE_LEAF, f"{label}: modulePath"
+    )
+    if module_path_error:
+        errors.append(module_path_error)
 
     phases = record["phases"]
     if not isinstance(phases, dict) or not phases:

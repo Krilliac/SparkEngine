@@ -733,6 +733,14 @@ class ManifestValidator:
                 f"run against the source under test is.",
             )
             return
+        shape_errors = lifecycle_mod.check_document_shape(
+            self.lifecycle_evidence, "lifecycle evidence"
+        )
+        if shape_errors:
+            for error in shape_errors:
+                self._err(error)
+            return
+        assert isinstance(self.lifecycle_evidence, dict)
         if "lifecycle-log" in self.declared_gaps:
             self._record_gap("lifecycle-log", True, "")
             return
@@ -754,24 +762,16 @@ class ManifestValidator:
         ):
             self._err(err)
 
-        records = {
-            r.get("module"): r
-            for r in self.lifecycle_evidence.get("records", [])
-            if isinstance(r, dict)
-        }
+        records = self.lifecycle_evidence["records"]
+        assert isinstance(records, list) and len(records) == 1
+        record = records[0]
+        assert isinstance(record, dict)
         for mod in included:
             name = mod.get("name")
             src = mod.get("sourceDirectory")
             lib = mod.get("sharedLibrary")
             if not (isinstance(name, str) and isinstance(src, str)
                     and isinstance(lib, dict)):
-                continue
-            record = records.get(name)
-            if record is None:
-                self._err(
-                    f"module {name!r} is shipped by a profile but no lifecycle "
-                    f"record exists for it — an unexercised module is unproven"
-                )
                 continue
             tree_sha, err = lifecycle_mod.source_tree_sha(
                 self.repo_root, self.expected_sha, src
@@ -781,7 +781,7 @@ class ManifestValidator:
                 continue
             assert tree_sha is not None
             for msg in lifecycle_mod.check_record(
-                record, name, tree_sha, lib, f"module {name!r}"
+                record, name, src, tree_sha, lib, f"module {name!r}"
             ):
                 self._err(msg)
 
