@@ -23,6 +23,13 @@ No checked-in required same-workflow CI job yet runs the collector against the
 immutable Windows Release artifact at the exact SHA, so the validator still
 permits the declared lifecycle gap until that producer and consumer land.
 
+The current validator also deliberately fails closed if a lifecycle document
+is present: its committed-policy, source, and Git control-plane reads are being
+converted to rooted Ubuntu descriptor operations under
+`2026-09-09-rdy010-rooted-validator-authority.md`. Until that migration lands,
+no platform may emit a positive lifecycle `OK`; this prevents a path-based
+control-plane race from being represented as release evidence.
+
 ## Scope and non-goals
 
 In scope:

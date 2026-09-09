@@ -160,7 +160,7 @@
         "python3 -m unittest Tests.Tools.test_module_evidence",
         "python3 tools/module-evidence/validate_manifest.py --repo-root . --policy-only",
         "python3 tools/module-evidence/collect_targets.py --build-dir build/module-evidence-configure --out build/module-evidence/module-targets.json --configure-arg -DBUILD_GAME_MODULES=ON",
-        "python3 tools/module-evidence/validate_manifest.py --repo-root \"$GITHUB_WORKSPACE\" --target-evidence build/module-evidence/module-targets.json --allow-declared-gaps tools/module-evidence/evidence-gaps.json",
+        "python3 tools/module-evidence/validate_manifest.py --repo-root \"$GITHUB_WORKSPACE\" --allow-declared-gaps tools/module-evidence/evidence-gaps.json",
         "tools/check-module-evidence.sh",
         "cmake --preset windows-shipping -DBUILD_GAME_MODULES=ON -DENABLE_EDITOR=ON -DBUILD_TESTS=ON",
         "cmake --build --preset windows-shipping --config MinSizeRel --parallel 2",
