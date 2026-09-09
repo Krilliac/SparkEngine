@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 import copy
+from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -211,10 +212,48 @@ def pe_image() -> bytes:
     return bytes(image)
 
 
+@dataclass(frozen=True)
+class FakeLeaseIdentity:
+    """A complete, handle-style identity for collector lease tests."""
+
+    volume_serial: int
+    file_index: int
+    size: int
+    last_write_time: int = 1
+
+
+class FakeImageLease:
+    """Controlled lease double for exercising the collector's real boundaries."""
+
+    def __init__(self, path: Path, *, identity: FakeLeaseIdentity,
+                 digest: str, final_path: str | None = None,
+                 attributes: int = 0, image: bytes | None = None) -> None:
+        self.path = path
+        self.identity = identity
+        self.final_path = final_path or str(path)
+        self.attributes = attributes
+        self._digest = digest
+        self._image = image or pe_image()
+        self.closed = False
+
+    def read_at(self, offset: int, size: int) -> bytes:
+        if self.closed:
+            raise OSError("attempted to read a closed fake image lease")
+        return self._image[offset:offset + size]
+
+    def sha256(self) -> str:
+        if self.closed:
+            raise OSError("attempted to hash a closed fake image lease")
+        return self._digest
+
+    def close(self) -> None:
+        self.closed = True
+
+
 def write_image_manifest(root: Path, engine: Path, module: Path, sha: str,
-                         *, engine_digest: str | None = None) -> Path:
+                          *, engine_digest: str | None = None) -> Path:
     digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
-    path = root / "image-manifest.json"
+    path = root / "module-lifecycle-images.json"
     path.write_text(json.dumps({
         "schemaVersion": "spark-image-manifest-v1", "commitSHA": sha,
         "images": [
@@ -703,17 +742,6 @@ class TestLifecycleAuthenticity(FixtureCase):
                                      lifecycle_evidence=ev)
         self.assertTrue(any("enginePath" in e for e in errors))
 
-    def test_engine_sha256_hash_function_deterministic(self) -> None:
-        from collect_lifecycle import hash_engine_binary
-        binary = self.repo / "SparkEngine.exe"
-        binary.write_bytes(b"MZ" + b"\x00" * 16384)
-        h1 = hash_engine_binary(binary)
-        h2 = hash_engine_binary(binary)
-        self.assertEqual(h1, h2)
-        self.assertEqual(len(h1), 64)
-        self.assertTrue(all(c in "0123456789abcdef" for c in h1))
-
-
 # --------------------------------------------------------------------------
 # Collector contract — one host-owned terminal record, no trace reconstruction
 # --------------------------------------------------------------------------
@@ -747,9 +775,30 @@ class TestLifecycleCollector(FixtureCase):
         """Run main's real publication path while isolating the engine process."""
         import collect_lifecycle
 
+        engine = Path(argv[argv.index("--engine") + 1])
+        module = Path(argv[argv.index("--module-image") + 1])
+        engine_digest = hashlib.sha256(engine.read_bytes()).hexdigest()
+        module_digest = hashlib.sha256(module.read_bytes()).hexdigest()
+        engine_image = collect_lifecycle.ImageVerification(
+            digest=engine_digest,
+            final_path=str(engine),
+            identity=collect_lifecycle.ImageIdentity(1, 1, engine.stat().st_size, 1),
+        )
+        module_image = collect_lifecycle.ImageVerification(
+            digest=module_digest,
+            final_path=str(module),
+            identity=collect_lifecycle.ImageIdentity(1, 2, module.stat().st_size, 1),
+        )
+
         with ExitStack() as stack:
             stack.enter_context(mock.patch.object(sys, "argv", argv))
             stack.enter_context(mock.patch("collect_lifecycle.os.name", "nt"))
+            stack.enter_context(mock.patch(
+                "collect_lifecycle.resolve_head_sha", return_value=(self.sha, None),
+            ))
+            stack.enter_context(mock.patch.dict(
+                "collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False,
+            ))
             stack.enter_context(mock.patch(
                 "collect_lifecycle.lifecycle_mod.source_tree_sha",
                 return_value=("c" * 40, None),
@@ -757,7 +806,10 @@ class TestLifecycleCollector(FixtureCase):
             stack.enter_context(mock.patch(
                 "collect_lifecycle.run_engine",
                 return_value=(
-                    collect_lifecycle.EngineOutput(self.VALID_RECORD, ""), None
+                    collect_lifecycle.EngineOutput(
+                        self.VALID_RECORD, "", engine_image, module_image,
+                    ),
+                    None,
                 ),
             ))
             for patch in extra_patches:
@@ -889,6 +941,49 @@ class TestLifecycleCollector(FixtureCase):
                 ), 1)
                 self._assert_no_transaction_artifacts(out)
 
+    def test_main_records_handle_derived_paths_and_digests(self) -> None:
+        """Published evidence must use lease metadata, never pre-launch Path.resolve values."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("handle-derived-record")
+        engine = Path(argv[argv.index("--engine") + 1])
+        module = Path(argv[argv.index("--module-image") + 1])
+        engine_digest = hashlib.sha256(engine.read_bytes()).hexdigest()
+        module_digest = hashlib.sha256(module.read_bytes()).hexdigest()
+        engine_image = collect_lifecycle.ImageVerification(
+            digest=engine_digest,
+            final_path=r"\\?\C:\verified-artifact\SparkEngine.exe",
+            identity=collect_lifecycle.ImageIdentity(21, 701, engine.stat().st_size, 1),
+        )
+        module_image = collect_lifecycle.ImageVerification(
+            digest=module_digest,
+            final_path=r"\\?\C:\verified-artifact\SparkGameFPS.dll",
+            identity=collect_lifecycle.ImageIdentity(21, 702, module.stat().st_size, 1),
+        )
+
+        with mock.patch.object(sys, "argv", argv), \
+             mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
+             mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
+             mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
+                        return_value=("c" * 40, None)), \
+             mock.patch(
+                 "collect_lifecycle.run_engine",
+                 return_value=(
+                     collect_lifecycle.EngineOutput(
+                         self.VALID_RECORD, "", engine_image, module_image,
+                     ),
+                     None,
+                 ),
+             ):
+            self.assertEqual(collect_lifecycle.main(), 0)
+
+        record = json.loads(out.read_text(encoding="utf-8"))["records"][0]
+        self.assertEqual(record["engineSHA256"], engine_digest)
+        self.assertEqual(record["enginePath"], engine_image.final_path)
+        self.assertEqual(record["moduleSHA256"], module_digest)
+        self.assertEqual(record["modulePath"], module_image.final_path)
+
     def test_parses_exact_standalone_terminal_record(self) -> None:
         from collect_lifecycle import parse_terminal_record
         self.assertEqual(parse_terminal_record(self.VALID_RECORD, INCLUDED), {
@@ -930,8 +1025,12 @@ class TestLifecycleCollector(FixtureCase):
         engine.write_bytes(pe_image())
         module.write_bytes(pe_image())
         completed = subprocess.CompletedProcess([], 0, self.VALID_RECORD, "")
+        digest = hashlib.sha256(pe_image()).hexdigest()
         with mock.patch("collect_lifecycle.subprocess.run", return_value=completed) as run:
-            captured, err = run_engine(engine, module, INCLUDED, root, "d3d11", 30)
+            captured, err = run_engine(
+                engine, module, INCLUDED, root, "d3d11", 30,
+                expected_digests=(digest, digest),
+            )
         self.assertIsNone(err)
         self.assertEqual(captured.stdout, self.VALID_RECORD)
         cmd = run.call_args.args[0]
@@ -944,6 +1043,345 @@ class TestLifecycleCollector(FixtureCase):
         self.assertEqual(env["SPARK_RHI_BACKEND"], "d3d11")
         self.assertEqual(env["SPARK_D3D11_DRIVER"], "warp")
         self.assertEqual(run.call_args.kwargs["cwd"], str(root))
+
+    def test_run_engine_keeps_image_leases_live_and_records_handle_metadata(self) -> None:
+        """A child may start only while both authenticated image leases are held."""
+        from collect_lifecycle import run_engine
+
+        root = self.repo / "leased-package"
+        root.mkdir()
+        engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        digest = hashlib.sha256(pe_image()).hexdigest()
+        engine_identity = FakeLeaseIdentity(11, 101, len(pe_image()))
+        module_identity = FakeLeaseIdentity(11, 102, len(pe_image()))
+        leases = [
+            FakeImageLease(engine, identity=engine_identity, digest=digest),
+            FakeImageLease(module, identity=module_identity, digest=digest),
+            FakeImageLease(engine, identity=engine_identity, digest=digest),
+            FakeImageLease(module, identity=module_identity, digest=digest),
+        ]
+        opened: list[FakeImageLease] = []
+
+        def factory(path: Path) -> FakeImageLease:
+            lease = leases[len(opened)]
+            self.assertEqual(path, lease.path)
+            opened.append(lease)
+            return lease
+
+        def child(*args, **kwargs):
+            self.assertEqual(len(opened), 2)
+            self.assertFalse(opened[0].closed)
+            self.assertFalse(opened[1].closed)
+            return subprocess.CompletedProcess([], 0, self.VALID_RECORD, "")
+
+        with mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.subprocess.run", side_effect=child):
+            captured, error = run_engine(
+                engine, module, INCLUDED, root, "d3d11", 30,
+                expected_digests=(digest, digest), lease_factory=factory,
+            )
+
+        self.assertIsNone(error)
+        self.assertEqual([lease.path for lease in opened],
+                         [engine, module, engine, module])
+        self.assertTrue(all(lease.closed for lease in opened))
+        self.assertEqual(captured.engine_image.digest, digest)
+        self.assertEqual(captured.engine_image.final_path, str(engine))
+        self.assertEqual(captured.module_image.digest, digest)
+        self.assertEqual(captured.module_image.final_path, str(module))
+
+    def test_run_engine_closes_held_leases_when_child_launch_fails(self) -> None:
+        """A launch error cannot leak the write/delete-excluding image handles."""
+        from collect_lifecycle import run_engine
+
+        root = self.repo / "lease-launch-failure"
+        root.mkdir()
+        engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        digest = hashlib.sha256(pe_image()).hexdigest()
+        leases = [
+            FakeImageLease(engine, identity=FakeLeaseIdentity(12, 201, len(pe_image())), digest=digest),
+            FakeImageLease(module, identity=FakeLeaseIdentity(12, 202, len(pe_image())), digest=digest),
+        ]
+        opened: list[FakeImageLease] = []
+
+        def factory(path: Path) -> FakeImageLease:
+            lease = leases[len(opened)]
+            self.assertEqual(path, lease.path)
+            opened.append(lease)
+            return lease
+
+        with mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.subprocess.run", side_effect=OSError("launch denied")):
+            _, error = run_engine(
+                engine, module, INCLUDED, root, "d3d11", 30,
+                expected_digests=(digest, digest), lease_factory=factory,
+            )
+
+        self.assertIn("cannot launch engine", error or "")
+        self.assertEqual(len(opened), 2)
+        self.assertTrue(all(lease.closed for lease in opened))
+
+    def test_run_engine_closes_first_lease_when_second_lease_acquisition_fails(self) -> None:
+        """A partially acquired image pair never leaves the first Windows handle open."""
+        from collect_lifecycle import run_engine
+
+        root = self.repo / "lease-open-failure"
+        root.mkdir()
+        engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        digest = hashlib.sha256(pe_image()).hexdigest()
+        first = FakeImageLease(
+            engine, identity=FakeLeaseIdentity(12, 203, len(pe_image())), digest=digest,
+        )
+        calls = 0
+
+        def factory(path: Path) -> FakeImageLease:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                self.assertEqual(path, engine)
+                return first
+            raise OSError("second image lease denied")
+
+        with mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.subprocess.run") as child:
+            _, error = run_engine(
+                engine, module, INCLUDED, root, "d3d11", 30,
+                expected_digests=(digest, digest), lease_factory=factory,
+            )
+
+        self.assertIn("second image lease denied", error or "")
+        child.assert_not_called()
+        self.assertTrue(first.closed)
+
+    def test_run_engine_rejects_post_run_lease_identity_change_and_closes_every_lease(self) -> None:
+        """A pathname that changes identity after launch cannot produce evidence."""
+        from collect_lifecycle import run_engine
+
+        root = self.repo / "lease-identity-mutation"
+        root.mkdir()
+        engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        digest = hashlib.sha256(pe_image()).hexdigest()
+        engine_identity = FakeLeaseIdentity(13, 301, len(pe_image()))
+        module_identity = FakeLeaseIdentity(13, 302, len(pe_image()))
+        leases = [
+            FakeImageLease(engine, identity=engine_identity, digest=digest),
+            FakeImageLease(module, identity=module_identity, digest=digest),
+            FakeImageLease(engine, identity=FakeLeaseIdentity(13, 399, len(pe_image())), digest=digest),
+            FakeImageLease(module, identity=module_identity, digest=digest),
+        ]
+        opened: list[FakeImageLease] = []
+
+        def factory(path: Path) -> FakeImageLease:
+            lease = leases[len(opened)]
+            self.assertEqual(path, lease.path)
+            opened.append(lease)
+            return lease
+
+        with mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.subprocess.run", return_value=subprocess.CompletedProcess(
+                 [], 0, self.VALID_RECORD, "",
+             )):
+            _, error = run_engine(
+                engine, module, INCLUDED, root, "d3d11", 30,
+                expected_digests=(digest, digest), lease_factory=factory,
+            )
+
+        self.assertIn("changed", error or "")
+        self.assertEqual(len(opened), 4)
+        self.assertTrue(all(lease.closed for lease in opened))
+
+    def test_run_engine_rejects_engine_module_identity_alias_before_launch(self) -> None:
+        """The executable and DLL cannot be two names for one hard-linked image."""
+        from collect_lifecycle import run_engine
+
+        root = self.repo / "lease-identity-alias"
+        root.mkdir()
+        engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        digest = hashlib.sha256(pe_image()).hexdigest()
+        shared = FakeLeaseIdentity(14, 401, len(pe_image()))
+        leases = [
+            FakeImageLease(engine, identity=shared, digest=digest),
+            FakeImageLease(module, identity=shared, digest=digest),
+        ]
+        opened: list[FakeImageLease] = []
+
+        def factory(path: Path) -> FakeImageLease:
+            lease = leases[len(opened)]
+            self.assertEqual(path, lease.path)
+            opened.append(lease)
+            return lease
+
+        with mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.subprocess.run") as child:
+            _, error = run_engine(
+                engine, module, INCLUDED, root, "d3d11", 30,
+                expected_digests=(digest, digest), lease_factory=factory,
+            )
+
+        self.assertIn("same file identity", error or "")
+        child.assert_not_called()
+        self.assertEqual(len(opened), 2)
+        self.assertTrue(all(lease.closed for lease in opened))
+
+    def test_run_engine_rejects_handle_final_path_alias_before_launch(self) -> None:
+        """A path resolved from a handle must still equal the requested image path."""
+        from collect_lifecycle import run_engine
+
+        root = self.repo / "lease-final-path-alias"
+        root.mkdir()
+        engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        digest = hashlib.sha256(pe_image()).hexdigest()
+        leases = [
+            FakeImageLease(
+                engine, identity=FakeLeaseIdentity(16, 601, len(pe_image())),
+                digest=digest, final_path=str(root / "other" / "SparkEngine.exe"),
+            ),
+            FakeImageLease(
+                module, identity=FakeLeaseIdentity(16, 602, len(pe_image())), digest=digest,
+            ),
+        ]
+        opened: list[FakeImageLease] = []
+
+        def factory(path: Path) -> FakeImageLease:
+            lease = leases[len(opened)]
+            self.assertEqual(path, lease.path)
+            opened.append(lease)
+            return lease
+
+        with mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.subprocess.run") as child:
+            _, error = run_engine(
+                engine, module, INCLUDED, root, "d3d11", 30,
+                expected_digests=(digest, digest), lease_factory=factory,
+            )
+
+        self.assertIn("handle path", error or "")
+        child.assert_not_called()
+        self.assertTrue(all(lease.closed for lease in opened))
+
+    def test_run_engine_fails_closed_without_native_lease_support(self) -> None:
+        """Windows collection never falls back to path-only hashing."""
+        from collect_lifecycle import run_engine
+
+        root = self.repo / "no-native-lease"
+        root.mkdir()
+        engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        digest = hashlib.sha256(pe_image()).hexdigest()
+
+        with mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.WINDOWS_IMAGE_LEASE_AVAILABLE", False), \
+             mock.patch("collect_lifecycle.subprocess.run") as child:
+            _, error = run_engine(
+                engine, module, INCLUDED, root, "d3d11", 30,
+                expected_digests=(digest, digest),
+            )
+
+        self.assertIn("native Windows image leases", error or "")
+        child.assert_not_called()
+
+    def test_resolve_collection_sha_rejects_environment_commit_disagreement(self) -> None:
+        """A CI environment SHA cannot silently overrule the checked-out revision."""
+        from collect_lifecycle import resolve_collection_sha
+
+        with mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
+             mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": "f" * 40}, clear=False):
+            sha, error = resolve_collection_sha(self.sha)
+
+        self.assertIsNone(sha)
+        self.assertIn("GITHUB_SHA", error or "")
+
+    def test_main_rejects_noncanonical_manifest_or_commit_before_launch(self) -> None:
+        """Only the fixed artifact-root manifest for checkout HEAD can authorize a run."""
+        import collect_lifecycle
+
+        root = self.repo / "fixed-manifest-package"
+        root.mkdir()
+        engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        manifest = write_image_manifest(root, engine, module, self.sha)
+        wrong_name = root / "image-manifest.json"
+        wrong_name.write_text(manifest.read_text(encoding="utf-8"), encoding="utf-8")
+        outside = self.repo / "outside-image-manifest"
+        outside.mkdir()
+        outside_manifest = outside / "module-lifecycle-images.json"
+        outside_manifest.write_text(manifest.read_text(encoding="utf-8"), encoding="utf-8")
+        cases = (
+            ("wrong-name", wrong_name, self.sha, self.sha),
+            ("lexical-traversal", root / "nested" / ".." / manifest.name,
+             self.sha, self.sha),
+            ("outside-root", outside_manifest, self.sha, self.sha),
+            ("commit-mismatch", manifest, self.sha, "f" * 40),
+        )
+
+        for name, image_manifest, requested_sha, head_sha in cases:
+            with self.subTest(case=name):
+                out = self.repo / f"{name}-manifest-out" / "module-lifecycle.json"
+                argv = [
+                    "collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
+                    "--module-image", str(module), "--working-directory", str(root),
+                    "--rhi-backend", "d3d11", "--image-manifest", str(image_manifest),
+                    "--out", str(out), "--commit-sha", requested_sha,
+                ]
+                with mock.patch.object(sys, "argv", argv), \
+                     mock.patch("collect_lifecycle.os.name", "nt"), \
+                     mock.patch("collect_lifecycle.resolve_head_sha", return_value=(head_sha, None)), \
+                     mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
+                                return_value=("c" * 40, None)), \
+                     mock.patch("collect_lifecycle.run_engine") as child:
+                    self.assertEqual(collect_lifecycle.main(), 1)
+                child.assert_not_called()
+                self.assertFalse(out.exists())
+
+    @unittest.skipUnless(os.name == "nt", "native Windows image leases are unavailable")
+    def test_native_image_lease_requests_read_only_nondelete_share_mode(self) -> None:
+        """The native lease denies new write and delete opens for the image epoch."""
+        import collect_lifecycle
+
+        if not collect_lifecycle.WINDOWS_IMAGE_LEASE_AVAILABLE:
+            self.skipTest("native Windows image lease binding is unavailable")
+        root = self.repo / "native-lease-intent"
+        root.mkdir()
+        engine = root / "SparkEngine.exe"
+        engine.write_bytes(pe_image())
+        native_create = collect_lifecycle._CreateFileW
+        native_set_information = collect_lifecycle._SetHandleInformation
+        with mock.patch("collect_lifecycle._CreateFileW", wraps=native_create) as create, \
+             mock.patch("collect_lifecycle._SetHandleInformation",
+                        wraps=native_set_information) as set_information:
+            lease = collect_lifecycle.open_image_lease(engine)
+        try:
+            args = create.call_args.args
+            self.assertEqual(args[1], collect_lifecycle._GENERIC_READ |
+                             collect_lifecycle._FILE_READ_ATTRIBUTES)
+            self.assertEqual(args[2], collect_lifecycle._FILE_SHARE_READ)
+            self.assertEqual(args[4], collect_lifecycle._OPEN_EXISTING)
+            required_flags = (collect_lifecycle._FILE_ATTRIBUTE_NORMAL |
+                              collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT)
+            self.assertEqual(args[5] & required_flags, required_flags)
+            self.assertEqual(
+                set_information.call_args.args[1:],
+                (collect_lifecycle._HANDLE_FLAG_INHERIT, 0),
+            )
+            self.assertEqual(lease.sha256(), hashlib.sha256(pe_image()).hexdigest())
+            with self.assertRaises(OSError):
+                engine.write_bytes(pe_image())
+        finally:
+            lease.close()
 
     def test_rejects_outside_script_and_reparse_images(self) -> None:
         from collect_lifecycle import validate_image_pair
@@ -986,6 +1424,8 @@ class TestLifecycleCollector(FixtureCase):
         ):
             with self.subTest(returncode=completed.returncode), \
                  mock.patch.object(sys, "argv", argv), \
+                 mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
+                 mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
                  mock.patch("collect_lifecycle.subprocess.run", return_value=completed), \
                  mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                             return_value=("c" * 40, None)):
@@ -1016,9 +1456,16 @@ class TestLifecycleCollector(FixtureCase):
                               ("SparkConsole.exe", pe_image())):
             engine = root / name
             engine.write_bytes(content)
+            expected = (
+                hashlib.sha256(content).hexdigest(),
+                hashlib.sha256(pe_image()).hexdigest(),
+            )
             with self.subTest(engine=name), \
-                 mock.patch("collect_lifecycle.subprocess.run") as run:
-                _, error = run_engine(engine, module, INCLUDED, root, "d3d11", 30)
+                  mock.patch("collect_lifecycle.subprocess.run") as run:
+                _, error = run_engine(
+                    engine, module, INCLUDED, root, "d3d11", 30,
+                    expected_digests=expected,
+                )
             self.assertIsNotNone(error)
             run.assert_not_called()
 
@@ -1037,6 +1484,10 @@ class TestLifecycleCollector(FixtureCase):
                 "--rhi-backend", "d3d11", "--image-manifest", str(bad_manifest),
                 "--out", str(out), "--commit-sha", self.sha]
         with mock.patch.object(sys, "argv", argv), \
+             mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
+             mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
+             mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
+                        return_value=("c" * 40, None)), \
              mock.patch("collect_lifecycle.subprocess.run") as run:
             self.assertEqual(collect_lifecycle.main(), 1)
         run.assert_not_called()
@@ -1054,10 +1505,12 @@ class TestLifecycleCollector(FixtureCase):
         previous = Path.cwd()
         try:
             os.chdir(self.repo)
+            digest = hashlib.sha256(pe_image()).hexdigest()
             with mock.patch("collect_lifecycle.subprocess.run", return_value=completed) as run:
                 _, error = run_engine(Path("relative-package/SparkEngine.exe"),
-                                      Path("relative-package/SparkGameFPS.dll"),
-                                      INCLUDED, Path("relative-package"), "d3d11", 30)
+                                       Path("relative-package/SparkGameFPS.dll"),
+                                       INCLUDED, Path("relative-package"), "d3d11", 30,
+                                       expected_digests=(digest, digest))
         finally:
             os.chdir(previous)
         self.assertIsNone(error)
@@ -1092,6 +1545,7 @@ class TestLifecycleCollector(FixtureCase):
                                                   INCLUDED, root))
 
     def test_run_engine_rejects_image_mutation_after_launch(self) -> None:
+        """A manifest digest that changes after launch is rejected through the leases."""
         from collect_lifecycle import run_engine
         root = self.repo / "mutation-package"
         root.mkdir()
@@ -1099,12 +1553,33 @@ class TestLifecycleCollector(FixtureCase):
         module = root / "SparkGameFPS.dll"
         engine.write_bytes(pe_image())
         module.write_bytes(pe_image())
+        engine_digest = "a" * 64
+        module_digest = "b" * 64
+        engine_identity = FakeLeaseIdentity(15, 501, len(pe_image()))
+        module_identity = FakeLeaseIdentity(15, 502, len(pe_image()))
+        leases = [
+            FakeImageLease(engine, identity=engine_identity, digest=engine_digest),
+            FakeImageLease(module, identity=module_identity, digest=module_digest),
+            FakeImageLease(engine, identity=engine_identity, digest="c" * 64),
+            FakeImageLease(module, identity=module_identity, digest=module_digest),
+        ]
+        opened: list[FakeImageLease] = []
+
+        def factory(path: Path) -> FakeImageLease:
+            lease = leases[len(opened)]
+            self.assertEqual(path, lease.path)
+            opened.append(lease)
+            return lease
+
         completed = subprocess.CompletedProcess([], 0, self.VALID_RECORD, "")
         with mock.patch("collect_lifecycle.subprocess.run", return_value=completed), \
-             mock.patch("collect_lifecycle.hash_engine_binary",
-                        side_effect=["a" * 64, "b" * 64, "c" * 64, "b" * 64]):
-            _, error = run_engine(engine, module, INCLUDED, root, "d3d11", 30)
+             mock.patch("collect_lifecycle.os.name", "nt"):
+            _, error = run_engine(
+                engine, module, INCLUDED, root, "d3d11", 30,
+                expected_digests=(engine_digest, module_digest), lease_factory=factory,
+            )
         self.assertIn("changed", error or "")
+        self.assertTrue(all(lease.closed for lease in opened))
 
     def test_main_clears_stale_output_after_hash_or_write_failure(self) -> None:
         import collect_lifecycle
@@ -1122,14 +1597,16 @@ class TestLifecycleCollector(FixtureCase):
                 "--module-image", str(module), "--working-directory", str(root),
                 "--rhi-backend", "d3d11", "--image-manifest", str(image_manifest),
                 "--out", str(out), "--commit-sha", self.sha]
-        for patch_target in ("collect_lifecycle.hash_engine_binary",
+        for patch_target in ("collect_lifecycle.open_image_lease",
                              "collect_lifecycle._write_temp"):
             out.write_text("stale-json", encoding="utf-8")
             log.write_text("stale-log", encoding="utf-8")
             with self.subTest(failure=patch_target), \
-                 mock.patch.object(sys, "argv", argv), \
-                 mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
-                            return_value=("c" * 40, None)), \
+                  mock.patch.object(sys, "argv", argv), \
+                  mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
+                  mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
+                  mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
+                             return_value=("c" * 40, None)), \
                  mock.patch(patch_target, side_effect=OSError("injected failure")), \
                  mock.patch("collect_lifecycle.subprocess.run", return_value=subprocess.CompletedProcess(
                      [], 0, self.VALID_RECORD, "")):

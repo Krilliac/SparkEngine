@@ -17,7 +17,9 @@ Usage:
     python tools/module-evidence/collect_lifecycle.py \
         --engine package/SparkEngine.exe --module SparkGameFPS \
         --module-image package/SparkGameFPS.dll --working-directory package \
-        --rhi-backend d3d11 --out build/module-evidence/module-lifecycle.json
+        --rhi-backend d3d11 \
+        --image-manifest package/module-lifecycle-images.json \
+        --out build/module-evidence/module-lifecycle.json
 """
 
 from __future__ import annotations
@@ -34,6 +36,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -50,41 +53,258 @@ _SCRIPT_EXTENSIONS = frozenset({".cmd", ".bat", ".sh", ".ps1", ".py", ".pl", ".r
 _SCRIPT_SIGNATURES = (b"#!", b"@echo", b"@ECHO", b"@rem", b"@REM")
 _MIN_ENGINE_SIZE = 4096
 IMAGE_MANIFEST_SCHEMA = "spark-image-manifest-v1"
+IMAGE_MANIFEST_FILENAME = "module-lifecycle-images.json"
 LIFECYCLE_TOKEN = "SPARK_MODULE_LIFECYCLE"
+
+_GENERIC_READ = 0x80000000
+_FILE_READ_ATTRIBUTES = 0x0080
+_FILE_SHARE_READ = 0x00000001
+_OPEN_EXISTING = 3
+_FILE_ATTRIBUTE_NORMAL = 0x00000080
+_FILE_ATTRIBUTE_DIRECTORY = 0x00000010
+_FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
+_FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+_FILE_FLAG_SEQUENTIAL_SCAN = 0x08000000
+_HANDLE_FLAG_INHERIT = 0x00000001
+_FILE_BEGIN = 0
+
+
+WINDOWS_IMAGE_LEASE_AVAILABLE = False
+if os.name == "nt":
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _BY_HANDLE_FILE_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ("dwFileAttributes", wintypes.DWORD),
+                ("ftCreationTime", wintypes.FILETIME),
+                ("ftLastAccessTime", wintypes.FILETIME),
+                ("ftLastWriteTime", wintypes.FILETIME),
+                ("dwVolumeSerialNumber", wintypes.DWORD),
+                ("nFileSizeHigh", wintypes.DWORD),
+                ("nFileSizeLow", wintypes.DWORD),
+                ("nNumberOfLinks", wintypes.DWORD),
+                ("nFileIndexHigh", wintypes.DWORD),
+                ("nFileIndexLow", wintypes.DWORD),
+            ]
+
+        _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        _CreateFileW = _kernel32.CreateFileW
+        _CreateFileW.argtypes = [
+            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+            wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+        ]
+        _CreateFileW.restype = wintypes.HANDLE
+        _CloseHandle = _kernel32.CloseHandle
+        _CloseHandle.argtypes = [wintypes.HANDLE]
+        _CloseHandle.restype = wintypes.BOOL
+        _SetHandleInformation = _kernel32.SetHandleInformation
+        _SetHandleInformation.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD]
+        _SetHandleInformation.restype = wintypes.BOOL
+        _GetFileInformationByHandle = _kernel32.GetFileInformationByHandle
+        _GetFileInformationByHandle.argtypes = [
+            wintypes.HANDLE, ctypes.POINTER(_BY_HANDLE_FILE_INFORMATION),
+        ]
+        _GetFileInformationByHandle.restype = wintypes.BOOL
+        _GetFinalPathNameByHandleW = _kernel32.GetFinalPathNameByHandleW
+        _GetFinalPathNameByHandleW.argtypes = [
+            wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD,
+        ]
+        _GetFinalPathNameByHandleW.restype = wintypes.DWORD
+        _SetFilePointerEx = _kernel32.SetFilePointerEx
+        _SetFilePointerEx.argtypes = [
+            wintypes.HANDLE, ctypes.c_longlong, ctypes.POINTER(ctypes.c_longlong), wintypes.DWORD,
+        ]
+        _SetFilePointerEx.restype = wintypes.BOOL
+        _ReadFile = _kernel32.ReadFile
+        _ReadFile.argtypes = [
+            wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID,
+        ]
+        _ReadFile.restype = wintypes.BOOL
+        _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+        WINDOWS_IMAGE_LEASE_AVAILABLE = True
+    except (AttributeError, ImportError, OSError):
+        # Production collection must reject rather than silently reducing this
+        # to path-based hashing when a native lease cannot be established.
+        WINDOWS_IMAGE_LEASE_AVAILABLE = False
 
 
 @dataclass(frozen=True)
 class EngineOutput:
     stdout: str
     stderr: str
+    engine_image: ImageVerification | None = None
+    module_image: ImageVerification | None = None
 
     @property
     def audit_log(self) -> str:
         return f"--- stdout ---\n{self.stdout}--- stderr ---\n{self.stderr}"
 
 
-def hash_engine_binary(engine: Path) -> str:
-    h = hashlib.sha256()
-    with open(engine, "rb") as f:
-        while True:
-            chunk = f.read(1 << 16)
+@dataclass(frozen=True)
+class ImageIdentity:
+    """Windows handle identity and mutation-relevant metadata for one image."""
+
+    volume_serial: int
+    file_index: int
+    size: int
+    last_write_time: int
+
+
+@dataclass(frozen=True)
+class ImageVerification:
+    """A manifest-matched digest and final path read from a live file handle."""
+
+    digest: str
+    final_path: str
+    identity: ImageIdentity
+    attributes: int = 0
+
+
+def _filetime_ticks(value: object) -> int:
+    return (int(value.dwHighDateTime) << 32) | int(value.dwLowDateTime)  # type: ignore[attr-defined]
+
+
+def _native_identity(handle: int) -> tuple[ImageIdentity, int]:
+    if not WINDOWS_IMAGE_LEASE_AVAILABLE:
+        raise OSError("native Windows image lease support is unavailable")
+    info = _BY_HANDLE_FILE_INFORMATION()  # type: ignore[name-defined]
+    if not _GetFileInformationByHandle(handle, ctypes.byref(info)):  # type: ignore[name-defined]
+        raise OSError(f"GetFileInformationByHandle failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+    identity = ImageIdentity(
+        volume_serial=int(info.dwVolumeSerialNumber),
+        file_index=(int(info.nFileIndexHigh) << 32) | int(info.nFileIndexLow),
+        size=(int(info.nFileSizeHigh) << 32) | int(info.nFileSizeLow),
+        last_write_time=_filetime_ticks(info.ftLastWriteTime),
+    )
+    return identity, int(info.dwFileAttributes)
+
+
+def _native_final_path(handle: int) -> str:
+    if not WINDOWS_IMAGE_LEASE_AVAILABLE:
+        raise OSError("native Windows image lease support is unavailable")
+    size = 512
+    while True:
+        buffer = ctypes.create_unicode_buffer(size)  # type: ignore[name-defined]
+        length = _GetFinalPathNameByHandleW(handle, buffer, size, 0)  # type: ignore[name-defined]
+        if length == 0:
+            raise OSError(f"GetFinalPathNameByHandleW failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+        if length < size:
+            return _normalise_windows_final_path(buffer.value)
+        size = int(length) + 1
+
+
+def _native_read_at(handle: int, offset: int, size: int) -> bytes:
+    if not WINDOWS_IMAGE_LEASE_AVAILABLE:
+        raise OSError("native Windows image lease support is unavailable")
+    if offset < 0 or size < 0:
+        raise OSError("invalid native image read range")
+    if size == 0:
+        return b""
+    if not _SetFilePointerEx(handle, ctypes.c_longlong(offset), None, _FILE_BEGIN):  # type: ignore[name-defined]
+        raise OSError(f"SetFilePointerEx failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+    buffer = ctypes.create_string_buffer(size)  # type: ignore[name-defined]
+    read = wintypes.DWORD()  # type: ignore[name-defined]
+    if not _ReadFile(handle, buffer, size, ctypes.byref(read), None):  # type: ignore[name-defined]
+        raise OSError(f"ReadFile failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+    return buffer.raw[:int(read.value)]
+
+
+class ImageLease:
+    """An owning, non-inheritable Windows image handle held across execution."""
+
+    def __init__(self, path: Path, handle: int, identity: ImageIdentity,
+                 attributes: int, final_path: str) -> None:
+        self.path = path
+        self._handle = handle
+        self.identity = identity
+        self.attributes = attributes
+        self.final_path = final_path
+        self._closed = False
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    def snapshot(self) -> tuple[ImageIdentity, int]:
+        if self._closed:
+            raise OSError("image lease is already closed")
+        return _native_identity(self._handle)
+
+    def read_at(self, offset: int, size: int) -> bytes:
+        if self._closed:
+            raise OSError("image lease is already closed")
+        return _native_read_at(self._handle, offset, size)
+
+    def sha256(self) -> str:
+        if self._closed:
+            raise OSError("image lease is already closed")
+        before, _ = self.snapshot()
+        h = hashlib.sha256()
+        offset = 0
+        while offset < before.size:
+            chunk = self.read_at(offset, min(1 << 16, before.size - offset))
             if not chunk:
-                break
+                raise OSError("image lease reached EOF before its recorded size")
             h.update(chunk)
-    return h.hexdigest()
+            offset += len(chunk)
+        after, _ = self.snapshot()
+        if after != before:
+            raise OSError("image changed while it was hashed through its live lease")
+        return h.hexdigest()
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        if not _CloseHandle(self._handle):  # type: ignore[name-defined]
+            raise OSError(f"CloseHandle failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+
+    def __enter__(self) -> ImageLease:
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> bool:
+        self.close()
+        return False
 
 
-def image_identity(path: Path) -> tuple[int, int, int]:
-    """Portable file identity used with the manifest-bound hash epoch."""
-    stat_result = path.stat()
-    return stat_result.st_dev, stat_result.st_ino, stat_result.st_size
+def open_image_lease(path: Path) -> ImageLease:
+    """Open a Windows image read lease that denies subsequent writes/deletes."""
+    if os.name != "nt" or not WINDOWS_IMAGE_LEASE_AVAILABLE:
+        raise OSError("native Windows image leases are required but unavailable")
+    # Windows has read/write/delete share flags only.  Sharing read access lets
+    # the loader map the image while intentionally excluding new writers and
+    # replacement/deletion opens for this evidence epoch.
+    handle = _CreateFileW(  # type: ignore[name-defined]
+        str(path),
+        _GENERIC_READ | _FILE_READ_ATTRIBUTES,
+        _FILE_SHARE_READ,
+        None,
+        _OPEN_EXISTING,
+        _FILE_ATTRIBUTE_NORMAL | _FILE_FLAG_OPEN_REPARSE_POINT | _FILE_FLAG_SEQUENTIAL_SCAN,
+        None,
+    )
+    if handle in (None, _INVALID_HANDLE_VALUE):  # type: ignore[name-defined]
+        raise OSError(f"CreateFileW could not lease {path}: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+    try:
+        if not _SetHandleInformation(handle, _HANDLE_FLAG_INHERIT, 0):  # type: ignore[name-defined]
+            raise OSError(f"SetHandleInformation failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+        identity, attributes = _native_identity(handle)
+        final_path = _native_final_path(handle)
+        return ImageLease(path, handle, identity, attributes, final_path)
+    except BaseException:
+        _CloseHandle(handle)  # type: ignore[name-defined]
+        raise
 
 
 def load_image_manifest(path: Path, root: Path, commit_sha: str) -> tuple[dict[str, str] | None, str | None]:
     """Load the narrowly-scoped upstream Release image identity manifest.
 
-    Task 4 must write exactly ``SparkEngine.exe`` and ``SparkGameFPS.dll`` with
-    artifact-root-relative paths and lowercase SHA-256 values for github.sha.
+    Task 4 must write ``module-lifecycle-images.json`` at the artifact root,
+    declaring exactly ``SparkEngine.exe`` and ``SparkGameFPS.dll`` with
+    artifact-root-relative paths and lowercase SHA-256 values for checkout HEAD.
     """
     try:
         document = strict_json.load_file(path)
@@ -181,6 +401,140 @@ def _is_pe_image(header: bytes, path: Path) -> bool:
         return False
 
 
+def _normalise_windows_final_path(value: str | Path) -> str:
+    """Compare a GetFinalPathNameByHandleW value with a canonical input path."""
+    path = os.path.normpath(str(value))
+    if path.startswith("\\\\?\\UNC\\"):
+        path = "\\\\" + path[len("\\\\?\\UNC\\"):]
+    elif path.startswith("\\\\?\\"):
+        path = path[len("\\\\?\\"):]
+    return os.path.normcase(os.path.normpath(path))
+
+
+def _lease_snapshot(lease: object) -> tuple[object, int]:
+    """Read image metadata from an injected or native lease without paths."""
+    snapshot = getattr(lease, "snapshot", None)
+    if callable(snapshot):
+        value = snapshot()
+        if not isinstance(value, tuple) or len(value) != 2:
+            raise OSError("image lease returned malformed handle metadata")
+        identity, attributes = value
+    else:
+        identity = getattr(lease, "identity", None)
+        attributes = getattr(lease, "attributes", None)
+    if identity is None or not isinstance(attributes, int):
+        raise OSError("image lease cannot report native metadata")
+    for field in ("volume_serial", "file_index", "size", "last_write_time"):
+        if not isinstance(getattr(identity, field, None), int):
+            raise OSError("image lease returned malformed file identity")
+    return identity, attributes
+
+
+def _lease_final_path(lease: object) -> str:
+    final_path = getattr(lease, "final_path", None)
+    if not isinstance(final_path, str) or not final_path:
+        raise OSError("image lease cannot report its final handle path")
+    return final_path
+
+
+def _lease_read_at(lease: object, offset: int, size: int) -> bytes:
+    reader = getattr(lease, "read_at", None)
+    if not callable(reader):
+        raise OSError("image lease cannot read through its live handle")
+    value = reader(offset, size)
+    if not isinstance(value, bytes):
+        raise OSError("image lease returned a non-bytes image read")
+    return value
+
+
+def _lease_sha256(lease: object) -> str:
+    hasher = getattr(lease, "sha256", None)
+    if not callable(hasher):
+        raise OSError("image lease cannot hash through its live handle")
+    before, _ = _lease_snapshot(lease)
+    digest = hasher()
+    after, _ = _lease_snapshot(lease)
+    if before != after:
+        raise OSError("image changed while it was hashed through its live lease")
+    if not isinstance(digest, str) or not lifecycle_mod.ENGINE_SHA256_RE.fullmatch(digest):
+        raise OSError("image lease returned an invalid SHA-256 digest")
+    return digest
+
+
+def _same_file_identity(left: object, right: object) -> bool:
+    return (
+        getattr(left, "volume_serial", None), getattr(left, "file_index", None)
+    ) == (
+        getattr(right, "volume_serial", None), getattr(right, "file_index", None)
+    )
+
+
+def _lease_is_pe_image(lease: object, header: bytes, size: int) -> bool:
+    if len(header) < 64 or header[:2] != b"MZ":
+        return False
+    pe_offset = int.from_bytes(header[0x3C:0x40], "little")
+    if pe_offset < 0 or pe_offset + 4 > size:
+        return False
+    try:
+        return _lease_read_at(lease, pe_offset, 4) == b"PE\0\0"
+    except OSError:
+        return False
+
+
+def _validate_leased_image(lease: object, expected_path: Path, *, role: str,
+                           expected_name: str, min_size: int = 0) -> str | None:
+    """Validate type, final path, and PE header through a held native handle."""
+    try:
+        identity, attributes = _lease_snapshot(lease)
+        final_path = _lease_final_path(lease)
+    except OSError as exc:
+        return f"cannot inspect {role} image lease: {exc}"
+    if attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+        return f"{role} image lease refers to a reparse point"
+    if attributes & _FILE_ATTRIBUTE_DIRECTORY:
+        return f"{role} image lease refers to a directory"
+    if getattr(identity, "size") < min_size:
+        return f"{role} image lease is smaller than the required compiled image size"
+    if _normalise_windows_final_path(final_path) != _normalise_windows_final_path(expected_path):
+        return f"{role} image handle path does not match the canonical expected image"
+    if Path(final_path).name.casefold() != expected_name.casefold():
+        return f"{role} image handle filename is not the required {expected_name!r}"
+    try:
+        header = _lease_read_at(lease, 0, 64)
+    except OSError as exc:
+        return f"cannot read {role} image through its lease: {exc}"
+    for signature in _SCRIPT_SIGNATURES:
+        if header.lstrip().startswith(signature):
+            return f"{role} image lease starts with a script signature"
+    if not _lease_is_pe_image(lease, header, getattr(identity, "size")):
+        return f"{role} image lease is not a valid PE image"
+    return None
+
+
+def _verify_leased_image(lease: object, expected_path: Path, *, role: str,
+                         expected_name: str, expected_digest: str,
+                         min_size: int = 0) -> tuple[ImageVerification | None, str | None]:
+    """Return one handle-derived, manifest-matched image verification."""
+    error = _validate_leased_image(
+        lease, expected_path, role=role, expected_name=expected_name,
+        min_size=min_size,
+    )
+    if error:
+        return None, error
+    try:
+        digest = _lease_sha256(lease)
+        identity, attributes = _lease_snapshot(lease)
+        final_path = _lease_final_path(lease)
+    except OSError as exc:
+        return None, f"cannot hash {role} image through its lease: {exc}"
+    if digest != expected_digest:
+        return None, f"{role} image digest does not match the trusted image manifest"
+    return ImageVerification(
+        digest=digest, final_path=final_path, identity=identity,
+        attributes=attributes,
+    ), None
+
+
 def _absolute_raw(path: Path) -> Path:
     return Path(os.path.abspath(path))
 
@@ -222,7 +576,15 @@ def _canonicalize_images(engine: Path, module_image: Path,
 
 
 def _canonical_manifest(path: Path, root: Path) -> tuple[Path | None, str | None]:
+    if any(part in {".", ".."} for part in path.parts):
+        return None, "image manifest path must not contain traversal segments"
     raw = _absolute_raw(path)
+    expected_raw = _absolute_raw(root / IMAGE_MANIFEST_FILENAME)
+    if raw != expected_raw:
+        return None, (
+            "image manifest must be the fixed artifact-root file "
+            f"{IMAGE_MANIFEST_FILENAME!r}"
+        )
     if paths_mod._is_reparse_point(raw) or not raw.is_file():
         return None, "image manifest must be a regular non-reparse file"
     try:
@@ -231,7 +593,22 @@ def _canonical_manifest(path: Path, root: Path) -> tuple[Path | None, str | None
         return None, f"cannot resolve image manifest: {exc}"
     if root not in canonical.parents:
         return None, "image manifest lies outside the artifact root"
+    if canonical != root / IMAGE_MANIFEST_FILENAME:
+        return None, "image manifest final path is not the fixed artifact-root file"
     return canonical, None
+
+
+def resolve_collection_sha(requested_sha: str | None) -> tuple[str | None, str | None]:
+    """Bind evidence to checkout HEAD; CLI input cannot invent a revision."""
+    head_sha, error = resolve_head_sha(REPO_ROOT)
+    if head_sha is None:
+        return None, error
+    if requested_sha is not None and requested_sha != head_sha:
+        return None, "--commit-sha must exactly equal the checked-out HEAD"
+    github_sha = os.environ.get("GITHUB_SHA")
+    if github_sha is not None and github_sha != head_sha:
+        return None, "GITHUB_SHA must exactly equal the checked-out HEAD"
+    return head_sha, None
 
 
 def _validate_image(path: Path, root: Path, *, role: str,
@@ -304,68 +681,143 @@ def parse_terminal_streams(stdout: str, stderr: str, module: str) -> dict[str, i
     return parse_terminal_record(stdout, module)
 
 
-def run_engine(engine: Path, module_image: Path, module: str,
-               working_directory: Path, rhi_backend: str,
-               timeout: int, expected_digests: tuple[str, str] | None = None) -> tuple[EngineOutput, str | None]:
-    """Run only the stable-v1 Windows lifecycle command."""
+def _close_image_leases(leases: list[object]) -> str | None:
+    """Close every acquired lease, even if a preceding close fails."""
+    errors: list[str] = []
+    for lease in reversed(leases):
+        closer = getattr(lease, "close", None)
+        if not callable(closer):
+            errors.append("image lease has no close operation")
+            continue
+        try:
+            closer()
+        except Exception as exc:
+            errors.append(str(exc))
+    return "; ".join(errors) if errors else None
+
+
+def run_engine(
+    engine: Path,
+    module_image: Path,
+    module: str,
+    working_directory: Path,
+    rhi_backend: str,
+    timeout: int,
+    expected_digests: tuple[str, str] | None = None,
+    *,
+    lease_factory: Callable[[Path], object] | None = None,
+) -> tuple[EngineOutput, str | None]:
+    """Run stable-v1 while native handles pin both manifest-bound images."""
     if os.name != "nt":
         return EngineOutput("", ""), "stable-v1 lifecycle evidence is Windows-only"
     if module != "SparkGameFPS":
         return EngineOutput("", ""), "stable-v1 lifecycle evidence accepts only module SparkGameFPS"
     if rhi_backend != "d3d11":
         return EngineOutput("", ""), "stable-v1 lifecycle evidence requires --rhi-backend d3d11"
-    prepared, err = _canonicalize_images(engine, module_image, working_directory)
-    if err:
-        return EngineOutput("", ""), err
+    if expected_digests is None or any(
+        not isinstance(digest, str) or not lifecycle_mod.ENGINE_SHA256_RE.fullmatch(digest)
+        for digest in expected_digests
+    ):
+        return EngineOutput("", ""), "stable-v1 lifecycle evidence requires manifest-bound image digests"
+    prepared, error = _canonicalize_images(engine, module_image, working_directory)
+    if error:
+        return EngineOutput("", ""), error
     assert prepared is not None
     root, engine, module_image = prepared
-    err = validate_engine_binary(engine)
-    if err:
-        return EngineOutput("", ""), err
-    err = _validate_image(module_image, root, role="module",
-                          expected_name=expected_library_names(module)["windows"])
-    if err:
-        return EngineOutput("", ""), err
+    factory = lease_factory or open_image_lease
+    leases: list[object] = []
+    captured = EngineOutput("", "")
+    error = None
     try:
-        before_engine = hash_engine_binary(engine)
-        before_module = hash_engine_binary(module_image)
-        before_identity = (image_identity(engine), image_identity(module_image))
-    except OSError as exc:
-        return EngineOutput("", ""), f"cannot hash lifecycle image before launch: {exc}"
-    if expected_digests is not None and (before_engine, before_module) != expected_digests:
-        return EngineOutput("", ""), "image identity differs from the verified manifest epoch"
-    cmd = [
-        str(engine), "-game", str(module_image), "-require-game",
-        "-test-seconds", "1.0", "-threads", "2", "-window-size", "640x360",
-        "-no-subprocess",
-    ]
-    print(f"[collect_lifecycle] {' '.join(cmd)}", flush=True)
-    try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
-            check=False, cwd=str(root),
-            env={**os.environ, "SPARK_RHI_BACKEND": "d3d11",
-                 "SPARK_D3D11_DRIVER": "warp"},
-        )
-    except subprocess.TimeoutExpired:
-        return EngineOutput("", ""), f"engine run exceeded {timeout}s without completing"
-    except OSError as exc:
-        return EngineOutput("", ""), f"cannot launch engine: {exc}"
+        engine_lease = factory(engine)
+        leases.append(engine_lease)
+        module_lease = factory(module_image)
+        leases.append(module_lease)
 
-    captured = EngineOutput(proc.stdout or "", proc.stderr or "")
-    try:
-        after = (hash_engine_binary(engine), hash_engine_binary(module_image))
-        after_identity = (image_identity(engine), image_identity(module_image))
-        if after != (before_engine, before_module) or after_identity != before_identity or (expected_digests is not None and after != expected_digests):
-            return captured, "engine or module image changed while the lifecycle run executed"
-    except OSError as exc:
-        return captured, f"cannot hash lifecycle image after launch: {exc}"
-    if proc.returncode != 0:
-        return captured, (
-            f"engine exited {proc.returncode}; a failed run is not evidence of "
-            "a working lifecycle"
+        engine_verified, error = _verify_leased_image(
+            engine_lease, engine, role="engine", expected_name=_ENGINE_NAME,
+            expected_digest=expected_digests[0], min_size=_MIN_ENGINE_SIZE,
         )
-    return captured, None
+        if error is None:
+            module_verified, error = _verify_leased_image(
+                module_lease, module_image, role="module",
+                expected_name=expected_library_names(module)["windows"],
+                expected_digest=expected_digests[1],
+            )
+        else:
+            module_verified = None
+        if error is None and engine_verified is not None and module_verified is not None:
+            if _same_file_identity(engine_verified.identity, module_verified.identity):
+                error = "engine and module image leases refer to the same file identity"
+
+        if error is None:
+            cmd = [
+                str(engine), "-game", str(module_image), "-require-game",
+                "-test-seconds", "1.0", "-threads", "2", "-window-size", "640x360",
+                "-no-subprocess",
+            ]
+            print(f"[collect_lifecycle] {' '.join(cmd)}", flush=True)
+            try:
+                proc = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=timeout,
+                    check=False, cwd=str(root),
+                    env={**os.environ, "SPARK_RHI_BACKEND": "d3d11",
+                         "SPARK_D3D11_DRIVER": "warp"},
+                )
+            except subprocess.TimeoutExpired:
+                error = f"engine run exceeded {timeout}s without completing"
+            except OSError as exc:
+                error = f"cannot launch engine: {exc}"
+            else:
+                captured = EngineOutput(proc.stdout or "", proc.stderr or "")
+                if proc.returncode != 0:
+                    error = (
+                        f"engine exited {proc.returncode}; a failed run is not evidence of "
+                        "a working lifecycle"
+                    )
+
+        if error is None and engine_verified is not None and module_verified is not None:
+            post_engine, post_error = _verify_leased_image(
+                engine_lease, engine, role="engine", expected_name=_ENGINE_NAME,
+                expected_digest=expected_digests[0], min_size=_MIN_ENGINE_SIZE,
+            )
+            post_module, module_post_error = _verify_leased_image(
+                module_lease, module_image, role="module",
+                expected_name=expected_library_names(module)["windows"],
+                expected_digest=expected_digests[1],
+            )
+            if post_error or module_post_error or post_engine != engine_verified or post_module != module_verified:
+                error = "engine or module image changed while the lifecycle run executed"
+
+        if error is None and engine_verified is not None and module_verified is not None:
+            reopened_engine_lease = factory(engine)
+            leases.append(reopened_engine_lease)
+            reopened_module_lease = factory(module_image)
+            leases.append(reopened_module_lease)
+            reopened_engine, reopen_error = _verify_leased_image(
+                reopened_engine_lease, engine, role="engine", expected_name=_ENGINE_NAME,
+                expected_digest=expected_digests[0], min_size=_MIN_ENGINE_SIZE,
+            )
+            reopened_module, module_reopen_error = _verify_leased_image(
+                reopened_module_lease, module_image, role="module",
+                expected_name=expected_library_names(module)["windows"],
+                expected_digest=expected_digests[1],
+            )
+            if reopen_error or module_reopen_error or reopened_engine != engine_verified or reopened_module != module_verified:
+                error = "canonical image path changed identity while the lifecycle run executed"
+            else:
+                captured = EngineOutput(
+                    captured.stdout, captured.stderr,
+                    engine_image=engine_verified, module_image=module_verified,
+                )
+    except OSError as exc:
+        error = f"cannot acquire or inspect native lifecycle image leases: {exc}"
+    finally:
+        close_error = _close_image_leases(leases)
+        if close_error:
+            error = f"{error}; " if error else ""
+            error += f"cannot close lifecycle image leases: {close_error}"
+    return captured, error
 
 
 def _clear_artifacts(*paths: Path) -> str | None:
@@ -456,11 +908,9 @@ def main() -> int:
             raise RuntimeError("stable-v1 lifecycle evidence accepts only module SparkGameFPS")
         if args.rhi_backend != "d3d11":
             raise RuntimeError("stable-v1 lifecycle evidence requires --rhi-backend d3d11")
-        sha = args.commit_sha
+        sha, err = resolve_collection_sha(args.commit_sha)
         if sha is None:
-            sha, err = resolve_head_sha(REPO_ROOT)
-            if sha is None:
-                raise RuntimeError(err)
+            raise RuntimeError(err)
         prepared, err = _canonicalize_images(
             args.engine, args.module_image, args.working_directory
         )
@@ -476,28 +926,18 @@ def main() -> int:
         if err:
             raise RuntimeError(err)
         assert trusted_images is not None
-        if (err := validate_engine_binary(engine)) is not None:
-            raise RuntimeError(err)
-        if (err := _validate_image(module_image, root, role="module",
-                                  expected_name=expected_library_names(module)["windows"])) is not None:
-            raise RuntimeError(err)
-        try:
-            engine_digest = hash_engine_binary(engine)
-            module_digest = hash_engine_binary(module_image)
-        except OSError as exc:
-            raise RuntimeError(f"cannot hash lifecycle image before launch: {exc}") from exc
-        if (engine_digest, module_digest) != (trusted_images["SparkEngine.exe"],
-                                              trusted_images["SparkGameFPS.dll"]):
-            raise RuntimeError("image digest does not match the trusted image manifest")
         source_dir = f"GameModules/{module}/Source"
         tree_sha, err = lifecycle_mod.source_tree_sha(REPO_ROOT, sha, source_dir)
         if tree_sha is None:
             raise RuntimeError(err)
         captured, err = run_engine(engine, module_image, module, root,
                                    args.rhi_backend, args.timeout,
-                                   (engine_digest, module_digest))
+                                   (trusted_images["SparkEngine.exe"],
+                                    trusted_images["SparkGameFPS.dll"]))
         if err:
             raise RuntimeError(err)
+        if captured.engine_image is None or captured.module_image is None:
+            raise RuntimeError("native image lease verification returned no image metadata")
         phases = parse_terminal_streams(captured.stdout, captured.stderr, module)
         record = {
             "module": module,
@@ -506,10 +946,10 @@ def main() -> int:
             "sourceTreeSHA": tree_sha,
             "runner": "headless-exec",
             "phases": phases,
-            "engineSHA256": engine_digest,
-            "enginePath": str(engine),
-            "moduleSHA256": module_digest,
-            "modulePath": str(module_image),
+            "engineSHA256": captured.engine_image.digest,
+            "enginePath": captured.engine_image.final_path,
+            "moduleSHA256": captured.module_image.digest,
+            "modulePath": captured.module_image.final_path,
         }
         document = {
             "schemaVersion": lifecycle_mod.LIFECYCLE_SCHEMA_VERSION,
