@@ -1021,6 +1021,16 @@ def main() -> int:
             if root_authority is not None:
                 root_authority.verify()
 
+            if lifecycle_evidence is not None:
+                print(
+                    "FATAL: positive lifecycle evidence validation is disabled "
+                    "until rooted control-plane reads are complete; the collector "
+                    "may produce evidence and --policy-only/incomplete checks remain "
+                    "available, but no platform may emit a release-attesting OK",
+                    file=sys.stderr,
+                )
+                return 1
+
             expected_sha, sha_error = _resolve_expected_sha(
                 repo_root, args.expected_sha,
             )

@@ -1148,14 +1148,8 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         self.assertEqual(result, 0, stderr.getvalue())
         self.assertIn("POLICY-ONLY:", stdout.getvalue())
 
-    def test_main_detects_root_replacement_after_explicit_lifecycle_read(self) -> None:
-        """A post-read root swap is blocked or cannot turn provenance into success.
-
-        The legacy semantic validator still consumes some root-relative paths.
-        This test swaps the root from inside that provenance route, after an
-        explicit lifecycle file has been held and parsed, so final root identity
-        verification must reject the otherwise-valid run.
-        """
+    def test_main_blocks_positive_evidence_before_legacy_root_consumers(self) -> None:
+        """Positive proof stops before mutable Git/source pathname consumers."""
         root = self.repo / "cli-post-read-root"
         self._prepare_cli_evidence_root(root)
         manifest_path = root / "cli-manifest.json"
@@ -1165,38 +1159,13 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             .read_text(encoding="utf-8"),
             encoding="utf-8",
         )
-        preserved_root = self.repo / "cli-post-read-root-preserved"
-        original_source_tree_sha = lifecycle_mod.source_tree_sha
-        swapped = False
-        mutation_blocked = False
-
-        def swap_after_provenance_read(
-            repo_root: Path, commit_sha: str, source_directory: str,
-        ) -> tuple[str | None, str | None]:
-            nonlocal swapped, mutation_blocked
-            result = original_source_tree_sha(repo_root, commit_sha, source_directory)
-            if not swapped:
-                try:
-                    root.rename(preserved_root)
-                    os.symlink(str(preserved_root), str(root), target_is_directory=True)
-                except OSError as exc:
-                    # The Windows held directory authority intentionally omits
-                    # delete sharing, so the operating system can reject the
-                    # mutation before the portable post-phase verifier runs.
-                    if os.name == "nt" and getattr(exc, "winerror", None) in {5, 32}:
-                        mutation_blocked = True
-                        return result
-                    raise
-                except NotImplementedError as exc:
-                    raise unittest.SkipTest(
-                        f"cannot create the post-read reparse fixture: {exc}"
-                    ) from exc
-                swapped = True
-            return result
 
         stdout = io.StringIO()
         stderr = io.StringIO()
-        with mock.patch.object(lifecycle_mod, "source_tree_sha", side_effect=swap_after_provenance_read), \
+        with mock.patch.object(
+                lifecycle_mod, "source_tree_sha",
+                side_effect=AssertionError("legacy source-tree path was reached"),
+        ) as source_tree, \
                 mock.patch.object(sys, "argv", [
                     "validate_manifest.py", "--repo-root", str(root),
                     "--manifest", str(manifest_path),
@@ -1204,21 +1173,12 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
                 ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
-        if mutation_blocked:
-            self.assertFalse(swapped)
-            self.assertEqual(result, 0, stderr.getvalue())
-            self.assertIn("OK: module evidence manifest is valid", stdout.getvalue())
-            return
-
-        self.assertTrue(swapped, "the regression did not reach the provenance route")
-        self.assertNotEqual(
-            result, 0,
-            "a root replacement after lifecycle parsing was not detected before success",
-        )
-        self.assertIn("FATAL:", stderr.getvalue())
+        source_tree.assert_not_called()
+        self.assertNotEqual(result, 0)
+        self.assertIn("rooted control-plane reads are complete", stderr.getvalue())
 
     def test_main_accepts_default_lifecycle_evidence_at_a_real_lexical_path(self) -> None:
-        """The hardened CLI retains the normal default evidence success path."""
+        """No platform may emit a positive result before rooted control-plane reads."""
         root = self.repo / "cli-normal-root"
         self._prepare_cli_evidence_root(root)
         manifest_path = root / "cli-manifest.json"
@@ -1230,8 +1190,8 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
-        self.assertEqual(result, 0, stderr.getvalue())
-        self.assertIn("OK: module evidence manifest is valid", stdout.getvalue())
+        self.assertNotEqual(result, 0)
+        self.assertIn("rooted control-plane reads are complete", stderr.getvalue())
 
     def test_main_reads_default_target_index_through_held_root_bytes(self) -> None:
         """The release default cannot regress to a mutable target-index pathname."""
@@ -1258,7 +1218,8 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
-        self.assertEqual(result, 0, stderr.getvalue())
+        self.assertNotEqual(result, 0)
+        self.assertIn("rooted control-plane reads are complete", stderr.getvalue())
         self.assertIn("build/module-evidence/module-targets.json", calls)
 
     def test_document_shape_is_rejected_by_loader_and_injected_validator(self) -> None:
