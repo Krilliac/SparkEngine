@@ -18,8 +18,12 @@ Usage:
         --engine package/SparkEngine.exe --module SparkGameFPS \
         --module-image package/SparkGameFPS.dll --working-directory package \
         --rhi-backend d3d11 \
-        --image-manifest package/module-lifecycle-images.json \
-        --out <absolute-repo-root>\\build\\module-evidence\\module-lifecycle.json
+        --image-manifest <ABSOLUTE_WORKING_DIRECTORY>\\module-lifecycle-images.json \
+        --out <ABSOLUTE_REPO_ROOT>\\build\\module-evidence\\module-lifecycle.json
+
+``<ABSOLUTE_WORKING_DIRECTORY>`` and ``<ABSOLUTE_REPO_ROOT>`` are literal
+placeholders: release automation must supply those exact absolute paths.  The
+collector accepts no alternate manifest filename or output namespace.
 """
 
 from __future__ import annotations
@@ -67,19 +71,23 @@ _WINDOWS_RESERVED_NAMES = frozenset(
 )
 
 _GENERIC_READ = 0x80000000
+_FILE_LIST_DIRECTORY = 0x00000001
 _FILE_READ_ATTRIBUTES = 0x0080
 _FILE_SHARE_READ = 0x00000001
+_FILE_SHARE_WRITE = 0x00000002
 _OPEN_EXISTING = 3
 _FILE_ATTRIBUTE_NORMAL = 0x00000080
 _FILE_ATTRIBUTE_DIRECTORY = 0x00000010
 _FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
 _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+_FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 _FILE_FLAG_SEQUENTIAL_SCAN = 0x08000000
 _HANDLE_FLAG_INHERIT = 0x00000001
 _FILE_BEGIN = 0
 
 
 WINDOWS_IMAGE_LEASE_AVAILABLE = False
+WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE = False
 if os.name == "nt":
     try:
         import ctypes
@@ -135,10 +143,12 @@ if os.name == "nt":
         _ReadFile.restype = wintypes.BOOL
         _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
         WINDOWS_IMAGE_LEASE_AVAILABLE = True
+        WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE = True
     except (AttributeError, ImportError, OSError):
         # Production collection must reject rather than silently reducing this
         # to path-based hashing when a native lease cannot be established.
         WINDOWS_IMAGE_LEASE_AVAILABLE = False
+        WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE = False
 
 
 @dataclass(frozen=True)
@@ -281,6 +291,51 @@ class ImageLease:
         return False
 
 
+class OutputDirectoryLease:
+    """A Windows namespace anchor that excludes rename/delete races, not child writes."""
+
+    def __init__(self, path: Path, handle: int, identity: ImageIdentity,
+                 attributes: int, final_path: str) -> None:
+        self.path = path
+        self._handle = handle
+        self.identity = identity
+        self.attributes = attributes
+        self.final_path = final_path
+        self._closed = False
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    def snapshot(self) -> tuple[ImageIdentity, int]:
+        if self._closed:
+            raise OSError("output-directory lease is already closed")
+        return _native_identity(self._handle)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        if not _CloseHandle(self._handle):  # type: ignore[name-defined]
+            raise OSError(f"CloseHandle failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+        self._closed = True
+
+    def __enter__(self) -> OutputDirectoryLease:
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> bool:
+        self.close()
+        return False
+
+
+@dataclass(frozen=True)
+class OutputNamespaceLease:
+    """One identity-checked directory anchor in the fixed output namespace."""
+
+    path: Path
+    lease: object
+    identity: object
+
+
 def open_image_lease(path: Path) -> ImageLease:
     """Open a Windows image read lease that denies subsequent writes/deletes."""
     if os.name != "nt" or not WINDOWS_IMAGE_LEASE_AVAILABLE:
@@ -305,6 +360,37 @@ def open_image_lease(path: Path) -> ImageLease:
         identity, attributes = _native_identity(handle)
         final_path = _native_final_path(handle)
         return ImageLease(path, handle, identity, attributes, final_path)
+    except BaseException:
+        _CloseHandle(handle)  # type: ignore[name-defined]
+        raise
+
+
+def open_output_directory_lease(path: Path) -> OutputDirectoryLease:
+    """Open a Windows directory lease that excludes later rename/delete opens."""
+    if os.name != "nt" or not WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
+        raise OSError("native Windows output-directory leases are required but unavailable")
+    # Windows requires FILE_SHARE_WRITE for atomic create/replace of children
+    # through ordinary pathname APIs.  This is a namespace-anchor lease, not a
+    # child-content lock: writers may modify children, but omitting
+    # FILE_SHARE_DELETE prevents later opens that would rename/delete this
+    # directory (or replace it with a reparse-point alias).
+    handle = _CreateFileW(  # type: ignore[name-defined]
+        str(path),
+        _FILE_LIST_DIRECTORY | _FILE_READ_ATTRIBUTES,
+        _FILE_SHARE_READ | _FILE_SHARE_WRITE,
+        None,
+        _OPEN_EXISTING,
+        _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OPEN_REPARSE_POINT,
+        None,
+    )
+    if handle in (None, _INVALID_HANDLE_VALUE):  # type: ignore[name-defined]
+        raise OSError(f"CreateFileW could not lease output directory {path}: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+    try:
+        if not _SetHandleInformation(handle, _HANDLE_FLAG_INHERIT, 0):  # type: ignore[name-defined]
+            raise OSError(f"SetHandleInformation failed: {ctypes.get_last_error()}")  # type: ignore[name-defined]
+        identity, attributes = _native_identity(handle)
+        final_path = _native_final_path(handle)
+        return OutputDirectoryLease(path, handle, identity, attributes, final_path)
     except BaseException:
         _CloseHandle(handle)  # type: ignore[name-defined]
         raise
@@ -420,6 +506,30 @@ def _display_windows_final_path(value: str | Path) -> str:
 def _normalise_windows_final_path(value: str | Path) -> str:
     """Case-fold a handle-derived or canonical path for security comparisons only."""
     return ntpath.normcase(_display_windows_final_path(value))
+
+
+def _validate_leased_output_directory(
+    lease: object, expected_path: Path, *, expected_identity: object | None = None,
+) -> tuple[object | None, str | None]:
+    """Require a live lease for the exact fixed publication directory."""
+    expected = _absolute_raw(expected_path)
+    try:
+        identity, attributes = _lease_snapshot(lease)
+        final_path = _lease_final_path(lease)
+    except OSError as exc:
+        return None, f"cannot inspect lifecycle output-directory lease: {exc}"
+    if attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+        return None, "lifecycle output-directory lease refers to a reparse point"
+    if not attributes & _FILE_ATTRIBUTE_DIRECTORY:
+        return None, "lifecycle output-directory lease does not refer to a directory"
+    if _normalise_windows_final_path(final_path) != _normalise_windows_final_path(expected):
+        return None, "lifecycle output-directory handle path does not match the fixed namespace"
+    expected_leaf = ntpath.basename(_display_windows_final_path(expected))
+    if ntpath.basename(_display_windows_final_path(final_path)) != expected_leaf:
+        return None, "lifecycle output-directory handle leaf is not the fixed namespace"
+    if expected_identity is not None and not _same_file_identity(identity, expected_identity):
+        return None, "lifecycle output-directory handle changed identity while held"
+    return identity, None
 
 
 def _lease_snapshot(lease: object) -> tuple[object, int]:
@@ -763,6 +873,62 @@ def _output_collides_with_input(output: Path, log: Path,
     for label, path in inputs:
         if _same_output_identity(output, path) or _same_output_identity(log, path):
             return f"fixed lifecycle output collides with the {label} input path"
+    return None
+
+
+def _open_output_namespace_leases(
+    repo_root: Path, output_directory: Path,
+    *, lease_factory: Callable[[Path], object] | None = None,
+) -> tuple[tuple[OutputNamespaceLease, ...] | None, str | None]:
+    """Lease every mutable directory anchor from repository root to output."""
+    root = _absolute_raw(repo_root)
+    expected_paths = (
+        root,
+        root / LIFECYCLE_OUTPUT_DIRECTORY[0],
+        root.joinpath(*LIFECYCLE_OUTPUT_DIRECTORY),
+    )
+    if output_directory != expected_paths[-1]:
+        return None, "lifecycle output directory is not the fixed namespace anchor"
+    factory = lease_factory or open_output_directory_lease
+    acquired: list[OutputNamespaceLease] = []
+    opened: list[object] = []
+    try:
+        for path in expected_paths:
+            lease = factory(path)
+            opened.append(lease)
+            identity, error = _validate_leased_output_directory(lease, path)
+            if error:
+                raise OSError(error)
+            assert identity is not None
+            acquired.append(OutputNamespaceLease(path, lease, identity))
+    except OSError as exc:
+        close_error = _close_image_leases(opened)
+        suffix = f"; cannot close partial output namespace leases: {close_error}" if close_error else ""
+        return None, f"cannot acquire lifecycle output namespace leases: {exc}{suffix}"
+    return tuple(acquired), None
+
+
+def _validate_output_pair_under_namespace_leases(
+    leases: tuple[OutputNamespaceLease, ...], output: Path, log: Path,
+) -> str | None:
+    """Validate the fixed pair while each ancestor directory remains leased."""
+    expected_paths = (output.parent.parent.parent, output.parent.parent, output.parent)
+    if len(leases) != len(expected_paths):
+        return "lifecycle output namespace lease chain is incomplete"
+    for anchor, expected_path in zip(leases, expected_paths, strict=True):
+        if anchor.path != expected_path:
+            return "lifecycle output namespace lease chain does not match the fixed path"
+        _identity, error = _validate_leased_output_directory(
+            anchor.lease, expected_path, expected_identity=anchor.identity,
+        )
+        if error:
+            return error
+    if _same_output_identity(output, log):
+        return "lifecycle JSON and audit-log paths must be distinct"
+    for path in (output, log):
+        error = _validate_output_leaf(path)
+        if error:
+            return error
     return None
 
 
@@ -1134,6 +1300,7 @@ def main() -> int:
     args = parser.parse_args()
     out_path: Path | None = None
     log_path: Path | None = None
+    output_namespace_leases: tuple[OutputNamespaceLease, ...] | None = None
     manifest_lease: object | None = None
     tracked_temps: set[Path] = set()
     cleanup_authorized = False
@@ -1165,6 +1332,31 @@ def main() -> int:
         engine_arg = Path(args.engine)
         module_image_arg = Path(args.module_image)
         working_directory_arg = Path(args.working_directory)
+        raw_collision_error = _output_collides_with_input(
+            out_path, log_path,
+            (("engine", _absolute_raw(engine_arg)),
+             ("module image", _absolute_raw(module_image_arg)),
+             ("image manifest", _absolute_raw(Path(args.image_manifest)))),
+        )
+        if raw_collision_error:
+            raise RuntimeError(raw_collision_error)
+        output_namespace_leases, err = _open_output_namespace_leases(
+            _absolute_raw(REPO_ROOT), out_path.parent,
+        )
+        if err:
+            raise RuntimeError(err)
+        assert output_namespace_leases is not None
+        err = _validate_output_pair_under_namespace_leases(
+            output_namespace_leases, out_path, log_path,
+        )
+        if err:
+            raise RuntimeError(err)
+        # From this point onward, cleanup targets are fixed leaf names inside a
+        # live directory handle that denies a later rename or replacement.
+        cleanup_authorized = True
+        cleared = _clear_artifacts(out_path, log_path)
+        if cleared:
+            raise RuntimeError(cleared)
         sha, err = resolve_collection_sha(args.commit_sha)
         if sha is None:
             raise RuntimeError(err)
@@ -1197,16 +1389,11 @@ def main() -> int:
         tree_sha, err = lifecycle_mod.source_tree_sha(REPO_ROOT, sha, source_dir)
         if tree_sha is None:
             raise RuntimeError(err)
-        # Re-check immediately before the first destructive operation.  This
-        # guarantees _clear_artifacts never receives a caller-selected path or
-        # a namespace which became a reparse/case alias during input checks.
-        namespace, err = _validate_output_namespace(args.out, REPO_ROOT)
-        if err or namespace != (out_path, log_path):
-            raise RuntimeError(err or "lifecycle output namespace changed during validation")
-        cleanup_authorized = True
-        cleared = _clear_artifacts(out_path, log_path)
-        if cleared:
-            raise RuntimeError(cleared)
+        err = _validate_output_pair_under_namespace_leases(
+            output_namespace_leases, out_path, log_path,
+        )
+        if err:
+            raise RuntimeError(err)
         captured, err = run_engine(engine, module_image, "SparkGameFPS", root,
                                    args.rhi_backend, args.timeout,
                                    (trusted_images["SparkEngine.exe"],
@@ -1241,9 +1428,11 @@ def main() -> int:
             "commitSHA": sha,
             "records": [record],
         }
-        namespace, err = _validate_output_namespace(args.out, REPO_ROOT)
-        if err or namespace != (out_path, log_path):
-            raise RuntimeError(err or "lifecycle output namespace changed before publication")
+        err = _validate_output_pair_under_namespace_leases(
+            output_namespace_leases, out_path, log_path,
+        )
+        if err:
+            raise RuntimeError(err)
         log_temp = _write_temp(log_path, captured.audit_log, tracked_temps=tracked_temps)
         json_temp = _write_temp(
             out_path, json.dumps(document, indent=2, sort_keys=True) + "\n",
@@ -1267,18 +1456,41 @@ def main() -> int:
                 failure = f"{failure}; {close_failure}" if failure else f"FATAL: {close_failure}"
                 success = False
                 result = 1
+        if success and output_namespace_leases is not None:
+            close_error = _close_image_leases(
+                [anchor.lease for anchor in output_namespace_leases],
+            )
+            if close_error:
+                close_failure = f"cannot close lifecycle output namespace leases: {close_error}"
+                failure = f"FATAL: {close_failure}"
+                success = False
+                result = 1
+            else:
+                output_namespace_leases = None
         if not success:
-            if cleanup_authorized and out_path is not None and log_path is not None:
-                namespace, namespace_error = _validate_output_namespace(args.out, REPO_ROOT)
-                if namespace_error or namespace != (out_path, log_path):
+            if cleanup_authorized and out_path is not None and log_path is not None and \
+               output_namespace_leases is not None:
+                namespace_error = _validate_output_pair_under_namespace_leases(
+                    output_namespace_leases, out_path, log_path,
+                )
+                if namespace_error:
                     _report_failure(
                         "FATAL: lifecycle evidence cleanup skipped because the fixed "
-                        f"output namespace is no longer safe: {namespace_error or 'changed'}"
+                        f"output namespace is no longer safe: {namespace_error}"
                     )
                 else:
                     cleanup_error = _clear_artifacts(out_path, log_path, *tracked_temps)
                     if cleanup_error:
                         _report_failure(f"FATAL: lifecycle evidence cleanup failed: {cleanup_error}")
+            if output_namespace_leases is not None:
+                close_error = _close_image_leases(
+                    [anchor.lease for anchor in output_namespace_leases],
+                )
+                if close_error:
+                    close_failure = f"cannot close lifecycle output namespace leases: {close_error}"
+                    failure = f"{failure}; {close_failure}" if failure else f"FATAL: {close_failure}"
+                else:
+                    output_namespace_leases = None
             if failure is not None:
                 _report_failure(failure)
     return result

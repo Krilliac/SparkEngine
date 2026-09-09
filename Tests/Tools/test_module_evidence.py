@@ -249,6 +249,26 @@ class FakeImageLease:
         self.closed = True
 
 
+class FakeOutputDirectoryLease:
+    """Controlled directory-handle double for collector publication tests."""
+
+    def __init__(self, path: Path, *, identity: FakeLeaseIdentity,
+                 attributes: int, final_path: str | None = None) -> None:
+        self.path = path
+        self.identity = identity
+        self.attributes = attributes
+        self.final_path = final_path or str(path)
+        self.closed = False
+
+    def snapshot(self) -> tuple[FakeLeaseIdentity, int]:
+        if self.closed:
+            raise OSError("attempted to inspect a closed fake output directory lease")
+        return self.identity, self.attributes
+
+    def close(self) -> None:
+        self.closed = True
+
+
 def write_image_manifest(root: Path, engine: Path, module: Path, sha: str,
                           *, engine_digest: str | None = None) -> Path:
     digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -913,6 +933,7 @@ class TestLifecycleCollector(FixtureCase):
         engine = Path(argv[argv.index("--engine") + 1])
         module = Path(argv[argv.index("--module-image") + 1])
         image_manifest = Path(argv[argv.index("--image-manifest") + 1])
+        out = Path(argv[argv.index("--out") + 1])
         engine_digest = hashlib.sha256(engine.read_bytes()).hexdigest()
         module_digest = hashlib.sha256(module.read_bytes()).hexdigest()
         engine_image = collect_lifecycle.ImageVerification(
@@ -926,6 +947,16 @@ class TestLifecycleCollector(FixtureCase):
             identity=collect_lifecycle.ImageIdentity(1, 2, module.stat().st_size, 1),
         )
         manifest_bytes = image_manifest.read_bytes()
+        output_paths = (self.repo, self.repo / "build", out.parent)
+        output_leases = [
+            FakeOutputDirectoryLease(
+                path,
+                identity=FakeLeaseIdentity(1, 4 + ordinal, 0),
+                attributes=collect_lifecycle._FILE_ATTRIBUTE_DIRECTORY,
+            )
+            for ordinal, path in enumerate(output_paths)
+        ]
+        output_opened: list[FakeOutputDirectoryLease] = []
 
         def manifest_lease_factory(path: Path) -> FakeImageLease:
             self.assertEqual(path, image_manifest)
@@ -935,6 +966,13 @@ class TestLifecycleCollector(FixtureCase):
                 digest=hashlib.sha256(manifest_bytes).hexdigest(),
                 image=manifest_bytes,
             )
+
+        def output_lease_factory(path: Path) -> FakeOutputDirectoryLease:
+            expected = output_paths[len(output_opened)]
+            self.assertEqual(path, expected)
+            lease = output_leases[len(output_opened)]
+            output_opened.append(lease)
+            return lease
 
         with ExitStack() as stack:
             stack.enter_context(mock.patch.object(sys, "argv", argv))
@@ -963,6 +1001,10 @@ class TestLifecycleCollector(FixtureCase):
                 "collect_lifecycle.open_image_lease",
                 side_effect=manifest_lease_factory,
             ))
+            stack.enter_context(mock.patch(
+                "collect_lifecycle.open_output_directory_lease",
+                side_effect=output_lease_factory,
+            ))
             for patch in extra_patches:
                 stack.enter_context(patch)
             return collect_lifecycle.main()
@@ -976,6 +1018,40 @@ class TestLifecycleCollector(FixtureCase):
                 list(final_path.parent.glob(f".{final_path.name}.*.tmp")), [],
                 f"temporary publication sibling survived for {final_path.name}",
             )
+
+    def _fake_output_namespace_factory(
+        self, out: Path, *, output_attributes: int | None = None,
+        output_final_path: str | None = None, identity_base: int = 1100,
+    ) -> tuple[list[FakeOutputDirectoryLease], Any]:
+        """Return ordered fake root/build/output directory leases for main()."""
+        import collect_lifecycle
+
+        paths = (self.repo, self.repo / "build", out.parent)
+        leases = [
+            FakeOutputDirectoryLease(
+                path,
+                identity=FakeLeaseIdentity(39, identity_base + ordinal, 0),
+                attributes=(
+                    output_attributes if ordinal == len(paths) - 1 and output_attributes is not None
+                    else collect_lifecycle._FILE_ATTRIBUTE_DIRECTORY
+                ),
+                final_path=(
+                    output_final_path if ordinal == len(paths) - 1 and output_final_path is not None
+                    else str(path)
+                ),
+            )
+            for ordinal, path in enumerate(paths)
+        ]
+        opened: list[FakeOutputDirectoryLease] = []
+
+        def factory(path: Path) -> FakeOutputDirectoryLease:
+            expected = paths[len(opened)]
+            self.assertEqual(path, expected)
+            lease = leases[len(opened)]
+            opened.append(lease)
+            return lease
+
+        return leases, factory
 
     @staticmethod
     def _fdopen_that_fails(phase: str):
@@ -1215,6 +1291,88 @@ class TestLifecycleCollector(FixtureCase):
         self.assertEqual(out.read_text(encoding="utf-8"), "protected-json")
         self.assertEqual(log.read_text(encoding="utf-8"), "protected-log")
 
+    def test_main_rejects_untrusted_output_directory_leases_before_any_clear(self) -> None:
+        """A path alias, reparse point, or non-directory handle cannot authorize cleanup."""
+        import collect_lifecycle
+
+        cases = (
+            ("path-alias", str(self.repo / "other-evidence-directory"),
+             collect_lifecycle._FILE_ATTRIBUTE_DIRECTORY),
+            ("reparse", None, collect_lifecycle._FILE_ATTRIBUTE_DIRECTORY |
+             collect_lifecycle._FILE_ATTRIBUTE_REPARSE_POINT),
+            ("not-directory", None, 0),
+        )
+        (self.repo / "other-evidence-directory").mkdir(exist_ok=True)
+        for name, final_path, attributes in cases:
+            with self.subTest(case=name):
+                out, argv = self._collector_main_fixture(f"output-lease-{name}")
+                log = out.parent / "module-lifecycle-SparkGameFPS.log"
+                out.write_text("protected-json", encoding="utf-8")
+                log.write_text("protected-log", encoding="utf-8")
+                leases, factory = self._fake_output_namespace_factory(
+                    out,
+                    output_attributes=attributes,
+                    output_final_path=final_path,
+                    identity_base=1000,
+                )
+                with mock.patch(
+                    "collect_lifecycle._clear_artifacts",
+                    wraps=collect_lifecycle._clear_artifacts,
+                ) as clear:
+                    self.assertEqual(self._run_truthful_collector_main(
+                        argv,
+                        mock.patch("collect_lifecycle.open_output_directory_lease",
+                                   side_effect=factory),
+                    ), 1)
+                clear.assert_not_called()
+                self.assertTrue(all(lease.closed for lease in leases))
+                self.assertEqual(out.read_text(encoding="utf-8"), "protected-json")
+                self.assertEqual(log.read_text(encoding="utf-8"), "protected-log")
+
+    def test_main_holds_output_directory_lease_through_cleanup_and_publication(self) -> None:
+        """Every destructive/output operation runs while the fixed directory handle is live."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("output-lease-lifetime")
+        leases, output_factory = self._fake_output_namespace_factory(
+            out, identity_base=1010,
+        )
+        output_lease = leases[-1]
+        events: list[str] = []
+        real_clear = collect_lifecycle._clear_artifacts
+        real_write = collect_lifecycle._write_temp
+        real_replace = os.replace
+
+        def observe_clear(*paths: Path) -> str | None:
+            self.assertTrue(all(not lease.closed for lease in leases),
+                            "namespace lease closed before cleanup")
+            events.append("clear")
+            return real_clear(*paths)
+
+        def observe_write(final_path: Path, content: str, *, tracked_temps: set[Path]) -> Path:
+            self.assertTrue(all(not lease.closed for lease in leases),
+                            "namespace lease closed before temporary write")
+            events.append("write")
+            return real_write(final_path, content, tracked_temps=tracked_temps)
+
+        def observe_replace(source, destination) -> None:
+            self.assertTrue(all(not lease.closed for lease in leases),
+                            "namespace lease closed before replacement")
+            events.append("replace")
+            return real_replace(source, destination)
+
+        self.assertEqual(self._run_truthful_collector_main(
+            argv,
+            mock.patch("collect_lifecycle.open_output_directory_lease",
+                       side_effect=output_factory),
+            mock.patch("collect_lifecycle._clear_artifacts", side_effect=observe_clear),
+            mock.patch("collect_lifecycle._write_temp", side_effect=observe_write),
+            mock.patch("collect_lifecycle.os.replace", side_effect=observe_replace),
+        ), 0)
+        self.assertEqual(events, ["clear", "write", "write", "replace", "replace"])
+        self.assertTrue(output_lease.closed)
+        self.assertTrue(all(lease.closed for lease in leases))
+
     def test_manifest_lease_reads_held_bytes_not_replaced_path(self) -> None:
         """A manifest lease, not a later pathname read, supplies authority."""
         import collect_lifecycle
@@ -1336,13 +1494,16 @@ class TestLifecycleCollector(FixtureCase):
         self._assert_no_transaction_artifacts(out)
 
     def test_main_fails_closed_when_native_manifest_lease_is_unavailable(self) -> None:
-        """A Windows collector never falls back to reading its manifest by path."""
+        """A manifest-lease failure clears stale evidence after the fixed namespace is held."""
         import collect_lifecycle
 
         out, argv = self._collector_main_fixture("manifest-native-lease-required")
         log = out.parent / "module-lifecycle-SparkGameFPS.log"
         out.write_text("preexisting-json", encoding="utf-8")
         log.write_text("preexisting-log", encoding="utf-8")
+        output_leases, output_factory = self._fake_output_namespace_factory(
+            out, identity_base=1020,
+        )
         with mock.patch.object(sys, "argv", argv), \
              mock.patch("collect_lifecycle.os.name", "nt"), \
              mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
@@ -1351,12 +1512,37 @@ class TestLifecycleCollector(FixtureCase):
              mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                         return_value=("c" * 40, None)), \
              mock.patch("collect_lifecycle.WINDOWS_IMAGE_LEASE_AVAILABLE", False), \
+             mock.patch("collect_lifecycle.open_output_directory_lease",
+                        side_effect=output_factory), \
              mock.patch("collect_lifecycle.run_engine") as child:
-            self.assertEqual(collect_lifecycle.main(), 1)
+             self.assertEqual(collect_lifecycle.main(), 1)
 
         child.assert_not_called()
-        self.assertEqual(out.read_text(encoding="utf-8"), "preexisting-json")
-        self.assertEqual(log.read_text(encoding="utf-8"), "preexisting-log")
+        self.assertTrue(all(lease.closed for lease in output_leases))
+        self._assert_no_transaction_artifacts(out)
+
+    def test_main_clears_stale_pair_after_source_tree_failure(self) -> None:
+        """A source-tree binding failure cannot leave an earlier lifecycle pair publishable."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("source-tree-failure-cleans-stale")
+        log = out.parent / "module-lifecycle-SparkGameFPS.log"
+        out.write_text("preexisting-json", encoding="utf-8")
+        log.write_text("preexisting-log", encoding="utf-8")
+        output_leases, output_factory = self._fake_output_namespace_factory(
+            out, identity_base=1030,
+        )
+
+        self.assertEqual(self._run_truthful_collector_main(
+            argv,
+            mock.patch("collect_lifecycle.open_output_directory_lease",
+                       side_effect=output_factory),
+            mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
+                       return_value=(None, "injected source-tree failure")),
+        ), 1)
+
+        self.assertTrue(all(lease.closed for lease in output_leases))
+        self._assert_no_transaction_artifacts(out)
 
     def test_display_final_path_preserves_leaf_case_while_comparisons_fold_case(self) -> None:
         """Display paths retain the canonical image spelling; security comparisons do not."""
@@ -1839,6 +2025,81 @@ class TestLifecycleCollector(FixtureCase):
                 engine.write_bytes(pe_image())
         finally:
             lease.close()
+
+    @unittest.skipUnless(os.name == "nt", "native Windows directory leases are unavailable")
+    def test_native_output_namespace_leases_allow_child_replace_but_deny_anchor_renames(self) -> None:
+        """Leased root/build/output anchors permit child publication but cannot be swapped."""
+        import collect_lifecycle
+
+        if not collect_lifecycle.WINDOWS_OUTPUT_DIRECTORY_LEASE_AVAILABLE:
+            self.skipTest("native Windows output-directory lease binding is unavailable")
+        container = self.repo / "native-output-directory-lease-container"
+        container.mkdir()
+        root = container / "repo"
+        root.mkdir()
+        build = root / "build"
+        build.mkdir()
+        directory = build / "module-evidence"
+        directory.mkdir()
+        renamed_output = build / "renamed-evidence"
+        replacement = build / "replacement-evidence"
+        renamed_build = root / "renamed-build"
+        renamed_root = container / "renamed-root"
+        replacement.mkdir()
+        native_create = collect_lifecycle._CreateFileW
+        native_set_information = collect_lifecycle._SetHandleInformation
+        with mock.patch("collect_lifecycle._CreateFileW", wraps=native_create) as create, \
+             mock.patch("collect_lifecycle._SetHandleInformation",
+                        wraps=native_set_information) as set_information:
+            leases, error = collect_lifecycle._open_output_namespace_leases(root, directory)
+        self.assertIsNone(error)
+        self.assertIsNotNone(leases)
+        assert leases is not None
+        try:
+            self.assertEqual(len(create.call_args_list), 3)
+            for call in create.call_args_list:
+                args = call.args
+                self.assertEqual(args[1], collect_lifecycle._FILE_LIST_DIRECTORY |
+                                 collect_lifecycle._FILE_READ_ATTRIBUTES)
+                self.assertEqual(args[2], collect_lifecycle._FILE_SHARE_READ |
+                                 collect_lifecycle._FILE_SHARE_WRITE)
+                self.assertEqual(args[4], collect_lifecycle._OPEN_EXISTING)
+                required_flags = (collect_lifecycle._FILE_FLAG_BACKUP_SEMANTICS |
+                                  collect_lifecycle._FILE_FLAG_OPEN_REPARSE_POINT)
+                self.assertEqual(args[5] & required_flags, required_flags)
+            self.assertEqual(set_information.call_count, 3)
+            for call in set_information.call_args_list:
+                self.assertEqual(
+                    call.args[1:],
+                    (collect_lifecycle._HANDLE_FLAG_INHERIT, 0),
+                )
+            self.assertTrue(all(
+                anchor.lease.attributes & collect_lifecycle._FILE_ATTRIBUTE_DIRECTORY
+                for anchor in leases
+            ))
+            self.assertTrue(leases[-1].lease.final_path.endswith(r"\module-evidence"),
+                            leases[-1].lease.final_path)
+            with self.assertRaises(OSError):
+                directory.rename(renamed_output)
+            with self.assertRaises(OSError):
+                os.replace(replacement, directory)
+            with self.assertRaises(OSError):
+                build.rename(renamed_build)
+            with self.assertRaises(OSError):
+                root.rename(renamed_root)
+            staged = directory / "staged.tmp"
+            published = directory / "module-lifecycle-SparkGameFPS.log"
+            staged.write_text("audit", encoding="utf-8")
+            os.replace(staged, published)
+            self.assertEqual(published.read_text(encoding="utf-8"), "audit")
+            self.assertTrue(directory.is_dir())
+            self.assertTrue(replacement.is_dir())
+        finally:
+            close_error = collect_lifecycle._close_image_leases(
+                [anchor.lease for anchor in leases],
+            )
+        self.assertIsNone(close_error)
+        self.assertTrue(all(anchor.lease.closed for anchor in leases))
 
     def test_rejects_outside_script_and_reparse_images(self) -> None:
         from collect_lifecycle import validate_image_pair
