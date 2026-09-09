@@ -1128,7 +1128,7 @@ def main() -> int:
                     declared_gaps = load_declared_gaps_bytes(
                         root_authority.read_relative_bytes(
                             ledger_relative,
-                            max_bytes=strict_json.DEFAULT_LIMITS.document_bytes,
+                            max_bytes=strict_json.CONTRACT_LIMITS.document_bytes,
                         ),
                         str(repo_root / ledger_relative), known_items,
                     )

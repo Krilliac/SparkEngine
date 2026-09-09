@@ -1430,12 +1430,12 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             encoding="utf-8",
         )
         original_reader = strict_json.NoFollowDirectoryLease.read_relative_bytes
-        calls: list[str] = []
+        calls: list[tuple[str, int]] = []
 
         def record_reader(
             lease: strict_json.NoFollowDirectoryLease, relative: str, *, max_bytes: int,
         ) -> bytes:
-            calls.append(relative)
+            calls.append((relative, max_bytes))
             return original_reader(lease, relative, max_bytes=max_bytes)
 
         stdout = io.StringIO()
@@ -1459,7 +1459,11 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             "build/module-evidence/module-lifecycle.json",
             EVIDENCE_PRODUCERS["junit-xml"]["artifact"],
             EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"],
-        }.issubset(set(calls)), calls)
+        }.issubset({relative for relative, _limit in calls}), calls)
+        self.assertIn(
+            ("tools/module-evidence/evidence-gaps.json", strict_json.CONTRACT_LIMITS.document_bytes),
+            calls,
+        )
 
     @unittest.skipIf(os.name == "nt", "POSIX external revision-anchor regression")
     def test_posix_main_rejects_positive_lifecycle_without_external_sha_anchor(self) -> None:
