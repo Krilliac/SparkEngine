@@ -4645,17 +4645,15 @@ class TestEvidenceGapLedger(FixtureCase):
             {"lifecycle-log": "RDY-010"},
         )
 
-    def test_shipped_ledger_retains_only_unimplemented_lifecycle_independent_gaps(self) -> None:
+    def test_shipped_ledger_has_no_gap_after_every_required_producer_is_wired(self) -> None:
         from schema import load_known_work_item_ids
         from validate_manifest import load_declared_gaps
         ids, err = load_known_work_item_ids(REPO_ROOT)
         self.assertIsNone(err)
         gaps = load_declared_gaps(
             REPO_ROOT / "tools" / "module-evidence" / "evidence-gaps.json", ids)
-        self.assertNotEqual(gaps, {},
-                            "an empty ledger would mean RDY-010 is closeable")
-        self.assertNotIn("lifecycle-log", gaps)
-        self.assertIn("package-smoke-log", gaps)
+        self.assertEqual(gaps, {},
+                         "declared gap remains after its required producer is wired")
 
 
 class TestCIWiring(unittest.TestCase):
@@ -4737,10 +4735,20 @@ class TestCIWiring(unittest.TestCase):
     def test_module_evidence_consumes_lifecycle_producer_artifact(self) -> None:
         """The Ubuntu release consumer waits for and reads exact lifecycle JSON."""
         block = self._job_block("module-evidence")
-        self.assertIn("needs: [build-linux-gcc, module-profile-lifecycle]", block)
+        self.assertIn(
+            "needs: [build-linux-gcc, module-profile-lifecycle, module-profile-package-smoke]",
+            block,
+        )
         self.assertIn("module-profile-lifecycle-${{ github.sha }}", block)
         self.assertIn("--lifecycle-evidence", block)
         self.assertIn("module-lifecycle.json", block)
+
+    def test_module_evidence_consumes_exact_package_smoke_artifact(self) -> None:
+        """The Ubuntu release authority reads the Windows installed-package observation."""
+        block = self._job_block("module-evidence")
+        self.assertIn("module-profile-package-smoke-${{ github.sha }}", block)
+        self.assertIn("package-smoke.log", block)
+        self.assertIn("build/module-evidence", block)
 
     def test_required_gate_includes_lifecycle_producer(self) -> None:
         """A skipped Windows producer cannot disappear behind the aggregate gate."""
@@ -4748,6 +4756,13 @@ class TestCIWiring(unittest.TestCase):
         needs = gate[gate.index("needs:"):gate.index("runs-on:")]
         self.assertIn("- module-profile-lifecycle", needs)
         self.assertIn('"module-profile-lifecycle"', gate)
+
+    def test_required_gate_includes_package_smoke_producer(self) -> None:
+        """A skipped clean-install package producer cannot disappear behind the aggregate gate."""
+        gate = self.workflow[self.workflow.index("\n  required-ci-gate:\n"):]
+        needs = gate[gate.index("needs:"):gate.index("runs-on:")]
+        self.assertIn("- module-profile-package-smoke", needs)
+        self.assertIn('"module-profile-package-smoke"', gate)
 
     def test_gate_consumes_really_produced_junit_evidence(self) -> None:
         block = self._job_block("module-evidence")

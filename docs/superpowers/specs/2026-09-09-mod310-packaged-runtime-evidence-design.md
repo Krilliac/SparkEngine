@@ -106,11 +106,22 @@ all of these actions succeed:
    and `faults=0`; and
 5. successful uninstall with no product registration or install-root residue.
 
-The helper writes `build/module-evidence/package-smoke.log` only after steps
-1-5 pass.  The log has a closed, line-oriented `package-smoke-v1` contract:
+The helper creates a fresh `msi-qualification/` directory and writes its
+canonical `package-smoke.log` there only after steps 1-5 pass. It stages bytes
+through a held Windows identity before atomically publishing the final leaf;
+the artifact consumer later downloads that one file into the fixed
+`build/module-evidence/package-smoke.log` path. The log has a closed,
+line-oriented `package-smoke-v1` contract:
 module name, stable-v1 profile, exact commit SHA, MSI SHA-256, both backend
 results, `exit_code=0`, and terminal `PASS`.  The semantic validator rejects
 missing, duplicate, malformed, mismatched, or non-passing fields.
+
+The Windows package-smoke job owns its checkout and runner-temporary workspace
+from publication through the immediately following SHA-pinned artifact upload.
+No repository-controlled command runs between qualifier success and that
+upload. The final output reservation ends when the qualifier process exits;
+the job-owned workspace plus the immediate pinned uploader are the explicit
+handoff boundary, matching the lifecycle collector's process-exit contract.
 
 ### Evidence and gate changes
 

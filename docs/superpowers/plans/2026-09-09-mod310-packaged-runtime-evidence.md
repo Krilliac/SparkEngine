@@ -119,9 +119,9 @@ PowerShell, CMake, GitHub Actions, existing no-follow Python evidence reader.
 - `write-shipping-package-manifest.py --packages <dir> --version <X.Y.Z>
   --commit-sha <40-hex> --out <json>` writes one no-BOM
   `spark-shipping-package-v1` manifest for the exact MinSizeRel MSI.
-- `qualify(..., package_manifest, package_smoke_log, ...)` verifies the
-  manifest/MSI digest, then writes `package-smoke.log` only after both backend
-  runs and uninstall succeed.
+- `qualify(..., package_manifest, ...)` verifies the manifest/MSI digest, then
+  creates `logs/package-smoke.log` only after both backend runs and uninstall
+  succeed; the workflow uploads that exact file to the Ubuntu consumer.
 
 - [ ] **Step 1: Write manifest-helper tests first.**
 
@@ -160,9 +160,9 @@ PowerShell, CMake, GitHub Actions, existing no-follow Python evidence reader.
   - one exact D3D11/WARP module-lifecycle transcript; and
   - installer identity/uninstall records.
 
-  Assert that `package_smoke_log` is absent when either backend, the MSI hash,
-  or uninstall fails; assert the canonical ten-line record is written only on
-  the all-pass path.
+  Assert that the fresh `logs/package-smoke.log` is absent when either backend,
+  the MSI hash, or uninstall fails; assert the canonical ten-line record is
+  written only on the all-pass path.
 
 - [ ] **Step 5: Run the red qualification tests.**
 
@@ -255,8 +255,13 @@ PowerShell, CMake, GitHub Actions, existing no-follow Python evidence reader.
   configured module manifest using the SHA-named artifact.  Move clean
   installation/qualification to `module-profile-package-smoke`; it checks out
   the same revision, downloads the artifact to runner temp, writes only
-  `build/module-evidence/package-smoke.log`, and uploads that log plus
-  diagnostics after helper success.
+  `msi-qualification/package-smoke.log`, and uploads that log plus diagnostics
+  after helper success. The Ubuntu consumer maps the uploaded leaf to its fixed
+  `build/module-evidence/package-smoke.log` namespace.
+
+  Keep the evidence upload immediately after qualification: the Windows job
+  owns the workspace between producer exit and the SHA-pinned uploader, and no
+  repository-controlled command may run in that interval.
 
 - [ ] **Step 4: Verify workflow contracts.**
 
@@ -414,7 +419,11 @@ PowerShell, CMake, GitHub Actions, existing no-follow Python evidence reader.
 
 ## Execution Status
 
-Planned under the user-authorized release-readiness goal.  No production code
-or workflow mutation from this plan has been applied yet.  The local
-MinSizeRel lifecycle rehearsal is available as a preceding proof, but a
-hosted exact-SHA package-smoke run remains required after implementation.
+Implemented locally under the user-authorized release-readiness goal:
+hash-bound Windows Shipping MSI manifests, held-identity clean-install
+qualification, strict package-smoke records, exact artifact handoff, Ubuntu
+rooted consumption, and required-gate wiring. Local Windows and Ubuntu
+contract suites pass, but a hosted exact-SHA run remains required through
+`build-windows-shipping` → `module-profile-package-smoke` →
+`module-evidence` → `required-ci-gate`. MOD-310 remains open for its
+public-SDK-only and installed single-player/save acceptance criteria.

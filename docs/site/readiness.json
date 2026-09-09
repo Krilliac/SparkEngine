@@ -1019,7 +1019,7 @@
         "Builds against SparkEngineLib with the engine source tree on its include path rather than the public SDK surface alone, so the public-API-only requirement is unmet",
         "Fake/in-memory multiplayer state",
         "No production two-client authoritative loop",
-        "Content gaps remain; quicksave/quickload now persist the declared local profile (slot fps_quicksave) through the engine context's SaveSystem, and the single-player death -> respawn -> score loop is complete (Tests/TestSparkGameFPSLoopReal.cpp), but there is no installed-package smoke and the module still initializes gameplay only (GPU work skipped) without a D3D11 device"
+        "Content gaps remain; quicksave/quickload now persist the declared local profile (slot fps_quicksave) through the engine context's SaveSystem, and the single-player death -> respawn -> score loop is complete (Tests/TestSparkGameFPSLoopReal.cpp), but installed-package smoke has no hosted exact-SHA proof and the module still initializes gameplay only (GPU work skipped) without a D3D11 device"
       ],
       "evidence": [
         {

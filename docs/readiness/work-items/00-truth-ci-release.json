@@ -102,7 +102,7 @@
       "wave": 0,
       "area": "tests",
       "owner": "unassigned",
-      "rationale": "In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, has a real Windows lifecycle collector/host contract, and defines a required same-workflow Windows Release producer plus Ubuntu consumer at the exact SHA. No hosted run has yet supplied the corresponding immutable lifecycle artifact and successful required-gate evidence, and package smoke is not scoped to a module profile in blocking CI. Those remaining gaps keep this item release-blocking.",
+      "rationale": "In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, has a real Windows lifecycle collector/host contract, and requires exact-SHA Windows lifecycle and installed-package-smoke producers before the Ubuntu consumer and aggregate gate. No hosted run has yet supplied the corresponding immutable lifecycle/package artifacts and successful required-gate evidence. Those unhosted proof gaps keep this item release-blocking.",
       "dependencies": [
         "RDY-000",
         "CI-100"
@@ -224,7 +224,7 @@
       "wave": 0,
       "area": "content",
       "owner": "unassigned",
-      "rationale": "Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked; profile-module-package-smoke remains planned.",
+      "rationale": "Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked; the profile-module-package-smoke producer/consumer path is implemented but has no hosted exact-SHA proof yet.",
       "dependencies": [
         "RDY-000"
       ],

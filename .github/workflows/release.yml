@@ -332,10 +332,17 @@ jobs:
       shell: pwsh
       # Hosted Windows Server evidence is not Windows 11 or upgrade certification.
       run: |
+        $packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"
+        python .github/scripts/write-shipping-package-manifest.py `
+          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
+          --version "${{ needs.prepare.outputs.cmake_version }}" `
+          --commit-sha "${{ github.sha }}" --out $packageManifest
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         python .github/scripts/qualify-windows-msi.py `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
           --version "${{ needs.prepare.outputs.cmake_version }}" `
           --manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake" `
+          --package-manifest $packageManifest `
           --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `
           --source-sha "${{ github.sha }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

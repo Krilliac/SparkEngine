@@ -86,8 +86,8 @@ EVIDENCE_PRODUCERS: dict[str, dict[str, str]] = {
         "ciJob": "module-profile-lifecycle",
     },
     "package-smoke-log": {
-        "producer": "ctest:SparkInstalledPackageSmoke",
-        "definedIn": "Tests/PackageSmoke/CMakeLists.txt",
+        "producer": "py:.github/scripts/qualify-windows-msi.py",
+        "definedIn": ".github/workflows/build.yml",
         "artifact": "build/module-evidence/package-smoke.log",
         "ciJob": "module-profile-package-smoke",
     },

@@ -45,6 +45,7 @@ REQUIRED_CI_JOBS = (
     "build-windows-vs2022",
     "module-profile-lifecycle",
     "build-windows-shipping",
+    "module-profile-package-smoke",
     "build-linux-gcc",
     "build-linux-clang",
     "coverage",
@@ -2044,7 +2045,10 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         block = named_step(windows, "Qualify Windows stable MSI install and uninstall")
         self.assertIn("if: needs.prepare.outputs.is_versioned == 'true'", block)
         self.assertIn("python .github/scripts/qualify-windows-msi.py", block)
+        self.assertIn("python .github/scripts/write-shipping-package-manifest.py", block)
         self.assertIn('--manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake"', block)
+        self.assertIn('$packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"', block)
+        self.assertIn("--package-manifest $packageManifest", block)
         self.assertIn('--runner-temp "${{ runner.temp }}"', block)
         self.assertIn('--source-sha "${{ github.sha }}"', block)
         self.assertTrue(block.rstrip().endswith("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"))
@@ -2056,24 +2060,52 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("path: msi-qualification/", logs)
         self.assertIn("test_qualify_windows_msi.py", self.build)
 
-    def test_shipping_ci_qualifies_native_msi_without_rebuilding_or_publishing(self) -> None:
+    def test_shipping_ci_publishes_exact_msi_for_package_smoke_without_rebuilding(self) -> None:
         shipping = yaml_section(self.build, "build-windows-shipping", indent=2)
-        block = named_step(shipping, "Package and qualify the Windows Shipping MSI")
+        block = named_step(shipping, "Package Windows Shipping MSI for package-smoke consumer")
         self.assertIn("cpack --config build/windows-shipping/CPackConfig.cmake -G WIX -C MinSizeRel", block)
-        self.assertIn("python .github/scripts/qualify-windows-msi.py", block)
+        self.assertIn("python .github/scripts/write-shipping-package-manifest.py", block)
         self.assertIn('"build/ci-msi-package"', block)
         self.assertIn('SPARK_ENGINE_VERSION:STRING=', block)
-        self.assertIn('--manifest "${{ github.workspace }}/build/windows-shipping/SparkEngineGameModules.cmake"', block)
+        self.assertIn('--out "$packageRoot/shipping-package-manifest.json"', block)
+        self.assertNotIn("qualify-windows-msi.py", block)
         self.assertEqual(block.count("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"), 2)
         self.assertNotIn("continue-on-error", block)
         self.assertNotIn("cmake --build", block)
         self.assertNotIn("cmake --preset", block)
         self.assertNotIn("if: ", block)
-        self.assertLess(shipping.index("validate_pending_authority.py"), shipping.index("Package and qualify"))
-        logs = named_step(shipping, "Upload Windows Shipping MSI qualification diagnostics")
-        self.assertIn("if: always()", logs)
-        self.assertIn("msi-qualification", logs)
-        self.assertIn("msi-cpack.log", logs)
+        self.assertLess(shipping.index("validate_pending_authority.py"), shipping.index("Package Windows Shipping MSI"))
+        artifact = named_step(shipping, "Upload exact Windows Shipping MSI for package smoke")
+        self.assertIn("shipping-package-${{ github.sha }}", artifact)
+        self.assertIn("shipping-package-manifest.json", artifact)
+        self.assertIn("SparkEngineGameModules.cmake", artifact)
+        self.assertIn("if-no-files-found: error", artifact)
+        self.assertIn("msi-cpack.log", block)
+
+    def test_package_smoke_job_consumes_exact_shipping_artifact_and_publishes_evidence(self) -> None:
+        smoke = yaml_section(self.build, "module-profile-package-smoke", indent=2)
+        self.assertIn("needs: [build-windows-shipping]", smoke)
+        self.assertIn("runs-on: windows-2022", smoke)
+        self.assertIn("shipping-package-${{ github.sha }}", smoke)
+        self.assertIn("qualify-windows-msi.py", smoke)
+        self.assertIn("--package-manifest", smoke)
+        self.assertIn("module-profile-package-smoke-${{ github.sha }}", smoke)
+        self.assertIn("msi-qualification/package-smoke.log", smoke)
+        self.assertIn("if-no-files-found: error", smoke)
+        self.assertNotIn("continue-on-error", smoke)
+        self.assertIn(
+            "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n\n"
+            "      - name: Upload package smoke evidence",
+            smoke,
+        )
+
+    def test_required_windows_lane_gates_native_package_evidence_contracts(self) -> None:
+        windows = yaml_section(self.build, "build-windows-vs2022", indent=2)
+        step = named_step(windows, "Test native Windows package evidence producers")
+        self.assertIn("if: matrix.config == 'Release'", step)
+        self.assertIn("test_write_shipping_package_manifest.py", step)
+        self.assertIn("test_qualify_windows_msi.py", step)
+        self.assertNotIn("continue-on-error", step)
 
     def test_stable_runtime_layout_is_validated_before_packaging(self) -> None:
         windows = yaml_section(self.release, "build-windows", indent=2)
