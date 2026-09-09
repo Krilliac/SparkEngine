@@ -1764,6 +1764,23 @@
       }
     },
     {
+      "id": "editor-recovery-snapshot",
+      "description": "Editor recovery snapshot envelope and restored-world reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Core/EditorRecovery.cpp",
+        "SparkEditor/Source/Core/EditorRecovery.h"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
       "id": "editor-profiling-import",
       "description": "Editor profiling capture importer.",
       "trust_boundary": "untrusted-file",

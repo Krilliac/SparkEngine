@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest import mock
 
@@ -38,7 +38,9 @@ import parser_inventory
 import policy_common
 
 
-TODAY = date.today()
+# Production policy evaluates expiry and corpus verification in UTC. Keep these
+# tests on that same clock so they do not flip at the local/UTC date boundary.
+TODAY = datetime.now(timezone.utc).date()
 FUTURE = (TODAY + timedelta(days=180)).isoformat()
 
 ROOT_CMAKE = """cmake_minimum_required(VERSION 3.25)

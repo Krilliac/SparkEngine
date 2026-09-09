@@ -11,8 +11,8 @@ policy gate, but it does not yet have a production fuzz target, seed corpus, san
 fuzz smoke, scheduled campaign, coverage result, or crash-free-duration result.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **104 explicitly inventoried parsers, all
-blocked**, **151 detected candidates deferred with an owner and expiry**, and **1977
+For the recorded source-tree state it reports **105 explicitly inventoried parsers, all
+blocked**, **151 detected candidates deferred with an owner and expiry**, and **1979
 source files scanned across 17 first-party roots**. Those counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.

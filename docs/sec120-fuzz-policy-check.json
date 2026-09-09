@@ -1,6 +1,6 @@
 {
   "closure_blockers": [
-    "104 inventoried parsers have no fuzz target",
+    "105 inventoried parsers have no fuzz target",
     "151 detected candidates await classification",
     "no corpus/resource budget is bound to a runnable fuzz target"
   ],
@@ -14,11 +14,11 @@
   "coverage_claim": false,
   "inputs": {
     "corpus_manifest": "1bc6f04e0af9e4f5969ae6aa95f83ad214aaaa3dc93ea65fdbe0441423e4c2e2",
-    "inventory": "30a03bf12d9b8b8e02c937750e1e1207627894e8128d7c3f72735e62b9d78999"
+    "inventory": "94d9c7afe3d1d13e12acf543f199da01cb46c87020cd1351f7a9980c57afce81"
   },
   "inventory": {
-    "blocked_count": 104,
-    "candidate_count": 267,
+    "blocked_count": 105,
+    "candidate_count": 269,
     "deferred_candidate_count": 151,
     "excluded_files": [],
     "excluded_subtrees": [
@@ -38,7 +38,7 @@
       }
     ],
     "fuzzed_count": 0,
-    "parser_count": 104,
+    "parser_count": 105,
     "scan_roots": [
       "SparkEngine/Source",
       "SparkEditor/Source",
@@ -58,7 +58,7 @@
       "SparkSDK/Include",
       "GameModules"
     ],
-    "scanned_file_count": 1977,
+    "scanned_file_count": 1979,
     "unclassified_candidate_count": 0
   },
   "passed": false,
