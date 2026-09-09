@@ -1,19 +1,12 @@
 #!/usr/bin/env python3
 """Produce runtime lifecycle evidence by really running a module.
 
-This is the *producer* half of the lifecycle contract.  It launches the
-headless engine against a built game module, captures the ModuleManager phase
-trace, and serialises what actually executed.
+This is the *producer* half of the lifecycle contract. It launches the exact
+stable-v1 Windows command against its built game DLL and accepts one direct,
+host-owned terminal record emitted after teardown:
 
-Phase trace contract
---------------------
-The engine must emit one line per entered phase, on stdout or into the
-captured log, in the form:
-
-    [module-lifecycle] <ModuleName> <PhaseName>
-
-`validate_manifest.py` requires `CreateModule`, `OnLoad`, `OnUpdate`,
-`OnUnload` and `DestroyModule` to appear for every module a profile ships.
+    SPARK_MODULE_LIFECYCLE module=SparkGameFPS create=1 load=1 update=4 \
+    fixed=2 render=4 unload=1 destroy=1 faults=0
 
 If the engine binary is missing, the run fails, or the trace contains none of
 the required markers, this program writes **no evidence file** and exits
@@ -22,8 +15,9 @@ present as absent, not as a module that ran and did nothing.
 
 Usage:
     python tools/module-evidence/collect_lifecycle.py \
-        --engine build/bin/SparkEngine --module SparkGameFPS \
-        --out build/module-evidence/module-lifecycle.json --frames 120
+        --engine package/SparkEngine.exe --module SparkGameFPS \
+        --module-image package/SparkGameFPS.dll --working-directory package \
+        --rhi-backend d3d11 --out build/module-evidence/module-lifecycle.json
 """
 
 from __future__ import annotations
@@ -31,6 +25,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -115,41 +110,95 @@ def validate_engine_binary(engine: Path) -> str | None:
     return None
 
 
-TRACE_RE = re.compile(
-    r"^\[module-lifecycle\]\s+(?P<module>[A-Za-z][A-Za-z0-9]*)\s+"
-    r"(?P<phase>[A-Za-z][A-Za-z0-9]*)\s*$"
+_TERMINAL_COUNTS = (
+    ("create", "CreateModule"), ("load", "OnLoad"), ("update", "OnUpdate"),
+    ("fixed", "OnFixedUpdate"), ("render", "OnRender"),
+    ("unload", "OnUnload"), ("destroy", "DestroyModule"),
 )
 
 
-def parse_trace(text: str, module: str) -> dict[str, int]:
-    """Count phase entries for `module` in a captured engine log."""
-    counts: dict[str, int] = {}
-    for line in text.splitlines():
-        match = TRACE_RE.match(line.strip())
-        if not match or match.group("module") != module:
-            continue
-        phase = match.group("phase")
-        if phase not in lifecycle_mod.OBSERVABLE_PHASES:
-            continue
-        counts[phase] = counts.get(phase, 0) + 1
-    return counts
+def _validate_image(path: Path, root: Path, *, role: str,
+                    expected_name: str | None = None) -> str | None:
+    """Reject an image that is not a real, in-package PE file."""
+    try:
+        root = root.resolve(strict=True)
+        candidate = path.resolve(strict=True)
+    except OSError as exc:
+        return f"cannot resolve {role} image {path}: {exc}"
+    if not root.is_dir() or paths_mod._is_reparse_point(root):
+        return f"working directory {root} must be a real non-reparse directory"
+    if root not in candidate.parents:
+        return f"{role} image {path} lies outside working directory {root}"
+    if not path.is_file() or paths_mod._is_reparse_point(path):
+        return f"{role} image {path} must be a regular non-reparse file"
+    if expected_name is not None and path.name != expected_name:
+        return f"{role} image {path.name!r} must be the Windows module {expected_name!r}"
+    if path.suffix.lower() in _SCRIPT_EXTENSIONS:
+        return f"{role} image {path} is a script, not a compiled binary"
+    try:
+        with path.open("rb") as image:
+            header = image.read(64)
+    except OSError as exc:
+        return f"cannot read {role} image {path}: {exc}"
+    if len(header) < 2 or header[:2] != b"MZ":
+        return f"{role} image {path} is not a PE binary"
+    return None
 
 
-def run_engine(engine: Path, module: str, frames: int, timeout: int,
-               log_path: Path) -> tuple[str, str | None]:
-    """Run the headless engine and return (captured output, error)."""
-    err = validate_engine_binary(engine)
+def validate_image_pair(engine: Path, module_image: Path, module: str,
+                        working_directory: Path) -> str | None:
+    """Validate the exact engine/module image pair that will be launched."""
+    error = _validate_image(engine, working_directory, role="engine")
+    if error:
+        return error
+    return _validate_image(
+        module_image, working_directory, role="module",
+        expected_name=expected_library_names(module)["windows"],
+    )
+
+
+def parse_terminal_record(text: str, module: str) -> dict[str, int]:
+    """Parse exactly one direct, standalone host lifecycle record."""
+    fields = " ".join(
+        f"{name}=(?P<{name}>[0-9]+)" for name, _ in _TERMINAL_COUNTS
+    ) + " faults=(?P<faults>[0-9]+)"
+    record_re = re.compile(
+        rf"^SPARK_MODULE_LIFECYCLE module={re.escape(module)} {fields}$"
+    )
+    matching = [line for line in text.splitlines() if line.startswith("SPARK_MODULE_LIFECYCLE")]
+    if len(matching) != 1:
+        raise ValueError(f"expected exactly one standalone lifecycle record for {module}")
+    match = record_re.fullmatch(matching[0])
+    if match is None:
+        raise ValueError(f"malformed, wrong-module, or unknown-key lifecycle record for {module}")
+    values = {name: int(match.group(name)) for name, _ in _TERMINAL_COUNTS}
+    faults = int(match.group("faults"))
+    if any(value == 0 for value in values.values()) or faults != 0:
+        raise ValueError(f"incomplete or faulted lifecycle record for {module}")
+    return {phase: values[name] for name, phase in _TERMINAL_COUNTS}
+
+
+def run_engine(engine: Path, module_image: Path, module: str,
+               working_directory: Path, rhi_backend: str,
+               timeout: int) -> tuple[str, str | None]:
+    """Run only the stable-v1 Windows lifecycle command."""
+    if rhi_backend != "d3d11":
+        return "", "stable-v1 lifecycle evidence requires --rhi-backend d3d11"
+    err = validate_image_pair(engine, module_image, module, working_directory)
     if err:
         return "", err
     cmd = [
-        str(engine), "-headless", "-game", module,
-        "-test-frames", str(frames),
+        str(engine), "-game", str(module_image), "-require-game",
+        "-test-seconds", "1.0", "-threads", "2", "-window-size", "640x360",
+        "-no-subprocess",
     ]
     print(f"[collect_lifecycle] {' '.join(cmd)}", flush=True)
     try:
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout,
-            check=False, cwd=str(REPO_ROOT),
+            check=False, cwd=str(working_directory),
+            env={**os.environ, "SPARK_RHI_BACKEND": "d3d11",
+                 "SPARK_D3D11_DRIVER": "warp"},
         )
     except subprocess.TimeoutExpired:
         return "", f"engine run exceeded {timeout}s without completing"
@@ -157,12 +206,10 @@ def run_engine(engine: Path, module: str, frames: int, timeout: int,
         return "", f"cannot launch engine: {exc}"
 
     captured = (proc.stdout or "") + (proc.stderr or "")
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path.write_text(captured, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         return captured, (
-            f"engine exited {proc.returncode}; a failed run is not evidence "
-            f"of a working lifecycle (captured log: {log_path})"
+            f"engine exited {proc.returncode}; a failed run is not evidence of "
+            "a working lifecycle"
         )
     return captured, None
 
@@ -171,8 +218,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True)
     parser.add_argument("--module", action="append", required=True, dest="modules")
+    parser.add_argument("--module-image", type=Path, required=True)
+    parser.add_argument("--working-directory", type=Path, required=True)
+    parser.add_argument("--rhi-backend", required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--commit-sha", default=None)
     args = parser.parse_args()
@@ -184,9 +233,14 @@ def main() -> int:
             print(f"FATAL: {err}", file=sys.stderr)
             return 1
 
-    engine_err = validate_engine_binary(args.engine)
-    if engine_err:
-        print(f"FATAL: {engine_err}", file=sys.stderr)
+    if len(args.modules) != 1:
+        print("FATAL: stable-v1 lifecycle evidence accepts exactly one module", file=sys.stderr)
+        return 1
+    image_err = validate_image_pair(
+        args.engine, args.module_image, args.modules[0], args.working_directory
+    )
+    if image_err:
+        print(f"FATAL: {image_err}", file=sys.stderr)
         return 1
     engine_digest = hash_engine_binary(args.engine)
     engine_path_str = str(args.engine)
@@ -201,22 +255,23 @@ def main() -> int:
             continue
 
         log_path = args.out.parent / f"module-lifecycle-{module}.log"
-        captured, err = run_engine(args.engine, module, args.frames,
-                                   args.timeout, log_path)
+        captured, err = run_engine(args.engine, args.module_image, module,
+                                   args.working_directory, args.rhi_backend,
+                                   args.timeout)
         if err:
             failures.append(f"{module}: {err}")
             continue
 
-        phases = parse_trace(captured, module)
-        missing = [p for p in lifecycle_mod.REQUIRED_RUNTIME_PHASES if not phases.get(p)]
-        if missing:
+        try:
+            phases = parse_terminal_record(captured, module)
+        except ValueError as exc:
             failures.append(
-                f"{module}: the run produced no '[module-lifecycle]' trace for "
-                f"{missing}. Either the module did not reach those phases, or "
-                f"ModuleManager does not yet emit the phase trace this contract "
-                f"requires. Evidence is not written for an unproven run."
+                f"{module}: {exc}; evidence is not written for an unproven run."
             )
             continue
+
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(captured, encoding="utf-8", errors="replace")
 
         records.append({
             "module": module,
@@ -229,6 +284,8 @@ def main() -> int:
             "phases": phases,
             "engineSHA256": engine_digest,
             "enginePath": engine_path_str,
+            "moduleSHA256": hash_engine_binary(args.module_image),
+            "modulePath": str(args.module_image),
         })
 
     if failures:

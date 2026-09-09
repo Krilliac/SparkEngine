@@ -27,6 +27,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "module-evidence"))
@@ -195,6 +196,8 @@ def target_index(*, name: str = INCLUDED, ttype: str = "SHARED_LIBRARY",
 
 FAKE_ENGINE_SHA256 = "a" * 64
 FAKE_ENGINE_PATH = "/usr/local/bin/SparkEngine"
+FAKE_MODULE_SHA256 = "b" * 64
+FAKE_MODULE_PATH = "/usr/local/lib/libSparkGameFPS.so"
 
 
 def lifecycle_evidence(repo: Path, sha: str, *, module: str = INCLUDED,
@@ -221,6 +224,8 @@ def lifecycle_evidence(repo: Path, sha: str, *, module: str = INCLUDED,
             "phases": phases,
             "engineSHA256": FAKE_ENGINE_SHA256,
             "enginePath": FAKE_ENGINE_PATH,
+            "moduleSHA256": FAKE_MODULE_SHA256,
+            "modulePath": FAKE_MODULE_PATH,
         }],
     }
 
@@ -682,6 +687,122 @@ class TestLifecycleAuthenticity(FixtureCase):
         self.assertEqual(h1, h2)
         self.assertEqual(len(h1), 64)
         self.assertTrue(all(c in "0123456789abcdef" for c in h1))
+
+
+# --------------------------------------------------------------------------
+# Collector contract — one host-owned terminal record, no trace reconstruction
+# --------------------------------------------------------------------------
+class TestLifecycleCollector(FixtureCase):
+
+    VALID_RECORD = (
+        "SPARK_MODULE_LIFECYCLE module=SparkGameFPS create=1 load=1 "
+        "update=4 fixed=2 render=4 unload=1 destroy=1 faults=0"
+    )
+
+    def test_parses_exact_standalone_terminal_record(self) -> None:
+        from collect_lifecycle import parse_terminal_record
+        self.assertEqual(parse_terminal_record(self.VALID_RECORD, INCLUDED), {
+            "CreateModule": 1, "OnLoad": 1, "OnUpdate": 4,
+            "OnFixedUpdate": 2, "OnRender": 4, "OnUnload": 1,
+            "DestroyModule": 1,
+        })
+
+    def test_rejects_duplicate_prefixed_wrong_or_malformed_terminal_records(self) -> None:
+        from collect_lifecycle import parse_terminal_record
+        bad_inputs = (
+            self.VALID_RECORD + "\n" + self.VALID_RECORD,
+            "[info] " + self.VALID_RECORD,
+            self.VALID_RECORD.replace("module=SparkGameFPS", "module=Other"),
+            self.VALID_RECORD.replace("faults=0", "faults=0 extra=1"),
+            self.VALID_RECORD.replace("create=1", "create=0"),
+            self.VALID_RECORD.replace("faults=0", "faults=1"),
+        )
+        for text in bad_inputs:
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                parse_terminal_record(text, INCLUDED)
+
+    def test_run_command_and_environment_are_the_stable_v1_contract(self) -> None:
+        from collect_lifecycle import run_engine
+        root = self.repo / "package"
+        root.mkdir(exist_ok=True)
+        engine = root / "SparkEngine.exe"
+        module = root / "SparkGameFPS.dll"
+        engine.write_bytes(b"MZ" + b"\0" * 8192)
+        module.write_bytes(b"MZ" + b"\0" * 8192)
+        completed = subprocess.CompletedProcess([], 0, self.VALID_RECORD, "")
+        with mock.patch("collect_lifecycle.subprocess.run", return_value=completed) as run:
+            captured, err = run_engine(engine, module, INCLUDED, root, "d3d11", 30)
+        self.assertIsNone(err)
+        self.assertEqual(captured, self.VALID_RECORD)
+        cmd = run.call_args.args[0]
+        self.assertEqual(cmd, [
+            str(engine), "-game", str(module), "-require-game",
+            "-test-seconds", "1.0", "-threads", "2", "-window-size", "640x360",
+            "-no-subprocess",
+        ])
+        env = run.call_args.kwargs["env"]
+        self.assertEqual(env["SPARK_RHI_BACKEND"], "d3d11")
+        self.assertEqual(env["SPARK_D3D11_DRIVER"], "warp")
+        self.assertEqual(run.call_args.kwargs["cwd"], str(root))
+
+    def test_rejects_outside_script_and_reparse_images(self) -> None:
+        from collect_lifecycle import validate_image_pair
+        root = self.repo / "package"
+        root.mkdir(exist_ok=True)
+        engine = root / "SparkEngine.exe"
+        module = root / "SparkGameFPS.dll"
+        engine.write_bytes(b"MZ" + b"\0" * 8192)
+        module.write_bytes(b"MZ" + b"\0" * 8192)
+        outside = self.repo / "SparkGameFPS.dll"
+        outside.write_bytes(b"MZ" + b"\0" * 8192)
+        self.assertIsNotNone(validate_image_pair(engine, outside, INCLUDED, root))
+        script = root / "SparkGameFPS.cmd"
+        script.write_text("@echo off\n", encoding="utf-8")
+        self.assertIsNotNone(validate_image_pair(engine, script, INCLUDED, root))
+        link = root / "linked.dll"
+        try:
+            os.symlink(str(module), str(link))
+        except (OSError, NotImplementedError):
+            self.skipTest("cannot create symlinks on this platform")
+        self.assertIsNotNone(validate_image_pair(engine, link, INCLUDED, root))
+
+    def test_main_writes_no_json_or_log_after_failed_or_invalid_run(self) -> None:
+        import collect_lifecycle
+        root = self.repo / "package"
+        root.mkdir(exist_ok=True)
+        engine = root / "SparkEngine.exe"
+        module = root / "SparkGameFPS.dll"
+        engine.write_bytes(b"MZ" + b"\0" * 8192)
+        module.write_bytes(b"MZ" + b"\0" * 8192)
+        out = self.repo / "out" / "module-lifecycle.json"
+        argv = ["collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
+                "--module-image", str(module), "--working-directory", str(root),
+                "--rhi-backend", "d3d11", "--out", str(out), "--commit-sha", self.sha]
+        for completed in (
+            subprocess.CompletedProcess([], 1, "bad output", "failure"),
+            subprocess.CompletedProcess([], 0, "malformed output", ""),
+        ):
+            with self.subTest(returncode=completed.returncode), \
+                 mock.patch.object(sys, "argv", argv), \
+                 mock.patch("collect_lifecycle.subprocess.run", return_value=completed), \
+                 mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
+                            return_value=("c" * 40, None)):
+                self.assertEqual(collect_lifecycle.main(), 1)
+            self.assertFalse(out.exists())
+            self.assertFalse((out.parent / "module-lifecycle-SparkGameFPS.log").exists())
+
+    def test_module_digest_and_path_are_required_and_valid(self) -> None:
+        ev = lifecycle_evidence(self.repo, self.sha)
+        for key, value in (("moduleSHA256", None), ("modulePath", ""),
+                           ("moduleSHA256", "not-a-digest")):
+            candidate = copy.deepcopy(ev)
+            if value is None:
+                del candidate["records"][0][key]
+            else:
+                candidate["records"][0][key] = value
+            errors = self.assertRejected(base_manifest(), f"collector-{key}",
+                                         lifecycle_evidence=candidate)
+            self.assertTrue(any(key in error or "missing" in error for error in errors))
 
 
 # --------------------------------------------------------------------------

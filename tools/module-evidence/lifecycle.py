@@ -68,7 +68,7 @@ OBSERVABLE_PHASES = frozenset(
 
 REQUIRED_RECORD_KEYS = frozenset(
     {"module", "sharedLibrary", "sourceDirectory", "sourceTreeSHA", "runner",
-     "phases", "engineSHA256", "enginePath"}
+     "phases", "engineSHA256", "enginePath", "moduleSHA256", "modulePath"}
 )
 
 ENGINE_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -198,6 +198,20 @@ def check_record(
         errors.append(
             f"{label}: enginePath must be a non-empty string (≤512 chars) "
             f"naming the engine executable, got {engine_path!r}"
+        )
+
+    module_sha = record.get("moduleSHA256")
+    if not isinstance(module_sha, str) or not ENGINE_SHA256_RE.match(module_sha):
+        errors.append(
+            f"{label}: moduleSHA256 must be a 64-character lowercase hex digest "
+            f"of the loaded module binary, got {module_sha!r}"
+        )
+
+    module_path = record.get("modulePath")
+    if not isinstance(module_path, str) or not module_path or len(module_path) > 512:
+        errors.append(
+            f"{label}: modulePath must be a non-empty string (≤512 chars) "
+            f"naming the loaded module binary, got {module_path!r}"
         )
 
     phases = record["phases"]
