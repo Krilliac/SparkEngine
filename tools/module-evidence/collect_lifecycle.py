@@ -19,7 +19,7 @@ Usage:
         --module-image package/SparkGameFPS.dll --working-directory package \
         --rhi-backend d3d11 \
         --image-manifest package/module-lifecycle-images.json \
-        --out build/module-evidence/module-lifecycle.json
+        --out <absolute-repo-root>\\build\\module-evidence\\module-lifecycle.json
 """
 
 from __future__ import annotations
@@ -54,7 +54,16 @@ _SCRIPT_SIGNATURES = (b"#!", b"@echo", b"@ECHO", b"@rem", b"@REM")
 _MIN_ENGINE_SIZE = 4096
 IMAGE_MANIFEST_SCHEMA = "spark-image-manifest-v1"
 IMAGE_MANIFEST_FILENAME = "module-lifecycle-images.json"
+LIFECYCLE_OUTPUT_DIRECTORY = ("build", "module-evidence")
+LIFECYCLE_OUTPUT_FILENAME = "module-lifecycle.json"
+LIFECYCLE_AUDIT_LOG_FILENAME = "module-lifecycle-SparkGameFPS.log"
 LIFECYCLE_TOKEN = "SPARK_MODULE_LIFECYCLE"
+
+_WINDOWS_RESERVED_NAMES = frozenset(
+    {"con", "prn", "aux", "nul"}
+    | {f"com{i}" for i in range(1, 10)}
+    | {f"lpt{i}" for i in range(1, 10)}
+)
 
 _GENERIC_READ = 0x80000000
 _FILE_READ_ATTRIBUTES = 0x0080
@@ -140,7 +149,8 @@ class EngineOutput:
 
     @property
     def audit_log(self) -> str:
-        return f"--- stdout ---\n{self.stdout}--- stderr ---\n{self.stderr}"
+        separator = "" if self.stdout.endswith("\n") else "\n"
+        return f"--- stdout ---\n{self.stdout}{separator}--- stderr ---\n{self.stderr}"
 
 
 @dataclass(frozen=True)
@@ -299,17 +309,10 @@ def open_image_lease(path: Path) -> ImageLease:
         raise
 
 
-def load_image_manifest(path: Path, root: Path, commit_sha: str) -> tuple[dict[str, str] | None, str | None]:
-    """Load the narrowly-scoped upstream Release image identity manifest.
-
-    Task 4 must write ``module-lifecycle-images.json`` at the artifact root,
-    declaring exactly ``SparkEngine.exe`` and ``SparkGameFPS.dll`` with
-    artifact-root-relative paths and lowercase SHA-256 values for checkout HEAD.
-    """
-    try:
-        document = strict_json.load_file(path)
-    except strict_json.StrictJSONError as exc:
-        return None, f"image manifest is unusable: {exc}"
+def _validate_image_manifest_document(
+    document: object, commit_sha: str,
+) -> tuple[dict[str, str] | None, str | None]:
+    """Validate the narrowly-scoped upstream Release image manifest object."""
     if not isinstance(document, dict) or set(document) != {"schemaVersion", "commitSHA", "images"}:
         return None, "image manifest has an invalid top-level schema"
     if document["schemaVersion"] != IMAGE_MANIFEST_SCHEMA or document["commitSHA"] != commit_sha:
@@ -328,6 +331,8 @@ def load_image_manifest(path: Path, root: Path, commit_sha: str) -> tuple[dict[s
            not lifecycle_mod.ENGINE_SHA256_RE.fullmatch(digest) or artifact_path in values:
             return None, "image manifest image path or SHA-256 is invalid"
         values[artifact_path] = digest
+    if set(values) != expected:
+        return None, "image manifest must declare both required stable-v1 images"
     return values, None
 
 
@@ -461,6 +466,78 @@ def _lease_sha256(lease: object) -> str:
     return digest
 
 
+def _validate_leased_manifest(lease: object, expected_path: Path,
+                              root: Path) -> str | None:
+    """Require the fixed manifest to be the regular file behind this lease."""
+    expected = _absolute_raw(root / IMAGE_MANIFEST_FILENAME)
+    if expected_path != expected:
+        return "image manifest path is not the fixed artifact-root filename"
+    try:
+        _identity, attributes = _lease_snapshot(lease)
+        final_path = _lease_final_path(lease)
+    except OSError as exc:
+        return f"cannot inspect image manifest lease: {exc}"
+    if attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+        return "image manifest lease refers to a reparse point"
+    if attributes & _FILE_ATTRIBUTE_DIRECTORY:
+        return "image manifest lease refers to a directory"
+    if _normalise_windows_final_path(final_path) != _normalise_windows_final_path(expected):
+        return "image manifest handle path does not match the fixed artifact-root file"
+    if Path(final_path).name.casefold() != IMAGE_MANIFEST_FILENAME.casefold():
+        return "image manifest handle filename is not the required fixed filename"
+    return None
+
+
+def _read_manifest_text_from_lease(lease: object, origin: str) -> tuple[str | None, str | None]:
+    """Read a bounded UTF-8 manifest from its held handle, never its pathname."""
+    try:
+        before, _attributes = _lease_snapshot(lease)
+        size = getattr(before, "size")
+        if size > strict_json.DEFAULT_LIMITS.document_bytes:
+            return None, (
+                f"image manifest is {size} bytes, limit is "
+                f"{strict_json.DEFAULT_LIMITS.document_bytes}"
+            )
+        chunks: list[bytes] = []
+        offset = 0
+        while offset < size:
+            chunk = _lease_read_at(lease, offset, min(1 << 16, size - offset))
+            if not chunk:
+                return None, "image manifest lease reached EOF before its recorded size"
+            if len(chunk) > size - offset:
+                return None, "image manifest lease returned bytes beyond its recorded size"
+            chunks.append(chunk)
+            offset += len(chunk)
+        after, _attributes = _lease_snapshot(lease)
+        if after != before:
+            return None, "image manifest changed while it was read through its live lease"
+    except OSError as exc:
+        return None, f"cannot read image manifest through its live lease: {exc}"
+    try:
+        return b"".join(chunks).decode("utf-8"), None
+    except UnicodeDecodeError as exc:
+        return None, f"image manifest is not valid UTF-8: {exc}"
+
+
+def load_image_manifest_from_lease(
+    lease: object, path: Path, root: Path, commit_sha: str,
+) -> tuple[dict[str, str] | None, str | None]:
+    """Parse the fixed manifest bytes from a live, non-replaceable file lease."""
+    error = _validate_leased_manifest(lease, path, root)
+    if error:
+        return None, error
+    final_path = _lease_final_path(lease)
+    text, error = _read_manifest_text_from_lease(lease, final_path)
+    if error:
+        return None, error
+    assert text is not None
+    try:
+        document = strict_json.loads(text, origin=final_path)
+    except strict_json.StrictJSONError as exc:
+        return None, f"image manifest is unusable: {exc}"
+    return _validate_image_manifest_document(document, commit_sha)
+
+
 def _same_file_identity(left: object, right: object) -> bool:
     return (
         getattr(left, "volume_serial", None), getattr(left, "file_index", None)
@@ -539,6 +616,150 @@ def _absolute_raw(path: Path) -> Path:
     return Path(os.path.abspath(path))
 
 
+def _windows_path_alias_error(value: str | Path, label: str) -> str | None:
+    """Reject lexical Windows aliases before pathlib or Win32 can normalize them."""
+    raw = os.fspath(value)
+    if not isinstance(raw, str) or not raw:
+        return f"{label} must be a non-empty path"
+    if "\0" in raw:
+        return f"{label} contains a NUL byte"
+    drive_seen = False
+    for segment in re.split(r"[\\/]+", raw):
+        if not segment:
+            continue
+        if not drive_seen and re.fullmatch(r"[A-Za-z]:", segment):
+            drive_seen = True
+            continue
+        if segment in {".", ".."}:
+            return f"{label} contains a traversal or dot segment"
+        if ":" in segment:
+            return f"{label} contains a drive-relative or alternate-data-stream alias"
+        if segment.endswith((".", " ")):
+            return f"{label} contains a trailing-dot or trailing-space alias"
+        if any(character in segment for character in '<>"|?*'):
+            return f"{label} contains a Windows device or wildcard alias"
+        stem = segment.split(".", 1)[0].casefold()
+        if stem in _WINDOWS_RESERVED_NAMES:
+            return f"{label} contains the reserved Windows device name {segment!r}"
+    return None
+
+
+def _require_exact_nonreparse_directory(
+    parent: Path, name: str, *, create_if_missing: bool,
+) -> tuple[Path | None, str | None]:
+    """Walk one fixed namespace segment without case or reparse aliases."""
+    candidate = parent / name
+    try:
+        entries = {entry.name for entry in os.scandir(parent)}
+    except OSError as exc:
+        return None, f"cannot enumerate required evidence namespace parent {parent}: {exc}"
+    if name not in entries:
+        aliases = [entry for entry in entries if entry.casefold() == name.casefold()]
+        if aliases:
+            return None, (
+                f"required evidence namespace segment {name!r} is case-aliased "
+                f"by {aliases[0]!r}"
+            )
+        if create_if_missing:
+            try:
+                candidate.mkdir()
+            except FileExistsError:
+                # A competing creator is safe only if the fresh directory
+                # check below accepts the exact non-reparse entry.
+                pass
+            except OSError as exc:
+                return None, f"cannot create required evidence namespace directory {candidate}: {exc}"
+            return _require_exact_nonreparse_directory(
+                parent, name, create_if_missing=False,
+            )
+        return None, f"required evidence namespace directory {candidate} does not exist"
+    if paths_mod._is_reparse_point(candidate) or not candidate.is_dir():
+        return None, f"required evidence namespace directory {candidate} is not a real non-reparse directory"
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as exc:
+        return None, f"cannot resolve required evidence namespace directory {candidate}: {exc}"
+    if _normalise_windows_final_path(resolved) != _normalise_windows_final_path(candidate):
+        return None, f"required evidence namespace directory {candidate} resolves through an alias"
+    return candidate, None
+
+
+def _validate_output_leaf(path: Path) -> str | None:
+    """Ensure a fixed output leaf cannot be a directory, reparse point, or device."""
+    if paths_mod._is_reparse_point(path):
+        return f"lifecycle output {path} is a reparse point"
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return f"cannot inspect lifecycle output {path}: {exc}"
+    if not stat.S_ISREG(mode):
+        return f"lifecycle output {path} is not a regular file"
+    return None
+
+
+def _same_output_identity(left: Path, right: Path) -> bool:
+    """Detect both lexical aliases and pre-existing hard-link collisions."""
+    if _normalise_windows_final_path(left) == _normalise_windows_final_path(right):
+        return True
+    try:
+        return left.exists() and right.exists() and os.path.samefile(left, right)
+    except OSError:
+        return False
+
+
+def _validate_output_namespace(raw_output: str, repo_root: Path) -> tuple[tuple[Path, Path] | None, str | None]:
+    """Authorize the one fixed, non-reparse release-evidence publication pair."""
+    alias_error = _windows_path_alias_error(raw_output, "--out")
+    if alias_error:
+        return None, alias_error
+    root = _absolute_raw(repo_root)
+    output_directory = root.joinpath(*LIFECYCLE_OUTPUT_DIRECTORY)
+    output = output_directory / LIFECYCLE_OUTPUT_FILENAME
+    log = output_directory / LIFECYCLE_AUDIT_LOG_FILENAME
+    # Do not accept relative, case-folded, short-name, dot, ADS, or any other
+    # spelling.  The producer clears files only after this exact comparison.
+    if raw_output != str(output):
+        return None, (
+            "--out must exactly name the fixed release evidence file "
+            f"{output}"
+        )
+    if paths_mod._is_reparse_point(root) or not root.is_dir():
+        return None, f"repository root {root} must be a real non-reparse directory"
+    try:
+        resolved_root = root.resolve(strict=True)
+    except OSError as exc:
+        return None, f"cannot resolve repository root for lifecycle evidence: {exc}"
+    if _normalise_windows_final_path(resolved_root) != _normalise_windows_final_path(root):
+        return None, "repository root for lifecycle evidence resolves through an alias"
+    current = root
+    for component in LIFECYCLE_OUTPUT_DIRECTORY:
+        current, error = _require_exact_nonreparse_directory(
+            current, component, create_if_missing=True,
+        )
+        if error:
+            return None, error
+        assert current is not None
+    if current != output_directory:
+        return None, "lifecycle output directory did not resolve to the fixed namespace"
+    if _same_output_identity(output, log):
+        return None, "lifecycle JSON and audit-log paths must be distinct"
+    for path in (output, log):
+        error = _validate_output_leaf(path)
+        if error:
+            return None, error
+    return (output, log), None
+
+
+def _output_collides_with_input(output: Path, log: Path,
+                                inputs: tuple[tuple[str, Path], ...]) -> str | None:
+    for label, path in inputs:
+        if _same_output_identity(output, path) or _same_output_identity(log, path):
+            return f"fixed lifecycle output collides with the {label} input path"
+    return None
+
+
 def _canonicalize_images(engine: Path, module_image: Path,
                          working_directory: Path) -> tuple[tuple[Path, Path, Path] | None, str | None]:
     """Reject raw reparse paths before producing stable canonical identities."""
@@ -575,27 +796,23 @@ def _canonicalize_images(engine: Path, module_image: Path,
     return (root, canonical_engine, canonical_module), None
 
 
-def _canonical_manifest(path: Path, root: Path) -> tuple[Path | None, str | None]:
-    if any(part in {".", ".."} for part in path.parts):
-        return None, "image manifest path must not contain traversal segments"
-    raw = _absolute_raw(path)
+def _canonical_manifest(path: str | Path, root: Path) -> tuple[Path | None, str | None]:
+    alias_error = _windows_path_alias_error(path, "image manifest path")
+    if alias_error:
+        return None, alias_error
+    raw_value = os.fspath(path)
+    raw = _absolute_raw(Path(raw_value))
     expected_raw = _absolute_raw(root / IMAGE_MANIFEST_FILENAME)
-    if raw != expected_raw:
+    if raw_value != str(expected_raw) or raw != expected_raw:
         return None, (
             "image manifest must be the fixed artifact-root file "
             f"{IMAGE_MANIFEST_FILENAME!r}"
         )
-    if paths_mod._is_reparse_point(raw) or not raw.is_file():
-        return None, "image manifest must be a regular non-reparse file"
-    try:
-        canonical = raw.resolve(strict=True)
-    except OSError as exc:
-        return None, f"cannot resolve image manifest: {exc}"
-    if root not in canonical.parents:
-        return None, "image manifest lies outside the artifact root"
-    if canonical != root / IMAGE_MANIFEST_FILENAME:
-        return None, "image manifest final path is not the fixed artifact-root file"
-    return canonical, None
+    if paths_mod._is_reparse_point(raw):
+        return None, "image manifest must not be a reparse point"
+    # Do not read or resolve the leaf by pathname here.  The native held lease
+    # below is the authority for its type, final path, and bytes.
+    return expected_raw, None
 
 
 def resolve_collection_sha(requested_sha: str | None) -> tuple[str | None, str | None]:
@@ -846,23 +1063,38 @@ def _clear_artifacts(*paths: Path) -> str | None:
 
 def _write_temp(final_path: Path, content: str, *, tracked_temps: set[Path]) -> Path:
     """Stage content beside its destination and retain it for transaction cleanup."""
-    final_path.parent.mkdir(parents=True, exist_ok=True)
+    if paths_mod._is_reparse_point(final_path.parent) or not final_path.parent.is_dir():
+        raise OSError(f"lifecycle output parent {final_path.parent} is not a real directory")
     descriptor, temp_name = tempfile.mkstemp(prefix=f".{final_path.name}.", suffix=".tmp",
                                              dir=final_path.parent, text=True)
     temporary = Path(temp_name)
     tracked_temps.add(temporary)
+    descriptor_owned = True
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+        stream = os.fdopen(descriptor, "w", encoding="utf-8", newline="\n")
+        descriptor_owned = False
+        with stream:
             stream.write(content)
             stream.flush()
         return temporary
     except BaseException as exc:
+        descriptor_close_error: OSError | None = None
+        if descriptor_owned:
+            try:
+                os.close(descriptor)
+            except OSError as close_exc:
+                descriptor_close_error = close_exc
         cleanup_error = _clear_artifacts(temporary)
         if cleanup_error is None:
             tracked_temps.discard(temporary)
         else:
             raise OSError(
                 f"cannot clean temporary lifecycle artifact {temporary}: {cleanup_error}"
+            ) from exc
+        if descriptor_close_error is not None:
+            raise OSError(
+                f"cannot close temporary lifecycle descriptor for {temporary}: "
+                f"{descriptor_close_error}"
             ) from exc
         raise
 
@@ -881,38 +1113,57 @@ def _report_failure(message: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--engine", type=Path, required=True)
+    # Keep externally supplied paths as raw strings until alias rejection has
+    # completed.  pathlib intentionally normalizes ``.``/``..`` on Windows,
+    # which would otherwise erase exactly the evidence needed to reject them.
+    parser.add_argument("--engine", required=True)
     parser.add_argument("--module", action="append", required=True, dest="modules")
-    parser.add_argument("--module-image", type=Path, required=True)
-    parser.add_argument("--working-directory", type=Path, required=True)
+    parser.add_argument("--module-image", required=True)
+    parser.add_argument("--working-directory", required=True)
     parser.add_argument("--rhi-backend", required=True)
-    parser.add_argument("--image-manifest", type=Path, required=True)
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--image-manifest", required=True)
+    parser.add_argument("--out", required=True)
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--commit-sha", default=None)
     args = parser.parse_args()
-    out_path = _absolute_raw(args.out)
-    module = args.modules[0] if len(args.modules) == 1 else "invalid-module"
-    log_path = out_path.parent / f"module-lifecycle-{module}.log"
+    out_path: Path | None = None
+    log_path: Path | None = None
+    manifest_lease: object | None = None
     tracked_temps: set[Path] = set()
+    cleanup_authorized = False
     success = False
     result = 1
     failure: str | None = None
     try:
-        cleared = _clear_artifacts(out_path, log_path)
-        if cleared:
-            raise RuntimeError(cleared)
-        if os.name != "nt":
-            raise RuntimeError("stable-v1 lifecycle evidence is Windows-only")
         if len(args.modules) != 1 or args.modules[0] != "SparkGameFPS":
             raise RuntimeError("stable-v1 lifecycle evidence accepts only module SparkGameFPS")
         if args.rhi_backend != "d3d11":
             raise RuntimeError("stable-v1 lifecycle evidence requires --rhi-backend d3d11")
+        if os.name != "nt":
+            raise RuntimeError("stable-v1 lifecycle evidence is Windows-only")
+        for label, value in (
+            ("--engine", args.engine),
+            ("--module-image", args.module_image),
+            ("--working-directory", args.working_directory),
+            ("--image-manifest", args.image_manifest),
+            ("--out", args.out),
+        ):
+            alias_error = _windows_path_alias_error(value, label)
+            if alias_error:
+                raise RuntimeError(alias_error)
+        namespace, err = _validate_output_namespace(args.out, REPO_ROOT)
+        if err:
+            raise RuntimeError(err)
+        assert namespace is not None
+        out_path, log_path = namespace
+        engine_arg = Path(args.engine)
+        module_image_arg = Path(args.module_image)
+        working_directory_arg = Path(args.working_directory)
         sha, err = resolve_collection_sha(args.commit_sha)
         if sha is None:
             raise RuntimeError(err)
         prepared, err = _canonicalize_images(
-            args.engine, args.module_image, args.working_directory
+            engine_arg, module_image_arg, working_directory_arg,
         )
         if err:
             raise RuntimeError(err)
@@ -922,15 +1173,35 @@ def main() -> int:
         if err:
             raise RuntimeError(err)
         assert manifest_path is not None
-        trusted_images, err = load_image_manifest(manifest_path, root, sha)
+        collision_error = _output_collides_with_input(
+            out_path, log_path,
+            (("engine", engine), ("module image", module_image),
+             ("image manifest", manifest_path)),
+        )
+        if collision_error:
+            raise RuntimeError(collision_error)
+        manifest_lease = open_image_lease(manifest_path)
+        trusted_images, err = load_image_manifest_from_lease(
+            manifest_lease, manifest_path, root, sha,
+        )
         if err:
             raise RuntimeError(err)
         assert trusted_images is not None
-        source_dir = f"GameModules/{module}/Source"
+        source_dir = "GameModules/SparkGameFPS/Source"
         tree_sha, err = lifecycle_mod.source_tree_sha(REPO_ROOT, sha, source_dir)
         if tree_sha is None:
             raise RuntimeError(err)
-        captured, err = run_engine(engine, module_image, module, root,
+        # Re-check immediately before the first destructive operation.  This
+        # guarantees _clear_artifacts never receives a caller-selected path or
+        # a namespace which became a reparse/case alias during input checks.
+        namespace, err = _validate_output_namespace(args.out, REPO_ROOT)
+        if err or namespace != (out_path, log_path):
+            raise RuntimeError(err or "lifecycle output namespace changed during validation")
+        cleanup_authorized = True
+        cleared = _clear_artifacts(out_path, log_path)
+        if cleared:
+            raise RuntimeError(cleared)
+        captured, err = run_engine(engine, module_image, "SparkGameFPS", root,
                                    args.rhi_backend, args.timeout,
                                    (trusted_images["SparkEngine.exe"],
                                     trusted_images["SparkGameFPS.dll"]))
@@ -938,10 +1209,17 @@ def main() -> int:
             raise RuntimeError(err)
         if captured.engine_image is None or captured.module_image is None:
             raise RuntimeError("native image lease verification returned no image metadata")
-        phases = parse_terminal_streams(captured.stdout, captured.stderr, module)
+        # The manifest remains held until the image leases have been acquired,
+        # the child has exited, and run_engine has completed its post-run
+        # identity checks.  A close failure is fatal before publication.
+        close_error = _close_image_leases([manifest_lease])
+        manifest_lease = None
+        if close_error:
+            raise RuntimeError(f"cannot close image manifest lease: {close_error}")
+        phases = parse_terminal_streams(captured.stdout, captured.stderr, "SparkGameFPS")
         record = {
-            "module": module,
-            "sharedLibrary": expected_library_names(module)["windows"],
+            "module": "SparkGameFPS",
+            "sharedLibrary": expected_library_names("SparkGameFPS")["windows"],
             "sourceDirectory": source_dir,
             "sourceTreeSHA": tree_sha,
             "runner": "headless-exec",
@@ -957,6 +1235,9 @@ def main() -> int:
             "commitSHA": sha,
             "records": [record],
         }
+        namespace, err = _validate_output_namespace(args.out, REPO_ROOT)
+        if err or namespace != (out_path, log_path):
+            raise RuntimeError(err or "lifecycle output namespace changed before publication")
         log_temp = _write_temp(log_path, captured.audit_log, tracked_temps=tracked_temps)
         json_temp = _write_temp(
             out_path, json.dumps(document, indent=2, sort_keys=True) + "\n",
@@ -973,10 +1254,25 @@ def main() -> int:
     except Exception as exc:
         failure = f"FATAL: lifecycle evidence could not be produced: {exc}"
     finally:
+        if manifest_lease is not None:
+            close_error = _close_image_leases([manifest_lease])
+            if close_error:
+                close_failure = f"cannot close image manifest lease: {close_error}"
+                failure = f"{failure}; {close_failure}" if failure else f"FATAL: {close_failure}"
+                success = False
+                result = 1
         if not success:
-            cleanup_error = _clear_artifacts(out_path, log_path, *tracked_temps)
-            if cleanup_error:
-                _report_failure(f"FATAL: lifecycle evidence cleanup failed: {cleanup_error}")
+            if cleanup_authorized and out_path is not None and log_path is not None:
+                namespace, namespace_error = _validate_output_namespace(args.out, REPO_ROOT)
+                if namespace_error or namespace != (out_path, log_path):
+                    _report_failure(
+                        "FATAL: lifecycle evidence cleanup skipped because the fixed "
+                        f"output namespace is no longer safe: {namespace_error or 'changed'}"
+                    )
+                else:
+                    cleanup_error = _clear_artifacts(out_path, log_path, *tracked_temps)
+                    if cleanup_error:
+                        _report_failure(f"FATAL: lifecycle evidence cleanup failed: {cleanup_error}")
             if failure is not None:
                 _report_failure(failure)
     return result

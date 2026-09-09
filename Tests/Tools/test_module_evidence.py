@@ -760,7 +760,15 @@ class TestLifecycleCollector(FixtureCase):
         module = root / "SparkGameFPS.dll"
         engine.write_bytes(pe_image())
         module.write_bytes(pe_image())
-        out = self.repo / f"{name}-out" / "module-lifecycle.json"
+        # The release collector has one non-negotiable publication namespace.
+        # Fixtures deliberately use that same path so transaction tests cannot
+        # quietly exercise an arbitrary caller-controlled output directory.
+        out = self.repo / "build" / "module-evidence" / "module-lifecycle.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        log = out.parent / "module-lifecycle-SparkGameFPS.log"
+        for artifact in (out, log):
+            if artifact.exists():
+                artifact.unlink()
         image_manifest = write_image_manifest(root, engine, module, self.sha)
         return out, [
             "collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
@@ -777,6 +785,7 @@ class TestLifecycleCollector(FixtureCase):
 
         engine = Path(argv[argv.index("--engine") + 1])
         module = Path(argv[argv.index("--module-image") + 1])
+        image_manifest = Path(argv[argv.index("--image-manifest") + 1])
         engine_digest = hashlib.sha256(engine.read_bytes()).hexdigest()
         module_digest = hashlib.sha256(module.read_bytes()).hexdigest()
         engine_image = collect_lifecycle.ImageVerification(
@@ -789,10 +798,21 @@ class TestLifecycleCollector(FixtureCase):
             final_path=str(module),
             identity=collect_lifecycle.ImageIdentity(1, 2, module.stat().st_size, 1),
         )
+        manifest_bytes = image_manifest.read_bytes()
+
+        def manifest_lease_factory(path: Path) -> FakeImageLease:
+            self.assertEqual(path, image_manifest)
+            return FakeImageLease(
+                path,
+                identity=FakeLeaseIdentity(1, 3, len(manifest_bytes)),
+                digest=hashlib.sha256(manifest_bytes).hexdigest(),
+                image=manifest_bytes,
+            )
 
         with ExitStack() as stack:
             stack.enter_context(mock.patch.object(sys, "argv", argv))
             stack.enter_context(mock.patch("collect_lifecycle.os.name", "nt"))
+            stack.enter_context(mock.patch("collect_lifecycle.REPO_ROOT", self.repo))
             stack.enter_context(mock.patch(
                 "collect_lifecycle.resolve_head_sha", return_value=(self.sha, None),
             ))
@@ -811,6 +831,10 @@ class TestLifecycleCollector(FixtureCase):
                     ),
                     None,
                 ),
+            ))
+            stack.enter_context(mock.patch(
+                "collect_lifecycle.open_image_lease",
+                side_effect=manifest_lease_factory,
             ))
             for patch in extra_patches:
                 stack.enter_context(patch)
@@ -881,7 +905,6 @@ class TestLifecycleCollector(FixtureCase):
         """A stale-clear failure must still run the shared cleanup transaction."""
         out, argv = self._collector_main_fixture("stale-unlink")
         log = out.parent / "module-lifecycle-SparkGameFPS.log"
-        out.parent.mkdir()
         out.write_text("stale-json", encoding="utf-8")
         log.write_text("stale-log", encoding="utf-8")
         real_unlink = Path.unlink
@@ -941,6 +964,273 @@ class TestLifecycleCollector(FixtureCase):
                 ), 1)
                 self._assert_no_transaction_artifacts(out)
 
+    def test_write_temp_closes_descriptor_when_fdopen_never_takes_ownership(self) -> None:
+        """A failed fdopen construction cannot leak the mkstemp descriptor."""
+        import collect_lifecycle
+
+        root = self.repo / "fdopen-construction-failure"
+        root.mkdir()
+        final_path = root / "module-lifecycle.json"
+        tracked: set[Path] = set()
+        descriptors: list[int] = []
+
+        def fail_before_ownership(descriptor: int, *args, **kwargs):
+            descriptors.append(descriptor)
+            raise OSError("injected fdopen construction failure")
+
+        with mock.patch("collect_lifecycle.os.fdopen", side_effect=fail_before_ownership):
+            with self.assertRaisesRegex(OSError, "fdopen construction failure"):
+                collect_lifecycle._write_temp(final_path, "payload", tracked_temps=tracked)
+
+        self.assertEqual(len(descriptors), 1)
+        with self.assertRaises(OSError):
+            os.fstat(descriptors[0])
+        self.assertFalse(final_path.exists())
+        self.assertEqual(tracked, set())
+        self.assertEqual(list(root.glob(".module-lifecycle.json.*.tmp")), [])
+
+    def test_engine_output_audit_log_always_delimits_stdout_and_stderr(self) -> None:
+        """The audit trail remains line-oriented when stdout lacks a newline."""
+        from collect_lifecycle import EngineOutput
+
+        self.assertEqual(
+            EngineOutput("stdout-without-newline", "stderr").audit_log,
+            "--- stdout ---\nstdout-without-newline\n--- stderr ---\nstderr",
+        )
+
+    def test_main_rejects_unsafe_output_and_module_inputs_before_any_clear(self) -> None:
+        """No caller-controlled alias or collision can select a deletion target."""
+        import collect_lifecycle
+
+        cases = (
+            ("module-traversal", "--module", r"\..\..\victim"),
+            ("output-is-log", "--out", "log"),
+            ("output-is-engine", "--out", "engine"),
+            ("output-is-module", "--out", "module"),
+            ("output-is-manifest", "--out", "manifest"),
+            ("engine-trailing-dot", "--engine", "engine-trailing-dot"),
+            ("module-image-ads", "--module-image", "module-image-ads"),
+            ("output-dot-alias", "--out", "dot-alias"),
+            ("output-trailing-dot", "--out", "trailing-dot"),
+            ("output-trailing-space", "--out", "trailing-space"),
+            ("output-ads", "--out", "ads"),
+        )
+        for name, option, replacement in cases:
+            with self.subTest(case=name):
+                out, argv = self._collector_main_fixture(f"namespace-{name}")
+                log = out.parent / "module-lifecycle-SparkGameFPS.log"
+                engine = Path(argv[argv.index("--engine") + 1])
+                module = Path(argv[argv.index("--module-image") + 1])
+                manifest = Path(argv[argv.index("--image-manifest") + 1])
+                out.write_text("protected-json", encoding="utf-8")
+                log.write_text("protected-log", encoding="utf-8")
+                values = {
+                    "log": str(log),
+                    "engine": str(engine),
+                    "module": str(module),
+                    "manifest": str(manifest),
+                    "engine-trailing-dot": str(engine) + ".",
+                    "module-image-ads": str(module) + ":alternate",
+                    "dot-alias": str(self.repo / "build") +
+                    r"\.\module-evidence\module-lifecycle.json",
+                    "trailing-dot": str(out) + ".",
+                    "trailing-space": str(out) + " ",
+                    "ads": str(out) + ":audit",
+                }
+                argv = list(argv)
+                argv[argv.index(option) + 1] = values.get(replacement, replacement)
+                protected = {
+                    engine: engine.read_bytes(),
+                    module: module.read_bytes(),
+                    manifest: manifest.read_bytes(),
+                }
+                with mock.patch.object(sys, "argv", argv), \
+                     mock.patch("collect_lifecycle.os.name", "nt"), \
+                     mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
+                     mock.patch("collect_lifecycle.resolve_head_sha",
+                                return_value=(self.sha, None)), \
+                     mock.patch("collect_lifecycle._clear_artifacts",
+                                wraps=collect_lifecycle._clear_artifacts) as clear, \
+                     mock.patch("collect_lifecycle.run_engine") as child:
+                    self.assertEqual(collect_lifecycle.main(), 1)
+                clear.assert_not_called()
+                child.assert_not_called()
+                self.assertEqual(out.read_text(encoding="utf-8"), "protected-json")
+                self.assertEqual(log.read_text(encoding="utf-8"), "protected-log")
+                for path, content in protected.items():
+                    self.assertEqual(path.read_bytes(), content, path)
+
+    def test_main_rejects_reparse_output_namespace_before_any_clear(self) -> None:
+        """Every fixed output ancestor is checked before stale evidence is touched."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("namespace-reparse")
+        log = out.parent / "module-lifecycle-SparkGameFPS.log"
+        out.write_text("protected-json", encoding="utf-8")
+        log.write_text("protected-log", encoding="utf-8")
+
+        def synthetic_reparse(path: Path) -> bool:
+            return path == out.parent
+
+        with mock.patch.object(sys, "argv", argv), \
+             mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
+             mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
+             mock.patch("collect_lifecycle.paths_mod._is_reparse_point",
+                        side_effect=synthetic_reparse), \
+             mock.patch("collect_lifecycle._clear_artifacts",
+                        wraps=collect_lifecycle._clear_artifacts) as clear, \
+             mock.patch("collect_lifecycle.run_engine") as child:
+            self.assertEqual(collect_lifecycle.main(), 1)
+
+        clear.assert_not_called()
+        child.assert_not_called()
+        self.assertEqual(out.read_text(encoding="utf-8"), "protected-json")
+        self.assertEqual(log.read_text(encoding="utf-8"), "protected-log")
+
+    def test_manifest_lease_reads_held_bytes_not_replaced_path(self) -> None:
+        """A manifest lease, not a later pathname read, supplies authority."""
+        import collect_lifecycle
+
+        root = self.repo / "manifest-held-bytes"
+        root.mkdir()
+        engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
+        engine.write_bytes(pe_image())
+        module.write_bytes(pe_image())
+        manifest = write_image_manifest(root, engine, module, self.sha)
+        held_bytes = manifest.read_bytes()
+        manifest.write_text('{"schemaVersion":"attacker-replacement"}', encoding="utf-8")
+        lease = FakeImageLease(
+            manifest,
+            identity=FakeLeaseIdentity(31, 901, len(held_bytes)),
+            digest=hashlib.sha256(held_bytes).hexdigest(),
+            image=held_bytes,
+        )
+
+        trusted, error = collect_lifecycle.load_image_manifest_from_lease(
+            lease, manifest, root, self.sha,
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(
+            trusted,
+            {
+                "SparkEngine.exe": hashlib.sha256(pe_image()).hexdigest(),
+                "SparkGameFPS.dll": hashlib.sha256(pe_image()).hexdigest(),
+            },
+        )
+        lease.close()
+
+    def test_main_holds_manifest_lease_across_run_and_publishes_distinct_audit_log(self) -> None:
+        """Replacing the pathname after its lease opens cannot swap manifest authority."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("manifest-held-through-run")
+        log = out.parent / "module-lifecycle-SparkGameFPS.log"
+        engine = Path(argv[argv.index("--engine") + 1])
+        module = Path(argv[argv.index("--module-image") + 1])
+        manifest = Path(argv[argv.index("--image-manifest") + 1])
+        held_bytes = manifest.read_bytes()
+        lease = FakeImageLease(
+            manifest,
+            identity=FakeLeaseIdentity(32, 902, len(held_bytes)),
+            digest=hashlib.sha256(held_bytes).hexdigest(),
+            image=held_bytes,
+        )
+        engine_digest = hashlib.sha256(engine.read_bytes()).hexdigest()
+        module_digest = hashlib.sha256(module.read_bytes()).hexdigest()
+        engine_image = collect_lifecycle.ImageVerification(
+            engine_digest, str(engine),
+            collect_lifecycle.ImageIdentity(32, 903, engine.stat().st_size, 1),
+        )
+        module_image = collect_lifecycle.ImageVerification(
+            module_digest, str(module),
+            collect_lifecycle.ImageIdentity(32, 904, module.stat().st_size, 1),
+        )
+        opened: list[FakeImageLease] = []
+
+        def manifest_factory(path: Path) -> FakeImageLease:
+            self.assertEqual(path, manifest)
+            opened.append(lease)
+            # A path-based parse after open would now authorize this replacement.
+            manifest.write_text('{"schemaVersion":"attacker-replacement"}',
+                                encoding="utf-8")
+            return lease
+
+        def run_with_live_manifest(*args, **kwargs):
+            self.assertFalse(lease.closed, "manifest lease was released before image leases/run")
+            return collect_lifecycle.EngineOutput(
+                self.VALID_RECORD, "stderr-without-newline", engine_image, module_image,
+            ), None
+
+        with mock.patch.object(sys, "argv", argv), \
+             mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
+             mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
+             mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
+             mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
+                        return_value=("c" * 40, None)), \
+             mock.patch("collect_lifecycle.open_image_lease", side_effect=manifest_factory), \
+             mock.patch("collect_lifecycle.run_engine", side_effect=run_with_live_manifest):
+            self.assertEqual(collect_lifecycle.main(), 0)
+
+        self.assertEqual(opened, [lease])
+        self.assertTrue(lease.closed)
+        self.assertTrue(out.is_file())
+        self.assertTrue(log.is_file())
+        self.assertNotEqual(out, log)
+        self.assertIn("\n--- stderr ---\n", log.read_text(encoding="utf-8"))
+
+    def test_main_closes_manifest_lease_after_engine_failure(self) -> None:
+        """Manifest lease ownership is released even when launch/collection fails."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("manifest-close-on-failure")
+        manifest = Path(argv[argv.index("--image-manifest") + 1])
+        manifest_bytes = manifest.read_bytes()
+        lease = FakeImageLease(
+            manifest,
+            identity=FakeLeaseIdentity(33, 905, len(manifest_bytes)),
+            digest=hashlib.sha256(manifest_bytes).hexdigest(),
+            image=manifest_bytes,
+        )
+        with mock.patch.object(sys, "argv", argv), \
+             mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
+             mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
+             mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
+             mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
+                        return_value=("c" * 40, None)), \
+             mock.patch("collect_lifecycle.open_image_lease", return_value=lease), \
+             mock.patch("collect_lifecycle.run_engine", return_value=(None, "injected launch failure")):
+            self.assertEqual(collect_lifecycle.main(), 1)
+
+        self.assertTrue(lease.closed)
+        self._assert_no_transaction_artifacts(out)
+
+    def test_main_fails_closed_when_native_manifest_lease_is_unavailable(self) -> None:
+        """A Windows collector never falls back to reading its manifest by path."""
+        import collect_lifecycle
+
+        out, argv = self._collector_main_fixture("manifest-native-lease-required")
+        log = out.parent / "module-lifecycle-SparkGameFPS.log"
+        out.write_text("preexisting-json", encoding="utf-8")
+        log.write_text("preexisting-log", encoding="utf-8")
+        with mock.patch.object(sys, "argv", argv), \
+             mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
+             mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
+             mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
+             mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
+                        return_value=("c" * 40, None)), \
+             mock.patch("collect_lifecycle.WINDOWS_IMAGE_LEASE_AVAILABLE", False), \
+             mock.patch("collect_lifecycle.run_engine") as child:
+            self.assertEqual(collect_lifecycle.main(), 1)
+
+        child.assert_not_called()
+        self.assertEqual(out.read_text(encoding="utf-8"), "preexisting-json")
+        self.assertEqual(log.read_text(encoding="utf-8"), "preexisting-log")
+
     def test_main_records_handle_derived_paths_and_digests(self) -> None:
         """Published evidence must use lease metadata, never pre-launch Path.resolve values."""
         import collect_lifecycle
@@ -961,22 +1251,18 @@ class TestLifecycleCollector(FixtureCase):
             identity=collect_lifecycle.ImageIdentity(21, 702, module.stat().st_size, 1),
         )
 
-        with mock.patch.object(sys, "argv", argv), \
-             mock.patch("collect_lifecycle.os.name", "nt"), \
-             mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
-             mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
-             mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
-                        return_value=("c" * 40, None)), \
-             mock.patch(
-                 "collect_lifecycle.run_engine",
-                 return_value=(
-                     collect_lifecycle.EngineOutput(
-                         self.VALID_RECORD, "", engine_image, module_image,
-                     ),
-                     None,
-                 ),
-             ):
-            self.assertEqual(collect_lifecycle.main(), 0)
+        self.assertEqual(self._run_truthful_collector_main(
+            argv,
+            mock.patch(
+                "collect_lifecycle.run_engine",
+                return_value=(
+                    collect_lifecycle.EngineOutput(
+                        self.VALID_RECORD, "", engine_image, module_image,
+                    ),
+                    None,
+                ),
+            ),
+        ), 0)
 
         record = json.loads(out.read_text(encoding="utf-8"))["records"][0]
         self.assertEqual(record["engineSHA256"], engine_digest)
@@ -1324,13 +1610,20 @@ class TestLifecycleCollector(FixtureCase):
             ("wrong-name", wrong_name, self.sha, self.sha),
             ("lexical-traversal", root / "nested" / ".." / manifest.name,
              self.sha, self.sha),
+            ("case-alias", str(root / "MODULE-LIFECYCLE-IMAGES.JSON"),
+             self.sha, self.sha),
+            ("ads-alias", str(manifest) + ":alternate", self.sha, self.sha),
             ("outside-root", outside_manifest, self.sha, self.sha),
             ("commit-mismatch", manifest, self.sha, "f" * 40),
         )
 
         for name, image_manifest, requested_sha, head_sha in cases:
             with self.subTest(case=name):
-                out = self.repo / f"{name}-manifest-out" / "module-lifecycle.json"
+                out = self.repo / "build" / "module-evidence" / "module-lifecycle.json"
+                out.parent.mkdir(parents=True, exist_ok=True)
+                for artifact in (out, out.parent / "module-lifecycle-SparkGameFPS.log"):
+                    if artifact.exists():
+                        artifact.unlink()
                 argv = [
                     "collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
                     "--module-image", str(module), "--working-directory", str(root),
@@ -1339,6 +1632,7 @@ class TestLifecycleCollector(FixtureCase):
                 ]
                 with mock.patch.object(sys, "argv", argv), \
                      mock.patch("collect_lifecycle.os.name", "nt"), \
+                     mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
                      mock.patch("collect_lifecycle.resolve_head_sha", return_value=(head_sha, None)), \
                      mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                                 return_value=("c" * 40, None)), \
@@ -1406,30 +1700,33 @@ class TestLifecycleCollector(FixtureCase):
 
     def test_main_writes_no_json_or_log_after_failed_or_invalid_run(self) -> None:
         import collect_lifecycle
-        root = self.repo / "package"
-        root.mkdir(exist_ok=True)
-        engine = root / "SparkEngine.exe"
-        module = root / "SparkGameFPS.dll"
-        engine.write_bytes(pe_image())
-        module.write_bytes(pe_image())
-        out = self.repo / "out" / "module-lifecycle.json"
-        image_manifest = write_image_manifest(root, engine, module, self.sha)
-        argv = ["collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
-                "--module-image", str(module), "--working-directory", str(root),
-                "--rhi-backend", "d3d11", "--image-manifest", str(image_manifest),
-                "--out", str(out), "--commit-sha", self.sha]
-        for completed in (
-            subprocess.CompletedProcess([], 1, "bad output", "failure"),
-            subprocess.CompletedProcess([], 0, "malformed output", ""),
-        ):
-            with self.subTest(returncode=completed.returncode), \
-                 mock.patch.object(sys, "argv", argv), \
-                 mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
-                 mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
-                 mock.patch("collect_lifecycle.subprocess.run", return_value=completed), \
-                 mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
-                            return_value=("c" * 40, None)):
-                self.assertEqual(collect_lifecycle.main(), 1)
+
+        out, argv = self._collector_main_fixture("failed-or-invalid-run")
+        engine = Path(argv[argv.index("--engine") + 1])
+        module = Path(argv[argv.index("--module-image") + 1])
+        engine_image = collect_lifecycle.ImageVerification(
+            hashlib.sha256(engine.read_bytes()).hexdigest(), str(engine),
+            collect_lifecycle.ImageIdentity(41, 1001, engine.stat().st_size, 1),
+        )
+        module_image = collect_lifecycle.ImageVerification(
+            hashlib.sha256(module.read_bytes()).hexdigest(), str(module),
+            collect_lifecycle.ImageIdentity(41, 1002, module.stat().st_size, 1),
+        )
+        cases = (
+            ("failed-engine", collect_lifecycle.EngineOutput(
+                "bad output", "failure", engine_image, module_image,
+            ), "injected non-zero engine exit"),
+            ("malformed-stream", collect_lifecycle.EngineOutput(
+                "malformed output", "", engine_image, module_image,
+            ), None),
+        )
+        for name, captured, error in cases:
+            with self.subTest(case=name):
+                self.assertEqual(self._run_truthful_collector_main(
+                    argv,
+                    mock.patch("collect_lifecycle.run_engine",
+                               return_value=(captured, error)),
+                ), 1)
             self.assertFalse(out.exists())
             self.assertFalse((out.parent / "module-lifecycle-SparkGameFPS.log").exists())
 
@@ -1476,21 +1773,57 @@ class TestLifecycleCollector(FixtureCase):
         engine, module = root / "SparkEngine.exe", root / "SparkGameFPS.dll"
         engine.write_bytes(pe_image())
         module.write_bytes(pe_image())
-        out = self.repo / "manifest-out" / "module-lifecycle.json"
+        out = self.repo / "build" / "module-evidence" / "module-lifecycle.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
         bad_manifest = write_image_manifest(root, engine, module, self.sha,
                                             engine_digest="0" * 64)
+        manifest_bytes = bad_manifest.read_bytes()
+        lease = FakeImageLease(
+            bad_manifest,
+            identity=FakeLeaseIdentity(42, 1101, len(manifest_bytes)),
+            digest=hashlib.sha256(manifest_bytes).hexdigest(),
+            image=manifest_bytes,
+        )
+        image_digest = hashlib.sha256(pe_image()).hexdigest()
+        engine_lease = FakeImageLease(
+            engine,
+            identity=FakeLeaseIdentity(42, 1102, len(pe_image())),
+            digest=image_digest,
+        )
+        module_lease = FakeImageLease(
+            module,
+            identity=FakeLeaseIdentity(42, 1103, len(pe_image())),
+            digest=image_digest,
+        )
+        opened: list[FakeImageLease] = []
+
+        def lease_factory(path: Path) -> FakeImageLease:
+            choices = {
+                bad_manifest: lease,
+                engine: engine_lease,
+                module: module_lease,
+            }
+            selected = choices[path]
+            opened.append(selected)
+            return selected
+
         argv = ["collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
                 "--module-image", str(module), "--working-directory", str(root),
                 "--rhi-backend", "d3d11", "--image-manifest", str(bad_manifest),
                 "--out", str(out), "--commit-sha", self.sha]
         with mock.patch.object(sys, "argv", argv), \
+             mock.patch("collect_lifecycle.os.name", "nt"), \
+             mock.patch("collect_lifecycle.REPO_ROOT", self.repo), \
              mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
              mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
              mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
                         return_value=("c" * 40, None)), \
-             mock.patch("collect_lifecycle.subprocess.run") as run:
-            self.assertEqual(collect_lifecycle.main(), 1)
-        run.assert_not_called()
+             mock.patch("collect_lifecycle.open_image_lease", side_effect=lease_factory), \
+             mock.patch("collect_lifecycle.subprocess.run") as child:
+             self.assertEqual(collect_lifecycle.main(), 1)
+        child.assert_not_called()
+        self.assertEqual(opened, [lease, engine_lease, module_lease])
+        self.assertTrue(all(item.closed for item in opened))
         self.assertFalse(out.exists())
 
     def test_run_engine_uses_canonical_paths_for_relative_arguments(self) -> None:
@@ -1581,36 +1914,25 @@ class TestLifecycleCollector(FixtureCase):
         self.assertIn("changed", error or "")
         self.assertTrue(all(lease.closed for lease in opened))
 
-    def test_main_clears_stale_output_after_hash_or_write_failure(self) -> None:
-        import collect_lifecycle
-        root = self.repo / "stale-package"
-        root.mkdir()
-        engine = root / "SparkEngine.exe"
-        module = root / "SparkGameFPS.dll"
-        engine.write_bytes(pe_image())
-        module.write_bytes(pe_image())
-        out = self.repo / "stale-out" / "module-lifecycle.json"
+    def test_main_clears_stale_output_after_post_validation_run_or_write_failure(self) -> None:
+        """Once all paths/manifests validate, later failures remove stale evidence."""
+        out, argv = self._collector_main_fixture("stale-post-validation")
         log = out.parent / "module-lifecycle-SparkGameFPS.log"
-        out.parent.mkdir()
-        image_manifest = write_image_manifest(root, engine, module, self.sha)
-        argv = ["collect_lifecycle.py", "--engine", str(engine), "--module", INCLUDED,
-                "--module-image", str(module), "--working-directory", str(root),
-                "--rhi-backend", "d3d11", "--image-manifest", str(image_manifest),
-                "--out", str(out), "--commit-sha", self.sha]
-        for patch_target in ("collect_lifecycle.open_image_lease",
-                             "collect_lifecycle._write_temp"):
+        failures = (
+            ("run-engine", mock.patch(
+                "collect_lifecycle.run_engine",
+                return_value=(None, "injected post-validation engine failure"),
+            )),
+            ("write-temp", mock.patch(
+                "collect_lifecycle._write_temp",
+                side_effect=OSError("injected write failure"),
+            )),
+        )
+        for name, failure in failures:
             out.write_text("stale-json", encoding="utf-8")
             log.write_text("stale-log", encoding="utf-8")
-            with self.subTest(failure=patch_target), \
-                  mock.patch.object(sys, "argv", argv), \
-                  mock.patch("collect_lifecycle.resolve_head_sha", return_value=(self.sha, None)), \
-                  mock.patch.dict("collect_lifecycle.os.environ", {"GITHUB_SHA": self.sha}, clear=False), \
-                  mock.patch("collect_lifecycle.lifecycle_mod.source_tree_sha",
-                             return_value=("c" * 40, None)), \
-                 mock.patch(patch_target, side_effect=OSError("injected failure")), \
-                 mock.patch("collect_lifecycle.subprocess.run", return_value=subprocess.CompletedProcess(
-                     [], 0, self.VALID_RECORD, "")):
-                self.assertEqual(collect_lifecycle.main(), 1)
+            with self.subTest(failure=name):
+                self.assertEqual(self._run_truthful_collector_main(argv, failure), 1)
             self.assertFalse(out.exists())
             self.assertFalse(log.exists())
 
