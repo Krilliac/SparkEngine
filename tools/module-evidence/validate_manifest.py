@@ -870,10 +870,14 @@ def _resolve_expected_sha(repo_root: Path, explicit: str | None) -> tuple[str | 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate the module evidence manifest")
     parser.add_argument("--manifest", type=Path, default=None)
-    parser.add_argument("--repo-root", type=Path, default=None)
+    # Keep root/evidence arguments as raw text until lexical validation has
+    # rejected dot/traversal aliases.  argparse's Path conversion is not an
+    # authority boundary and must not erase a component before the held
+    # no-follow lifecycle reader can inspect it.
+    parser.add_argument("--repo-root", default=None)
     parser.add_argument("--target-evidence", type=Path, default=None,
                         help="module-targets.json from collect_targets.py")
-    parser.add_argument("--lifecycle-evidence", type=Path, default=None,
+    parser.add_argument("--lifecycle-evidence", default=None,
                         help="module-lifecycle.json from a real ModuleManager run")
     parser.add_argument("--expected-sha", default=None,
                         help="Revision under test (CI passes GITHUB_SHA)")
@@ -892,7 +896,34 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    repo_root = (args.repo_root or REPO_ROOT).resolve()
+    try:
+        repo_root = strict_json.lexical_absolute_no_follow_path(
+            args.repo_root if args.repo_root is not None else str(REPO_ROOT),
+            label="--repo-root", allow_current_directory=True,
+        )
+        lifecycle_path: Path | None = None
+        if not args.policy_only:
+            lifecycle_path = (
+                strict_json.lexical_absolute_no_follow_path(
+                    args.lifecycle_evidence, label="--lifecycle-evidence",
+                ) if args.lifecycle_evidence is not None else
+                repo_root / EVIDENCE_PRODUCERS["lifecycle-log"]["artifact"]
+            )
+    except strict_json.StrictJSONError as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 1
+
+    # Read lifecycle evidence before any path-consuming operation can resolve
+    # the user-supplied repository root.  The loader receives the unresolved
+    # lexical artifact path and opens each ancestor through held no-follow
+    # authority, so a root/ancestor reparse swap is rejected rather than
+    # converted into a clean attacker-controlled target path.
+    lifecycle_evidence = lifecycle_error = None
+    if lifecycle_path is not None:
+        try:
+            lifecycle_evidence = lifecycle_mod.load_lifecycle_evidence(lifecycle_path)
+        except lifecycle_mod.LifecycleEvidenceUnavailable as exc:
+            lifecycle_error = str(exc)
 
     try:
         manifest = load_manifest(args.manifest)
@@ -910,7 +941,6 @@ def main() -> int:
             return 1
 
     target_index = target_error = None
-    lifecycle_evidence = lifecycle_error = None
     if not args.policy_only:
         try:
             path = args.target_evidence or (
@@ -919,13 +949,6 @@ def main() -> int:
             target_index = targets_mod.load_target_index(Path(path))
         except targets_mod.TargetEvidenceUnavailable as exc:
             target_error = str(exc)
-        try:
-            path = args.lifecycle_evidence or (
-                repo_root / EVIDENCE_PRODUCERS["lifecycle-log"]["artifact"]
-            )
-            lifecycle_evidence = lifecycle_mod.load_lifecycle_evidence(Path(path))
-        except lifecycle_mod.LifecycleEvidenceUnavailable as exc:
-            lifecycle_error = str(exc)
 
     expected_sha, sha_error = _resolve_expected_sha(repo_root, args.expected_sha)
     if sha_error and not args.policy_only:

@@ -16,10 +16,11 @@ No repository file is modified.  Fixtures are built in temporary directories.
 
 from __future__ import annotations
 
-from contextlib import ExitStack
+from contextlib import ExitStack, redirect_stderr, redirect_stdout
 import copy
 from dataclasses import dataclass, replace
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -41,6 +42,7 @@ import paths as paths_mod  # noqa: E402
 import provenance  # noqa: E402
 import strict_json  # noqa: E402
 import targets as targets_mod  # noqa: E402
+import validate_manifest as validate_manifest_mod  # noqa: E402
 from schema import EVIDENCE_PRODUCERS, expected_library_names  # noqa: E402
 from validate_manifest import ManifestValidator, load_manifest  # noqa: E402
 
@@ -586,6 +588,29 @@ class TestSourceDirectoryExactness(FixtureCase):
 # --------------------------------------------------------------------------
 class TestLifecycleIsRuntimeProof(FixtureCase):
 
+    def _prepare_cli_evidence_root(self, root: Path) -> tuple[str, Path, Path]:
+        """Build one self-contained, semantically valid CLI evidence fixture."""
+        sha = build_fake_repo(root)
+        target_path = root / EVIDENCE_PRODUCERS["cmake-target-index"]["artifact"]
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        targets = target_index()
+        targets.update({
+            "schemaVersion": targets_mod.INDEX_SCHEMA_VERSION,
+            "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "commitSHA": sha,
+            "source": "cmake-file-api",
+        })
+        target_path.write_text(json.dumps(targets), encoding="utf-8")
+        evidence_path = root / EVIDENCE_PRODUCERS["lifecycle-log"]["artifact"]
+        evidence_path.parent.mkdir(parents=True, exist_ok=True)
+        evidence_path.write_text(
+            json.dumps(lifecycle_evidence(root, sha)), encoding="utf-8",
+        )
+        manifest_path = root / "cli-manifest.json"
+        manifest_path.write_text(json.dumps(base_manifest()), encoding="utf-8")
+        return sha, evidence_path, manifest_path
+
+
     def test_B10_declared_phase_list_is_not_accepted_as_evidence(self) -> None:
         """The schema no longer even has a lifecyclePhases key to declare."""
         m = base_manifest()
@@ -733,6 +758,119 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
                 lifecycle_mod.LifecycleEvidenceUnavailable, "unavailable",
             ):
                 lifecycle_mod.load_lifecycle_evidence(path)
+
+    def test_main_rejects_default_evidence_after_repo_root_reparse_swap(self) -> None:
+        """CLI default evidence cannot inherit a repo-root symlink's target."""
+        trusted_root = self.repo / "cli-root-before-swap"
+        attacker_root = self.repo / "cli-root-attacker"
+        self._prepare_cli_evidence_root(trusted_root)
+        _attacker_sha, attacker_evidence, manifest_path = \
+            self._prepare_cli_evidence_root(attacker_root)
+        attacker_payload = attacker_evidence.read_text(encoding="utf-8")
+
+        invoked_root = self.repo / "cli-root"
+        trusted_root.rename(invoked_root)
+        preserved_root = self.repo / "cli-root-preserved"
+        invoked_root.rename(preserved_root)
+        try:
+            os.symlink(str(attacker_root), str(invoked_root), target_is_directory=True)
+        except (OSError, NotImplementedError) as exc:
+            preserved_root.rename(invoked_root)
+            self.skipTest(f"cannot create a repo-root reparse fixture: {exc}")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(invoked_root),
+            "--manifest", str(manifest_path),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertNotEqual(
+            result, 0,
+            "repo-root resolution followed the reparse target and accepted attacker evidence",
+        )
+        self.assertIn("lifecycle evidence is unavailable", stderr.getvalue())
+        self.assertEqual(attacker_evidence.read_text(encoding="utf-8"), attacker_payload)
+
+    def test_main_rejects_explicit_lifecycle_dot_segment_before_loader(self) -> None:
+        """An explicit dot segment cannot be normalized away before held loading."""
+        root = self.repo / "cli-explicit-dot-root"
+        _sha, evidence_path, manifest_path = self._prepare_cli_evidence_root(root)
+        explicit_alias = str(evidence_path.parent) + os.sep + "." + os.sep + evidence_path.name
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(root),
+            "--manifest", str(manifest_path),
+            "--lifecycle-evidence", explicit_alias,
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertNotEqual(
+            result, 0,
+            "explicit lifecycle evidence dot segment was normalized before no-follow loading",
+        )
+        self.assertIn("dot or traversal segment", stderr.getvalue())
+
+    def test_main_rejects_explicit_lifecycle_reparse_path(self) -> None:
+        """The explicit CLI override retains the loader's no-follow contract."""
+        root = self.repo / "cli-explicit-reparse-root"
+        _sha, evidence_path, manifest_path = self._prepare_cli_evidence_root(root)
+        attacker_evidence = self.repo / "cli-explicit-reparse-target.json"
+        attacker_payload = evidence_path.read_text(encoding="utf-8")
+        attacker_evidence.write_text(attacker_payload, encoding="utf-8")
+        alias = root / "explicit-lifecycle-reparse.json"
+        try:
+            os.symlink(str(attacker_evidence), str(alias))
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"cannot create an explicit lifecycle reparse fixture: {exc}")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(root),
+            "--manifest", str(manifest_path),
+            "--lifecycle-evidence", str(alias),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertNotEqual(result, 0)
+        self.assertIn("lifecycle evidence is unavailable", stderr.getvalue())
+        self.assertEqual(attacker_evidence.read_text(encoding="utf-8"), attacker_payload)
+
+    def test_main_rejects_repo_root_dot_segment_before_default_loader(self) -> None:
+        """A root alias cannot be normalized before default evidence composition."""
+        root = self.repo / "cli-root-dot-root"
+        self._prepare_cli_evidence_root(root)
+        manifest_path = root / "cli-manifest.json"
+        root_alias = str(root) + os.sep + "."
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", root_alias,
+            "--manifest", str(manifest_path),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertNotEqual(result, 0)
+        self.assertIn("--repo-root contains a dot or traversal segment", stderr.getvalue())
+
+    def test_main_accepts_default_lifecycle_evidence_at_a_real_lexical_path(self) -> None:
+        """The hardened CLI retains the normal default evidence success path."""
+        root = self.repo / "cli-normal-root"
+        self._prepare_cli_evidence_root(root)
+        manifest_path = root / "cli-manifest.json"
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", [
+            "validate_manifest.py", "--repo-root", str(root),
+            "--manifest", str(manifest_path),
+        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+            result = validate_manifest_mod.main()
+
+        self.assertEqual(result, 0, stderr.getvalue())
+        self.assertIn("OK: module evidence manifest is valid", stdout.getvalue())
 
     def test_document_shape_is_rejected_by_loader_and_injected_validator(self) -> None:
         """Direct injection must not bypass the loader's closed document schema."""

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
@@ -67,6 +68,32 @@ MODULE_TARGET_LIMITS = Limits(container_items=2048)
 
 class StrictJSONError(ValueError):
     """A document that must be rejected before any semantic validation runs."""
+
+
+def lexical_absolute_no_follow_path(
+    path: Path | str, *, label: str = "path", allow_current_directory: bool = False,
+) -> Path:
+    """Make a lexical absolute path without erasing a raw reparse-bearing segment.
+
+    ``abspath`` is deliberately used only after rejecting ``.`` and ``..`` in
+    the caller's spelling.  Collapsing either component first could remove a
+    directory that a platform would otherwise traverse as a reparse point.
+    This is lexical preparation only: callers that need filesystem authority
+    must still use the held no-follow open routines below.
+    """
+    raw = os.fspath(path)
+    if not isinstance(raw, str) or not raw or "\0" in raw:
+        raise StrictJSONError(f"{label} must be a non-empty text path without NUL")
+    if allow_current_directory and raw in {".", "./", ".\\"}:
+        return Path(os.path.abspath(raw))
+    _drive, tail = os.path.splitdrive(raw)
+    separator = r"[\\/]+" if os.name == "nt" else r"/+"
+    if any(component in {".", ".."} for component in re.split(separator, tail) if component):
+        raise StrictJSONError(
+            f"{label} contains a dot or traversal segment; no-follow paths must "
+            "preserve every raw component"
+        )
+    return Path(os.path.abspath(raw))
 
 
 if os.name == "nt":
@@ -200,14 +227,13 @@ def _read_open_descriptor(fd: int, max_bytes: int) -> bytes:
 
 def _read_file_no_follow_posix(path: Path | str, max_bytes: int) -> bytes:
     """Open every POSIX path component below held parent descriptors."""
-    raw = os.fspath(path)
-    if not isinstance(raw, str) or not raw or "\0" in raw:
-        raise StrictJSONError(f"unsafe lifecycle evidence path: {path!r}")
     no_follow = getattr(os, "O_NOFOLLOW", 0)
     directory = getattr(os, "O_DIRECTORY", 0)
     if not no_follow or not directory or os.open not in os.supports_dir_fd:
         raise StrictJSONError("secure no-follow POSIX evidence reader is unavailable")
-    absolute = os.path.abspath(raw)
+    absolute = os.fspath(lexical_absolute_no_follow_path(
+        path, label="lifecycle evidence path",
+    ))
     components = [component for component in absolute.split(os.path.sep) if component]
     if not components:
         raise StrictJSONError(f"unsafe lifecycle evidence path is not a file: {path}")
@@ -351,10 +377,9 @@ if os.name == "nt":
         """Open a Windows file through a non-reparse RootDirectory HANDLE chain."""
         if not _WINDOWS_NO_FOLLOW_READER_AVAILABLE:
             raise StrictJSONError("secure no-follow Windows evidence reader is unavailable")
-        raw = os.fspath(path)
-        if not isinstance(raw, str) or not raw or "\0" in raw:
-            raise StrictJSONError(f"unsafe lifecycle evidence path: {path!r}")
-        absolute = os.path.abspath(raw)
+        absolute = os.fspath(lexical_absolute_no_follow_path(
+            path, label="lifecycle evidence path",
+        ))
         drive, tail = os.path.splitdrive(absolute)
         if not drive or drive.startswith("\\\\") or not tail.startswith("\\"):
             raise StrictJSONError("lifecycle evidence path must be an absolute drive-qualified path")
