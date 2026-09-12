@@ -1171,12 +1171,26 @@ namespace Spark
                     srvDesc.Format = depthReadback ? DepthShaderResourceFormat(format) : format;
                     if (desc.sampleCount > 1)
                     {
-                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                        srvDesc.ViewDimension = desc.type == RHITextureType::Texture2DArray
+                                                    ? D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY
+                                                    : D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                        if (srvDesc.ViewDimension == D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY)
+                            srvDesc.Texture2DMSArray.ArraySize = desc.arraySize;
                     }
                     else
                     {
-                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-                        srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                        srvDesc.ViewDimension = desc.type == RHITextureType::Texture2DArray
+                                                    ? D3D11_SRV_DIMENSION_TEXTURE2DARRAY
+                                                    : D3D11_SRV_DIMENSION_TEXTURE2D;
+                        if (srvDesc.ViewDimension == D3D11_SRV_DIMENSION_TEXTURE2DARRAY)
+                        {
+                            srvDesc.Texture2DArray.MipLevels = desc.mipLevels;
+                            srvDesc.Texture2DArray.ArraySize = desc.arraySize;
+                        }
+                        else
+                        {
+                            srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                        }
                     }
                     hr = m_device->CreateShaderResourceView(texture.Get(), &srvDesc, &srv);
                     if (FAILED(hr))
@@ -1196,8 +1210,26 @@ namespace Spark
                 {
                     D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
                     dsvDesc.Format = format;
-                    dsvDesc.ViewDimension =
-                        desc.sampleCount > 1 ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
+                    if (desc.sampleCount > 1)
+                    {
+                        dsvDesc.ViewDimension = desc.type == RHITextureType::Texture2DArray
+                                                     ? D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY
+                                                     : D3D11_DSV_DIMENSION_TEXTURE2DMS;
+                        if (dsvDesc.ViewDimension == D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY)
+                            dsvDesc.Texture2DMSArray.ArraySize = desc.arraySize;
+                    }
+                    else
+                    {
+                        dsvDesc.ViewDimension = desc.type == RHITextureType::Texture2DArray
+                                                     ? D3D11_DSV_DIMENSION_TEXTURE2DARRAY
+                                                     : D3D11_DSV_DIMENSION_TEXTURE2D;
+                        if (dsvDesc.ViewDimension == D3D11_DSV_DIMENSION_TEXTURE2DARRAY)
+                        {
+                            dsvDesc.Texture2DArray.MipSlice = 0;
+                            dsvDesc.Texture2DArray.FirstArraySlice = 0;
+                            dsvDesc.Texture2DArray.ArraySize = desc.arraySize;
+                        }
+                    }
                     hr = m_device->CreateDepthStencilView(texture.Get(), &dsvDesc, &dsv);
                     if (FAILED(hr))
                         return nullptr;
