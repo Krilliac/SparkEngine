@@ -2060,7 +2060,7 @@ ctest --test-dir /tmp/spark-consumer --output-on-failure --no-tests=error
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. Local process fixtures verify orchestration; hosted native results are pending. This does not close signing, Windows 11, NSIS, upgrade, rollback, repair, or user-data retention requirements.
+The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. 2026-09-12 progress: InstallState now flushes to a same-directory temporary marker before replacement, loads into a temporary object with required-field validation, and treats malformed state as invalid; focused round-trip/replacement/recovery tests pass. Local process fixtures verify orchestration; hosted native results are pending. This does not close signing, Windows 11, NSIS, upgrade, rollback, repair, or user-data retention requirements.
 
 **Dependency contract**
 
@@ -2223,7 +2223,7 @@ ctest --test-dir build/linux-shipping -L compatibility --output-on-failure --no-
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** sdk · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior.
+Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior. 2026-09-12 progress: SparkGameModule now rejects SDK headers with multiple or missing SPARK_SDK_VERSION definitions before deriving the module ABI sidecar, with a configure-level hostile-header regression. The full installed-consumer and N-1 compatibility gates remain open.
 
 **Dependency contract**
 

@@ -1555,7 +1555,7 @@
       "wave": 2,
       "area": "sdk",
       "owner": "unassigned",
-      "rationale": "Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior.",
+      "rationale": "Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior. 2026-09-12 progress: SparkGameModule now rejects SDK headers with multiple or missing SPARK_SDK_VERSION definitions before deriving the module ABI sidecar, with a configure-level hostile-header regression. The full installed-consumer and N-1 compatibility gates remain open.",
       "dependencies": [
         "ASSET-220",
         "LIFE-200",
