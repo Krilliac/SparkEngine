@@ -512,13 +512,11 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job (individual diagnostics advisory) |
 | `todo-count` | ubuntu-24.04 | -- | -- | warn-only above 20 |
 
-**Enforcement truth (verified 2026-09-05):** no branch protection or ruleset is
-active on `Working` (`branches/Working/protection` is 404 and all five rulesets
-are `enforcement=disabled`), so a PR or direct push must pass zero checks today.
-`required-ci-gate`, the Build Matrix Verifier, and CodeQL are **post-hoc
-publication gates** consumed by `release.yml`, `site-data-publish.yml`, and
-`trusted-ci-aggregate.yml`, not merge gates, until the account owner activates
-the ruleset (`CI-100`). The exact-source gate accepts a failed Build job only if
+**Enforcement truth (verified 2026-09-12):** legacy branch protection is not
+configured on `Working` (`branches/Working/protection` is 404), but repository
+ruleset `21968740` (`Working integrity`) is active. It protects against deletion
+and non-fast-forward updates and requires the GitHub Actions `Required CI Gate`
+check with no bypass actors. The exact-source gate accepts a failed Build job only if
 `build.yml` at that exact commit declares the job `continue-on-error`; the
 required set is cross-checked between `required-ci-gate.needs` and
 `EXPECTED_REQUIRED_JOBS_JSON`, and a required job marked `continue-on-error` is
