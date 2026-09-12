@@ -453,6 +453,7 @@ def release_acceptance_gate_errors(workflow: str) -> list[str]:
     """Require both final publication paths to use the fail-closed acceptance gate."""
 
     errors: list[str] = []
+    stable_publish_step: str | None = None
     for step_name in (
         "Publish complete stable versioned release",
         "Publish complete nightly rolling release",
@@ -462,6 +463,8 @@ def release_acceptance_gate_errors(workflow: str) -> list[str]:
         except AssertionError as error:
             errors.append(str(error))
             continue
+        if step_name == "Publish complete stable versioned release":
+            stable_publish_step = step
         for fragment in (
             "GITHUB_REPOSITORY: ${{ github.repository }}",
             "IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}",
@@ -476,6 +479,17 @@ def release_acceptance_gate_errors(workflow: str) -> list[str]:
                 errors.append(f"{step_name} is missing required acceptance-gate fragment: {fragment}")
         if "gh api --method PATCH" in step:
             errors.append(f"{step_name} must not publish through a bare gh API PATCH")
+    if stable_publish_step is not None:
+        readiness_check = 'python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-ready'
+        acceptance_command = 'python3 -I "$GITHUB_WORKSPACE/.github/scripts/release-acceptance-gate.py"'
+        if readiness_check not in stable_publish_step:
+            errors.append("stable publication must revalidate readiness immediately before acceptance")
+        elif (
+            acceptance_command in stable_publish_step
+            and stable_publish_step.index(readiness_check)
+            > stable_publish_step.index(acceptance_command)
+        ):
+            errors.append("stable publication readiness recheck must precede acceptance PATCH")
     return errors
 
 

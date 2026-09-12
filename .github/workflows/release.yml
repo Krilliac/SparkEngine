@@ -2205,6 +2205,10 @@ jobs:
           --gate-output "$FINAL_REPLAY_OUTPUT" \
           --repository "$GITHUB_REPOSITORY" \
           --source-commit "$TARGET_SHA"
+        # Re-read the release contract at the final stable publication boundary.
+        # This is intentionally adjacent to the acceptance PATCH so a blocked
+        # stable-v1 profile cannot be promoted by a stale earlier check.
+        python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-ready
         bash "$GITHUB_WORKSPACE/.github/scripts/verify-release-publication-boundary.sh" \
           publish-preflight
         publication_attempted=false
