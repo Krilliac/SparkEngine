@@ -13,6 +13,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import yaml
@@ -65,8 +66,19 @@ from buildmatrix.workflow import WorkflowError, parse_workflow_yaml  # noqa: E40
 def bash_executable() -> str:
     """Resolve Bash for release-workflow fixtures on GitHub and Windows hosts."""
 
+    if os.name == "nt":
+        # ``bash`` on PATH can be the WindowsApps WSL launcher. Its cwd and
+        # environment forwarding differ from the Windows Git Bash shell used
+        # by the release workflow, so prefer the actual Git installation.
+        git_bash = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+        if git_bash.is_file():
+            return str(git_bash)
     found = shutil.which("bash")
     if found:
+        if os.name == "nt" and any(part.casefold() == "windowsapps" for part in Path(found).parts):
+            raise FileNotFoundError(
+                "Git Bash is required for release-workflow fixtures; the WindowsApps WSL launcher is incompatible"
+            )
         return found
     common = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
     if common.is_file():
@@ -1063,6 +1075,23 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_git_bash_is_available_to_release_workflow_fixtures(self) -> None:
         self.assertTrue(Path(bash_executable()).is_file())
+
+    @unittest.skipUnless(os.name == "nt", "Windows release fixture shell selection")
+    def test_windows_release_fixtures_prefer_git_bash_over_wsl_launcher(self) -> None:
+        """Fixture cwd/env semantics must match the Windows release workflow shell."""
+        expected = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+        self.assertTrue(expected.is_file(), f"Git Bash is unavailable at {expected}")
+        self.assertEqual(Path(bash_executable()).resolve(), expected.resolve())
+
+    @unittest.skipUnless(os.name == "nt", "Windows release fixture shell selection")
+    def test_windows_release_fixtures_reject_wsl_launcher_when_git_bash_is_absent(self) -> None:
+        """WSL's launcher cannot silently replace the workflow's Git Bash semantics."""
+        wsl_launcher = Path(os.environ["LOCALAPPDATA"]) / "Microsoft" / "WindowsApps" / "bash.exe"
+        self.assertTrue(wsl_launcher.is_file(), f"WSL launcher fixture is unavailable at {wsl_launcher}")
+        with mock.patch.object(Path, "is_file", return_value=False), \
+                mock.patch.object(shutil, "which", return_value=str(wsl_launcher)):
+            with self.assertRaisesRegex(FileNotFoundError, "Git Bash"):
+                bash_executable()
 
     def test_ci_runs_release_acceptance_gate_regressions(self) -> None:
         validation = yaml_section(self.build, "validate-ci-tools", indent=2)
