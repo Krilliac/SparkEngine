@@ -199,7 +199,7 @@
 | `CoverID` | alias | Tests | [TestCoverSystem.cpp:L13](../../Tests/TestCoverSystem.cpp#L13) |  |
 | `CrashCallback` | alias | SparkEditor | [EditorCrashHandler.h:L51](../../SparkEditor/Source/Core/EditorCrashHandler.h#L51) | Crash handler callback types |
 | `CreateGameModuleFn` | alias | SparkEngine | [IGameModule.h:L84](../../SparkEngine/Source/Core/IGameModule.h#L84) | Function signature for the game module factory exported from game DLLs |
-| `CreateGameModuleFn` | alias | SparkEngine | [ModuleManager.h:L36](../../SparkEngine/Source/Core/ModuleManager.h#L36) |  |
+| `CreateGameModuleFn` | alias | SparkEngine | [ModuleManager.h:L37](../../SparkEngine/Source/Core/ModuleManager.h#L37) |  |
 | `CreateModuleFn` | alias | SparkSDK | [IModule.h:L185](../../SparkSDK/Include/Spark/IModule.h#L185) |  |
 | `CreateProjectRequestHandler` | alias | SparkEditor | [ProjectBrowserPanel.h:L55](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L55) |  |
 | `CrossAreaHandler` | alias | SparkEngine | [AreaServer.h:L193](../../SparkEngine/Source/Engine/Networking/AreaServer.h#L193) | Register handler for cross-area messages |
@@ -257,7 +257,7 @@
 | `DEFINE_GENERATOR` | macro | Tests | [TestMovementSystem.cpp:L46](../../Tests/TestMovementSystem.cpp#L46) |  |
 | `DeserializeFunc` | alias | SparkEngine | [SaveSystem.h:L183](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L183) | Function signature for component deserialization. |
 | `DestroyGameModuleFn` | alias | SparkEngine | [IGameModule.h:L92](../../SparkEngine/Source/Core/IGameModule.h#L92) | Function signature for destroying the game module |
-| `DestroyGameModuleFn` | alias | SparkEngine | [ModuleManager.h:L37](../../SparkEngine/Source/Core/ModuleManager.h#L37) |  |
+| `DestroyGameModuleFn` | alias | SparkEngine | [ModuleManager.h:L38](../../SparkEngine/Source/Core/ModuleManager.h#L38) |  |
 | `DestroyModuleFn` | alias | SparkSDK | [IModule.h:L186](../../SparkSDK/Include/Spark/IModule.h#L186) |  |
 | `DestS` | alias | SparkEngine | [EngineSettings.cpp:L505](../../SparkEngine/Source/Core/EngineSettings.cpp#L505) |  |
 | `Digest` | alias | SparkEngine | [PasswordHash.cpp:L22](../../SparkEngine/Source/Utils/PasswordHash.cpp#L22) |  |
@@ -620,9 +620,9 @@
 | `IDS_APP_TITLE` | macro | SparkEngine | [resource.h:L18](../../SparkEngine/Source/Core/resource.h#L18) |  |
 | `IDYES` | macro | SparkEngine | [PlatformTypes.h:L321](../../SparkEngine/Source/Core/PlatformTypes.h#L321) |  |
 | `IncomingDamageFilter` | alias | GameModules | [TFDamageSystem.h:L211](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.h#L211) |  |
-| `InjectConsoleFn` | alias | SparkEngine | [ModuleManager.cpp:L802](../../SparkEngine/Source/Core/ModuleManager.cpp#L802) |  |
-| `InjectContextFn` | alias | SparkEngine | [ModuleManager.cpp:L816](../../SparkEngine/Source/Core/ModuleManager.cpp#L816) |  |
-| `InjectImGuiFn` | alias | SparkEngine | [ModuleManager.cpp:L828](../../SparkEngine/Source/Core/ModuleManager.cpp#L828) |  |
+| `InjectConsoleFn` | alias | SparkEngine | [ModuleManager.cpp:L822](../../SparkEngine/Source/Core/ModuleManager.cpp#L822) |  |
+| `InjectContextFn` | alias | SparkEngine | [ModuleManager.cpp:L836](../../SparkEngine/Source/Core/ModuleManager.cpp#L836) |  |
+| `InjectImGuiFn` | alias | SparkEngine | [ModuleManager.cpp:L848](../../SparkEngine/Source/Core/ModuleManager.cpp#L848) |  |
 | `InstanceID` | alias | SparkEngine | [InstanceManager.h:L29](../../SparkEngine/Source/Engine/Gameplay/InstanceManager.h#L29) |  |
 | `InstanceID` | alias | Tests | [TestInstanceManager.cpp:L16](../../Tests/TestInstanceManager.cpp#L16) |  |
 | `INT` | alias | SparkEngine | [PlatformTypes.h:L36](../../SparkEngine/Source/Core/PlatformTypes.h#L36) |  |
@@ -690,7 +690,7 @@
 | `MemS` | alias | SparkEngine | [EngineSettings.cpp:L598](../../SparkEngine/Source/Core/EngineSettings.cpp#L598) |  |
 | `MessageCallback` | alias | SparkEditor | [ExternalConsoleIntegration.h:L37](../../SparkEditor/Source/Integration/ExternalConsoleIntegration.h#L37) |  |
 | `MessageHandler` | alias | SparkEngine | [INetworkRuntime.h:L22](../../SparkEngine/Source/Engine/Networking/INetworkRuntime.h#L22) | DedicatedServer-facing networking runtime abstraction. |
-| `MessageHandler` | alias | SparkEngine | [NetworkManager.h:L457](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L457) |  |
+| `MessageHandler` | alias | SparkEngine | [NetworkManager.h:L459](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L459) |  |
 | `MessageHandler` | alias | Tests | [TestNetworkManagerOrchestration.cpp:L95](../../Tests/TestNetworkManagerOrchestration.cpp#L95) |  |
 | `MirrorRec` | alias | GameModules | [TFVehicleSystem.h:L147](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L147) |  |
 | `ModS` | alias | SparkEngine | [EngineSettings.cpp:L527](../../SparkEngine/Source/Core/EngineSettings.cpp#L527) |  |
@@ -704,7 +704,7 @@
 | `NDEBUG` | macro | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L16](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L16) |  |
 | `NetworkEntityID` | alias | SparkEngine | [EntityReplicator.h:L30](../../SparkEngine/Source/Engine/Networking/EntityReplicator.h#L30) |  |
 | `NetworkManager` | alias | SparkSDK | [IEngineContext.h:L83](../../SparkSDK/Include/Spark/IEngineContext.h#L83) |  |
-| `NetworkTime` | alias | SparkEngine | [NetworkManager.h:L89](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L89) |  |
+| `NetworkTime` | alias | SparkEngine | [NetworkManager.h:L91](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L91) |  |
 | `NOMINMAX` | macro | GameModules | [TFSavePaths.h:L22](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L22) |  |
 | `NOMINMAX` | macro | SparkAssetPipelineCore | [AssetCooker.cpp:L18](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L18) |  |
 | `NOMINMAX` | macro | SparkCooker | [main.cpp:L18](../../SparkCooker/src/main.cpp#L18) |  |
@@ -865,7 +865,7 @@
 | `SelectionCallback` | alias | SparkEditor | [SelectionManager.h:L141](../../SparkEditor/Source/Panels/SelectionManager.h#L141) | Callback signature for selection changes |
 | `SelectionCallback` | alias | Tests | [TestSelectionManager.cpp:L30](../../Tests/TestSelectionManager.cpp#L30) |  |
 | `SentState` | alias | GameModules | [TFVehicleSystem.h:L148](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L148) |  |
-| `SequenceNumber` | alias | SparkEngine | [NetworkManager.h:L88](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L88) |  |
+| `SequenceNumber` | alias | SparkEngine | [NetworkManager.h:L90](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L90) |  |
 | `SequenceNumber` | alias | Tests | [TestNetworkManagerOrchestration.cpp:L27](../../Tests/TestNetworkManagerOrchestration.cpp#L27) |  |
 | `SequenceNumber` | alias | Tests | [TestReliableChannel.cpp:L18](../../Tests/TestReliableChannel.cpp#L18) |  |
 | `SerializeFunc` | alias | SparkEngine | [SaveSystem.h:L174](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L174) | Function signature for component serialization. |
@@ -887,7 +887,7 @@
 | `Slot` | alias | SparkEngine | [GraphicsEngineLinuxRenderTargets.cpp:L82](../../SparkEngine/Source/Graphics/GraphicsEngineLinuxRenderTargets.cpp#L82) |  |
 | `SLTypeId` | alias | Tests | [TestAdversarialEngine.cpp:L1117](../../Tests/TestAdversarialEngine.cpp#L1117) |  |
 | `SmallRing` | alias | Tests | [TestLockFreeRingAllocatorReal.cpp:L12](../../Tests/TestLockFreeRingAllocatorReal.cpp#L12) |  |
-| `SOCKET` | alias | SparkEngine | [NetworkManager.h:L59](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L59) |  |
+| `SOCKET` | alias | SparkEngine | [NetworkManager.h:L61](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L61) |  |
 | `SOCKET` | alias | SparkEngine | [UDPTransport.h:L32](../../SparkEngine/Source/Engine/Networking/UDPTransport.h#L32) |  |
 | `SocketFactory` | alias | SparkEditor | [LiveEditBridge.h:L58](../../SparkEditor/Source/Communication/LiveEditBridge.h#L58) |  |
 | `SPARK_ASSET_STALL_UPDATE` | macro | SparkEngine | [AssetStallDetector.h:L149](../../SparkEngine/Source/Utils/AssetStallDetector.h#L149) |  |
@@ -1021,7 +1021,7 @@
 | `SPARK_GPU_LEAK_UPDATE` | macro | SparkEngine | [GPUResourceLeakDetector.h:L159](../../SparkEngine/Source/Utils/GPUResourceLeakDetector.h#L159) |  |
 | `SPARK_GPU_LEAK_UPDATE` | macro | SparkEngine | [GPUResourceLeakDetector.h:L161](../../SparkEngine/Source/Utils/GPUResourceLeakDetector.h#L161) |  |
 | `SPARK_GUARDED_UPDATE` | macro | SparkEngine | [FaultIsolation.h:L125](../../SparkEngine/Source/Core/FaultIsolation.h#L125) |  |
-| `SPARK_HAS_CLOSESOCKET_SHIM` | macro | SparkEngine | [NetworkManager.h:L63](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L63) |  |
+| `SPARK_HAS_CLOSESOCKET_SHIM` | macro | SparkEngine | [NetworkManager.h:L65](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L65) |  |
 | `SPARK_HAS_CLOSESOCKET_SHIM` | macro | SparkEngine | [UDPTransport.h:L36](../../SparkEngine/Source/Engine/Networking/UDPTransport.h#L36) |  |
 | `SPARK_HAS_CONTRACTS` | macro | SparkEngine | [Platform.h:L189](../../SparkEngine/Source/Core/Platform.h#L189) |  |
 | `SPARK_HAS_DEDUCING_THIS` | macro | SparkEngine | [Platform.h:L172](../../SparkEngine/Source/Core/Platform.h#L172) |  |
@@ -1305,7 +1305,7 @@
 | `TFSockHandle` | alias | GameModules | [TFLanDiscoveryInternal.h:L38](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryInternal.h#L38) |  |
 | `TFSockHandle` | alias | GameModules | [TFLanDiscoveryInternal.h:L70](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryInternal.h#L70) |  |
 | `Three` | alias | Tests | [TestTypeTraits.cpp:L89](../../Tests/TestTypeTraits.cpp#L89) |  |
-| `TimeoutHandler` | alias | SparkEngine | [NetworkManager.h:L830](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L830) |  |
+| `TimeoutHandler` | alias | SparkEngine | [NetworkManager.h:L832](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L832) |  |
 | `TimePoint` | alias | SparkEngine | [PerformanceStats.h:L304](../../SparkEngine/Source/Utils/PerformanceStats.h#L304) |  |
 | `TimePoint` | alias | Tests | [TestScriptHotReload.cpp:L17](../../Tests/TestScriptHotReload.cpp#L17) |  |
 | `TimerCallback` | alias | SparkEngine | [TimerManager.h:L63](../../SparkEngine/Source/Utils/TimerManager.h#L63) | Callback type for timer expiration |

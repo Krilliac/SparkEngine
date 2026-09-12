@@ -132,7 +132,7 @@
 | `ChampionAffix` | enum | GameModules | [ARPGMonsterSystem.h:L25](../../GameModules/SparkGameARPG/Source/Monster/ARPGMonsterSystem.h#L25) | Champion affixes that modify monster behavior and stats |
 | `ChangeType` | enum | SparkEngine | [ReactiveSystem.h:L48](../../SparkEngine/Source/Engine/ECS/ReactiveSystem.h#L48) | Type of component change that triggered the reactive system. |
 | `ChannelConfiguration` | enum | SparkEditor | [AudioSystemEnums.h:L44](../../SparkEditor/Source/Enums/AudioSystemEnums.h#L44) | Audio channel configurations |
-| `ChannelType` | enum | SparkEngine | [NetworkManager.h:L93](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L93) |  |
+| `ChannelType` | enum | SparkEngine | [NetworkManager.h:L95](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L95) |  |
 | `ChannelType` | enum | Tests | [TestNetworkManagerOrchestration.cpp:L57](../../Tests/TestNetworkManagerOrchestration.cpp#L57) |  |
 | `ChannelType` | enum | Tests | [TestServerMockClient.cpp:L55](../../Tests/TestServerMockClient.cpp#L55) |  |
 | `CharacterClass` | enum | GameModules | [RPGEnums.h:L22](../../GameModules/SparkGameRPG/Source/Enums/RPGEnums.h#L22) | Playable character classes with distinct stat growth and abilities |
@@ -171,7 +171,7 @@
 | `ConditionType` | enum | Tests | [TestConditionSystem.cpp:L17](../../Tests/TestConditionSystem.cpp#L17) |  |
 | `ConflictType` | enum | SparkEditor | [VersionControlEnums.h:L71](../../SparkEditor/Source/Enums/VersionControlEnums.h#L71) | Merge conflict types |
 | `ConflictType` | enum | SparkEditor | [VersionControlTypes.h:L96](../../SparkEditor/Source/VersionControl/VersionControlTypes.h#L96) |  |
-| `ConnectionState` | enum | SparkEngine | [NetworkManager.h:L115](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L115) | Immutable snapshot consumed by first-party discovery endpoints. |
+| `ConnectionState` | enum | SparkEngine | [NetworkManager.h:L117](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L117) | Immutable snapshot consumed by first-party discovery endpoints. |
 | `ConnectionState` | enum | Tests | [TestNetworkManagerOrchestration.cpp:L29](../../Tests/TestNetworkManagerOrchestration.cpp#L29) |  |
 | `ConsoleLogLevel` | enum | SparkEngine | [InGameConsole.h:L62](../../SparkEngine/Source/Utils/InGameConsole.h#L62) | Log level for console messages |
 | `ConsoleSeverity` | enum | SparkEngine | [SparkConsole.h:L37](../../SparkEngine/Source/Utils/SparkConsole.h#L37) |  |
@@ -240,7 +240,7 @@
 | `DirectorPhase` | enum | SparkEngine | [AIDirector.h:L59](../../SparkEngine/Source/Engine/AI/AIDirector.h#L59) | Phases of the AI Director's intensity cycle. |
 | `DirtyFlag` | enum | SparkEngine | [UIDirtyTracking.h:L35](../../SparkEngine/Source/Engine/UI/UIDirtyTracking.h#L35) | Bitfield flags indicating what changed on a widget |
 | `DirtyFlag` | enum | SparkEngine | [PipelineStateCache.h:L61](../../SparkEngine/Source/Graphics/PipelineStateCache.h#L61) | Dirty flags for tracking which pipeline state categories need flushing. |
-| `DiscoveryMode` | enum | SparkEngine | [ModuleManager.h:L76](../../SparkEngine/Source/Core/ModuleManager.h#L76) |  |
+| `DiscoveryMode` | enum | SparkEngine | [ModuleManager.h:L102](../../SparkEngine/Source/Core/ModuleManager.h#L102) |  |
 | `DiscoveryState` | enum | GameModules | [OpenWorldEnums.h:L119](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L119) | Discovery state for map fog / exploration progress |
 | `DockPosition` | enum | SparkEditor | [CoreEditorEnums.h:L19](../../SparkEditor/Source/Enums/CoreEditorEnums.h#L19) | Dock position enumeration for panel docking |
 | `DocumentTransitionAction` | enum | SparkEditor | [EditorUI.h:L50](../../SparkEditor/Source/Core/EditorUI.h#L50) |  |
@@ -463,7 +463,7 @@
 | `MergeStrategy` | enum | SparkEditor | [VersionControlEnums.h:L102](../../SparkEditor/Source/Enums/VersionControlEnums.h#L102) | Merge strategy types |
 | `MergeStrategy` | enum | SparkEditor | [VersionControlTypes.h:L207](../../SparkEditor/Source/VersionControl/VersionControlTypes.h#L207) |  |
 | `MeshTopology` | enum | SparkEngine | [GraphicsEnums.h:L53](../../SparkEngine/Source/Enums/GraphicsEnums.h#L53) | Mesh topology types |
-| `MessageType` | enum | SparkEngine | [NetworkManager.h:L127](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L127) |  |
+| `MessageType` | enum | SparkEngine | [NetworkManager.h:L129](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L129) |  |
 | `MessageType` | enum | SparkEngine | [PacketValidator.h:L31](../../SparkEngine/Source/Engine/Networking/PacketValidator.h#L31) |  |
 | `MessageType` | enum | Tests | [TestNetworkManagerOrchestration.cpp:L44](../../Tests/TestNetworkManagerOrchestration.cpp#L44) |  |
 | `MessageType` | enum | Tests | [TestServerMockClient.cpp:L38](../../Tests/TestServerMockClient.cpp#L38) |  |
@@ -505,7 +505,7 @@
 | `NetworkHealthState` | enum | SparkEngine | [NetworkHealthMonitor.h:L40](../../SparkEngine/Source/Utils/NetworkHealthMonitor.h#L40) | Network connection health classification |
 | `NetworkHealthState` | enum | Tests | [TestNetworkHealthMonitor.cpp:L21](../../Tests/TestNetworkHealthMonitor.cpp#L21) |  |
 | `NetworkPeerScope` | enum | SparkEngine | [NetworkBindPolicy.h:L20](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L20) | The only remote address classes available before authenticated transport exists. |
-| `NetworkRole` | enum | SparkEngine | [NetworkManager.h:L100](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L100) |  |
+| `NetworkRole` | enum | SparkEngine | [NetworkManager.h:L102](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L102) |  |
 | `NetworkRole` | enum | Tests | [TestNetworkManagerOrchestration.cpp:L37](../../Tests/TestNetworkManagerOrchestration.cpp#L37) |  |
 | `NodeStatus` | enum | SparkEngine | [BehaviorTreeTypes.h:L48](../../SparkEngine/Source/Engine/AI/BehaviorTreeTypes.h#L48) | Result returned by a behavior tree node after each tick. |
 | `NodeStatus` | enum | Tests | [TestAIBehaviorTree.cpp:L15](../../Tests/TestAIBehaviorTree.cpp#L15) |  |
@@ -861,7 +861,7 @@
 | `TransformSpace` | enum | SparkEditor | [EditorUI.h:L399](../../SparkEditor/Source/Core/EditorUI.h#L399) | Play-in-editor manager (scene snapshot, time control, subsystem toggles) |
 | `TransformSpace` | enum | SparkEditor | [SceneSystemEnums.h:L188](../../SparkEditor/Source/Enums/SceneSystemEnums.h#L188) | Transform space types |
 | `TransformTool` | enum | SparkEditor | [EditorUI.h:L195](../../SparkEditor/Source/Core/EditorUI.h#L195) | Active viewport transform tool. The main toolbar, the W/E/R |
-| `TransportType` | enum | SparkEngine | [NetworkIntegration.h:L51](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h#L51) | Configuration for the integrated network stack. |
+| `TransportType` | enum | SparkEngine | [NetworkIntegration.h:L53](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h#L53) | Configuration for the integrated network stack. |
 | `TraversalType` | enum | SparkEngine | [AdvancedPlacementComponents.h:L102](../../SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h#L102) | Defines an off-mesh link between two NavMesh positions. |
 | `TriggerShape` | enum | SparkEngine | [ProximityTriggerSystem.h:L41](../../SparkEngine/Source/Engine/World/ProximityTriggerSystem.h#L41) | Shape of a trigger volume. |
 | `TriggerType` | enum | SparkEditor | [LevelStreamingEnums.h:L83](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L83) | Streaming trigger types |
@@ -882,7 +882,7 @@
 | `Type` | enum | SparkEngine | [LightComponents.h:L30](../../SparkEngine/Source/Engine/ECS/Components/LightComponents.h#L30) |  |
 | `Type` | enum | SparkEngine | [PhysicsComponents.h:L31](../../SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h#L31) |  |
 | `Type` | enum | SparkEngine | [QuestSystem.h:L53](../../SparkEngine/Source/Engine/Gameplay/QuestSystem.h#L53) |  |
-| `Type` | enum | SparkEngine | [NetworkManager.h:L247](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L247) |  |
+| `Type` | enum | SparkEngine | [NetworkManager.h:L249](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L249) |  |
 | `Type` | enum | SparkEngine | [LightmapBaker.h:L87](../../SparkEngine/Source/Graphics/LightmapBaker.h#L87) | A light source for baking |
 | `Type` | enum | SparkEngine | [RHIFactory.h:L154](../../SparkEngine/Source/Graphics/RHI/RHIFactory.h#L154) | Reflected shader resource binding |
 | `Type` | enum | SparkEngine | [GamepadInput.h:L469](../../SparkEngine/Source/Input/GamepadInput.h#L469) | Internal action binding record linking a game action name to a button or trigger |

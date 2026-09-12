@@ -19,6 +19,16 @@ cmake_policy(SET CMP0141 NEW)  # Select MSVC debug-information format through CM
 # MSVC variable is not defined until the compiler is identified anyway).
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
 
+# macOS targets must inherit the staged shared-library search path when they are
+# created. CMake initializes each target's INSTALL_RPATH from these variables;
+# setting them after SparkEngine/SparkEngineLib are declared leaves installed
+# binaries with an unresolved @rpath SDL2 dependency.
+if(APPLE)
+    set(CMAKE_MACOSX_RPATH ON)
+    set(CMAKE_INSTALL_RPATH "@executable_path;@executable_path/../lib")
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+endif()
+
 # Note: CMAKE_MSVC_RUNTIME_LIBRARY is set after project() below,
 # because the MSVC variable is not defined until the compiler is identified.
 
@@ -2316,10 +2326,6 @@ if(APPLE)
     # 4.1 but the backend still functions. MoltenVK/Metal are the long-term
     # path; until then, GL is the supported non-headless default.
     target_compile_definitions(SparkEngineLib PUBLIC GL_SILENCE_DEPRECATION=1)
-    # Set rpath for .dylib game modules and shared libraries
-    set(CMAKE_MACOSX_RPATH ON)
-    set(CMAKE_INSTALL_RPATH "@executable_path;@executable_path/../lib")
-    set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
     message(STATUS "SparkEngine: macOS frameworks linked (Cocoa, IOKit, CoreVideo, AudioToolbox, CoreAudio)")
 endif()
 

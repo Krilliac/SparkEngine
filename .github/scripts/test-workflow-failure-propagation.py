@@ -28,6 +28,7 @@ SITE_DATA_PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "site-data-pu
 TRUSTED_CI_AGGREGATE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "trusted-ci-aggregate.yml"
 README = REPO_ROOT / "README.md"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
+CMAKE_ROOT = REPO_ROOT / "CMakeLists.txt"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
 TEST_TELEMETRY_SPOOL = REPO_ROOT / "Tests" / "TestTelemetrySpool.cpp"
 TELEMETRY_EXPECTED_COUNT = 8
@@ -1050,6 +1051,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         cls.loc_counter = LOC_COUNTER_WORKFLOW.read_text(encoding="utf-8")
         cls.site_data_publish = SITE_DATA_PUBLISH_WORKFLOW.read_text(encoding="utf-8")
         cls.readme = README.read_text(encoding="utf-8")
+        cls.cmake = CMAKE_ROOT.read_text(encoding="utf-8")
         cls.tests_cmake = TESTS_CMAKE.read_text(encoding="utf-8")
         cls.test_telemetry_spool = TEST_TELEMETRY_SPOOL.read_text(encoding="utf-8")
 
@@ -1124,6 +1126,18 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("- os: macos-15", self.build)
         self.assertIn("- os: windows-2022", self.release)
         self.assertIn("- os: macos-15", self.release)
+
+    def test_macos_install_rpath_is_initialized_before_engine_targets(self) -> None:
+        """Installed macOS binaries must inherit the staged shared-library RPATH."""
+        rpath = 'set(CMAKE_INSTALL_RPATH "@executable_path;@executable_path/../lib")'
+        self.assertEqual(self.cmake.count(rpath), 1)
+        rpath_position = self.cmake.index(rpath)
+        first_engine_library = self.cmake.index("add_library(SparkEngineLib STATIC")
+        first_engine_executable = self.cmake.index("add_executable(SparkEngine")
+        self.assertLess(rpath_position, first_engine_library)
+        self.assertLess(rpath_position, first_engine_executable)
+        self.assertIn("set(CMAKE_MACOSX_RPATH ON)", self.cmake)
+        self.assertIn("set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)", self.cmake)
 
     def test_standard_test_evidence_rejects_scrub_removal_or_reordering(self) -> None:
         vs2022 = yaml_section(self.build, "build-windows-vs2022", indent=2)
