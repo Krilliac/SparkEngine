@@ -10,7 +10,7 @@
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.",
+      "rationale": "Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. 2026-09-12 progress: built-in RemoteDebug command types are now reserved against public handler rebinding, with a hostile probe and RemoteAdmin regression proving a replacement cannot downgrade authorization. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.",
       "dependencies": [],
       "parallelWith": [
         "CI-100",
@@ -860,7 +860,7 @@
       "wave": 2,
       "area": "performance",
       "owner": "unassigned",
-      "rationale": "Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. Pre-release control-plane tooling now provides identity-bound bounded duplicate-aware JSON ingestion, exact nested schemas, externally supplied full-SHA equality, per-hardware active-budget approvals bound to canonical definition digests, hardware-scoped completeness, explicit non-active semantics, a required CI governance job, and 152 Python test methods including 21 second-audit and 15 final-audit hostile cases. These are tooling checks only: all 17 committed metric definitions remain pending_measurement, with zero certified hardware rows and zero accepted baselines. Representative measured budgets, certified baselines, benchmark scenes, golden images, soaks, and release-result jobs remain pending.",
+      "rationale": "Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. Pre-release control-plane tooling now provides identity-bound bounded duplicate-aware JSON ingestion, exact nested schemas, externally supplied full-SHA equality, per-hardware active-budget approvals bound to canonical definition digests, hardware-scoped completeness, explicit non-active semantics, a required CI governance job, and 153 Python test methods including 22 second-audit and 15 final-audit hostile cases. 2026-09-12 progress: malformed active-metric hardwareRowId values now return validation errors instead of raising during baseline validation. These are tooling checks only: all 17 committed metric definitions remain pending_measurement, with zero certified hardware rows and zero accepted baselines. Representative measured budgets, certified baselines, benchmark scenes, golden images, soaks, and release-result jobs remain pending.",
       "dependencies": [
         "CI-110",
         "BLD-100",

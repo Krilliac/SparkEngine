@@ -1261,7 +1261,7 @@ grype sbom:sbom.spdx.json
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.
+Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. 2026-09-12 progress: built-in RemoteDebug command types are now reserved against public handler rebinding, with a hostile probe and RemoteAdmin regression proving a replacement cannot downgrade authorization. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.
 
 **Dependency contract**
 
@@ -2144,7 +2144,7 @@ ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-te
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** compatibility · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-A release engine must preserve or explicitly migrate user projects and game state across versions; several modules still contain placeholder serialization. 2026-09-05 progress: .spark_save v3 persists the Transform hierarchy, retains <slot>.spark_save.bak and falls back to it on an unreadable slot, creates the save directory on demand, and covers every ComponentFactory-registered serializer; the in-memory v2->v3 migration and the v1 disk fixture are tested. Not yet: a v2 disk fixture, a payload checksum, scene/asset migration fixtures. AchievementSystem persistence remains a game-module responsibility.
+A release engine must preserve or explicitly migrate user projects and game state across versions; several modules still contain placeholder serialization. 2026-09-05 progress: .spark_save v3 persists the Transform hierarchy, retains <slot>.spark_save.bak and falls back to it on an unreadable slot, creates the save directory on demand, and covers every ComponentFactory-registered serializer; the in-memory v2->v3 migration and the v1 disk fixture are tested. 2026-09-12 progress: AssetMigrationRegistry now rejects a valid header whose asset type differs from the requested migration type, with a production regression. Not yet: a v2 disk fixture, a payload checksum, scene/asset migration fixtures. AchievementSystem persistence remains a game-module responsibility.
 
 **Dependency contract**
 
@@ -2305,7 +2305,7 @@ ctest --test-dir /tmp/spark-sdk-consumer --output-on-failure --no-tests=error
 **Priority:** P1 · **Status:** in-progress · **Wave:** 2 · **Area:** performance · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. Pre-release control-plane tooling now provides identity-bound bounded duplicate-aware JSON ingestion, exact nested schemas, externally supplied full-SHA equality, per-hardware active-budget approvals bound to canonical definition digests, hardware-scoped completeness, explicit non-active semantics, a required CI governance job, and 152 Python test methods including 21 second-audit and 15 final-audit hostile cases. These are tooling checks only: all 17 committed metric definitions remain pending_measurement, with zero certified hardware rows and zero accepted baselines. Representative measured budgets, certified baselines, benchmark scenes, golden images, soaks, and release-result jobs remain pending.
+Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. Pre-release control-plane tooling now provides identity-bound bounded duplicate-aware JSON ingestion, exact nested schemas, externally supplied full-SHA equality, per-hardware active-budget approvals bound to canonical definition digests, hardware-scoped completeness, explicit non-active semantics, a required CI governance job, and 153 Python test methods including 22 second-audit and 15 final-audit hostile cases. 2026-09-12 progress: malformed active-metric hardwareRowId values now return validation errors instead of raising during baseline validation. These are tooling checks only: all 17 committed metric definitions remain pending_measurement, with zero certified hardware rows and zero accepted baselines. Representative measured budgets, certified baselines, benchmark scenes, golden images, soaks, and release-result jobs remain pending.
 
 **Dependency contract**
 
