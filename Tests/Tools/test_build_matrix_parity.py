@@ -498,6 +498,20 @@ class PresetAndCodemodelTests(unittest.TestCase):
         findings = check_parity.check_profile_presets(mutated)
         self.assertTrue(any("windows-validation" in finding.message for finding in findings))
 
+    def test_every_source_tree_configuration_must_bind_to_a_matching_build_preset(self) -> None:
+        data = inventory.build_inventory()
+        mutated = copy.deepcopy(data)
+        mutated["cmakePresets"]["buildPresets"] = [
+            preset
+            for preset in mutated["cmakePresets"]["buildPresets"]
+            if preset["name"] != "windows-shipping"
+        ]
+
+        findings = check_parity.check_profile_presets(mutated)
+
+        self.assertTrue(any("windows-shipping" in finding.message for finding in findings))
+        self.assertTrue(any(finding.category == "profile-build-preset-invalid" for finding in findings))
+
     def test_build_matrix_profile_ids_are_not_misclassified_as_preset_names(self) -> None:
         data = inventory.build_inventory()
         findings = check_parity.check_workflow_adoption(data)
