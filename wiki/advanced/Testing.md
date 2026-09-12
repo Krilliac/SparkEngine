@@ -674,7 +674,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*604 test-bearing `.cpp`/`.mm` files, 7330 source-level test definitions*
+*604 test-bearing `.cpp`/`.mm` files, 7332 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -921,7 +921,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameModuleRTS` | 39 |
 | `TestGameModuleRacing` | 28 |
 | `TestGameObjectTransforms` | 24 |
-| `TestGamePackager` | 10 |
+| `TestGamePackager` | 11 |
 | `TestGameViewPanel` | 3 |
 | `TestGamepadInputProcessing` | 23 |
 | `TestGameplayDebugger` | 11 |
@@ -1003,7 +1003,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
-| `TestModuleLifecycleReal` | 7 |
+| `TestModuleLifecycleReal` | 8 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
 | `TestMultiISADispatch` | 7 |

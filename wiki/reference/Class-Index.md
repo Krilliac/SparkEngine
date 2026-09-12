@@ -2627,7 +2627,7 @@
 | `NullCommandList` | class | SparkEngine | [NullRHIDevice.h:L44](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L44) | No-op command list that tracks call counts for validation. |
 | `NullDeviceStats` | struct | Tests | [TestNullRHIDevice.cpp:L12](../../Tests/TestNullRHIDevice.cpp#L12) |  |
 | `NullEngineContext` | class | Tests | [TestModuleABI.cpp:L57](../../Tests/TestModuleABI.cpp#L57) |  |
-| `NullEngineContext` | class | Tests | [TestModuleLifecycleReal.cpp:L49](../../Tests/TestModuleLifecycleReal.cpp#L49) |  |
+| `NullEngineContext` | class | Tests | [TestModuleLifecycleReal.cpp:L52](../../Tests/TestModuleLifecycleReal.cpp#L52) |  |
 | `NullInputBackend` | class | SparkEngine | [PlatformInput.h:L246](../../SparkEngine/Source/Input/PlatformInput.h#L246) | No-op input backend for headless mode and unit tests. |
 | `NullOnlinePlatform` | class | SparkEngine | [OnlineServices.h:L194](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L194) | Fully functional offline platform implementation |
 | `NullPipelineState` | class | SparkEngine | [NullRHIResources.h:L149](../../SparkEngine/Source/Graphics/RHI/NullRHIResources.h#L149) | Interface-only stub pipeline state. |
@@ -3639,7 +3639,7 @@
 | `ScopedLoggerBaseline` | struct | Tests | [ScopedLoggerBaseline.h:L20](../../Tests/ScopedLoggerBaseline.h#L20) |  |
 | `ScopedManifestCredentialWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L91](../../SparkCrashReporter/src/CrashReporterApp.cpp#L91) |  |
 | `ScopedMinimumFileSizeLimit` | class | Tests | [Test_persistence_SaveSystem.cpp:L40](../../Tests/harden/Test_persistence_SaveSystem.cpp#L40) |  |
-| `ScopedModuleEnvironment` | class | Tests | [TestModuleLifecycleReal.cpp:L78](../../Tests/TestModuleLifecycleReal.cpp#L78) | A SPARK_MODULE_ABI_ |
+| `ScopedModuleEnvironment` | class | Tests | [TestModuleLifecycleReal.cpp:L81](../../Tests/TestModuleLifecycleReal.cpp#L81) | A SPARK_MODULE_ABI_ |
 | `ScopedNativeHandle` | class | SparkCrashReporter | [CrashReporterApp.cpp:L546](../../SparkCrashReporter/src/CrashReporterApp.cpp#L546) |  |
 | `ScopedNetworkBindMode` | class | Tests | [TestNetworkManagerIntegration.cpp:L194](../../Tests/TestNetworkManagerIntegration.cpp#L194) |  |
 | `ScopedNetworkBindMode` | class | Tests | [TestSparkServerApplication.cpp:L21](../../Tests/TestSparkServerApplication.cpp#L21) |  |

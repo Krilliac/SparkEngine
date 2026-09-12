@@ -15,6 +15,7 @@
 #include <Spark/Version.h>
 
 #include <cstdlib>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -299,6 +300,7 @@ TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
     ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
     manager.InitializeAll(&context);
     ASSERT_TRUE(manager.HasInitializedModules());
+    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
 
     auto& console = Spark::SimpleConsole::GetInstance();
     const bool consoleWasInitialized = console.IsInitialized();
@@ -319,13 +321,14 @@ TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
             lastReloadSucceeded = success;
         });
 
-    // Keep the image invalid but present. Its stale sidecar makes each reload
-    // fail before the replacement can be loaded, so retry behavior is isolated
-    // from compiler timing and dynamic-module lifecycle effects.
-    {
-        std::ofstream module(modulePath, std::ios::binary | std::ios::app);
-        module << "invalid replacement";
-    }
+    // Keep the image present but make the real module reject OnLoad. Advance
+    // the timestamp instead of rewriting a loaded DLL, which is not writable
+    // on every Windows loader configuration.
+    std::error_code changeError;
+    const auto previousTime = std::filesystem::last_write_time(modulePath, changeError);
+    ASSERT_FALSE(changeError);
+    std::filesystem::last_write_time(modulePath, previousTime + std::chrono::seconds(2), changeError);
+    ASSERT_FALSE(changeError);
 
     EXPECT_EQ(hotReload.PollChanges(), 0);
     EXPECT_EQ(callbackCount, size_t{1});

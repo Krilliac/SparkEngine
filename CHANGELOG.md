@@ -42,7 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rolling Debug/Release build aliases and generated checksum/SBOM/provenance metadata for development artifacts; binaries/installers are not code-signed, and none of this is versioned stable-v1 release qualification
 
 ### Changed
-- RemoteDebug reserves built-in command types against public handler rebinding, AssetMigration rejects requested-type mismatches, and performance-budget baseline validation rejects malformed hardware IDs
+- Failed ModuleHotReload replacements remain pending for retry instead of consuming the watched file change
+- RemoteDebug reserves built-in command types against public handler rebinding, AssetMigration rejects requested-type mismatches, GamePackager rejects traversal project names, and performance-budget baseline validation rejects malformed hardware IDs
 - SparkGameModule rejects SDK headers with ambiguous `SPARK_SDK_VERSION` definitions before configuring a module ABI sidecar
 - SparkInstaller persists `.sparkengine-install.json` through a flushed same-directory replacement and treats malformed state as non-existent
 - Build-matrix and trusted CodeQL exact-source status publication tolerate GitHub's queued-to-in_progress API race, and Windows authority fixtures select Git Bash instead of the incompatible WindowsApps WSL launcher
