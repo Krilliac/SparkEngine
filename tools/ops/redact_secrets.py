@@ -15,7 +15,7 @@ from typing import Any
 
 from fs_security import FileMetadata, FilesystemPolicyError, SecureRoot, validate_portable_filename
 from secret_policy import SecretFinding, redact_text, scan_json_values, scan_payload
-from strict_json import StrictJsonError, loads_strict
+from ops_strict_json import StrictJsonError, loads_strict
 
 
 MAX_SCAN_FILE_BYTES = 32 * 1024 * 1024

@@ -16,7 +16,7 @@ from typing import Any
 
 from fs_security import FilesystemPolicyError, SecureRoot, validate_portable_filename
 from secret_policy import scan_json_values, scan_payload
-from strict_json import StrictJsonError, loads_strict
+from ops_strict_json import StrictJsonError, loads_strict
 
 
 # These five limits mirror CrashReporterApp.cpp.

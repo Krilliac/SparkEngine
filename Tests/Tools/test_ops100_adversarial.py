@@ -9,6 +9,7 @@ import json
 import os
 import re
 import struct
+import subprocess
 import sys
 import tempfile
 import time
@@ -23,7 +24,7 @@ OPS = ROOT / "tools" / "ops"
 sys.path.insert(0, str(OPS))
 policy = importlib.import_module("secret_policy")
 redactor = importlib.import_module("redact_secrets")
-strict = importlib.import_module("strict_json")
+strict = importlib.import_module("ops_strict_json")
 fs = importlib.import_module("fs_security")
 crash = importlib.import_module("validate_crash_package")
 spool = importlib.import_module("validate_telemetry_spool")
@@ -541,7 +542,7 @@ class CIRegistrationTests(unittest.TestCase):
                 self.assertTrue((tests / name).exists(), f"missing {name}")
 
     def test_all_ops_modules_importable(self) -> None:
-        for module_name in ("secret_policy", "redact_secrets", "strict_json",
+        for module_name in ("secret_policy", "redact_secrets", "ops_strict_json",
                             "fs_security", "validate_crash_package", "validate_telemetry_spool"):
             with self.subTest(module=module_name):
                 mod = importlib.import_module(module_name)
@@ -614,6 +615,27 @@ class DocsEvidenceTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class StrictJsonAdversarialTests(unittest.TestCase):
+    def test_ops_validators_are_isolated_from_module_evidence_strict_json(self) -> None:
+        script = """
+import importlib
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root / "tools" / "module-evidence"))
+importlib.import_module("strict_json")
+sys.path.insert(0, str(root / "tools" / "ops"))
+for module_name in ("redact_secrets", "validate_crash_package", "validate_telemetry_spool"):
+    importlib.import_module(module_name)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(ROOT)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_empty_input_rejected(self) -> None:
         with self.assertRaises(strict.StrictJsonError):
             strict.loads_strict(b"", source="t", max_bytes=1024, max_depth=4,

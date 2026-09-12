@@ -16,7 +16,7 @@ from typing import Any
 
 from fs_security import FilesystemPolicyError, SecureRoot
 from secret_policy import scan_json_values, scan_payload
-from strict_json import StrictJsonError, loads_strict
+from ops_strict_json import StrictJsonError, loads_strict
 
 
 # Offline-tool policy limits. They are not current Telemetry.h runtime guarantees.

@@ -82,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runtime packages now include complete deterministic third-party license notices rather than dependency metadata alone
 
 ### Fixed
+- OPS-100 validators now import their bounded JSON parser under a unique module name, so combined test discovery cannot resolve the module-evidence parser in its place
 - SparkBuild documentation now names the repository's Spark Open License and `Working`/`nightly` development channel instead of stale MIT and `main`/`latest` claims
 - Telemetry local export now creates its configured directory before writing, and the OPS-100 spool validator accepts the sequence-range filenames emitted by the runtime while retaining legacy timestamp-only compatibility
 - `AssetCache::AddAsset` re-locked its own non-recursive mutex through the public `GetCurrentMemory()`/`EvictLRU()` while enforcing the budget; on MSVC the re-lock throws `system_error(resource_deadlock_would_occur)`, so every synchronous `AssetPipeline::LoadAsset` that reached the cache threw. Budget enforcement now runs on lock-held helpers, `EvictLRU()` locks for external callers, and the loop terminates when a single asset exceeds the whole budget (`Tests/TestAssetPipelineReal.cpp` RED proofs; surfaced by the shadow-pass test loading three meshes)
