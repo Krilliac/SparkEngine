@@ -719,6 +719,19 @@ async function main() {
             context: 'Trusted Exact-Source CI / Aggregate'
         });
 
+        const queuedRunningData = fixture();
+        queuedRunningData.event.action = 'in_progress';
+        queuedRunningData.event.workflow_run.status = 'in_progress';
+        queuedRunningData.event.workflow_run.conclusion = null;
+        queuedRunningData.run.status = 'queued';
+        queuedRunningData.run.conclusion = null;
+        queuedRunningData.workflowRuns = [clone(queuedRunningData.run)];
+        const queuedRunningPending = await runPending(root, queuedRunningData);
+        assert.strictEqual(queuedRunningPending.observed.failed.length, 0,
+            'an in-progress event may race the API while the source run is still queued');
+        assert.strictEqual(queuedRunningPending.observed.commitStatuses.length, 2,
+            'a queued source run must still publish the pending CodeQL statuses');
+
         const runningData = fixture();
         runningData.event.action = 'in_progress';
         runningData.run.status = 'in_progress';

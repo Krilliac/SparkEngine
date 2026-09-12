@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rolling Debug/Release build aliases and generated checksum/SBOM/provenance metadata for development artifacts; binaries/installers are not code-signed, and none of this is versioned stable-v1 release qualification
 
 ### Changed
-- Build-matrix exact-source status publication tolerates GitHub's queued-to-in_progress API race, and Windows authority fixtures select Git Bash instead of the incompatible WindowsApps WSL launcher
+- Build-matrix and trusted CodeQL exact-source status publication tolerate GitHub's queued-to-in_progress API race, and Windows authority fixtures select Git Bash instead of the incompatible WindowsApps WSL launcher
 - World saves now write format v3 (reader window v1..v3, in-memory v1->v2 and v2->v3 migrations); `SerializeWorld` covers every `ComponentFactory`-registered type with a serializer instead of a fixed 14, and named entities without other components are retained
 - `RHIBridge::Initialize` no longer silently degrades a windowed request to `NullRHIDevice`; headless fallback requires `allowHeadlessFallback`. D3D11 requires feature level 11_0 (SM 5.0); D3D11 deferred command lists really record (`FinishCommandList`) and execute; structured/indirect buffers get the correct misc flags and SRV/UAVs
 - Shader compiler compiles HLSL to DXBC for real via `d3dcompiler_47` (D3D11/D3D12 on Windows) and fails closed for DXIL/SPIR-V/GLSL/MSL; shader hot reload compiles for real when driven but is not enabled in production; the four DXR PSOs use their shaders' export names
