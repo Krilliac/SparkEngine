@@ -8,7 +8,7 @@
     {
       "category": "target-name-unresolved",
       "severity": "warning",
-      "message": "Target name '${TARGET_NAME}' at cmake/SparkGameModule.cmake:183 cannot be resolved statically",
+      "message": "Target name '${TARGET_NAME}' at cmake/SparkGameModule.cmake:186 cannot be resolved statically",
       "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration."
     },
     {

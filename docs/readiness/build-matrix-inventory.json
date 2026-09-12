@@ -1360,7 +1360,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1544,
+      "line": 1560,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1968,7 +1968,7 @@
       "target": "${TARGET_NAME}",
       "kind": "unresolved",
       "file": "cmake/SparkGameModule.cmake",
-      "line": 183,
+      "line": 186,
       "conditionFrames": [],
       "definitionScope": [
         "spark_add_game_module"
@@ -2801,6 +2801,24 @@
       "resolved": true
     },
     {
+      "target": "SparkInstallerInstallStateTests",
+      "kind": "executable",
+      "file": "SparkInstaller/CMakeLists.txt",
+      "line": 148,
+      "conditionFrames": [
+        {
+          "id": "SparkInstaller/CMakeLists.txt:128",
+          "branch": 0,
+          "branches": [
+            "SPARKINSTALLER_BUILD_TESTS"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkLauncher",
       "kind": "executable",
       "file": "SparkLauncher/CMakeLists.txt",
@@ -3441,7 +3459,7 @@
       "declarations": [
         {
           "file": "cmake/SparkGameModule.cmake",
-          "line": 183,
+          "line": 186,
           "kind": "unresolved",
           "origin": "function-template",
           "definitionScope": [
@@ -4490,6 +4508,24 @@
         {
           "file": "SparkInstaller/CMakeLists.txt",
           "line": 130,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkInstallerInstallStateTests",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "SparkInstaller/CMakeLists.txt",
+          "line": 148,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
