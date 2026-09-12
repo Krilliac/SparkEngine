@@ -35,7 +35,7 @@ MAX_CLOCK_SKEW_SECONDS = 5 * 60
 VALIDATION_SECONDS = 15.0
 UINT64_MAX = 2**64 - 1
 
-TELEMETRY_BATCH_PATTERN = re.compile(r"^telemetry_([0-9]{1,20})\.json$")
+TELEMETRY_BATCH_PATTERN = re.compile(r"^telemetry_([0-9]{1,20})(?:_[0-9]{1,20}_[0-9]{1,20})?\.json$")
 SESSION_ID_PATTERN = re.compile(r"^session_([0-9]{1,20})$")
 EVENT_FIELDS = {"name", "timestamp", "sessionId", "properties", "sequence"}
 REQUIRED_EVENT_FIELDS = {"name", "timestamp", "sessionId", "properties"}

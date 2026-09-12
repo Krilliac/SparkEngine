@@ -4,7 +4,7 @@ A cross-platform terminal UI build tool for configuring and compiling [SparkEngi
 
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-green)
-![License](https://img.shields.io/badge/license-MIT-brightgreen)
+![License](https://img.shields.io/badge/license-Spark_Open-blue)
 
 ## Features
 
@@ -201,13 +201,13 @@ SparkBuild/
 
 ## CI/CD
 
-GitHub Actions automatically builds SparkBuild on every push to `main`:
+GitHub Actions automatically builds SparkBuild in the repository's configured CI lanes:
 
 - **Windows** — Visual Studio 2022 (x64)
 - **Linux** — GCC and Clang with Ninja
 - **macOS** — Clang with Ninja
 
-Tagged commits (`v*`) create versioned GitHub Releases. Every push to `main` updates a rolling `latest` pre-release with fresh binaries for all platforms.
+Tagged commits (`v*`) create versioned GitHub Releases. Pushes to `Working` may update the rolling `nightly` pre-release for development evaluation; those artifacts are not a versioned stable release.
 
 ## Related
 
@@ -215,4 +215,4 @@ Tagged commits (`v*`) create versioned GitHub Releases. Every push to `main` upd
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the repository's [Spark Open License 1.0](../LICENSE).

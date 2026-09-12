@@ -41,6 +41,11 @@ class TelemetrySpoolTests(unittest.TestCase):
     def batch_name(self, offset_seconds: int = 0) -> str:
         return f"telemetry_{int((self.now + offset_seconds) * 1000)}.json"
 
+    def runtime_batch_name(self, first_sequence: int = 1, last_sequence: int = 1) -> str:
+        return (
+            f"telemetry_{int(self.now * 1000)}_{first_sequence}_{last_sequence}.json"
+        )
+
     def write_batch(self, events: object, name: str | None = None) -> Path:
         path = self.root / (name or self.batch_name())
         path.write_text(json.dumps(events), encoding="utf-8")
@@ -57,6 +62,16 @@ class TelemetrySpoolTests(unittest.TestCase):
 
     def test_valid_cpp_shaped_batch(self) -> None:
         self.write_batch([valid_event()])
+        validator = self.validate()
+        self.assertFalse(validator.errors)
+        self.assertEqual(validator.stats["batch_files"], 1)
+
+    def test_current_runtime_filename_with_sequence_range_is_accepted(self) -> None:
+        first = valid_event()
+        first["sequence"] = 7
+        second = valid_event()
+        second["sequence"] = 9
+        self.write_batch([first, second], self.runtime_batch_name(7, 9))
         validator = self.validate()
         self.assertFalse(validator.errors)
         self.assertEqual(validator.stats["batch_files"], 1)

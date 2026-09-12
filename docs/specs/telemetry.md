@@ -4,7 +4,7 @@ This document describes the current local telemetry implementation in `SparkEngi
 
 ## Runtime output
 
-`TelemetrySystem` records events only when initialized, enabled, and consent is observed as true. `LocalFileTelemetryBackend` writes a JSON array to `telemetry_<epoch-ms>.json`. Each serialized event has exactly the runtime fields below:
+`TelemetrySystem` records events only when initialized, enabled, and consent is observed as true. `LocalFileTelemetryBackend` writes a JSON array to `telemetry_<epoch-ms>_<first-sequence>_<last-sequence>.json`. Each serialized event has exactly the runtime fields below:
 
 ```json
 {
@@ -34,7 +34,7 @@ python tools/ops/validate_telemetry_spool.py <spool-root>
 python tools/ops/redact_secrets.py <spool-root>
 ```
 
-The validator pins the supplied non-reparse root; accepts only immediate `telemetry_<epoch-ms>.json` regular single-link files; and rejects symlinks, junctions/reparse points, hard links, subdirectories, and unmatched filenames. Every entry, including an unmatched or oversized one, participates in count and aggregate-size accounting.
+The validator pins the supplied non-reparse root; accepts only immediate `telemetry_<epoch-ms>_<first-sequence>_<last-sequence>.json` (and the legacy `telemetry_<epoch-ms>.json`) regular single-link files; and rejects symlinks, junctions/reparse points, hard links, subdirectories, and unmatched filenames. Every entry, including an unmatched or oversized one, participates in count and aggregate-size accounting.
 
 JSON is strict UTF-8 with duplicate keys, non-finite numbers, excessive depth, excessive collections, and oversized strings rejected. Events require `name`, `timestamp`, `sessionId`, and `properties`; timestamps and optional sequences must be true uint64 integers (not booleans or floats); properties must be a bounded string-to-string object. Filename time and filesystem modification time are checked independently for retention and future skew. The shared secret policy covers GitHub, AWS, OpenAI, Anthropic, bearer/URL/PEM, and structured credential fields without printing secret previews.
 

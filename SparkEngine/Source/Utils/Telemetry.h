@@ -163,6 +163,13 @@ namespace Spark
             if (m_exportPath.empty())
                 return TelemetryDeliveryResult::RetryableFailure;
 
+            const std::filesystem::path exportPath(m_exportPath);
+            std::error_code directoryError;
+            if (!std::filesystem::create_directories(exportPath, directoryError) && directoryError)
+                return TelemetryDeliveryResult::RetryableFailure;
+            if (!std::filesystem::is_directory(exportPath, directoryError) || directoryError)
+                return TelemetryDeliveryResult::RetryableFailure;
+
             // Build filename from epoch time
             auto now = std::chrono::system_clock::now().time_since_epoch();
             auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
@@ -170,7 +177,7 @@ namespace Spark
             const std::string fileName = "telemetry_" + std::to_string(ms) + "_" +
                                          std::to_string(events.front().sequence) + "_" +
                                          std::to_string(events.back().sequence) + ".json";
-            const std::filesystem::path filePath = std::filesystem::path(m_exportPath) / fileName;
+            const std::filesystem::path filePath = exportPath / fileName;
 
             std::ofstream file(filePath, std::ios::binary | std::ios::trunc);
             if (!file.is_open())

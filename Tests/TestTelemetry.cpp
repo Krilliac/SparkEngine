@@ -216,6 +216,42 @@ TEST(Telemetry_FlushEvents_EmptiesQueue_WithBackend)
     std::filesystem::remove_all(exportPath, cleanupError);
 }
 
+TEST(Telemetry_LocalFileBackend_CreatesMissingExportDirectory)
+{
+    static std::atomic<uint64_t> sequence{0};
+    const auto exportPath = std::filesystem::temp_directory_path() /
+                            ("spark-telemetry-missing-export-" + std::to_string(++sequence) + "-" +
+                             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::error_code cleanupError;
+    std::filesystem::remove_all(exportPath, cleanupError);
+
+    Spark::TelemetryEvent event;
+    event.name = "directory_creation";
+    event.timestamp = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count());
+    event.sessionId = "session_" + std::to_string(event.timestamp);
+    event.sequence = 7;
+
+    Spark::LocalFileTelemetryBackend backend(exportPath.string());
+    EXPECT_TRUE(backend.Send(std::vector<Spark::TelemetryEvent>{event}) == Spark::TelemetryDeliveryResult::Delivered);
+    EXPECT_TRUE(std::filesystem::is_directory(exportPath));
+    EXPECT_EQ(backend.GetFilesWritten(), 1u);
+
+    size_t fileCount = 0;
+    std::filesystem::path writtenFile;
+    for (const auto& entry : std::filesystem::directory_iterator(exportPath))
+    {
+        ++fileCount;
+        writtenFile = entry.path();
+    }
+    EXPECT_EQ(fileCount, 1u);
+    if (fileCount == 1)
+        EXPECT_TRUE(writtenFile.filename().string().find("_7_7.json") != std::string::npos);
+
+    std::filesystem::remove_all(exportPath, cleanupError);
+}
+
 TEST(Telemetry_FlushEvents_NoBackend_QueueRetained)
 {
     auto& telemetry = Spark::TelemetrySystem::GetInstance();
