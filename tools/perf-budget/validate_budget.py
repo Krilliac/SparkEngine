@@ -35,6 +35,7 @@ SUPPORTED_BUDGET_VERSION = "v1"
 SUPPORTED_BASELINE_VERSION = "v1"
 
 MAX_JSON_BYTES = 2 * 1024 * 1024
+MAX_JSON_DEPTH = 64
 MAX_HARDWARE_ROWS = 128
 MAX_METRICS = 2048
 MAX_BASELINES = 2048
@@ -298,6 +299,32 @@ def _reject_json_constant(value: str) -> Any:
     raise BudgetValidationError(f"non-finite JSON number {value!r} is not allowed")
 
 
+def _validate_json_nesting(text: str) -> None:
+    """Reject excessive structural depth before the runtime JSON parser runs."""
+    depth = 0
+    in_string = False
+    escaped = False
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            if depth > MAX_JSON_DEPTH:
+                raise BudgetValidationError(
+                    f"JSON nesting/value is invalid: maximum depth {MAX_JSON_DEPTH} exceeded"
+                )
+        elif character in "]}":
+            depth = max(0, depth - 1)
+
+
 def budget_definition_digest(metric: Any) -> str | None:
     """Return the canonical approval digest for one exact metric definition."""
     if not isinstance(metric, dict) or set(metric) != set(METRIC_REQUIRED):
@@ -501,6 +528,7 @@ def load_bounded_json(path: Path, label: str, *,
     except UnicodeDecodeError as exc:
         return None, [f"{label}: invalid UTF-8 at byte {exc.start}"]
     try:
+        _validate_json_nesting(text)
         data = json.loads(
             text,
             object_pairs_hook=_duplicate_aware_object,

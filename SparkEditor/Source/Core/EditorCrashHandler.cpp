@@ -198,7 +198,6 @@ namespace SparkEditor
         {
             s_instance = nullptr;
         }
-
     }
 
     bool EditorCrashHandler::Initialize(const std::string& crashDirectory, EditorLogger* logger)

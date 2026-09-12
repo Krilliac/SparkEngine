@@ -42,7 +42,7 @@ namespace SparkEditor
      * resulting value-only snapshot to EditorRecoveryStore.
      */
     EditorRecoverySnapshot CaptureRecoverySnapshotOnCallingThread(const ::World& world,
-                                                                   EditorRecoverySnapshot metadata);
+                                                                  EditorRecoverySnapshot metadata);
 
     /**
      * @brief Deserialize a recovery document into a new World without touching
@@ -53,7 +53,7 @@ namespace SparkEditor
      * this operation so it remains state-only.
      */
     std::unique_ptr<::World> DeserializeRecoverySnapshotIntoFreshWorld(const EditorRecoverySnapshot& snapshot,
-                                                                        std::string& error);
+                                                                       std::string& error);
 
     /**
      * @brief Resolve a candidate scene path only when it remains inside a project.
@@ -62,10 +62,8 @@ namespace SparkEditor
      * are weakly canonicalized so an existing symlink or junction cannot turn
      * a lexically safe-looking path into an outside-project write.
      */
-    bool ResolvePathInsideProject(const std::filesystem::path& projectRoot,
-                                  const std::filesystem::path& candidate,
-                                  std::filesystem::path& resolved,
-                                  std::string& error);
+    bool ResolvePathInsideProject(const std::filesystem::path& projectRoot, const std::filesystem::path& candidate,
+                                  std::filesystem::path& resolved, std::string& error);
 
     enum class EditorRecoveryLoadState : uint8_t
     {

@@ -339,9 +339,8 @@ namespace Spark
 
             for (const int64_t parentId : parentIds)
             {
-                if (parentId >= 0 &&
-                    (static_cast<uint64_t>(parentId) > std::numeric_limits<uint32_t>::max() ||
-                     !entityIds.contains(static_cast<uint32_t>(parentId))))
+                if (parentId >= 0 && (static_cast<uint64_t>(parentId) > std::numeric_limits<uint32_t>::max() ||
+                                      !entityIds.contains(static_cast<uint32_t>(parentId))))
                     return false;
             }
             return true;
@@ -618,9 +617,8 @@ namespace Spark
                 if (!WriteDurableText(backupTemporary, previous, error) ||
                     !ReplaceFileAtomically(backupTemporary, backup, error))
                 {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core,
-                                   "[ReflectedScene] previous-good backup failed for %s: %s", path.c_str(),
-                                   error.message().c_str());
+                    SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] previous-good backup failed for %s: %s",
+                                   path.c_str(), error.message().c_str());
                     RemoveFileNoThrow(temporary);
                     RemoveFileNoThrow(backupTemporary);
                     return false;
@@ -630,8 +628,8 @@ namespace Spark
 
         if (!ReplaceFileAtomically(temporary, destination, error))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] atomic replace failed for %s: %s",
-                           path.c_str(), error.message().c_str());
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] atomic replace failed for %s: %s", path.c_str(),
+                           error.message().c_str());
             RemoveFileNoThrow(temporary);
             return false;
         }

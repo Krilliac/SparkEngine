@@ -25,8 +25,8 @@ namespace
         TemporaryReflectedScene()
         {
             const auto nonce = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-            m_path = std::filesystem::temp_directory_path() /
-                     ("spark_reflected_scene_" + std::to_string(nonce) + ".json");
+            m_path =
+                std::filesystem::temp_directory_path() / ("spark_reflected_scene_" + std::to_string(nonce) + ".json");
         }
 
         ~TemporaryReflectedScene()
@@ -275,8 +275,7 @@ TEST(ReflectedScene_RejectsUnknownAndAmbiguousVersionsWithoutMutation)
     world.CreateEntity("KeepMe");
 
     EXPECT_FALSE(DeserializeInto(world, R"json({"version":999,"entities":[]})json"));
-    EXPECT_FALSE(
-        DeserializeInto(world, R"json({"version":1,"sceneVersion":1,"entities":[]})json"));
+    EXPECT_FALSE(DeserializeInto(world, R"json({"version":1,"sceneVersion":1,"entities":[]})json"));
     EXPECT_FALSE(DeserializeInto(world, R"json({"entities":[]})json"));
     EXPECT_FALSE(DeserializeInto(world, R"json({"sceneVersion":"1","entities":[]})json"));
     EXPECT_EQ(world.GetEntityCount(), static_cast<size_t>(1));

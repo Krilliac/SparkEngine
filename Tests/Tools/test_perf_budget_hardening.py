@@ -678,7 +678,10 @@ class TestFinalAuditClosure(unittest.TestCase):
             try:
                 errors = validate_suite(alias)
             finally:
-                os.rmdir(alias)
+                if os.name == "nt":
+                    os.rmdir(alias)
+                else:
+                    alias.unlink()
         self.assertTrue(any("junction" in error or "reparse" in error
                             for error in errors))
 

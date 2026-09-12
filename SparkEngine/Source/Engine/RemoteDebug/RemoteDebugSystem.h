@@ -280,7 +280,8 @@ namespace Spark::RemoteDebug
             m_session.SetState(SessionState::Listening);
             RegisterBuiltinHandlers();
             SPARK_LOG_INFO(Spark::LogCategory::Network,
-                           "RemoteDebugServer: logical listen state configured for port %d (no transport adapter)", port);
+                           "RemoteDebugServer: logical listen state configured for port %d (no transport adapter)",
+                           port);
             return true;
         }
 
@@ -359,7 +360,7 @@ namespace Spark::RemoteDebug
      * @param handler Callback returning a response.
      */
         void RegisterCommandHandler(const std::string& type, RemoteDebugCapability requiredCapability,
-                                     CommandHandler handler)
+                                    CommandHandler handler)
         {
             std::unique_lock executionLock(m_executionMutex);
             RegisterCommandHandlerUnlocked(type, requiredCapability, std::move(handler));
@@ -433,8 +434,8 @@ namespace Spark::RemoteDebug
             // authenticated role. Callers that have no narrower capability
             // declaration get the conservative execution capability.
             m_handlerCapabilities[type] = requiredCapability == RemoteDebugCapability::None
-                                               ? RemoteDebugCapability::ExecuteConsole
-                                               : requiredCapability;
+                                              ? RemoteDebugCapability::ExecuteConsole
+                                              : requiredCapability;
         }
 
         [[nodiscard]] static RemoteCommand AccessDeniedResponse(const RemoteCommand& cmd)
@@ -469,8 +470,9 @@ namespace Spark::RemoteDebug
             }
 
             const auto capabilityIt = m_handlerCapabilities.find(cmd.type);
-            const RemoteDebugCapability requiredCapability =
-                capabilityIt == m_handlerCapabilities.end() ? RemoteDebugCapability::ExecuteConsole : capabilityIt->second;
+            const RemoteDebugCapability requiredCapability = capabilityIt == m_handlerCapabilities.end()
+                                                                 ? RemoteDebugCapability::ExecuteConsole
+                                                                 : capabilityIt->second;
             const auto authorization =
                 m_accessControl.Authorize(principal, cmd.type, cmd.requestId, cmd.payload.size(), requiredCapability);
             if (!authorization.allowed)
@@ -489,57 +491,67 @@ namespace Spark::RemoteDebug
                 return;
             m_builtinsRegistered = true;
 
-            RegisterCommandHandlerUnlocked("console_cmd", RemoteDebugCapability::ExecuteConsole, [](const RemoteCommand& c)
-            {
-                // Extract the command string from the JSON payload
-                std::string command = c.payload;
-                // Simple JSON extraction: find "command":"<value>"
-                auto cmdPos = command.find("\"command\"");
-                if (cmdPos != std::string::npos)
-                {
-                    auto valStart = command.find('\"', cmdPos + 9);
-                    if (valStart != std::string::npos)
-                    {
-                        auto valEnd = command.find('\"', valStart + 1);
-                        if (valEnd != std::string::npos)
-                            command = command.substr(valStart + 1, valEnd - valStart - 1);
-                    }
-                }
+            RegisterCommandHandlerUnlocked("console_cmd", RemoteDebugCapability::ExecuteConsole,
+                                           [](const RemoteCommand& c)
+                                           {
+                                               // Extract the command string from the JSON payload
+                                               std::string command = c.payload;
+                                               // Simple JSON extraction: find "command":"<value>"
+                                               auto cmdPos = command.find("\"command\"");
+                                               if (cmdPos != std::string::npos)
+                                               {
+                                                   auto valStart = command.find('\"', cmdPos + 9);
+                                                   if (valStart != std::string::npos)
+                                                   {
+                                                       auto valEnd = command.find('\"', valStart + 1);
+                                                       if (valEnd != std::string::npos)
+                                                           command =
+                                                               command.substr(valStart + 1, valEnd - valStart - 1);
+                                                   }
+                                               }
 
-                auto& console = Spark::SimpleConsole::GetInstance();
-                uint64_t logsBefore = console.GetStats().totalLogsWritten;
-                bool success = console.ExecuteCommand(command);
+                                               auto& console = Spark::SimpleConsole::GetInstance();
+                                               uint64_t logsBefore = console.GetStats().totalLogsWritten;
+                                               bool success = console.ExecuteCommand(command);
 
-                // Collect output generated by the command
-                std::string output;
-                auto logs = console.GetLogHistory();
-                for (const auto& entry : logs)
-                {
-                    if (entry.sequenceNumber >= logsBefore)
-                    {
-                        if (!output.empty())
-                            output += '\n';
-                        output += entry.message;
-                    }
-                }
+                                               // Collect output generated by the command
+                                               std::string output;
+                                               auto logs = console.GetLogHistory();
+                                               for (const auto& entry : logs)
+                                               {
+                                                   if (entry.sequenceNumber >= logsBefore)
+                                                   {
+                                                       if (!output.empty())
+                                                           output += '\n';
+                                                       output += entry.message;
+                                                   }
+                                               }
 
-                std::string payload = "{\"status\":\"" + std::string(success ? "ok" : "error") + "\",\"output\":\"" +
-                                      EscapeJson(output) + "\"}";
-                return RemoteCommand{"console_cmd_result", payload, c.requestId, 0.0f};
-            });
-            RegisterCommandHandlerUnlocked("property_get", RemoteDebugCapability::Inspect, [](const RemoteCommand& c)
-            {
-                std::string payload = "{\"path\":\"" + EscapeJson(c.payload) + "\",\"value\":null}";
-                return RemoteCommand{"property_value", payload, c.requestId, 0.0f};
-            });
-            RegisterCommandHandlerUnlocked("property_set", RemoteDebugCapability::ModifyProperties, [](const RemoteCommand& c)
-            { return RemoteCommand{"property_set_result", R"({"status":"ok"})", c.requestId, 0.0f}; });
-            RegisterCommandHandlerUnlocked("profile_data", RemoteDebugCapability::Inspect, [](const RemoteCommand& c) {
-                return RemoteCommand{"profile_data", R"({"fps":0,"cpuMs":0,"gpuMs":0,"memoryMB":0})", c.requestId,
-                                     0.0f};
-            });
-            RegisterCommandHandlerUnlocked("heartbeat", RemoteDebugCapability::Inspect, [](const RemoteCommand& c)
-            { return RemoteCommand{"heartbeat", R"({"status":"alive"})", c.requestId, 0.0f}; });
+                                               std::string payload = "{\"status\":\"" +
+                                                                     std::string(success ? "ok" : "error") +
+                                                                     "\",\"output\":\"" + EscapeJson(output) + "\"}";
+                                               return RemoteCommand{"console_cmd_result", payload, c.requestId, 0.0f};
+                                           });
+            RegisterCommandHandlerUnlocked("property_get", RemoteDebugCapability::Inspect,
+                                           [](const RemoteCommand& c)
+                                           {
+                                               std::string payload =
+                                                   "{\"path\":\"" + EscapeJson(c.payload) + "\",\"value\":null}";
+                                               return RemoteCommand{"property_value", payload, c.requestId, 0.0f};
+                                           });
+            RegisterCommandHandlerUnlocked(
+                "property_set", RemoteDebugCapability::ModifyProperties, [](const RemoteCommand& c)
+                { return RemoteCommand{"property_set_result", R"({"status":"ok"})", c.requestId, 0.0f}; });
+            RegisterCommandHandlerUnlocked("profile_data", RemoteDebugCapability::Inspect,
+                                           [](const RemoteCommand& c)
+                                           {
+                                               return RemoteCommand{"profile_data",
+                                                                    R"({"fps":0,"cpuMs":0,"gpuMs":0,"memoryMB":0})",
+                                                                    c.requestId, 0.0f};
+                                           });
+            RegisterCommandHandlerUnlocked(
+                "heartbeat", RemoteDebugCapability::Inspect, [](const RemoteCommand& c)
+                { return RemoteCommand{"heartbeat", R"({"status":"alive"})", c.requestId, 0.0f}; });
         }
 
         RemoteSession m_session;

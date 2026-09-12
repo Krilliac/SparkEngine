@@ -261,9 +261,12 @@ namespace SparkEditor
             ShowNotification("Redo: " + redoDesc, "info");
         }
         ImGui::Separator();
-        RenderUnavailableMenuItem("Cut", "Ctrl+X", "Selection clipboard actions are not available in this editor build.");
-        RenderUnavailableMenuItem("Copy", "Ctrl+C", "Selection clipboard actions are not available in this editor build.");
-        RenderUnavailableMenuItem("Paste", "Ctrl+V", "Selection clipboard actions are not available in this editor build.");
+        RenderUnavailableMenuItem("Cut", "Ctrl+X",
+                                  "Selection clipboard actions are not available in this editor build.");
+        RenderUnavailableMenuItem("Copy", "Ctrl+C",
+                                  "Selection clipboard actions are not available in this editor build.");
+        RenderUnavailableMenuItem("Paste", "Ctrl+V",
+                                  "Selection clipboard actions are not available in this editor build.");
         ImGui::Separator();
         RenderUnavailableMenuItem("Select All", "Ctrl+A",
                                   "Selection clipboard actions are not available in this editor build.");
@@ -640,13 +643,16 @@ namespace SparkEditor
             ShowNotification("Build & Cook panel opened", "info");
         }
         ImGui::Separator();
-        RenderUnavailableMenuItem(ICON_FA_LIGHTBULB " Build Lighting", nullptr,
-                                  "Lighting builds are not available in this editor build. Use Build Settings for supported tasks.");
-        RenderUnavailableMenuItem(ICON_FA_MAP " Build NavMesh", nullptr,
-                                  "NavMesh builds are not available in this editor build. Use Build Settings for supported tasks.");
+        RenderUnavailableMenuItem(
+            ICON_FA_LIGHTBULB " Build Lighting", nullptr,
+            "Lighting builds are not available in this editor build. Use Build Settings for supported tasks.");
+        RenderUnavailableMenuItem(
+            ICON_FA_MAP " Build NavMesh", nullptr,
+            "NavMesh builds are not available in this editor build. Use Build Settings for supported tasks.");
         ImGui::Separator();
-        RenderUnavailableMenuItem(ICON_FA_HAMMER " Build All", nullptr,
-                                  "Build All is unavailable because lighting and NavMesh builds are not available yet.");
+        RenderUnavailableMenuItem(
+            ICON_FA_HAMMER " Build All", nullptr,
+            "Build All is unavailable because lighting and NavMesh builds are not available yet.");
         if (ImGui::MenuItem(ICON_FA_FIRE " Cook Content"))
         {
             SetPanelVisible("BuildCook", true);

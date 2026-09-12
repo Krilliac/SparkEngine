@@ -817,7 +817,8 @@ TEST(ProjectManager_ExplicitDataDirectoriesKeepHistorySeparate)
     const fs::path firstDir = root / "first";
     const fs::path secondDir = root / "second";
     fs::create_directories(firstDir);
-    const std::string original = R"({"recentProjects":[{"name":"Profile A","path":"missing.sparkproject","engineVersion":"1.0","lastOpened":1}]})";
+    const std::string original =
+        R"({"recentProjects":[{"name":"Profile A","path":"missing.sparkproject","engineVersion":"1.0","lastOpened":1}]})";
     {
         std::ofstream seed(firstDir / "RecentProjects.json");
         seed << original;
@@ -2468,7 +2469,14 @@ TEST(Gated_EditorDockLayout_ToolbarUsesContentHeightAndKeepsPanelsSeparate)
     ImGuiContext* previous = ImGui::GetCurrentContext();
     ImGuiContext* context = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1280.0f, 2160.0f);
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+    ImGui::NewFrame();
+    ImGui::Begin("##DockLayoutGeometryTest");
     for (float height : {720.0f, 1080.0f, 2160.0f})
     {
         const ImGuiID root = 0x53444F43;
@@ -2486,6 +2494,8 @@ TEST(Gated_EditorDockLayout_ToolbarUsesContentHeightAndKeepsPanelsSeparate)
         EXPECT_TRUE(nodes.bottom != nodes.center);
         ImGui::DockBuilderRemoveNode(root);
     }
+    ImGui::End();
+    ImGui::EndFrame();
     ImGui::DestroyContext(context);
     ImGui::SetCurrentContext(previous);
 }
@@ -2495,7 +2505,14 @@ TEST(Gated_EditorDockLayout_PreservesExistingTreeUntilExplicitReset)
     ImGuiContext* previous = ImGui::GetCurrentContext();
     ImGuiContext* context = ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1280.0f, 720.0f);
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+    ImGui::NewFrame();
+    ImGui::Begin("##DockLayoutPersistenceTest");
 
     const ImGuiID root = 0x53444F43;
     BuildEditorDockLayout(root, ImVec2(1280.0f, 720.0f));
@@ -2504,6 +2521,8 @@ TEST(Gated_EditorDockLayout_PreservesExistingTreeUntilExplicitReset)
 
     ImGui::DockBuilderRemoveNode(root);
     EXPECT_TRUE(NeedsDefaultEditorDockLayout(root, false));
+    ImGui::End();
+    ImGui::EndFrame();
     ImGui::DestroyContext(context);
     ImGui::SetCurrentContext(previous);
 }
@@ -2684,8 +2703,8 @@ TEST(Gated_EditorTheme_GetAvailableThemes)
     EXPECT_TRUE(std::is_sorted(themes.begin(), themes.end()));
     for (const char* name : {"Ember Studio", "Cobalt Forge", "Graphite Signal", "Professional Light", "High Contrast"})
         EXPECT_TRUE(std::find(themes.begin(), themes.end(), name) != themes.end());
-    for (const char* name : {"Spark Professional", "Spark Fusion", "Spark Ember", "Unity Pro", "Unreal Pro",
-                             "VS Pro", "JetBrains", "Blue Accent", "Orange Accent"})
+    for (const char* name : {"Spark Professional", "Spark Fusion", "Spark Ember", "Unity Pro", "Unreal Pro", "VS Pro",
+                             "JetBrains", "Blue Accent", "Orange Accent"})
         EXPECT_TRUE(std::find(themes.begin(), themes.end(), name) == themes.end());
 }
 
@@ -2694,11 +2713,9 @@ TEST(Gated_EditorTheme_RetiredNamesResolveWithoutPickerDuplicates)
     ImGuiContext* previous = ImGui::GetCurrentContext();
     ImGuiContext* context = ImGui::CreateContext();
     const std::pair<const char*, const char*> aliases[] = {
-        {"Spark Professional", "Ember Studio"}, {"Spark Ember", "Ember Studio"},
-        {"Orange Accent", "Ember Studio"}, {"Spark Fusion", "Cobalt Forge"},
-        {"Unreal Pro", "Cobalt Forge"}, {"Blue Accent", "Cobalt Forge"},
-        {"Unity Pro", "Graphite Signal"}, {"VS Pro", "Graphite Signal"},
-        {"JetBrains", "Graphite Signal"}};
+        {"Spark Professional", "Ember Studio"}, {"Spark Ember", "Ember Studio"}, {"Orange Accent", "Ember Studio"},
+        {"Spark Fusion", "Cobalt Forge"},       {"Unreal Pro", "Cobalt Forge"},  {"Blue Accent", "Cobalt Forge"},
+        {"Unity Pro", "Graphite Signal"},       {"VS Pro", "Graphite Signal"},   {"JetBrains", "Graphite Signal"}};
     for (const auto& [oldName, replacement] : aliases)
     {
         const auto* resolved = EditorTheme::GetTheme(oldName);

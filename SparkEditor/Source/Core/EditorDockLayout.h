@@ -36,7 +36,7 @@ namespace SparkEditor
         const float toolbarHeight = EditorToolbarButtonSize + 2.0f * EditorToolbarPaddingY;
         const float splitHeight = ImMax(1.0f, size.y - ImGui::GetStyle().DockingSeparatorSize);
         ImGui::DockBuilderSplitNode(main, ImGuiDir_Up, ImClamp(toolbarHeight / splitHeight, 0.0f, 0.95f),
-                                   &nodes.toolbar, &main);
+                                    &nodes.toolbar, &main);
         if (auto* toolbar = ImGui::DockBuilderGetNode(nodes.toolbar))
         {
             // This is an action strip, not a document tab. Keep the workspace
@@ -49,4 +49,4 @@ namespace SparkEditor
         ImGui::DockBuilderSplitNode(main, ImGuiDir_Down, 0.25f, &nodes.bottom, &nodes.center);
         return nodes;
     }
-}
+} // namespace SparkEditor

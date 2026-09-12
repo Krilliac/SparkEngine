@@ -116,8 +116,7 @@ namespace Spark::Net
     }
 
     /** @brief Whether an RFC1918 address/prefix denotes a concrete broadcast-capable LAN host. */
-    [[nodiscard]] inline constexpr bool IsConcretePrivateUnicastAddress(uint32_t address,
-                                                                         uint8_t prefixLength) noexcept
+    [[nodiscard]] inline constexpr bool IsConcretePrivateUnicastAddress(uint32_t address, uint8_t prefixLength) noexcept
     {
         const uint8_t minimumPrefix = MinimumPrivatePrefix(address);
         if (minimumPrefix == 0u || prefixLength < minimumPrefix || prefixLength > 30u)

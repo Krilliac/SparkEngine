@@ -69,9 +69,9 @@ static bool HasFullEngineBindings(const EngineContext* context)
     return context != nullptr && context->GetEventBus() != nullptr && context->GetWorld() != nullptr &&
            context->GetPhysics() != nullptr && context->GetWeather() != nullptr && context->GetTimeOfDay() != nullptr &&
            context->GetCoroutineScheduler() != nullptr && context->GetAbilities() != nullptr &&
-           context->GetConditions() != nullptr && context->GetInstances() != nullptr && context->GetDialogue() != nullptr &&
-           context->GetTween() != nullptr && context->GetSaveSystem() != nullptr && context->GetVFS() != nullptr &&
-           context->GetFileCache() != nullptr && context->GetDestruction() != nullptr &&
+           context->GetConditions() != nullptr && context->GetInstances() != nullptr &&
+           context->GetDialogue() != nullptr && context->GetTween() != nullptr && context->GetSaveSystem() != nullptr &&
+           context->GetVFS() != nullptr && context->GetFileCache() != nullptr && context->GetDestruction() != nullptr &&
            context->GetAreaStreaming() != nullptr;
 }
 

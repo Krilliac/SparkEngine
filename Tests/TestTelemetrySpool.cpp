@@ -862,14 +862,14 @@ TEST(Telemetry_SpoolPathPolicy_TrustedRootAliasRewritesOnlyExactPrefix)
     const fs::path requestedDirectory = trustedAlias / "folders" / "session";
     const fs::path expectedDirectory = trustedTarget / "folders" / "session";
 
-    EXPECT_EQ(Spark::TelemetryDetail::TelemetrySpoolPathPolicy::NormalizeTrustedRootAlias(
-                  requestedDirectory, trustedAlias, trustedTarget),
+    EXPECT_EQ(Spark::TelemetryDetail::TelemetrySpoolPathPolicy::NormalizeTrustedRootAlias(requestedDirectory,
+                                                                                          trustedAlias, trustedTarget),
               expectedDirectory);
     EXPECT_EQ(Spark::TelemetryDetail::TelemetrySpoolPathPolicy::NormalizeTrustedRootAlias(
                   fixture.Root() / "variable" / "session", trustedAlias, trustedTarget),
               fixture.Root() / "variable" / "session");
-    EXPECT_EQ(Spark::TelemetryDetail::TelemetrySpoolPathPolicy::NormalizeTrustedRootAlias(
-                  fs::path("var") / "session", trustedAlias, trustedTarget),
+    EXPECT_EQ(Spark::TelemetryDetail::TelemetrySpoolPathPolicy::NormalizeTrustedRootAlias(fs::path("var") / "session",
+                                                                                          trustedAlias, trustedTarget),
               fs::path("var") / "session");
 }
 

@@ -546,7 +546,7 @@
 | `Case` | struct | Tests | [TestCoverageScripting.cpp:L235](../../Tests/TestCoverageScripting.cpp#L235) |  |
 | `CastState` | struct | Tests | [TestAbilitySystem.cpp:L88](../../Tests/TestAbilitySystem.cpp#L88) |  |
 | `CategoryEntry` | struct | SparkEngine | [MemoryMonitor.h:L86](../../SparkEngine/Source/Utils/MemoryMonitor.h#L86) |  |
-| `CategoryInfo` | struct | SparkEditor | [EditorMenuBar.cpp:L504](../../SparkEditor/Source/Core/EditorMenuBar.cpp#L504) |  |
+| `CategoryInfo` | struct | SparkEditor | [EditorMenuBar.cpp:L507](../../SparkEditor/Source/Core/EditorMenuBar.cpp#L507) |  |
 | `CatOverride` | struct | SparkEngine | [GameplayLifecycleShared.cpp:L370](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp#L370) |  |
 | `CBAllocation` | struct | SparkEngine | [ConstantBufferRing.h:L55](../../SparkEngine/Source/Graphics/ConstantBufferRing.h#L55) | Result of a constant buffer sub-allocation |
 | `CBRingMetrics` | struct | SparkEngine | [ConstantBufferRing.h:L68](../../SparkEngine/Source/Graphics/ConstantBufferRing.h#L68) | Metrics for constant buffer ring usage |
@@ -1174,11 +1174,11 @@
 | `EditorPluginManager` | class | SparkEditor | [EditorPluginManager.h:L59](../../SparkEditor/Source/Core/EditorPluginManager.h#L59) | Manages editor plugin lifecycle |
 | `EditorPluginManager` | class | SparkEditor | [EditorUI.h:L109](../../SparkEditor/Source/Core/EditorUI.h#L109) |  |
 | `EditorProcessOperations` | struct | SparkEditor | [EditorProcessLaunch.h:L103](../../SparkEditor/Source/Utils/EditorProcessLaunch.h#L103) | Injectable operations used by OwnedEditorProcess. Production uses |
-| `EditorRecoveryCaptureGate` | class | SparkEditor | [EditorRecovery.h:L127](../../SparkEditor/Source/Core/EditorRecovery.h#L127) | Keeps an explicit document discard from being re-captured during |
-| `EditorRecoveryController` | class | SparkEditor | [EditorRecovery.h:L99](../../SparkEditor/Source/Core/EditorRecovery.h#L99) | State-only recovery decision controller for the EditorUI modal. |
-| `EditorRecoveryLoadResult` | struct | SparkEditor | [EditorRecovery.h:L78](../../SparkEditor/Source/Core/EditorRecovery.h#L78) |  |
+| `EditorRecoveryCaptureGate` | class | SparkEditor | [EditorRecovery.h:L125](../../SparkEditor/Source/Core/EditorRecovery.h#L125) | Keeps an explicit document discard from being re-captured during |
+| `EditorRecoveryController` | class | SparkEditor | [EditorRecovery.h:L97](../../SparkEditor/Source/Core/EditorRecovery.h#L97) | State-only recovery decision controller for the EditorUI modal. |
+| `EditorRecoveryLoadResult` | struct | SparkEditor | [EditorRecovery.h:L76](../../SparkEditor/Source/Core/EditorRecovery.h#L76) |  |
 | `EditorRecoverySnapshot` | struct | SparkEditor | [EditorRecovery.h:L24](../../SparkEditor/Source/Core/EditorRecovery.h#L24) |  |
-| `EditorRecoveryStore` | class | SparkEditor | [EditorRecovery.h:L140](../../SparkEditor/Source/Core/EditorRecovery.h#L140) |  |
+| `EditorRecoveryStore` | class | SparkEditor | [EditorRecovery.h:L138](../../SparkEditor/Source/Core/EditorRecovery.h#L138) |  |
 | `EditorSceneData` | struct | SparkEditor | [IntegrationTypes.h:L87](../../SparkEditor/Source/Integration/IntegrationTypes.h#L87) | Scene data for editor/engine synchronization |
 | `EditorSceneData` | struct | SparkEditor | [SparkEngineIntegration.h:L97](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L97) | Scene data for editor/engine synchronization |
 | `EditorSettings` | struct | SparkEngine | [EngineSettings.h:L438](../../SparkEngine/Source/Core/EngineSettings.h#L438) |  |
@@ -2559,7 +2559,7 @@
 | `NetworkDebugPanel` | class | SparkEditor | [NetworkDebugPanel.h:L91](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L91) | Editor panel for real-time network debugging |
 | `NetworkDesc` | struct | SparkEngine | [NeuralTypes.h:L51](../../SparkEngine/Source/Graphics/Neural/NeuralTypes.h#L51) | Describes a complete MLP architecture (layers + metadata). |
 | `NetworkDiscoveryConfiguration` | struct | SparkEngine | [NetworkManager.h:L110](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L110) | Immutable snapshot consumed by first-party discovery endpoints. |
-| `NetworkEndpointPolicy` | class | SparkEngine | [NetworkBindPolicy.h:L142](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L142) | Captured endpoint boundary threaded unchanged through one socket lifecycle. |
+| `NetworkEndpointPolicy` | class | SparkEngine | [NetworkBindPolicy.h:L141](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L141) | Captured endpoint boundary threaded unchanged through one socket lifecycle. |
 | `NetworkHandle` | struct | SparkEngine | [NeuralTypes.h:L84](../../SparkEngine/Source/Graphics/Neural/NeuralTypes.h#L84) | Opaque handle to a GPU-resident neural network. |
 | `NetworkHealthConfig` | struct | SparkEngine | [NetworkHealthMonitor.h:L52](../../SparkEngine/Source/Utils/NetworkHealthMonitor.h#L52) | Configuration for network health monitoring |
 | `NetworkHealthConfig` | struct | Tests | [TestNetworkHealthMonitor.cpp:L30](../../Tests/TestNetworkHealthMonitor.cpp#L30) |  |
@@ -2691,7 +2691,7 @@
 | `OrderedBuffer` | struct | Tests | [TestReliableChannel.cpp:L78](../../Tests/TestReliableChannel.cpp#L78) |  |
 | `OrderTrackingSystem` | class | Tests | [TestSystemManagerIntegration.cpp:L24](../../Tests/TestSystemManagerIntegration.cpp#L24) |  |
 | `OriginRebasingStats` | struct | SparkEngine | [WorldOriginSystem.h:L63](../../SparkEngine/Source/Engine/World/WorldOriginSystem.h#L63) | Statistics about origin rebasing |
-| `osInfo` | struct | SparkEditor | [EditorCrashHandler.cpp:L713](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L713) |  |
+| `osInfo` | struct | SparkEditor | [EditorCrashHandler.cpp:L712](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L712) |  |
 | `OtherDerived` | struct | Tests | [TestSafetyCoreUtils.cpp:L148](../../Tests/TestSafetyCoreUtils.cpp#L148) |  |
 | `OverlayStat` | struct | SparkEngine | [DebugOverlay.h:L78](../../SparkEngine/Source/Utils/DebugOverlay.h#L78) | Real-time stat entry for the overlay |
 | `OWDynamicEventSystem` | class | GameModules | [SparkGameOpenWorld.h:L28](../../GameModules/SparkGameOpenWorld/Source/Core/SparkGameOpenWorld.h#L28) |  |
@@ -2745,7 +2745,7 @@
 | `ParallelPerceptionSystem` | class | SparkEngine | [ParallelPerception.h:L120](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L120) |  |
 | `ParallelSystemExecutor` | class | SparkEngine | [ParallelSystemExecutor.h:L73](../../SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.h#L73) | Executes ECS systems in parallel where safe, serial where required. |
 | `ParameterDecl` | struct | SparkEngine | [MaterialDefinition.h:L104](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L104) | Declaration of a single material parameter with metadata. |
-| `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecovery.cpp:L379](../../SparkEditor/Source/Core/EditorRecovery.cpp#L379) |  |
+| `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecovery.cpp:L380](../../SparkEditor/Source/Core/EditorRecovery.cpp#L380) |  |
 | `ParsedScene` | struct | SparkEditor | [SceneImportPanel.h:L85](../../SparkEditor/Source/Panels/SceneImportPanel.h#L85) | Full parse result for one .scene file. |
 | `Parser` | class | SparkEngine | [JsonUtils.h:L409](../../SparkEngine/Source/Utils/JsonUtils.h#L409) |  |
 | `ParseResult` | struct | SparkServer | [ServerApplication.h:L53](../../SparkServer/src/ServerApplication.h#L53) |  |
@@ -2816,7 +2816,7 @@
 | `PendingKill` | struct | GameModules | [TFHUD.h:L126](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUD.h#L126) |  |
 | `PendingMessage` | struct | Tests | [TestReliableChannel.cpp:L108](../../Tests/TestReliableChannel.cpp#L108) |  |
 | `PendingNotification` | struct | SparkEngine | [FileWatcher.h:L257](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h#L257) |  |
-| `PendingParent` | struct | SparkEngine | [ReflectedSceneSerializer.cpp:L473](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L473) |  |
+| `PendingParent` | struct | SparkEngine | [ReflectedSceneSerializer.cpp:L472](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L472) |  |
 | `PendingReload` | struct | SparkEngine | [ModuleHotReload.h:L124](../../SparkEngine/Source/Core/ModuleHotReload.h#L124) |  |
 | `PendingSection` | struct | SparkEngine | [CpuDebugger.h:L312](../../SparkEngine/Source/Utils/CpuDebugger.h#L312) |  |
 | `PendingSpoolPurge` | struct | SparkEngine | [Telemetry.h:L831](../../SparkEngine/Source/Utils/Telemetry.h#L831) |  |
@@ -3190,7 +3190,7 @@
 | `QueueConstraintResult` | struct | SparkEngine | [Telemetry.h:L839](../../SparkEngine/Source/Utils/Telemetry.h#L839) |  |
 | `QueuedEventBus` | class | SparkEngine | [EventSystem.h:L307](../../SparkEngine/Source/Engine/Events/EventSystem.h#L307) |  |
 | `QueueFamilyIndices` | struct | SparkEngine | [VulkanDevice.h:L95](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L95) |  |
-| `QueuePrimed` | struct | Tests | [TestRemoteDebugSystem.cpp:L429](../../Tests/TestRemoteDebugSystem.cpp#L429) |  |
+| `QueuePrimed` | struct | Tests | [TestRemoteDebugSystem.cpp:L422](../../Tests/TestRemoteDebugSystem.cpp#L422) |  |
 | `RaceControlEdges` | struct | GameModules | [RacingRaceFlow.h:L18](../../GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.h#L18) |  |
 | `RaceDef` | struct | GameModules | [MMOCharacterSystem.h:L62](../../GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.h#L62) | Race definition |
 | `Racer` | struct | Tests | [TestSparkGameRacing.cpp:L26](../../Tests/TestSparkGameRacing.cpp#L26) |  |
@@ -3307,12 +3307,12 @@
 | `RemoteDebugAccessControlTestHarness` | class | Tests | [TestRemoteDebugSystem.cpp:L24](../../Tests/TestRemoteDebugSystem.cpp#L24) |  |
 | `RemoteDebugAccessControlTestHarness` | class | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L34](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L34) |  |
 | `RemoteDebugAuditEvent` | struct | SparkEngine | [RemoteDebugAccessControl.h:L87](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L87) | Bounded audit data. Payloads, credentials, and grants are never retained here. |
-| `RemoteDebugClient` | class | SparkEngine | [RemoteDebugSystem.h:L560](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L560) | Connects to a running game and provides convenience debug methods. |
+| `RemoteDebugClient` | class | SparkEngine | [RemoteDebugSystem.h:L572](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L572) | Connects to a running game and provides convenience debug methods. |
 | `RemoteDebugPrincipal` | class | SparkEngine | [RemoteDebugAccessControl.h:L103](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L103) | Opaque server-owned association for an authenticated local endpoint. |
 | `RemoteDebugResponseEpochTestSeam` | struct | SparkEngine | [RemoteDebugSystem.h:L254](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L254) | Optional synchronization seam for deterministic epoch-race tests. |
 | `RemoteDebugServer` | class | SparkEngine | [RemoteDebugAccessControl.h:L25](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L25) |  |
 | `RemoteDebugServer` | class | SparkEngine | [RemoteDebugSystem.h:L261](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L261) | Owns logical server state and dispatches authenticated incoming commands. |
-| `RemoteDebugSystem` | class | SparkEngine | [RemoteDebugSystem.h:L659](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L659) | Top-level singleton owning both server and client instances. |
+| `RemoteDebugSystem` | class | SparkEngine | [RemoteDebugSystem.h:L671](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L671) | Top-level singleton owning both server and client instances. |
 | `RemotePawn` | struct | GameModules | [TFReplication.h:L41](../../GameModules/SparkGameMMOFPS/Source/Net/TFReplication.h#L41) |  |
 | `RemoteSession` | class | SparkEngine | [RemoteDebugSystem.h:L64](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L64) | Mutable state of a single remote debug connection (thread-safe queues). |
 | `RemoveNodeCommand` | class | SparkEditor | [VisualScriptPanel.h:L47](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L47) | Undo command for removing a node from the visual script graph |
@@ -3542,7 +3542,7 @@
 | `S3` | struct | Tests | [TestEngineContext.cpp:L348](../../Tests/TestEngineContext.cpp#L348) |  |
 | `S4` | struct | Tests | [TestEngineContext.cpp:L352](../../Tests/TestEngineContext.cpp#L352) |  |
 | `S5` | struct | Tests | [TestEngineContext.cpp:L356](../../Tests/TestEngineContext.cpp#L356) |  |
-| `sa` | struct | SparkEditor | [EditorCrashHandler.cpp:L252](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L252) |  |
+| `sa` | struct | SparkEditor | [EditorCrashHandler.cpp:L251](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L251) |  |
 | `sa` | struct | SparkEngine | [CrashHandler.cpp:L2115](../../SparkEngine/Source/Utils/CrashHandler.cpp#L2115) |  |
 | `SafeArea` | struct | SparkEngine | [MobilePlatform.h:L137](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h#L137) | Screen safe area (avoiding notches, home indicators). |
 | `SAHBucket` | struct | SparkEngine | [BVHAccelerator.h:L178](../../SparkEngine/Source/Graphics/BVHAccelerator.h#L178) |  |
@@ -3854,7 +3854,7 @@
 | `ShooterState` | struct | GameModules | [TFWeaponSystem.h:L143](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h#L143) |  |
 | `ShotFx` | struct | GameModules | [TFWorldSetup.h:L223](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h#L223) |  |
 | `ShutdownStage` | class | SparkEngine | [ShutdownStage.cpp:L6](../../SparkEngine/Source/Core/Lifecycle/ShutdownStage.cpp#L6) |  |
-| `si` | struct | SparkEditor | [EditorCrashHandler.cpp:L763](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L763) |  |
+| `si` | struct | SparkEditor | [EditorCrashHandler.cpp:L762](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L762) |  |
 | `si` | struct | SparkEngine | [CrashHandler.cpp:L1805](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1805) |  |
 | `SiblingDependentModule` | class | Tests | [SiblingDependentModule.cpp:L9](../../Tests/Fixtures/ModuleABI/SiblingDependentModule.cpp#L9) |  |
 | `SimDamageIndicator` | struct | SparkEditor | [GameViewPanel.h:L165](../../SparkEditor/Source/Panels/GameViewPanel.h#L165) |  |

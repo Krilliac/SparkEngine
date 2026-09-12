@@ -25,57 +25,48 @@ namespace Spark::RemoteDebug
     {
       public:
         template <typename Server>
-        static constexpr bool kCanMintLegacyPrincipal = requires(Server& server)
-        {
+        static constexpr bool kCanMintLegacyPrincipal = requires(Server& server) {
             server.IssueTrustedLoopbackPrincipal(RemoteDebugRole::Administrator, uint64_t{1});
         };
 
         template <typename Server>
-        static constexpr bool kCanMintLoopbackObserver = requires(Server& server)
-        {
-            server.IssueLoopbackObserverPrincipal();
-        };
+        static constexpr bool kCanMintLoopbackObserver =
+            requires(Server& server) { server.IssueLoopbackObserverPrincipal(); };
 
         template <typename Server>
         static constexpr bool kCanDispatchWithPrincipal =
-            requires(Server& server, const RemoteCommand& command, const RemoteDebugPrincipal& principal)
-        {
-            server.ProcessCommandWithPrincipal(command, principal);
-        };
+            requires(Server& server, const RemoteCommand& command, const RemoteDebugPrincipal& principal) {
+                server.ProcessCommandWithPrincipal(command, principal);
+            };
 
         template <typename Session>
         static constexpr bool kCanQueueWithPrincipal =
-            requires(Session& session, const RemoteCommand& command, const RemoteDebugPrincipal& principal)
-        {
-            session.EnqueueReceivedWithPrincipal(command, principal);
-        };
+            requires(Session& session, const RemoteCommand& command, const RemoteDebugPrincipal& principal) {
+                session.EnqueueReceivedWithPrincipal(command, principal);
+            };
 
         template <typename Session>
-        static constexpr bool kCanQueueOutbound = requires(Session& session, const RemoteCommand& command)
-        {
-            session.EnqueueSend(command);
-        };
+        static constexpr bool kCanQueueOutbound =
+            requires(Session& session, const RemoteCommand& command) { session.EnqueueSend(command); };
 
         template <typename Session>
-        static constexpr bool kCanForgeConnectedState = requires(Session& session)
-        {
-            session.SetState(SessionState::Connected);
-        };
+        static constexpr bool kCanForgeConnectedState =
+            requires(Session& session) { session.SetState(SessionState::Connected); };
     };
 } // namespace Spark::RemoteDebug
 
-static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::
-                  kCanMintLegacyPrincipal<Spark::RemoteDebug::RemoteDebugServer>);
-static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::
-                  kCanMintLoopbackObserver<Spark::RemoteDebug::RemoteDebugServer>);
-static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::
-                  kCanDispatchWithPrincipal<Spark::RemoteDebug::RemoteDebugServer>);
-static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::
-                  kCanQueueWithPrincipal<Spark::RemoteDebug::RemoteSession>);
-static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::
-                  kCanQueueOutbound<Spark::RemoteDebug::RemoteSession>);
-static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::
-                  kCanForgeConnectedState<Spark::RemoteDebug::RemoteSession>);
+static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::kCanMintLegacyPrincipal<
+              Spark::RemoteDebug::RemoteDebugServer>);
+static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::kCanMintLoopbackObserver<
+              Spark::RemoteDebug::RemoteDebugServer>);
+static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::kCanDispatchWithPrincipal<
+              Spark::RemoteDebug::RemoteDebugServer>);
+static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::kCanQueueWithPrincipal<
+              Spark::RemoteDebug::RemoteSession>);
+static_assert(
+    !Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::kCanQueueOutbound<Spark::RemoteDebug::RemoteSession>);
+static_assert(!Spark::RemoteDebug::RemoteDebugAccessControlTestHarness::kCanForgeConnectedState<
+              Spark::RemoteDebug::RemoteSession>);
 
 namespace
 {
@@ -90,7 +81,7 @@ namespace
     {
         return response.type == "error" && response.payload.find("access_denied") != std::string::npos;
     }
-}
+} // namespace
 
 // ============================================================================
 // Initialization
@@ -180,7 +171,8 @@ TEST(RemoteAdmin_AnonymousDenied)
     server.StartListening(0);
 
     bool directHandlerCalled = false;
-    server.RegisterCommandHandler("direct_probe", [&](const RemoteCommand& command)
+    server.RegisterCommandHandler("direct_probe",
+                                  [&](const RemoteCommand& command)
                                   {
                                       directHandlerCalled = true;
                                       return RemoteCommand{"direct_ok", "", command.requestId, 0.0f};
@@ -194,7 +186,8 @@ TEST(RemoteAdmin_AnonymousDenied)
     EXPECT_TRUE(AuditEndsWith(server, RemoteDebugAuditDecision::AnonymousDenied));
 
     bool queueHandlerCalled = false;
-    server.RegisterCommandHandler("queue_probe", [&](const RemoteCommand& queued)
+    server.RegisterCommandHandler("queue_probe",
+                                  [&](const RemoteCommand& queued)
                                   {
                                       queueHandlerCalled = true;
                                       return RemoteCommand{"queue_ok", "", queued.requestId, 0.0f};
@@ -489,14 +482,15 @@ namespace
         }
 
         std::atomic_bool transitionReturned{false};
-        std::thread transitionThread([&]
-                                     {
-                                         if (transition == ResponseEpochTransition::StartListening)
-                                             server->StartListening(0);
-                                         else
-                                             server->StopListening();
-                                         transitionReturned.store(true, std::memory_order_release);
-                                     });
+        std::thread transitionThread(
+            [&]
+            {
+                if (transition == ResponseEpochTransition::StartListening)
+                    server->StartListening(0);
+                else
+                    server->StopListening();
+                transitionReturned.store(true, std::memory_order_release);
+            });
         {
             std::unique_lock lock(barrierMutex);
             transitionTriedLock.wait(lock, [&] { return transitionTryObserved; });
@@ -532,7 +526,7 @@ namespace
         EXPECT_EQ(static_cast<uint32_t>(2), effectCount.load());
         system.Shutdown();
     }
-}
+} // namespace
 
 TEST(RemoteDebug_ResponseEpochStartListening)
 {

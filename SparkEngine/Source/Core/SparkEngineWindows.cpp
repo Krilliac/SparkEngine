@@ -596,10 +596,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         // independent of display-name wording.
         if (const auto* record = evidence.FindModule("Spark Arena - Engine Showcase"))
         {
-            WriteCommandOutput(std::format(
-                "SPARK_MODULE_LIFECYCLE module=SparkGameFPS create={} load={} update={} fixed={} render={} unload={} destroy={} faults={}\n",
-                record->createModule, record->onLoad, record->onUpdate, record->onFixedUpdate,
-                record->onRender, record->onUnload, record->destroyModule, record->faults));
+            WriteCommandOutput(std::format("SPARK_MODULE_LIFECYCLE module=SparkGameFPS create={} load={} update={} "
+                                           "fixed={} render={} unload={} destroy={} faults={}\n",
+                                           record->createModule, record->onLoad, record->onUpdate,
+                                           record->onFixedUpdate, record->onRender, record->onUnload,
+                                           record->destroyModule, record->faults));
         }
     }
 

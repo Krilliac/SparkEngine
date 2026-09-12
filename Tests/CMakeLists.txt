@@ -1737,9 +1737,8 @@ if(Python3_Interpreter_FOUND)
 
     add_test(
         NAME PlatformCertification
-        COMMAND ${Python3_EXECUTABLE} -m pytest
-            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_platform_certification.py
-            -v --tb=short
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_platform_certification.py
+            -v
     )
     set_tests_properties(PlatformCertification PROPERTIES LABELS "certification;integration" TIMEOUT 120)
     add_test(

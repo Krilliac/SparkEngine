@@ -13,6 +13,7 @@ temporary directories and are removed on teardown.
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import os
 import shutil
@@ -948,6 +949,16 @@ class TestGitmodulesReconciliation(FakeRepoCase):
 # ═══════════════════════════════════════════════════════════════════════
 
 class TestSentinelIntegrity(FakeRepoCase):
+
+    def test_crlf_sentinel_hash_is_platform_stable(self) -> None:
+        path = self.repo / "ThirdParty/Utils/demo/demo.h"
+        canonical = path.read_bytes()
+        path.write_bytes(canonical.replace(b"\n", b"\r\n"))
+        self.addCleanup(lambda: path.write_bytes(canonical))
+        self.assertEqual(
+            sc._content_sha256(path, sc.MAX_SENTINEL_BYTES),
+            (hashlib.sha256(canonical).hexdigest(), len(canonical)),
+        )
 
     def test_content_hash_drift_is_detected(self) -> None:
         data = self.lock()

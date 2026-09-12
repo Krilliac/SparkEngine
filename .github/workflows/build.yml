@@ -151,7 +151,7 @@ jobs:
       run: python3 Tests/Tools/test_check_thirdparty_manifest_sync.py
 
     - name: Platform certification validator
-      run: python3 -m pytest Tests/Tools/test_platform_certification.py -v --tb=short
+      run: python3 -m unittest Tests.Tools.test_platform_certification -v
 
     - name: Validate certification matrix
       run: python3 Tools/platform-cert/validate_certification.py --matrix-only --matrix docs/certification/support-matrix.json
@@ -160,7 +160,7 @@ jobs:
       run: bash tools/check-test-registration.sh
 
     - name: Test asset integrity verifier
-      run: python3 -m pytest Tests/Tools/test_asset_integrity.py -v --tb=short
+      run: python3 -m unittest Tests.Tools.test_asset_integrity -v
 
     - name: Verify repository asset integrity baseline
       run: python3 tools/asset-integrity/verify_asset_integrity.py check-all --repo-root .
@@ -410,13 +410,17 @@ jobs:
         PYTHONDONTWRITEBYTECODE: "1"
       run: |
         set -euo pipefail
+        # The four source files are test_ops100_redaction.py,
+        # test_ops100_crash_security.py, test_ops100_telemetry_spool.py, and
+        # test_ops100_adversarial.py; unittest runs their native test classes
+        # without requiring an unpinned third-party pytest installation.
         cd Tests/Tools
-        python3 -m pytest \
-          test_ops100_redaction.py \
-          test_ops100_crash_security.py \
-          test_ops100_telemetry_spool.py \
-          test_ops100_adversarial.py \
-          -v --tb=short 2>&1 | tee ops100-results.log
+        python3 -m unittest \
+          test_ops100_redaction \
+          test_ops100_crash_security \
+          test_ops100_telemetry_spool \
+          test_ops100_adversarial \
+          -v 2>&1 | tee ops100-results.log
         echo "OPS-100 validation passed."
 
     - name: Upload OPS-100 test log
@@ -462,7 +466,7 @@ jobs:
       run: python3 tools/check-supply-chain.py
 
     - name: Supply-chain adversarial tests
-      run: python3 -m pytest Tests/test_check_supply_chain.py -v
+      run: python3 -m unittest Tests.test_check_supply_chain -v
 
   # ===========================================================================
   # Linux Build — GCC with AddressSanitizer + UBSan + LSan

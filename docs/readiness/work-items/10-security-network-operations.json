@@ -709,7 +709,7 @@
       ],
       "evidence": {
         "partialCompletion": "2026-08-28",
-        "scope": "Local C++ runtime, offline adversarial-validation, and configured CI-lane evidence only. The reporter rejects transport fields and is intentionally read-only; local telemetry has bounded spool/retry/drop accounting. This is not controlled-relay delivery, privacy/retention review, private-symbol publication, release-canary symbolication, or exact-SHA hosted evidence.",
+        "scope": "Local C++ runtime, offline adversarial-validation, and configured CI-lane evidence only. The reporter rejects transport fields and is intentionally read-only; local telemetry has bounded spool/retry/drop accounting. This is not runtime-delivery evidence, controlled-relay delivery, privacy/retention review, private-symbol publication, release-canary symbolication, or exact-SHA hosted evidence.",
         "tooling": [
           "tools/ops/secret_policy.py: JSON-aware recursive redaction (structural parse, redact sensitive values at any depth/type, re-serialize valid JSON); bounded linear lexer for generic-text credentials (multiword/quoted/escaped, per-line/document/secret ceilings); single-pass bounded PEM parser for RSA/EC/DSA/OPENSSH/ENCRYPTED/generic PRIVATE KEY families with label matching; location sanitization via keyed hashes to suppress secret-bearing paths; archive detection by ZIP magic bytes (not suffix) with minidump structure validation; explicit size/depth/count ceilings throughout",
           "tools/ops/validate_crash_package.py validates strict bounded manifests and referenced artifacts through a pinned authoritative root without modifying them",
@@ -724,7 +724,7 @@
           "SparkCrashReporter/tests/CrashReporterManifestTests.cpp, exercised by SparkCrashReporter.ManifestCompatibility, proves transport fields are discarded, manifests omit them, the reporter is truthful and read-only, and path/identity/size/consent defenses reject hostile artifacts",
           "Tests/TestTelemetrySpool.cpp, exercised by TelemetrySpool, proves C++ durable spool recovery, terminal rejection, retry boundaries, bounds/drop accounting, consent revocation, and hostile artifact rejection"
         ],
-        "ciGate": "validate-ops100 is a required job in .github/workflows/build.yml, running all four policy suites via pytest and included in the required-ci-gate needs list. The telemetry-integration workflow job configures Linux Shipping, builds SparkTests, and runs TelemetrySpool; neither definition substitutes for a successful exact-SHA hosted record.",
+        "ciGate": "validate-ops100 is a required job in .github/workflows/build.yml, running all four policy suites via unittest and included in the required-ci-gate needs list. The telemetry-integration workflow job configures Linux Shipping, builds SparkTests, and runs TelemetrySpool; neither definition substitutes for a successful exact-SHA hosted record.",
         "remainingBlockers": [
           "Crash delivery has no controlled relay, scoped ephemeral authorization, private-symbol publication, or synthetic release-crash symbolication canary",
           "Legacy in-process fallback still permits direct GitHub/SMTP/URL configuration in networking/CURL builds, so reusable client transport configuration is not eliminated across profiles",

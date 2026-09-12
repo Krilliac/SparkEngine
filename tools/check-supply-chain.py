@@ -844,22 +844,57 @@ def check_tree_digests(
 # ── Check: sentinel files ─────────────────────────────────────────────
 
 def _content_sha256(filepath: Path, size_limit: int) -> tuple[str, int] | None:
-    """Stream-hash a file, refusing to read past size_limit bytes."""
+    """Stream-hash a file after canonicalizing CRLF to LF.
+
+    Git's clean filter already gives the lockfile a platform-stable blob
+    identity, but the working-tree bytes differ when Windows autocrlf is on.
+    Canonicalizing only the line-ending convention keeps sentinel content
+    evidence equivalent on Windows and POSIX without reading an unbounded
+    payload into memory.
+    """
     digest = hashlib.sha256()
-    read = 0
+    raw_read = 0
+    canonical_size = 0
+    pending_cr = False
+
+    def update(data: bytes) -> bool:
+        nonlocal canonical_size
+        canonical_size += len(data)
+        if canonical_size > size_limit:
+            return False
+        digest.update(data)
+        return True
+
     try:
         with open(filepath, "rb") as handle:
             while True:
                 chunk = handle.read(65536)
                 if not chunk:
                     break
-                read += len(chunk)
-                if read > size_limit:
+                raw_read += len(chunk)
+                if raw_read > size_limit:
                     return None
-                digest.update(chunk)
+
+                if pending_cr:
+                    if chunk.startswith(b"\n"):
+                        if not update(b"\n"):
+                            return None
+                        chunk = chunk[1:]
+                    elif not update(b"\r"):
+                        return None
+                    pending_cr = False
+
+                if chunk.endswith(b"\r"):
+                    chunk = chunk[:-1]
+                    pending_cr = True
+                if chunk and not update(chunk.replace(b"\r\n", b"\n")):
+                    return None
+
+            if pending_cr and not update(b"\r"):
+                return None
     except OSError:
         return None
-    return digest.hexdigest(), read
+    return digest.hexdigest(), canonical_size
 
 
 def check_sentinel_files(
@@ -890,13 +925,14 @@ def check_sentinel_files(
             result.error("sentinel", rel_path, f"sentinel file: {file_err}")
             continue
 
-        # Size first: a stat is one syscall, and hashing an oversized planted
-        # file before comparing sizes is unbounded work for a known answer.
-        actual_size = filepath.stat().st_size
-        if actual_size != expected["size"]:
+        # Stat first to reject an oversized planted file before hashing. The
+        # recorded size is the LF-normalized size, so raw Windows CRLF bytes
+        # are intentionally allowed to be larger than the lockfile value.
+        raw_size = filepath.stat().st_size
+        if raw_size > MAX_SENTINEL_BYTES:
             result.error(
                 "integrity", rel_path,
-                f"size mismatch: lockfile={expected['size']}, actual={actual_size}",
+                f"raw size exceeds sentinel limit: {raw_size} > {MAX_SENTINEL_BYTES}",
             )
             continue
 
@@ -905,6 +941,13 @@ def check_sentinel_files(
             result.error(
                 "integrity", rel_path,
                 "cannot hash sentinel file within the size limit",
+            )
+            continue
+        actual_size = hashed[1]
+        if actual_size != expected["size"]:
+            result.error(
+                "integrity", rel_path,
+                f"size mismatch: lockfile={expected['size']}, actual={actual_size} (LF-normalized)",
             )
             continue
         if hashed[0] != expected["sha256"]:

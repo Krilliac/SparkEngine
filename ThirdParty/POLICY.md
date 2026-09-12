@@ -87,7 +87,9 @@ gitlink; the only files exempt are the governance files named in
 
 Sentinel files — entry-point headers, implementation files, and license texts —
 add on-disk verification on top of that: SHA-256 content hash, git blob
-identity, and size.
+identity, and size. The content hash and size use a streaming LF-normalized
+view, so Windows CRLF checkout bytes and POSIX LF checkout bytes carry the same
+evidence without weakening the raw-size ceiling.
 
 The CI checker verifies these on every run, and any failure fails the
 `check-supply-chain` job:

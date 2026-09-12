@@ -196,7 +196,8 @@ namespace SparkEditor
             root["serializedWorld"] = Spark::Json::Value(snapshot.serializedWorld);
             root["layoutIniPath"] = Spark::Json::Value(snapshot.layoutIniPath);
             root["dirtySequence"] = Spark::Json::Value(static_cast<double>(snapshot.dirtySequence));
-            root["capturedUnixMilliseconds"] = Spark::Json::Value(static_cast<double>(snapshot.capturedUnixMilliseconds));
+            root["capturedUnixMilliseconds"] =
+                Spark::Json::Value(static_cast<double>(snapshot.capturedUnixMilliseconds));
             root["recentOperations"] = Spark::Json::Value::MakeArray();
             for (const std::string& operation : snapshot.recentOperations)
                 root["recentOperations"].PushBack(Spark::Json::Value(operation));
@@ -256,8 +257,8 @@ namespace SparkEditor
             const double dirtySequence = root["dirtySequence"].AsNumber();
             const double capturedTime = root["capturedUnixMilliseconds"].AsNumber();
             if (!std::isfinite(dirtySequence) || dirtySequence < 0.0 ||
-                dirtySequence > static_cast<double>(kMaxExactJsonInteger) || std::trunc(dirtySequence) != dirtySequence ||
-                !std::isfinite(capturedTime) ||
+                dirtySequence > static_cast<double>(kMaxExactJsonInteger) ||
+                std::trunc(dirtySequence) != dirtySequence || !std::isfinite(capturedTime) ||
                 capturedTime < -static_cast<double>(kMaxExactJsonInteger) ||
                 capturedTime > static_cast<double>(kMaxExactJsonInteger) || std::trunc(capturedTime) != capturedTime)
             {
@@ -499,7 +500,7 @@ namespace SparkEditor
     }
 
     std::unique_ptr<::World> DeserializeRecoverySnapshotIntoFreshWorld(const EditorRecoverySnapshot& snapshot,
-                                                                        std::string& error)
+                                                                       std::string& error)
     {
         error.clear();
         // This helper is deliberately safe even if a future caller bypasses

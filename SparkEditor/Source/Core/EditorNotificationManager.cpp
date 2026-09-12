@@ -60,7 +60,8 @@ namespace SparkEditor
         float yOffset = viewport->WorkPos.y + 12.0f;
         const float notificationWidth =
             std::min(NOTIFICATION_MAX_WIDTH, std::max(1.0f, viewport->WorkSize.x - 2.0f * NOTIFICATION_INSET));
-        const float textWrapWidth = std::max(1.0f, notificationWidth - NOTIFICATION_TEXT_LEFT - NOTIFICATION_TEXT_RIGHT);
+        const float textWrapWidth =
+            std::max(1.0f, notificationWidth - NOTIFICATION_TEXT_LEFT - NOTIFICATION_TEXT_RIGHT);
 
         for (size_t i = 0; i < m_notifications.size(); ++i)
         {

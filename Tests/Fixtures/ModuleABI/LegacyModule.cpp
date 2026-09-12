@@ -20,7 +20,7 @@ namespace
         void Shutdown() override {}
         void Update(float) override {}
     };
-}
+} // namespace
 
 SPARK_EXPORT_MODULE_COMPATIBILITY()
 

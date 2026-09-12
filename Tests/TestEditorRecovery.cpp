@@ -61,8 +61,7 @@ namespace
         {
             if (!it->is_regular_file(error) || it->path().filename() != fileName)
                 continue;
-            if (ReadAll(it->path()).find("\"projectIdentity\": \"" + projectIdentity + "\"") !=
-                std::string::npos)
+            if (ReadAll(it->path()).find("\"projectIdentity\": \"" + projectIdentity + "\"") != std::string::npos)
             {
                 return it->path();
             }
@@ -110,8 +109,8 @@ TEST(EditorRecovery_InvalidWorldDoesNotReplaceExistingPrimary)
 
     std::string error;
     ASSERT_TRUE(store.Save(valid, error));
-    const std::filesystem::path primary = FindRecoveryFileForProject(
-        scratch.Path(), valid.projectIdentity, "recovery-v1.json");
+    const std::filesystem::path primary =
+        FindRecoveryFileForProject(scratch.Path(), valid.projectIdentity, "recovery-v1.json");
     ASSERT_FALSE(primary.empty());
     const std::string before = ReadAll(primary);
     ASSERT_FALSE(before.empty());
@@ -145,8 +144,8 @@ TEST(EditorRecovery_UsesBackupWhenPrimaryIsDamaged)
     ASSERT_TRUE(store.Save(newer, error));
 
     const fs::path primary = FindRecoveryFileForProject(scratch.Path(), older.projectIdentity, "recovery-v1.json");
-    const fs::path backup = FindRecoveryFileForProject(
-        scratch.Path(), older.projectIdentity, "recovery-v1.backup.json");
+    const fs::path backup =
+        FindRecoveryFileForProject(scratch.Path(), older.projectIdentity, "recovery-v1.backup.json");
     ASSERT_FALSE(primary.empty());
     ASSERT_FALSE(backup.empty());
     ASSERT_TRUE(fs::exists(backup));
@@ -362,14 +361,12 @@ TEST(EditorRecovery_ExplicitDiscardClearsOnlyAfterUserAction)
     ASSERT_TRUE(controller.Snapshot() != nullptr);
 
     controller.DismissAfterRestore();
-    EXPECT_EQ(static_cast<int>(controller.State()),
-              static_cast<int>(SparkEditor::EditorRecoveryDialogState::Hidden));
+    EXPECT_EQ(static_cast<int>(controller.State()), static_cast<int>(SparkEditor::EditorRecoveryDialogState::Hidden));
     EXPECT_TRUE(controller.Snapshot() == nullptr);
 
     controller.Offer(snapshot);
     controller.DismissAfterDiscard();
-    EXPECT_EQ(static_cast<int>(controller.State()),
-              static_cast<int>(SparkEditor::EditorRecoveryDialogState::Hidden));
+    EXPECT_EQ(static_cast<int>(controller.State()), static_cast<int>(SparkEditor::EditorRecoveryDialogState::Hidden));
     EXPECT_TRUE(controller.Snapshot() == nullptr);
     EXPECT_TRUE(controller.Error().empty());
 }
@@ -411,7 +408,8 @@ TEST(EditorRecovery_ClearForProjectPreservesForeignRecovery)
     ASSERT_TRUE(store.Save(projectB, error));
 
     const SparkEditor::EditorRecoveryLoadResult primaryForProjectA = store.LoadForProject(projectA.projectIdentity);
-    EXPECT_EQ(static_cast<int>(primaryForProjectA.state), static_cast<int>(SparkEditor::EditorRecoveryLoadState::Primary));
+    EXPECT_EQ(static_cast<int>(primaryForProjectA.state),
+              static_cast<int>(SparkEditor::EditorRecoveryLoadState::Primary));
     ASSERT_TRUE(primaryForProjectA.snapshot.has_value());
     EXPECT_EQ(primaryForProjectA.snapshot->sceneDisplayName, std::string("A"));
 
@@ -505,21 +503,20 @@ TEST(EditorRecovery_ProjectPathResolutionRejectsEscapes)
 
     fs::path resolved;
     std::string error;
-    EXPECT_TRUE(SparkEditor::ResolvePathInsideProject(projectRoot, fs::path("Scenes/Main.sparkscene"), resolved,
-                                                       error));
+    EXPECT_TRUE(
+        SparkEditor::ResolvePathInsideProject(projectRoot, fs::path("Scenes/Main.sparkscene"), resolved, error));
     EXPECT_FALSE(resolved.empty());
-    EXPECT_FALSE(SparkEditor::ResolvePathInsideProject(projectRoot, fs::path("../outside.sparkscene"), resolved,
-                                                        error));
+    EXPECT_FALSE(
+        SparkEditor::ResolvePathInsideProject(projectRoot, fs::path("../outside.sparkscene"), resolved, error));
 
     const fs::path outside = scratch.Path() / "Outside";
     fs::create_directories(outside);
-    EXPECT_FALSE(SparkEditor::ResolvePathInsideProject(projectRoot, outside / "outside.sparkscene", resolved,
-                                                        error));
+    EXPECT_FALSE(SparkEditor::ResolvePathInsideProject(projectRoot, outside / "outside.sparkscene", resolved, error));
     std::error_code symlinkError;
     fs::create_directory_symlink(outside, projectRoot / "Scenes" / "linked", symlinkError);
     if (!symlinkError)
     {
-        EXPECT_FALSE(SparkEditor::ResolvePathInsideProject(
-            projectRoot, fs::path("Scenes/linked/escaped.sparkscene"), resolved, error));
+        EXPECT_FALSE(SparkEditor::ResolvePathInsideProject(projectRoot, fs::path("Scenes/linked/escaped.sparkscene"),
+                                                           resolved, error));
     }
 }

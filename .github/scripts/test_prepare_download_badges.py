@@ -61,6 +61,20 @@ SOURCE_SHA = "a" * 40
 FIXED_NOW = lambda: datetime(2026, 8, 27, tzinfo=timezone.utc)
 
 
+def bash_executable() -> str:
+    """Use Git Bash on Windows, not the WindowsApps WSL launcher."""
+    if os.name == "nt":
+        git_bash = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+        if git_bash.is_file():
+            return str(git_bash)
+    found = shutil.which("bash")
+    if found:
+        if os.name == "nt" and any(part.casefold() == "windowsapps" for part in Path(found).parts):
+            raise FileNotFoundError("Git Bash is required for release-workflow fixtures; the WindowsApps WSL launcher is incompatible")
+        return found
+    raise FileNotFoundError("bash is required for release-workflow fixtures")
+
+
 def asset_digest(name: str) -> str:
     return "sha256:" + hashlib.sha256(name.encode("utf-8")).hexdigest()
 
@@ -2661,7 +2675,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
                     if source != missing:
                         (packages / source).write_text(source, encoding="utf-8")
                 result = subprocess.run(
-                    [shutil.which("bash"), "-c", script], cwd=root, text=True, capture_output=True,
+                    [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
                     env={**os.environ, "IS_VERSIONED": "false", "RELEASE_VERSION": "7.8.9",
                          "GITHUB_OUTPUT": str(root / "outputs"), "GITHUB_STEP_SUMMARY": str(root / "summary")},
                 )
@@ -2776,7 +2790,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         nightly_step = text[stage:checkpoint]
         self.assertIn("prerelease: true", nightly_step)
         nightly_publish_step = text[publish:after_tag]
-        self.assertIn("-F prerelease=true", nightly_publish_step)
+        self.assertIn("release-acceptance-gate.py", nightly_publish_step)
 
         hide_step = text[hide:preflight]
         self.assertIn("steps.release-inspect.outputs.target_exists == 'true'", hide_step)
@@ -2813,7 +2827,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         self.assertIn("fetch --force --no-tags", before_tag_step)
         self.assertIn('refs/tags/${RELEASE_TAG}^{commit}', before_tag_step)
         publish_step = text[publish:after_tag]
-        self.assertIn("-F draft=false", publish_step)
+        self.assertIn("release-acceptance-gate.py", publish_step)
         after_tag_step = text[after_tag:complete]
         self.assertIn("fetch --force --no-tags", after_tag_step)
         self.assertIn('refs/tags/${RELEASE_TAG}^{commit}', after_tag_step)
@@ -3089,6 +3103,10 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         self.assertIn("--ledger-json", final_asset_step)
         self.assertIn("--expected-draft true", final_asset_step)
 
+        acceptance_gate = Path(__file__).with_name("release-acceptance-gate.py").read_text(encoding="utf-8")
+        self.assertIn('patch_body["prerelease"] = False', acceptance_gate)
+        self.assertIn('patch_body["prerelease"] = True', acceptance_gate)
+
         asset_boundary = ASSET_BOUNDARY_SCRIPT.read_text(encoding="utf-8")
         for required in (
             "preparedAssetIds",
@@ -3104,8 +3122,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             self.assertIn(required, asset_boundary)
 
         stable_publish_step = text[stable_publish:nightly_publish]
-        self.assertIn("-F prerelease=false", stable_publish_step)
-        self.assertIn(".prerelease == false", stable_publish_step)
+        self.assertIn("release-acceptance-gate.py", stable_publish_step)
         nightly_after = text.index(
             "    - name: Verify release tag immediately after publication"
         )
@@ -3128,7 +3145,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             ]
             self.assertEqual(len(boundary_calls), 2)
             terminal_boundary, post_publish_boundary = boundary_calls
-            visibility_mutation = publish_step.index("\n        gh api --method PATCH")
+            visibility_mutation = publish_step.index("release-acceptance-gate.py")
             trap_clear = publish_step.rindex("trap - ERR")
             self.assertLess(exact_gate, frozen_manifest)
             self.assertLess(frozen_manifest, tag_recheck)
@@ -3144,7 +3161,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             attempted = publish_step.index("publication_attempted=true")
             recovered = publish_step.index("publication_attempted=false", attempted)
             self.assertLess(terminal_boundary, attempted)
-            self.assertLess(attempted, visibility_mutation)
+            self.assertLess(visibility_mutation, attempted)
             self.assertLess(post_publish_boundary, recovered)
             self.assertLess(recovered, trap_clear)
             self.assertEqual(publish_step.count("verify-exact-required-gate.py"), 2)

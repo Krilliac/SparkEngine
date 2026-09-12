@@ -42,9 +42,9 @@ namespace SparkEditor::Testing
             const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
             for (int attempt = 0; attempt < 16; ++attempt)
             {
-                const auto path = std::filesystem::temp_directory_path() /
-                                  ("spark-test-editor-profile-" + std::to_string(stamp) + "-" +
-                                   std::to_string(sequence.fetch_add(1)));
+                const auto path =
+                    std::filesystem::temp_directory_path() / ("spark-test-editor-profile-" + std::to_string(stamp) +
+                                                              "-" + std::to_string(sequence.fetch_add(1)));
                 if (std::filesystem::create_directory(path))
                     return path;
             }
@@ -53,4 +53,4 @@ namespace SparkEditor::Testing
 
         std::filesystem::path m_directory;
     };
-}
+} // namespace SparkEditor::Testing

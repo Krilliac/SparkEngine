@@ -41,4 +41,4 @@ namespace SparkEditor
         }
         ImGui::PopID();
     }
-}
+} // namespace SparkEditor

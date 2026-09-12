@@ -38,10 +38,19 @@ def trusted_powershell():
     return str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
 
 
+def _has_link_component(path):
+    """Reject symlink/reparse components without rejecting Windows 8.3 aliases."""
+    for component in (path, *path.parents):
+        info = component.lstat()
+        if (component.is_symlink()
+                or getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)):
+            return True
+    return False
+
+
 def regular_file(path):
     info = path.lstat()
-    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or path.is_symlink() or path.resolve() != path.absolute()
-            or getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)):
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or _has_link_component(path):
         raise ValueError(f"Installer must be a regular file without link traversal: {path.name}")
 
 

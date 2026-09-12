@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321274 |
-| **SparkEditor/Source** | 103590 |
+| **SparkEngine/Source** | 321284 |
+| **SparkEditor/Source** | 103591 |
 | **GameModules** | 142614 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 182878 |
+| **Tests** | 182884 |
 | **SparkConsole/src** | 1701 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~777813** |
+| **Total C++ (excl. ThirdParty)** | **~777830** |
 
 ### File Counts
 
@@ -43,13 +43,13 @@ Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 121125 | 37.7% |
-| Engine (all subsystems) | 89077 | 27.7% |
+| Engine (all subsystems) | 89088 | 27.7% |
 | Utils | 46106 | 14.3% |
-| Core | 31064 | 9.6% |
+| Core | 31065 | 9.6% |
 | Physics | 10799 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
-| SceneManager | 2608 | 0.8% |
+| SceneManager | 2606 | 0.8% |
 | Enums | 1383 | 0.4% |
 | Game | 2855 | 0.8% |
 | Camera | 999 | 0.3% |
@@ -58,7 +58,7 @@ Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 15168 |
+| Networking | 15167 |
 | AI | 13490 |
 | ECS | 8497 |
 | Gameplay | 7925 |
@@ -103,7 +103,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 103590 |
+| Total editor lines | 103591 |
 
 ## Testing Metrics
 
@@ -178,7 +178,7 @@ inventory is implementation evidence, not support certification.
 | `EngineSettings.h` | 1152 |
 | `NetworkManager.h` | 943 |
 | `SaveSystem.h` | 860 |
-| `RemoteDebugSystem.h` | 847 |
+| `RemoteDebugSystem.h` | 859 |
 | `ECSystems.h` | 846 |
 | `PhysicsTypes.h` | 828 |
 
@@ -186,8 +186,8 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `EditorUI.cpp` | 2870 |
-| `ProjectManager.cpp` | 2590 |
+| `EditorUI.cpp` | 2867 |
+| `ProjectManager.cpp` | 2589 |
 | `JSONSceneSerializer.cpp` | 2010 |
 | `VisualScriptPanel.cpp` | 1773 |
 | `CollaborativeEditSession.cpp` | 1696 |

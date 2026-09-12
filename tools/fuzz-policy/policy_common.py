@@ -173,10 +173,15 @@ def _opened_final_path(descriptor: int) -> Path | None:
         f_getpath = 50  # <sys/fcntl.h> F_GETPATH
         buffer = bytearray(1024)  # PATH_MAX
         try:
-            fcntl.fcntl(descriptor, f_getpath, buffer)
+            returned = fcntl.fcntl(descriptor, f_getpath, buffer)
         except OSError as exc:
             raise PolicyError(f"cannot resolve the opened file descriptor: {exc}") from exc
-        return Path(bytes(buffer).split(b"\0", 1)[0].decode("utf-8", "surrogateescape"))
+        if not isinstance(returned, (bytes, bytearray)):
+            raise PolicyError("opened file handle path query returned an invalid buffer")
+        value = bytes(returned).split(b"\0", 1)[0]
+        if not value:
+            raise PolicyError("opened file handle path query returned an empty path")
+        return Path(value.decode("utf-8", "surrogateescape"))
     # Returning None here would make the post-open confinement check a silent
     # no-op, so an unsupported platform fails closed instead.
     raise PolicyError(f"opened-handle confinement is unavailable on {sys.platform}")

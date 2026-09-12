@@ -257,6 +257,14 @@ class FixtureTestCase(unittest.TestCase):
 # Path and identity policy
 # =========================================================================
 class TestRelativePathPolicy(unittest.TestCase):
+    def test_darwin_fgetpath_uses_returned_buffer(self) -> None:
+        fake_fcntl = SimpleNamespace(fcntl=lambda descriptor, command, buffer: b"/private/tmp/fixture\0")
+        with mock.patch.dict(sys.modules, {"fcntl": fake_fcntl}):
+            with mock.patch.object(policy_common.os, "name", "posix"):
+                with mock.patch.object(policy_common.sys, "platform", "darwin"):
+                    resolved = policy_common._opened_final_path(7)
+        self.assertEqual(str(resolved), "/private/tmp/fixture")
+
     def test_accepts_canonical_relative_path(self) -> None:
         self.assertEqual(policy_common.normalized_relative_path("src/file.cpp", "path"), "src/file.cpp")
 

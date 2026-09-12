@@ -64,9 +64,8 @@ TEST(NetworkBindPolicy_RequiresCanonicalLoopbackOrExactRfc1918SubnetHost)
     EXPECT_FALSE(NetworkEndpointPolicy::PrivateLan(0x64400001u, 24u).IsValid());
 
     for (const std::string_view allowed :
-         {"local", "loopback", "localhost", "127.8.9.10", "10.1.2.3/8", "172.16.4.5/12",
-          "172.31.254.1/12", "192.168.7.8/24", "192.168.7.9/30", "192.168.1.0/23",
-          "192.168.0.255/23"})
+         {"local", "loopback", "localhost", "127.8.9.10", "10.1.2.3/8", "172.16.4.5/12", "172.31.254.1/12",
+          "192.168.7.8/24", "192.168.7.9/30", "192.168.1.0/23", "192.168.0.255/23"})
         EXPECT_TRUE(ResolveNetworkEndpointPolicy(allowed).IsValid());
 
     for (const std::string_view rejected : {"",
@@ -85,28 +84,28 @@ TEST(NetworkBindPolicy_RequiresCanonicalLoopbackOrExactRfc1918SubnetHost)
                                             "203.0.113.3",
                                             "100.64.0.1",
                                             "224.0.0.1",
-                                             "255.255.255.255",
-                                             "::ffff:127.0.0.1",
-                                             "0x7f.0.0.1",
-                                             "127.1",
-                                             "0127.0.0.1",
-                                             "127.000.0.1",
-                                             "010.1.2.3/8",
-                                             "192.168.001.9/24",
-                                             "127.0.0.0",
-                                             "127.255.255.255",
-                                             "10.1.2.3",
-                                             "10.1.2.3/7",
-                                             "10.1.2.3/031",
-                                             "10.1.2.3/31",
-                                             "10.1.2.3/32",
-                                             "172.16.4.5/11",
-                                             "192.168.7.8/15",
-                                             "192.168.1.0/24",
-                                             "192.168.1.255/24",
-                                             "192.168.1.127/25",
-                                             "192.168.1.128/25",
-                                             "typo"})
+                                            "255.255.255.255",
+                                            "::ffff:127.0.0.1",
+                                            "0x7f.0.0.1",
+                                            "127.1",
+                                            "0127.0.0.1",
+                                            "127.000.0.1",
+                                            "010.1.2.3/8",
+                                            "192.168.001.9/24",
+                                            "127.0.0.0",
+                                            "127.255.255.255",
+                                            "10.1.2.3",
+                                            "10.1.2.3/7",
+                                            "10.1.2.3/031",
+                                            "10.1.2.3/31",
+                                            "10.1.2.3/32",
+                                            "172.16.4.5/11",
+                                            "192.168.7.8/15",
+                                            "192.168.1.0/24",
+                                            "192.168.1.255/24",
+                                            "192.168.1.127/25",
+                                            "192.168.1.128/25",
+                                            "typo"})
         EXPECT_FALSE(ResolveNetworkEndpointPolicy(rejected).IsValid());
 
     EXPECT_EQ(static_cast<int>(ResolveNetworkEndpointPolicy("192.168.1.20").Error()),
@@ -395,8 +394,8 @@ TEST(NetworkManager_RepeatedServerStartPreservesNativeHandleAndState)
     EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
     EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Connected));
 
-    const uint16_t differentPort = originalPort == 65535u ? static_cast<uint16_t>(originalPort - 1u)
-                                                           : static_cast<uint16_t>(originalPort + 1u);
+    const uint16_t differentPort =
+        originalPort == 65535u ? static_cast<uint16_t>(originalPort - 1u) : static_cast<uint16_t>(originalPort + 1u);
     EXPECT_FALSE(nm.StartServer(differentPort, 4));
     EXPECT_EQ(NetworkManagerEndpointLifecycleTestAccess::Socket(nm), originalSocket);
     EXPECT_EQ(nm.GetBoundPort(), originalPort);

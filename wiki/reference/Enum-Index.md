@@ -263,8 +263,8 @@
 | `EditorCameraMode` | enum | SparkEngine | [PlayModeTypes.h:L76](../../SparkEngine/Source/Engine/Editor/PlayModeTypes.h#L76) |  |
 | `EditorNetMessageType` | enum | SparkEditor | [LiveEditBridge.h:L33](../../SparkEditor/Source/Communication/LiveEditBridge.h#L33) | Custom message types for editor→AreaServer communication. |
 | `EditorProcessStopResult` | enum | SparkEditor | [EditorProcessLaunch.h:L81](../../SparkEditor/Source/Utils/EditorProcessLaunch.h#L81) | Force-terminate a process launched via LaunchEditorProcess (used by |
-| `EditorRecoveryDialogState` | enum | SparkEditor | [EditorRecovery.h:L85](../../SparkEditor/Source/Core/EditorRecovery.h#L85) |  |
-| `EditorRecoveryLoadState` | enum | SparkEditor | [EditorRecovery.h:L70](../../SparkEditor/Source/Core/EditorRecovery.h#L70) |  |
+| `EditorRecoveryDialogState` | enum | SparkEditor | [EditorRecovery.h:L83](../../SparkEditor/Source/Core/EditorRecovery.h#L83) |  |
+| `EditorRecoveryLoadState` | enum | SparkEditor | [EditorRecovery.h:L68](../../SparkEditor/Source/Core/EditorRecovery.h#L68) |  |
 | `EditorState` | enum | SparkEditor | [CoreEditorEnums.h:L54](../../SparkEditor/Source/Enums/CoreEditorEnums.h#L54) | Editor application states |
 | `EditorTheme` | enum | SparkEditor | [CoreEditorEnums.h:L67](../../SparkEditor/Source/Enums/CoreEditorEnums.h#L67) | Editor theme types |
 | `EffectType` | enum | SparkEngine | [AbilitySystem.h:L80](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L80) |  |
@@ -649,7 +649,7 @@
 | `ResourceState` | enum | SparkEngine | [GraphicsEnums.h:L65](../../SparkEngine/Source/Enums/GraphicsEnums.h#L65) | Resource states |
 | `ResourceState` | enum | SparkEngine | [RHIValidationLayer.h:L32](../../SparkEngine/Source/Graphics/RHI/RHIValidationLayer.h#L32) | Lifecycle state of a tracked RHI resource. |
 | `ResourceType` | enum | GameModules | [OpenWorldEnums.h:L74](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L74) | Harvestable resource categories |
-| `ResponseEpochTransition` | enum | Tests | [TestRemoteDebugSystem.cpp:L411](../../Tests/TestRemoteDebugSystem.cpp#L411) |  |
+| `ResponseEpochTransition` | enum | Tests | [TestRemoteDebugSystem.cpp:L404](../../Tests/TestRemoteDebugSystem.cpp#L404) |  |
 | `ResState` | enum | Tests | [TestExtendedSystems.cpp:L670](../../Tests/TestExtendedSystems.cpp#L670) |  |
 | `RestartPolicy` | enum | SparkDaemon | [OrchestrationProtocol.h:L48](../../SparkDaemon/src/OrchestrationProtocol.h#L48) |  |
 | `ReverbPreset` | enum | SparkEngine | [AudioMixer.h:L72](../../SparkEngine/Source/Audio/AudioMixer.h#L72) | Predefined reverb environment settings. |

@@ -115,9 +115,9 @@ namespace SparkEditor
             if (capturedUnixMilliseconds <= 0)
                 return "Unknown time";
 
-            const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(
-                                     std::chrono::milliseconds(capturedUnixMilliseconds))
-                                     .count();
+            const auto seconds =
+                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::milliseconds(capturedUnixMilliseconds))
+                    .count();
             const std::time_t timestamp = static_cast<std::time_t>(seconds);
             std::tm localTime{};
 #ifdef _WIN32
@@ -294,8 +294,8 @@ namespace SparkEditor
         {
             console.LogWarning("Project manager initialization failed");
         }
-        m_recoveryStore = std::make_unique<EditorRecoveryStore>(
-            PathFromUtf8(ProjectManager::GetEditorDataDirectory()) / "Crashes");
+        m_recoveryStore =
+            std::make_unique<EditorRecoveryStore>(PathFromUtf8(ProjectManager::GetEditorDataDirectory()) / "Crashes");
         m_projectBrowserPanel = std::make_shared<ProjectBrowserPanel>(m_projectManager.get());
         m_projectBrowserPanel->SetOpenProjectRequestHandler([this](const std::string& projectPath)
                                                             { return RequestOpenProject(projectPath); });
@@ -959,8 +959,8 @@ namespace SparkEditor
             const float contentRight = contentLeft + ImGui::GetContentRegionAvail().x;
             const float fps = m_stats.frameTime > 0.001f ? 1000.0f / m_stats.frameTime : 0.0f;
             const ImVec4 fpsColor = fps >= 60.0f   ? theme.textSuccess.ToImVec4()
-                                  : fps >= 30.0f ? theme.textWarning.ToImVec4()
-                                                 : theme.textError.ToImVec4();
+                                    : fps >= 30.0f ? theme.textWarning.ToImVec4()
+                                                   : theme.textError.ToImVec4();
 
             // Reserve the metrics column before rendering variable-length
             // document context, so a long project or scene name cannot overlap it.
@@ -970,14 +970,14 @@ namespace SparkEditor
             std::snprintf(detailedMetricsText, sizeof(detailedMetricsText), "%.1fms  " ICON_FA_DATABASE " %d  #%llu",
                           m_stats.frameTime, m_assetDatabaseSize, static_cast<unsigned long long>(m_frameNumber));
             const float fpsWidth = ImGui::CalcTextSize(fpsText).x;
-            const float detailedMetricsWidth =
-                fpsWidth + 8.0f + ImGui::CalcTextSize(detailedMetricsText).x;
+            const float detailedMetricsWidth = fpsWidth + 8.0f + ImGui::CalcTextSize(detailedMetricsText).x;
             const float minimumContextWidth = ImGui::CalcTextSize(ICON_FA_CIRCLE).x;
             const float contentWidth = contentRight - contentLeft;
             const bool showDetailedMetrics = contentWidth >= detailedMetricsWidth + minimumContextWidth + 24.0f;
             const bool showCompactMetrics =
                 !showDetailedMetrics && contentWidth >= fpsWidth + minimumContextWidth + 16.0f;
-            const float metricsWidth = showDetailedMetrics ? detailedMetricsWidth : (showCompactMetrics ? fpsWidth : 0.0f);
+            const float metricsWidth =
+                showDetailedMetrics ? detailedMetricsWidth : (showCompactMetrics ? fpsWidth : 0.0f);
             const float metricsStart = contentRight - metricsWidth;
             const float contextRight = metricsWidth > 0.0f ? metricsStart - 12.0f : contentRight;
             float contextCursor = contentLeft;
@@ -1005,8 +1005,8 @@ namespace SparkEditor
                 return true;
             };
 
-            auto renderContextWithFallback = [&](const std::string& text, const char* icon, const ImVec4& color,
-                                                 const std::string& tooltip)
+            auto renderContextWithFallback =
+                [&](const std::string& text, const char* icon, const ImVec4& color, const std::string& tooltip)
             {
                 if (renderContext(text, color, tooltip))
                     return;
@@ -1014,10 +1014,9 @@ namespace SparkEditor
             };
 
             // Left: engine connection chip badge.
-            ImVec4 statusColor =
-                m_engineConnected ? theme.textSuccess.ToImVec4() : theme.textError.ToImVec4();
-            const std::string connectionText = std::string(ICON_FA_CIRCLE) +
-                                               (m_engineConnected ? " Connected" : " Disconnected");
+            ImVec4 statusColor = m_engineConnected ? theme.textSuccess.ToImVec4() : theme.textError.ToImVec4();
+            const std::string connectionText =
+                std::string(ICON_FA_CIRCLE) + (m_engineConnected ? " Connected" : " Disconnected");
             renderContextWithFallback(connectionText, ICON_FA_CIRCLE, statusColor,
                                       m_engineConnected ? "Engine connected" : "Engine disconnected");
 
@@ -1030,8 +1029,8 @@ namespace SparkEditor
                                           theme.textSecondary.ToImVec4(), "Project: " + projectName);
             }
 
-            const std::string sceneText = std::string(ICON_FA_MAP) + " " + m_currentSceneName +
-                                          (sceneModified ? " *" : "");
+            const std::string sceneText =
+                std::string(ICON_FA_MAP) + " " + m_currentSceneName + (sceneModified ? " *" : "");
             renderContextWithFallback(sceneText, ICON_FA_MAP, theme.text.ToImVec4(),
                                       "Scene: " + m_currentSceneName + (sceneModified ? " (modified)" : ""));
 
@@ -1617,8 +1616,7 @@ namespace SparkEditor
         auto& history = Spark::Editor::CommandHistory::GetInstance();
         const uint64_t editSequence = history.GetEditSequence();
         const auto now = std::chrono::steady_clock::now();
-        if (!force && editSequence == m_lastCapturedSequence &&
-            now - m_lastRecoveryCapture < kRecoveryCaptureInterval)
+        if (!force && editSequence == m_lastCapturedSequence && now - m_lastRecoveryCapture < kRecoveryCaptureInterval)
         {
             return;
         }
@@ -1641,8 +1639,8 @@ namespace SparkEditor
             metadata.recentOperations.assign(m_recentRecoveryOperations.begin(), m_recentRecoveryOperations.end());
             metadata.dirtySequence = editSequence;
             metadata.capturedUnixMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                                   std::chrono::system_clock::now().time_since_epoch())
-                                                   .count();
+                                                    std::chrono::system_clock::now().time_since_epoch())
+                                                    .count();
 
             std::string error;
             const EditorRecoverySnapshot snapshot =
@@ -1687,8 +1685,7 @@ namespace SparkEditor
         if ((loaded.state == EditorRecoveryLoadState::Primary || loaded.state == EditorRecoveryLoadState::Backup) &&
             loaded.snapshot)
         {
-            m_recoveryController.Offer(std::move(*loaded.snapshot),
-                                       loaded.state == EditorRecoveryLoadState::Backup);
+            m_recoveryController.Offer(std::move(*loaded.snapshot), loaded.state == EditorRecoveryLoadState::Backup);
             return;
         }
 
@@ -1725,7 +1722,8 @@ namespace SparkEditor
         std::string error;
         if (!m_recoveryStore->ClearForProject(projectIdentity, error))
         {
-            ShowNotification("Discarded document will not be re-captured, but matching recovery cleanup failed: " + error,
+            ShowNotification("Discarded document will not be re-captured, but matching recovery cleanup failed: " +
+                                 error,
                              "warning", 6.0f);
         }
     }
@@ -1916,8 +1914,7 @@ namespace SparkEditor
         ImGui::Text("Captured: %s", capturedTime.c_str());
         if (m_recoveryController.UsesBackup())
         {
-            ImGui::TextColored(ImVec4(0.95f, 0.72f, 0.28f, 1.0f),
-                               "Using the last known-good backup snapshot");
+            ImGui::TextColored(ImVec4(0.95f, 0.72f, 0.28f, 1.0f), "Using the last known-good backup snapshot");
         }
         if (!snapshot->recentOperations.empty())
         {
@@ -2560,8 +2557,8 @@ namespace SparkEditor
                 if (!ResolvePathInsideProject(PathFromUtf8(ProjectManager::GetActiveProjectPath()), PathFromUtf8(path),
                                               containedPath, pathError))
                 {
-                    Spark::SimpleConsole::GetInstance().LogError(
-                        "Refusing to save scene outside the open project: " + pathError);
+                    Spark::SimpleConsole::GetInstance().LogError("Refusing to save scene outside the open project: " +
+                                                                 pathError);
                     return false;
                 }
                 resolvedPath = PathToUtf8(containedPath);

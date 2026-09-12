@@ -151,9 +151,9 @@ namespace SparkEditor
         {
             static const std::unordered_map<std::string, std::string> aliases = {
                 {"Spark Professional", "Ember Studio"}, {"Spark Ember", "Ember Studio"},
-                {"Orange Accent", "Ember Studio"}, {"Spark Fusion", "Cobalt Forge"},
-                {"Unreal Pro", "Cobalt Forge"}, {"Blue Accent", "Cobalt Forge"},
-                {"Unity Pro", "Graphite Signal"}, {"VS Pro", "Graphite Signal"},
+                {"Orange Accent", "Ember Studio"},      {"Spark Fusion", "Cobalt Forge"},
+                {"Unreal Pro", "Cobalt Forge"},         {"Blue Accent", "Cobalt Forge"},
+                {"Unity Pro", "Graphite Signal"},       {"VS Pro", "Graphite Signal"},
                 {"JetBrains", "Graphite Signal"}};
             const auto alias = aliases.find(themeName);
             if (alias != aliases.end())
@@ -419,12 +419,12 @@ namespace SparkEditor
         initialized = true;
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing default editor themes");
-        RegisterTheme(CreateStudioTheme("Ember Studio", "#110e0d", "#1a1716", "#24201e", "#3c3733",
-                                       "#efeeeb", "#918b85", "#f1823a", "#68d3ee", "#74d291"));
-        RegisterTheme(CreateStudioTheme("Cobalt Forge", "#0b1017", "#151f2a", "#202e3d", "#314557",
-                                       "#e6eef7", "#94a8bb", "#55c2e8", "#a99aff", "#6fdaa8"));
-        RegisterTheme(CreateStudioTheme("Graphite Signal", "#101113", "#1b1c1f", "#282a2f", "#46484e",
-                                       "#ececef", "#a8aab1", "#c9d1dd", "#78d3b2", "#a7d472"));
+        RegisterTheme(CreateStudioTheme("Ember Studio", "#110e0d", "#1a1716", "#24201e", "#3c3733", "#efeeeb",
+                                        "#918b85", "#f1823a", "#68d3ee", "#74d291"));
+        RegisterTheme(CreateStudioTheme("Cobalt Forge", "#0b1017", "#151f2a", "#202e3d", "#314557", "#e6eef7",
+                                        "#94a8bb", "#55c2e8", "#a99aff", "#6fdaa8"));
+        RegisterTheme(CreateStudioTheme("Graphite Signal", "#101113", "#1b1c1f", "#282a2f", "#46484e", "#ececef",
+                                        "#a8aab1", "#c9d1dd", "#78d3b2", "#a7d472"));
         RegisterTheme(CreateProfessionalLightTheme());
         RegisterTheme(CreateHighContrastTheme());
     }
