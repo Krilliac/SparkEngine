@@ -18,14 +18,14 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 | **Tests** | 182920 |
 | **SparkConsole/src** | 1701 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~777873** |
+| **Total C++ (excl. ThirdParty)** | **~778011** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hh/.hpp/.hxx/.inl) | 1059 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1580 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1581 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
