@@ -54,7 +54,8 @@ def _decode(root: Path, path: str, field: str, maximum: int = 2 * 1024 * 1024) -
 
 
 def _digest(root: Path, path: str, field: str) -> str:
-    return hashlib.sha256(read_confined_file(root, path, field, max_bytes=1024 * 1024)).hexdigest()
+    payload = read_confined_file(root, path, field, max_bytes=1024 * 1024)
+    return hashlib.sha256(payload.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def _strip_yaml_comment(line: str) -> str:

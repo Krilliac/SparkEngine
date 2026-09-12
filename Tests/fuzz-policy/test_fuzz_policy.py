@@ -1092,7 +1092,7 @@ class TestGateBehavior(FixtureTestCase):
             self.root, parser_inventory.DEFAULT_INVENTORY, corpus_manifest.DEFAULT_CORPUS_MANIFEST
         )
         raw = (self.root / "tools" / "fuzz-policy" / "parser-inventory.json").read_bytes()
-        self.assertEqual(report["inputs"]["inventory"], hashlib.sha256(raw).hexdigest())
+        self.assertEqual(report["inputs"]["inventory"], hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest())
 
     def test_emit_json_failure_returns_nonzero(self) -> None:
         self.fixture.write_inventory("{}")

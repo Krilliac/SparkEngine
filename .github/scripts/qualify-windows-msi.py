@@ -17,6 +17,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -117,6 +118,16 @@ _MODULE_LIFECYCLE_RE = re.compile(
     r"destroy=([0-9]+) faults=([0-9]+)"
 )
 _SOURCE_SHA_RE = re.compile(r"[0-9a-f]{40}")
+
+
+def _has_link_component(path: Path) -> bool:
+    """Reject symlink/reparse components without rejecting Windows 8.3 aliases."""
+    for component in (path, *path.parents):
+        info = component.lstat()
+        if (component.is_symlink()
+                or getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)):
+            return True
+    return False
 
 
 def _exact_record(lines, pattern, label):
@@ -287,7 +298,7 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         if len(candidates) != 1 or candidates[0].name != expected:
             raise ValueError("Expected exactly one versioned Windows Shipping Runtime MSI")
         package = candidates[0].absolute()
-        if not package.is_file() or package.is_symlink() or package.resolve() != package:
+        if not package.is_file() or _has_link_component(package):
             raise ValueError("MSI path must be a regular file without symlink traversal")
         if not manifest.is_file() or not runner_temp.is_dir():
             raise ValueError("Trusted build manifest and runner temporary directory are required")
