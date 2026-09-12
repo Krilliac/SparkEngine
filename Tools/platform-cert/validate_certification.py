@@ -1284,7 +1284,8 @@ def load_authority(repo_root: Path) -> da.Authority:
 
     lock_path = repo_root / da.LOCK_RELPATH
     try:
-        measured, _size = safe_fs.measure_file(lock_path, max_bytes=da.MAX_LOCK_BYTES)
+        lock_bytes = safe_fs.read_bounded(lock_path, max_bytes=da.MAX_LOCK_BYTES)
+        measured = da.manifest_digest(lock_bytes)
     except safe_fs.FileSecurityError as exc:
         raise CertificationError(f"dependency manifest unusable: {exc}") from exc
     if measured != document["sourceSha256"]:

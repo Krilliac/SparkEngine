@@ -26,7 +26,7 @@ fails on any drift, so a submodule bump or a manifest edit forces the closure
 to be re-certified instead of silently inheriting the old verdict.
 
 The validator only ever *reads* the committed authority and confirms its
-recorded digest still matches the manifest bytes.  It never shells out to git,
+recorded digest still matches the LF-normalized manifest bytes.  It never shells out to git,
 so validation stays deterministic and hermetic; the git-backed drift gate is
 this module's `--check` mode, wired into CI and CTest.
 """
@@ -196,13 +196,21 @@ def substitute(value: str, resolved: dict[str, str]) -> str:
 # ── Authority construction ─────────────────────────────────────────────────
 
 
+def _canonical_manifest_bytes(raw: bytes) -> bytes:
+    """Keep the manifest digest stable across Windows CRLF and POSIX LF checkouts."""
+    return raw.replace(b"\r\n", b"\n")
+
+
+def manifest_digest(raw: bytes) -> str:
+    """Return the platform-stable digest used by the committed authority."""
+    return hashlib.sha256(_canonical_manifest_bytes(raw)).hexdigest()
+
+
 def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
     raw = path.read_bytes()
     if len(raw) > MAX_LOCK_BYTES:
         raise AuthorityError(f"{path.name}: {len(raw)} bytes exceeds {MAX_LOCK_BYTES}")
-    digest.update(raw)
-    return digest.hexdigest()
+    return manifest_digest(raw)
 
 
 def build_third_party(repo_root: Path) -> tuple[list[dict[str, Any]], str]:
@@ -210,7 +218,7 @@ def build_third_party(repo_root: Path) -> tuple[list[dict[str, Any]], str]:
     lock_path = repo_root / LOCK_RELPATH
     if not lock_path.is_file():
         raise AuthorityError(f"dependency manifest missing: {LOCK_RELPATH}")
-    raw = lock_path.read_bytes()
+    raw = _canonical_manifest_bytes(lock_path.read_bytes())
     if len(raw) > MAX_LOCK_BYTES:
         raise AuthorityError(f"{LOCK_RELPATH}: {len(raw)} bytes exceeds {MAX_LOCK_BYTES}")
     text = raw.decode("utf-8")
@@ -240,7 +248,7 @@ def build_third_party(repo_root: Path) -> tuple[list[dict[str, Any]], str]:
             }
         )
     derived.sort(key=lambda item: item["name"].casefold())
-    return derived, hashlib.sha256(raw).hexdigest()
+    return derived, manifest_digest(raw)
 
 
 def default_platform_runtime() -> list[dict[str, Any]]:

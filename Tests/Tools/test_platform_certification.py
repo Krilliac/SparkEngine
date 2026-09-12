@@ -1425,9 +1425,7 @@ class TestDependencyAuthority(unittest.TestCase):
         document = json.loads(
             (REPO_ROOT / da.AUTHORITY_RELPATH).read_text(encoding="utf-8")
         )
-        measured = hashlib.sha256(
-            (REPO_ROOT / da.LOCK_RELPATH).read_bytes()
-        ).hexdigest()
+        measured = da.manifest_digest((REPO_ROOT / da.LOCK_RELPATH).read_bytes())
         self.assertEqual(document["sourceSha256"], measured)
 
     def test_authority_carries_every_manifest_entry(self) -> None:

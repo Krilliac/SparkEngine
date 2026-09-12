@@ -470,7 +470,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                         return 0
                     if "/i" in argv:
                         install_root = Path(next(arg.split("=", 1)[1] for arg in argv if arg.startswith("INSTALL_ROOT=")))
-                        self.assertTrue(install_root.parent.is_relative_to(root))
+                        self.assertTrue(install_root.parent.resolve().is_relative_to(root.resolve()))
                         self.assertFalse(install_root.exists())
                         install_root.mkdir()
                         (install_root / "owned-file").write_text("payload")
