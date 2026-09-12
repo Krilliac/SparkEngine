@@ -611,10 +611,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3334,
+      "line": 3340,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3330",
+          "id": "CMakeLists.txt:3336",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1360,7 +1360,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1560,
+      "line": 1561,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1387,10 +1387,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3334,
+      "line": 3340,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3330",
+          "id": "CMakeLists.txt:3336",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -3299,7 +3299,7 @@
       "target": "spark_fps_abilities_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 113,
+      "line": 116,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3309,7 +3309,7 @@
       "target": "spark_fps_assets_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 41,
+      "line": 44,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3329,7 +3329,7 @@
       "target": "spark_fps_inventory_quests_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 125,
+      "line": 128,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3339,7 +3339,7 @@
       "target": "spark_fps_progression_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 21,
+      "line": 24,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3349,7 +3349,7 @@
       "target": "spark_fps_weapons_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 64,
+      "line": 67,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -5107,7 +5107,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 113,
+          "line": 116,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5125,7 +5125,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 41,
+          "line": 44,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5161,7 +5161,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 125,
+          "line": 128,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5179,7 +5179,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 21,
+          "line": 24,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5197,7 +5197,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 64,
+          "line": 67,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -9455,7 +9455,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "cca74c0e30177b80"
+            "runDigest": "8ac978e2dc1a9ba9"
           },
           {
             "index": 6,

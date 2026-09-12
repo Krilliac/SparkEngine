@@ -112,7 +112,7 @@
       "wave": 6,
       "area": "governance",
       "owner": "unassigned",
-      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag.",
+      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.",
       "dependencies": [
         "RDY-000",
         "SEC-110",

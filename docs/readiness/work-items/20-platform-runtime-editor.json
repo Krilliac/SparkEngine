@@ -10,7 +10,7 @@
       "wave": 2,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification.",
+      "rationale": "Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification. 2026-09-12 progress: full platform-cert validation now rejects unknown profiles even when a caller enables matrix-only diagnostic compatibility; unknown profiles cannot produce certified evidence. Clean Windows 11, driver, installer, upgrade, rollback, and hosted certification evidence remain open.",
       "dependencies": [
         "BLD-100",
         "REL-100",
@@ -544,7 +544,7 @@
       "wave": 2,
       "area": "rendering",
       "owner": "unassigned",
-      "rationale": "D3D11 is the deepest renderer but lacks a same-commit packaged golden-scene/pass/shader/resource/driver/performance release gate.",
+      "rationale": "D3D11 is the deepest renderer but lacks a same-commit packaged golden-scene/pass/shader/resource/driver/performance release gate. 2026-09-12 progress: Texture2DArray color and depth resources now create array-aware SRV/DSV views, including MSAA dimensions, with production-linked native view-descriptor coverage. GPU captures, golden-scene execution, packaged-runtime validation, and driver certification remain open.",
       "dependencies": [
         "CI-110",
         "BLD-100",
@@ -1079,7 +1079,7 @@
       "wave": 2,
       "area": "runtime",
       "owner": "unassigned",
-      "rationale": "NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS module/assets/save, shutdown, leak, soak, and no-GPU evidence without inheriting production-service operations. 2026-09-05 progress: Saves/, Logs/ (rotating SparkEngine_*.log), spark_trace.json and ShaderCache/ resolve through Spark::UserPaths under %LOCALAPPDATA%/SparkEngine (POSIX: $XDG_DATA_HOME or ~/.local/share/SparkEngine), Data/*.spk is resolved beside the executable first, and settings.ini falls back to a per-user directory on read-only installs (Tests/TestUserDataPathsReal.cpp). RHIBridge::Initialize no longer degrades a windowed request to NullRHIDevice silently (headless needs a headless request or allowHeadlessFallback). No packaged Windows 11 x64 no-GPU boot/soak evidence exists yet; the item stays open.",
+      "rationale": "NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS module/assets/save, shutdown, leak, soak, and no-GPU evidence without inheriting production-service operations. 2026-09-05 progress: Saves/, Logs/ (rotating SparkEngine_*.log), spark_trace.json and ShaderCache/ resolve through Spark::UserPaths under %LOCALAPPDATA%/SparkEngine (POSIX: $XDG_DATA_HOME or ~/.local/share/SparkEngine), Data/*.spk is resolved beside the executable first, and settings.ini falls back to a per-user directory on read-only installs (Tests/TestUserDataPathsReal.cpp). RHIBridge::Initialize no longer degrades a windowed request to NullRHIDevice silently (headless needs a headless request or allowHeadlessFallback). 2026-09-12 progress: NullRHI qualification now rejects logger-prefixed SPARK_D3D11_DEVICE records rather than accepting a false no-GPU result. No packaged Windows 11 x64 no-GPU boot/soak evidence exists yet; the item stays open.",
       "dependencies": [
         "BLD-100",
         "RDY-010",
@@ -1266,7 +1266,7 @@
       "wave": 2,
       "area": "editor",
       "owner": "unassigned",
-      "rationale": "Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate. 2026-09-05 progress: World-document create/delete/duplicate/reparent/rename/translate/rotate/scale and inspector edits are command-backed (one CommandHistory entry per gizmo drag); all three transform gizmos ship. Still open: asset browse/drag/assign path, author-to-installed-runtime round trip, and the crash-recovery pipeline (RecoveryCallback, RecordOperation callers, recovery dialog remain unwired; do not claim crash recovery works).",
+      "rationale": "Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate. 2026-09-05 progress: World-document create/delete/duplicate/reparent/rename/translate/rotate/scale and inspector edits are command-backed (one CommandHistory entry per gizmo drag); all three transform gizmos ship. 2026-09-12 progress: UndoRedoManager now restores its dispatch-depth boundary through RAII when a command throws, with a production regression proving the manager does not remain in dispatch state or enqueue a failed command. Still open: asset browse/drag/assign path, author-to-installed-runtime round trip, and the crash-recovery pipeline (RecoveryCallback, RecordOperation callers, recovery dialog remain unwired; do not claim crash recovery works).",
       "dependencies": [
         "RDY-010",
         "RDY-020",

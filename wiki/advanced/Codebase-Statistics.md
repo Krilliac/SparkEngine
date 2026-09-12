@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321331 |
-| **SparkEditor/Source** | 103591 |
+| **SparkEngine/Source** | 321401 |
+| **SparkEditor/Source** | 103594 |
 | **GameModules** | 142614 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 183092 |
-| **SparkConsole/src** | 1701 |
+| **Tests** | 183230 |
+| **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~778223** |
+| **Total C++ (excl. ThirdParty)** | **~778444** |
 
 ### File Counts
 
@@ -34,7 +34,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 121157 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,10 +42,10 @@ Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121125 | 37.6% |
+| Graphics | 121157 | 37.6% |
 | Engine (all subsystems) | 89114 | 27.7% |
-| Utils | 46113 | 14.3% |
-| Core | 31079 | 9.6% |
+| Utils | 46144 | 14.3% |
+| Core | 31086 | 9.6% |
 | Physics | 10799 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
@@ -103,14 +103,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 103591 |
+| Total editor lines | 103594 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 605 |
-| TEST() definitions | 7333 |
+| TEST() definitions | 7338 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -161,7 +161,7 @@ inventory is implementation evidence, not support certification.
 | `OpenGLDevice.cpp` | 2160 |
 | `ModuleManager.cpp` | 2013 |
 | `VulkanDevice.cpp` | 1991 |
-| `D3D11Device.cpp` | 1902 |
+| `D3D11Device.cpp` | 1934 |
 | `EngineSettings.cpp` | 1849 |
 | `NetworkConnection.cpp` | 1680 |
 | `GameplayLifecycleShared.cpp` | 1653 |

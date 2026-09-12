@@ -283,13 +283,17 @@ TEST(D3D11DeviceReal_Texture2DArrayCreatesArrayViews)
     EXPECT_TRUE(texture->GetShaderResourceView() != nullptr);
     EXPECT_TRUE(texture->GetRenderTargetView() != nullptr);
 
+    auto* colorSrv = static_cast<ID3D11ShaderResourceView*>(texture->GetShaderResourceView());
+    ASSERT_TRUE(colorSrv != nullptr);
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-    texture->GetShaderResourceView()->GetDesc(&srvDesc);
+    colorSrv->GetDesc(&srvDesc);
     EXPECT_EQ(srvDesc.ViewDimension, D3D11_SRV_DIMENSION_TEXTURE2DARRAY);
     EXPECT_EQ(srvDesc.Texture2DArray.ArraySize, desc.arraySize);
 
+    auto* colorRtv = static_cast<ID3D11RenderTargetView*>(texture->GetRenderTargetView());
+    ASSERT_TRUE(colorRtv != nullptr);
     D3D11_RENDER_TARGET_VIEW_DESC rtvDesc{};
-    texture->GetRenderTargetView()->GetDesc(&rtvDesc);
+    colorRtv->GetDesc(&rtvDesc);
     EXPECT_EQ(rtvDesc.ViewDimension, D3D11_RTV_DIMENSION_TEXTURE2DARRAY);
     EXPECT_EQ(rtvDesc.Texture2DArray.ArraySize, desc.arraySize);
 
@@ -303,8 +307,10 @@ TEST(D3D11DeviceReal_Texture2DArrayCreatesArrayViews)
     EXPECT_TRUE(texture->GetShaderResourceView() != nullptr);
     EXPECT_TRUE(texture->GetDepthStencilView() != nullptr);
 
+    auto* depthDsv = static_cast<ID3D11DepthStencilView*>(texture->GetDepthStencilView());
+    ASSERT_TRUE(depthDsv != nullptr);
     D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
-    texture->GetDepthStencilView()->GetDesc(&dsvDesc);
+    depthDsv->GetDesc(&dsvDesc);
     EXPECT_EQ(dsvDesc.ViewDimension, D3D11_DSV_DIMENSION_TEXTURE2DARRAY);
     EXPECT_EQ(dsvDesc.Texture2DArray.ArraySize, desc.arraySize);
 

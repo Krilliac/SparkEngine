@@ -674,7 +674,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*604 test-bearing `.cpp`/`.mm` files, 7332 source-level test definitions*
+*604 test-bearing `.cpp`/`.mm` files, 7337 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -790,9 +790,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCpuNeuralInference` | 14 |
 | `TestCpuNeuralTraining` | 13 |
 | `TestCrashHandlerGatingReal` | 11 |
-| `TestCrashReportUploader` | 8 |
+| `TestCrashReportUploader` | 10 |
 | `TestCrossSystemIntegration` | 4 |
-| `TestD3D11DeviceContractsReal` | 12 |
+| `TestD3D11DeviceContractsReal` | 13 |
 | `TestDXRSupport` | 13 |
 | `TestDaemonCodexFixes` | 4 |
 | `TestDaemonConcurrent` | 6 |
@@ -1159,7 +1159,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkGameRTS` | 5 |
 | `TestSparkGameRacing` | 5 |
 | `TestSparkGatewayCoordinator` | 7 |
-| `TestSparkPak` | 18 |
+| `TestSparkPak` | 19 |
 | `TestSparkServerApplication` | 23 |
 | `TestSpatialGrid` | 16 |
 | `TestSpatialGridReal` | 7 |
@@ -1225,7 +1225,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestUISystemPhaseR` | 7 |
 | `TestUUID` | 12 |
 | `TestUndoRedoManager` | 7 |
-| `TestUndoRedoManagerProduction` | 2 |
+| `TestUndoRedoManagerProduction` | 3 |
 | `TestUpscalingSystem` | 10 |
 | `TestUserDataPathsReal` | 7 |
 | `TestUtilsStress` | 13 |

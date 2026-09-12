@@ -44,6 +44,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Failed ModuleHotReload replacements remain pending for retry instead of consuming the watched file change
 - clang-tidy now analyzes the complete shipped-product source inventory and fails closed when its roots or translation units are missing
+- Release preparation now runs the fail-closed dependency, vendored-content, and GitHub Actions pin policy before computing release metadata
+- Crash-upload proxy and FTP logs now redact credentials and capability-bearing URL data while preserving transport behavior
+- SparkConsole now consumes the configured engine version, exposes `--version`/`-v`, and verifies that output through CTest
+- SparkPak now rejects traversal entry names while opening archives, before unsafe paths reach the virtual filesystem
+- D3D11 Texture2DArray resources now create array-aware shader/depth views, including multisample array dimensions
+- Editor UndoRedoManager now restores its dispatch boundary when a command throws, preventing failed commands from poisoning later transactions
+- Runtime packages now carry the first-party asset integrity manifest, and extracted-package checks reject missing, link-like, or tampered asset payloads
+- FPS package smoke now requires the complete canonical public SDK header set, including the umbrella SparkSDK.h contract
+- Windows NullRHI qualification now rejects logger-prefixed D3D11 device records that could masquerade as a no-GPU result
+- Build-matrix parity now binds stable shipping/validation profiles to matching CMake build presets and configurations, failing closed on drift
+- SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed deadlines
+- Platform certification now rejects unknown profiles in full evidence validation; unknown profiles remain diagnostic-only
+- Stable publication now rechecks the readiness contract immediately before its final acceptance PATCH
 - RemoteDebug reserves built-in command types against public handler rebinding, AssetMigration rejects requested-type mismatches, GamePackager rejects traversal project names, and performance-budget baseline validation rejects malformed hardware IDs
 - SparkGameModule rejects SDK headers with ambiguous `SPARK_SDK_VERSION` definitions before configuring a module ABI sidecar
 - SparkInstaller persists `.sparkengine-install.json` through a flushed same-directory replacement and treats malformed state as non-existent

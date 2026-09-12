@@ -741,12 +741,12 @@
 | `OutputCallback` | alias | SparkBuild | [ProcessRunner.h:L22](../../SparkBuild/src/ProcessRunner.h#L22) |  |
 | `P` | alias | Tests | [TestCoreAndBuildSystems.cpp:L301](../../Tests/TestCoreAndBuildSystems.cpp#L301) |  |
 | `P` | alias | Tests | [TestCoreAndBuildSystems.cpp:L309](../../Tests/TestCoreAndBuildSystems.cpp#L309) |  |
-| `PAK_FSEEK` | macro | SparkEngine | [SparkPak.cpp:L26](../../SparkEngine/Source/Core/SparkPak.cpp#L26) |  |
-| `PAK_FSEEK` | macro | SparkEngine | [SparkPak.cpp:L29](../../SparkEngine/Source/Core/SparkPak.cpp#L29) |  |
+| `PAK_FSEEK` | macro | SparkEngine | [SparkPak.cpp:L27](../../SparkEngine/Source/Core/SparkPak.cpp#L27) |  |
+| `PAK_FSEEK` | macro | SparkEngine | [SparkPak.cpp:L30](../../SparkEngine/Source/Core/SparkPak.cpp#L30) |  |
 | `PAK_FSEEK` | macro | SparkEngine | [SparkPakWriter.cpp:L24](../../SparkEngine/Source/Core/SparkPakWriter.cpp#L24) |  |
 | `PAK_FSEEK` | macro | SparkEngine | [SparkPakWriter.cpp:L27](../../SparkEngine/Source/Core/SparkPakWriter.cpp#L27) |  |
-| `PAK_FTELL` | macro | SparkEngine | [SparkPak.cpp:L27](../../SparkEngine/Source/Core/SparkPak.cpp#L27) |  |
-| `PAK_FTELL` | macro | SparkEngine | [SparkPak.cpp:L30](../../SparkEngine/Source/Core/SparkPak.cpp#L30) |  |
+| `PAK_FTELL` | macro | SparkEngine | [SparkPak.cpp:L28](../../SparkEngine/Source/Core/SparkPak.cpp#L28) |  |
+| `PAK_FTELL` | macro | SparkEngine | [SparkPak.cpp:L31](../../SparkEngine/Source/Core/SparkPak.cpp#L31) |  |
 | `PAK_FTELL` | macro | SparkEngine | [SparkPakWriter.cpp:L25](../../SparkEngine/Source/Core/SparkPakWriter.cpp#L25) |  |
 | `PAK_FTELL` | macro | SparkEngine | [SparkPakWriter.cpp:L28](../../SparkEngine/Source/Core/SparkPakWriter.cpp#L28) |  |
 | `Panel` | alias | Tests | [TestGameViewPanel.cpp:L68](../../Tests/TestGameViewPanel.cpp#L68) |  |
