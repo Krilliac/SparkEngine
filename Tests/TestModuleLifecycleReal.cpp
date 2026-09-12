@@ -9,7 +9,9 @@
 
 #include "TestFramework.h"
 
+#include "Core/ModuleHotReload.h"
 #include "Core/ModuleManager.h"
+#include "Utils/SparkConsole.h"
 #include <Spark/Version.h>
 
 #include <cstdlib>
@@ -282,6 +284,68 @@ TEST(ModuleLifecycle_RecordsFailedNewStyleModuleInitialization)
     EXPECT_EQ(record->destroyModule, 1u);
 
     manager.UnloadAll();
+}
+
+TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
+{
+    const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadRetry");
+    const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+    std::filesystem::path modulePath = directory / "RetryableModule";
+    modulePath += source.extension();
+    ASSERT_TRUE(CopyFixtureImage(modulePath));
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    manager.InitializeAll(&context);
+    ASSERT_TRUE(manager.HasInitializedModules());
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const bool consoleWasInitialized = console.IsInitialized();
+    ASSERT_TRUE(console.Initialize());
+
+    Spark::ModuleHotReloadManager hotReload;
+    hotReload.Initialize(&manager, &context);
+    hotReload.SetDebounceMs(0);
+    hotReload.WatchModule("Spark Compatible ABI Fixture", PathToUtf8(modulePath));
+    hotReload.Start();
+
+    size_t callbackCount = 0;
+    bool lastReloadSucceeded = true;
+    hotReload.SetReloadCallback(
+        [&](const std::string&, bool success)
+        {
+            ++callbackCount;
+            lastReloadSucceeded = success;
+        });
+
+    // Keep the image invalid but present. Its stale sidecar makes each reload
+    // fail before the replacement can be loaded, so retry behavior is isolated
+    // from compiler timing and dynamic-module lifecycle effects.
+    {
+        std::ofstream module(modulePath, std::ios::binary | std::ios::app);
+        module << "invalid replacement";
+    }
+
+    EXPECT_EQ(hotReload.PollChanges(), 0);
+    EXPECT_EQ(callbackCount, size_t{1});
+    EXPECT_FALSE(lastReloadSucceeded);
+
+    // The same failed disk change remains actionable and must be retried on a
+    // later poll; otherwise a transient compiler-side failure requires another
+    // unrelated file edit before hot-reload can recover.
+    EXPECT_EQ(hotReload.PollChanges(), 0);
+    EXPECT_EQ(callbackCount, size_t{2});
+    EXPECT_FALSE(lastReloadSucceeded);
+
+    hotReload.Stop();
+    ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    if (!consoleWasInitialized)
+        console.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(directory, ec);
 }
 
 TEST(ModuleLegacyAdapter_SuccessCreatesNoLifecycleRecord)
