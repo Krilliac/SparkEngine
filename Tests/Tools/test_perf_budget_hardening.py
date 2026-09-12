@@ -315,6 +315,13 @@ class TestSecondAuditReproductions(unittest.TestCase):
             errors = validate_suite(root)
         self.assertTrue(any("id must be a string" in error for error in errors))
 
+    def test_13b_unhashable_metric_hardware_id_returns_errors(self) -> None:
+        metric = _metric(hardware_id=[])
+        errors = validate_baselines(
+            _baselines(), {metric["id"]: metric}, HARDWARE_IDS,
+        )
+        self.assertTrue(any("hardwareRowId" in error for error in errors))
+
     def test_14_zero_budget_margin_is_null_with_reason(self) -> None:
         budget = _budget([_metric(budget=0.0)])
         result = _result()
