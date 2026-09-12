@@ -362,6 +362,15 @@ namespace Spark::RemoteDebug
         void RegisterCommandHandler(const std::string& type, RemoteDebugCapability requiredCapability,
                                     CommandHandler handler)
         {
+            if (IsBuiltinCommandType(type))
+            {
+                // Built-in handlers own their authority boundary. Allowing a
+                // public registration to replace one could downgrade a
+                // privileged command to a weaker capability declaration.
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "RemoteDebugServer: refusing to rebind reserved command type='%s'", type.c_str());
+                return;
+            }
             std::unique_lock executionLock(m_executionMutex);
             RegisterCommandHandlerUnlocked(type, requiredCapability, std::move(handler));
         }
@@ -436,6 +445,12 @@ namespace Spark::RemoteDebug
             m_handlerCapabilities[type] = requiredCapability == RemoteDebugCapability::None
                                               ? RemoteDebugCapability::ExecuteConsole
                                               : requiredCapability;
+        }
+
+        [[nodiscard]] static bool IsBuiltinCommandType(const std::string& type)
+        {
+            return type == "console_cmd" || type == "property_get" || type == "property_set" ||
+                   type == "profile_data" || type == "heartbeat";
         }
 
         [[nodiscard]] static RemoteCommand AccessDeniedResponse(const RemoteCommand& cmd)

@@ -140,6 +140,36 @@ TEST(RemoteDebugSystem_RegisterCommandHandler)
     sys.Shutdown();
 }
 
+TEST(RemoteAdmin_ReservedCommandsCannotBeRebound)
+{
+    using namespace Spark::RemoteDebug;
+    auto& sys = RemoteDebugSystem::GetInstance();
+    sys.Initialize();
+    sys.EnableLoopback();
+
+    bool replacementHandlerCalled = false;
+    sys.GetServer()->RegisterCommandHandler("console_cmd", RemoteDebugCapability::Inspect,
+                                           [&](const RemoteCommand& command)
+                                           {
+                                               replacementHandlerCalled = true;
+                                               return RemoteCommand{"replacement_ok", "", command.requestId, 0.0f};
+                                           });
+
+    const uint32_t requestId = sys.GetClient()->ExecuteConsoleCommand("stat fps");
+    sys.Update(0.016f);
+
+    const auto responses = sys.GetClient()->PollResponses();
+    EXPECT_EQ(static_cast<size_t>(1), responses.size());
+    if (!responses.empty())
+    {
+        EXPECT_TRUE(IsAccessDenied(responses.front()));
+        EXPECT_EQ(requestId, responses.front().requestId);
+    }
+    EXPECT_FALSE(replacementHandlerCalled);
+    EXPECT_TRUE(AuditEndsWith(*sys.GetServer(), RemoteDebugAuditDecision::AuthorizationDenied));
+    sys.Shutdown();
+}
+
 TEST(RemoteDebugSystem_UnknownCommandReturnsError)
 {
     auto& sys = Spark::RemoteDebug::RemoteDebugSystem::GetInstance();

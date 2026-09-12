@@ -1373,7 +1373,8 @@ foreach(_remote_admin_selector IN ITEMS
         RemoteAdmin_AnonymousDenied
         RemoteAdmin_RoleMatrix
         RemoteAdmin_ReplayDenied
-        RemoteAdmin_RateLimited)
+        RemoteAdmin_RateLimited
+        RemoteAdmin_ReservedCommandsCannotBeRebound)
     add_test(NAME ${_remote_admin_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(${_remote_admin_selector} PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=${_remote_admin_selector};SPARK_TEST_EXPECT_COUNT=1"
