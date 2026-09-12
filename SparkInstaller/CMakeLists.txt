@@ -144,6 +144,23 @@ if(SPARKINSTALLER_BUILD_TESTS)
     endif()
     add_test(NAME SparkInstallerGitTests COMMAND SparkInstallerGitTests)
     set_tests_properties(SparkInstallerGitTests PROPERTIES TIMEOUT 15)
+
+    add_executable(SparkInstallerInstallStateTests
+        tests/InstallStateTests.cpp
+        src/InstallState.cpp
+    )
+    target_include_directories(SparkInstallerInstallStateTests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    if(MSVC)
+        target_compile_definitions(SparkInstallerInstallStateTests PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(SparkInstallerInstallStateTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME SparkInstallerInstallStateTests COMMAND SparkInstallerInstallStateTests)
+    set_tests_properties(SparkInstallerInstallStateTests PROPERTIES TIMEOUT 10)
+
     if(WIN32)
         set(_sparkinstaller_platform "Windows")
     elseif(APPLE)
