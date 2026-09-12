@@ -34,6 +34,18 @@ jobs:
         ref: Working
         persist-credentials: false
 
+    # Release publication must enforce the same dependency, vendored-content,
+    # and action-pin policy as CI before any release metadata is computed.
+    - name: Install supply-chain checker dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-yaml cmake
+        python3 -c "import yaml; print('PyYAML', yaml.__version__)"
+        cmake --version
+
+    - name: Supply-chain policy check
+      run: python3 tools/check-supply-chain.py --ci
+
     - name: Attest current trusted release controller
       env:
         GH_TOKEN: ${{ github.token }}

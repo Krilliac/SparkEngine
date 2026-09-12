@@ -2028,6 +2028,14 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn('LOCAL_SHA" != "$WORKFLOW_SHA', controller)
         self.assertIn('LOCAL_SHA" != "$REMOTE_SHA', controller)
 
+    def test_release_prepare_runs_supply_chain_policy_before_metadata(self) -> None:
+        policy = named_step(self.release, "Supply-chain policy check")
+        metadata = named_step(self.release, "Compute release metadata")
+        self.assertIn("python3 tools/check-supply-chain.py --ci", policy)
+        self.assertNotIn("continue-on-error", policy)
+        self.assertNotIn("|| true", policy)
+        self.assertLess(self.release.index(policy), self.release.index(metadata))
+
     def test_release_metadata_requires_one_source_version_and_changelog_entry(self) -> None:
         block = named_step(self.release, "Compute release metadata")
         script = local_release_fixture_script(
