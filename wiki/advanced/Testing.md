@@ -676,7 +676,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*604 test-bearing `.cpp`/`.mm` files, 7327 source-level test definitions*
+*604 test-bearing `.cpp`/`.mm` files, 7328 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1198,7 +1198,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTFServerValidation` | 15 |
 | `TestTFSocialStore` | 7 |
 | `TestTacticalPointSystem` | 4 |
-| `TestTelemetry` | 15 |
+| `TestTelemetry` | 16 |
 | `TestTelemetryPhaseFF` | 7 |
 | `TestTelemetrySpool` | 9 |
 | `TestTemplateRuntimeReal` | 7 |
