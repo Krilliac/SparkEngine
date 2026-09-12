@@ -62,6 +62,23 @@ REQUIRED_CI_JOBS = (
 )
 REQUIRED_CI_JOBS_JSON = json.dumps(REQUIRED_CI_JOBS, separators=(",", ":"))
 
+CLANG_TIDY_SOURCE_ROOTS = (
+    "SparkEngine/Source",
+    "SparkEditor/Source",
+    "SparkConsole/src",
+    "SparkDaemon/src",
+    "SparkGateway/src",
+    "SparkLauncher/src",
+    "SparkServer/src",
+    "SparkWorker/src",
+    "SparkCooker/src",
+    "SparkAutomation/src",
+    "SparkBuild/src",
+    "SparkInstaller/src",
+    "SparkShaderCompiler/src",
+    "GameModules",
+)
+
 sys.path.insert(0, str(REPO_ROOT / "Tools"))
 
 from buildmatrix.workflow import WorkflowError, parse_workflow_yaml  # noqa: E402
@@ -1063,6 +1080,16 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
+
+    def test_clang_tidy_inventory_covers_all_shipped_source_roots(self) -> None:
+        block = self.build[self.build.index("\n  clang-tidy:\n"):]
+        block = block[:block.index("\n  # ===========================================================================", 1)]
+        self.assertNotIn("head -z", block)
+        self.assertIn("file_count=$(tr -cd '\\0' < clang-tidy-files.list | wc -c)", block)
+        self.assertIn('if [ "$file_count" -eq 0 ]; then', block)
+        self.assertIn('if [ ! -d "$root" ]; then', block)
+        for root in CLANG_TIDY_SOURCE_ROOTS:
+            self.assertIn(f"            {root}\n", block)
 
     def test_required_ci_verifier_covers_every_declared_job(self) -> None:
         document = parse_workflow_yaml(self.build)
