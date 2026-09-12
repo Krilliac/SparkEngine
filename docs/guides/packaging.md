@@ -55,6 +55,13 @@ target_link_libraries(MyTarget PRIVATE Spark::SparkEngineLib)
 
 A CI smoke project exists at `Tests/PackageSmoke/` and is used to validate package consumption on release pipelines.
 
+### Portable POSIX archives
+
+The POSIX install keeps SDL2's ABI-visible filenames, but CPack archive staging
+converts any SDL2 SONAME/development symlinks into regular copies confined to
+the installed `lib/` directory. This preserves runtime lookup and exported
+CMake targets while keeping portable `TGZ`/`ZIP` members free of link entries.
+
 ## Versioning Policy
 
 - Engine package version is driven by `SPARK_ENGINE_VERSION` (cache var) and mapped to `project(... VERSION ...)`.

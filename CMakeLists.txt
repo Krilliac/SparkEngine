@@ -2690,6 +2690,35 @@ if(TARGET SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/include")
         FRAMEWORK DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
         INCLUDES DESTINATION include include/SDL2
     )
+
+    # CPack's portable archives must contain regular files. SDL2's versioned
+    # POSIX install normally emits SONAME and development symlinks; preserve
+    # those ABI-visible names as bounded copies after installation so runtime
+    # lookup and exported targets stay unchanged without placing links in an
+    # archive that the package validator intentionally rejects.
+    if(UNIX)
+        install(CODE [[
+            set(_spark_sdl2_libdir "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib")
+            if(IS_DIRECTORY "${_spark_sdl2_libdir}")
+                file(REAL_PATH "${_spark_sdl2_libdir}" _spark_sdl2_real_libdir)
+                file(GLOB _spark_sdl2_entries "${_spark_sdl2_libdir}/libSDL2*")
+                foreach(_spark_sdl2_entry IN LISTS _spark_sdl2_entries)
+                    if(IS_SYMLINK "${_spark_sdl2_entry}")
+                        file(REAL_PATH "${_spark_sdl2_entry}" _spark_sdl2_resolved)
+                        file(RELATIVE_PATH _spark_sdl2_relative
+                            "${_spark_sdl2_real_libdir}" "${_spark_sdl2_resolved}")
+                        if(_spark_sdl2_relative MATCHES "^\\.\\.(/|$)")
+                            message(FATAL_ERROR
+                                "SDL2 install link escapes its library directory: ${_spark_sdl2_entry}")
+                        endif()
+                        file(REMOVE "${_spark_sdl2_entry}")
+                        file(COPY_FILE "${_spark_sdl2_resolved}" "${_spark_sdl2_entry}")
+                    endif()
+                endforeach()
+            endif()
+        ]]
+            COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME})
+    endif()
     install(EXPORT SparkSDL2Targets
         FILE SDL2Targets.cmake
         NAMESPACE SDL2::

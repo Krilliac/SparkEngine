@@ -1139,6 +1139,18 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("set(CMAKE_MACOSX_RPATH ON)", self.cmake)
         self.assertIn("set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)", self.cmake)
 
+    def test_posix_sdl_install_uses_regular_files_for_portable_archives(self) -> None:
+        """Portable POSIX packages must dereference SDL2 links without renaming its ABI."""
+        start = self.cmake.index("if(TARGET SDL2 AND EXISTS")
+        end = self.cmake.index("set(SPARK_PACKAGE_HAS_CURL", start)
+        sdl_install = self.cmake[start:end]
+        self.assertIn("install(CODE", sdl_install)
+        self.assertIn('file(GLOB _spark_sdl2_entries "${_spark_sdl2_libdir}/libSDL2*")', sdl_install)
+        self.assertIn('if(IS_SYMLINK "${_spark_sdl2_entry}")', sdl_install)
+        self.assertIn('file(REAL_PATH "${_spark_sdl2_entry}" _spark_sdl2_resolved)', sdl_install)
+        self.assertIn('file(REMOVE "${_spark_sdl2_entry}")', sdl_install)
+        self.assertIn('file(COPY_FILE "${_spark_sdl2_resolved}" "${_spark_sdl2_entry}")', sdl_install)
+
     def test_standard_test_evidence_rejects_scrub_removal_or_reordering(self) -> None:
         vs2022 = yaml_section(self.build, "build-windows-vs2022", indent=2)
         scrub = named_step(vs2022, "Scrub restored test evidence")
