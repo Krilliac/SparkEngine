@@ -46,4 +46,22 @@ endif()
 if(NOT "${output}\n${error}" MATCHES "WeaponTypes[.]h")
     message(FATAL_ERROR "Consumer failed for an unrelated reason (${result}):\n${output}\n${error}")
 endif()
+
+# The package consumer must also reject an installation missing the canonical
+# SDK umbrella header; accepting only a surviving leaf header would make the
+# public SDK contract depend on stale or partial package contents.
+file(COPY "${INSTALLED_INCLUDE_DIR}/Spark/SparkSDK.h"
+    DESTINATION "${FIXTURE}/include/Spark")
+file(REMOVE "${FIXTURE}/include/Spark/SparkSDK.h")
+execute_process(COMMAND ${configure}
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 120)
+if("${result}" STREQUAL "0")
+    message(FATAL_ERROR
+        "Consumer accepted an SDK missing its canonical SparkSDK.h after reconfiguration")
+endif()
+if(NOT "${output}\n${error}" MATCHES "SparkSDK[.]h")
+    message(FATAL_ERROR
+        "Consumer failed for an unrelated reason while SparkSDK.h was missing (${result}):\n"
+        "${output}\n${error}")
+endif()
 file(REMOVE_RECURSE "${FIXTURE}")

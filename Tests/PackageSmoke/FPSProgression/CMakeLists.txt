@@ -7,9 +7,12 @@ endif()
 
 # The installed include root also contains SparkEngine internals. Stage only
 # the canonical SDK so even a SparkEngine/... include fails in this consumer.
-if(NOT EXISTS "${SPARK_ENGINE_INCLUDE_DIR}/Spark/IModule.h")
-    message(FATAL_ERROR "The canonical Spark SDK headers are missing")
-endif()
+foreach(_required_sdk_header IN ITEMS SparkSDK.h IModule.h Version.h)
+    if(NOT EXISTS "${SPARK_ENGINE_INCLUDE_DIR}/Spark/${_required_sdk_header}")
+        message(FATAL_ERROR
+            "The canonical Spark SDK is incomplete: missing Spark/${_required_sdk_header}")
+    endif()
+endforeach()
 set(_public_sdk "${CMAKE_CURRENT_BINARY_DIR}/public-sdk")
 # A removed installed header must not survive from an earlier configure.
 file(REMOVE_RECURSE "${_public_sdk}")
