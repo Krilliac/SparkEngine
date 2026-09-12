@@ -1200,7 +1200,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
     def test_main_allows_a_declared_gap_for_a_genuinely_absent_lifecycle_leaf(self) -> None:
         """The release ledger remains compatible with an actually absent producer."""
         root = self.repo / "cli-absent-root"
-        _sha, evidence_path, manifest_path = self._prepare_cli_evidence_root(root)
+        sha, evidence_path, manifest_path = self._prepare_cli_evidence_root(root)
         evidence_path.unlink()
         gap_ledger = self._write_cli_lifecycle_gap_ledger("missing-leaf")
         stdout = io.StringIO()
@@ -1209,6 +1209,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
             "validate_manifest.py", "--repo-root", str(root),
             "--manifest", str(manifest_path),
             "--allow-declared-gaps", str(gap_ledger),
+            "--expected-sha", sha,
         ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
@@ -1480,10 +1481,11 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         manifest_path = root / "cli-manifest.json"
         stdout = io.StringIO()
         stderr = io.StringIO()
-        with mock.patch.object(sys, "argv", [
-            "validate_manifest.py", "--repo-root", str(root),
-            "--manifest", str(manifest_path),
-        ]), redirect_stdout(stdout), redirect_stderr(stderr):
+        with mock.patch.dict(os.environ, {"GITHUB_SHA": ""}, clear=False), \
+                mock.patch.object(sys, "argv", [
+                    "validate_manifest.py", "--repo-root", str(root),
+                    "--manifest", str(manifest_path),
+                ]), redirect_stdout(stdout), redirect_stderr(stderr):
             result = validate_manifest_mod.main()
 
         self.assertNotEqual(result, 0)
@@ -5170,7 +5172,13 @@ class TestCMakeFileAPI(unittest.TestCase):
                         "a commented-out add_library must not yield a target",
                     )
                 else:
-                    index = targets_mod.extract_from_reply(reply)
+                    try:
+                        index = targets_mod.extract_from_reply(reply)
+                    except targets_mod.TargetEvidenceUnavailable:
+                        # A configure that intentionally creates no target is
+                        # represented by the fail-closed collector exception.
+                        # That is the expected negative result for this case.
+                        continue
                     self.assertNotIn(
                         "ProbeModule", index,
                         "target reported despite not being created",
