@@ -5,6 +5,7 @@
 
 #include "SparkPak.h"
 
+#include "Engine/Modding/VirtualFileSystem.h"
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
@@ -304,6 +305,12 @@ namespace Spark
 
             entry.virtualPath.assign(reinterpret_cast<const char*>(ptr), pathLen);
             ptr += pathLen;
+
+            if (!IsVirtualPathSafe(entry.virtualPath))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPak: unsafe virtual path '%s'", entry.virtualPath.c_str());
+                return false;
+            }
 
             // Validate every untrusted entry while opening the archive, before a
             // later lookup can allocate from its declared sizes. File data is
