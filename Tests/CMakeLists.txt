@@ -1525,6 +1525,22 @@ set_tests_properties(SparkPackageModuleSidecarValidatorTests PROPERTIES
     LABELS "package;unit"
     TIMEOUT 30)
 
+add_test(
+    NAME SparkSDKRejectsAmbiguousVersionHeader
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_GAME_MODULE_CMAKE=${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/sdk-version-header-ambiguity/$<CONFIG>"
+        "-DCONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCONSUMER_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCONSUMER_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCONSUMER_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/FPSProgression/TestSparkGameModuleVersion.cmake)
+set_tests_properties(SparkSDKRejectsAmbiguousVersionHeader PROPERTIES
+    LABELS "sdk;module;unit"
+    TIMEOUT 30)
+
 # ----------------------------------------------------------------------------
 # Installed-SDK template gate (opt-in)
 # ----------------------------------------------------------------------------

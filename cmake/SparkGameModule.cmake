@@ -40,12 +40,15 @@ if(NOT _spark_sdk_version_header)
 endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${_spark_sdk_version_header}")
-file(STRINGS "${_spark_sdk_version_header}" _spark_sdk_version_line
+file(STRINGS "${_spark_sdk_version_header}" _spark_sdk_version_lines
     REGEX "^#[ \t]*define[ \t]+SPARK_SDK_VERSION[ \t]+[0-9]+")
-if(NOT _spark_sdk_version_line MATCHES
+list(LENGTH _spark_sdk_version_lines _spark_sdk_version_line_count)
+if(NOT _spark_sdk_version_line_count EQUAL 1 OR
+   NOT _spark_sdk_version_lines MATCHES
    "SPARK_SDK_VERSION[ \t]+([0-9]+)")
     message(FATAL_ERROR
-        "SparkGameModule: could not parse SPARK_SDK_VERSION from ${_spark_sdk_version_header}")
+        "SparkGameModule: ${_spark_sdk_version_header} must contain exactly one "
+        "SPARK_SDK_VERSION definition")
 endif()
 set_property(GLOBAL PROPERTY SPARK_MODULE_CURRENT_SDK_VERSION "${CMAKE_MATCH_1}")
 
