@@ -27,6 +27,10 @@ if(APPLE)
     set(CMAKE_MACOSX_RPATH ON)
     set(CMAKE_INSTALL_RPATH "@executable_path;@executable_path/../lib")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+elseif(UNIX)
+    # Linux packages place shared libraries beside the install prefix's lib/;
+    # initialize the target RPATH before any executable or module is created.
+    set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
 endif()
 
 # Note: CMAKE_MSVC_RUNTIME_LIBRARY is set after project() below,

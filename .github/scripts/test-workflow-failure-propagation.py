@@ -1139,6 +1139,16 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("set(CMAKE_MACOSX_RPATH ON)", self.cmake)
         self.assertIn("set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)", self.cmake)
 
+    def test_linux_install_rpath_is_initialized_before_engine_targets(self) -> None:
+        """Installed Linux binaries must resolve shared libraries from package lib/."""
+        rpath = 'set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")'
+        self.assertEqual(self.cmake.count(rpath), 1)
+        rpath_position = self.cmake.index(rpath)
+        first_engine_library = self.cmake.index("add_library(SparkEngineLib STATIC")
+        first_engine_executable = self.cmake.index("add_executable(SparkEngine")
+        self.assertLess(rpath_position, first_engine_library)
+        self.assertLess(rpath_position, first_engine_executable)
+
     def test_posix_sdl_install_uses_regular_files_for_portable_archives(self) -> None:
         """Portable POSIX packages must dereference SDL2 links without renaming its ABI."""
         start = self.cmake.index("if(TARGET SDL2 AND EXISTS")

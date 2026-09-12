@@ -59,8 +59,10 @@ A CI smoke project exists at `Tests/PackageSmoke/` and is used to validate packa
 
 The POSIX install keeps SDL2's ABI-visible filenames, but CPack archive staging
 converts any SDL2 SONAME/development symlinks into regular copies confined to
-the installed `lib/` directory. This preserves runtime lookup and exported
-CMake targets while keeping portable `TGZ`/`ZIP` members free of link entries.
+the installed `lib/` directory. Installed executables use `$ORIGIN/../lib` on
+Linux and `@executable_path/../lib` on macOS. This preserves runtime lookup and
+exported CMake targets while keeping portable `TGZ`/`ZIP` members free of link
+entries.
 
 ## Versioning Policy
 

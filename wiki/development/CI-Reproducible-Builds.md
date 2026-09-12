@@ -217,9 +217,11 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
 Versioned publication requires its `vMAJOR.MINOR.PATCH` tag to equal the single `SPARK_ENGINE_VERSION` default in `CMakeLists.txt`. `CHANGELOG.md` must contain exactly one matching `## [MAJOR.MINOR.PATCH]` heading, optionally followed by ` - YYYY-MM-DD`. Missing, duplicate, or mismatched metadata fails preparation before release outputs are emitted. Nightly publication continues to use the source default without requiring a versioned changelog section. This contract does not certify release notes, signing, or Windows qualification; the stable readiness gate remains mandatory.
 
 Portable POSIX CPack archives keep SDL2's ABI-visible library names but
-dereference its SONAME/development symlinks during install staging. The archive
-preflight therefore sees regular files while the runtime loader and exported
-CMake targets retain their expected names.
+dereference its SONAME/development symlinks during install staging. Installed
+executables search `lib/` through `$ORIGIN/../lib` on Linux and
+`@executable_path/../lib` on macOS. The archive preflight therefore sees regular
+files while the runtime loader and exported CMake targets retain their expected
+names.
 
 ## Windows native-package component preflight
 
