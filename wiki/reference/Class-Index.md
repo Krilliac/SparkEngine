@@ -2819,7 +2819,7 @@
 | `PendingParent` | struct | SparkEngine | [ReflectedSceneSerializer.cpp:L472](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L472) |  |
 | `PendingReload` | struct | SparkEngine | [ModuleHotReload.h:L124](../../SparkEngine/Source/Core/ModuleHotReload.h#L124) |  |
 | `PendingSection` | struct | SparkEngine | [CpuDebugger.h:L312](../../SparkEngine/Source/Utils/CpuDebugger.h#L312) |  |
-| `PendingSpoolPurge` | struct | SparkEngine | [Telemetry.h:L831](../../SparkEngine/Source/Utils/Telemetry.h#L831) |  |
+| `PendingSpoolPurge` | struct | SparkEngine | [Telemetry.h:L838](../../SparkEngine/Source/Utils/Telemetry.h#L838) |  |
 | `PendingWait` | struct | SparkEngine | [ThreadDebugger.h:L435](../../SparkEngine/Source/Utils/ThreadDebugger.h#L435) |  |
 | `PendingWork` | struct | SparkEngine | [AsyncComputeScheduler.h:L176](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.h#L176) |  |
 | `PerceivableEntity` | struct | SparkEngine | [ParallelPerception.h:L72](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L72) | Describes a perceivable entity in the world for spatial indexing. |
@@ -3187,7 +3187,7 @@
 | `QuestRewards` | struct | GameModules | [RPGQuestSystem.h:L39](../../GameModules/SparkGameRPG/Source/Quest/RPGQuestSystem.h#L39) | Rewards granted upon quest completion |
 | `QuestSystem` | class | SparkEngine | [QuestSystem.h:L120](../../SparkEngine/Source/Engine/Gameplay/QuestSystem.h#L120) | Manages quest definitions and per-entity quest progress tracking. |
 | `QuestTrackerTag` | struct | SparkEngine | [GameplayComponents.h:L165](../../SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h#L165) | Tag component for entities with quest tracking. |
-| `QueueConstraintResult` | struct | SparkEngine | [Telemetry.h:L839](../../SparkEngine/Source/Utils/Telemetry.h#L839) |  |
+| `QueueConstraintResult` | struct | SparkEngine | [Telemetry.h:L846](../../SparkEngine/Source/Utils/Telemetry.h#L846) |  |
 | `QueuedEventBus` | class | SparkEngine | [EventSystem.h:L307](../../SparkEngine/Source/Engine/Events/EventSystem.h#L307) |  |
 | `QueueFamilyIndices` | struct | SparkEngine | [VulkanDevice.h:L95](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L95) |  |
 | `QueuePrimed` | struct | Tests | [TestRemoteDebugSystem.cpp:L422](../../Tests/TestRemoteDebugSystem.cpp#L422) |  |
@@ -4177,7 +4177,7 @@
 | `TelemetryEvent` | struct | SparkEngine | [TelemetrySpoolInternal.h:L20](../../SparkEngine/Source/Utils/TelemetrySpoolInternal.h#L20) |  |
 | `TelemetryReset` | class | Tests | [TestTelemetrySpool.cpp:L106](../../Tests/TestTelemetrySpool.cpp#L106) |  |
 | `TelemetrySpool` | class | SparkEngine | [TelemetrySpool.h:L48](../../SparkEngine/Source/Utils/TelemetrySpool.h#L48) | Game-thread-only persistence for pending telemetry events. |
-| `TelemetrySystem` | class | SparkEngine | [Telemetry.h:L283](../../SparkEngine/Source/Utils/Telemetry.h#L283) | Singleton managing event recording, batching, and backend dispatch. |
+| `TelemetrySystem` | class | SparkEngine | [Telemetry.h:L290](../../SparkEngine/Source/Utils/Telemetry.h#L290) | Singleton managing event recording, batching, and backend dispatch. |
 | `TeleporterObject` | class | GameModules | [InteractiveObject.h:L310](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L310) | Teleporter that moves the player to a destination |
 | `TempAllocator` | class | SparkEngine | [PhysicsSystem.h:L47](../../SparkEngine/Source/Physics/PhysicsSystem.h#L47) |  |
 | `TempAssets` | struct | Tests | [TestAdvancedAssetPipeline.cpp:L24](../../Tests/TestAdvancedAssetPipeline.cpp#L24) |  |
