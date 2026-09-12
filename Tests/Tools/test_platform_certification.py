@@ -1293,6 +1293,11 @@ class TestCanonicalProfileFreeze(BundleTestCase):
             vc.validate_matrix(matrix, now=NOW, allow_unknown_profile=True), []
         )
 
+    def test_unknown_profile_cannot_certify_through_full_validation(self) -> None:
+        self.bundle.matrix["profile"] = "totally-made-up"
+        result = self.bundle.validate(allow_unknown_profile=True)
+        self.assertRejected(result, "has no canonical definition")
+
     def test_dropping_a_canonical_row_is_rejected(self) -> None:
         self.rejectMatrix(
             lambda m: m.__setitem__("rows", m["rows"][:1]), "missing required row"

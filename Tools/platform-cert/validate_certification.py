@@ -1202,9 +1202,11 @@ def load_and_validate(
     result = ValidationResult()
 
     matrix = load_strict_json(matrix_path)
-    matrix_errors = validate_matrix(
-        matrix, now=now, allow_unknown_profile=allow_unknown_profile
-    )
+    # Unknown profiles may be inspected through the matrix-only diagnostic
+    # mode, but they must never reach evidence cross-validation.  Otherwise a
+    # caller could opt out of the canonical row contract and still obtain a
+    # fully certified result from a complete-looking bundle.
+    matrix_errors = validate_matrix(matrix, now=now, allow_unknown_profile=False)
     if matrix_errors:
         for message in matrix_errors:
             result.error(f"[matrix] {message}")
