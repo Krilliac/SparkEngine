@@ -223,6 +223,13 @@ executables search `lib/` through `$ORIGIN/../lib` on Linux and
 files while the runtime loader and exported CMake targets retain their expected
 names.
 
+Installed-template live smokes also set `SPARK_TEMPLATE_LIVE_SMOKE_EVIDENCE=1`
+inside a disposable project copy. The shared template bridge and FPSStarter's
+compatible bridge write `.spark-template-live-smoke.log`; the verifier reads it
+alongside process and FileSink output before removing the copy. This keeps the
+scene-ownership gate reliable for GUI-subsystem Windows hosts whose module DLLs
+have DLL-local logger state.
+
 ## Windows native-package component preflight
 
 Versioned Windows publication stages only `runtime`, `tools`, and `samples` into a fresh root before CPack. The package validator's explicit `runtime` layout checks that SDK-free tree against the trusted build's generated game-module inventory and the validator checkout's canonical SDK ABI header. It retains the complete required executable and runtime-content lists, every configured module's sidecar/schema/ABI/SHA-256 checks, and executable help/version smokes. The default `sdk` layout retains its installed inventory/header checks. Unknown layouts, runtime use outside `stable-v1`, or reference files inside the installed package are rejected.

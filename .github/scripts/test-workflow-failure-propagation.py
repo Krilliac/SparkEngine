@@ -29,6 +29,9 @@ TRUSTED_CI_AGGREGATE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "trusted-c
 README = REPO_ROOT / "README.md"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
 CMAKE_ROOT = REPO_ROOT / "CMakeLists.txt"
+TEMPLATE_VERIFIER = REPO_ROOT / "cmake" / "VerifyInstalledTemplates.cmake"
+TEMPLATE_RUNTIME_HEADER = REPO_ROOT / "SparkEngine" / "Source" / "Game" / "TemplateRuntime.h"
+FPS_TEMPLATE_HEADER = REPO_ROOT / "Templates" / "FPSStarter" / "Source" / "GameModule.h"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
 TEST_TELEMETRY_SPOOL = REPO_ROOT / "Tests" / "TestTelemetrySpool.cpp"
 TELEMETRY_EXPECTED_COUNT = 8
@@ -1052,6 +1055,9 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         cls.site_data_publish = SITE_DATA_PUBLISH_WORKFLOW.read_text(encoding="utf-8")
         cls.readme = README.read_text(encoding="utf-8")
         cls.cmake = CMAKE_ROOT.read_text(encoding="utf-8")
+        cls.template_verifier = TEMPLATE_VERIFIER.read_text(encoding="utf-8")
+        cls.template_runtime = TEMPLATE_RUNTIME_HEADER.read_text(encoding="utf-8")
+        cls.fps_template = FPS_TEMPLATE_HEADER.read_text(encoding="utf-8")
         cls.tests_cmake = TESTS_CMAKE.read_text(encoding="utf-8")
         cls.test_telemetry_spool = TEST_TELEMETRY_SPOOL.read_text(encoding="utf-8")
 
@@ -1148,6 +1154,30 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         first_engine_executable = self.cmake.index("add_executable(SparkEngine")
         self.assertLess(rpath_position, first_engine_library)
         self.assertLess(rpath_position, first_engine_executable)
+
+    def test_installed_template_smoke_captures_sandboxed_engine_log(self) -> None:
+        """GUI-subsystem Windows hosts must expose FileSink evidence to the verifier."""
+        verifier = self.template_verifier
+        self.assertIn('COMMAND "${CMAKE_COMMAND}" -E env', verifier)
+        self.assertIn('"LOCALAPPDATA=${live_smoke_user_data}"', verifier)
+        self.assertIn('"XDG_DATA_HOME=${live_smoke_user_data}"', verifier)
+        self.assertIn('file(GLOB live_smoke_logs "${live_smoke_user_data}/SparkEngine/Logs/', verifier)
+        self.assertIn('file(READ "${live_smoke_log}" live_smoke_log_text)', verifier)
+        self.assertIn('string(APPEND live_smoke_log_output', verifier)
+        self.assertIn(
+            'set(live_smoke_output "${live_smoke_stdout}${live_smoke_stderr}${live_smoke_log_output}")',
+            verifier,
+        )
+
+    def test_template_bridge_emits_opt_in_smoke_evidence_marker(self) -> None:
+        """Module-local logging must not be the only scene-ownership evidence."""
+        self.assertIn("SPARK_TEMPLATE_LIVE_SMOKE_EVIDENCE", self.template_runtime)
+        self.assertIn('".spark-template-live-smoke.log"', self.template_runtime)
+        self.assertIn('"SPARK_TEMPLATE_LIVE_SMOKE_EVIDENCE=1"', self.template_verifier)
+        self.assertIn('file(READ "${live_smoke_evidence}" live_smoke_evidence_output)', self.template_verifier)
+        self.assertIn('string(APPEND live_smoke_output "${live_smoke_evidence_output}")', self.template_verifier)
+        self.assertIn('"Game/TemplateRuntime.h"', self.fps_template)
+        self.assertIn('Spark::Templates::EmitLiveSmokeEvidence("FPSStarter"', self.fps_template)
 
     def test_posix_sdl_install_uses_regular_files_for_portable_archives(self) -> None:
         """Portable POSIX packages must dereference SDL2 links without renaming its ABI."""

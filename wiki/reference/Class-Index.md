@@ -1461,11 +1461,11 @@
 | `FormationTemplate` | struct | SparkEngine | [FormationSystem.h:L89](../../SparkEngine/Source/Engine/AI/FormationSystem.h#L89) | Template defining the shape and spacing for a formation type. |
 | `FPSLocalProfile` | struct | GameModules | [FPSLocalProfile.h:L23](../../GameModules/SparkGameFPS/Source/Game/FPSLocalProfile.h#L23) | Declared local profile state for the single-player slice. |
 | `FPSMultiplayerSystem` | class | GameModules | [MultiplayerSystem.h:L273](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L273) | Multiplayer system wiring NetworkManager into the FPS game module |
-| `FPSStarterCaptureTransition` | struct | Templates | [GameModule.h:L46](../../Templates/FPSStarter/Source/GameModule.h#L46) |  |
-| `FPSStarterModule` | class | Templates | [GameModule.h:L53](../../Templates/FPSStarter/Source/GameModule.h#L53) |  |
-| `FPSStarterPlayerState` | struct | Templates | [GameModule.h:L32](../../Templates/FPSStarter/Source/GameModule.h#L32) |  |
-| `FPSStarterTargetState` | struct | Templates | [GameModule.h:L40](../../Templates/FPSStarter/Source/GameModule.h#L40) |  |
-| `FPSStarterWeaponState` | struct | Templates | [GameModule.h:L23](../../Templates/FPSStarter/Source/GameModule.h#L23) |  |
+| `FPSStarterCaptureTransition` | struct | Templates | [GameModule.h:L47](../../Templates/FPSStarter/Source/GameModule.h#L47) |  |
+| `FPSStarterModule` | class | Templates | [GameModule.h:L54](../../Templates/FPSStarter/Source/GameModule.h#L54) |  |
+| `FPSStarterPlayerState` | struct | Templates | [GameModule.h:L33](../../Templates/FPSStarter/Source/GameModule.h#L33) |  |
+| `FPSStarterTargetState` | struct | Templates | [GameModule.h:L41](../../Templates/FPSStarter/Source/GameModule.h#L41) |  |
+| `FPSStarterWeaponState` | struct | Templates | [GameModule.h:L24](../../Templates/FPSStarter/Source/GameModule.h#L24) |  |
 | `FPSToolsPanel` | class | SparkEditor | [FPSToolsPanel.h:L18](../../SparkEditor/Source/Panels/FPSToolsPanel.h#L18) | Editor panel for FPS-specific level design and gameplay tuning tools. |
 | `FracturePattern` | class | SparkEngine | [DestructionSystem.h:L79](../../SparkEngine/Source/Engine/Destruction/DestructionSystem.h#L79) | Defines how an object breaks apart — a collection of debris pieces. |
 | `FracturePiece` | struct | SparkEngine | [DestructionSystem.h:L62](../../SparkEngine/Source/Engine/Destruction/DestructionSystem.h#L62) | A single debris piece created when an object is destroyed. |
@@ -4182,7 +4182,7 @@
 | `TempAllocator` | class | SparkEngine | [PhysicsSystem.h:L47](../../SparkEngine/Source/Physics/PhysicsSystem.h#L47) |  |
 | `TempAssets` | struct | Tests | [TestAdvancedAssetPipeline.cpp:L24](../../Tests/TestAdvancedAssetPipeline.cpp#L24) |  |
 | `TemplateEntry` | struct | SparkLauncher | [LauncherApp.h:L19](../../SparkLauncher/src/LauncherApp.h#L19) |  |
-| `TemplateRuntimeScene` | class | SparkEngine | [TemplateRuntime.h:L49](../../SparkEngine/Source/Game/TemplateRuntime.h#L49) |  |
+| `TemplateRuntimeScene` | class | SparkEngine | [TemplateRuntime.h:L75](../../SparkEngine/Source/Game/TemplateRuntime.h#L75) |  |
 | `TemporalCB` | struct | SparkEngine | [TemporalEffects.h:L580](../../SparkEngine/Source/Graphics/TemporalEffects.h#L580) |  |
 | `TemporalEffects` | class | SparkEngine | [TemporalEffects.h:L67](../../SparkEngine/Source/Graphics/TemporalEffects.h#L67) | Manages TAA, motion blur, and frame history for temporal rendering |
 | `TemporalUpscaleConstants` | struct | SparkEngine | [DynamicQualityTypes.h:L241](../../SparkEngine/Source/Graphics/DynamicQualityTypes.h#L241) | Constant buffer shared by DLSS/XeSS fallback path |

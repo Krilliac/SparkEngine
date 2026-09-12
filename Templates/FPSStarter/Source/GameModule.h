@@ -4,6 +4,7 @@
 
 #include "Core/Reflection.h"
 #include "Engine/ECS/Components.h"
+#include "Game/TemplateRuntime.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/WorldBasicRenderer.h"
 #include "Input/InputManager.h"
@@ -558,6 +559,7 @@ class FPSStarterModule final : public Spark::IModule
             }
 
             m_projectRoot = root;
+            Spark::Templates::EmitLiveSmokeEvidence("FPSStarter", root, candidate, m_ownedEntities.size());
             SPARK_LOG_INFO(Spark::LogCategory::Game, "FPSStarter loaded scene '%s' with %zu owned entities",
                            PathUtf8(candidate).c_str(), m_ownedEntities.size());
             return true;

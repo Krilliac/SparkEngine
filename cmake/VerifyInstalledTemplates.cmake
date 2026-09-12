@@ -285,8 +285,24 @@ foreach(template_dir IN LISTS template_candidates)
         file(MAKE_DIRECTORY "${live_smoke_work}")
         file(COPY "${template_dir}/" DESTINATION "${live_smoke_work}")
 
+        # SparkEngine is a GUI-subsystem executable on Windows, so its stderr is
+        # not a reliable child-process evidence channel. Give this run a private
+        # user-data root and collect the Logger FileSink record as well as stdout
+        # and stderr; the sandbox is removed after all three channels are read.
+        set(live_smoke_user_data "${live_smoke_work}/user-data")
+        set(live_smoke_evidence "${live_smoke_work}/.spark-template-live-smoke.log")
+        file(MAKE_DIRECTORY "${live_smoke_user_data}")
+        if(CMAKE_HOST_WIN32)
+            set(live_smoke_environment "LOCALAPPDATA=${live_smoke_user_data}")
+        else()
+            set(live_smoke_environment "XDG_DATA_HOME=${live_smoke_user_data}")
+        endif()
+
         execute_process(
-            COMMAND "${SPARK_ENGINE_EXECUTABLE}"
+            COMMAND "${CMAKE_COMMAND}" -E env
+                "${live_smoke_environment}"
+                "SPARK_TEMPLATE_LIVE_SMOKE_EVIDENCE=1"
+                "${SPARK_ENGINE_EXECUTABLE}"
                 -headless
                 -game "${module_candidates}"
                 -test-frames ${SPARK_TEMPLATE_LIVE_SMOKE_FRAMES}
@@ -299,19 +315,34 @@ foreach(template_dir IN LISTS template_candidates)
             ERROR_VARIABLE live_smoke_stderr
             TIMEOUT 60
         )
+
+        set(live_smoke_log_output "")
+        file(GLOB live_smoke_logs "${live_smoke_user_data}/SparkEngine/Logs/SparkEngine_*.log")
+        list(SORT live_smoke_logs)
+        foreach(live_smoke_log IN LISTS live_smoke_logs)
+            file(READ "${live_smoke_log}" live_smoke_log_text)
+            string(APPEND live_smoke_log_output "\n${live_smoke_log_text}")
+        endforeach()
+        set(live_smoke_evidence_output "")
+        if(EXISTS "${live_smoke_evidence}")
+            file(READ "${live_smoke_evidence}" live_smoke_evidence_output)
+        endif()
+        set(live_smoke_output "${live_smoke_stdout}${live_smoke_stderr}${live_smoke_log_output}")
+        string(APPEND live_smoke_output "${live_smoke_evidence_output}")
         file(REMOVE_RECURSE "${live_smoke_work}")
         if(NOT live_smoke_result EQUAL 0)
             message(FATAL_ERROR
                 "Installed ${template_name} live-load smoke failed (exit ${live_smoke_result})\n"
                 "stdout:\n${live_smoke_stdout}\n"
-                "stderr:\n${live_smoke_stderr}")
+                "stderr:\n${live_smoke_stderr}\n"
+                "file log:\n${live_smoke_log_output}\n"
+                "smoke evidence:\n${live_smoke_evidence_output}")
         endif()
 
         # A zero exit only proves the host started and stopped. Require the
         # module's own evidence that it resolved a scene and took ownership of at
         # least one entity, so a template whose scene contract silently falls
         # through can no longer pass this gate.
-        set(live_smoke_output "${live_smoke_stdout}${live_smoke_stderr}")
         if(NOT live_smoke_output MATCHES
            "${template_name} loaded scene '[^']+' with ([1-9][0-9]*) owned entities")
             message(FATAL_ERROR
@@ -319,7 +350,9 @@ foreach(template_dir IN LISTS template_candidates)
                 "Expected a log line \"${template_name} loaded scene '<path>' with <n> owned entities\" "
                 "with a non-zero count.\n"
                 "stdout:\n${live_smoke_stdout}\n"
-                "stderr:\n${live_smoke_stderr}")
+                "stderr:\n${live_smoke_stderr}\n"
+                "file log:\n${live_smoke_log_output}\n"
+                "smoke evidence:\n${live_smoke_evidence_output}")
         endif()
         set(live_smoke_entities "${CMAKE_MATCH_1}")
         math(EXPR live_smoke_count "${live_smoke_count} + 1")

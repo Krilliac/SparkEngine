@@ -55,6 +55,11 @@ of that bridge and is the one package this accessor does not reach. With a real 
 world, consumes live input, synchronizes entities and camera state, renders, resizes, and removes
 only its own entities on unload; `EmptyProject` is the exception and does not read input.
 
+Installed-template live-smoke qualification sets `SPARK_TEMPLATE_LIVE_SMOKE_EVIDENCE=1` in a
+disposable project copy. The shared runtime bridge, including `FPSStarter`'s compatible bridge
+path, writes `.spark-template-live-smoke.log` only when that opt-in flag is present, allowing a
+GUI-subsystem Windows host to prove scene ownership without relying on a DLL-local Logger sink.
+
 Visual scene composition stays editable and uses built-in procedural primitive paths. A scene
 contract requires only the entities a module cannot run without (its camera and, where it has one,
 its player); a missing decorative prop degrades that feature and logs one warning instead of

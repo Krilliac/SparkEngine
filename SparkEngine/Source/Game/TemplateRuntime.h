@@ -25,8 +25,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <initializer_list>
 #include <limits>
 #include <memory>
@@ -38,6 +41,29 @@
 
 namespace Spark::Templates
 {
+    /**
+     * @brief Emit an opt-in scene-ownership record for installed-template smoke tests.
+     *
+     * Game modules link SparkEngineLib statically, so their Logger singleton is
+     * DLL-local and cannot be the host's captured evidence channel. The verifier
+     * enables this marker only inside a disposable project copy.
+     */
+    inline void EmitLiveSmokeEvidence(std::string_view moduleName, const std::filesystem::path& projectRoot,
+                                      const std::filesystem::path& candidate, std::size_t ownedEntityCount)
+    {
+        const char* enabled = std::getenv("SPARK_TEMPLATE_LIVE_SMOKE_EVIDENCE");
+        if (!enabled || std::string_view(enabled) != "1")
+            return;
+
+        std::ofstream evidence(projectRoot / ".spark-template-live-smoke.log", std::ios::out | std::ios::trunc);
+        if (!evidence)
+            return;
+        const std::u8string utf8 = candidate.generic_u8string();
+        evidence << moduleName << " loaded scene '"
+                 << std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size()) << "' with "
+                 << ownedEntityCount << " owned entities\n";
+    }
+
     /** Outcome of the most recent TemplateRuntimeScene::Load call. */
     enum class TemplateLoadResult
     {
@@ -129,6 +155,7 @@ namespace Spark::Templates
                     m_meshCache = std::make_unique<WorldMeshCache>();
                 m_runtimeActive = true;
                 m_lastLoadResult = TemplateLoadResult::Loaded;
+                Spark::Templates::EmitLiveSmokeEvidence(m_moduleName, m_projectRoot, candidate, m_ownedEntities.size());
                 SPARK_LOG_INFO(LogCategory::Game, "%s loaded scene '%s' with %zu owned entities", m_moduleName.c_str(),
                                PathUtf8(candidate).c_str(), m_ownedEntities.size());
                 return true;

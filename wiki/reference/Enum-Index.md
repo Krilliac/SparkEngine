@@ -794,7 +794,7 @@
 | `TelemetryDeliveryResult` | enum | SparkEngine | [Telemetry.h:L95](../../SparkEngine/Source/Utils/Telemetry.h#L95) | Result of one backend delivery attempt. |
 | `TelemetrySpoolResult` | enum | SparkEngine | [TelemetrySpool.h:L32](../../SparkEngine/Source/Utils/TelemetrySpool.h#L32) |  |
 | `TemperatureZone` | enum | GameModules | [OpenWorldEnums.h:L191](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L191) | Temperature range affecting survival |
-| `TemplateLoadResult` | enum | SparkEngine | [TemplateRuntime.h:L42](../../SparkEngine/Source/Game/TemplateRuntime.h#L42) |  |
+| `TemplateLoadResult` | enum | SparkEngine | [TemplateRuntime.h:L68](../../SparkEngine/Source/Game/TemplateRuntime.h#L68) |  |
 | `TerrainTool` | enum | SparkEditor | [TerrainData.h:L25](../../SparkEditor/Source/Terrain/TerrainData.h#L25) |  |
 | `TestBottleneck` | enum | Tests | [TestGPUStallProfiler.cpp:L16](../../Tests/TestGPUStallProfiler.cpp#L16) |  |
 | `TestCompression` | enum | Tests | [TestCompressionUtils.cpp:L17](../../Tests/TestCompressionUtils.cpp#L17) |  |
