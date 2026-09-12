@@ -1,6 +1,14 @@
 # SparkThirdPartyAudit.cmake
 # Validates ThirdParty dependency manifest and prints configure-time summary.
 
+# Empty manifest fields are meaningful (for example, a missing license). Keep
+# them in the list produced from each pipe-delimited entry so the Python
+# reconciliation gate reports the policy violation instead of a CMake-version
+# dependent malformed-entry failure.
+if(POLICY CMP0007)
+    cmake_policy(SET CMP0007 NEW)
+endif()
+
 function(_spark_dep_report severity message_text)
     if(severity STREQUAL "ERROR")
         if(SPARK_STRICT_DEPS)
