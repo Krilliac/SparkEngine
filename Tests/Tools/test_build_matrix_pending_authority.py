@@ -30,6 +30,34 @@ COMMIT = "a" * 40
 DIGEST = "b" * 64
 
 
+def bash_executable() -> str | None:
+    """Use the Windows Git Bash shell, not the WindowsApps WSL launcher."""
+
+    if os.name == "nt":
+        candidates = (
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+            / "Git"
+            / "bin"
+            / "bash.exe",
+            Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+            / "Git"
+            / "bin"
+            / "bash.exe",
+        )
+        for candidate in candidates:
+            if candidate.is_file():
+                return str(candidate)
+
+    found = shutil.which("bash")
+    if found:
+        if os.name == "nt" and any(
+            part.casefold() == "windowsapps" for part in Path(found).parts
+        ):
+            return None
+        return found
+    return None
+
+
 def provenance(profile: str) -> dict[str, Any]:
     return {
         "state": "unavailable",
@@ -156,15 +184,7 @@ class PendingAuthorityTests(unittest.TestCase):
     def test_cli_stdout_bytes_match_atomic_output_through_git_bash_redirect(self) -> None:
         if os.name != "nt":
             self.skipTest("Windows Git Bash redirection contract")
-        bash = shutil.which("bash")
-        if bash is None:
-            git = shutil.which("git")
-            if git is not None:
-                candidates = (
-                    Path(git).resolve().parent.parent / "bin" / "bash.exe",
-                    Path(git).resolve().parent.parent.parent / "bin" / "bash.exe",
-                )
-                bash = next((str(candidate) for candidate in candidates if candidate.is_file()), None)
+        bash = bash_executable()
         if bash is None:
             self.skipTest("Git Bash is unavailable")
 
