@@ -952,10 +952,10 @@ _REQUIRED_TARGET_REFERENCE_COMMANDS = {
     "target_precompile_headers",
     "target_sources",
 }
-# Each record pins the exact declaration a human reviewed, line numbers
-# included, so a moved or rewritten reference is re-reviewed rather than
-# silently inherited. The stable-shipping CMake change shifted the audited
-# references by two lines; the guard conditions remain byte-identical.
+# Each record pins the exact declaration a human reviewed, including line
+# numbers and condition frames, so a moved or rewritten reference is re-reviewed
+# rather than silently inherited. Keep these coordinates synchronized with the
+# reviewed declarations below when CMake source layout changes.
 _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
     "Jolt": {
         "profiles": frozenset({"windows-shipping", "windows-validation"}),
@@ -963,15 +963,15 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "Jolt",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 1638,
+            "line": 1652,
             "conditionFrames": [
-                {"id": "CMakeLists.txt:1544", "branch": 0, "branches": ["JOLT_FOUND"]},
+                {"id": "CMakeLists.txt:1558", "branch": 0, "branches": ["JOLT_FOUND"]},
                 {
-                    "id": "CMakeLists.txt:1636",
+                    "id": "CMakeLists.txt:1650",
                     "branch": 0,
                     "branches": ["SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"],
                 },
-                {"id": "CMakeLists.txt:1637", "branch": 0, "branches": ["MSVC"]},
+                {"id": "CMakeLists.txt:1651", "branch": 0, "branches": ["MSVC"]},
             ],
             "definitionScope": [],
             "origin": "required-target-reference",
@@ -984,10 +984,10 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "angelscript",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 990,
+            "line": 1004,
             "conditionFrames": [
                 {
-                    "id": "CMakeLists.txt:932",
+                    "id": "CMakeLists.txt:946",
                     "branch": 0,
                     "branches": ["ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"],
                 }
