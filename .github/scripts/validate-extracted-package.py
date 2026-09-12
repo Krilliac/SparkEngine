@@ -554,7 +554,7 @@ def _validate_runtime_asset_integrity(package_root: Path) -> None:
     if not assets_root.is_dir() or _is_link_like(assets_root):
         raise ValidationError(f"Runtime asset root is missing or link-like: {assets_root}")
 
-    verifier_path = Path(__file__).resolve().parents[2] / "Tools" / "asset-integrity" / "verify_asset_integrity.py"
+    verifier_path = Path(__file__).resolve().parents[2] / "tools" / "asset-integrity" / "verify_asset_integrity.py"
     if _is_link_like(verifier_path) or not verifier_path.is_file():
         raise ValidationError(f"Asset integrity verifier is missing: {verifier_path}")
     spec = importlib.util.spec_from_file_location("_spark_package_asset_integrity", verifier_path)
