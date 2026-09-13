@@ -1542,6 +1542,16 @@ set_tests_properties(SparkSDKRejectsAmbiguousVersionHeader PROPERTIES
     LABELS "sdk;module;unit"
     TIMEOUT 30)
 
+add_test(
+    NAME SparkInstalledPackageRejectsMissingVersionDiagnostics
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/incomplete-sdk-package/$<CONFIG>"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestSparkEnginePackageCompleteness.cmake)
+set_tests_properties(SparkInstalledPackageRejectsMissingVersionDiagnostics PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 30)
+
 # ----------------------------------------------------------------------------
 # Installed-SDK template gate (opt-in)
 # ----------------------------------------------------------------------------

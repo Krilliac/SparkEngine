@@ -1,5 +1,22 @@
 @PACKAGE_INIT@
 
+# CMake treats a package without a ConfigVersion file as usable when the
+# consumer does not request a version. The installed SDK contract always ships
+# this file, so accepting its absence would silently drop package-version
+# compatibility diagnostics.
+set(_spark_required_package_files
+    SparkEngineConfigVersion.cmake
+)
+foreach(_spark_required_package_file IN LISTS _spark_required_package_files)
+    if(NOT IS_REGULAR_FILE "${CMAKE_CURRENT_LIST_DIR}/${_spark_required_package_file}")
+        message(FATAL_ERROR
+            "SparkEngine package is incomplete: missing required package file "
+            "${CMAKE_CURRENT_LIST_DIR}/${_spark_required_package_file}")
+    endif()
+endforeach()
+unset(_spark_required_package_file)
+unset(_spark_required_package_files)
+
 include(CMakeFindDependencyMacro)
 
 if(NOT WIN32 OR @SPARK_PACKAGE_HAS_ANGELSCRIPT@)
