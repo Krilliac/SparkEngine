@@ -671,6 +671,42 @@ foreach(_spark_module IN LISTS _spark_required_game_modules)
     endif()
 endforeach()
 
+function(_spark_run_staged_nullrhi_smoke)
+    # A runtime layout is not release evidence until the staged executable loads
+    # the staged first-party module and completes the real no-render lifecycle.
+    # The file and --help/--version checks cannot catch a corrupt or unloadable
+    # module whose sidecar hash was regenerated to match it. Reuse the strict
+    # terminal-record parser so this gate rejects a missing module-ready record,
+    # rendered backend, incomplete update/fixed loop, or unsafe shutdown.
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSPARK_ENGINE_EXECUTABLE=${SPARK_PACKAGE_ROOT}/bin/SparkEngine${SPARK_EXECUTABLE_SUFFIX}"
+            "-DSPARK_GAME_MODULE=${SPARK_PACKAGE_ROOT}/bin/SparkGameFPS.dll"
+            "-DSPARK_WORKING_DIRECTORY=${SPARK_PACKAGE_ROOT}/bin"
+            -DSPARK_RHI_BACKEND=null
+            -P "${CMAKE_CURRENT_LIST_DIR}/RunSparkHeadlessNullRHILifecycle.cmake"
+        RESULT_VARIABLE _spark_nullrhi_result
+        OUTPUT_VARIABLE _spark_nullrhi_stdout
+        ERROR_VARIABLE _spark_nullrhi_stderr
+        TIMEOUT 90
+        ENCODING UTF-8
+    )
+    if(NOT _spark_nullrhi_result EQUAL 0)
+        message(FATAL_ERROR
+            "Staged SparkEngine package NullRHI lifecycle smoke failed "
+            "(exit ${_spark_nullrhi_result})\n"
+            "stdout:\n${_spark_nullrhi_stdout}\n"
+            "stderr:\n${_spark_nullrhi_stderr}")
+    endif()
+    message(STATUS
+        "Validated staged SparkEngine package NullRHI lifecycle in "
+        "${SPARK_PACKAGE_ROOT}/bin")
+endfunction()
+
+if(SPARK_PACKAGE_LAYOUT STREQUAL "runtime" AND _spark_validate_modules_only)
+    _spark_run_staged_nullrhi_smoke()
+endif()
+
 list(LENGTH _spark_required_game_modules _spark_game_module_count)
 if(_spark_validate_modules_only)
     message(STATUS
@@ -752,36 +788,8 @@ if(NOT _spark_version_result EQUAL 0 OR
         "stderr:\n${_spark_version_stderr}")
 endif()
 
-# A runtime layout is not release evidence until the staged executable loads
-# the staged first-party module and completes the real no-render lifecycle.  The
-# file and --help/--version checks above cannot catch a corrupt or unloadable
-# module whose sidecar hash was regenerated to match it.  Reuse the strict
-# terminal-record parser so this gate rejects a missing module-ready record,
-# rendered backend, incomplete update/fixed loop, or unsafe shutdown.
 if(SPARK_PACKAGE_LAYOUT STREQUAL "runtime")
-    execute_process(
-        COMMAND "${CMAKE_COMMAND}"
-            "-DSPARK_ENGINE_EXECUTABLE=${SPARK_PACKAGE_ROOT}/bin/SparkEngine${SPARK_EXECUTABLE_SUFFIX}"
-            "-DSPARK_GAME_MODULE=${SPARK_PACKAGE_ROOT}/bin/SparkGameFPS.dll"
-            "-DSPARK_WORKING_DIRECTORY=${SPARK_PACKAGE_ROOT}/bin"
-            -DSPARK_RHI_BACKEND=null
-            -P "${CMAKE_CURRENT_LIST_DIR}/RunSparkHeadlessNullRHILifecycle.cmake"
-        RESULT_VARIABLE _spark_nullrhi_result
-        OUTPUT_VARIABLE _spark_nullrhi_stdout
-        ERROR_VARIABLE _spark_nullrhi_stderr
-        TIMEOUT 90
-        ENCODING UTF-8
-    )
-    if(NOT _spark_nullrhi_result EQUAL 0)
-        message(FATAL_ERROR
-            "Staged SparkEngine package NullRHI lifecycle smoke failed "
-            "(exit ${_spark_nullrhi_result})\n"
-            "stdout:\n${_spark_nullrhi_stdout}\n"
-            "stderr:\n${_spark_nullrhi_stderr}")
-    endif()
-    message(STATUS
-        "Validated staged SparkEngine package NullRHI lifecycle in "
-        "${SPARK_PACKAGE_ROOT}/bin")
+    _spark_run_staged_nullrhi_smoke()
 endif()
 
 list(LENGTH _spark_required_executables _spark_executable_count)
