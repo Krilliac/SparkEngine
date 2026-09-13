@@ -185,6 +185,22 @@ namespace SparkEditor
                 error = "recovery world root is not an object";
                 return false;
             }
+
+            try
+            {
+                ::World restoredWorld;
+                if (!Spark::DeserializeInto(restoredWorld, snapshot.serializedWorld,
+                                            Spark::SceneDeserializeMode::StrictRecovery))
+                {
+                    error = "recovery world does not satisfy the strict scene schema";
+                    return false;
+                }
+            }
+            catch (const std::exception& exception)
+            {
+                error = "recovery world could not be deserialized: " + std::string(exception.what());
+                return false;
+            }
             return true;
         }
 
