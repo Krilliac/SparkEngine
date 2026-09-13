@@ -477,7 +477,14 @@ class PresetAndCodemodelTests(unittest.TestCase):
     def test_inherited_shipping_values_are_resolved(self) -> None:
         presets = {
             "configurePresets": [
-                {"name": "base", "hidden": True, "cacheVariables": {"SPARK_STRICT_DEPS": "ON"}},
+                {
+                    "name": "base",
+                    "hidden": True,
+                    "cacheVariables": {
+                        "SPARK_STRICT_DEPS": "ON",
+                        "STRIP_DEBUG_SYMBOLS": "ON",
+                    },
+                },
                 {
                     "name": "windows-shipping",
                     "inherits": "base",
@@ -490,7 +497,11 @@ class PresetAndCodemodelTests(unittest.TestCase):
         resolved = inventory.resolve_configure_preset(presets, "windows-shipping")
         self.assertEqual(
             resolved["cacheVariables"],
-            {"SPARK_STRICT_DEPS": "ON", "SPARK_NATIVE_ARCH": "OFF"},
+            {
+                "SPARK_STRICT_DEPS": "ON",
+                "SPARK_NATIVE_ARCH": "OFF",
+                "STRIP_DEBUG_SYMBOLS": "ON",
+            },
         )
         self.assertEqual(check_parity.check_shipping_preset_options(presets), [])
 
@@ -500,6 +511,19 @@ class PresetAndCodemodelTests(unittest.TestCase):
         )
         self.assertEqual(finding_categories(findings), {"missing-shipping-preset"})
         self.assertEqual(findings[0].severity, "error")
+
+    def test_shipping_preset_requires_debug_symbol_stripping(self) -> None:
+        presets = inventory.extract_cmake_presets()
+        shipping = next(
+            entry for entry in presets["configurePresets"] if entry["name"] == "windows-shipping"
+        )
+        shipping["cacheVariables"]["STRIP_DEBUG_SYMBOLS"] = "OFF"
+
+        findings = check_parity.check_shipping_preset_options(presets)
+
+        self.assertEqual(finding_categories(findings), {"shipping-preset-option"})
+        self.assertEqual(findings[0].severity, "error")
+        self.assertIn("STRIP_DEBUG_SYMBOLS=ON", findings[0].message)
 
     def test_every_canonical_preset_must_resolve(self) -> None:
         data = inventory.build_inventory()

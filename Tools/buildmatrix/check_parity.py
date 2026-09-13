@@ -372,6 +372,7 @@ def check_shipping_preset_options(
     for name, expected, detail in (
         ("SPARK_STRICT_DEPS", "ON", "Stable-v1 must fail on a missing critical dependency."),
         ("SPARK_NATIVE_ARCH", "OFF", "Distributed binaries cannot inherit the build host CPU."),
+        ("STRIP_DEBUG_SYMBOLS", "ON", "Shipping binaries must not emit debug symbols or PDB paths."),
     ):
         if str(cache.get(name, "")).upper() != expected:
             findings.append(
