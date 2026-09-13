@@ -1259,13 +1259,29 @@ namespace Spark
 
                     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
                     srvDesc.Format = depthSRVFormat != DXGI_FORMAT_UNKNOWN ? depthSRVFormat : format;
+                    const bool isArray = desc.type == RHITextureType::Texture2DArray;
                     if (desc.sampleCount > 1)
                     {
-                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                        srvDesc.ViewDimension =
+                            isArray ? D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY : D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                        if (isArray)
+                        {
+                            srvDesc.Texture2DMSArray.FirstArraySlice = 0;
+                            srvDesc.Texture2DMSArray.ArraySize = desc.arraySize;
+                        }
+                    }
+                    else if (isArray)
+                    {
+                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+                        srvDesc.Texture2DArray.MostDetailedMip = 0;
+                        srvDesc.Texture2DArray.MipLevels = desc.mipLevels;
+                        srvDesc.Texture2DArray.FirstArraySlice = 0;
+                        srvDesc.Texture2DArray.ArraySize = desc.arraySize;
                     }
                     else
                     {
                         srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                        srvDesc.Texture2D.MostDetailedMip = 0;
                         srvDesc.Texture2D.MipLevels = desc.mipLevels;
                     }
                     HRESULT srvHr = m_device->CreateShaderResourceView(resource.Get(), &srvDesc, &srv);
@@ -1279,7 +1295,48 @@ namespace Spark
                     }
                 }
 
-                return std::make_unique<D3D11Texture>(desc, resource, std::move(srv));
+                ComPtr<ID3D11DepthStencilView> dsv;
+                if (desc.usage & RHITextureUsage::DepthStencil)
+                {
+                    const DXGI_FORMAT format = ConvertFormat(desc.format);
+                    D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+                    dsvDesc.Format = format;
+                    const bool isArray = desc.type == RHITextureType::Texture2DArray;
+                    if (desc.sampleCount > 1)
+                    {
+                        dsvDesc.ViewDimension =
+                            isArray ? D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D11_DSV_DIMENSION_TEXTURE2DMS;
+                        if (isArray)
+                        {
+                            dsvDesc.Texture2DMSArray.FirstArraySlice = 0;
+                            dsvDesc.Texture2DMSArray.ArraySize = desc.arraySize;
+                        }
+                    }
+                    else if (isArray)
+                    {
+                        dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+                        dsvDesc.Texture2DArray.MipSlice = 0;
+                        dsvDesc.Texture2DArray.FirstArraySlice = 0;
+                        dsvDesc.Texture2DArray.ArraySize = desc.arraySize;
+                    }
+                    else
+                    {
+                        dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+                        dsvDesc.Texture2D.MipSlice = 0;
+                    }
+
+                    const HRESULT dsvHr = m_device->CreateDepthStencilView(resource.Get(), &dsvDesc, &dsv);
+                    if (FAILED(dsvHr))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::WrapNativeTexture: DSV creation failed for '%s' "
+                                        "(HRESULT 0x%08lX)",
+                                        desc.debugName.c_str(), dsvHr);
+                        return nullptr;
+                    }
+                }
+
+                return std::make_unique<D3D11Texture>(desc, resource, std::move(srv), nullptr, std::move(dsv));
             }
 
             std::unique_ptr<IRHIShader> D3D11Device::CreateShader(const RHIShaderDesc& desc)

@@ -317,6 +317,58 @@ TEST(D3D11DeviceReal_Texture2DArrayCreatesArrayViews)
     device.Shutdown();
 }
 
+TEST(D3D11DeviceReal_WrapNativeTextureCreatesArrayDepthViews)
+{
+    Spark::RHI::D3D11::D3D11Device device;
+    if (!TryCreateD3D11Device(device))
+        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+
+    D3D11_TEXTURE2D_DESC nativeDesc{};
+    nativeDesc.Width = 32;
+    nativeDesc.Height = 32;
+    nativeDesc.MipLevels = 2;
+    nativeDesc.ArraySize = 3;
+    nativeDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
+    nativeDesc.SampleDesc.Count = 1;
+    nativeDesc.Usage = D3D11_USAGE_DEFAULT;
+    nativeDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_DEPTH_STENCIL;
+
+    ComPtr<ID3D11Texture2D> nativeTexture;
+    ASSERT_TRUE(SUCCEEDED(device.GetD3D11Device()->CreateTexture2D(&nativeDesc, nullptr, &nativeTexture)));
+
+    Spark::RHI::RHITextureDesc desc;
+    desc.width = nativeDesc.Width;
+    desc.height = nativeDesc.Height;
+    desc.mipLevels = nativeDesc.MipLevels;
+    desc.arraySize = nativeDesc.ArraySize;
+    desc.type = Spark::RHI::RHITextureType::Texture2DArray;
+    desc.format = Spark::RHI::PixelFormat::D24_UNORM_S8_UINT;
+    desc.usage = Spark::RHI::RHITextureUsage::ShaderResource | Spark::RHI::RHITextureUsage::DepthStencil;
+    desc.debugName = "ContractTest_WrappedDepthTexture2DArray";
+
+    auto wrapped = device.WrapNativeTexture(nativeTexture.Get(), desc);
+    ASSERT_TRUE(wrapped != nullptr);
+
+    auto* srv = static_cast<ID3D11ShaderResourceView*>(wrapped->GetShaderResourceView());
+    ASSERT_TRUE(srv != nullptr);
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    srv->GetDesc(&srvDesc);
+    EXPECT_EQ(srvDesc.ViewDimension, D3D11_SRV_DIMENSION_TEXTURE2DARRAY);
+    EXPECT_EQ(srvDesc.Texture2DArray.MipLevels, desc.mipLevels);
+    EXPECT_EQ(srvDesc.Texture2DArray.ArraySize, desc.arraySize);
+
+    auto* dsv = static_cast<ID3D11DepthStencilView*>(wrapped->GetDepthStencilView());
+    ASSERT_TRUE(dsv != nullptr);
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
+    dsv->GetDesc(&dsvDesc);
+    EXPECT_EQ(dsvDesc.ViewDimension, D3D11_DSV_DIMENSION_TEXTURE2DARRAY);
+    EXPECT_EQ(dsvDesc.Texture2DArray.ArraySize, desc.arraySize);
+
+    wrapped.reset();
+    nativeTexture.Reset();
+    device.Shutdown();
+}
+
 TEST(D3D11DeviceReal_RejectsUnimplementedTextureTypes)
 {
     Spark::RHI::D3D11::D3D11Device device;
