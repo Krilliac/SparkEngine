@@ -278,6 +278,12 @@ def compare(budget_dir: Path, result_data: Any, *,
             f"no active metrics apply to result hardware {result_hardware!r}; "
             "pending metrics cannot produce a passing budget result"
         )
+    elif not active_ids_for_current_hardware and not result_data["measurements"]:
+        errors.append(
+            f"no performance measurement is available for result hardware "
+            f"{result_hardware!r}; no active budget metric can establish a "
+            "passing result"
+        )
     for unmeasured in sorted(active_ids_for_current_hardware - measured_metric_ids):
         errors.append(
             f"unmeasured active metric {unmeasured!r} for hardware "
