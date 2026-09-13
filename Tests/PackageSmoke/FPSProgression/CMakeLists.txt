@@ -1,4 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
+
+# Match the engine's MSVC/sccache contract for the nested consumer projects.
+# The multi-config generator performs a Debug try-compile during project(),
+# and /Zi leaves sccache looking for a PDB that the probe does not produce.
+cmake_policy(SET CMP0141 NEW)
+set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
+
 project(SparkFPSProgressionConsumer LANGUAGES CXX)
 
 if(NOT DEFINED SPARK_ENGINE_INCLUDE_DIR)
