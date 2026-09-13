@@ -718,7 +718,7 @@
 | `NOMINMAX` | macro | SparkEngine | [GameImGuiLayer.h:L31](../../SparkEngine/Source/Core/GameImGuiLayer.h#L31) |  |
 | `NOMINMAX` | macro | SparkEngine | [AsyncDatabase.cpp:L21](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L21) |  |
 | `NOMINMAX` | macro | SparkEngine | [SaveSystem.cpp:L26](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L26) |  |
-| `NOMINMAX` | macro | SparkEngine | [ReflectedSceneSerializer.cpp:L16](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L16) |  |
+| `NOMINMAX` | macro | SparkEngine | [ReflectedSceneSerializer.cpp:L17](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L17) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashArtifactDirectory.h:L18](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L18) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashHandlerSupport.h:L29](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L29) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashRedactionContext.h:L23](../../SparkEngine/Source/Utils/CrashRedactionContext.h#L23) |  |
@@ -1180,7 +1180,7 @@
 | `SPARK_REFLECT_TYPE_BASE` | macro | SparkEngine | [Reflection.h:L471](../../SparkEngine/Source/Core/Reflection.h#L471) | Begin type reflection with a base class. |
 | `SPARK_REFLECT_VERSION` | macro | SparkEngine | [Reflection.h:L562](../../SparkEngine/Source/Core/Reflection.h#L562) | Set the schema version for the current type registration. |
 | `SPARK_REGISTER_COMPONENT` | macro | SparkEngine | [ComponentReflection.cpp:L319](../../SparkEngine/Source/Core/ComponentReflection.cpp#L319) |  |
-| `SPARK_REMOTE_DEBUG_TESTING` | macro | Tests | [TestRemoteDebugSystem.cpp:L14](../../Tests/TestRemoteDebugSystem.cpp#L14) |  |
+| `SPARK_REMOTE_DEBUG_TESTING` | macro | Tests | [TestRemoteDebugSystem.cpp:L15](../../Tests/TestRemoteDebugSystem.cpp#L15) |  |
 | `SPARK_REMOTE_DEBUG_TESTING` | macro | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L17](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L17) |  |
 | `SPARK_REQUIRE` | macro | SparkEngine | [Validate.h:L303](../../SparkEngine/Source/Utils/Validate.h#L303) | Precondition check: logs fatal error and aborts if expr is false |
 | `SPARK_REQUIRE_MSG` | macro | SparkEngine | [Validate.h:L318](../../SparkEngine/Source/Utils/Validate.h#L318) | Precondition check with a diagnostic message |

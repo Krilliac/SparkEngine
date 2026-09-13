@@ -674,7 +674,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*604 test-bearing `.cpp`/`.mm` files, 7337 source-level test definitions*
+*604 test-bearing `.cpp`/`.mm` files, 7345 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -712,7 +712,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAssertSuppression` | 9 |
 | `TestAssertSuppressionReal` | 8 |
 | `TestAssetDependencyGraph` | 19 |
-| `TestAssetMigration` | 22 |
+| `TestAssetMigration` | 23 |
 | `TestAssetMigrationPhaseEE` | 10 |
 | `TestAssetPipelineCache` | 22 |
 | `TestAssetPipelineIntegration` | 16 |
@@ -785,7 +785,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCoverSystemReal` | 5 |
 | `TestCoverageAI` | 9 |
 | `TestCoverageCamera` | 4 |
-| `TestCoverageScripting` | 5 |
+| `TestCoverageScripting` | 6 |
 | `TestCpuDebuggerPhaseGG` | 8 |
 | `TestCpuNeuralInference` | 14 |
 | `TestCpuNeuralTraining` | 13 |
@@ -901,7 +901,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFrustumCulling` | 11 |
 | `TestFullEngineDiagnostics` | 9 |
 | `TestGLSLPipelineIntegration` | 19 |
-| `TestGLTFStaticMeshLoader` | 9 |
+| `TestGLTFStaticMeshLoader` | 10 |
 | `TestGPUClusterCulling` | 11 |
 | `TestGPUDrivenRenderer` | 14 |
 | `TestGPUDrivenRendererD3D11` | 2 |
@@ -1003,7 +1003,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
-| `TestModuleLifecycleReal` | 8 |
+| `TestModuleLifecycleReal` | 9 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
 | `TestMultiISADispatch` | 7 |
@@ -1020,7 +1020,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkInterpolation` | 12 |
 | `TestNetworkMMOIntegration` | 11 |
 | `TestNetworkManagerEdgeCases` | 37 |
-| `TestNetworkManagerIntegration` | 34 |
+| `TestNetworkManagerIntegration` | 35 |
 | `TestNetworkManagerOrchestration` | 27 |
 | `TestNetworkManagerReal` | 23 |
 | `TestNetworkReplicationIntegration` | 13 |
@@ -1079,14 +1079,14 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestRTHandleSystem` | 15 |
 | `TestRandomEngine` | 11 |
 | `TestRecastIntegration` | 6 |
-| `TestReflectedScene` | 9 |
+| `TestReflectedScene` | 10 |
 | `TestReflectedSceneEmissiveHierarchy` | 6 |
 | `TestReflection` | 18 |
 | `TestReflectionProbeCache` | 16 |
 | `TestReflectionReal` | 22 |
 | `TestRegionMapDataSource` | 7 |
 | `TestReliableChannel` | 22 |
-| `TestRemoteDebugSystem` | 19 |
+| `TestRemoteDebugSystem` | 20 |
 | `TestRenderCommandRing` | 8 |
 | `TestRenderECSIntegration` | 8 |
 | `TestRenderGraph` | 36 |
@@ -1271,7 +1271,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `Test_lifecycle_ecs_phase_wiring` | 4 |
 | `Test_net-world_migration` | 2 |
 | `Test_persistence_AsyncDatabaseParams` | 2 |
-| `Test_persistence_AsyncDatabasePool` | 3 |
+| `Test_persistence_AsyncDatabasePool` | 4 |
 | `Test_persistence_ModSystem` | 2 |
 | `Test_persistence_ReplaySystem` | 3 |
 | `Test_persistence_SaveSystem` | 31 |

@@ -626,9 +626,9 @@
 | `ReadStatus` | enum | GameModules | [TFWorldSave.h:L22](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h#L22) |  |
 | `ReflAttrMetadataFixture` | enum | Tests | [TestReflectionReal.cpp:L40](../../Tests/TestReflectionReal.cpp#L40) |  |
 | `ReloadResult` | enum | SparkEngine | [ModuleHotReload.h:L44](../../SparkEngine/Source/Engine/HotReload/ModuleHotReload.h#L44) | Result of a module reload attempt |
-| `RemoteDebugAuditDecision` | enum | SparkEngine | [RemoteDebugAccessControl.h:L73](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L73) | Secret-safe outcome for one attempted dispatch. |
-| `RemoteDebugCapability` | enum | SparkEngine | [RemoteDebugAccessControl.h:L36](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L36) | Per-command capabilities; a command handler must declare one. |
-| `RemoteDebugRole` | enum | SparkEngine | [RemoteDebugAccessControl.h:L28](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L28) | Fixed least-privilege role policy for trusted local loopback. |
+| `RemoteDebugAuditDecision` | enum | SparkEngine | [RemoteDebugAccessControl.h:L74](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L74) | Secret-safe outcome for one attempted dispatch. |
+| `RemoteDebugCapability` | enum | SparkEngine | [RemoteDebugAccessControl.h:L37](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L37) | Per-command capabilities; a command handler must declare one. |
+| `RemoteDebugRole` | enum | SparkEngine | [RemoteDebugAccessControl.h:L29](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L29) | Fixed least-privilege role policy for trusted local loopback. |
 | `RenderCommandType` | enum | SparkEngine | [RenderCommandRing.h:L28](../../SparkEngine/Source/Graphics/RenderCommandRing.h#L28) | Command types that can be posted to the render thread. |
 | `RenderGraphPassType` | enum | SparkEngine | [RenderGraphTypes.h:L197](../../SparkEngine/Source/Graphics/RenderGraphTypes.h#L197) | Classifies a render pass for scheduling purposes. |
 | `RenderGraphResourceLifetime` | enum | SparkEngine | [RenderGraphTypes.h:L175](../../SparkEngine/Source/Graphics/RenderGraphTypes.h#L175) | Indicates whether a resource is graph-managed (transient) or |
@@ -649,7 +649,7 @@
 | `ResourceState` | enum | SparkEngine | [GraphicsEnums.h:L65](../../SparkEngine/Source/Enums/GraphicsEnums.h#L65) | Resource states |
 | `ResourceState` | enum | SparkEngine | [RHIValidationLayer.h:L32](../../SparkEngine/Source/Graphics/RHI/RHIValidationLayer.h#L32) | Lifecycle state of a tracked RHI resource. |
 | `ResourceType` | enum | GameModules | [OpenWorldEnums.h:L74](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L74) | Harvestable resource categories |
-| `ResponseEpochTransition` | enum | Tests | [TestRemoteDebugSystem.cpp:L434](../../Tests/TestRemoteDebugSystem.cpp#L434) |  |
+| `ResponseEpochTransition` | enum | Tests | [TestRemoteDebugSystem.cpp:L470](../../Tests/TestRemoteDebugSystem.cpp#L470) |  |
 | `ResState` | enum | Tests | [TestExtendedSystems.cpp:L670](../../Tests/TestExtendedSystems.cpp#L670) |  |
 | `RestartPolicy` | enum | SparkDaemon | [OrchestrationProtocol.h:L48](../../SparkDaemon/src/OrchestrationProtocol.h#L48) |  |
 | `ReverbPreset` | enum | SparkEngine | [AudioMixer.h:L72](../../SparkEngine/Source/Audio/AudioMixer.h#L72) | Predefined reverb environment settings. |
