@@ -2353,6 +2353,15 @@ jobs:
           exit 1
         fi
 
+    - name: Verify published release attestation as a consumer
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      run: |
+        set -euo pipefail
+        gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+
     - name: Complete published release and download counters
       id: badge-complete
       env:
