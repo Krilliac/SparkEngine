@@ -3910,7 +3910,7 @@
 | `ComputeSkyColor` | function | SparkEngine | [SkyAtmosphere.h:L146](../../SparkEngine/Source/Graphics/SkyAtmosphere.h#L146) | Compute the sky color for a given view direction. |
 | `ComputeSkyColor` | function | Tests | [TestSkyAtmosphere.cpp:L61](../../Tests/TestSkyAtmosphere.cpp#L61) |  |
 | `ComputeStackHash` | function | SparkEngine | [CrashReportUploader.cpp:L64](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L64) |  |
-| `ComputeStackHash` | function | SparkEngine | [CrashReportUploader.h:L173](../../SparkEngine/Source/Utils/CrashReportUploader.h#L173) |  |
+| `ComputeStackHash` | function | SparkEngine | [CrashReportUploader.h:L172](../../SparkEngine/Source/Utils/CrashReportUploader.h#L172) |  |
 | `ComputeStackHash` | function | Tests | [TestCrashReportUploader.cpp:L39](../../Tests/TestCrashReportUploader.cpp#L39) |  |
 | `ComputeStats` | function | GameModules | [MMOCharacterSystem.h:L167](../../GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.h#L167) |  |
 | `ComputeSteering` | function | GameModules | [RacingAIDriver.h:L122](../../GameModules/SparkGameRacing/Source/AI/RacingAIDriver.h#L122) |  |
@@ -4029,7 +4029,7 @@
 | `Connect` | function | SparkEngine | [NetworkManager.h:L437](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L437) |  |
 | `Connect` | function | SparkEngine | [NetworkManager.h:L439](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L439) |  |
 | `Connect` | function | SparkEngine | [NetworkManager.h:L928](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L928) |  |
-| `Connect` | function | SparkEngine | [RemoteDebugSystem.h:L596](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L596) | Record an intent to connect to a game instance. |
+| `Connect` | function | SparkEngine | [RemoteDebugSystem.h:L595](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L595) | Record an intent to connect to a game instance. |
 | `Connect` | function | SparkEngine | [DaemonClient.h:L69](../../SparkEngine/Source/Utils/DaemonClient.h#L69) |  |
 | `Connect` | function | Tests | [TestNetworkManagerOrchestration.cpp:L144](../../Tests/TestNetworkManagerOrchestration.cpp#L144) |  |
 | `Connect` | function | Tests | [TestReliableChannel.cpp:L557](../../Tests/TestReliableChannel.cpp#L557) |  |
@@ -4042,7 +4042,7 @@
 | `ConnectToEngine` | function | SparkEditor | [SparkEngineIntegration.h:L221](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L221) | Connect to Spark Engine runtime |
 | `ConnectToServer` | function | GameModules | [Game.h:L570](../../GameModules/SparkGameFPS/Source/Game/Game.h#L570) | Connect to a remote server |
 | `ConnectToServer` | function | SparkEditor | [DedicatedServerPanel.h:L166](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L166) |  |
-| `ConnectToTarget` | function | SparkEngine | [RemoteDebugSystem.h:L744](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L744) | Connect the client to a running game instance. |
+| `ConnectToTarget` | function | SparkEngine | [RemoteDebugSystem.h:L743](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L743) | Connect the client to a running game instance. |
 | `ConnectWithTimeout` | function | SparkEditor | [CollaborativeEditSession.cpp:L395](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L395) |  |
 | `Consider` | function | GameModules | [TFBlobShadows.h:L106](../../GameModules/SparkGameMMOFPS/Source/Game/TFBlobShadows.h#L106) |  |
 | `console` | function | GameModules | [AdvancedConsoleCommands.cpp:L76](../../GameModules/SparkGameFPS/Source/Console/AdvancedConsoleCommands.cpp#L76) |  |
@@ -4180,7 +4180,7 @@
 | `Console_GetStatus` | function | SparkEngine | [WorldServer.h:L311](../../SparkEngine/Source/Engine/Networking/WorldServer.h#L311) |  |
 | `Console_GetStatus` | function | SparkEngine | [OnlineServices.h:L631](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L631) | Get console-friendly status |
 | `Console_GetStatus` | function | SparkEngine | [ProceduralGenerator.h:L488](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h#L488) | Get status string for console/debug display |
-| `Console_GetStatus` | function | SparkEngine | [RemoteDebugSystem.h:L815](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L815) | Console status string |
+| `Console_GetStatus` | function | SparkEngine | [RemoteDebugSystem.h:L814](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L814) | Console status string |
 | `Console_GetStatus` | function | SparkEngine | [ScriptHotReload.h:L148](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L148) |  |
 | `Console_GetStatus` | function | SparkEngine | [AreaAssetLoader.h:L134](../../SparkEngine/Source/Engine/Streaming/AreaAssetLoader.h#L134) | Get diagnostic status string |
 | `Console_GetStatus` | function | SparkEngine | [DirectStorageLoader.h:L167](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L167) | Console status report |
@@ -6470,7 +6470,7 @@
 | `Disconnect` | function | SparkEngine | [ReactiveSystem.h:L85](../../SparkEngine/Source/Engine/ECS/ReactiveSystem.h#L85) | Disconnect from the registry and stop observing. |
 | `Disconnect` | function | SparkEngine | [NetworkManager.h:L443](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L443) |  |
 | `Disconnect` | function | SparkEngine | [NetworkManager.h:L933](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L933) |  |
-| `Disconnect` | function | SparkEngine | [RemoteDebugSystem.h:L610](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L610) | Disconnect from the game instance |
+| `Disconnect` | function | SparkEngine | [RemoteDebugSystem.h:L609](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L609) | Disconnect from the game instance |
 | `Disconnect` | function | SparkEngine | [DaemonClient.h:L72](../../SparkEngine/Source/Utils/DaemonClient.h#L72) |  |
 | `Disconnect` | function | Tests | [TestNetworkManagerOrchestration.cpp:L156](../../Tests/TestNetworkManagerOrchestration.cpp#L156) |  |
 | `Disconnect` | function | Tests | [TestServerMockClient.cpp:L380](../../Tests/TestServerMockClient.cpp#L380) |  |
@@ -7266,7 +7266,7 @@
 | `EnableLayer` | function | SparkEngine | [LightLayers.h:L38](../../SparkEngine/Source/Graphics/LightLayers.h#L38) | Enable a specific layer (0-31) |
 | `EnableLightCulling` | function | SparkEngine | [LightingSystem.h:L353](../../SparkEngine/Source/Graphics/LightingSystem.h#L353) |  |
 | `EnableLink` | function | SparkEngine | [NavMeshLink.h:L85](../../SparkEngine/Source/Engine/AI/NavMeshLink.h#L85) |  |
-| `EnableLoopback` | function | SparkEngine | [RemoteDebugSystem.h:L790](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L790) | Enable in-process loopback (shared queues, no sockets). |
+| `EnableLoopback` | function | SparkEngine | [RemoteDebugSystem.h:L789](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L789) | Enable in-process loopback (shared queues, no sockets). |
 | `EnableMod` | function | SparkEngine | [ModSystem.h:L95](../../SparkEngine/Source/Engine/Modding/ModSystem.h#L95) | Enable a mod by ID. |
 | `EnableShadows` | function | SparkEngine | [LightingSystem.h:L349](../../SparkEngine/Source/Graphics/LightingSystem.h#L349) |  |
 | `EnableStreaming` | function | SparkEngine | [TextureSystem.h:L349](../../SparkEngine/Source/Graphics/TextureSystem.h#L349) |  |
@@ -7953,7 +7953,7 @@
 | `ExecuteCommandList` | function | SparkEngine | [VulkanDevice.h:L434](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L434) |  |
 | `ExecuteCommandList` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L134](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L134) |  |
 | `ExecuteConsoleCommand` | function | SparkEditor | [SparkEngineIntegration.h:L458](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L458) | Execute console command in engine |
-| `ExecuteConsoleCommand` | function | SparkEngine | [RemoteDebugSystem.h:L630](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L630) | Execute a console command on the remote game. |
+| `ExecuteConsoleCommand` | function | SparkEngine | [RemoteDebugSystem.h:L629](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L629) | Execute a console command on the remote game. |
 | `ExecuteDLSS` | function | SparkEngine | [UpscalingSystem.h:L198](../../SparkEngine/Source/Graphics/UpscalingSystem.h#L198) |  |
 | `ExecuteDocumentTransition` | function | SparkEditor | [EditorUI.cpp:L2072](../../SparkEditor/Source/Core/EditorUI.cpp#L2072) |  |
 | `ExecuteDocumentTransition` | function | SparkEditor | [EditorUI.cpp:L2087](../../SparkEditor/Source/Core/EditorUI.cpp#L2087) |  |
@@ -10481,7 +10481,7 @@
 | `GetClassName` | function | GameModules | [Player.h:L322](../../GameModules/SparkGameFPS/Source/Game/Player.h#L322) | Get the player's current class name |
 | `GetClassName` | function | GameModules | [RPGDemoSession.cpp:L24](../../GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp#L24) |  |
 | `GetClassSystem` | function | GameModules | [Game.h:L291](../../GameModules/SparkGameFPS/Source/Game/Game.h#L291) | Get class system instance |
-| `GetClient` | function | SparkEngine | [RemoteDebugSystem.h:L812](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L812) | Get client (may be null) |
+| `GetClient` | function | SparkEngine | [RemoteDebugSystem.h:L811](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L811) | Get client (may be null) |
 | `GetClientCount` | function | SparkEngine | [AreaServer.h:L205](../../SparkEngine/Source/Engine/Networking/AreaServer.h#L205) |  |
 | `GetClientCount` | function | SparkEngine | [ConnectionScope.h:L249](../../SparkEngine/Source/Engine/Networking/ConnectionScope.h#L249) | Get total tracked client count. |
 | `GetClientCount` | function | Tests | [TestServerMockClient.cpp:L223](../../Tests/TestServerMockClient.cpp#L223) |  |
@@ -10492,7 +10492,7 @@
 | `GetClients` | function | Tests | [TestDedicatedServerRuntime.cpp:L77](../../Tests/TestDedicatedServerRuntime.cpp#L77) |  |
 | `GetClients` | function | Tests | [TestNetworkManagerOrchestration.cpp:L336](../../Tests/TestNetworkManagerOrchestration.cpp#L336) |  |
 | `GetClients` | function | Tests | [TestServerMockClient.cpp:L227](../../Tests/TestServerMockClient.cpp#L227) |  |
-| `GetClientSession` | function | SparkEngine | [RemoteDebugSystem.h:L761](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L761) |  |
+| `GetClientSession` | function | SparkEngine | [RemoteDebugSystem.h:L760](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L760) |  |
 | `GetClip` | function | SparkEngine | [AnimationSystem.h:L416](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L416) | Retrieve a cached clip by name. |
 | `GetClip` | function | Tests | [TestAnimationSystem.cpp:L394](../../Tests/TestAnimationSystem.cpp#L394) |  |
 | `GetClothDimensions` | function | SparkEngine | [ClothSimulation.h:L246](../../SparkEngine/Source/Physics/ClothSimulation.h#L246) | Get the cloth grid dimensions. |
@@ -11786,7 +11786,7 @@
 | `GetInstance` | function | SparkEngine | [NetworkManager.h:L918](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L918) |  |
 | `GetInstance` | function | SparkEngine | [OnlineServices.h:L568](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L568) | Online service manager — singleton that holds the active platform |
 | `GetInstance` | function | SparkEngine | [ProceduralGenerator.h:L168](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h#L168) | Get the singleton instance |
-| `GetInstance` | function | SparkEngine | [RemoteDebugSystem.h:L690](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L690) | Get the singleton instance |
+| `GetInstance` | function | SparkEngine | [RemoteDebugSystem.h:L689](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L689) | Get the singleton instance |
 | `GetInstance` | function | SparkEngine | [MovieRenderPipeline.h:L205](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L205) | Get the singleton instance |
 | `GetInstance` | function | SparkEngine | [FreezeSystem.h:L209](../../SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h#L209) |  |
 | `GetInstance` | function | SparkEngine | [SaveSystem.h:L224](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L224) | Access the singleton instance of the registry. |
@@ -12966,7 +12966,7 @@
 | `GetProjectTemplateDescriptors` | function | SparkEditor | [ProjectManager.h:L183](../../SparkEditor/Source/Core/ProjectManager.h#L183) |  |
 | `GetProjectTemplateName` | function | SparkEditor | [ProjectManager.h:L188](../../SparkEditor/Source/Core/ProjectManager.h#L188) |  |
 | `GetProjectTempPath` | function | SparkEditor | [ProjectManager.h:L173](../../SparkEditor/Source/Core/ProjectManager.h#L173) |  |
-| `GetProperty` | function | SparkEngine | [RemoteDebugSystem.h:L642](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L642) | Request the value of a named property. |
+| `GetProperty` | function | SparkEngine | [RemoteDebugSystem.h:L641](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L641) | Request the value of a named property. |
 | `GetPropertyName` | function | SparkEngine | [MaterialPropertyHandle.h:L121](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L121) | Get the name of a property from its handle. |
 | `GetPropertyType` | function | SparkEngine | [MaterialPropertyHandle.h:L128](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L128) | Get the type of a property from its handle. |
 | `GetProviderName` | function | SparkEngine | [ArchiveResourceProvider.h:L54](../../SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h#L54) |  |
@@ -13355,17 +13355,17 @@
 | `GetSequence` | function | SparkEngine | [Sequencer.h:L340](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L340) |  |
 | `GetSequenceFrameCount` | function | SparkEngine | [ScreenCapture.h:L232](../../SparkEngine/Source/Graphics/ScreenCapture.h#L232) | Get the current sequence frame count |
 | `GetSerializedFieldCount` | function | SparkEngine | [Reflection.h:L154](../../SparkEngine/Source/Core/Reflection.h#L154) | Get the count of fields that are marked for serialization. |
-| `GetServer` | function | SparkEngine | [RemoteDebugSystem.h:L811](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L811) | Get server (may be null) |
+| `GetServer` | function | SparkEngine | [RemoteDebugSystem.h:L810](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L810) | Get server (may be null) |
 | `GetServerAddress` | function | SparkEditor | [LiveEditBridge.h:L102](../../SparkEditor/Source/Communication/LiveEditBridge.h#L102) | Get the address of the connected AreaServer |
 | `GetServerPort` | function | SparkEditor | [LiveEditBridge.h:L107](../../SparkEditor/Source/Communication/LiveEditBridge.h#L107) | Get the port of the connected AreaServer |
-| `GetServerSession` | function | SparkEngine | [RemoteDebugSystem.h:L760](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L760) |  |
+| `GetServerSession` | function | SparkEngine | [RemoteDebugSystem.h:L759](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L759) |  |
 | `GetServerTime` | function | SparkEngine | [NetworkManager.h:L514](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L514) |  |
 | `GetServerTime` | function | Tests | [TestNetworkManagerOrchestration.cpp:L333](../../Tests/TestNetworkManagerOrchestration.cpp#L333) |  |
 | `GetSession` | function | GameModules | [MMOAccountSystem.h:L127](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L127) |  |
 | `GetSession` | function | SparkEngine | [RemoteDebugSystem.h:L378](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L378) | Access session |
 | `GetSession` | function | SparkEngine | [RemoteDebugSystem.h:L379](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L379) | Access session (const) |
-| `GetSession` | function | SparkEngine | [RemoteDebugSystem.h:L673](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L673) | Access session |
-| `GetSession` | function | SparkEngine | [RemoteDebugSystem.h:L674](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L674) | Access session (const) |
+| `GetSession` | function | SparkEngine | [RemoteDebugSystem.h:L672](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L672) | Access session |
+| `GetSession` | function | SparkEngine | [RemoteDebugSystem.h:L673](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L673) | Access session (const) |
 | `GetSessionByAccount` | function | GameModules | [MMOAccountSystem.cpp:L428](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.cpp#L428) |  |
 | `GetSessionByAccount` | function | GameModules | [MMOAccountSystem.h:L128](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L128) |  |
 | `GetSettings` | function | SparkEditor | [BuildCookPanel.h:L115](../../SparkEditor/Source/Panels/BuildCookPanel.h#L115) |  |
@@ -16120,7 +16120,7 @@
 | `Initialize` | function | SparkEngine | [OnlineServices.h:L575](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L575) | Initialize with the default (Null) platform |
 | `Initialize` | function | SparkEngine | [JoltPhysicsInterface.h:L345](../../SparkEngine/Source/Engine/Physics/JoltPhysicsInterface.h#L345) |  |
 | `Initialize` | function | SparkEngine | [ProceduralGenerator.h:L178](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h#L178) | Initialize with a seed |
-| `Initialize` | function | SparkEngine | [RemoteDebugSystem.h:L697](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L697) | Initialize the remote debug subsystem. @return True on success. |
+| `Initialize` | function | SparkEngine | [RemoteDebugSystem.h:L696](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L696) | Initialize the remote debug subsystem. @return True on success. |
 | `Initialize` | function | SparkEngine | [MovieRenderPipeline.h:L212](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L212) | Initialize the pipeline |
 | `Initialize` | function | SparkEngine | [FreezeSystem.h:L215](../../SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h#L215) |  |
 | `Initialize` | function | SparkEngine | [SaveSystem.h:L436](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L436) |  |
@@ -16987,7 +16987,7 @@
 | `IsConnected` | function | SparkEditor | [ExternalConsoleIntegration.h:L71](../../SparkEditor/Source/Integration/ExternalConsoleIntegration.h#L71) | Check if connected to engine |
 | `IsConnected` | function | SparkEditor | [SparkEngineIntegration.h:L238](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L238) | Check if connected to engine |
 | `IsConnected` | function | SparkEditor | [EditorConsoleBridge.h:L111](../../SparkEditor/Source/Utils/EditorConsoleBridge.h#L111) | Check if the bridge is connected to the engine console. |
-| `IsConnected` | function | SparkEngine | [RemoteDebugSystem.h:L750](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L750) | True if either side has an active connection |
+| `IsConnected` | function | SparkEngine | [RemoteDebugSystem.h:L749](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L749) | True if either side has an active connection |
 | `IsConnected` | function | SparkEngine | [GamepadInput.h:L189](../../SparkEngine/Source/Input/GamepadInput.h#L189) | Check if a specific controller is connected |
 | `IsConnected` | function | Tests | [TestGamepadInputProcessing.cpp:L160](../../Tests/TestGamepadInputProcessing.cpp#L160) |  |
 | `IsConnected` | function | Tests | [TestSelfRecovery.cpp:L215](../../Tests/TestSelfRecovery.cpp#L215) |  |
@@ -17009,7 +17009,7 @@
 | `IsCrashManifestReadyName` | function | SparkEngine | [CrashHandlerSupport.h:L76](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L76) | Check a ready-manifest filename without accepting paths or alternate suffixes. |
 | `IsCrashReportId` | function | SparkEngine | [CrashHandlerSupport.h:L55](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L55) | Validate the fixed-width lowercase hexadecimal report identifier. |
 | `IsCrashUploadRateLimited` | function | SparkEngine | [CrashReportUploader.cpp:L38](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L38) |  |
-| `IsCrashUploadRateLimited` | function | SparkEngine | [CrashReportUploader.h:L179](../../SparkEngine/Source/Utils/CrashReportUploader.h#L179) | Check if upload is rate-limited (60s cooldown between uploads) |
+| `IsCrashUploadRateLimited` | function | SparkEngine | [CrashReportUploader.h:L178](../../SparkEngine/Source/Utils/CrashReportUploader.h#L178) | Check if upload is rate-limited (60s cooldown between uploads) |
 | `IsCredentialOnboardingOriginAllowed` | function | GameModules | [TFServerSimOnboarding.cpp:L44](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSimOnboarding.cpp#L44) |  |
 | `IsCulled` | function | SparkEngine | [RenderGraphPass.h:L63](../../SparkEngine/Source/Graphics/RenderGraphPass.h#L63) |  |
 | `IsCursorCaptured` | function | SparkEditor | [GameViewPanel.h:L55](../../SparkEditor/Source/Panels/GameViewPanel.h#L55) | Check if the game view is capturing input (cursor locked) |
@@ -19018,7 +19018,7 @@
 | `lock` | function | SparkEngine | [ModuleHotReload.cpp:L244](../../SparkEngine/Source/Core/ModuleHotReload.cpp#L244) |  |
 | `lock` | function | SparkEngine | [ModuleManager.cpp:L93](../../SparkEngine/Source/Core/ModuleManager.cpp#L93) |  |
 | `lock` | function | SparkEngine | [ModuleManager.cpp:L694](../../SparkEngine/Source/Core/ModuleManager.cpp#L694) |  |
-| `lock` | function | SparkEngine | [SparkPak.cpp:L389](../../SparkEngine/Source/Core/SparkPak.cpp#L389) |  |
+| `lock` | function | SparkEngine | [SparkPak.cpp:L390](../../SparkEngine/Source/Core/SparkPak.cpp#L390) |  |
 | `lock` | function | SparkEngine | [Sequencer.cpp:L746](../../SparkEngine/Source/Engine/Cinematic/Sequencer.cpp#L746) |  |
 | `lock` | function | SparkEngine | [Sequencer.cpp:L781](../../SparkEngine/Source/Engine/Cinematic/Sequencer.cpp#L781) |  |
 | `lock` | function | SparkEngine | [Sequencer.cpp:L788](../../SparkEngine/Source/Engine/Cinematic/Sequencer.cpp#L788) |  |
@@ -24205,7 +24205,7 @@
 | `PollProcessExited` | function | SparkEditor | [EditorProcessLaunchWin32.cpp:L134](../../SparkEditor/Source/Utils/EditorProcessLaunchWin32.cpp#L134) |  |
 | `PollRaceControlEdges` | function | GameModules | [RacingRaceFlow.cpp:L15](../../GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.cpp#L15) |  |
 | `PollRaceControlEdges` | function | GameModules | [RacingRaceFlow.h:L25](../../GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.h#L25) |  |
-| `PollResponses` | function | SparkEngine | [RemoteDebugSystem.h:L616](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L616) | Drain all received responses since the last poll |
+| `PollResponses` | function | SparkEngine | [RemoteDebugSystem.h:L615](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L615) | Drain all received responses since the last poll |
 | `PollStandaloneInput` | function | SparkConsole | [ConsoleApp.h:L78](../../SparkConsole/src/ConsoleApp.h#L78) |  |
 | `PollWheelSelection` | function | GameModules | [TFPingUI.h:L81](../../GameModules/SparkGameMMOFPS/Source/UI/TFPingUI.h#L81) |  |
 | `PollWindowsPipeData` | function | SparkConsole | [ConsoleApp.h:L83](../../SparkConsole/src/ConsoleApp.h#L83) |  |
@@ -24897,7 +24897,7 @@
 | `PullFromWidget` | function | SparkEngine | [UIFactory.h:L33](../../SparkEngine/Source/Engine/UI/UIFactory.h#L33) | Pull widget value back to data |
 | `PullFromWidget` | function | SparkEngine | [UIFactory.h:L56](../../SparkEngine/Source/Engine/UI/UIFactory.h#L56) |  |
 | `PumpInput` | function | GameModules | [TFClientNet.h:L159](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.h#L159) |  |
-| `PumpLoopback` | function | SparkEngine | [RemoteDebugSystem.h:L853](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L853) |  |
+| `PumpLoopback` | function | SparkEngine | [RemoteDebugSystem.h:L852](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L852) |  |
 | `PumpServer` | function | Tests | [TestReliableChannel.cpp:L612](../../Tests/TestReliableChannel.cpp#L612) |  |
 | `PurchaseCount` | function | GameModules | [TFColossusSystem.h:L80](../../GameModules/SparkGameMMOFPS/Source/Game/TFColossusSystem.h#L80) |  |
 | `PurgeExpired` | function | Tests | [TestTextureZombiePool.cpp:L53](../../Tests/TestTextureZombiePool.cpp#L53) |  |
@@ -27586,7 +27586,7 @@
 | `RequestOpenProject` | function | SparkEditor | [EditorUI.h:L188](../../SparkEditor/Source/Core/EditorUI.h#L188) |  |
 | `RequestOpenProject` | function | SparkEditor | [ProjectBrowserPanel.h:L78](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L78) |  |
 | `RequestPage` | function | SparkEngine | [VirtualTexture.h:L110](../../SparkEngine/Source/Graphics/VirtualTexture.h#L110) | Request a specific page to be loaded into the cache. |
-| `RequestPerformanceSnapshot` | function | SparkEngine | [RemoteDebugSystem.h:L666](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L666) | Request a performance snapshot (CPU, GPU, memory). |
+| `RequestPerformanceSnapshot` | function | SparkEngine | [RemoteDebugSystem.h:L665](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L665) | Request a performance snapshot (CPU, GPU, memory). |
 | `RequestShadow` | function | SparkEngine | [CachedShadowAtlas.h:L139](../../SparkEngine/Source/Graphics/CachedShadowAtlas.h#L139) | Request shadow rendering for a light |
 | `RequestStandaloneLock` | function | SparkEditor | [CollaborativeEditSession.cpp:L1219](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L1219) |  |
 | `RequestStandaloneLock` | function | SparkEditor | [CollaborativeEditSession.h:L348](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L348) |  |
@@ -29434,7 +29434,7 @@
 | `SendCommand` | function | SparkEditor | [EngineInterface.h:L278](../../SparkEditor/Source/Communication/EngineInterface.h#L278) | Send command to engine (simplified interface) |
 | `SendCommand` | function | SparkEditor | [ExternalConsoleIntegration.h:L78](../../SparkEditor/Source/Integration/ExternalConsoleIntegration.h#L78) | Send command to engine |
 | `SendCommand` | function | SparkEditor | [SparkEngineIntegration.h:L564](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L564) | Send command to engine |
-| `SendCommand` | function | SparkEngine | [RemoteDebugSystem.h:L613](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L613) | Send a command only after the client enters a connected epoch. |
+| `SendCommand` | function | SparkEngine | [RemoteDebugSystem.h:L612](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L612) | Send a command only after the client enters a connected epoch. |
 | `SendCreate` | function | GameModules | [TFDeployableSystem.h:L210](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.h#L210) |  |
 | `SendCrossAreaMessage` | function | SparkEngine | [AreaServer.h:L188](../../SparkEngine/Source/Engine/Networking/AreaServer.h#L188) | Send a message to another area server |
 | `SendDeathRecap` | function | GameModules | [TFDamageSystem.h:L253](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.h#L253) |  |
@@ -30847,7 +30847,7 @@
 | `SetProjectilePool` | function | GameModules | [VehicleSystem.h:L161](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h#L161) | Set the projectile pool used for vehicle weapon firing |
 | `SetProjectilePool` | function | GameModules | [VehicleSystem.h:L337](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h#L337) | Set projectile pool for all current and future vehicles |
 | `SetProjectPath` | function | SparkEditor | [AssetBrowserPanel.h:L73](../../SparkEditor/Source/Panels/AssetBrowserPanel.h#L73) | Set project path |
-| `SetProperty` | function | SparkEngine | [RemoteDebugSystem.h:L655](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L655) | Set the value of a named property. |
+| `SetProperty` | function | SparkEngine | [RemoteDebugSystem.h:L654](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L654) | Set the value of a named property. |
 | `SetQuality` | function | SparkEngine | [HybridRTManager.h:L178](../../SparkEngine/Source/Graphics/HybridRT/HybridRTManager.h#L178) |  |
 | `SetQuality` | function | SparkEngine | [UpscalingSystem.h:L347](../../SparkEngine/Source/Graphics/UpscalingSystem.h#L347) | Set the quality preset |
 | `SetQualityPreset` | function | SparkEngine | [MobilePlatform.h:L188](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h#L188) | Set quality preset. |
@@ -31870,7 +31870,7 @@
 | `Shutdown` | function | SparkEngine | [OnlineServices.h:L584](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L584) | Shut down and release all platforms |
 | `Shutdown` | function | SparkEngine | [JoltPhysicsInterface.h:L346](../../SparkEngine/Source/Engine/Physics/JoltPhysicsInterface.h#L346) |  |
 | `Shutdown` | function | SparkEngine | [ProceduralGenerator.h:L188](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h#L188) | Shut down the generator |
-| `Shutdown` | function | SparkEngine | [RemoteDebugSystem.h:L709](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L709) | Shut down and release all resources |
+| `Shutdown` | function | SparkEngine | [RemoteDebugSystem.h:L708](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L708) | Shut down and release all resources |
 | `Shutdown` | function | SparkEngine | [MovieRenderPipeline.h:L221](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L221) | Shut down, cancelling any active render |
 | `Shutdown` | function | SparkEngine | [FreezeSystem.h:L217](../../SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h#L217) |  |
 | `Shutdown` | function | SparkEngine | [AngelScriptEngine.h:L114](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h#L114) | Shut down the engine and release all script resources |
@@ -32704,15 +32704,15 @@
 | `SparkModuleInjectImGui` | function | Tests | [MismatchedModule.cpp:L68](../../Tests/Fixtures/ModuleABI/MismatchedModule.cpp#L68) |  |
 | `SparkPackageModuleHeaderSmokeAnchor` | function | Tests | [module_header_smoke.cpp:L4](../../Tests/PackageSmoke/module_header_smoke.cpp#L4) |  |
 | `SparkPakReader::Close` | method | SparkEngine | [SparkPak.cpp:L186](../../SparkEngine/Source/Core/SparkPak.cpp#L186) |  |
-| `SparkPakReader::Exists` | method | SparkEngine | [SparkPak.cpp:L353](../../SparkEngine/Source/Core/SparkPak.cpp#L353) |  |
-| `SparkPakReader::GetEntryCount` | method | SparkEngine | [SparkPak.cpp:L465](../../SparkEngine/Source/Core/SparkPak.cpp#L465) |  |
-| `SparkPakReader::GetFilePath` | method | SparkEngine | [SparkPak.cpp:L470](../../SparkEngine/Source/Core/SparkPak.cpp#L470) |  |
+| `SparkPakReader::Exists` | method | SparkEngine | [SparkPak.cpp:L354](../../SparkEngine/Source/Core/SparkPak.cpp#L354) |  |
+| `SparkPakReader::GetEntryCount` | method | SparkEngine | [SparkPak.cpp:L466](../../SparkEngine/Source/Core/SparkPak.cpp#L466) |  |
+| `SparkPakReader::GetFilePath` | method | SparkEngine | [SparkPak.cpp:L471](../../SparkEngine/Source/Core/SparkPak.cpp#L471) |  |
 | `SparkPakReader::IsOpen` | method | SparkEngine | [SparkPak.cpp:L198](../../SparkEngine/Source/Core/SparkPak.cpp#L198) |  |
-| `SparkPakReader::ListFiles` | method | SparkEngine | [SparkPak.cpp:L441](../../SparkEngine/Source/Core/SparkPak.cpp#L441) |  |
+| `SparkPakReader::ListFiles` | method | SparkEngine | [SparkPak.cpp:L442](../../SparkEngine/Source/Core/SparkPak.cpp#L442) |  |
 | `SparkPakReader::Open` | method | SparkEngine | [SparkPak.cpp:L157](../../SparkEngine/Source/Core/SparkPak.cpp#L157) |  |
-| `SparkPakReader::ReadFile` | method | SparkEngine | [SparkPak.cpp:L358](../../SparkEngine/Source/Core/SparkPak.cpp#L358) |  |
+| `SparkPakReader::ReadFile` | method | SparkEngine | [SparkPak.cpp:L359](../../SparkEngine/Source/Core/SparkPak.cpp#L359) |  |
 | `SparkPakReader::ReadHeader` | method | SparkEngine | [SparkPak.cpp:L207](../../SparkEngine/Source/Core/SparkPak.cpp#L207) |  |
-| `SparkPakReader::ReadTextFile` | method | SparkEngine | [SparkPak.cpp:L435](../../SparkEngine/Source/Core/SparkPak.cpp#L435) |  |
+| `SparkPakReader::ReadTextFile` | method | SparkEngine | [SparkPak.cpp:L436](../../SparkEngine/Source/Core/SparkPak.cpp#L436) |  |
 | `SparkPakReader::ReadTOC` | method | SparkEngine | [SparkPak.cpp:L215](../../SparkEngine/Source/Core/SparkPak.cpp#L215) |  |
 | `SparkPakWriter::AddDirectory` | method | SparkEngine | [SparkPakWriter.cpp:L104](../../SparkEngine/Source/Core/SparkPakWriter.cpp#L104) |  |
 | `SparkPakWriter::AddFile` | method | SparkEngine | [SparkPakWriter.cpp:L38](../../SparkEngine/Source/Core/SparkPakWriter.cpp#L38) |  |
@@ -33074,7 +33074,7 @@
 | `StartServer` | function | SparkEngine | [NetworkManager.h:L430](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L430) |  |
 | `StartServer` | function | SparkEngine | [NetworkManager.h:L926](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L926) |  |
 | `StartServer` | function | SparkEngine | [NetworkManagerRuntimeAdapter.h:L21](../../SparkEngine/Source/Engine/Networking/NetworkManagerRuntimeAdapter.h#L21) |  |
-| `StartServer` | function | SparkEngine | [RemoteDebugSystem.h:L728](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L728) | Enter logical server state for a future authenticated transport. |
+| `StartServer` | function | SparkEngine | [RemoteDebugSystem.h:L727](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L727) | Enter logical server state for a future authenticated transport. |
 | `StartServer` | function | Tests | [TestAssetServiceClient.cpp:L113](../../Tests/TestAssetServiceClient.cpp#L113) |  |
 | `StartServer` | function | Tests | [TestDedicatedServerRuntime.cpp:L33](../../Tests/TestDedicatedServerRuntime.cpp#L33) |  |
 | `StartServer` | function | Tests | [TestNetworkManagerOrchestration.cpp:L126](../../Tests/TestNetworkManagerOrchestration.cpp#L126) |  |
@@ -33645,7 +33645,7 @@
 | `std::string` | method | SparkEngine | [EngineConsoleCommands.cpp:L633](../../SparkEngine/Source/Core/EngineConsoleCommands.cpp#L633) |  |
 | `std::string` | method | SparkEngine | [EngineConsoleCommands.cpp:L652](../../SparkEngine/Source/Core/EngineConsoleCommands.cpp#L652) |  |
 | `std::string` | method | SparkEngine | [SparkEngineLinuxInit.cpp:L77](../../SparkEngine/Source/Core/SparkEngineLinuxInit.cpp#L77) |  |
-| `std::string` | method | SparkEngine | [SparkPak.cpp:L438](../../SparkEngine/Source/Core/SparkPak.cpp#L438) |  |
+| `std::string` | method | SparkEngine | [SparkPak.cpp:L439](../../SparkEngine/Source/Core/SparkPak.cpp#L439) |  |
 | `std::string` | method | SparkEngine | [SubsystemConsoleCommandsExt.cpp:L588](../../SparkEngine/Source/Core/SubsystemConsoleCommandsExt.cpp#L588) |  |
 | `std::string` | method | SparkEngine | [SubsystemConsoleCommandsExt.cpp:L590](../../SparkEngine/Source/Core/SubsystemConsoleCommandsExt.cpp#L590) |  |
 | `std::string` | method | SparkEngine | [LootAndCraftingSystem.h:L210](../../SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h#L210) | Human-readable status for debugging |
@@ -33668,8 +33668,8 @@
 | `std::string` | method | SparkEngine | [ShaderHotReload.cpp:L231](../../SparkEngine/Source/Graphics/ShaderHotReload.cpp#L231) |  |
 | `std::string` | method | SparkEngine | [ColorUtils.h:L143](../../SparkEngine/Source/Utils/ColorUtils.h#L143) | Convert to hex string "#RRGGBBAA". |
 | `std::string` | method | SparkEngine | [CrashHandlerSupport.h:L99](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L99) | Convert a native path to UTF-8 without using the Windows locale. |
+| `std::string` | method | SparkEngine | [CrashReportUploader.h:L52](../../SparkEngine/Source/Utils/CrashReportUploader.h#L52) |  |
 | `std::string` | method | SparkEngine | [CrashReportUploader.h:L53](../../SparkEngine/Source/Utils/CrashReportUploader.h#L53) |  |
-| `std::string` | method | SparkEngine | [CrashReportUploader.h:L54](../../SparkEngine/Source/Utils/CrashReportUploader.h#L54) |  |
 | `std::string` | method | SparkEngine | [DaemonLifecycle.cpp:L99](../../SparkEngine/Source/Utils/DaemonLifecycle.cpp#L99) |  |
 | `std::string` | method | SparkEngine | [DaemonLifecycle.cpp:L209](../../SparkEngine/Source/Utils/DaemonLifecycle.cpp#L209) |  |
 | `std::string` | method | SparkEngine | [InGameConsole.h:L451](../../SparkEngine/Source/Utils/InGameConsole.h#L451) |  |
@@ -37647,7 +37647,7 @@
 | `Update` | function | SparkEngine | [NetworkManagerRuntimeAdapter.h:L25](../../SparkEngine/Source/Engine/Networking/NetworkManagerRuntimeAdapter.h#L25) |  |
 | `Update` | function | SparkEngine | [OnlineServices.h:L596](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L596) | Per-frame update (for async callbacks on real platforms) |
 | `Update` | function | SparkEngine | [RemoteDebugSystem.h:L302](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L302) | Process queued commands and send responses (call per frame) |
-| `Update` | function | SparkEngine | [RemoteDebugSystem.h:L767](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L767) | Per-frame update: pump loopback, update server and client. |
+| `Update` | function | SparkEngine | [RemoteDebugSystem.h:L766](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L766) | Per-frame update: pump loopback, update server and client. |
 | `Update` | function | SparkEngine | [MovieRenderPipeline.h:L301](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L301) | Main update -- call each frame. Uses fixed dt when rendering. |
 | `Update` | function | SparkEngine | [MemoryIntegrity.h:L162](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h#L162) |  |
 | `Update` | function | SparkEngine | [AreaAssetLoader.h:L73](../../SparkEngine/Source/Engine/Streaming/AreaAssetLoader.h#L73) | Poll DirectStorageLoader for completions and check area readiness |
@@ -38084,30 +38084,30 @@
 | `UploadClusterGrid` | function | SparkEngine | [GPUClusterCulling.h:L99](../../SparkEngine/Source/Graphics/GPUClusterCulling.h#L99) | Upload cluster AABBs (call once or when projection changes) |
 | `UploadCrashFile` | function | SparkEngine | [CrashReportUploader.cpp:L797](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L797) |  |
 | `UploadCrashFile` | function | SparkEngine | [CrashReportUploader.cpp:L1251](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1251) |  |
-| `UploadCrashFile` | function | SparkEngine | [CrashReportUploader.h:L148](../../SparkEngine/Source/Utils/CrashReportUploader.h#L148) | Upload a file to a remote URL via HTTP multipart/form-data |
+| `UploadCrashFile` | function | SparkEngine | [CrashReportUploader.h:L147](../../SparkEngine/Source/Utils/CrashReportUploader.h#L147) | Upload a file to a remote URL via HTTP multipart/form-data |
 | `UploadCrashReport` | function | SparkEngine | [CrashReportUploader.cpp:L1125](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1125) |  |
 | `UploadCrashReport` | function | SparkEngine | [CrashReportUploader.cpp:L1221](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1221) |  |
-| `UploadCrashReport` | function | SparkEngine | [CrashReportUploader.h:L73](../../SparkEngine/Source/Utils/CrashReportUploader.h#L73) |  |
+| `UploadCrashReport` | function | SparkEngine | [CrashReportUploader.h:L72](../../SparkEngine/Source/Utils/CrashReportUploader.h#L72) |  |
 | `UploadCrashToDropbox` | function | SparkEngine | [CrashReportUploader.cpp:L829](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L829) |  |
 | `UploadCrashToDropbox` | function | SparkEngine | [CrashReportUploader.cpp:L1152](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1152) |  |
 | `UploadCrashToDropbox` | function | SparkEngine | [CrashReportUploader.cpp:L1241](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1241) |  |
-| `UploadCrashToDropbox` | function | SparkEngine | [CrashReportUploader.h:L114](../../SparkEngine/Source/Utils/CrashReportUploader.h#L114) |  |
+| `UploadCrashToDropbox` | function | SparkEngine | [CrashReportUploader.h:L113](../../SparkEngine/Source/Utils/CrashReportUploader.h#L113) |  |
 | `UploadCrashToEmail` | function | SparkEngine | [CrashReportUploader.cpp:L1028](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1028) |  |
 | `UploadCrashToEmail` | function | SparkEngine | [CrashReportUploader.cpp:L1160](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1160) |  |
 | `UploadCrashToEmail` | function | SparkEngine | [CrashReportUploader.cpp:L1236](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1236) |  |
-| `UploadCrashToEmail` | function | SparkEngine | [CrashReportUploader.h:L137](../../SparkEngine/Source/Utils/CrashReportUploader.h#L137) |  |
+| `UploadCrashToEmail` | function | SparkEngine | [CrashReportUploader.h:L136](../../SparkEngine/Source/Utils/CrashReportUploader.h#L136) |  |
 | `UploadCrashToFTP` | function | SparkEngine | [CrashReportUploader.cpp:L914](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L914) |  |
 | `UploadCrashToFTP` | function | SparkEngine | [CrashReportUploader.cpp:L1156](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1156) |  |
 | `UploadCrashToFTP` | function | SparkEngine | [CrashReportUploader.cpp:L1246](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1246) |  |
-| `UploadCrashToFTP` | function | SparkEngine | [CrashReportUploader.h:L123](../../SparkEngine/Source/Utils/CrashReportUploader.h#L123) | Upload crash dump via FTP/FTPS |
+| `UploadCrashToFTP` | function | SparkEngine | [CrashReportUploader.h:L122](../../SparkEngine/Source/Utils/CrashReportUploader.h#L122) | Upload crash dump via FTP/FTPS |
 | `UploadCrashToGitHub` | function | SparkEngine | [CrashReportUploader.cpp:L400](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L400) |  |
 | `UploadCrashToGitHub` | function | SparkEngine | [CrashReportUploader.cpp:L1139](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1139) |  |
 | `UploadCrashToGitHub` | function | SparkEngine | [CrashReportUploader.cpp:L1226](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1226) |  |
-| `UploadCrashToGitHub` | function | SparkEngine | [CrashReportUploader.h:L87](../../SparkEngine/Source/Utils/CrashReportUploader.h#L87) |  |
+| `UploadCrashToGitHub` | function | SparkEngine | [CrashReportUploader.h:L86](../../SparkEngine/Source/Utils/CrashReportUploader.h#L86) |  |
 | `UploadCrashToProxy` | function | SparkEngine | [CrashReportUploader.cpp:L686](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L686) |  |
 | `UploadCrashToProxy` | function | SparkEngine | [CrashReportUploader.cpp:L1135](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1135) |  |
 | `UploadCrashToProxy` | function | SparkEngine | [CrashReportUploader.cpp:L1231](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L1231) |  |
-| `UploadCrashToProxy` | function | SparkEngine | [CrashReportUploader.h:L101](../../SparkEngine/Source/Utils/CrashReportUploader.h#L101) |  |
+| `UploadCrashToProxy` | function | SparkEngine | [CrashReportUploader.h:L100](../../SparkEngine/Source/Utils/CrashReportUploader.h#L100) |  |
 | `UploadGridToGPU` | function | SparkEngine | [FroxelVolumetricFog.h:L200](../../SparkEngine/Source/Graphics/FroxelVolumetricFog.h#L200) | Upload the integrated grid data to the 3D GPU texture |
 | `UploadProbeDataToGPU` | function | SparkEngine | [DDGIProbeSystem.h:L203](../../SparkEngine/Source/Graphics/DDGIProbeSystem.h#L203) | Upload current probe SH data to the GPU structured buffer |
 | `UploadToGPU` | function | SparkEngine | [ClusteredLightCulling.h:L146](../../SparkEngine/Source/Graphics/ClusteredLightCulling.h#L146) | Upload CPU-computed cluster data to the GPU buffers after Update() |

@@ -3308,12 +3308,12 @@
 | `RemoteDebugAccessControlTestHarness` | class | Tests | [TestRemoteDebugSystem.cpp:L24](../../Tests/TestRemoteDebugSystem.cpp#L24) |  |
 | `RemoteDebugAccessControlTestHarness` | class | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L34](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L34) |  |
 | `RemoteDebugAuditEvent` | struct | SparkEngine | [RemoteDebugAccessControl.h:L87](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L87) | Bounded audit data. Payloads, credentials, and grants are never retained here. |
-| `RemoteDebugClient` | class | SparkEngine | [RemoteDebugSystem.h:L587](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L587) | Connects to a running game and provides convenience debug methods. |
+| `RemoteDebugClient` | class | SparkEngine | [RemoteDebugSystem.h:L586](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L586) | Connects to a running game and provides convenience debug methods. |
 | `RemoteDebugPrincipal` | class | SparkEngine | [RemoteDebugAccessControl.h:L103](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L103) | Opaque server-owned association for an authenticated local endpoint. |
 | `RemoteDebugResponseEpochTestSeam` | struct | SparkEngine | [RemoteDebugSystem.h:L254](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L254) | Optional synchronization seam for deterministic epoch-race tests. |
 | `RemoteDebugServer` | class | SparkEngine | [RemoteDebugAccessControl.h:L25](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L25) |  |
 | `RemoteDebugServer` | class | SparkEngine | [RemoteDebugSystem.h:L261](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L261) | Owns logical server state and dispatches authenticated incoming commands. |
-| `RemoteDebugSystem` | class | SparkEngine | [RemoteDebugSystem.h:L686](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L686) | Top-level singleton owning both server and client instances. |
+| `RemoteDebugSystem` | class | SparkEngine | [RemoteDebugSystem.h:L685](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L685) | Top-level singleton owning both server and client instances. |
 | `RemotePawn` | struct | GameModules | [TFReplication.h:L41](../../GameModules/SparkGameMMOFPS/Source/Net/TFReplication.h#L41) |  |
 | `RemoteSession` | class | SparkEngine | [RemoteDebugSystem.h:L64](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L64) | Mutable state of a single remote debug connection (thread-safe queues). |
 | `RemoveNodeCommand` | class | SparkEditor | [VisualScriptPanel.h:L47](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L47) | Undo command for removing a node from the visual script graph |

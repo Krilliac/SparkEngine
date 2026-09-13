@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321401 |
+| **SparkEngine/Source** | 321400 |
 | **SparkEditor/Source** | 103594 |
 | **GameModules** | 142614 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 183230 |
+| **Tests** | 183229 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~778444** |
+| **Total C++ (excl. ThirdParty)** | **~778442** |
 
 ### File Counts
 
@@ -43,9 +43,9 @@ Graphics contains 121157 lines, or 37% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 121157 | 37.6% |
-| Engine (all subsystems) | 89114 | 27.7% |
-| Utils | 46144 | 14.3% |
-| Core | 31086 | 9.6% |
+| Engine (all subsystems) | 89113 | 27.7% |
+| Utils | 46143 | 14.3% |
+| Core | 31087 | 9.6% |
 | Physics | 10799 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
@@ -177,7 +177,7 @@ inventory is implementation evidence, not support certification.
 | `GraphicsEngine.h` | 1277 |
 | `EngineSettings.h` | 1152 |
 | `NetworkManager.h` | 943 |
-| `RemoteDebugSystem.h` | 874 |
+| `RemoteDebugSystem.h` | 873 |
 | `SaveSystem.h` | 860 |
 | `ECSystems.h` | 846 |
 | `PhysicsTypes.h` | 828 |
