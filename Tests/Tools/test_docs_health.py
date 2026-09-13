@@ -1019,6 +1019,18 @@ class AssetIntegrityTests(unittest.TestCase):
                 )
                 self.assertTrue(any(fragment in message for message in messages), messages)
 
+    def test_windows_reserved_asset_reference_fails_before_resolution(self) -> None:
+        for reference in ("CON", "CON.txt", "nested/AUX.bin", "LPT9.log"):
+            with self.subTest(reference=reference):
+                messages = self.findings(
+                    [{"path": reference, "origin": "authored", "sha256": "0" * 64}],
+                    {"art.png": b"intact\n"},
+                )
+                self.assertTrue(
+                    any("reserved Windows device name" in message for message in messages),
+                    messages,
+                )
+
     def test_undeclared_shipped_file_fails(self) -> None:
         payload = b"intact\n"
         messages = self.findings(

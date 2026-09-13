@@ -12,7 +12,9 @@ package that ships a file no manifest declares.
 from __future__ import annotations
 
 import hashlib
+import ntpath
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -25,8 +27,15 @@ UNDECLARED_EXEMPT = {MANIFEST_NAME, "README.md"}
 PACKAGE_ROOTS = ("Templates", "GameModules")
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 MAX_ASSET_BYTES = 256 * 1024 * 1024
+MAX_PATH_BYTES = 1024
 HASH_CHUNK_BYTES = 1024 * 1024
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+INVALID_WINDOWS_CHARS = frozenset('<>:"|?*')
+RESERVED_WINDOWS_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
 
 
 def asset_package_roots() -> list[str]:
@@ -55,15 +64,33 @@ def _reference_error(reference: Any) -> str | None:
     """Reject a reference before it is ever joined to a directory."""
     if not isinstance(reference, str) or not reference:
         return "asset path must be a non-empty string"
+    try:
+        encoded = reference.encode("utf-8")
+    except UnicodeEncodeError as error:
+        return f"asset path is not valid Unicode: {error}"
+    if len(encoded) > MAX_PATH_BYTES:
+        return f"asset path exceeds {MAX_PATH_BYTES} UTF-8 bytes"
+    if reference != unicodedata.normalize("NFC", reference):
+        return "asset path is not NFC-normalized"
     if "\\" in reference:
         return f"asset path uses backslashes: {reference!r}"
-    candidate = Path(reference)
-    if candidate.is_absolute() or reference.startswith("/"):
+    if ntpath.isabs(reference) or ntpath.splitdrive(reference)[0] or reference.startswith("/"):
         return f"asset path is absolute: {reference!r}"
-    if ".." in candidate.parts or "." in candidate.parts:
+    parts = reference.split("/")
+    if any(part in ("", ".", "..") for part in parts):
         return f"asset path traverses outside its package: {reference!r}"
-    if reference.endswith("/"):
-        return f"asset path names a directory: {reference!r}"
+    for part in parts:
+        if part != part.strip() or part.endswith((".", " ")):
+            return f"asset path has non-canonical whitespace or trailing dot: {reference!r}"
+        for char in part:
+            codepoint = ord(char)
+            if codepoint < 0x20 or codepoint == 0x7F:
+                return f"asset path contains control character U+{codepoint:04X}: {reference!r}"
+            if char in INVALID_WINDOWS_CHARS:
+                return f"asset path contains Windows-invalid character {char!r}: {reference!r}"
+        device_stem = part.split(".", 1)[0].rstrip(" .").upper()
+        if device_stem in RESERVED_WINDOWS_NAMES:
+            return f"asset path contains reserved Windows device name: {reference!r}"
     return None
 
 
