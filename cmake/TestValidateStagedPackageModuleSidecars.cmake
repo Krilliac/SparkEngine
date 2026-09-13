@@ -440,15 +440,13 @@ file(WRITE "${_spark_runtime_reference}"
 foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sidecar unlisted_sample_source hash_mismatch sdk_mismatch
         missing_sidecar unknown_layout untrusted_inventory missing_reference wrong_profile
         missing_executable missing_runtime full_valid full_smoke_failure)
-    # POSIX script stand-ins exercise orchestration only, not native PE execution.
-    # Windows runs the real executable smoke in the release workflow.
-    if(CMAKE_HOST_WIN32 AND _spark_case MATCHES "^full_")
-        continue()
-    endif()
-    if(CMAKE_HOST_WIN32 AND _spark_case STREQUAL "valid")
-        # A text stand-in cannot be executed as the staged Windows PE. The
-        # installed-package test supplies the real executable; the source
-        # contract assertion above still proves this gate cannot return early.
+    # Every runtime fixture uses a text stand-in for the staged executable. The
+    # runtime validator now intentionally executes that executable even when
+    # module-only validation is enabled, so none of these stand-ins are safe to
+    # run on Windows. The installed-package test supplies the real PE smoke;
+    # the source contract assertion above still proves this gate cannot return
+    # early before the smoke call.
+    if(CMAKE_HOST_WIN32)
         continue()
     endif()
     set(_spark_root "${_spark_resolved_test_root}/runtime_${_spark_case}")

@@ -10,7 +10,7 @@
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. 2026-09-12 progress: built-in RemoteDebug command types are now reserved against public handler rebinding, with a hostile probe and RemoteAdmin regression proving a replacement cannot downgrade authorization. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.",
+      "rationale": "Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. 2026-09-12 progress: built-in RemoteDebug command types are now reserved against public handler rebinding, with a hostile probe and RemoteAdmin regression proving a replacement cannot downgrade authorization. 2026-09-13 progress: the local area-control HMAC replay ledger now fails closed at the existing 4,096-entry bound on Windows and POSIX, with a capacity regression. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.",
       "dependencies": [],
       "parallelWith": [
         "CI-100",
@@ -47,7 +47,8 @@
         "RemoteAdmin_AnonymousDenied",
         "RemoteAdmin_RoleMatrix",
         "RemoteAdmin_ReplayDenied",
-        "RemoteAdmin_RateLimited"
+        "RemoteAdmin_RateLimited",
+        "GatewayAreaControl_*"
       ],
       "requiredCiJobs": [
         "security-runtime",
