@@ -1425,6 +1425,11 @@ def extract_workflow_presets(path: Path | None = None) -> list[str]:
 # Cache variables worth binding evidence to. Bounded on purpose: the reply's
 # cache is attacker-sized input, and an unbounded copy would bloat the artifact.
 _BOUND_CACHE_PREFIXES = ("SPARK_", "ENABLE_", "BUILD_")
+_MSVC_TOOLCHAIN_CACHE_NAMES = (
+    "CMAKE_GENERATOR_INSTANCE",
+    "CMAKE_AR",
+    "CMAKE_LINKER",
+)
 _BOUND_CACHE_NAMES = {
     "CMAKE_BUILD_TYPE",
     "CMAKE_GENERATOR",
@@ -1433,6 +1438,7 @@ _BOUND_CACHE_NAMES = {
     "CMAKE_HOME_DIRECTORY",
     "CMAKE_SYSTEM_NAME",
     "CMAKE_SIZEOF_VOID_P",
+    *_MSVC_TOOLCHAIN_CACHE_NAMES,
 }
 _MAX_CACHE_ENTRIES = 4096
 _MAX_REPLY_FILES = 8192
@@ -3211,6 +3217,13 @@ def _capture_material_errors(evidence: dict[str, Any], profile: str) -> list[str
         preset = resolve_configure_preset(extract_cmake_presets(), config["preset"])
         for name in preset.get("cacheVariables", {}):
             if not isinstance(cache, dict) or name not in cache:
+                errors.append(f"cacheVariables.{name}")
+    if (
+        str(evidence.get("generator", "")).casefold().startswith("visual studio")
+        or str(evidence.get("toolset", "")).casefold().startswith("v14")
+    ):
+        for name in _MSVC_TOOLCHAIN_CACHE_NAMES:
+            if not isinstance(cache, dict) or not cache.get(name):
                 errors.append(f"cacheVariables.{name}")
     return sorted(set(errors))
 

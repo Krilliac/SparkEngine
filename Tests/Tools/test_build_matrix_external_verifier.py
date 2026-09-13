@@ -139,6 +139,15 @@ def shipping_fixture(artifact_root: Path, *, include_pdb: bool = False) -> tuple
         "CMAKE_GENERATOR_PLATFORM": "x64",
         "CMAKE_GENERATOR_TOOLSET": "v143",
         "CMAKE_HOME_DIRECTORY": REPOSITORY_ROOT,
+        "CMAKE_GENERATOR_INSTANCE": "C:/Program Files/Microsoft Visual Studio/2022/Community",
+        "CMAKE_AR": (
+            "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+            "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/lib.exe"
+        ),
+        "CMAKE_LINKER": (
+            "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+            "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/link.exe"
+        ),
         **{name: str(value) for name, value in resolved.get("cacheVariables", {}).items()},
     }
     write_json(

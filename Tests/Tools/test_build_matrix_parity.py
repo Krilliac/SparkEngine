@@ -1983,6 +1983,15 @@ def write_codemodel_reply(
         "CMAKE_GENERATOR_PLATFORM": architecture,
         "CMAKE_GENERATOR_TOOLSET": toolset,
         "CMAKE_HOME_DIRECTORY": source_dir,
+        "CMAKE_GENERATOR_INSTANCE": "C:/Program Files/Microsoft Visual Studio/2022/Community",
+        "CMAKE_AR": (
+            "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+            "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/lib.exe"
+        ),
+        "CMAKE_LINKER": (
+            "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+            "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/link.exe"
+        ),
     }
     entries.update(cache or {})
     write_json(
@@ -2970,6 +2979,36 @@ class CodemodelProvenanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             evidence = self.shipping_evidence(Path(raw), generator="Ninja")
         self.assertIn("codemodel-generator-mismatch", self.categories(self.bound_data(evidence)))
+
+    def test_msvc_toolchain_identity_is_required(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+
+        for name in inventory._MSVC_TOOLCHAIN_CACHE_NAMES:
+            evidence["cacheVariables"].pop(name, None)
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-toolchain-incomplete", categories)
+
+    def test_msvc_toolchain_installations_must_agree(self) -> None:
+        cache = dict(self.shipping_cache)
+        cache.update(
+            {
+                "CMAKE_GENERATOR_INSTANCE": "C:/Program Files/Microsoft Visual Studio/2022/Community",
+                "CMAKE_AR": (
+                    "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+                    "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/lib.exe"
+                ),
+                "CMAKE_LINKER": (
+                    "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+                    "VC/Tools/MSVC/14.45.40000/bin/Hostx64/x64/link.exe"
+                ),
+            }
+        )
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), cache=cache)
+
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-toolchain-mismatch", categories)
 
     def test_cache_that_contradicts_the_preset_is_rejected(self) -> None:
         cache = dict(self.shipping_cache)

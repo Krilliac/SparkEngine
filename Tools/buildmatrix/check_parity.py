@@ -1178,6 +1178,72 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
     return findings
 
 
+_MSVC_TOOLSET_PATH_RE = re.compile(r"/VC/Tools/MSVC/([^/]+)/", re.IGNORECASE)
+_MSVC_TOOLSET_VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\Z")
+
+
+def _check_msvc_toolchain_identity(
+    identifier: str,
+    expected_toolchain: tuple[str, str, str],
+    cache: dict[str, Any],
+) -> list[Finding]:
+    """Require CMake to expose the exact installed MSVC toolset paths.
+
+    ``CMAKE_GENERATOR_TOOLSET=v143`` identifies only a toolset family.  The
+    generator instance and its archiver/linker paths are the concrete
+    installation identity CMake actually used, including the minor toolset
+    version.  Keep this check limited to Visual Studio profiles so Linux and
+    non-MSVC profiles do not inherit Windows-only assumptions.
+    """
+    expected_generator, _expected_architecture, expected_toolset = expected_toolchain
+    if not (
+        expected_generator.casefold().startswith("visual studio")
+        or expected_toolset.casefold().startswith("v14")
+    ):
+        return []
+
+    required = tuple(inventory_tool._MSVC_TOOLCHAIN_CACHE_NAMES)
+    missing = [name for name in required if not isinstance(cache.get(name), str) or not cache[name].strip()]
+    if missing:
+        return [
+            Finding(
+                "codemodel-toolchain-incomplete",
+                "error",
+                f"Profile '{identifier}' omits exact MSVC toolchain identity: {', '.join(missing)}",
+                "The v143 family label does not prove which Visual Studio installation and minor toolset built the targets.",
+            )
+        ]
+
+    normalized_paths = {
+        name: str(cache[name]).replace("\\", "/")
+        for name in ("CMAKE_AR", "CMAKE_LINKER")
+    }
+    versions: dict[str, str] = {}
+    for name, value in normalized_paths.items():
+        match = _MSVC_TOOLSET_PATH_RE.search(value)
+        if match is None or _MSVC_TOOLSET_VERSION_RE.fullmatch(match.group(1)) is None:
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' {name} does not identify a concrete MSVC toolset path",
+                    f"Observed {name}={cache[name]!r}.",
+                )
+            ]
+        versions[name] = match.group(1)
+
+    if versions["CMAKE_AR"] != versions["CMAKE_LINKER"]:
+        return [
+            Finding(
+                "codemodel-toolchain-mismatch",
+                "error",
+                f"Profile '{identifier}' MSVC archiver and linker use different toolset versions",
+                f"CMAKE_AR={versions['CMAKE_AR']}, CMAKE_LINKER={versions['CMAKE_LINKER']}.",
+            )
+        ]
+    return []
+
+
 def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
     """Bind configured evidence to the tree, commit, preset and cache it claims.
 
@@ -1565,6 +1631,10 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                         f"requires {expected_value!r}",
                     )
                 )
+
+        findings.extend(
+            _check_msvc_toolchain_identity(identifier, expected_toolchain, observed_cache)
+        )
 
         for entry in evidence.get("targets", []):
             name = str(entry.get("target"))
