@@ -2060,6 +2060,15 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertNotIn("continue-on-error", publish_step)
         self.assertNotIn("|| true", publish_step)
 
+        proof = named_step(self.site_data_publish, "Repeat the complete repository proof")
+        first_site_generation = proof.index("python3 tools/site-data/generate.py")
+        docs_validation = proof.index("python3 tools/site-data/validate.py --docs")
+        self.assertGreater(
+            docs_validation,
+            first_site_generation,
+            "clean-checkout docs validation must follow API generation",
+        )
+
     def test_release_controller_cannot_run_from_a_caller_selected_ref(self) -> None:
         header = self.release[: self.release.index("permissions:")]
         self.assertIn("repository_dispatch:", header)
