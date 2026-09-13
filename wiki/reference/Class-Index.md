@@ -3645,7 +3645,7 @@
 | `ScopedNetworkBindMode` | class | Tests | [TestNetworkManagerIntegration.cpp:L194](../../Tests/TestNetworkManagerIntegration.cpp#L194) |  |
 | `ScopedNetworkBindMode` | class | Tests | [TestSparkServerApplication.cpp:L21](../../Tests/TestSparkServerApplication.cpp#L21) |  |
 | `ScopedNoGPUBackends` | class | Tests | [TestD3D11DeviceContractsReal.cpp:L44](../../Tests/TestD3D11DeviceContractsReal.cpp#L44) |  |
-| `ScopedPathPrefix` | class | SparkInstaller | [InstallerTransactionTests.cpp:L51](../../SparkInstaller/tests/InstallerTransactionTests.cpp#L51) |  |
+| `ScopedPathPrefix` | class | SparkInstaller | [InstallerTransactionTests.cpp:L59](../../SparkInstaller/tests/InstallerTransactionTests.cpp#L59) |  |
 | `ScopedProfileTimer` | class | SparkEngine | [Profiler.h:L153](../../SparkEngine/Source/Utils/Profiler.h#L153) | Scoped CPU timer - automatically records start/end |
 | `ScopedRecoveryDirectory` | class | Tests | [TestEditorRecovery.cpp:L18](../../Tests/TestEditorRecovery.cpp#L18) |  |
 | `ScopedRuntimeTestDirectory` | class | Tests | [TestTemplateRuntimeReal.cpp:L34](../../Tests/TestTemplateRuntimeReal.cpp#L34) |  |
