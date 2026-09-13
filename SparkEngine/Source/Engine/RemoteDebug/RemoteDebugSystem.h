@@ -473,8 +473,9 @@ namespace Spark::RemoteDebug
                 // An authenticated caller can receive the historical
                 // unknown-command response. Raw callers remain denied before
                 // type details are exposed.
-                const auto authorization = m_accessControl.Authorize(
-                    principal, cmd.type, cmd.requestId, cmd.payload.size(), RemoteDebugCapability::Inspect);
+                const auto authorization =
+                    m_accessControl.Authorize(principal, cmd.type, cmd.requestId, cmd.payload.size(), cmd.timestamp,
+                                              RemoteDebugCapability::Inspect);
                 if (!authorization.allowed)
                     return AccessDeniedResponse(cmd);
 
@@ -488,8 +489,8 @@ namespace Spark::RemoteDebug
             const RemoteDebugCapability requiredCapability = capabilityIt == m_handlerCapabilities.end()
                                                                  ? RemoteDebugCapability::ExecuteConsole
                                                                  : capabilityIt->second;
-            const auto authorization =
-                m_accessControl.Authorize(principal, cmd.type, cmd.requestId, cmd.payload.size(), requiredCapability);
+            const auto authorization = m_accessControl.Authorize(principal, cmd.type, cmd.requestId, cmd.payload.size(),
+                                                                 cmd.timestamp, requiredCapability);
             if (!authorization.allowed)
                 return AccessDeniedResponse(cmd);
 

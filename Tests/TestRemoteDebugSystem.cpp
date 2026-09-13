@@ -4,6 +4,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <limits>
 #include <mutex>
 #include <thread>
 #include <type_traits>
@@ -193,6 +194,41 @@ TEST(RemoteDebugSystem_UnknownCommandReturnsError)
 // ============================================================================
 // Server-owned authorization boundary
 // ============================================================================
+
+TEST(RemoteAdmin_MalformedTimestampDenied)
+{
+    using namespace Spark::RemoteDebug;
+    auto& sys = RemoteDebugSystem::GetInstance();
+    sys.Initialize();
+    sys.EnableLoopback();
+
+    auto* client = sys.GetClient();
+    auto* server = sys.GetServer();
+    ASSERT_TRUE(client != nullptr);
+    ASSERT_TRUE(server != nullptr);
+
+    bool handlerCalled = false;
+    server->RegisterCommandHandler("malformed_timestamp_probe", RemoteDebugCapability::Inspect,
+                                   [&](const RemoteCommand& command)
+                                   {
+                                       handlerCalled = true;
+                                       return RemoteCommand{"malformed_timestamp_ok", "", command.requestId, 0.0f};
+                                   });
+
+    client->SendCommand({"malformed_timestamp_probe", "", 1, std::numeric_limits<float>::quiet_NaN()});
+    sys.Update(0.016f);
+
+    const auto responses = client->PollResponses();
+    EXPECT_EQ(static_cast<size_t>(1), responses.size());
+    if (!responses.empty())
+    {
+        EXPECT_TRUE(IsAccessDenied(responses.front()));
+        EXPECT_EQ(static_cast<uint32_t>(1), responses.front().requestId);
+    }
+    EXPECT_FALSE(handlerCalled);
+    EXPECT_TRUE(AuditEndsWith(*server, RemoteDebugAuditDecision::MalformedRequestDenied));
+    sys.Shutdown();
+}
 
 TEST(RemoteAdmin_AnonymousDenied)
 {

@@ -11,6 +11,7 @@
 #pragma once
 
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -213,9 +214,10 @@ namespace Spark::RemoteDebug
             return principal;
         }
 
-        [[nodiscard]] AuthorizationResult Authorize(const RemoteDebugPrincipal& principal, const std::string& commandType,
-                                                     uint32_t requestId, size_t payloadSize,
-                                                     RemoteDebugCapability requiredCapability)
+        [[nodiscard]] AuthorizationResult Authorize(const RemoteDebugPrincipal& principal,
+                                                    const std::string& commandType, uint32_t requestId,
+                                                    size_t payloadSize, float timestamp,
+                                                    RemoteDebugCapability requiredCapability)
         {
             std::lock_guard lock(m_mutex);
             if (!principal.IsAuthenticated())
@@ -242,7 +244,8 @@ namespace Spark::RemoteDebug
                 return {false, RemoteDebugAuditDecision::ExpiredPrincipalDenied};
             }
 
-            if (!IsWellFormedCommandType(commandType) || payloadSize > 4096 || requestId == 0)
+            if (!IsWellFormedCommandType(commandType) || payloadSize > 4096 || requestId == 0 ||
+                !std::isfinite(timestamp))
             {
                 RecordLocked(state.subject, state.source, SafeCommandType(commandType), requestId,
                              RemoteDebugAuditDecision::MalformedRequestDenied);

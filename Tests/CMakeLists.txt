@@ -1371,6 +1371,7 @@ set_tests_properties(LifecyclePartialInit PROPERTIES
 
 foreach(_remote_admin_selector IN ITEMS
         RemoteAdmin_AnonymousDenied
+        RemoteAdmin_MalformedTimestampDenied
         RemoteAdmin_RoleMatrix
         RemoteAdmin_ReplayDenied
         RemoteAdmin_RateLimited

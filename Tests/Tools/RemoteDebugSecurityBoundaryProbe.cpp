@@ -22,6 +22,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -187,6 +188,35 @@ namespace
         return denied && !replacementCalled.load(std::memory_order_acquire);
     }
 
+    [[nodiscard]] bool MalformedTimestampIsDenied()
+    {
+        auto& system = RemoteDebugSystem::GetInstance();
+        system.Initialize();
+        system.EnableLoopback();
+        auto* client = system.GetClient();
+        auto* server = system.GetServer();
+        if (client == nullptr || server == nullptr)
+            return false;
+
+        std::atomic_bool handlerCalled{false};
+        server->RegisterCommandHandler("malformed_timestamp_probe", RemoteDebugCapability::Inspect,
+                                       [&handlerCalled](const RemoteCommand& command)
+                                       {
+                                           handlerCalled.store(true, std::memory_order_release);
+                                           return RemoteCommand{"malformed_timestamp_ok", "", command.requestId, 0.0f};
+                                       });
+
+        client->SendCommand({"malformed_timestamp_probe", "", 1, std::numeric_limits<float>::quiet_NaN()});
+        system.Update(0.016f);
+        const auto responses = client->PollResponses();
+        const auto events = server->GetAuditEvents();
+        const bool malformedAudit =
+            !events.empty() && events.back().decision == RemoteDebugAuditDecision::MalformedRequestDenied;
+        const bool denied = responses.size() == 1 && IsDenied(responses.front()) && responses.front().requestId == 1;
+        system.Shutdown();
+        return denied && !handlerCalled.load(std::memory_order_acquire) && malformedAudit;
+    }
+
     [[nodiscard]] bool RevocationWaitsForEffectAndThenFailsClosed()
     {
         auto& system = RemoteDebugSystem::GetInstance();
@@ -288,6 +318,7 @@ int main()
     Report("public_loopback_console_denied", PublicLoopbackConsoleIsDenied(), allPassed);
     Report("raw_dispatch_and_queue_denied", RawDispatchAndQueueAreDenied(), allPassed);
     Report("reserved_command_rebind_denied", ReservedCommandCannotBeRebound(), allPassed);
+    Report("malformed_timestamp_denied", MalformedTimestampIsDenied(), allPassed);
     Report("revocation_execution_lease", RevocationWaitsForEffectAndThenFailsClosed(), allPassed);
     return allPassed ? 0 : 1;
 }
