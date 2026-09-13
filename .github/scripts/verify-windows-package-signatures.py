@@ -78,6 +78,15 @@ def digest(path):
         return state.hexdigest()
 
 
+def _reject_duplicate_json_keys(pairs):
+    document = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        document[key] = value
+    return document
+
+
 def _validate_signature_evidence(signature, thumbprint, artifact_name):
     """Validate the identity fields retained from native Authenticode output."""
     if not isinstance(signature, dict):
@@ -116,7 +125,9 @@ def verify(packages, version, source_sha, thumbprint, report_path, *, powershell
                 raise ValueError(f"Installer changed during signature verification: {path.name}")
             if result.returncode != 0:
                 raise ValueError(f"Authenticode process failed with exit {result.returncode}: {path.name}")
-            signature = json.loads(result.stdout)
+            signature = json.loads(
+                result.stdout, object_pairs_hook=_reject_duplicate_json_keys,
+            )
             if not isinstance(signature, dict):
                 raise ValueError("Invalid signature evidence schema")
             entry["signature"] = signature
@@ -136,7 +147,10 @@ def check_hashes(packages, version, source_sha, report_path):
         if not re.fullmatch(r"[0-9a-fA-F]{40}", thumbprint):
             raise ValueError("SPARK_RELEASE_SIGNER_THUMBPRINT must configure the publisher certificate's 40-hex thumbprint")
         files = selected_packages(packages, version, source_sha)
-        report = json.loads(report_path.read_text(encoding="utf-8"))
+        report = json.loads(
+            report_path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_json_keys,
+        )
         if (not isinstance(report, dict) or report.get("passed") is not True
                 or report.get("version") != version or report.get("source_sha") != source_sha
                 or report.get("scope") != "stable-windows-outer-installers-only"

@@ -145,6 +145,81 @@ class SignatureTests(unittest.TestCase):
                             0,
                         )
 
+    def test_native_signature_evidence_rejects_duplicate_json_keys(self):
+        """Contradictory native evidence must not be resolved last-write-wins."""
+        self.assertIsNotNone(MODULE)
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            packages = root / "packages"
+            packages.mkdir()
+            for suffix in (".exe", ".msi"):
+                (packages / (PREFIX + suffix)).write_bytes(b"fixture " + suffix.encode())
+
+            duplicate_status = (
+                '{"Status":"NotSigned","Status":"Valid",'
+                '"SignatureType":"Authenticode",'
+                f'"SignerThumbprint":"{THUMBPRINT}",'
+                '"SignerSubject":"CN=Fixture",'
+                '"TimestampThumbprint":"' + "C" * 40 + '",'
+                '"TimestampSubject":"CN=Timestamp"}'
+            )
+
+            def runner(argv, **kwargs):
+                return subprocess.CompletedProcess(argv, 0, duplicate_status, "")
+
+            report = root / "result.json"
+            result = MODULE.verify(
+                packages, "1.2.3", SOURCE, THUMBPRINT, report,
+                powershell="trusted-powershell", runner=runner,
+            )
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(result, 1)
+            self.assertFalse(data["passed"])
+            self.assertIn("duplicate JSON key", data["errors"][0])
+
+    def test_check_hashes_rejects_duplicate_report_json_keys(self):
+        """A persisted report cannot smuggle contradictory pass state."""
+        self.assertIsNotNone(MODULE)
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            packages = root / "packages"
+            packages.mkdir()
+            files = []
+            signature = {
+                "Status": "Valid",
+                "SignatureType": "Authenticode",
+                "SignerThumbprint": THUMBPRINT,
+                "SignerSubject": "CN=Fixture",
+                "TimestampThumbprint": "C" * 40,
+                "TimestampSubject": "CN=Timestamp",
+            }
+            for suffix in (".exe", ".msi"):
+                path = packages / (PREFIX + suffix)
+                path.write_bytes(b"fixture " + suffix.encode())
+                files.append(path)
+            artifacts = [
+                {"name": path.name, "sha256": MODULE.digest(path), "signature": signature}
+                for path in files
+            ]
+            report = root / "result.json"
+            report.write_text(
+                '{"scope":"stable-windows-outer-installers-only",'
+                f'"version":"1.2.3","source_sha":"{SOURCE}",'
+                f'"publisher_thumbprint":"{THUMBPRINT}",'
+                '"passed":false,"passed":true,'
+                f'"artifacts":{json.dumps(artifacts)}}}\n',
+                encoding="utf-8",
+            )
+            with mock.patch.dict(
+                os.environ,
+                {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT},
+                clear=False,
+            ):
+                self.assertNotEqual(
+                    MODULE.check_hashes(packages, "1.2.3", SOURCE, report),
+                    0,
+                )
+
     def test_symlink_rejected(self):
         self.assertIsNotNone(MODULE)
         with tempfile.TemporaryDirectory() as raw:
