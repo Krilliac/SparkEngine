@@ -281,6 +281,11 @@ namespace Spark::Graphics::Detail
                     error = "invalid, compressed, or extended buffer view";
                     return false;
                 }
+                if (view.stride != 0 && view.stride % 4 != 0)
+                {
+                    error = "buffer view byte stride is not 4-byte aligned";
+                    return false;
+                }
                 if (AddWouldOverflow(view.offset, view.size) || view.offset + view.size > view.buffer->size)
                 {
                     error = "buffer view range exceeds its buffer";
