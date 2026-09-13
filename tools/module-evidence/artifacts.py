@@ -59,6 +59,31 @@ MIN_JUNIT_TESTCASES = 3
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 
 
+def _validate_junit_outcome_counts(
+    element: ET.Element, label: str, errors: list[str],
+) -> None:
+    """Reject malformed or unsuccessful JUnit outcome counts."""
+    for attribute in ("failures", "errors"):
+        value = element.get(attribute)
+        if value is None:
+            continue
+        try:
+            count = int(value)
+        except ValueError:
+            errors.append(
+                f"{label} {attribute} attribute {value!r} is not an integer"
+            )
+            continue
+        if count < 0:
+            errors.append(
+                f"{label} {attribute} attribute {value!r} is negative"
+            )
+        elif count != 0:
+            errors.append(
+                f"{label} {attribute} attribute {value!r} reports unsuccessful tests"
+            )
+
+
 def validate_junit_xml(path: Path, module_name: str) -> list[str]:
     """Validate a JUnit XML artifact carries real test evidence."""
     errors: list[str] = []
@@ -129,15 +154,9 @@ def validate_junit_xml(path: Path, module_name: str) -> list[str]:
                 "proves nothing"
             )
 
-    for attr in ("failures", "errors"):
-        val = root.get(attr)
-        if val is not None:
-            try:
-                int(val)
-            except ValueError:
-                errors.append(
-                    f"junit-xml {attr} attribute {val!r} is not an integer"
-                )
+    _validate_junit_outcome_counts(root, "junit-xml root", errors)
+    for suite in root.findall(".//testsuite"):
+        _validate_junit_outcome_counts(suite, "junit-xml testsuite", errors)
 
     testcases = root.findall(".//testcase")
     if not testcases:
@@ -255,13 +274,9 @@ def validate_junit_xml_bytes(data: bytes, leaf_name: str, module_name: str) -> l
             errors.append(
                 "junit-xml declares tests=\"0\" — a test run with zero tests proves nothing"
             )
-    for attr in ("failures", "errors"):
-        value = root.get(attr)
-        if value is not None:
-            try:
-                int(value)
-            except ValueError:
-                errors.append(f"junit-xml {attr} attribute {value!r} is not an integer")
+    _validate_junit_outcome_counts(root, "junit-xml root", errors)
+    for suite in root.findall(".//testsuite"):
+        _validate_junit_outcome_counts(suite, "junit-xml testsuite", errors)
     testcases = root.findall(".//testcase")
     if not testcases:
         errors.append("junit-xml contains no <testcase> elements — a JUnit document without test cases is not test evidence")

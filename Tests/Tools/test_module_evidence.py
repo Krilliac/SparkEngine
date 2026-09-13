@@ -5297,6 +5297,21 @@ class TestArtifactSemanticValidation(FixtureCase):
         errors = artifacts.validate_junit_xml(path, INCLUDED)
         self.assertTrue(any("zero tests" in e for e in errors), errors)
 
+    def test_junit_xml_with_nonzero_failure_or_error_counts_is_rejected(self) -> None:
+        """A report recording failed tests cannot satisfy the evidence binding."""
+        for attribute in ("failures", "errors"):
+            with self.subTest(attribute=attribute):
+                report = self.VALID_JUNIT.replace(
+                    f'{attribute}="0"', f'{attribute}="1"',
+                )
+                path = self._junit_xml(report)
+                path_errors = artifacts.validate_junit_xml(path, INCLUDED)
+                byte_errors = artifacts.validate_junit_xml_bytes(
+                    report.encode("utf-8"), "test-junit.xml", INCLUDED,
+                )
+                self.assertTrue(path_errors, path_errors)
+                self.assertTrue(byte_errors, byte_errors)
+
     def test_junit_xml_with_no_testcases_is_rejected(self) -> None:
         path = self._junit_xml(
             '<testsuites tests="5" failures="0" errors="0">'
