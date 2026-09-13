@@ -99,7 +99,7 @@ def synthetic_capture_contract(build_directory: Path, profile: str = "windows-sh
         preset = str(config.get("preset", ""))
         if not preset:
             raise inventory.InventoryError("synthetic helper currently requires a preset-backed profile")
-        return config, source, expected_build, [str(executable), "--preset", preset]
+        return config, source, expected_build, [str(executable), "--fresh", "--preset", preset]
 
     with mock.patch.object(inventory, "_capture_plan", side_effect=plan):
         yield
@@ -460,6 +460,20 @@ class WorkflowParserTests(unittest.TestCase):
 
 
 class PresetAndCodemodelTests(unittest.TestCase):
+    def test_preset_capture_configure_is_fresh(self) -> None:
+        executable = Path("C:/cmake.exe")
+
+        _, _, _, argv = inventory._capture_plan(
+            (REPO_ROOT / "build" / "windows-shipping").resolve(),
+            "windows-shipping",
+            executable,
+        )
+
+        self.assertEqual(
+            argv,
+            [str(executable), "--fresh", "--preset", "windows-shipping"],
+        )
+
     def test_inherited_shipping_values_are_resolved(self) -> None:
         presets = {
             "configurePresets": [
@@ -1972,7 +1986,7 @@ def write_synthetic_transaction_provenance(
                 "executable": executable,
                 "executableIdentity": inventory._executable_identity(Path(executable)),
                 "version": evidence["cmakeProducer"]["version"],
-                "argv": [executable, "--preset", profile],
+                "argv": [executable, "--fresh", "--preset", profile],
                 "cwd": repository_root,
                 "exitCode": 0,
             },
@@ -2181,7 +2195,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                         config,
                         source,
                         build,
-                        [executable.as_posix(), "--preset", "windows-shipping"],
+                        [executable.as_posix(), "--fresh", "--preset", "windows-shipping"],
                     ),
                 ),
                 mock.patch.object(inventory, "_repository_provenance", return_value=repository),
@@ -2197,7 +2211,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
             self.assertTrue(record_path.is_file())
             self.assertEqual(
                 configure_calls,
-                [[executable.as_posix(), "--preset", "windows-shipping"]],
+                [[executable.as_posix(), "--fresh", "--preset", "windows-shipping"]],
             )
             self.assertEqual(
                 build_calls,
@@ -2689,7 +2703,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                         config,
                         source,
                         build,
-                        [executable.as_posix(), "--preset", "windows-shipping"],
+                        [executable.as_posix(), "--fresh", "--preset", "windows-shipping"],
                     ),
                 ),
                 mock.patch.object(inventory, "_repository_provenance", return_value=repository),
@@ -2754,7 +2768,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                         config,
                         source,
                         build,
-                        [executable.as_posix(), "--preset", "windows-shipping"],
+                        [executable.as_posix(), "--fresh", "--preset", "windows-shipping"],
                     ),
                 ),
                 mock.patch.object(inventory, "_repository_provenance", return_value=repository),
@@ -2779,7 +2793,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                             "",
                         ),
                         subprocess.CompletedProcess(
-                            [executable.as_posix(), "--preset", "windows-shipping"], 0, "", ""
+                            [executable.as_posix(), "--fresh", "--preset", "windows-shipping"], 0, "", ""
                         ),
                     ],
                 ),
@@ -2831,7 +2845,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                         config,
                         source,
                         build,
-                        [executable.as_posix(), "--preset", "windows-shipping"],
+                        [executable.as_posix(), "--fresh", "--preset", "windows-shipping"],
                     ),
                 ),
                 mock.patch.object(inventory, "_repository_provenance", return_value=repository),

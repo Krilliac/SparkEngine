@@ -3573,7 +3573,7 @@ def _capture_plan(
         if not binary:
             raise InventoryError(f"capture preset {preset_name!r} has no binaryDir")
         expected_build = _absolute_directory(Path(binary.replace("${sourceDir}", str(source_dir))))
-        argv = [str(cmake_executable), "--preset", preset_name]
+        argv = [str(cmake_executable), "--fresh", "--preset", preset_name]
     else:
         source_dir = _absolute_directory(REPO_ROOT / str(config.get("sourceDirectory", "")))
         expected_build = _absolute_directory(REPO_ROOT / str(config.get("buildDirectory", "")))
