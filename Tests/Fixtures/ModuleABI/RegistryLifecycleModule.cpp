@@ -4,6 +4,8 @@
 #include <Spark/ModuleDllMain.h>
 #include <Spark/ModuleRegistry.h>
 
+#include <cstdlib>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -37,6 +39,11 @@ class RegistryLifecycleModule final : public Spark::IModule
         Spark::InvalidStateDetector::GetInstance().AddRule({kRuleName, kRuleCategory,
                                                             Spark::StateViolationSeverity::Warning, true,
                                                             [](World&, std::vector<Spark::StateViolation>&) {}});
+
+        const char* throwOnLoad = std::getenv("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD");
+        if (throwOnLoad && throwOnLoad[0] != '\0')
+            throw std::runtime_error("intentional registry fixture OnLoad failure");
+
         return true;
     }
 

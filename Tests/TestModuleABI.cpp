@@ -172,6 +172,18 @@ namespace
 #endif
     }
 
+    void SetRegistryFixtureThrowOnLoadEnvironment(bool enabled)
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", enabled ? "1" : "");
+#else
+        if (enabled)
+            setenv("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", "1", 1);
+        else
+            unsetenv("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD");
+#endif
+    }
+
 #ifndef _WIN32
     size_t CountStagedModuleImages(const std::filesystem::path& source)
     {
@@ -794,6 +806,53 @@ TEST(ModuleABI_ReloadPreservesHostRegistryCallbacks)
     EXPECT_FALSE(console.HasCommand(commandName));
     EXPECT_EQ(detector.GetRuleCount(), initialRuleCount);
     manager.UnloadAll();
+}
+
+TEST(ModuleABI_ThrownOnLoadCleansPartialHostRegistryState)
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    auto& detector = Spark::InvalidStateDetector::GetInstance();
+    const std::string commandName = "registry_fixture_status";
+    const std::string ruleCategory = "RegistryFixture";
+    const bool consoleWasInitialized = console.IsInitialized();
+    struct RegistryStateGuard final
+    {
+        Spark::SimpleConsole& console;
+        Spark::InvalidStateDetector& detector;
+        bool restoreUninitialized;
+        ~RegistryStateGuard()
+        {
+            detector.RemoveRulesByCategory("RegistryFixture");
+            console.UnregisterCommand("registry_fixture_status");
+            if (restoreUninitialized)
+                console.Shutdown();
+        }
+    } registryState{console, detector, !consoleWasInitialized};
+
+    if (!consoleWasInitialized)
+        ASSERT_TRUE(console.Initialize());
+    detector.RemoveRulesByCategory(ruleCategory);
+    console.UnregisterCommand(commandName);
+    ASSERT_FALSE(console.HasCommand(commandName));
+
+    const uint32_t initialRuleCount = detector.GetRuleCount();
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+
+    SetRegistryFixtureThrowOnLoadEnvironment(true);
+    bool initializeResult = true;
+    EXPECT_NO_THROW(initializeResult = manager.InitializeAll(&context));
+    SetRegistryFixtureThrowOnLoadEnvironment(false);
+
+    EXPECT_FALSE(initializeResult);
+    EXPECT_FALSE(manager.HasInitializedModules());
+    EXPECT_TRUE(manager.GetModule("Spark Registry Lifecycle Fixture") == nullptr);
+    EXPECT_FALSE(console.HasCommand(commandName));
+    EXPECT_EQ(detector.GetRuleCount(), initialRuleCount);
+
+    manager.UnloadAll();
+    EXPECT_EQ(manager.GetModuleCount(), size_t{0});
 }
 
 TEST(ModuleABI_FailedReplacementInitializationPreservesWorkingModule)

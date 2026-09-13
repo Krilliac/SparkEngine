@@ -24,6 +24,7 @@
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
+#include <exception>
 #include <format>
 #include <fstream>
 #include <mutex>
@@ -1322,7 +1323,25 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
         Spark::SimpleConsole::ScopedRegistrationOwner consoleOwner(console, entry.registrationOwner);
         auto& detector = Spark::InvalidStateDetector::GetInstance();
         Spark::InvalidStateDetector::ScopedRegistrationOwner detectorOwner(detector, entry.registrationOwner);
-        if (entry.instance->OnLoad(context))
+        bool loadSucceeded = false;
+        try
+        {
+            loadSucceeded = entry.instance->OnLoad(context);
+        }
+        catch (const std::exception& exception)
+        {
+            allInitialized = false;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Module '%s' OnLoad threw: %s", entry.name.c_str(),
+                            exception.what());
+        }
+        catch (...)
+        {
+            allInitialized = false;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Module '%s' OnLoad threw an unknown exception",
+                            entry.name.c_str());
+        }
+
+        if (loadSucceeded)
         {
             // A manager lifetime owns fresh evidence. Clear same-name records
             // left by a previous manager so an otherwise healthy replacement
@@ -1361,10 +1380,28 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
                            "Module '%s' failed OnLoad — destroying its instance immediately "
                            "(DLL stays mapped until engine shutdown)",
                            entry.name.c_str());
-            entry.instance->OnUnload();
-            ++m_lifecycleEvidence.unloaded;
-            if (!entry.isLegacyAdapter)
-                ++FindOrCreateLifecycleRecord(entry.name).onUnload;
+            bool unloadCompleted = false;
+            try
+            {
+                entry.instance->OnUnload();
+                unloadCompleted = true;
+            }
+            catch (const std::exception& exception)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Module '%s' partial OnUnload threw: %s", entry.name.c_str(),
+                                exception.what());
+            }
+            catch (...)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Module '%s' partial OnUnload threw an unknown exception",
+                                entry.name.c_str());
+            }
+            if (unloadCompleted)
+            {
+                ++m_lifecycleEvidence.unloaded;
+                if (!entry.isLegacyAdapter)
+                    ++FindOrCreateLifecycleRecord(entry.name).onUnload;
+            }
             if (entry.destroyFn)
             {
                 entry.destroyFn(entry.instance);
