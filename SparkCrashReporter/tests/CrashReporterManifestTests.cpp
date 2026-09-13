@@ -590,6 +590,22 @@ namespace
         Check(fs::exists(invalidManifestPath), "watcher ignores filenames outside the strict manifest shape");
     }
 
+    void TestMalformedReadyManifestFailsClosed(const fs::path& scratch)
+    {
+        const fs::path root = scratch / "malformed-ready-manifest-root";
+        fs::create_directories(root);
+        const fs::path malformedManifest = root / "crash_manifest_0000000000000001.json";
+        Check(WriteText(malformedManifest, R"json({"logFile":"unterminated})json"),
+              "write malformed ready manifest fixture");
+
+        std::ostringstream captured;
+        std::streambuf* previous = std::cerr.rdbuf(captured.rdbuf());
+        const int result = SparkCrashReporter::WatchAndReport(root.string(), "invalid-pid");
+        std::cerr.rdbuf(previous);
+
+        Check(result == 2, "watcher reports a rejected ready manifest as a failure");
+    }
+
     void TestReadOnlyReporterLaunchPolicyAndManifestNames()
     {
         Check(Spark::CrashHandlerDetail::ShouldLaunchReadOnlyReporter(false, false),
@@ -637,6 +653,7 @@ int main()
     TestManifestAndArtifactSubstitutionRejection(scratch.path);
     TestIdentitySwapAndBoundedLogRead(scratch.path);
     TestSequentialNonfatalManifestLifecycle(scratch.path);
+    TestMalformedReadyManifestFailsClosed(scratch.path);
     TestReadOnlyReporterLaunchPolicyAndManifestNames();
     TestUtf8CrashArtifactPathConversion();
 
