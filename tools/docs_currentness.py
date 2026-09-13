@@ -67,6 +67,35 @@ class CurrentnessError(RuntimeError):
     pass
 
 
+def case_aware_path(root: Path, relative: PurePosixPath) -> Path:
+    """Resolve a repository-relative path using the host's case semantics."""
+
+    candidate = root.joinpath(*relative.parts)
+    if not CASE_INSENSITIVE_TRACKED_PATHS:
+        return candidate
+    current = root
+    for part in relative.parts:
+        exact = current / part
+        if os.path.lexists(exact):
+            current = exact
+            continue
+        try:
+            matches = [
+                entry for entry in current.iterdir()
+                if entry.name.casefold() == part.casefold()
+            ]
+        except OSError:
+            return candidate
+        if len(matches) > 1:
+            raise CurrentnessError(
+                f"case-insensitive path collision under {current}: {part}"
+            )
+        if not matches:
+            return candidate
+        current = matches[0]
+    return current
+
+
 def safe_relative(raw: str) -> PurePosixPath:
     path = PurePosixPath(raw)
     if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
@@ -217,7 +246,7 @@ def copy_snapshot(destination: Path, tracked: list[str], modes: dict[str, str]) 
         if modes.get(raw) == "160000":
             target.mkdir(parents=True, exist_ok=True)
             continue
-        source = REPO_ROOT.joinpath(*rel.parts)
+        source = case_aware_path(REPO_ROOT, rel)
         try:
             docs_contract.assert_contained(source, REPO_ROOT, label="tracked documentation input")
             payload = docs_contract.read_regular_bytes(
@@ -411,7 +440,7 @@ def tree_projection(root: Path) -> dict[str, tuple[int, str]]:
     except docs_contract.ContractError as exc:
         raise CurrentnessError(str(exc)) from exc
     for relative, identity in snapshot.items():
-        path = root.joinpath(*PurePosixPath(relative).parts)
+        path = case_aware_path(root, PurePosixPath(relative))
         result[relative] = (identity.size, file_digest(path))
     return result
 
@@ -463,13 +492,17 @@ def compare_outputs(contract: dict, first: Path, second: Path, tracked: list[str
         if unexpected:
             raise CurrentnessError(f"generator changed undeclared generated output: {unexpected[0]}")
 
+    tracked_keys = {
+        path.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else path
+        for path in tracked_set
+    }
     declared_tracked: set[str] = set()
     for generator in contract["generators"]:
         for row in generator["outputs"]:
             relative = safe_relative(row["path"])
             canonical = relative.as_posix()
-            left = first.joinpath(*relative.parts)
-            right = second.joinpath(*relative.parts)
+            left = case_aware_path(first, relative)
+            right = case_aware_path(second, relative)
             if row.get("tree", False):
                 if tree_projection(left) != tree_projection(right):
                     raise CurrentnessError(f"generated tree is nondeterministic: {canonical}")
@@ -479,10 +512,11 @@ def compare_outputs(contract: dict, first: Path, second: Path, tracked: list[str
             if file_digest(left) != file_digest(right):
                 raise CurrentnessError(f"generated file is nondeterministic: {canonical}")
             if row["tracked"]:
-                declared_tracked.add(canonical)
-                if canonical not in tracked_set:
+                canonical_key = canonical.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else canonical
+                declared_tracked.add(canonical_key)
+                if canonical_key not in tracked_keys:
                     raise CurrentnessError(f"manifest says output is tracked but Git does not: {canonical}")
-                actual = REPO_ROOT.joinpath(*relative.parts)
+                actual = case_aware_path(REPO_ROOT, relative)
                 if not actual.is_file() or file_digest(actual) != file_digest(left):
                     raise CurrentnessError(f"tracked generated output is stale: {canonical}")
 
@@ -491,14 +525,14 @@ def compare_outputs(contract: dict, first: Path, second: Path, tracked: list[str
         rel = safe_relative(raw)
         if not should_copy(rel):
             continue
-        generated = first.joinpath(*rel.parts)
-        actual = REPO_ROOT.joinpath(*rel.parts)
+        generated = case_aware_path(first, rel)
+        actual = case_aware_path(REPO_ROOT, rel)
         generated_file = generated.is_file() and not generated.is_symlink()
         actual_file = actual.is_file() and not actual.is_symlink()
         if generated_file != actual_file:
-            changed.add(raw)
+            changed.add(raw.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else raw)
         elif generated_file and file_digest(generated) != file_digest(actual):
-            changed.add(raw)
+            changed.add(raw.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else raw)
     undeclared = sorted(changed - declared_tracked)
     if undeclared:
         raise CurrentnessError(f"generator changed undeclared tracked output: {undeclared[0]}")
@@ -514,7 +548,7 @@ def working_tree_projection(paths: list[str], modes: dict[str, str]) -> dict[str
             # worktree, and treating its checkout directory as a regular file
             # makes exact-currentness fail on every repository with submodules.
             continue
-        full = REPO_ROOT.joinpath(*rel.parts)
+        full = case_aware_path(REPO_ROOT, rel)
         if not os.path.lexists(full):
             continue
         try:
