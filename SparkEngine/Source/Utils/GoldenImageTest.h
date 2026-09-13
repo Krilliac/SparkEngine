@@ -217,6 +217,12 @@ namespace Spark
             ImageComparisonResult result;
             result.sceneName = std::string(sceneName);
 
+            if (!std::isfinite(m_config.tolerancePercent) || !std::isfinite(m_config.perPixelThreshold))
+            {
+                result.matched = false;
+                return result;
+            }
+
             std::string goldenPath = GoldenPath(sceneName);
             uint32_t goldenW = 0, goldenH = 0;
             auto goldenPixels = LoadPNG(goldenPath, goldenW, goldenH);
@@ -352,7 +358,7 @@ namespace Spark
             ImageComparisonResult result;
             result.totalPixels = w * h;
 
-            if (!golden || !actual || w == 0 || h == 0)
+            if (!std::isfinite(tolerance) || !golden || !actual || w == 0 || h == 0)
             {
                 result.matched = false;
                 return result;
