@@ -402,6 +402,31 @@ def check_profile_presets(data: dict[str, Any]) -> list[Finding]:
                     str(error),
                 )
             )
+        if config.get("purpose") not in {"shipping", "validation"}:
+            continue
+        try:
+            build = inventory_tool.resolve_dependent_preset(
+                data["cmakePresets"], "buildPresets", str(preset_name)
+            )
+            if build.get("configurePreset") != preset_name:
+                raise inventory_tool.InventoryError(
+                    f"resolves to configure preset {build.get('configurePreset')!r}"
+                )
+            expected_configuration = config.get("configuration")
+            if build.get("configuration") != expected_configuration:
+                raise inventory_tool.InventoryError(
+                    f"declares configuration {build.get('configuration')!r}, "
+                    f"expected {expected_configuration!r}"
+                )
+        except inventory_tool.InventoryError as error:
+            findings.append(
+                Finding(
+                    "profile-build-preset-invalid",
+                    "error",
+                    f"Canonical build profile '{config['id']}' cannot resolve matching build preset '{preset_name}'",
+                    str(error),
+                )
+            )
     return findings
 
 

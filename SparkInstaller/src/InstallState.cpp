@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <utility>
 
 namespace SparkInstaller
 {
@@ -151,7 +152,8 @@ namespace SparkInstaller
 
     bool InstallState::Exists(const std::string& destination)
     {
-        return fs::exists(fs::path(destination) / FileName());
+        InstallState state;
+        return Load(destination, state);
     }
 
     bool InstallState::Load(const std::string& destination, InstallState& out)
@@ -161,24 +163,38 @@ namespace SparkInstaller
         if (!ReadFile(path.string(), json))
             return false;
 
-        FindIntField(json, "schema", out.schema);
-        FindStringField(json, "ref", out.ref);
-        FindStringField(json, "commit", out.commit);
-        FindStringField(json, "destination", out.destination);
-        FindStringField(json, "generator", out.generator);
-        FindStringField(json, "build_type", out.buildType);
-        FindStringField(json, "built_at", out.builtAt);
-        FindStringField(json, "installer_version", out.installerVersion);
-        ParseOptions(json, out.options);
+        InstallState parsed;
+        if (!FindIntField(json, "schema", parsed.schema) || parsed.schema != 1 ||
+            !FindStringField(json, "ref", parsed.ref) || parsed.ref.empty() ||
+            !FindStringField(json, "commit", parsed.commit) || parsed.commit.empty() ||
+            !FindStringField(json, "destination", parsed.destination) || parsed.destination.empty() ||
+            !FindStringField(json, "generator", parsed.generator) || parsed.generator.empty() ||
+            !FindStringField(json, "build_type", parsed.buildType) || parsed.buildType.empty() ||
+            !FindStringField(json, "built_at", parsed.builtAt) || parsed.builtAt.empty() ||
+            !FindStringField(json, "installer_version", parsed.installerVersion) || parsed.installerVersion.empty())
+            return false;
+
+        ParseOptions(json, parsed.options);
+        out = std::move(parsed);
         return true;
     }
 
     bool InstallState::Save(const std::string& destination) const
     {
         fs::path path = fs::path(destination) / FileName();
-        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        fs::path temporaryPath = path;
+        temporaryPath += ".tmp";
+        const auto removeTemporary = [&temporaryPath]
+        {
+            std::error_code ignored;
+            fs::remove(temporaryPath, ignored);
+        };
+        std::ofstream out(temporaryPath, std::ios::binary | std::ios::trunc);
         if (!out)
+        {
+            removeTemporary();
             return false;
+        }
 
         std::string timestamp = builtAt.empty() ? NowUtcIso8601() : builtAt;
 
@@ -202,6 +218,27 @@ namespace SparkInstaller
         }
         out << "  }\n";
         out << "}\n";
+        out.flush();
+        if (!out)
+        {
+            out.close();
+            removeTemporary();
+            return false;
+        }
+        out.close();
+        if (!out)
+        {
+            removeTemporary();
+            return false;
+        }
+
+        std::error_code renameError;
+        fs::rename(temporaryPath, path, renameError);
+        if (renameError)
+        {
+            removeTemporary();
+            return false;
+        }
         return true;
     }
 } // namespace SparkInstaller

@@ -10,7 +10,7 @@
       "wave": 2,
       "area": "installer",
       "owner": "unassigned",
-      "rationale": "The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. Local process fixtures verify orchestration; hosted native results are pending. This does not close signing, Windows 11, NSIS, upgrade, rollback, repair, or user-data retention requirements.",
+      "rationale": "The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. 2026-09-12 progress: InstallState now flushes to a same-directory temporary marker before replacement, loads into a temporary object with required-field validation, and treats malformed state as invalid; focused round-trip/replacement/recovery tests pass. The installer CI job now explicitly builds SparkInstallerInstallStateTests before invoking CTest, closing a hosted registration/build omission found on the prior exact-SHA run. Local process fixtures verify orchestration; hosted native results are pending. This does not close signing, Windows 11, NSIS, upgrade, rollback, repair, or user-data retention requirements.",
       "dependencies": [
         "ASSET-220",
         "REL-100",
@@ -112,7 +112,7 @@
       "wave": 6,
       "area": "governance",
       "owner": "unassigned",
-      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag.",
+      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.",
       "dependencies": [
         "RDY-000",
         "SEC-110",

@@ -164,9 +164,15 @@ namespace Spark
                 if (success)
                     ++m_reloadCount;
 
-                auto it = m_watchedModules.find(pending.moduleName);
-                if (it != m_watchedModules.end())
-                    SnapshotFile(it->second);
+                // Keep the previous snapshot after a failed reload. The file
+                // change is still actionable, so a later poll can retry the
+                // same replacement once the compiler has finished writing it.
+                if (success)
+                {
+                    auto it = m_watchedModules.find(pending.moduleName);
+                    if (it != m_watchedModules.end())
+                        SnapshotFile(it->second);
+                }
 
                 callback = m_reloadCallback;
             }
@@ -203,9 +209,14 @@ namespace Spark
             if (success)
                 ++m_reloadCount;
 
-            auto it = m_watchedModules.find(moduleName);
-            if (it != m_watchedModules.end())
-                SnapshotFile(it->second);
+            // A failed forced reload must not consume the disk change either;
+            // leave the prior snapshot so PollChanges can retry it.
+            if (success)
+            {
+                auto it = m_watchedModules.find(moduleName);
+                if (it != m_watchedModules.end())
+                    SnapshotFile(it->second);
+            }
 
             callback = m_reloadCallback;
         }

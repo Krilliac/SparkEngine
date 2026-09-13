@@ -60,6 +60,31 @@ TEST(GamePackager_ValidateConfig_MissingExe)
     pkg.Shutdown();
 }
 
+TEST(GamePackager_Package_RejectsPathTraversalName)
+{
+    const std::string tmpDir = (std::filesystem::temp_directory_path() / "spark_test_packager_validation").string();
+    CleanupDir(tmpDir);
+    const auto exePath = CreateTempFile(tmpDir, "game.exe", "fake_exe_data");
+
+    auto& pkg = Spark::Build::GamePackager::GetInstance();
+    pkg.Initialize();
+    Spark::Build::PackageConfig config;
+    config.projectName = "../escape";
+    config.executablePath = exePath;
+    config.outputDirectory = tmpDir + "/output";
+    config.assetDirectory = "";
+    config.dataDirectory = "";
+    config.moduleDirectory = "";
+
+    const auto result = pkg.Package(config);
+
+    EXPECT_FALSE(result.success);
+    EXPECT_TRUE(result.errorMessage.find("safe path component") != std::string::npos);
+    EXPECT_FALSE(std::filesystem::exists(std::filesystem::path(tmpDir) / "escape"));
+    CleanupDir(tmpDir);
+    pkg.Shutdown();
+}
+
 // ============================================================================
 // Packaging
 // ============================================================================

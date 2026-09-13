@@ -5095,6 +5095,67 @@ class TestCMakeFileAPI(unittest.TestCase):
         self.assertEqual(index["SparkGameFPS"]["sources"],
                          ["GameModules/SparkGameFPS/Source/Main.cpp"])
 
+    def test_extract_from_reply_normalizes_absolute_codemodel_paths(self) -> None:
+        """Real CMake roots are absolute; evidence must remain portable."""
+        with tempfile.TemporaryDirectory(prefix="spark-absolute-reply-") as tmp:
+            root = Path(tmp)
+            source_root = root / "checkout"
+            build_root = root / "build"
+            target_source = source_root / "GameModules" / "SparkGameFPS"
+            target = {
+                "name": "SparkGameFPS",
+                "type": "SHARED_LIBRARY",
+                "nameOnDisk": "libSparkGameFPS.so",
+                "paths": {
+                    "source": str(target_source),
+                    "build": str(build_root / "GameModules" / "SparkGameFPS"),
+                },
+                "sources": [{
+                    "path": str(target_source / "Source" / "Main.cpp"),
+                }],
+                "artifacts": [{
+                    "path": str(build_root / "bin" / "libSparkGameFPS.so"),
+                }],
+            }
+            codemodel = {
+                "paths": {
+                    "source": str(source_root),
+                    "build": str(build_root),
+                },
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{
+                        "name": "SparkGameFPS",
+                        "jsonFile": "target-X.json",
+                    }],
+                }],
+            }
+            reply = root / "reply"
+            reply.mkdir()
+            (reply / "target-X.json").write_text(
+                json.dumps(target), encoding="utf-8",
+            )
+            (reply / "codemodel-v2-abc.json").write_text(
+                json.dumps(codemodel), encoding="utf-8",
+            )
+            (reply / "index-1.json").write_text(json.dumps({
+                "reply": {targets_mod.CLIENT_NAME: {"query.json": {
+                    "responses": [{
+                        "kind": "codemodel",
+                        "jsonFile": "codemodel-v2-abc.json",
+                    }]
+                }}}
+            }), encoding="utf-8")
+            index = targets_mod.extract_from_reply(reply)
+
+        captured = index["SparkGameFPS"]
+        self.assertEqual(captured["sourceDirectory"], "GameModules/SparkGameFPS")
+        self.assertEqual(
+            captured["sources"],
+            ["GameModules/SparkGameFPS/Source/Main.cpp"],
+        )
+        self.assertEqual(captured["artifacts"], ["bin/libSparkGameFPS.so"])
+
     def test_query_error_in_reply_raises(self) -> None:
         with tempfile.TemporaryDirectory(prefix="spark-reply-") as tmp:
             reply = Path(tmp)
@@ -5235,6 +5296,21 @@ class TestArtifactSemanticValidation(FixtureCase):
         )
         errors = artifacts.validate_junit_xml(path, INCLUDED)
         self.assertTrue(any("zero tests" in e for e in errors), errors)
+
+    def test_junit_xml_with_nonzero_failure_or_error_counts_is_rejected(self) -> None:
+        """A report recording failed tests cannot satisfy the evidence binding."""
+        for attribute in ("failures", "errors"):
+            with self.subTest(attribute=attribute):
+                report = self.VALID_JUNIT.replace(
+                    f'{attribute}="0"', f'{attribute}="1"',
+                )
+                path = self._junit_xml(report)
+                path_errors = artifacts.validate_junit_xml(path, INCLUDED)
+                byte_errors = artifacts.validate_junit_xml_bytes(
+                    report.encode("utf-8"), "test-junit.xml", INCLUDED,
+                )
+                self.assertTrue(path_errors, path_errors)
+                self.assertTrue(byte_errors, byte_errors)
 
     def test_junit_xml_with_no_testcases_is_rejected(self) -> None:
         path = self._junit_xml(

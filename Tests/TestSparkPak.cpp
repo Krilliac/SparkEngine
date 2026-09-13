@@ -528,6 +528,51 @@ TEST(SparkPak_ProductionRejectsTinyArchiveWith2GiBEntryDeclaration)
     Cleanup();
 }
 
+TEST(SparkPak_ProductionRejectsUnsafeTOCEntryPath)
+{
+    const auto path = TempPath("unsafe_path.spk");
+    const std::string virtualPath = "../outside.bin";
+
+    Spark::PakHeader header;
+    header.fileCount = 1;
+    header.tocOffset = sizeof(Spark::PakHeader) + 1;
+    header.tocSize = static_cast<uint32_t>(27 + virtualPath.size());
+    header.tocRawSize = header.tocSize;
+
+    std::vector<uint8_t> toc(header.tocSize);
+    uint8_t* cursor = toc.data();
+    const uint64_t hash = Spark::PakFNV1a(virtualPath);
+    const uint64_t dataOffset = sizeof(Spark::PakHeader);
+    const uint32_t size = 1;
+    const uint8_t compression = static_cast<uint8_t>(Spark::PakCompression::Stored);
+    const uint16_t pathLen = static_cast<uint16_t>(virtualPath.size());
+    std::memcpy(cursor, &hash, sizeof(hash));
+    cursor += sizeof(hash);
+    std::memcpy(cursor, &dataOffset, sizeof(dataOffset));
+    cursor += sizeof(dataOffset);
+    std::memcpy(cursor, &size, sizeof(size));
+    cursor += sizeof(size);
+    std::memcpy(cursor, &size, sizeof(size));
+    cursor += sizeof(size);
+    std::memcpy(cursor, &compression, sizeof(compression));
+    cursor += sizeof(compression);
+    std::memcpy(cursor, &pathLen, sizeof(pathLen));
+    cursor += sizeof(pathLen);
+    std::memcpy(cursor, virtualPath.data(), virtualPath.size());
+
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        const uint8_t payload = 0x5a;
+        out.write(reinterpret_cast<const char*>(&payload), 1);
+        out.write(reinterpret_cast<const char*>(toc.data()), static_cast<std::streamsize>(toc.size()));
+    }
+
+    Spark::SparkPakReader reader;
+    EXPECT_FALSE(reader.Open(path));
+    Cleanup();
+}
+
 TEST(SparkPak_ProductionRefusesHostileCompressionRatioPerEntry)
 {
     // A ~1 KB archive whose TOC declares a 100-byte deflate entry expanding to

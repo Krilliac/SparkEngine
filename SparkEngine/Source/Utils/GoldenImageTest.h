@@ -283,14 +283,14 @@ namespace Spark
         }
 
         /**
-         * @brief Check if any results contain regressions.
+         * @brief Check if comparisons are missing or any result contains a regression.
          * @param results Comparison results to inspect.
-         * @return True if at least one result did not match.
+         * @return True when no comparisons ran or at least one result did not match.
          */
         [[nodiscard]] static bool HasRegressions(const std::vector<ImageComparisonResult>& results)
         {
-            return std::any_of(results.begin(), results.end(),
-                               [](const ImageComparisonResult& r) { return !r.matched; });
+            return results.empty() || std::any_of(results.begin(), results.end(),
+                                                  [](const ImageComparisonResult& r) { return !r.matched; });
         }
 
         /**

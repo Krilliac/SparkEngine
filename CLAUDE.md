@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 7329 test definitions across 605 files, CTest
+Tests/                                   — 7338 test definitions across 605 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -316,7 +316,7 @@ To reproduce CI failures locally, see `wiki/development/CI-Reproducible-Builds.m
 
 `build-linux-msan`, `build-windows-vs2026`, `build-linux-mingw-wine` (manual `workflow_dispatch` only), and `build-macos` are job-level `continue-on-error` — failures are warnings, not blockers. `clang-tidy` is a blocking dependency of `required-ci-gate` (its configure/compile failures block; individual diagnostics are advisory).
 
-**No branch protection is active on `Working`** (verified 2026-09-05: `branches/Working/protection` is 404, all five rulesets `enforcement=disabled`). `required-ci-gate` is therefore a post-hoc publication gate consumed by `release.yml` / `site-data-publish.yml` / `trusted-ci-aggregate.yml`, not a merge gate — tracked as `CI-100`. Do not present a green check list as proof the required set was enforced.
+Legacy branch protection is not configured on `Working` (`branches/Working/protection` is 404). The repository's `Working integrity` ruleset (21968740) is active, protects against deletion and non-fast-forward updates, and requires the GitHub Actions `Required CI Gate` check with no bypass actors. Exact-SHA evidence and controlled-failure behavior remain release gates tracked as `CI-100`; do not present a green check list alone as release proof.
 
 ## Documentation
 

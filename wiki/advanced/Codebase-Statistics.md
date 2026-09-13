@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-12.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-13.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
@@ -10,22 +10,22 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321291 |
-| **SparkEditor/Source** | 103591 |
+| **SparkEngine/Source** | 321400 |
+| **SparkEditor/Source** | 103594 |
 | **GameModules** | 142614 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 182920 |
-| **SparkConsole/src** | 1701 |
+| **Tests** | 183229 |
+| **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~777873** |
+| **Total C++ (excl. ThirdParty)** | **~778442** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hh/.hpp/.hxx/.inl) | 1059 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1580 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1581 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
@@ -34,7 +34,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 121157 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,10 +42,10 @@ Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121125 | 37.6% |
-| Engine (all subsystems) | 89088 | 27.7% |
-| Utils | 46113 | 14.3% |
-| Core | 31065 | 9.6% |
+| Graphics | 121157 | 37.6% |
+| Engine (all subsystems) | 89113 | 27.7% |
+| Utils | 46143 | 14.3% |
+| Core | 31087 | 9.6% |
 | Physics | 10799 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
@@ -103,14 +103,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 103591 |
+| Total editor lines | 103594 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 605 |
-| TEST() definitions | 7329 |
+| TEST() definitions | 7338 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -161,7 +161,7 @@ inventory is implementation evidence, not support certification.
 | `OpenGLDevice.cpp` | 2160 |
 | `ModuleManager.cpp` | 2013 |
 | `VulkanDevice.cpp` | 1991 |
-| `D3D11Device.cpp` | 1902 |
+| `D3D11Device.cpp` | 1934 |
 | `EngineSettings.cpp` | 1849 |
 | `NetworkConnection.cpp` | 1680 |
 | `GameplayLifecycleShared.cpp` | 1653 |
@@ -177,8 +177,8 @@ inventory is implementation evidence, not support certification.
 | `GraphicsEngine.h` | 1277 |
 | `EngineSettings.h` | 1152 |
 | `NetworkManager.h` | 943 |
+| `RemoteDebugSystem.h` | 873 |
 | `SaveSystem.h` | 860 |
-| `RemoteDebugSystem.h` | 859 |
 | `ECSystems.h` | 846 |
 | `PhysicsTypes.h` | 828 |
 

@@ -1373,7 +1373,8 @@ foreach(_remote_admin_selector IN ITEMS
         RemoteAdmin_AnonymousDenied
         RemoteAdmin_RoleMatrix
         RemoteAdmin_ReplayDenied
-        RemoteAdmin_RateLimited)
+        RemoteAdmin_RateLimited
+        RemoteAdmin_ReservedCommandsCannotBeRebound)
     add_test(NAME ${_remote_admin_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(${_remote_admin_selector} PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=${_remote_admin_selector};SPARK_TEST_EXPECT_COUNT=1"
@@ -1523,6 +1524,22 @@ add_test(
 )
 set_tests_properties(SparkPackageModuleSidecarValidatorTests PROPERTIES
     LABELS "package;unit"
+    TIMEOUT 30)
+
+add_test(
+    NAME SparkSDKRejectsAmbiguousVersionHeader
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_GAME_MODULE_CMAKE=${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/sdk-version-header-ambiguity/$<CONFIG>"
+        "-DCONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCONSUMER_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCONSUMER_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCONSUMER_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/FPSProgression/TestSparkGameModuleVersion.cmake)
+set_tests_properties(SparkSDKRejectsAmbiguousVersionHeader PROPERTIES
+    LABELS "sdk;module;unit"
     TIMEOUT 30)
 
 # ----------------------------------------------------------------------------

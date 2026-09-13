@@ -56,9 +56,11 @@ See `.clang-format` for the full style configuration.
    `EXPECT_NO_CRASH(reason)` instead of `EXPECT_TRUE(true)` in does-not-crash
    tests, and `SKIP_TEST(reason)` in any `#else` placeholder for a compiled-out
    feature; a test with zero assertions is reported as `[ EMPTY ]`
-5. **Know what CI enforces.** No branch protection is active on `Working` today;
-   `required-ci-gate` is a post-hoc publication gate (`CI-100`), so a green PR
-   check list is not proof the required set ran. See `wiki/advanced/Testing.md`
+5. **Know what CI enforces.** The `Working integrity` ruleset protects `Working`
+   from deletion and non-fast-forward updates and requires the `Required CI Gate`
+   check. A green check list is not release proof until the exact-SHA evidence
+   and controlled-failure behavior are verified (`CI-100`). See
+   `wiki/advanced/Testing.md`
 5. **Keep PRs focused** — one feature or fix per PR
 6. **Write clear commit messages** explaining the "why"
 

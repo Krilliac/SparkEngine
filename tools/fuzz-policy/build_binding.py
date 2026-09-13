@@ -124,6 +124,8 @@ def _parse_arguments(text: str, index: int, line: int, field: str, name: str) ->
             value, index = ")", index + 1
         elif char == "(":
             depth += 1
+            if depth > MAX_REACHABILITY_DEPTH:
+                raise PolicyError(f"{field} command {name!r} exceeds nesting depth {MAX_REACHABILITY_DEPTH}")
             value, index = "(", index + 1
         elif char == "#":
             index, line = _skip_comment(text, index, line, field)

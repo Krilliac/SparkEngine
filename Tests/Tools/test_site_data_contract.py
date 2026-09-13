@@ -95,6 +95,8 @@ class ContractTestCase(unittest.TestCase):
         for item in contract["workItems"]:
             if item["id"] in declared:
                 item["status"] = "done"
+                if item["id"] == "GOV-400":
+                    contract["content"]["legal"]["policyGaps"] = []
         contract["readiness"]["execution"]["firstUnblockedWorkItemId"] = None
         contract["readiness"]["globalRelease"]["state"] = "ready"
 
@@ -378,6 +380,42 @@ class WorkItemApplicabilityTests(ContractTestCase):
                     smuggled,
                     "executable CTest commands must include --no-tests=error",
                 )
+
+
+class LegalContractConsistencyTests(ContractTestCase):
+    """GOV-400 legal data stays explicit while its policy work is open."""
+
+    @staticmethod
+    def license_of(contract: dict[str, Any]) -> dict[str, Any]:
+        return contract["content"]["legal"]["license"]
+
+    def test_current_license_declaration_cannot_be_relabelled(self) -> None:
+        mutations = (
+            ("name", "MIT", "content.legal.license.name"),
+            ("kind", "OSI-approved open-source license", "content.legal.license.kind"),
+            ("osiApproved", True, "content.legal.license.osiApproved"),
+        )
+        for field, value, location in mutations:
+            with self.subTest(field=field):
+                mutated = copy.deepcopy(self.contract)
+                self.license_of(mutated)[field] = value
+                self.assert_rejected(mutated, location)
+
+    def test_open_gov_400_requires_non_empty_unique_string_policy_gaps(self) -> None:
+        for policy_gaps in ([], ["same gap", "same gap"], ["valid gap", 7], [""]):
+            with self.subTest(policy_gaps=policy_gaps):
+                mutated = copy.deepcopy(self.contract)
+                mutated["content"]["legal"]["policyGaps"] = policy_gaps
+                self.assert_rejected(mutated, "content.legal.policyGaps")
+
+        missing = copy.deepcopy(self.contract)
+        missing["content"]["legal"].pop("policyGaps")
+        self.assert_rejected(missing, "content.legal.policyGaps")
+
+    def test_done_gov_400_rejects_remaining_policy_gaps(self) -> None:
+        mutated = copy.deepcopy(self.contract)
+        self.items_of(mutated)["GOV-400"]["status"] = "done"
+        self.assert_rejected(mutated, "GOV-400 cannot be done while policyGaps remain")
 
 
 class TransitiveDependencyTests(ContractTestCase):

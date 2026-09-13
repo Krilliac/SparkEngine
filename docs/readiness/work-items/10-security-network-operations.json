@@ -10,7 +10,7 @@
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.",
+      "rationale": "Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. 2026-09-12 progress: built-in RemoteDebug command types are now reserved against public handler rebinding, with a hostile probe and RemoteAdmin regression proving a replacement cannot downgrade authorization. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.",
       "dependencies": [],
       "parallelWith": [
         "CI-100",
@@ -96,7 +96,7 @@
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates.",
+      "rationale": "Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open.",
       "dependencies": [
         "CI-100"
       ],
@@ -225,7 +225,7 @@
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross stable-v1 trust boundaries without a unified fuzz/bounds gate; packet and script campaigns belong to the excluded networking and scripting surfaces. 2026-09-05 progress (partial hardening, no fuzz harness): Json::ParseBounded/JsonLimits budgets on every default parse entry point; mod.json and mod config capped at 64 KB / depth 16 / 4096 nodes and parsed strictly; scene manifests capped at 8 MB / 100,000 entries with path containment; .spk decompression ratio bounded at Open; .skel/.sanim name-length and parentIndex validation; Spark::IsVirtualPathSafe. Tests/TestSecurityParsersReal.cpp now executes the shipped parsers (the packet-validator evidence is tracked under NET-100). Do not promote a JSON-fuzz claim: only bounded regressions were added.",
+      "rationale": "Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross stable-v1 trust boundaries without a unified fuzz/bounds gate; packet and script campaigns belong to the excluded networking and scripting surfaces. 2026-09-05 progress (partial hardening, no fuzz harness): Json::ParseBounded/JsonLimits budgets on every default parse entry point; mod.json and mod config capped at 64 KB / depth 16 / 4096 nodes and parsed strictly; scene manifests capped at 8 MB / 100,000 entries with path containment; .spk decompression ratio bounded at Open; .skel/.sanim name-length and parentIndex validation; Spark::IsVirtualPathSafe. Tests/TestSecurityParsersReal.cpp now executes the shipped parsers (the packet-validator evidence is tracked under NET-100). 2026-09-12 progress: SparkPak now rejects unsafe traversal entry names while opening the archive, with a production regression fixture. Do not promote a JSON-fuzz claim: only bounded regressions were added; the required fuzz-smoke and scheduled campaigns remain open.",
       "dependencies": [
         "CI-100",
         "SEC-110"
@@ -627,7 +627,7 @@
       "wave": 1,
       "area": "operations",
       "owner": "unassigned",
-      "rationale": "Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. OPS-100 remains open because networking/CURL builds retain a legacy in-process direct-upload configuration with reusable credentials, and controlled relay delivery, scoped authorization, release symbolication, privacy/retention review, and exact-SHA crash evidence are absent.",
+      "rationale": "Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. 2026-09-12 progress: crash-upload proxy and FTP endpoint logs now retain only scheme and host, with Dropbox capability URLs fully redacted; production-linked regressions cover credentials, paths, queries, fragments, malformed URLs, and bearer data. OPS-100 remains open because networking/CURL builds retain a legacy in-process direct-upload configuration with reusable credentials, and controlled relay delivery, scoped authorization, release symbolication, privacy/retention review, and exact-SHA crash evidence are absent.",
       "dependencies": [],
       "parallelWith": [
         "SEC-100",
@@ -860,7 +860,7 @@
       "wave": 2,
       "area": "performance",
       "owner": "unassigned",
-      "rationale": "Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. Pre-release control-plane tooling now provides identity-bound bounded duplicate-aware JSON ingestion, exact nested schemas, externally supplied full-SHA equality, per-hardware active-budget approvals bound to canonical definition digests, hardware-scoped completeness, explicit non-active semantics, a required CI governance job, and 152 Python test methods including 21 second-audit and 15 final-audit hostile cases. These are tooling checks only: all 17 committed metric definitions remain pending_measurement, with zero certified hardware rows and zero accepted baselines. Representative measured budgets, certified baselines, benchmark scenes, golden images, soaks, and release-result jobs remain pending.",
+      "rationale": "Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. Pre-release control-plane tooling now provides identity-bound bounded duplicate-aware JSON ingestion, exact nested schemas, externally supplied full-SHA equality, per-hardware active-budget approvals bound to canonical definition digests, hardware-scoped completeness, explicit non-active semantics, a required CI governance job, and 153 Python test methods including 22 second-audit and 15 final-audit hostile cases. 2026-09-12 progress: malformed active-metric hardwareRowId values now return validation errors instead of raising during baseline validation. These are tooling checks only: all 17 committed metric definitions remain pending_measurement, with zero certified hardware rows and zero accepted baselines. Representative measured budgets, certified baselines, benchmark scenes, golden images, soaks, and release-result jobs remain pending.",
       "dependencies": [
         "CI-110",
         "BLD-100",

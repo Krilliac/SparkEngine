@@ -315,6 +315,13 @@ class TestSecondAuditReproductions(unittest.TestCase):
             errors = validate_suite(root)
         self.assertTrue(any("id must be a string" in error for error in errors))
 
+    def test_13b_unhashable_metric_hardware_id_returns_errors(self) -> None:
+        metric = _metric(hardware_id=[])
+        errors = validate_baselines(
+            _baselines(), {metric["id"]: metric}, HARDWARE_IDS,
+        )
+        self.assertTrue(any("hardwareRowId" in error for error in errors))
+
     def test_14_zero_budget_margin_is_null_with_reason(self) -> None:
         budget = _budget([_metric(budget=0.0)])
         result = _result()
@@ -385,6 +392,22 @@ class TestSecondAuditReproductions(unittest.TestCase):
         self.assertTrue(report.passed, report.errors)
         self.assertEqual(report.skipped_by_status, {"suspended": 1})
         self.assertEqual(report.verdicts, [])
+
+    def test_19b_pending_metric_unit_mismatch_is_rejected_before_skip(self) -> None:
+        budget = _budget([_metric(status="pending_measurement", budget=None)])
+        measurement = copy.deepcopy(_result()["measurements"][0])
+        measurement["unit"] = "bytes"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget)
+            report = compare(
+                root,
+                _result([measurement]),
+                expected_sha=RESULT_SHA,
+            )
+        self.assertFalse(report.passed)
+        self.assertTrue(any("unit mismatch" in error for error in report.errors))
+        self.assertEqual(report.skipped_metrics, [])
 
     def test_20_uncertified_hardware_is_advisory_not_failed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

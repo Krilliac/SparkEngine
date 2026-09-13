@@ -983,6 +983,7 @@ jobs:
           -DBUILD_TESTS=ON \
           -DENABLE_SDL2=OFF \
           -DENABLE_VULKAN=OFF \
+          -DSPARK_IMGUI_ENABLE_FREETYPE=OFF \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -3049,7 +3050,38 @@ jobs:
           # comment, while also printing a tail to the job log for
           # live-viewing in the Actions UI.
           set +e
-          find SparkEngine/Source -name '*.cpp' -print0 | sort -z | head -z -n 30 > clang-tidy-files.list
+          # Analyze every shipped-product translation unit. Keep the inventory
+          # byte-deterministic and fail closed if the checkout yields nothing;
+          # a bounded sample can never prove the static-analysis gate.
+          source_roots=(
+            SparkEngine/Source
+            SparkEditor/Source
+            SparkConsole/src
+            SparkDaemon/src
+            SparkGateway/src
+            SparkLauncher/src
+            SparkServer/src
+            SparkWorker/src
+            SparkCooker/src
+            SparkAutomation/src
+            SparkBuild/src
+            SparkInstaller/src
+            SparkShaderCompiler/src
+            GameModules
+          )
+          for root in "${source_roots[@]}"; do
+            if [ ! -d "$root" ]; then
+              echo "::error::clang-tidy source root is missing: $root"
+              exit 1
+            fi
+          done
+          find "${source_roots[@]}" -type f -name '*.cpp' -print0 | sort -z > clang-tidy-files.list
+          file_count=$(tr -cd '\0' < clang-tidy-files.list | wc -c)
+          echo "clang-tidy translation units: $file_count"
+          if [ "$file_count" -eq 0 ]; then
+            echo "::error::clang-tidy source inventory is empty"
+            exit 1
+          fi
           xargs -0 -r -n 1 -P 2 clang-tidy -p build --warnings-as-errors="" \
             < clang-tidy-files.list 2>&1 | tee clang-tidy-output.log
           ct_exit=${PIPESTATUS[0]}
@@ -3315,6 +3347,7 @@ jobs:
           cmake --build build-installer/build --config Release --target
           SparkInstaller
           SparkInstallerGitTests
+          SparkInstallerInstallStateTests
           SparkBuildProcessRunnerTests
           SparkBuildDownloaderTests
           -j

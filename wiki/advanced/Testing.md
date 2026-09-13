@@ -512,13 +512,11 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job (individual diagnostics advisory) |
 | `todo-count` | ubuntu-24.04 | -- | -- | warn-only above 20 |
 
-**Enforcement truth (verified 2026-09-05):** no branch protection or ruleset is
-active on `Working` (`branches/Working/protection` is 404 and all five rulesets
-are `enforcement=disabled`), so a PR or direct push must pass zero checks today.
-`required-ci-gate`, the Build Matrix Verifier, and CodeQL are **post-hoc
-publication gates** consumed by `release.yml`, `site-data-publish.yml`, and
-`trusted-ci-aggregate.yml`, not merge gates, until the account owner activates
-the ruleset (`CI-100`). The exact-source gate accepts a failed Build job only if
+**Enforcement truth (verified 2026-09-12):** legacy branch protection is not
+configured on `Working` (`branches/Working/protection` is 404), but repository
+ruleset `21968740` (`Working integrity`) is active. It protects against deletion
+and non-fast-forward updates and requires the GitHub Actions `Required CI Gate`
+check with no bypass actors. The exact-source gate accepts a failed Build job only if
 `build.yml` at that exact commit declares the job `continue-on-error`; the
 required set is cross-checked between `required-ci-gate.needs` and
 `EXPECTED_REQUIRED_JOBS_JSON`, and a required job marked `continue-on-error` is
@@ -676,7 +674,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*604 test-bearing `.cpp`/`.mm` files, 7328 source-level test definitions*
+*604 test-bearing `.cpp`/`.mm` files, 7337 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -714,7 +712,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAssertSuppression` | 9 |
 | `TestAssertSuppressionReal` | 8 |
 | `TestAssetDependencyGraph` | 19 |
-| `TestAssetMigration` | 21 |
+| `TestAssetMigration` | 22 |
 | `TestAssetMigrationPhaseEE` | 10 |
 | `TestAssetPipelineCache` | 22 |
 | `TestAssetPipelineIntegration` | 16 |
@@ -792,9 +790,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCpuNeuralInference` | 14 |
 | `TestCpuNeuralTraining` | 13 |
 | `TestCrashHandlerGatingReal` | 11 |
-| `TestCrashReportUploader` | 8 |
+| `TestCrashReportUploader` | 10 |
 | `TestCrossSystemIntegration` | 4 |
-| `TestD3D11DeviceContractsReal` | 12 |
+| `TestD3D11DeviceContractsReal` | 13 |
 | `TestDXRSupport` | 13 |
 | `TestDaemonCodexFixes` | 4 |
 | `TestDaemonConcurrent` | 6 |
@@ -923,7 +921,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameModuleRTS` | 39 |
 | `TestGameModuleRacing` | 28 |
 | `TestGameObjectTransforms` | 24 |
-| `TestGamePackager` | 10 |
+| `TestGamePackager` | 11 |
 | `TestGameViewPanel` | 3 |
 | `TestGamepadInputProcessing` | 23 |
 | `TestGameplayDebugger` | 11 |
@@ -1005,7 +1003,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
-| `TestModuleLifecycleReal` | 7 |
+| `TestModuleLifecycleReal` | 8 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
 | `TestMultiISADispatch` | 7 |
@@ -1088,7 +1086,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestReflectionReal` | 22 |
 | `TestRegionMapDataSource` | 7 |
 | `TestReliableChannel` | 22 |
-| `TestRemoteDebugSystem` | 18 |
+| `TestRemoteDebugSystem` | 19 |
 | `TestRenderCommandRing` | 8 |
 | `TestRenderECSIntegration` | 8 |
 | `TestRenderGraph` | 36 |
@@ -1161,7 +1159,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkGameRTS` | 5 |
 | `TestSparkGameRacing` | 5 |
 | `TestSparkGatewayCoordinator` | 7 |
-| `TestSparkPak` | 18 |
+| `TestSparkPak` | 19 |
 | `TestSparkServerApplication` | 23 |
 | `TestSpatialGrid` | 16 |
 | `TestSpatialGridReal` | 7 |
@@ -1227,7 +1225,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestUISystemPhaseR` | 7 |
 | `TestUUID` | 12 |
 | `TestUndoRedoManager` | 7 |
-| `TestUndoRedoManagerProduction` | 2 |
+| `TestUndoRedoManagerProduction` | 3 |
 | `TestUpscalingSystem` | 10 |
 | `TestUserDataPathsReal` | 7 |
 | `TestUtilsStress` | 13 |

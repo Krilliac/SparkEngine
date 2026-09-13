@@ -937,10 +937,16 @@ def validate_baselines(data: Any, metric_definitions: Any,
             if metric.get("status") != "active":
                 continue
             metric_hardware = metric.get("hardwareRowId")
-            applicable_hardware = (
-                known_hardware if metric_hardware is None
-                else frozenset({metric_hardware})
-            )
+            if metric_hardware is None:
+                applicable_hardware = known_hardware
+            elif isinstance(metric_hardware, str):
+                applicable_hardware = frozenset({metric_hardware})
+            else:
+                errors.append(
+                    f"baselines: active metric {metric_id!r} has an invalid "
+                    "hardwareRowId; expected a string or null"
+                )
+                applicable_hardware = frozenset()
             for hardware_id in sorted(
                     value for value in applicable_hardware if isinstance(value, str)):
                 key = (metric_id.casefold(), hardware_id.casefold())

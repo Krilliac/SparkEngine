@@ -222,6 +222,13 @@ def compare(budget_dir: Path, result_data: Any, *,
             )
             continue
 
+        if measurement["unit"] != metric["unit"]:
+            errors.append(
+                f"unit mismatch for {metric_id}: result={measurement['unit']!r}, "
+                f"budget={metric['unit']!r}"
+            )
+            continue
+
         status = metric["status"]
         if status != "active":
             reason_by_status = {
@@ -232,13 +239,6 @@ def compare(budget_dir: Path, result_data: Any, *,
             reason = reason_by_status[status]
             skipped_metrics.append(SkippedMetric(metric_id, status, reason))
             skipped_by_status[status] = skipped_by_status.get(status, 0) + 1
-            continue
-
-        if measurement["unit"] != metric["unit"]:
-            errors.append(
-                f"unit mismatch for {metric_id}: result={measurement['unit']!r}, "
-                f"budget={metric['unit']!r}"
-            )
             continue
 
         budget_value = metric["budget"]

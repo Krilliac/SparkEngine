@@ -83,8 +83,8 @@ static bool LinuxIsStdinPipe()
 // ---------------------------------------------------------------------------
 namespace
 {
-    constexpr const char* kConsoleVersion = "2.0.0";
-    constexpr const wchar_t* kConsoleVersionW = L"2.0.0";
+    constexpr const char* kConsoleVersion = SPARK_CONSOLE_VERSION;
+    constexpr const wchar_t* kConsoleVersionW = SPARK_CONSOLE_VERSION_W;
 } // namespace
 
 #ifdef SPARK_PLATFORM_WINDOWS

@@ -291,9 +291,9 @@ The VS2026 and macOS jobs are job-level advisory. MinGW is a manual
 `workflow_dispatch` development lane rather than a required push gate. The
 `clang-tidy` job is a dependency of `required-ci-gate` (even though individual
 diagnostics may be advisory), so its job/configuration outcome is blocking. Note
-that no branch protection or ruleset is active on `Working` today, so
-`required-ci-gate` is a post-hoc publication gate rather than a merge gate
-(`CI-100`). See
+that the active `Working integrity` ruleset (21968740) requires the
+`Required CI Gate` check; exact-SHA evidence and controlled-failure behavior are
+still release gates (`CI-100`). See
 [Contributing](../advanced/Contributing.md) for the full CI overview.
 
 ### Where do I get help?

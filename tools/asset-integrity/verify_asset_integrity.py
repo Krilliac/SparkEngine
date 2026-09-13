@@ -601,8 +601,8 @@ def _validate_template_manifest(path: Path, template_name: str) -> dict[str, str
         raise ManifestFormatError(
             f"package {data.get('package')!r} does not exactly match {template_name!r}")
     assets = data.get("assets")
-    if not isinstance(assets, list):
-        raise ManifestFormatError("template manifest assets must be an array")
+    if not isinstance(assets, list) or not assets:
+        raise ManifestFormatError("template manifest assets must be a non-empty array")
     if len(assets) > MAX_ENTRY_COUNT:
         raise ManifestFormatError(f"template manifest exceeds {MAX_ENTRY_COUNT} entries")
     result: dict[str, str] = {}

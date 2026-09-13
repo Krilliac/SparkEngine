@@ -78,6 +78,25 @@ def digest(path):
         return state.hexdigest()
 
 
+def _validate_signature_evidence(signature, thumbprint, artifact_name):
+    """Validate the identity fields retained from native Authenticode output."""
+    if not isinstance(signature, dict):
+        raise ValueError(f"Invalid signature evidence for {artifact_name}")
+    if signature.get("Status") != "Valid":
+        raise ValueError(f"Unacceptable signature status for {artifact_name}: {signature.get('Status')}")
+    if signature.get("SignatureType") != "Authenticode":
+        raise ValueError(f"Embedded Authenticode signature required: {artifact_name}")
+    signer = signature.get("SignerThumbprint")
+    if not isinstance(signer, str) or signer.upper() != thumbprint.upper():
+        raise ValueError(f"Unexpected publisher certificate: {artifact_name}")
+    timestamp = signature.get("TimestampThumbprint")
+    if not isinstance(timestamp, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", timestamp):
+        raise ValueError(f"Timestamp certificate required: {artifact_name}")
+    if any(not isinstance(signature.get(key), str) or not signature[key]
+           for key in ("SignerSubject", "TimestampSubject")):
+        raise ValueError("Invalid signature certificate evidence schema")
+
+
 def verify(packages, version, source_sha, thumbprint, report_path, *, powershell, runner=subprocess.run):
     report = {"scope": "stable-windows-outer-installers-only", "version": version, "source_sha": source_sha,
               "publisher_thumbprint": thumbprint.upper(), "passed": False, "artifacts": [], "errors": []}
@@ -101,19 +120,7 @@ def verify(packages, version, source_sha, thumbprint, report_path, *, powershell
             if not isinstance(signature, dict):
                 raise ValueError("Invalid signature evidence schema")
             entry["signature"] = signature
-            if signature.get("Status") != "Valid":
-                raise ValueError(f"Unacceptable signature status for {path.name}: {signature.get('Status')}")
-            if signature.get("SignatureType") != "Authenticode":
-                raise ValueError(f"Embedded Authenticode signature required: {path.name}")
-            signer = signature.get("SignerThumbprint")
-            if not isinstance(signer, str) or signer.upper() != thumbprint.upper():
-                raise ValueError(f"Unexpected publisher certificate: {path.name}")
-            timestamp = signature.get("TimestampThumbprint")
-            if not isinstance(timestamp, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", timestamp):
-                raise ValueError(f"Timestamp certificate required: {path.name}")
-            if any(not isinstance(signature.get(key), str) or not signature[key]
-                   for key in ("SignerSubject", "TimestampSubject")):
-                raise ValueError("Invalid signature certificate evidence schema")
+            _validate_signature_evidence(signature, thumbprint, path.name)
         report["passed"] = True
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         report["errors"].append(str(error))
@@ -123,16 +130,28 @@ def verify(packages, version, source_sha, thumbprint, report_path, *, powershell
 
 
 def check_hashes(packages, version, source_sha, report_path):
-    """Require the bytes verified earlier to survive native qualification unchanged."""
+    """Require signed identity and bytes to survive native qualification unchanged."""
     try:
+        thumbprint = os.environ.get("SPARK_RELEASE_SIGNER_THUMBPRINT", "")
+        if not re.fullmatch(r"[0-9a-fA-F]{40}", thumbprint):
+            raise ValueError("SPARK_RELEASE_SIGNER_THUMBPRINT must configure the publisher certificate's 40-hex thumbprint")
         files = selected_packages(packages, version, source_sha)
         report = json.loads(report_path.read_text(encoding="utf-8"))
         if (not isinstance(report, dict) or report.get("passed") is not True
                 or report.get("version") != version or report.get("source_sha") != source_sha
-                or report.get("scope") != "stable-windows-outer-installers-only"):
+                or report.get("scope") != "stable-windows-outer-installers-only"
+                or report.get("publisher_thumbprint") != thumbprint.upper()):
             raise ValueError("Signature report identity or result is invalid")
         expected = [{"name": p.name, "sha256": digest(p)} for p in files]
-        actual = [{"name": item["name"], "sha256": item["sha256"]} for item in report["artifacts"]]
+        artifacts = report.get("artifacts")
+        if not isinstance(artifacts, list) or len(artifacts) != len(files):
+            raise ValueError("Signature report artifact evidence is invalid")
+        actual = []
+        for item in artifacts:
+            if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                raise ValueError("Signature report artifact evidence is invalid")
+            _validate_signature_evidence(item.get("signature"), thumbprint, item["name"])
+            actual.append({"name": item["name"], "sha256": item["sha256"]})
         if actual != expected:
             raise ValueError("Installer bytes changed after signature verification")
     except (OSError, ValueError, KeyError, TypeError) as error:

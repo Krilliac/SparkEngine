@@ -2875,6 +2875,12 @@ foreach(_spark_runtime_asset_dir Models Textures Audio Materials Scenes Scripts 
         )
     endif()
 endforeach()
+if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/assets.integrity.json")
+    install(FILES "${CMAKE_SOURCE_DIR}/Assets/assets.integrity.json"
+        DESTINATION bin/Assets
+        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+    )
+endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Resources/Config")
     spark_install_tracked_directory(
         SOURCE SparkEngine/Resources/Config

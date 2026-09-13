@@ -220,6 +220,13 @@ WORK_ITEM_PLANNED_KEYS = {
     "requiredCiJobs": "plannedCiJobs",
     "testSelectors": "plannedTestSelectors",
 }
+# These values preserve the repository-authored declaration. They are a
+# consistency pin, not a legal classification decision.
+CURRENT_LICENSE_DECLARATION = {
+    "name": "Spark Open License 1.0",
+    "kind": "Custom software license",
+    "osiApproved": False,
+}
 
 
 _CTEST_COMMAND_TOKEN = re.compile(
@@ -2002,15 +2009,81 @@ class Validator:
 
     def validate_legal(self) -> None:
         legal = self.contract["content"].get("legal", {})
-        license_path = REPO_ROOT / legal.get("license", {}).get("sourcePath", "")
+        license_data = legal.get("license", {})
+        license_path = REPO_ROOT / license_data.get("sourcePath", "")
         self.require(license_path.is_file(), "content.legal.license.sourcePath", "license source must exist")
         if license_path.is_file():
             first_line = license_path.read_text(encoding="utf-8").splitlines()[0].strip()
             self.require(
-                legal.get("license", {}).get("name") == first_line,
+                license_data.get("name") == first_line,
                 "content.legal.license.name",
                 f"must exactly match LICENSE first line {first_line!r}",
             )
+        self.require(
+            license_data.get("name") == CURRENT_LICENSE_DECLARATION["name"],
+            "content.legal.license.name",
+            f"must preserve the current repository declaration {CURRENT_LICENSE_DECLARATION['name']!r}",
+        )
+        self.require(
+            license_data.get("kind") == CURRENT_LICENSE_DECLARATION["kind"],
+            "content.legal.license.kind",
+            f"must preserve the current repository declaration {CURRENT_LICENSE_DECLARATION['kind']!r}",
+        )
+        self.require(
+            type(license_data.get("osiApproved")) is bool
+            and license_data.get("osiApproved") == CURRENT_LICENSE_DECLARATION["osiApproved"],
+            "content.legal.license.osiApproved",
+            f"must preserve the current repository declaration {CURRENT_LICENSE_DECLARATION['osiApproved']!r}",
+        )
+
+        gov_items = [
+            item
+            for item in self.contract.get("workItems", [])
+            if isinstance(item, dict) and item.get("id") == "GOV-400"
+        ]
+        if len(gov_items) != 1:
+            self.error(
+                "workItems.GOV-400",
+                "exactly one work item is required to govern legal policy gaps",
+            )
+        else:
+            policy_gaps = legal.get("policyGaps")
+            policy_location = "content.legal.policyGaps"
+            status = gov_items[0].get("status")
+            if status == "open" or policy_gaps is not None:
+                self.require(
+                    isinstance(policy_gaps, list),
+                    policy_location,
+                    "must be a list of non-empty unique strings while GOV-400 is open",
+                )
+            if isinstance(policy_gaps, list):
+                all_non_empty_strings = all(
+                    isinstance(value, str) and bool(value.strip()) for value in policy_gaps
+                )
+                self.require(
+                    all_non_empty_strings,
+                    policy_location,
+                    "must contain only non-empty strings",
+                )
+                if all_non_empty_strings:
+                    self.require(
+                        len(policy_gaps) == len(set(policy_gaps)),
+                        policy_location,
+                        "must contain unique strings",
+                    )
+                if status == "open":
+                    self.require(
+                        bool(policy_gaps),
+                        policy_location,
+                        "must contain at least one policy gap while GOV-400 is open",
+                    )
+                if status == "done":
+                    self.require(
+                        not policy_gaps,
+                        policy_location,
+                        "GOV-400 cannot be done while policyGaps remain",
+                    )
+
         for index, document in enumerate(legal.get("documents", [])):
             self.require_path(document.get("sourcePath"), f"content.legal.documents[{index}].sourcePath")
 

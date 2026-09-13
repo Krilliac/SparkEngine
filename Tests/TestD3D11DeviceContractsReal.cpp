@@ -263,6 +263,60 @@ TEST(D3D11DeviceReal_SampledDepthTextureGetsTypelessResourceAndDepthSRV)
     device.Shutdown();
 }
 
+TEST(D3D11DeviceReal_Texture2DArrayCreatesArrayViews)
+{
+    Spark::RHI::D3D11::D3D11Device device;
+    if (!TryCreateD3D11Device(device))
+        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+
+    Spark::RHI::RHITextureDesc desc;
+    desc.width = 32;
+    desc.height = 32;
+    desc.arraySize = 3;
+    desc.type = Spark::RHI::RHITextureType::Texture2DArray;
+    desc.format = Spark::RHI::PixelFormat::R8G8B8A8_UNORM;
+    desc.usage = Spark::RHI::RHITextureUsage::RenderTarget | Spark::RHI::RHITextureUsage::ShaderResource;
+    desc.debugName = "ContractTest_Texture2DArray";
+
+    auto texture = device.CreateTexture(desc);
+    ASSERT_TRUE(texture != nullptr);
+    EXPECT_TRUE(texture->GetShaderResourceView() != nullptr);
+    EXPECT_TRUE(texture->GetRenderTargetView() != nullptr);
+
+    auto* colorSrv = static_cast<ID3D11ShaderResourceView*>(texture->GetShaderResourceView());
+    ASSERT_TRUE(colorSrv != nullptr);
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    colorSrv->GetDesc(&srvDesc);
+    EXPECT_EQ(srvDesc.ViewDimension, D3D11_SRV_DIMENSION_TEXTURE2DARRAY);
+    EXPECT_EQ(srvDesc.Texture2DArray.ArraySize, desc.arraySize);
+
+    auto* colorRtv = static_cast<ID3D11RenderTargetView*>(texture->GetRenderTargetView());
+    ASSERT_TRUE(colorRtv != nullptr);
+    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc{};
+    colorRtv->GetDesc(&rtvDesc);
+    EXPECT_EQ(rtvDesc.ViewDimension, D3D11_RTV_DIMENSION_TEXTURE2DARRAY);
+    EXPECT_EQ(rtvDesc.Texture2DArray.ArraySize, desc.arraySize);
+
+    texture.reset();
+
+    desc.format = Spark::RHI::PixelFormat::D24_UNORM_S8_UINT;
+    desc.usage = Spark::RHI::RHITextureUsage::DepthStencil | Spark::RHI::RHITextureUsage::ShaderResource;
+    desc.debugName = "ContractTest_DepthTexture2DArray";
+    texture = device.CreateTexture(desc);
+    ASSERT_TRUE(texture != nullptr);
+    EXPECT_TRUE(texture->GetShaderResourceView() != nullptr);
+    EXPECT_TRUE(texture->GetDepthStencilView() != nullptr);
+
+    auto* depthDsv = static_cast<ID3D11DepthStencilView*>(texture->GetDepthStencilView());
+    ASSERT_TRUE(depthDsv != nullptr);
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
+    depthDsv->GetDesc(&dsvDesc);
+    EXPECT_EQ(dsvDesc.ViewDimension, D3D11_DSV_DIMENSION_TEXTURE2DARRAY);
+    EXPECT_EQ(dsvDesc.Texture2DArray.ArraySize, desc.arraySize);
+
+    device.Shutdown();
+}
+
 TEST(D3D11DeviceReal_RejectsUnimplementedTextureTypes)
 {
     Spark::RHI::D3D11::D3D11Device device;

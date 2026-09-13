@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TriggerVolumeComponent` bridged to `ProximityTriggerSystem` (enter/exit publish `TriggerEnterEvent`/`TriggerExitEvent`); `ReplaySystem` records Transform/velocity/health frames while recording
 - Editor: SparkEditor installs a real Windows unhandled-exception filter (dumps under the per-user editor data directory); `EditorWindowManager` layout persisted to `<EditorData>/window_layout.json`; Workflow panel confirmation for Clean & Rebuild
 - CI/readiness tooling: `asset-integrity` job (`tools/site-data/validate.py --assets`), strict work-item selector/job resolution with `plannedCiJobs`/`plannedTestSelectors`, docs health producer (`docs/.health.json`), `SparkVersionSingleSource` CTest, `SPARK_CRASH_ON_ASSERT=1`, sanitizer `incomplete-run` classification, `.github/test-count-ratchet.json` baseline block
+- Working branch integrity ruleset 21968740 is active with the GitHub Actions `Required CI Gate` check required; exact-SHA hosted evidence and controlled-failure proof remain open release gates
 - `CrashHandler::TriggerCrashReportUnattended()` (`CrashReportDelivery::ArtifactOnly`): dump/log/manifest with no screenshot, consent dialog, or in-process upload — used by the freeze watchdog so `terminateOnFreeze` really terminates
 - `SaveSystem::MarkComponentTransient()` / `IsComponentTransient()` opt-out for registry-driven world serialization (default transient set: `ProjectileComponent`, `DecalComponent`)
 - Console command `log_path`: prints the log file this run opened and its size, or reports that no log file could be opened
@@ -41,6 +42,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rolling Debug/Release build aliases and generated checksum/SBOM/provenance metadata for development artifacts; binaries/installers are not code-signed, and none of this is versioned stable-v1 release qualification
 
 ### Changed
+- Failed ModuleHotReload replacements remain pending for retry instead of consuming the watched file change
+- clang-tidy now analyzes the complete shipped-product source inventory and fails closed when its roots or translation units are missing
+- Release preparation now runs the fail-closed dependency, vendored-content, and GitHub Actions pin policy before computing release metadata
+- Crash-upload proxy and FTP logs now redact credentials and capability-bearing URL data while preserving transport behavior
+- SparkConsole now consumes the configured engine version, exposes `--version`/`-v`, and verifies that output through CTest
+- SparkPak now rejects traversal entry names while opening archives, before unsafe paths reach the virtual filesystem
+- D3D11 Texture2DArray resources now create array-aware shader/depth views, including multisample array dimensions
+- Editor UndoRedoManager now restores its dispatch boundary when a command throws, preventing failed commands from poisoning later transactions
+- Runtime packages now carry the first-party asset integrity manifest, and extracted-package checks reject missing, link-like, or tampered asset payloads
+- FPS package smoke now requires the complete canonical public SDK header set, including the umbrella SparkSDK.h contract
+- Windows NullRHI qualification now rejects logger-prefixed D3D11 device records that could masquerade as a no-GPU result
+- Build-matrix parity now binds stable shipping/validation profiles to matching CMake build presets and configurations, failing closed on drift
+- SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed deadlines
+- Platform certification now rejects unknown profiles in full evidence validation; unknown profiles remain diagnostic-only
+- Stable publication now rechecks the readiness contract immediately before its final acceptance PATCH
+- Installer CI now builds the InstallState regression executable before running the complete registered test set
+- RemoteDebug reserves built-in command types against public handler rebinding, AssetMigration rejects requested-type mismatches, GamePackager rejects traversal project names, and performance-budget baseline validation rejects malformed hardware IDs
+- SparkGameModule rejects SDK headers with ambiguous `SPARK_SDK_VERSION` definitions before configuring a module ABI sidecar
+- SparkInstaller persists `.sparkengine-install.json` through a flushed same-directory replacement and treats malformed state as non-existent
+- Build-matrix and trusted CodeQL exact-source status publication tolerate GitHub's queued-to-in_progress API race, and Windows authority fixtures select Git Bash instead of the incompatible WindowsApps WSL launcher
 - World saves now write format v3 (reader window v1..v3, in-memory v1->v2 and v2->v3 migrations); `SerializeWorld` covers every `ComponentFactory`-registered type with a serializer instead of a fixed 14, and named entities without other components are retained
 - `RHIBridge::Initialize` no longer silently degrades a windowed request to `NullRHIDevice`; headless fallback requires `allowHeadlessFallback`. D3D11 requires feature level 11_0 (SM 5.0); D3D11 deferred command lists really record (`FinishCommandList`) and execute; structured/indirect buffers get the correct misc flags and SRV/UAVs
 - Shader compiler compiles HLSL to DXBC for real via `d3dcompiler_47` (D3D11/D3D12 on Windows) and fails closed for DXIL/SPIR-V/GLSL/MSL; shader hot reload compiles for real when driven but is not enabled in production; the four DXR PSOs use their shaders' export names

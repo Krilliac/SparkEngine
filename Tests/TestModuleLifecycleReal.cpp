@@ -9,10 +9,13 @@
 
 #include "TestFramework.h"
 
+#include "Core/ModuleHotReload.h"
 #include "Core/ModuleManager.h"
+#include "Utils/SparkConsole.h"
 #include <Spark/Version.h>
 
 #include <cstdlib>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -282,6 +285,70 @@ TEST(ModuleLifecycle_RecordsFailedNewStyleModuleInitialization)
     EXPECT_EQ(record->destroyModule, 1u);
 
     manager.UnloadAll();
+}
+
+TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
+{
+    const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadRetry");
+    const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+    std::filesystem::path modulePath = directory / "RetryableModule";
+    modulePath += source.extension();
+    ASSERT_TRUE(CopyFixtureImage(modulePath));
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    manager.InitializeAll(&context);
+    ASSERT_TRUE(manager.HasInitializedModules());
+    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const bool consoleWasInitialized = console.IsInitialized();
+    ASSERT_TRUE(console.Initialize());
+
+    Spark::ModuleHotReloadManager hotReload;
+    hotReload.Initialize(&manager, &context);
+    hotReload.SetDebounceMs(0);
+    hotReload.WatchModule("Spark Compatible ABI Fixture", PathToUtf8(modulePath));
+    hotReload.Start();
+
+    size_t callbackCount = 0;
+    bool lastReloadSucceeded = true;
+    hotReload.SetReloadCallback(
+        [&](const std::string&, bool success)
+        {
+            ++callbackCount;
+            lastReloadSucceeded = success;
+        });
+
+    // Keep the image present but make the real module reject OnLoad. Advance
+    // the timestamp instead of rewriting a loaded DLL, which is not writable
+    // on every Windows loader configuration.
+    std::error_code changeError;
+    const auto previousTime = std::filesystem::last_write_time(modulePath, changeError);
+    ASSERT_FALSE(changeError);
+    std::filesystem::last_write_time(modulePath, previousTime + std::chrono::seconds(2), changeError);
+    ASSERT_FALSE(changeError);
+
+    EXPECT_EQ(hotReload.PollChanges(), 0);
+    EXPECT_EQ(callbackCount, size_t{1});
+    EXPECT_FALSE(lastReloadSucceeded);
+
+    // The same failed disk change remains actionable and must be retried on a
+    // later poll; otherwise a transient compiler-side failure requires another
+    // unrelated file edit before hot-reload can recover.
+    EXPECT_EQ(hotReload.PollChanges(), 0);
+    EXPECT_EQ(callbackCount, size_t{2});
+    EXPECT_FALSE(lastReloadSucceeded);
+
+    hotReload.Stop();
+    ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    if (!consoleWasInitialized)
+        console.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(directory, ec);
 }
 
 TEST(ModuleLegacyAdapter_SuccessCreatesNoLifecycleRecord)
