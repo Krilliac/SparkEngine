@@ -1319,7 +1319,7 @@ def check_gitmodules_consistency(
 
 # ── Check: dependencies.lock reconciliation ───────────────────────────
 
-def export_manifest_entries(root: Path) -> list[list[str]]:
+def export_manifest_entries(root: Path, root_resolved: Path) -> list[list[str]]:
     """Read the manifest through CMake, the parser that actually evaluates it.
 
     A text scrape sees neither `list(APPEND ...)` after the closing paren, nor
@@ -1335,8 +1335,9 @@ def export_manifest_entries(root: Path) -> list[list[str]]:
         )
 
     manifest = root / MANIFEST_REL
-    if not manifest.is_file():
-        _fatal(f"{MANIFEST_REL} not found")
+    file_err = assert_regular_file_no_escape(manifest, root_resolved)
+    if file_err:
+        _fatal(f"{MANIFEST_REL}: {file_err}")
     _bounded_size(manifest, MAX_MANIFEST_BYTES, "dependency manifest")
 
     handle, out_path = tempfile.mkstemp(prefix="spark-tp-entries-", suffix=".txt")
@@ -1689,7 +1690,9 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
         digest, count = _tree_digest(assigned[container])
         digests[container] = {"digest": digest, "file_count": count}
 
-    sentinel_paths = _discover_sentinel_paths(root, existing, containers)
+    sentinel_paths = _discover_sentinel_paths(
+        root, root_resolved, existing, containers
+    )
     sentinels = _build_sentinels(root, root_resolved, sentinel_paths, quiet=quiet)
     action_pins = _discover_action_pins(root, root_resolved)
 
@@ -1715,11 +1718,14 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
 
 
 def _discover_sentinel_paths(
-    root: Path, existing: dict[str, Any], containers: dict[str, str]
+    root: Path,
+    root_resolved: Path,
+    existing: dict[str, Any],
+    containers: dict[str, str],
 ) -> list[str]:
     """Sentinels come from the manifest, not from the file being replaced."""
     paths: set[str] = set()
-    for fields in export_manifest_entries(root):
+    for fields in export_manifest_entries(root, root_resolved):
         if len(fields) != MANIFEST_FIELD_COUNT:
             continue
         local_path = fields[F_LOCAL_PATH].strip()
@@ -1855,7 +1861,7 @@ def run_all_checks(root: Path, root_resolved: Path) -> tuple[CheckResult, dict[s
     check_action_pins(root, root_resolved, lockfile, result)
     modules = _parse_gitmodules(root, root_resolved)
     check_gitmodules_consistency(modules, lockfile, result)
-    entries = export_manifest_entries(root)
+    entries = export_manifest_entries(root, root_resolved)
     check_manifest_reconciliation(root, lockfile, entries, modules, result)
     return result, lockfile
 

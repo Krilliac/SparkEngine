@@ -1349,6 +1349,19 @@ class TestFailClosed(FakeRepoCase):
         (self.repo / "ThirdParty/dependencies.lock").unlink()
         self.assert_fatal("")
 
+    def test_hardlinked_manifest_is_rejected(self) -> None:
+        manifest = self.repo / "ThirdParty/dependencies.lock"
+        outside = Path(self._tmp.name) / "dependencies.lock"
+        outside.write_bytes(manifest.read_bytes())
+        manifest.unlink()
+        try:
+            os.link(str(outside), str(manifest))
+        except (OSError, NotImplementedError, AttributeError) as exc:
+            if IN_CI:
+                self.fail(f"hardlink creation must work in CI: {exc}")
+            self.skipTest(f"hardlink creation unavailable: {exc}")
+        self.assert_fatal("hardlinked file rejected")
+
     def test_missing_gitmodules_exits_two(self) -> None:
         (self.repo / ".gitmodules").unlink()
         self.assert_fatal("cannot lstat")
