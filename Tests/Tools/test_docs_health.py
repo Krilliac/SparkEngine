@@ -1039,6 +1039,88 @@ class AssetIntegrityTests(unittest.TestCase):
         )
         self.assertTrue(any("no manifest declares it" in message for message in messages), messages)
 
+    def test_directory_reparse_is_rejected_before_asset_hash(self) -> None:
+        root = Path(self.temporary.name)
+        assets = root / "Templates" / "Probe" / "Assets"
+        outside = root / "outside"
+        assets.mkdir(parents=True)
+        outside.mkdir()
+        payload = b"outside payload"
+        (outside / "payload.bin").write_bytes(payload)
+        reparse = assets / "External"
+        try:
+            if sys.platform == "win32":
+                subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(reparse), str(outside)],
+                    check=True,
+                    capture_output=True,
+                )
+            else:
+                reparse.symlink_to(outside, target_is_directory=True)
+        except (OSError, subprocess.CalledProcessError) as error:
+            self.skipTest(f"directory reparses unavailable: {error}")
+
+        try:
+            (assets / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "manifestVersion": 1,
+                        "package": "Probe",
+                        "license": "Spark Open License 1.0",
+                        "assets": [
+                            {
+                                "path": "External/payload.bin",
+                                "origin": "fixture",
+                                "sha256": self.digest(payload),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            tracked = frozenset(
+                {
+                    "Templates/Probe/Assets/External/payload.bin",
+                    "Templates/Probe/Assets/manifest.json",
+                }
+            )
+            with mock.patch.object(site_assets, "REPO_ROOT", root), mock.patch.object(
+                site_assets, "file_digest", wraps=site_assets.file_digest
+            ) as digest_mock:
+                results = site_assets.validate_package("Templates/Probe/Assets", tracked)
+        finally:
+            if sys.platform == "win32":
+                subprocess.run(["cmd", "/c", "rmdir", str(reparse)], check=False, capture_output=True)
+            else:
+                reparse.unlink(missing_ok=True)
+
+        messages = [message for _, message in results]
+        self.assertTrue(any("reparse" in message.lower() for message in messages), messages)
+        digest_mock.assert_not_called()
+
+    def test_manifest_package_identity_must_match_directory(self) -> None:
+        payload = b"intact\n"
+        directory, _ = self.package(
+            [{"path": "art.png", "origin": "authored", "sha256": self.digest(payload)}],
+            {"art.png": payload},
+        )
+        manifest = directory / "Templates" / "Probe" / "Assets" / "manifest.json"
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        data["package"] = "DifferentPackage"
+        manifest.write_text(json.dumps(data), encoding="utf-8")
+        with mock.patch.object(site_assets, "REPO_ROOT", directory):
+            results = site_assets.validate_package(
+                "Templates/Probe/Assets",
+                frozenset(
+                    {
+                        "Templates/Probe/Assets/art.png",
+                        "Templates/Probe/Assets/manifest.json",
+                    }
+                ),
+            )
+        messages = [message for _, message in results]
+        self.assertTrue(any("package" in message.lower() for message in messages), messages)
+
     def test_repository_asset_packages_pass_the_real_walk(self) -> None:
         integrity = [
             f"{location}: {message}"
