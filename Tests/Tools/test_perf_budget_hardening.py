@@ -499,6 +499,19 @@ class TestAdditionalGovernanceClosure(unittest.TestCase):
 class TestFinalAuditClosure(unittest.TestCase):
     """Hostile cases from the final independent PERF-100 audit."""
 
+    def test_no_active_metrics_cannot_produce_passing_comparison(self) -> None:
+        budget = _budget([_metric(status="pending_measurement", budget=None)])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget)
+            report = compare(root, _result([]), expected_sha=RESULT_SHA)
+        self.assertFalse(
+            report.passed,
+            "A result with no enforced active metrics must not be a green budget result",
+        )
+        self.assertTrue(any("pending metrics cannot produce" in error
+                            for error in report.errors))
+
     def test_active_metric_requires_reviewed_baseline(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

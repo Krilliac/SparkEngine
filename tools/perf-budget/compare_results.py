@@ -267,6 +267,17 @@ def compare(budget_dir: Path, result_data: Any, *,
         and (metric["hardwareRowId"] is None
              or metric["hardwareRowId"] == result_hardware)
     }
+    pending_ids_for_current_hardware = {
+        metric["id"] for metric in budget_data["metrics"]
+        if metric["status"] == "pending_measurement"
+        and (metric["hardwareRowId"] is None
+             or metric["hardwareRowId"] == result_hardware)
+    }
+    if not active_ids_for_current_hardware and pending_ids_for_current_hardware:
+        errors.append(
+            f"no active metrics apply to result hardware {result_hardware!r}; "
+            "pending metrics cannot produce a passing budget result"
+        )
     for unmeasured in sorted(active_ids_for_current_hardware - measured_metric_ids):
         errors.append(
             f"unmeasured active metric {unmeasured!r} for hardware "
