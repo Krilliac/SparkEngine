@@ -234,10 +234,10 @@ def _scan_zip(data: bytes, *, location: str) -> ScanResult:
             aggregate = 0
             for member in members:
                 member_location = f"{location}!{member.filename}"
-                if member.is_dir():
-                    continue
                 if not _portable_archive_name(member.filename):
                     errors.append(f"{member_location}: unsafe archive member name")
+                    continue
+                if member.is_dir():
                     continue
                 if member.flag_bits & 0x1:
                     errors.append(f"{member_location}: encrypted archive member cannot be inspected")
