@@ -838,6 +838,20 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
         self.assertEqual(body["make_latest"], "true")
 
     @patch("subprocess.run")
+    def test_blocks_versioned_publication_with_rolling_tag(self, mock_run):
+        """A stable publication must not accept the nightly tag identity."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{SHA}\trefs/tags/nightly\n"
+        )
+        api = FakeApi(
+            release=_release(tag="nightly", prerelease=False),
+            published=_published_release(is_versioned=True, tag_name="nightly"),
+        )
+        with self.assertRaisesRegex(MODULE.GateError, "versioned release tag"):
+            self._run_gate(api, is_versioned=True, tag="nightly")
+        self.assertEqual(api.patch_calls, [])
+
+    @patch("subprocess.run")
     def test_blocks_on_tag_drift(self, mock_run):
         """Test 3: Tag moved between verify and PATCH."""
         mock_run.return_value = MagicMock(

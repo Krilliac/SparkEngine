@@ -31,6 +31,7 @@ ALLOWED_CI_EVENTS = frozenset({"push", "workflow_dispatch"})
 BUILD_WORKFLOW_NAME = "Build SparkEngine"
 BUILD_WORKFLOW_PATH = ".github/workflows/build.yml"
 WORKING_BRANCH = "Working"
+VERSION_TAG_PATTERN = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+")
 
 
 class GateError(Exception):
@@ -137,6 +138,15 @@ def _read_expected_digests(path: Path, expected_names: list[str]) -> dict[str, s
     if set(digests) != set(expected_names):
         raise GateError("expected digests do not match expected asset names")
     return digests
+
+
+def _validate_release_tag(release_tag: str, is_versioned: bool) -> None:
+    """Require the tag identity to match the publication channel."""
+    if is_versioned:
+        if VERSION_TAG_PATTERN.fullmatch(release_tag) is None:
+            raise GateError("versioned release tag must have the form vMAJOR.MINOR.PATCH")
+    elif release_tag != "nightly":
+        raise GateError("nightly publication must use the nightly release tag")
 
 
 def _fetch_release_assets(
@@ -494,6 +504,7 @@ def acceptance_gate(
 ) -> dict[str, Any]:
     """Run every pre-publication check, then PATCH draft=false in one step."""
 
+    _validate_release_tag(release_tag, is_versioned)
     expected_names = _read_expected_assets(expected_assets_file)
     expected_digests = _read_expected_digests(expected_digests_file, expected_names)
 
