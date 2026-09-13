@@ -178,7 +178,10 @@ namespace SparkInstaller
         for (const auto& opt : ctx.configManager.config.options)
             state.options[opt.cmakeVar] = opt.currentValue;
         if (!state.Save(ctx.destination))
-            Emit(ctx.log, "warning: could not write install state file");
+        {
+            Emit(ctx.log, "error: could not write install state file");
+            return 8;
+        }
 
         Emit(ctx.log, "Done. Engine built at: " + ctx.configManager.config.buildPath);
         return 0;

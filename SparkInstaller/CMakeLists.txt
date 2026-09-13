@@ -161,6 +161,29 @@ if(SPARKINSTALLER_BUILD_TESTS)
     add_test(NAME SparkInstallerInstallStateTests COMMAND SparkInstallerInstallStateTests)
     set_tests_properties(SparkInstallerInstallStateTests PROPERTIES TIMEOUT 10)
 
+    add_executable(SparkInstallerTransactionTests
+        tests/InstallerTransactionTests.cpp
+        src/Installer.cpp
+        src/InstallState.cpp
+        src/GitRunner.cpp
+        src/GitBootstrap.cpp
+    )
+    target_include_directories(SparkInstallerTransactionTests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(SparkInstallerTransactionTests PRIVATE SparkBuildCore)
+    target_compile_definitions(SparkInstallerTransactionTests PRIVATE
+        SPARK_INSTALLER_VERSION="${PROJECT_VERSION}"
+    )
+    if(MSVC)
+        target_compile_definitions(SparkInstallerTransactionTests PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(SparkInstallerTransactionTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME SparkInstallerTransactionTests COMMAND SparkInstallerTransactionTests)
+    set_tests_properties(SparkInstallerTransactionTests PROPERTIES TIMEOUT 15)
+
     if(WIN32)
         set(_sparkinstaller_platform "Windows")
     elseif(APPLE)
