@@ -1734,6 +1734,44 @@ jobs:
         self.assertIn("workflow-matrix-unresolved", categories)
         self.assertIn("workflow-configuration-not-built", categories)
 
+    def test_empty_matrix_axis_cannot_satisfy_a_profile(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data["profile"]["buildConfigurations"] = [
+            entry
+            for entry in data["profile"]["buildConfigurations"]
+            if entry["id"] == "windows-shipping"
+        ]
+        data["profile"]["buildProducts"] = [
+            entry
+            for entry in data["profile"]["buildProducts"]
+            if entry["buildProfile"] == "windows-shipping"
+        ]
+        data["workflow"] = inventory.workflow_tool.build_workflow_record(
+            """name: probe
+on:
+  push:
+    branches: [Working]
+jobs:
+  ship:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        config: []
+    steps:
+      - name: Configure
+        run: cmake --preset windows-shipping
+      - name: Build
+        run: cmake --build build/windows-shipping --config MinSizeRel
+""",
+            "probe.yml",
+        )
+
+        job = data["workflow"]["jobs"][0]
+        self.assertFalse(job["matrixResolved"])
+        categories = finding_categories(check_parity.check_workflow_semantics(data))
+        self.assertIn("workflow-matrix-unresolved", categories)
+        self.assertIn("workflow-configuration-not-built", categories)
+
     def test_manual_only_workflow_cannot_be_a_required_gate(self) -> None:
         data = copy.deepcopy(inventory.build_inventory())
         data["workflow"] = inventory.workflow_tool.build_workflow_record(
