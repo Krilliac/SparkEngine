@@ -111,14 +111,12 @@ def main() -> int:
             os.environ.get("DEFERRED_REQUIRED_FAILURES_JSON", "{}"),
             object_pairs_hook=_reject_duplicate_json_keys,
         )
-        expected_jobs_raw = os.environ.get("EXPECTED_REQUIRED_JOBS_JSON", "")
-        expected_jobs = (
-            json.loads(
-                expected_jobs_raw,
-                object_pairs_hook=_reject_duplicate_json_keys,
-            )
-            if expected_jobs_raw
-            else None
+        expected_jobs_raw = os.environ.get("EXPECTED_REQUIRED_JOBS_JSON")
+        if not expected_jobs_raw:
+            raise ValueError("EXPECTED_REQUIRED_JOBS_JSON is required")
+        expected_jobs = json.loads(
+            expected_jobs_raw,
+            object_pairs_hook=_reject_duplicate_json_keys,
         )
         passed, deferred, failed = verify_with_policy(
             needs,

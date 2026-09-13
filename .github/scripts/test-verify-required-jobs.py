@@ -90,6 +90,29 @@ class VerifyRequiredJobsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "non-empty"):
             MODULE.verify({})
 
+    def test_main_rejects_missing_expected_job_inventory(self) -> None:
+        for expected_jobs_raw in (None, ""):
+            with self.subTest(expected_jobs_raw=expected_jobs_raw):
+                environment = os.environ.copy()
+                environment["NEEDS_JSON"] = '{"build":{"result":"success"}}'
+                environment["DEFERRED_REQUIRED_FAILURES_JSON"] = "{}"
+                if expected_jobs_raw is None:
+                    environment.pop("EXPECTED_REQUIRED_JOBS_JSON", None)
+                else:
+                    environment["EXPECTED_REQUIRED_JOBS_JSON"] = expected_jobs_raw
+                environment.pop("GITHUB_STEP_SUMMARY", None)
+                result = subprocess.run(
+                    [sys.executable, str(SCRIPT)],
+                    cwd=SCRIPT.parents[2],
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("EXPECTED_REQUIRED_JOBS_JSON is required", result.stderr)
+                self.assertNotIn("All 1 required jobs succeeded", result.stdout)
+
     def test_rejects_duplicate_job_keys_in_raw_needs_evidence(self) -> None:
         environment = os.environ.copy()
         environment.update(
