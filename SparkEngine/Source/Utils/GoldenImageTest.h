@@ -268,12 +268,22 @@ namespace Spark
 
         /**
          * @brief Run comparison for every golden image in the golden directory.
-         * @return Vector of comparison results (one per golden image found).
+         * @return Vector of comparison results (one per golden image found, or
+         *         one failed result when no golden images are available).
          */
         [[nodiscard]] std::vector<ImageComparisonResult> RunAllComparisons()
         {
             std::vector<ImageComparisonResult> results;
             auto names = GetGoldenImageNames();
+            if (names.empty())
+            {
+                ImageComparisonResult noEvidence;
+                noEvidence.sceneName = "<no-golden-images>";
+                noEvidence.matched = false;
+                results.push_back(noEvidence);
+                return results;
+            }
+
             results.reserve(names.size());
             for (const auto& name : names)
             {

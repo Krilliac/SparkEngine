@@ -3,6 +3,7 @@
 #include "Utils/GoldenImageTest.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <vector>
 
 // ============================================================================
@@ -165,6 +166,33 @@ TEST(GoldenImageTest_HasRegressions_EmptyResultsFailClosed)
 {
     std::vector<Spark::ImageComparisonResult> results;
     EXPECT_TRUE(Spark::GoldenImageTestRunner::HasRegressions(results));
+}
+
+TEST(GoldenImageTest_RunAllComparisons_EmptyDirectoryFailsClosed)
+{
+    const std::filesystem::path goldenDirectory =
+        std::filesystem::temp_directory_path() / "sparkengine-golden-image-test-empty";
+    std::error_code ec;
+    std::filesystem::remove_all(goldenDirectory, ec);
+    std::filesystem::create_directories(goldenDirectory, ec);
+
+    Spark::GoldenImageConfig config;
+    config.goldenImageDir = goldenDirectory.string();
+    config.outputDir = (goldenDirectory / "output").string();
+
+    auto& runner = Spark::GoldenImageTestRunner::GetInstance();
+    runner.Initialize(config);
+    const auto results = runner.RunAllComparisons();
+
+    EXPECT_EQ(results.size(), 1u);
+    EXPECT_TRUE(Spark::GoldenImageTestRunner::HasRegressions(results));
+    if (!results.empty())
+    {
+        EXPECT_FALSE(results.front().matched);
+    }
+
+    runner.Shutdown();
+    std::filesystem::remove_all(goldenDirectory, ec);
 }
 
 // ============================================================================
