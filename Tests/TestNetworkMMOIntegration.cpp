@@ -769,7 +769,7 @@ TEST(MMOIntegration_FullStackStress)
     RunServerFrames(nm, 20);
 
     int connectedCount = static_cast<int>(nm.GetClients().size());
-    EXPECT_GT(connectedCount, 0);
+    EXPECT_EQ(connectedCount, kClients);
 
     // Bridge to WorldServer
     for (const auto& [clientId, info] : nm.GetClients())
