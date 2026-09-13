@@ -291,6 +291,17 @@ class CrashSecurityTests(unittest.TestCase):
         validator.validate_manifest_file(manifest)
         self.assertIn("binary-policy", self.checks(validator))
 
+    def test_zip_traversal_directory_member_is_rejected(self) -> None:
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as output:
+            output.writestr("../", "")
+        (self.root / "crash.log").write_text("safe", encoding="utf-8")
+        (self.root / "package.zip").write_bytes(archive.getvalue())
+        manifest = self.write_manifest({"logFile": "crash.log", "zipFile": "package.zip"})
+        validator = crash.CrashPackageValidator()
+        validator.validate_manifest_file(manifest)
+        self.assertIn("binary-policy", self.checks(validator))
+
     def test_package_aggregate_is_bounded(self) -> None:
         (self.root / "crash.log").write_bytes(b"a" * 16)
         manifest = self.write_manifest({"logFile": "crash.log"})
