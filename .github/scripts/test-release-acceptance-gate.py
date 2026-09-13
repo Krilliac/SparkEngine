@@ -180,6 +180,9 @@ class FakeApi:
         self.patch_calls.append((url, body))
         if self.patch_should_fail:
             raise MODULE.GateError("PATCH failed")
+        self.release["draft"] = body.get("draft")
+        if "prerelease" in body:
+            self.release["prerelease"] = body["prerelease"]
         return self.published
 
 
@@ -198,11 +201,24 @@ class PostPatchTamperApi(FakeApi):
 
     def patch(self, url: str, token: str, body: dict, **_kwargs: Any) -> Any:
         self.patch_calls.append((url, body))
+        self.release["draft"] = body.get("draft")
+        if "prerelease" in body:
+            self.release["prerelease"] = body["prerelease"]
         response = dict(self.published)
         response["draft"] = body.get("draft")
         if "prerelease" in body:
             response["prerelease"] = body["prerelease"]
         return response
+
+
+class StalePublicationResponseApi(FakeApi):
+    """Return a successful-looking PATCH response without publishing the target."""
+
+    def patch(self, url: str, token: str, body: dict, **_kwargs: Any) -> Any:
+        self.patch_calls.append((url, body))
+        if body.get("draft") is True:
+            return _release(draft=True)
+        return _published_release()
 
 
 class TestVerifyDraftRelease(unittest.TestCase):
@@ -912,6 +928,20 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
         )
         api = PostPatchTamperApi()
         with self.assertRaisesRegex(MODULE.GateError, "post-PATCH"):
+            self._run_gate(api)
+        self.assertEqual(
+            [body["draft"] for _url, body in api.patch_calls],
+            [False, True],
+        )
+
+    @patch("subprocess.run")
+    def test_rejects_stale_publication_response_when_target_remains_draft(self, mock_run):
+        """A stale PATCH response must not make an unpublished target look complete."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{SHA}\trefs/tags/{RELEASE_TAG}\n"
+        )
+        api = StalePublicationResponseApi()
+        with self.assertRaisesRegex(MODULE.GateError, "post-PATCH publication validation failed"):
             self._run_gate(api)
         self.assertEqual(
             [body["draft"] for _url, body in api.patch_calls],

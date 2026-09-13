@@ -266,6 +266,20 @@ def verify_published_release(
     if published.get("prerelease") is not expected_prerelease:
         raise GateError("publication PATCH returned the wrong release channel")
 
+    current = _fetch_json(f"{api_url}/repos/{repository}/releases/{release_id}", token)
+    if not isinstance(current, dict):
+        raise GateError("post-PATCH release GET response is not an object")
+    if current.get("id") != release_id:
+        raise GateError("post-PATCH release ID mismatch")
+    if current.get("tag_name") != release_tag:
+        raise GateError("post-PATCH release tag mismatch")
+    if current.get("draft") is not False:
+        raise GateError("post-PATCH release GET did not prove a public release")
+    if current.get("prerelease") is not expected_prerelease:
+        raise GateError("post-PATCH release GET returned the wrong release channel")
+    if current.get("immutable") is not False:
+        raise GateError("post-PATCH release is immutable before publication validation completed")
+
     assets = _fetch_release_assets(api_url, token, repository, release_id)
     _verify_release_assets(assets, expected_names, expected_digests)
 
