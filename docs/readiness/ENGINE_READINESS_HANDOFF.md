@@ -1976,7 +1976,7 @@ ctest --test-dir build/windows-shipping -L editor-integration --output-on-failur
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** packaging · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-CPack omits products/modules, package smoke does not call Spark symbols, installed linkage can contradict host architecture, CLI behaviors are placeholders, and two GamePackager implementations diverge. 2026-09-12 progress: the canonical GamePackager now rejects traversal or path-like project names at both configuration validation and package-write boundaries, with a regression proving no escaped output is created. Full installed-consumer, asset, and clean-machine package qualification remains open.
+CPack omits products/modules, package smoke does not call Spark symbols, installed linkage can contradict host architecture, CLI behaviors are placeholders, and two GamePackager implementations diverge. 2026-09-12 progress: the canonical GamePackager now rejects traversal or path-like project names at both configuration validation and package-write boundaries, with a regression proving no escaped output is created. 2026-09-13 progress: the CLI now validates both .scene and .sparkscene inputs as structured JSON and fails closed on malformed scene files. Full installed-consumer, asset, and clean-machine package qualification remains open, and the duplicate legacy GamePackager still needs consolidation.
 
 **Dependency contract**
 
