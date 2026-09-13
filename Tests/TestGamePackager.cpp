@@ -62,8 +62,7 @@ TEST(GamePackager_ValidateConfig_MissingExe)
 
 TEST(GamePackager_Package_RejectsPathTraversalName)
 {
-    const std::string tmpDir =
-        (std::filesystem::temp_directory_path() / "spark_test_packager_validation").string();
+    const std::string tmpDir = (std::filesystem::temp_directory_path() / "spark_test_packager_validation").string();
     CleanupDir(tmpDir);
     const auto exePath = CreateTempFile(tmpDir, "game.exe", "fake_exe_data");
 

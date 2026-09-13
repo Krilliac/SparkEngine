@@ -1213,16 +1213,16 @@ namespace Spark
                     if (desc.sampleCount > 1)
                     {
                         dsvDesc.ViewDimension = desc.type == RHITextureType::Texture2DArray
-                                                     ? D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY
-                                                     : D3D11_DSV_DIMENSION_TEXTURE2DMS;
+                                                    ? D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY
+                                                    : D3D11_DSV_DIMENSION_TEXTURE2DMS;
                         if (dsvDesc.ViewDimension == D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY)
                             dsvDesc.Texture2DMSArray.ArraySize = desc.arraySize;
                     }
                     else
                     {
                         dsvDesc.ViewDimension = desc.type == RHITextureType::Texture2DArray
-                                                     ? D3D11_DSV_DIMENSION_TEXTURE2DARRAY
-                                                     : D3D11_DSV_DIMENSION_TEXTURE2D;
+                                                    ? D3D11_DSV_DIMENSION_TEXTURE2DARRAY
+                                                    : D3D11_DSV_DIMENSION_TEXTURE2D;
                         if (dsvDesc.ViewDimension == D3D11_DSV_DIMENSION_TEXTURE2DARRAY)
                         {
                             dsvDesc.Texture2DArray.MipSlice = 0;

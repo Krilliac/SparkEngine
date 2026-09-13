@@ -172,17 +172,17 @@ namespace
 
         std::atomic_bool replacementCalled{false};
         server->RegisterCommandHandler("console_cmd", RemoteDebugCapability::Inspect,
-                                      [&replacementCalled](const RemoteCommand& command)
-                                      {
-                                          replacementCalled.store(true, std::memory_order_release);
-                                          return RemoteCommand{"replacement_ok", "", command.requestId, 0.0f};
-                                      });
+                                       [&replacementCalled](const RemoteCommand& command)
+                                       {
+                                           replacementCalled.store(true, std::memory_order_release);
+                                           return RemoteCommand{"replacement_ok", "", command.requestId, 0.0f};
+                                       });
 
         const uint32_t requestId = client->ExecuteConsoleCommand("audit_reserved_rebind");
         system.Update(0.016f);
         const auto responses = client->PollResponses();
-        const bool denied = responses.size() == 1 && IsDenied(responses.front()) &&
-                            responses.front().requestId == requestId;
+        const bool denied =
+            responses.size() == 1 && IsDenied(responses.front()) && responses.front().requestId == requestId;
         system.Shutdown();
         return denied && !replacementCalled.load(std::memory_order_acquire);
     }

@@ -558,8 +558,7 @@ namespace Spark::RemoteDebug
                 "property_set", RemoteDebugCapability::ModifyProperties, [](const RemoteCommand& c)
                 { return RemoteCommand{"property_set_result", R"({"status":"ok"})", c.requestId, 0.0f}; });
             RegisterCommandHandlerUnlocked("profile_data", RemoteDebugCapability::Inspect,
-                                           [](const RemoteCommand& c)
-                                           {
+                                           [](const RemoteCommand& c) {
                                                return RemoteCommand{"profile_data",
                                                                     R"({"fps":0,"cpuMs":0,"gpuMs":0,"memoryMB":0})",
                                                                     c.requestId, 0.0f};

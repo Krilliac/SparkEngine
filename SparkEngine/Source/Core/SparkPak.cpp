@@ -308,7 +308,8 @@ namespace Spark
 
             if (!IsVirtualPathSafe(entry.virtualPath))
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPak: unsafe virtual path '%s'", entry.virtualPath.c_str());
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPak: unsafe virtual path '%s'",
+                                entry.virtualPath.c_str());
                 return false;
             }
 

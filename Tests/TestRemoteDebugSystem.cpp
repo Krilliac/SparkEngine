@@ -149,11 +149,11 @@ TEST(RemoteAdmin_ReservedCommandsCannotBeRebound)
 
     bool replacementHandlerCalled = false;
     sys.GetServer()->RegisterCommandHandler("console_cmd", RemoteDebugCapability::Inspect,
-                                           [&](const RemoteCommand& command)
-                                           {
-                                               replacementHandlerCalled = true;
-                                               return RemoteCommand{"replacement_ok", "", command.requestId, 0.0f};
-                                           });
+                                            [&](const RemoteCommand& command)
+                                            {
+                                                replacementHandlerCalled = true;
+                                                return RemoteCommand{"replacement_ok", "", command.requestId, 0.0f};
+                                            });
 
     const uint32_t requestId = sys.GetClient()->ExecuteConsoleCommand("stat fps");
     sys.Update(0.016f);

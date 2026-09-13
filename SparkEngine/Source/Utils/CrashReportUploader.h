@@ -43,10 +43,9 @@ inline std::string RedactCrashEndpointForLog(std::string_view endpoint)
         return "dbx://<redacted>";
     const size_t authorityBegin = schemeEnd + 3;
     const size_t authorityEnd = endpoint.find_first_of("/?#", authorityBegin);
-    const std::string_view authority = endpoint.substr(authorityBegin,
-                                                       authorityEnd == std::string_view::npos
-                                                           ? std::string_view::npos
-                                                           : authorityEnd - authorityBegin);
+    const std::string_view authority =
+        endpoint.substr(authorityBegin, authorityEnd == std::string_view::npos ? std::string_view::npos
+                                                                               : authorityEnd - authorityBegin);
     const size_t userInfoEnd = authority.rfind('@');
     const std::string_view host = authority.substr(userInfoEnd == std::string_view::npos ? 0 : userInfoEnd + 1);
     if (host.empty())
