@@ -1861,16 +1861,31 @@ namespace Spark
             // SaveExists()/GetSaveSlots() even though the data survived in the .bak file.
             // Copying leaves a valid slot file on disk at every step of the write.
             std::error_code backupError;
-            if (std::filesystem::exists(filepath, backupError) && !backupError)
+            const bool destinationExists = std::filesystem::exists(filepath, backupError);
+            if (backupError)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save,
+                               "WriteToFile: could not inspect the existing save '%s': %s; aborting replace",
+                               filepath.c_str(), backupError.message().c_str());
+                std::error_code removeError;
+                std::filesystem::remove(tmpPath, removeError);
+                return false;
+            }
+            if (destinationExists)
             {
                 std::error_code rotateError;
-                std::filesystem::copy_file(filepath, filepath + kSaveBackupSuffix,
-                                           std::filesystem::copy_options::overwrite_existing, rotateError);
-                if (rotateError)
+                const bool retained =
+                    std::filesystem::copy_file(filepath, filepath + kSaveBackupSuffix,
+                                               std::filesystem::copy_options::overwrite_existing, rotateError);
+                if (!retained || rotateError)
                 {
                     SPARK_LOG_WARN(Spark::LogCategory::Save,
-                                   "WriteToFile: could not retain the last-good copy of '%s': %s", filepath.c_str(),
-                                   rotateError.message().c_str());
+                                   "WriteToFile: could not retain the last-good copy of '%s': %s; aborting replace",
+                                   filepath.c_str(),
+                                   rotateError ? rotateError.message().c_str() : "copy not performed");
+                    std::error_code removeError;
+                    std::filesystem::remove(tmpPath, removeError);
+                    return false;
                 }
             }
 

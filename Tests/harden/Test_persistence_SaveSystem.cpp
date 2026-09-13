@@ -766,6 +766,48 @@ TEST(SaveSystem_Save_ReplacesExistingSlotAtomically)
     std::filesystem::remove_all(dir);
 }
 
+TEST(SaveMigration_SaveAbortsWhenPreviousRevisionCannotBeRetained)
+{
+    const std::string dir = MakeTempSaveDir("backup_retention_failure");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    World firstWorld;
+    const EntityID firstEntity = firstWorld.CreateEntity("first-revision");
+    firstWorld.AddComponent<Transform>(firstEntity);
+    SaveMetadata firstMetadata;
+    firstMetadata.saveName = "First revision";
+    EXPECT_TRUE(ss.Save("retention-failure", firstWorld, firstMetadata));
+
+    const auto primaryPath = std::filesystem::path(dir) / "retention-failure.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "retention-failure.spark_save.bak";
+    ASSERT_TRUE(std::filesystem::create_directory(backupPath));
+
+    World secondWorld;
+    const EntityID secondEntity = secondWorld.CreateEntity("second-revision");
+    secondWorld.AddComponent<Transform>(secondEntity);
+    SaveMetadata secondMetadata;
+    secondMetadata.saveName = "Second revision";
+
+    // Retaining the previous revision is part of the save transaction. If that
+    // boundary fails, replacing the primary would silently discard the only
+    // recoverable copy of the first revision.
+    EXPECT_FALSE(ss.Save("retention-failure", secondWorld, secondMetadata));
+    EXPECT_TRUE(std::filesystem::exists(primaryPath));
+    EXPECT_TRUE(std::filesystem::is_directory(backupPath));
+
+    SaveMetadata retainedMetadata;
+    EXPECT_TRUE(ss.GetSaveMetadata("retention-failure", retainedMetadata));
+    EXPECT_EQ(retainedMetadata.saveName, std::string("First revision"));
+
+    World retainedWorld;
+    EXPECT_TRUE(ss.Load("retention-failure", retainedWorld));
+    EXPECT_TRUE(WorldContainsNamedEntity(retainedWorld, "first-revision"));
+    EXPECT_FALSE(WorldContainsNamedEntity(retainedWorld, "second-revision"));
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST(SaveSystem_DeleteSave_EvictsCachedPrimaryAndBackup)
 {
     const std::string dir = MakeTempSaveDir("delete_cached_revisions");
