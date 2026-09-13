@@ -9,6 +9,15 @@ import sys
 from typing import Any
 
 
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON object key: {key!r}")
+        value[key] = item
+    return value
+
+
 def verify(needs: Any) -> tuple[list[str], list[tuple[str, str]]]:
     passed, _deferred, failed = verify_with_policy(needs)
     return passed, failed
@@ -97,12 +106,20 @@ def markdown(
 def main() -> int:
     raw = os.environ.get("NEEDS_JSON", "")
     try:
-        needs = json.loads(raw)
+        needs = json.loads(raw, object_pairs_hook=_reject_duplicate_json_keys)
         deferred_failures = json.loads(
-            os.environ.get("DEFERRED_REQUIRED_FAILURES_JSON", "{}")
+            os.environ.get("DEFERRED_REQUIRED_FAILURES_JSON", "{}"),
+            object_pairs_hook=_reject_duplicate_json_keys,
         )
         expected_jobs_raw = os.environ.get("EXPECTED_REQUIRED_JOBS_JSON", "")
-        expected_jobs = json.loads(expected_jobs_raw) if expected_jobs_raw else None
+        expected_jobs = (
+            json.loads(
+                expected_jobs_raw,
+                object_pairs_hook=_reject_duplicate_json_keys,
+            )
+            if expected_jobs_raw
+            else None
+        )
         passed, deferred, failed = verify_with_policy(
             needs,
             deferred_failures=deferred_failures,
