@@ -620,10 +620,10 @@
 | `IDS_APP_TITLE` | macro | SparkEngine | [resource.h:L18](../../SparkEngine/Source/Core/resource.h#L18) |  |
 | `IDYES` | macro | SparkEngine | [PlatformTypes.h:L321](../../SparkEngine/Source/Core/PlatformTypes.h#L321) |  |
 | `IncomingDamageFilter` | alias | GameModules | [TFDamageSystem.h:L211](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.h#L211) |  |
-| `InjectConsoleFn` | alias | SparkEngine | [ModuleManager.cpp:L830](../../SparkEngine/Source/Core/ModuleManager.cpp#L830) |  |
-| `InjectContextFn` | alias | SparkEngine | [ModuleManager.cpp:L851](../../SparkEngine/Source/Core/ModuleManager.cpp#L851) |  |
-| `InjectImGuiFn` | alias | SparkEngine | [ModuleManager.cpp:L863](../../SparkEngine/Source/Core/ModuleManager.cpp#L863) |  |
-| `InjectInvalidStateDetectorFn` | alias | SparkEngine | [ModuleManager.cpp:L837](../../SparkEngine/Source/Core/ModuleManager.cpp#L837) |  |
+| `InjectConsoleFn` | alias | SparkEngine | [ModuleManager.cpp:L831](../../SparkEngine/Source/Core/ModuleManager.cpp#L831) |  |
+| `InjectContextFn` | alias | SparkEngine | [ModuleManager.cpp:L852](../../SparkEngine/Source/Core/ModuleManager.cpp#L852) |  |
+| `InjectImGuiFn` | alias | SparkEngine | [ModuleManager.cpp:L864](../../SparkEngine/Source/Core/ModuleManager.cpp#L864) |  |
+| `InjectInvalidStateDetectorFn` | alias | SparkEngine | [ModuleManager.cpp:L838](../../SparkEngine/Source/Core/ModuleManager.cpp#L838) |  |
 | `InstanceID` | alias | SparkEngine | [InstanceManager.h:L29](../../SparkEngine/Source/Engine/Gameplay/InstanceManager.h#L29) |  |
 | `InstanceID` | alias | Tests | [TestInstanceManager.cpp:L16](../../Tests/TestInstanceManager.cpp#L16) |  |
 | `INT` | alias | SparkEngine | [PlatformTypes.h:L36](../../SparkEngine/Source/Core/PlatformTypes.h#L36) |  |
@@ -1426,7 +1426,7 @@
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [DynamicPluginHost.cpp:L31](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L31) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [GameImGuiLayer.h:L28](../../SparkEngine/Source/Core/GameImGuiLayer.h#L28) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [GameModuleLoader.cpp:L14](../../SparkEngine/Source/Core/GameModuleLoader.cpp#L14) |  |
-| `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [ModuleManager.cpp:L38](../../SparkEngine/Source/Core/ModuleManager.cpp#L38) |  |
+| `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [ModuleManager.cpp:L39](../../SparkEngine/Source/Core/ModuleManager.cpp#L39) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [StartupSplash.cpp:L23](../../SparkEngine/Source/Core/StartupSplash.cpp#L23) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [AsyncDatabase.cpp:L24](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L24) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [MemoryIntegrity.cpp:L25](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp#L25) |  |

@@ -674,7 +674,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*604 test-bearing `.cpp`/`.mm` files, 7356 source-level test definitions*
+*604 test-bearing `.cpp`/`.mm` files, 7357 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -999,7 +999,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMetalRayTracing` | 16 |
 | `TestMetalRayTracingLive` | 10 |
 | `TestModSystem` | 9 |
-| `TestModuleABI` | 25 |
+| `TestModuleABI` | 26 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
