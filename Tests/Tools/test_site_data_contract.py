@@ -421,16 +421,17 @@ class LegalContractConsistencyTests(ContractTestCase):
 class LegalPublicWordingTests(ContractTestCase):
     """Public legal wording cannot outrun the reviewed license declaration."""
 
-    def test_non_osi_license_rejects_unreviewed_project_open_source_claims(self) -> None:
+    def test_non_osi_license_accepts_reviewed_source_available_project_wording(self) -> None:
         validator = site_data_validate.Validator(copy.deepcopy(self.contract))
-        with self.assertRaises(SiteDataError) as raised:
-            validator.validate(legal=True)
+        validator.validate(legal=True)
 
-        errors = str(raised.exception)
-        self.assertIn("unreviewed open-source wording", errors)
-        self.assertIn("README.md", errors)
-        self.assertIn("wiki/Home.md", errors)
-        self.assertIn("wiki/getting-started/FAQ.md", errors)
+        errors = site_data_validate.legal_public_wording_errors(
+            self.contract["content"]["legal"]["license"],
+            {"README.md": "A C++23 open-source game engine."},
+        )
+        self.assertEqual(1, len(errors))
+        self.assertIn("unreviewed open-source wording", errors[0])
+        self.assertIn("README.md", errors[0])
 
     def test_negated_wording_is_allowed_for_explaining_the_distinction(self) -> None:
         errors = site_data_validate.legal_public_wording_errors(

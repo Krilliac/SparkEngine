@@ -1,6 +1,6 @@
 # Spark Engine
 
-A C++23 open-source 3D game engine with multiple graphics backends behind a shared RHI surface, ECS (EnTT), Jolt Physics, AngelScript scripting, and an ImGui-based editor. Originally built around first-person shooters, it now includes genre templates for RPGs, MMOs, RTS, racing, open-world, and platformers.
+A C++23 source-available 3D game engine with multiple graphics backends behind a shared RHI surface, ECS (EnTT), Jolt Physics, AngelScript scripting, and an ImGui-based editor. Originally built around first-person shooters, it now includes genre templates for RPGs, MMOs, RTS, racing, open-world, and platformers.
 
 Website: [sparkengine.dev](https://sparkengine.dev/)
 

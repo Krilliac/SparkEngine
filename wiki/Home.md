@@ -1,6 +1,6 @@
 # Spark Engine
 
-**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine with a broad source inventory spanning FPS, RPG, MMO, open-world, and other genres. That inventory includes a multi-backend RHI (DirectX 11/12, Vulkan, OpenGL, Metal, NullRHI), rendering experiments, Jolt Physics, audio paths, scripting tools, an EnTT-based ECS architecture, an ImGui editor, world streaming, server architecture, and collaborative-editing prototypes. Presence in the source tree is not a support or release claim; non-profile breadth remains experimental unless the readiness contract says otherwise.
+**Spark Engine** is a free, source-available 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine with a broad source inventory spanning FPS, RPG, MMO, open-world, and other genres. That inventory includes a multi-backend RHI (DirectX 11/12, Vulkan, OpenGL, Metal, NullRHI), rendering experiments, Jolt Physics, audio paths, scripting tools, an EnTT-based ECS architecture, an ImGui editor, world streaming, server architecture, and collaborative-editing prototypes. Presence in the source tree is not a support or release claim; non-profile breadth remains experimental unless the readiness contract says otherwise.
 
 > **Release hardening in progress** — SparkEngine is currently source-usable,
 > but no versioned release has been published. The repository's readiness gates
