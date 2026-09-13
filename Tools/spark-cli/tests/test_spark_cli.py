@@ -348,6 +348,30 @@ class SparkRunTests(unittest.TestCase):
         self.assertIn("Multiple project descriptors", output.getvalue())
 
 
+class SparkValidateTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_validate_rejects_malformed_sparkscene(self):
+        scene = self.root / "Scenes" / "Broken.sparkscene"
+        scene.parent.mkdir(parents=True)
+        scene.write_text('{"entities": [', encoding="utf-8")
+        output = io.StringIO()
+
+        with working_directory(self.root), contextlib.redirect_stdout(output):
+            result = spark_cli.cmd_validate(
+                SimpleNamespace(path=".", strict=False, format="text")
+            )
+
+        self.assertEqual(result, 1)
+        self.assertIn("Broken.sparkscene", output.getvalue())
+        self.assertIn("Could not parse scene file", output.getvalue())
+
+
 class SparkPackageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

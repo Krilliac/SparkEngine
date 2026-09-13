@@ -1505,26 +1505,47 @@ def cmd_validate(args):
                 "suggestion": "Check file encoding and JSON syntax"
             })
 
-    # Check scene files for broken references
-    for scene_file in target_path.rglob("*.scene"):
-        checked += 1
-        try:
-            content = scene_file.read_text(encoding="utf-8")
-            scene_data = json.loads(content)
-            # Check for referenced assets
-            for entity in scene_data.get("entities", []):
-                for comp in entity.get("components", []):
-                    if "mesh" in comp and comp["mesh"]:
-                        mesh_path = target_path / comp["mesh"]
-                        if not mesh_path.exists():
-                            warnings.append({
-                                "file": str(scene_file),
-                                "severity": "warning",
-                                "message": f"Missing mesh reference: {comp['mesh']}",
-                                "suggestion": "Update mesh path or remove component"
-                            })
-        except (json.JSONDecodeError, UnicodeDecodeError, KeyError):
-            pass
+    # Check scene files for broken references. Both the legacy .scene suffix
+    # and the shipped .sparkscene format are package inputs; silently skipping
+    # the latter (or malformed JSON in either format) makes validation
+    # report success for content the runtime cannot load.
+    for scene_pattern in ("*.scene", "*.sparkscene"):
+        for scene_file in target_path.rglob(scene_pattern):
+            checked += 1
+            try:
+                content = scene_file.read_text(encoding="utf-8")
+                scene_data = json.loads(content)
+                if not isinstance(scene_data, dict):
+                    raise ValueError("scene root must be a JSON object")
+                entities = scene_data.get("entities", [])
+                if not isinstance(entities, list):
+                    raise ValueError("scene entities must be a JSON array")
+                # Check for referenced assets
+                for entity in entities:
+                    if not isinstance(entity, dict):
+                        raise ValueError("scene entity must be a JSON object")
+                    components = entity.get("components", [])
+                    if not isinstance(components, list):
+                        raise ValueError("scene components must be a JSON array")
+                    for comp in components:
+                        if not isinstance(comp, dict):
+                            raise ValueError("scene component must be a JSON object")
+                        if "mesh" in comp and comp["mesh"]:
+                            mesh_path = target_path / comp["mesh"]
+                            if not mesh_path.exists():
+                                warnings.append({
+                                    "file": str(scene_file),
+                                    "severity": "warning",
+                                    "message": f"Missing mesh reference: {comp['mesh']}",
+                                    "suggestion": "Update mesh path or remove component"
+                                })
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError, ValueError) as error:
+                errors.append({
+                    "file": str(scene_file),
+                    "severity": "error",
+                    "message": f"Could not parse scene file: {error}",
+                    "suggestion": "Check scene JSON syntax and structure"
+                })
 
     # Check for orphaned assets (files not referenced by any scene/material)
     for shader_file in target_path.rglob("*.hlsl"):
