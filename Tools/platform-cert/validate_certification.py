@@ -396,12 +396,17 @@ class TrustedContext:
 
 
 class ValidationResult:
-    """Accumulates pass/fail verdicts per row."""
+    """Accumulates pass/fail verdicts per row.
 
-    def __init__(self) -> None:
+    A result without trusted context is useful for inspection only and cannot
+    claim certification.
+    """
+
+    def __init__(self, *, trusted_context: TrustedContext | None = None) -> None:
         self.errors: list[str] = []
         self.warnings: list[str] = []
         self.structural_errors: list[str] = []
+        self.trusted_context = trusted_context
         self.rows_checked = 0
         self.rows_certified = 0
         self.rows_failed = 0
@@ -418,8 +423,13 @@ class ValidationResult:
 
     @property
     def fully_certified(self) -> bool:
-        """True only when every certifiable row actually certified."""
-        return self.ok and self.rows_certified > 0 and self.rows_failed == 0
+        """True only when every certifiable row passed with trusted context."""
+        return (
+            self.trusted_context is not None
+            and self.ok
+            and self.rows_certified > 0
+            and self.rows_failed == 0
+        )
 
     def summary(self) -> str:
         lines: list[str] = []
@@ -955,9 +965,9 @@ def cross_validate(
     authority: da.Authority | None = None,
     trusted: TrustedContext | None = None,
 ) -> ValidationResult:
-    """Cross-validate matrix rows against evidence records."""
+    """Cross-validate rows; without trust, the result is inspection-only."""
     bound_age = validate_max_age_hours(max_age_hours)
-    result = ValidationResult()
+    result = ValidationResult(trusted_context=trusted)
     now = now or datetime.now(timezone.utc)
 
     if trusted is not None and matrix.get("commitSha") != trusted.commit_sha:
@@ -1196,10 +1206,19 @@ def load_and_validate(
     now: datetime | None = None,
     allow_unknown_profile: bool = False,
 ) -> ValidationResult:
-    """Load matrix plus evidence records and run the full validation."""
+    """Load matrix plus evidence records and run trusted full validation."""
     bound_age = validate_max_age_hours(max_age_hours)
     now = now or datetime.now(timezone.utc)
-    result = ValidationResult()
+    result = ValidationResult(trusted_context=trusted)
+
+    if trusted is None:
+        message = (
+            "trusted context is required for full validation: supply the exact "
+            "commit SHA and collector provenance from a trusted channel"
+        )
+        result.error(message)
+        result.structural_errors.append(message)
+        return result
 
     matrix = load_strict_json(matrix_path)
     # Unknown profiles may be inspected through the matrix-only diagnostic

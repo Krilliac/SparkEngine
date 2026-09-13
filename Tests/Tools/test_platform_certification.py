@@ -375,6 +375,22 @@ class TestCertifiablePath(BundleTestCase):
     def test_measured_bundle_certifies(self) -> None:
         self.assertCertified(self.bundle.validate())
 
+    def test_complete_bundle_without_trusted_context_cannot_certify(self) -> None:
+        result = self.bundle.validate(trusted=None)
+        self.assertRejected(result, "trusted context")
+
+    def test_cross_validation_without_trusted_context_is_inspection_only(self) -> None:
+        result = vc.cross_validate(
+            self.bundle.matrix,
+            self.bundle.records,
+            now=NOW,
+            artifact_root=self.bundle.artifact_root,
+            authority=AUTHORITY,
+        )
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.rows_certified, 2)
+        self.assertFalse(result.fully_certified)
+
     def test_both_canonical_rows_are_certified(self) -> None:
         result = self.bundle.validate()
         self.assertEqual(result.rows_checked, 2)
@@ -2052,7 +2068,7 @@ class TestLedgerConsistency(BundleTestCase):
         self.assertIn("certification did not pass", errors[0])
 
     def test_a_completed_item_with_certification_is_accepted(self) -> None:
-        result = vc.ValidationResult()
+        result = vc.ValidationResult(trusted_context=trusted())
         result.rows_checked = 2
         result.rows_certified = 2
         self.assertEqual(vc.check_ledger_claim(self._ledger("complete"), result), [])
