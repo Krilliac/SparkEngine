@@ -2746,7 +2746,7 @@
 | `ParallelPerceptionSystem` | class | SparkEngine | [ParallelPerception.h:L120](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L120) |  |
 | `ParallelSystemExecutor` | class | SparkEngine | [ParallelSystemExecutor.h:L73](../../SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.h#L73) | Executes ECS systems in parallel where safe, serial where required. |
 | `ParameterDecl` | struct | SparkEngine | [MaterialDefinition.h:L104](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L104) | Declaration of a single material parameter with metadata. |
-| `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecovery.cpp:L380](../../SparkEditor/Source/Core/EditorRecovery.cpp#L380) |  |
+| `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecovery.cpp:L382](../../SparkEditor/Source/Core/EditorRecovery.cpp#L382) |  |
 | `ParsedScene` | struct | SparkEditor | [SceneImportPanel.h:L85](../../SparkEditor/Source/Panels/SceneImportPanel.h#L85) | Full parse result for one .scene file. |
 | `Parser` | class | SparkEngine | [JsonUtils.h:L409](../../SparkEngine/Source/Utils/JsonUtils.h#L409) |  |
 | `ParseResult` | struct | SparkServer | [ServerApplication.h:L53](../../SparkServer/src/ServerApplication.h#L53) |  |
@@ -3274,7 +3274,7 @@
 | `RecordingAudioBackend` | class | Tests | [TestSequencerAudioWiring.cpp:L27](../../Tests/TestSequencerAudioWiring.cpp#L27) |  |
 | `RecordingContext` | class | Tests | [Test_gamemodules_mmochat_di.cpp:L35](../../Tests/harden/Test_gamemodules_mmochat_di.cpp#L35) | Minimal IEngineContext that records GetNetwork() resolution. |
 | `RecordingSystem` | class | Tests | [Test_tests_ecsystemordering_real.cpp:L26](../../Tests/harden/Test_tests_ecsystemordering_real.cpp#L26) |  |
-| `RecoveryFiles` | struct | SparkEditor | [EditorRecovery.cpp:L82](../../SparkEditor/Source/Core/EditorRecovery.cpp#L82) |  |
+| `RecoveryFiles` | struct | SparkEditor | [EditorRecovery.cpp:L84](../../SparkEditor/Source/Core/EditorRecovery.cpp#L84) |  |
 | `Rect` | struct | SparkEngine | [UILayoutExtensions.h:L98](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L98) |  |
 | `RecursiveEvent` | struct | Tests | [TestAdversarialEngine.cpp:L213](../../Tests/TestAdversarialEngine.cpp#L213) |  |
 | `RedeployFacts` | struct | Tests | [TestTFRedeployRules.cpp:L77](../../Tests/TestTFRedeployRules.cpp#L77) |  |

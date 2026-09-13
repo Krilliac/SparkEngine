@@ -11,14 +11,14 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 | Section | Lines |
 |---------|------:|
 | **SparkEngine/Source** | 321496 |
-| **SparkEditor/Source** | 103594 |
+| **SparkEditor/Source** | 103596 |
 | **GameModules** | 142616 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 183548 |
+| **Tests** | 183564 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~779071** |
+| **Total C++ (excl. ThirdParty)** | **~779089** |
 
 ### File Counts
 
@@ -103,14 +103,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 103594 |
+| Total editor lines | 103596 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 605 |
-| TEST() definitions | 7348 |
+| TEST() definitions | 7349 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
