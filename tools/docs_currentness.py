@@ -48,7 +48,9 @@ HEALTH_OUTPUT_PATH = PurePosixPath("docs/.health.json")
 # may need to exercise Windows path semantics on a non-Windows host; changing
 # ``os.name`` globally also changes pathlib's path factory and makes that test
 # construct WindowsPath instances that cannot run on Linux.
-CASE_INSENSITIVE_TRACKED_PATHS = os.name == "nt"
+WINDOWS_HOST = os.name == "nt"
+CASE_INSENSITIVE_TRACKED_PATHS = WINDOWS_HOST
+GIT_BASH_PATH = r"C:\Program Files\Git\bin\bash.exe"
 OUTPUT_OVERRIDE_ENVIRONMENT = (
     "SPARK_DOC_API_OUTPUT_DIR",
     "SPARK_DOC_API_DIR",
@@ -280,10 +282,14 @@ def find_bash(*, allow_override: bool = True) -> str:
     explicit = os.environ.get("SPARK_DOC_BASH") if allow_override else None
     if explicit and Path(explicit).is_file():
         return explicit
+    if WINDOWS_HOST:
+        common = Path(GIT_BASH_PATH)
+        if common.is_file():
+            return str(common)
     found = shutil.which("bash")
     if found:
         return found
-    common = Path(r"C:\Program Files\Git\bin\bash.exe")
+    common = Path(GIT_BASH_PATH)
     if common.is_file():
         return str(common)
     raise CurrentnessError("bash is required for isolated documentation generation")

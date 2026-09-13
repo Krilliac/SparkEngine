@@ -297,6 +297,22 @@ class DocsGenerationHostileTests(unittest.TestCase):
             {"1"},
         )
 
+    def test_windows_prefers_installed_git_bash_over_wsl_shim(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-bash-selection-") as directory:
+            git_bash = Path(directory) / "bash.exe"
+            git_bash.write_text("trusted", encoding="utf-8")
+            with (
+                mock.patch.object(docs_currentness, "WINDOWS_HOST", True, create=True),
+                mock.patch.object(docs_currentness, "GIT_BASH_PATH", str(git_bash), create=True),
+                mock.patch.object(
+                    docs_currentness.shutil,
+                    "which",
+                    return_value=r"C:\WindowsApps\bash.exe",
+                ),
+            ):
+                selected = docs_currentness.find_bash(allow_override=False)
+        self.assertEqual(str(git_bash), selected)
+
     def test_bounded_process_timeout_terminates_descendants_promptly(self) -> None:
         child = (
             "import subprocess,sys,time; "
