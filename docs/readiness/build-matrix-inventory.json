@@ -3341,7 +3341,7 @@
       "target": "spark_fps_abilities_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 116,
+      "line": 123,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3351,7 +3351,7 @@
       "target": "spark_fps_assets_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 44,
+      "line": 51,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3371,7 +3371,7 @@
       "target": "spark_fps_inventory_quests_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 128,
+      "line": 135,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3381,7 +3381,7 @@
       "target": "spark_fps_progression_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 24,
+      "line": 31,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3391,7 +3391,7 @@
       "target": "spark_fps_weapons_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 67,
+      "line": 74,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -5167,7 +5167,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 116,
+          "line": 123,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5185,7 +5185,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 44,
+          "line": 51,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5221,7 +5221,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 128,
+          "line": 135,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5239,7 +5239,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 24,
+          "line": 31,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5257,7 +5257,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 67,
+          "line": 74,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
