@@ -436,6 +436,8 @@ jobs:
     - name: Check signed installer bytes after native qualification
       if: needs.prepare.outputs.is_versioned == 'true'
       shell: pwsh
+      env:
+        SPARK_RELEASE_SIGNER_THUMBPRINT: ${{ vars.SPARK_RELEASE_SIGNER_THUMBPRINT }}
       run: |
         python .github/scripts/verify-windows-package-signatures.py --check-hashes `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `

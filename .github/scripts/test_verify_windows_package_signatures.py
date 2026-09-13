@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 SCRIPT = Path(__file__).with_name("verify-windows-package-signatures.py")
 SPEC = importlib.util.spec_from_file_location("signatures", SCRIPT)
@@ -79,9 +80,70 @@ class SignatureTests(unittest.TestCase):
                     self.assertEqual(len(data["artifacts"]), 2)
                     self.assertEqual(data["source_sha"], SOURCE)
                     self.assertEqual(data["artifacts"][0]["sha256"], hashlib.sha256(exe.read_bytes()).hexdigest())
-                    self.assertEqual(MODULE.check_hashes(packages, "1.2.3", SOURCE, report), 0)
-                    exe.write_bytes(b"changed after native installer probe")
-                    self.assertNotEqual(MODULE.check_hashes(packages, "1.2.3", SOURCE, report), 0)
+                    with mock.patch.dict(
+                        os.environ,
+                        {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT},
+                        clear=False,
+                    ):
+                        self.assertEqual(MODULE.check_hashes(packages, "1.2.3", SOURCE, report), 0)
+                        exe.write_bytes(b"changed after native installer probe")
+                        self.assertNotEqual(MODULE.check_hashes(packages, "1.2.3", SOURCE, report), 0)
+
+    def test_check_hashes_rejects_forged_signature_identity(self):
+        self.assertIsNotNone(MODULE)
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            packages = root / "packages"
+            packages.mkdir()
+            files = []
+            for suffix in (".exe", ".msi"):
+                path = packages / (PREFIX + suffix)
+                path.write_bytes(b"fixture " + suffix.encode())
+                files.append(path)
+            report = root / "result.json"
+            valid_signature = {
+                "Status": "Valid",
+                "SignatureType": "Authenticode",
+                "SignerThumbprint": THUMBPRINT,
+                "SignerSubject": "CN=Fixture",
+                "TimestampThumbprint": "C" * 40,
+                "TimestampSubject": "CN=Timestamp",
+            }
+            report.write_text(json.dumps({
+                "scope": "stable-windows-outer-installers-only",
+                "version": "1.2.3",
+                "source_sha": SOURCE,
+                "publisher_thumbprint": THUMBPRINT,
+                "passed": True,
+                "artifacts": [
+                    {"name": path.name, "sha256": MODULE.digest(path),
+                     "signature": dict(valid_signature)}
+                    for path in files
+                ],
+            }), encoding="utf-8")
+
+            baseline = json.loads(report.read_text(encoding="utf-8"))
+            mutations = (
+                lambda data: data.update({"publisher_thumbprint": "0" * 40}),
+                lambda data: data["artifacts"][0].pop("signature"),
+                lambda data: data["artifacts"][0]["signature"].update(
+                    {"SignerThumbprint": "D" * 40}
+                ),
+            )
+            with mock.patch.dict(
+                os.environ,
+                {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT},
+                clear=False,
+            ):
+                for mutate in mutations:
+                    with self.subTest(mutate=mutate):
+                        data = json.loads(json.dumps(baseline))
+                        mutate(data)
+                        report.write_text(json.dumps(data), encoding="utf-8")
+                        self.assertNotEqual(
+                            MODULE.check_hashes(packages, "1.2.3", SOURCE, report),
+                            0,
+                        )
 
     def test_symlink_rejected(self):
         self.assertIsNotNone(MODULE)
