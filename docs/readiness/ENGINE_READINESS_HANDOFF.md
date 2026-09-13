@@ -2223,7 +2223,7 @@ ctest --test-dir build/linux-shipping -L compatibility --output-on-failure --no-
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** sdk · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior. 2026-09-12 progress: SparkGameModule now rejects SDK headers with multiple or missing SPARK_SDK_VERSION definitions before deriving the module ABI sidecar, with a configure-level hostile-header regression. The full installed-consumer and N-1 compatibility gates remain open.
+Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior. 2026-09-12 progress: SparkGameModule now rejects SDK headers with multiple or missing SPARK_SDK_VERSION definitions before deriving the module ABI sidecar, with a configure-level hostile-header regression. 2026-09-13 progress: the sdk install component now carries its legal materials, documentation, third-party notices, EmptyProject example, and a completeness CTest. The full installed-consumer and N-1 compatibility gates remain open.
 
 **Dependency contract**
 
@@ -2269,7 +2269,7 @@ ctest --test-dir /tmp/spark-sdk-consumer --output-on-failure --no-tests=error
 
 **Automated evidence**
 
-- Test selectors: `SDKConsumer_*`, `ModuleABI_*`, `ModuleVersion_*`
+- Test selectors: `SDKConsumer_*`, `ModuleABI_*`, `ModuleVersion_*`, `SparkSDKComponentCompleteness`
 - Required CI jobs: `sdk-consumer-linux`, `sdk-consumer-windows`, `module-compatibility`
 - Performance / reliability budgets:
   - Module load/reload budgets from PERF-100

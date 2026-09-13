@@ -611,10 +611,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3340,
+      "line": 3371,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3336",
+          "id": "CMakeLists.txt:3367",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1360,7 +1360,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1692,
+      "line": 1703,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1411,10 +1411,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3340,
+      "line": 3371,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3336",
+          "id": "CMakeLists.txt:3367",
           "branch": 0,
           "branches": [
             "WIN32"
