@@ -741,6 +741,12 @@ class TestCMakeTokenizer(unittest.TestCase):
         with self.assertRaisesRegex(policy_common.PolicyError, "unterminated argument list"):
             build_binding.parse_cmake("add_executable(Ghost\n", "f")
 
+    def test_parenthesis_nesting_is_bounded(self) -> None:
+        nesting = build_binding.MAX_REACHABILITY_DEPTH + 1
+        source = f"message({'(' * nesting}value{')' * nesting})\n"
+        with self.assertRaisesRegex(policy_common.PolicyError, "exceeds nesting depth"):
+            build_binding.parse_cmake(source, "f")
+
     def test_unresolvable_variable_is_refused(self) -> None:
         with self.assertRaisesRegex(policy_common.PolicyError, "unresolvable CMake variable"):
             build_binding._literal("${MYSTERY}", "f")
