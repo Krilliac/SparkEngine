@@ -431,9 +431,12 @@ namespace Spark::Net
         }
         uint32_t payloadLen = buf.ReadUint32();
 
-        if (payloadLen > length || buf.GetReadPosition() > length - payloadLen)
+        const size_t payloadOffset = buf.GetReadPosition();
+        if (payloadOffset > length || static_cast<size_t>(payloadLen) != length - payloadOffset)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Payload length %u exceeds remaining packet data", payloadLen);
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "Payload length %u does not match remaining packet data (%zu bytes)", payloadLen,
+                           payloadOffset <= length ? length - payloadOffset : 0u);
             return false;
         }
 
