@@ -1553,6 +1553,22 @@ set_tests_properties(SparkInstalledPackageRejectsMissingVersionDiagnostics PROPE
     LABELS "sdk;package;unit"
     TIMEOUT 30)
 
+add_test(
+    NAME SparkSDKRequiresInstalledVersionHeader
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_GAME_MODULE_CMAKE=${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/sdk-version-header-missing/$<CONFIG>"
+        "-DCONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCONSUMER_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCONSUMER_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCONSUMER_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestInstalledPackageRequiresVersionHeader.cmake)
+set_tests_properties(SparkSDKRequiresInstalledVersionHeader PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 30)
+
 # ----------------------------------------------------------------------------
 # Installed-SDK template gate (opt-in)
 # ----------------------------------------------------------------------------

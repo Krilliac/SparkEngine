@@ -21,12 +21,16 @@ set(_SPARK_MODULE_ABI_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 # fallback here is unsafe: changing IModule can otherwise leave every module
 # advertising the previous ABI until somebody manually reconfigures CMake.
 set(_spark_sdk_version_header "")
-set(_spark_sdk_version_candidates
-    "${CMAKE_SOURCE_DIR}/SparkSDK/Include/Spark/Version.h"
-    "${_SPARK_MODULE_ABI_CMAKE_DIR}/../SparkSDK/Include/Spark/Version.h")
 if(DEFINED SPARK_ENGINE_INCLUDE_DIR)
-    list(PREPEND _spark_sdk_version_candidates
+    # The package config sets this to its installed include root. Do not fall
+    # back to the consumer's source tree: a local/stale SparkSDK header must
+    # not make an incomplete installed package configure successfully.
+    set(_spark_sdk_version_candidates
         "${SPARK_ENGINE_INCLUDE_DIR}/Spark/Version.h")
+else()
+    set(_spark_sdk_version_candidates
+        "${CMAKE_SOURCE_DIR}/SparkSDK/Include/Spark/Version.h"
+        "${_SPARK_MODULE_ABI_CMAKE_DIR}/../SparkSDK/Include/Spark/Version.h")
 endif()
 foreach(_candidate IN LISTS _spark_sdk_version_candidates)
     if(EXISTS "${_candidate}")
