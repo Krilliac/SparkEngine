@@ -322,10 +322,13 @@ def check_target(
 
     source_dir = target.get("sourceDirectory", "")
     expected_source_prefix = f"GameModules/{module_name}"
-    if source_dir and not source_dir.startswith(expected_source_prefix):
+    if source_dir and not (
+        source_dir == expected_source_prefix
+        or source_dir.startswith(f"{expected_source_prefix}/")
+    ):
         errors.append(
             f"{label}: codemodel source directory {source_dir!r} does not "
-            f"start with {expected_source_prefix!r} — the configure-generated "
+            f"belong under {expected_source_prefix!r} — the configure-generated "
             f"evidence claims a foreign source tree"
         )
 

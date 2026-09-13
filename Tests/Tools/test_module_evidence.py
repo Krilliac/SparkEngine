@@ -499,6 +499,14 @@ class TestTargetProof(FixtureCase):
             target_index=target_index(sources=["SparkEngine/Source/Other.cpp"]),
         )
 
+    def test_B02c_sibling_source_directory_prefix_is_rejected(self) -> None:
+        self.assertRejected(
+            base_manifest(), "B02c",
+            target_index=target_index(
+                source_directory=f"GameModules/{INCLUDED}Evil/Source",
+            ),
+        )
+
     def test_target_of_wrong_type_is_rejected(self) -> None:
         self.assertRejected(base_manifest(), "B01c",
                             target_index=target_index(ttype="STATIC_LIBRARY"))
