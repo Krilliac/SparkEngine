@@ -17,6 +17,10 @@ namespace SparkInstaller
 
         bool Fetch(const std::string& destination, const LogSink& log) const;
         bool CheckoutRef(const std::string& ref, const std::string& destination, const LogSink& log) const;
+        // Restore an exact previously observed commit without forcing away
+        // local changes. A failure is reported to the caller so update
+        // rollback cannot be mistaken for a successful recovery.
+        bool CheckoutCommit(const std::string& commit, const std::string& destination, const LogSink& log) const;
         bool UpdateSubmodules(const std::string& destination, const LogSink& log) const;
 
         // Resolve the current HEAD commit SHA.

@@ -157,6 +157,17 @@ namespace SparkInstaller
         return Run("pull --ff-only origin " + EncodeProcessRunnerArgument(ref), destination, log) == 0;
     }
 
+    bool GitRunner::CheckoutCommit(const std::string& commit, const std::string& destination, const LogSink& log) const
+    {
+        if (!IsSafeRef(commit))
+        {
+            if (log)
+                log("error: git commit contains unsafe characters: " + commit);
+            return false;
+        }
+        return Run("checkout --detach " + EncodeProcessRunnerArgument(commit), destination, log) == 0;
+    }
+
     bool GitRunner::UpdateSubmodules(const std::string& destination, const LogSink& log) const
     {
         return Run("submodule update --init --recursive", destination, log) == 0;

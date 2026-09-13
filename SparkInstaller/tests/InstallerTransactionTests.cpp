@@ -35,9 +35,17 @@ namespace
             return 97;
 
         const std::string_view command = argv[1];
-        if (command == "--version" || command == "fetch" || command == "checkout" || command == "-S" ||
-            command == "--build")
+        if (command == "--version" || command == "fetch" || command == "-S")
             return 0;
+        if (command == "checkout")
+        {
+            std::ofstream lastCheckout("fake-git-last-checkout", std::ios::binary | std::ios::trunc);
+            if (argc > 2)
+                lastCheckout << argv[argc - 1];
+            return lastCheckout ? 0 : 96;
+        }
+        if (command == "--build")
+            return fs::exists("force-build-failure") ? 42 : 0;
         if (command == "show-ref")
             return 1;
         if (command == "rev-parse")
@@ -171,6 +179,80 @@ namespace
         fs::remove_all(root, error);
         return failures;
     }
+
+    int RunUpdateBuildFailureRollbackTest(const fs::path& executable)
+    {
+        const fs::path root = MakeTestRoot();
+        std::error_code error;
+        fs::create_directories(root / "tools", error);
+        int failures = Check(!error, "could not create rollback test root");
+        if (failures != 0)
+            return failures;
+
+        const fs::path fakeGit = root / "tools" /
+                                 (
+#ifdef _WIN32
+                                     "git.exe"
+#else
+                                     "git"
+#endif
+                                 );
+        fs::copy_file(executable, fakeGit, fs::copy_options::overwrite_existing, error);
+        failures += Check(!error, "could not create rollback fake git executable");
+#ifndef _WIN32
+        if (!error)
+        {
+            fs::permissions(fakeGit, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
+                            fs::perm_options::add, error);
+            failures += Check(!error, "could not make rollback fake git executable runnable");
+        }
+#endif
+
+        const fs::path destination = root / "install";
+        fs::create_directories(destination / ".git", error);
+        failures += Check(!error, "could not create rollback engine checkout");
+        std::ofstream cmakeLists(destination / "CMakeLists.txt");
+        cmakeLists << "cmake_minimum_required(VERSION 3.25)\n";
+        cmakeLists.close();
+        failures += Check(static_cast<bool>(cmakeLists), "could not create rollback CMakeLists");
+        std::ofstream forceFailure(destination / "force-build-failure");
+        forceFailure << "fail";
+        forceFailure.close();
+        failures += Check(static_cast<bool>(forceFailure), "could not create build failure fixture");
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), "could not prepend rollback fake git to PATH");
+
+        std::string log;
+        SparkInstaller::InstallerContext context;
+        context.frontend = SparkInstaller::Frontend::Headless;
+        context.destination = destination.string();
+        context.ref = "Working";
+        context.skipSubmoduleUpdate = true;
+        context.configManager.config.cmakePath = executable.string();
+        context.configManager.config.buildPath = (destination / "build").string();
+        context.log = [&log](const std::string& line)
+        {
+            log += line;
+            log.push_back('\n');
+        };
+
+        const int result = SparkInstaller::Installer::Run(context);
+        failures += Check(result != 0, "installer reported success after update build failure");
+
+        std::ifstream lastCheckout(destination / "fake-git-last-checkout", std::ios::binary);
+        std::string restoredCommit;
+        std::getline(lastCheckout, restoredCommit);
+        failures += Check(restoredCommit == kFakeHeadCommit,
+                          "failed update did not restore the previously working commit");
+        failures += Check(log.find("rolling back update") != std::string::npos,
+                          "failed update did not report that rollback was attempted");
+        failures += Check(log.find("Done. Engine built at:") == std::string::npos,
+                          "installer reported completion after update build failure");
+
+        fs::remove_all(root, error);
+        return failures;
+    }
 } // namespace
 
 int main(int argc, char* argv[])
@@ -179,5 +261,7 @@ int main(int argc, char* argv[])
         return RunFakeTool(argc, argv);
 
     const fs::path executable = fs::absolute(argv[0]);
-    return RunInstallStatePersistenceFailureTest(executable);
+    const int persistenceFailure = RunInstallStatePersistenceFailureTest(executable);
+    const int rollbackFailure = RunUpdateBuildFailureRollbackTest(executable);
+    return persistenceFailure == 0 && rollbackFailure == 0 ? 0 : 1;
 }
