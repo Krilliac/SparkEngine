@@ -1180,29 +1180,40 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
 
 _MSVC_TOOLSET_PATH_RE = re.compile(r"/VC/Tools/MSVC/([^/]+)/", re.IGNORECASE)
 _MSVC_TOOLSET_VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\Z")
+_MSVC_COMPILER_PATH_RE = re.compile(
+    r"/VC/Tools/MSVC/([^/]+)/bin/Hostx64/x64/cl\.exe\Z", re.IGNORECASE
+)
+_MSVC_COMPILER_VERSION_RE = re.compile(r"19\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\Z")
+_WINDOWS_SDK_VERSION_RE = re.compile(r"10\.0\.[0-9]{5}\.[0-9]\Z")
 
 
 def _check_msvc_toolchain_identity(
     identifier: str,
     expected_toolchain: tuple[str, str, str],
     cache: dict[str, Any],
+    *,
+    require_compiler_provenance: bool = False,
 ) -> list[Finding]:
-    """Require CMake to expose the exact installed MSVC toolset paths.
+    """Require CMake to expose the exact installed MSVC toolchain identity.
 
     ``CMAKE_GENERATOR_TOOLSET=v143`` identifies only a toolset family.  The
     generator instance and its archiver/linker paths are the concrete
     installation identity CMake actually used, including the minor toolset
-    version.  Keep this check limited to Visual Studio profiles so Linux and
-    non-MSVC profiles do not inherit Windows-only assumptions.
+    version. Root Visual Studio profiles additionally publish the compiler
+    path, compiler version, target architecture, and selected Windows SDK.
+    Keep this check limited to Visual Studio profiles so Linux and non-MSVC
+    profiles do not inherit Windows-only assumptions.
     """
-    expected_generator, _expected_architecture, expected_toolset = expected_toolchain
+    expected_generator, expected_architecture, expected_toolset = expected_toolchain
     if not (
         expected_generator.casefold().startswith("visual studio")
         or expected_toolset.casefold().startswith("v14")
     ):
         return []
 
-    required = tuple(inventory_tool._MSVC_TOOLCHAIN_CACHE_NAMES)
+    required = list(inventory_tool._MSVC_TOOLCHAIN_CACHE_NAMES)
+    if require_compiler_provenance:
+        required.extend(inventory_tool._MSVC_COMPILER_PROVENANCE_CACHE_NAMES)
     missing = [name for name in required if not isinstance(cache.get(name), str) or not cache[name].strip()]
     if missing:
         return [
@@ -1218,6 +1229,22 @@ def _check_msvc_toolchain_identity(
         name: str(cache[name]).replace("\\", "/")
         for name in ("CMAKE_AR", "CMAKE_LINKER")
     }
+    if require_compiler_provenance:
+        compiler_path = str(cache["SPARK_TOOLCHAIN_CXX_COMPILER"]).replace(
+            "\\", "/"
+        )
+        compiler_match = _MSVC_COMPILER_PATH_RE.fullmatch(compiler_path)
+        if compiler_match is None:
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' C++ compiler does not identify a concrete x64 MSVC toolset path",
+                    f"Observed SPARK_TOOLCHAIN_CXX_COMPILER={cache['SPARK_TOOLCHAIN_CXX_COMPILER']!r}.",
+                )
+            ]
+        normalized_paths["SPARK_TOOLCHAIN_CXX_COMPILER"] = compiler_path
+
     versions: dict[str, str] = {}
     for name, value in normalized_paths.items():
         match = _MSVC_TOOLSET_PATH_RE.search(value)
@@ -1241,6 +1268,56 @@ def _check_msvc_toolchain_identity(
                 f"CMAKE_AR={versions['CMAKE_AR']}, CMAKE_LINKER={versions['CMAKE_LINKER']}.",
             )
         ]
+
+    if require_compiler_provenance:
+        compiler_id = str(cache["SPARK_TOOLCHAIN_CXX_COMPILER_ID"]).strip()
+        compiler_version = str(cache["SPARK_TOOLCHAIN_CXX_COMPILER_VERSION"]).strip()
+        compiler_architecture = str(cache["SPARK_TOOLCHAIN_CXX_ARCHITECTURE"]).strip()
+        windows_sdk = str(cache["SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION"]).strip()
+        version_match = _MSVC_COMPILER_VERSION_RE.fullmatch(compiler_version)
+        if compiler_id.upper() != "MSVC":
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' C++ compiler identity is not MSVC",
+                    f"Observed SPARK_TOOLCHAIN_CXX_COMPILER_ID={compiler_id!r}.",
+                )
+            ]
+        if version_match is None or not _WINDOWS_SDK_VERSION_RE.fullmatch(
+            windows_sdk
+        ):
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' C++ compiler or Windows SDK version is malformed",
+                    f"Observed compiler={compiler_version!r}, SDK={windows_sdk!r}.",
+                )
+            ]
+        if (
+            expected_architecture
+            and compiler_architecture.casefold() != expected_architecture.casefold()
+        ):
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' C++ compiler architecture differs from the requested target",
+                    f"Observed {compiler_architecture!r}, expected {expected_architecture!r}.",
+                )
+            ]
+        if version_match.group(0).split(".")[1] != versions[
+            "SPARK_TOOLCHAIN_CXX_COMPILER"
+        ].split(".")[1]:
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' C++ compiler and MSVC toolset versions disagree",
+                    f"Compiler={compiler_version}, toolset={versions['SPARK_TOOLCHAIN_CXX_COMPILER']}.",
+                )
+            ]
     return []
 
 
@@ -1633,7 +1710,12 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                 )
 
         findings.extend(
-            _check_msvc_toolchain_identity(identifier, expected_toolchain, observed_cache)
+            _check_msvc_toolchain_identity(
+                identifier,
+                expected_toolchain,
+                observed_cache,
+                require_compiler_provenance=preset is not None,
+            )
         )
 
         for entry in evidence.get("targets", []):

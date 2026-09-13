@@ -3524,3 +3524,21 @@ endif()
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_SOURCE_DIR}/cmake/SparkCPackOptions.cmake")
 
 include(CPack)
+
+# Preserve the toolchain CMake actually selected in the File API cache. The
+# generator/toolset labels identify only the requested family; these measured
+# values bind root Windows profiles to the compiler, target architecture, and
+# SDK that configured the build. Empty SDK values remain visible so the
+# build-matrix capture can fail closed instead of accepting an unmeasured SDK.
+if(MSVC AND CMAKE_GENERATOR MATCHES "Visual Studio")
+    set(SPARK_TOOLCHAIN_CXX_COMPILER "${CMAKE_CXX_COMPILER}" CACHE INTERNAL
+        "Measured C++ compiler path for build provenance" FORCE)
+    set(SPARK_TOOLCHAIN_CXX_COMPILER_ID "${CMAKE_CXX_COMPILER_ID}" CACHE INTERNAL
+        "Measured C++ compiler identity for build provenance" FORCE)
+    set(SPARK_TOOLCHAIN_CXX_COMPILER_VERSION "${CMAKE_CXX_COMPILER_VERSION}" CACHE INTERNAL
+        "Measured C++ compiler version for build provenance" FORCE)
+    set(SPARK_TOOLCHAIN_CXX_ARCHITECTURE "${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}" CACHE INTERNAL
+        "Measured C++ compiler target architecture for build provenance" FORCE)
+    set(SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION "${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}" CACHE INTERNAL
+        "Measured Visual Studio Windows SDK version for build provenance" FORCE)
+endif()

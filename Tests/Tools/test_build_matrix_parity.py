@@ -29,6 +29,19 @@ import check_parity  # noqa: E402
 import inventory  # noqa: E402
 
 
+MSVC_TOOLCHAIN_PROVENANCE_CACHE_NAMES = (
+    "SPARK_TOOLCHAIN_CXX_COMPILER",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_ID",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_VERSION",
+    "SPARK_TOOLCHAIN_CXX_ARCHITECTURE",
+    "SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION",
+)
+MSVC_CXX_COMPILER_PATH = (
+    "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+    "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe"
+)
+
+
 def synthetic_ci_context(commit: str = "0" * 40) -> dict[str, str]:
     return {
         "provider": "github-actions",
@@ -1992,6 +2005,11 @@ def write_codemodel_reply(
             "C:/Program Files/Microsoft Visual Studio/2022/Community/"
             "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/link.exe"
         ),
+        "SPARK_TOOLCHAIN_CXX_COMPILER": MSVC_CXX_COMPILER_PATH,
+        "SPARK_TOOLCHAIN_CXX_COMPILER_ID": "MSVC",
+        "SPARK_TOOLCHAIN_CXX_COMPILER_VERSION": "19.44.35228.0",
+        "SPARK_TOOLCHAIN_CXX_ARCHITECTURE": "x64",
+        "SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION": "10.0.26100.0",
     }
     entries.update(cache or {})
     write_json(
@@ -2164,6 +2182,40 @@ class CodemodelProvenanceTests(unittest.TestCase):
             mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
         ):
             return inventory.extract_codemodel_targets(directory, "windows-shipping", "0" * 40)
+
+    def test_root_cmake_exports_actual_msvc_toolchain_metadata(self) -> None:
+        cmake = (Path(REPO_ROOT) / "CMakeLists.txt").read_text(encoding="utf-8")
+        for name in MSVC_TOOLCHAIN_PROVENANCE_CACHE_NAMES:
+            self.assertIn(f"set({name}", cmake)
+
+    def test_msvc_compiler_provenance_is_required(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+
+        for name in MSVC_TOOLCHAIN_PROVENANCE_CACHE_NAMES:
+            evidence["cacheVariables"].pop(name, None)
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-toolchain-incomplete", categories)
+
+    def test_msvc_compiler_path_must_agree_with_linker_toolset(self) -> None:
+        cache = dict(self.shipping_cache)
+        cache["SPARK_TOOLCHAIN_CXX_COMPILER"] = MSVC_CXX_COMPILER_PATH.replace(
+            "14.44.35207", "14.43.35207"
+        )
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), cache=cache)
+
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-toolchain-mismatch", categories)
+
+    def test_msvc_compiler_metadata_must_identify_msvc(self) -> None:
+        cache = dict(self.shipping_cache)
+        cache["SPARK_TOOLCHAIN_CXX_COMPILER_ID"] = "GNU"
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), cache=cache)
+
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-toolchain-mismatch", categories)
 
     def categories(self, data: dict[str, Any]) -> set[str]:
         return {item.category for item in check_parity.check_codemodel_provenance(data)}

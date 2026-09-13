@@ -1430,6 +1430,16 @@ _MSVC_TOOLCHAIN_CACHE_NAMES = (
     "CMAKE_AR",
     "CMAKE_LINKER",
 )
+# Root Visual Studio profiles publish these values from CMake's measured
+# compiler variables. They are deliberately separate from the path identity
+# names above because installed SDK consumers do not configure the engine root.
+_MSVC_COMPILER_PROVENANCE_CACHE_NAMES = (
+    "SPARK_TOOLCHAIN_CXX_COMPILER",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_ID",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_VERSION",
+    "SPARK_TOOLCHAIN_CXX_ARCHITECTURE",
+    "SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION",
+)
 _BOUND_CACHE_NAMES = {
     "CMAKE_BUILD_TYPE",
     "CMAKE_GENERATOR",
@@ -3222,7 +3232,10 @@ def _capture_material_errors(evidence: dict[str, Any], profile: str) -> list[str
         str(evidence.get("generator", "")).casefold().startswith("visual studio")
         or str(evidence.get("toolset", "")).casefold().startswith("v14")
     ):
-        for name in _MSVC_TOOLCHAIN_CACHE_NAMES:
+        required_toolchain_names = list(_MSVC_TOOLCHAIN_CACHE_NAMES)
+        if config and config.get("preset"):
+            required_toolchain_names.extend(_MSVC_COMPILER_PROVENANCE_CACHE_NAMES)
+        for name in required_toolchain_names:
             if not isinstance(cache, dict) or not cache.get(name):
                 errors.append(f"cacheVariables.{name}")
     return sorted(set(errors))
