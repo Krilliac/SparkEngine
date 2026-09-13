@@ -175,8 +175,8 @@
 | `ActiveTaskCount` | function | SparkEngine | [DynamicPluginHost.cpp:L714](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L714) |  |
 | `ActiveWeaponDefLocal` | function | GameModules | [TFWeaponSystem.h:L72](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h#L72) |  |
 | `ActiveWeaponModel` | function | GameModules | [TFWeaponSystem.h:L63](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h#L63) |  |
-| `actual` | function | Tests | [TestGoldenImageTest.cpp:L35](../../Tests/TestGoldenImageTest.cpp#L35) |  |
-| `actual` | function | Tests | [TestGoldenImageTest.cpp:L70](../../Tests/TestGoldenImageTest.cpp#L70) |  |
+| `actual` | function | Tests | [TestGoldenImageTest.cpp:L36](../../Tests/TestGoldenImageTest.cpp#L36) |  |
+| `actual` | function | Tests | [TestGoldenImageTest.cpp:L71](../../Tests/TestGoldenImageTest.cpp#L71) |  |
 | `AdaptExposure` | function | SparkEngine | [TonemapColorGrading.h:L151](../../SparkEngine/Source/Graphics/TonemapColorGrading.h#L151) |  |
 | `AdaptiveProbeVolumes::ApplyVirtualOffsets` | method | SparkEngine | [AdaptiveProbeVolumes.cpp:L108](../../SparkEngine/Source/Graphics/AdaptiveProbeVolumes.cpp#L108) |  |
 | `AdaptiveProbeVolumes::CreateBrick` | method | SparkEngine | [AdaptiveProbeVolumes.cpp:L42](../../SparkEngine/Source/Graphics/AdaptiveProbeVolumes.cpp#L42) |  |
@@ -5738,7 +5738,7 @@
 | `data` | function | Tests | [TestFBXImporter.cpp:L117](../../Tests/TestFBXImporter.cpp#L117) |  |
 | `data` | function | Tests | [TestFBXImporter.cpp:L131](../../Tests/TestFBXImporter.cpp#L131) |  |
 | `data` | function | Tests | [TestFBXImporter.cpp:L261](../../Tests/TestFBXImporter.cpp#L261) |  |
-| `data` | function | Tests | [TestGoldenImageTest.cpp:L128](../../Tests/TestGoldenImageTest.cpp#L128) |  |
+| `data` | function | Tests | [TestGoldenImageTest.cpp:L129](../../Tests/TestGoldenImageTest.cpp#L129) |  |
 | `data` | function | Tests | [TestMaterialSystemIntegration.cpp:L145](../../Tests/TestMaterialSystemIntegration.cpp#L145) |  |
 | `data` | function | Tests | [TestMaterialSystemIntegration.cpp:L158](../../Tests/TestMaterialSystemIntegration.cpp#L158) |  |
 | `data` | function | Tests | [TestMaterialSystemIntegration.cpp:L172](../../Tests/TestMaterialSystemIntegration.cpp#L172) |  |
@@ -6418,7 +6418,7 @@
 | `DialogueTree::GetNodeIds` | method | SparkEngine | [DialogueSystem.cpp:L39](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.cpp#L39) |  |
 | `DialogueTree::LoadFromFile` | method | SparkEngine | [DialogueSystem.cpp:L50](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.cpp#L50) |  |
 | `Diff` | function | SparkEngine | [FrameInspector.h:L80](../../SparkEngine/Source/Utils/FrameInspector.h#L80) | Compare this snapshot with another and return differences |
-| `diff` | function | SparkEngine | [GoldenImageTest.h:L518](../../SparkEngine/Source/Utils/GoldenImageTest.h#L518) |  |
+| `diff` | function | SparkEngine | [GoldenImageTest.h:L528](../../SparkEngine/Source/Utils/GoldenImageTest.h#L528) |  |
 | `Dim` | function | SparkBuild | [Terminal.cpp:L42](../../SparkBuild/src/Terminal.cpp#L42) |  |
 | `Dim` | function | SparkBuild | [Terminal.cpp:L106](../../SparkBuild/src/Terminal.cpp#L106) |  |
 | `Dim` | function | SparkBuild | [Terminal.cpp:L200](../../SparkBuild/src/Terminal.cpp#L200) |  |
@@ -14498,8 +14498,8 @@
 | `GLXContext` | function | SparkEngine | [OpenGLDevice.h:L48](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L48) |  |
 | `Glyph` | function | SparkEngine | [StartupSplash.cpp:L273](../../SparkEngine/Source/Core/StartupSplash.cpp#L273) |  |
 | `gmtime_s` | function | SparkEngine | [PlatformTypes.h:L271](../../SparkEngine/Source/Core/PlatformTypes.h#L271) |  |
-| `golden` | function | Tests | [TestGoldenImageTest.cpp:L34](../../Tests/TestGoldenImageTest.cpp#L34) |  |
-| `golden` | function | Tests | [TestGoldenImageTest.cpp:L69](../../Tests/TestGoldenImageTest.cpp#L69) |  |
+| `golden` | function | Tests | [TestGoldenImageTest.cpp:L35](../../Tests/TestGoldenImageTest.cpp#L35) |  |
+| `golden` | function | Tests | [TestGoldenImageTest.cpp:L70](../../Tests/TestGoldenImageTest.cpp#L70) |  |
 | `GoToStep` | function | SparkEditor | [TutorialSystem.h:L228](../../SparkEditor/Source/Core/TutorialSystem.h#L228) | Jump to a specific step index. |
 | `GPUClusterCulling::Console_GetStatus` | method | SparkEngine | [GPUClusterCulling.cpp:L22](../../SparkEngine/Source/Graphics/GPUClusterCulling.cpp#L22) |  |
 | `GPUClusterCulling::DispatchCull` | method | SparkEngine | [GPUClusterCulling.cpp:L203](../../SparkEngine/Source/Graphics/GPUClusterCulling.cpp#L203) |  |
@@ -23363,8 +23363,8 @@
 | `pathPrefix` | function | SparkInstaller | [InstallerTransactionTests.cpp:L145](../../SparkInstaller/tests/InstallerTransactionTests.cpp#L145) |  |
 | `pathStr` | function | SparkEngine | [BenchmarkFrameworkBaseline.cpp:L263](../../SparkEngine/Source/Utils/BenchmarkFrameworkBaseline.cpp#L263) |  |
 | `pathStr` | function | SparkEngine | [BenchmarkFrameworkBaseline.cpp:L273](../../SparkEngine/Source/Utils/BenchmarkFrameworkBaseline.cpp#L273) |  |
-| `pathStr` | function | SparkEngine | [GoldenImageTest.h:L417](../../SparkEngine/Source/Utils/GoldenImageTest.h#L417) |  |
-| `pathStr` | function | SparkEngine | [GoldenImageTest.h:L447](../../SparkEngine/Source/Utils/GoldenImageTest.h#L447) |  |
+| `pathStr` | function | SparkEngine | [GoldenImageTest.h:L427](../../SparkEngine/Source/Utils/GoldenImageTest.h#L427) |  |
+| `pathStr` | function | SparkEngine | [GoldenImageTest.h:L457](../../SparkEngine/Source/Utils/GoldenImageTest.h#L457) |  |
 | `PathString` | function | Tests | [TestVersionControlSystemGitReal.cpp:L49](../../Tests/TestVersionControlSystemGitReal.cpp#L49) |  |
 | `PathToTestUtf8` | function | Tests | [TestFileUtils.cpp:L32](../../Tests/TestFileUtils.cpp#L32) |  |
 | `PathToUtf8` | function | SparkCrashReporter | [CrashReporterApp.cpp:L531](../../SparkCrashReporter/src/CrashReporterApp.cpp#L531) |  |
@@ -23888,8 +23888,8 @@
 | `pixels` | function | SparkEngine | [GraphicsStateAndSettingsLinux.cpp:L312](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsLinux.cpp#L312) |  |
 | `pixels` | function | SparkEngine | [GraphicsStateAndSettingsWindowsResize.cpp:L156](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsWindowsResize.cpp#L156) |  |
 | `pixels` | function | SparkEngine | [VulkanDevice.cpp:L1912](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1912) |  |
-| `pixels` | function | SparkEngine | [GoldenImageTest.h:L466](../../SparkEngine/Source/Utils/GoldenImageTest.h#L466) |  |
-| `pixels` | function | Tests | [TestGoldenImageTest.cpp:L16](../../Tests/TestGoldenImageTest.cpp#L16) |  |
+| `pixels` | function | SparkEngine | [GoldenImageTest.h:L476](../../SparkEngine/Source/Utils/GoldenImageTest.h#L476) |  |
+| `pixels` | function | Tests | [TestGoldenImageTest.cpp:L17](../../Tests/TestGoldenImageTest.cpp#L17) |  |
 | `pixels` | function | Tests | [TestNeuralTextureCompressor.cpp:L72](../../Tests/TestNeuralTextureCompressor.cpp#L72) |  |
 | `pixels` | function | Tests | [TestNeuralTextureCompressor.cpp:L109](../../Tests/TestNeuralTextureCompressor.cpp#L109) |  |
 | `pixels` | function | Tests | [TestNeuralTextureCompressor.cpp:L153](../../Tests/TestNeuralTextureCompressor.cpp#L153) |  |
@@ -28888,7 +28888,7 @@
 | `SavePaths::AtomicReplace` | method | GameModules | [TFDatabase.cpp:L529](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp#L529) |  |
 | `SavePaths::AtomicReplace` | method | GameModules | [TFOutfitStoreDisk.cpp:L265](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStoreDisk.cpp#L265) |  |
 | `SavePaths::ContinentFile` | method | GameModules | [TFRegionSystemNet.cpp:L42](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionSystemNet.cpp#L42) |  |
-| `SavePNG` | function | SparkEngine | [GoldenImageTest.h:L408](../../SparkEngine/Source/Utils/GoldenImageTest.h#L408) | Save RGBA pixel data as a PNG file. |
+| `SavePNG` | function | SparkEngine | [GoldenImageTest.h:L418](../../SparkEngine/Source/Utils/GoldenImageTest.h#L418) | Save RGBA pixel data as a PNG file. |
 | `SavePrefab` | function | SparkEditor | [PrefabManager.h:L89](../../SparkEditor/Source/Prefabs/PrefabManager.h#L89) | Save a prefab to disk |
 | `SavePrefab` | function | SparkEngine | [SceneManager.h:L308](../../SparkEngine/Source/SceneManager/SceneManager.h#L308) |  |
 | `SaveProgress` | function | GameModules | [PlatformerEngineSystems.h:L59](../../GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.h#L59) | Save the platformer progress to the given slot. |
@@ -37909,7 +37909,7 @@
 | `UpdateGameplaySystemsImpl` | function | SparkEngine | [GameplayLifecycleShared.cpp:L1330](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp#L1330) |  |
 | `UpdateGameplaySystemsImpl` | function | SparkEngine | [GameplayLifecycleShared.h:L38](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.h#L38) |  |
 | `UpdateGeometry` | function | SparkEngine | [HRTFProcessor.h:L130](../../SparkEngine/Source/Audio/HRTFProcessor.h#L130) | Diagnostic snapshot from the last Process call |
-| `UpdateGolden` | function | SparkEngine | [GoldenImageTest.h:L300](../../SparkEngine/Source/Utils/GoldenImageTest.h#L300) | Overwrite the golden reference with the current framebuffer. |
+| `UpdateGolden` | function | SparkEngine | [GoldenImageTest.h:L310](../../SparkEngine/Source/Utils/GoldenImageTest.h#L310) | Overwrite the golden reference with the current framebuffer. |
 | `UpdateGPUBuffers` | function | SparkEngine | [WaterRenderer.h:L212](../../SparkEngine/Source/Graphics/WaterRenderer.h#L212) | Upload displaced vertices to the GPU vertex buffer after Update(). |
 | `UpdateGPUMesh` | function | SparkEngine | [ClipmapTerrain.h:L147](../../SparkEngine/Source/Graphics/ClipmapTerrain.h#L147) | Upload a specific clipmap level's mesh to GPU vertex/index buffers. |
 | `UpdateGridOrigin` | function | SparkEngine | [ProbeSystem.h:L73](../../SparkEngine/Source/Graphics/HybridRT/ProbeSystem.h#L73) | Update probe grid origin to follow camera |
