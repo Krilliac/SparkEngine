@@ -161,7 +161,7 @@ namespace Spark::Persistence
 
       private:
         void LoadFromDisk();
-        void FlushToDisk();
+        bool FlushToDisk();
 
         bool m_open = false;
         bool m_inTransaction = false;

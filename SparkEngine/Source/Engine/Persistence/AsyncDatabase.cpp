@@ -538,9 +538,20 @@ namespace Spark::Persistence
         {
             return false;
         }
+
+        if (!FlushToDisk())
+        {
+            // A transaction is not committed until its durable revision has
+            // replaced the destination.  Restore the snapshot when that
+            // boundary fails so callers cannot observe an unpersisted commit.
+            m_kvStore = std::move(m_transactionSnapshot);
+            m_transactionSnapshot.clear();
+            m_inTransaction = false;
+            return false;
+        }
+
         m_inTransaction = false;
         m_transactionSnapshot.clear();
-        FlushToDisk();
         return true;
     }
 
@@ -555,7 +566,7 @@ namespace Spark::Persistence
         return true;
     }
 
-    void SQLiteConnection::FlushToDisk()
+    bool SQLiteConnection::FlushToDisk()
     {
         // Never truncate the live store: a crash or a write error midway through would
         // destroy every key. Build the new revision in a sibling temp file and replace
@@ -569,7 +580,7 @@ namespace Spark::Persistence
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to open '%s' for writing",
                                 temporary.string().c_str());
-                return;
+                return false;
             }
 
             file << kKVFormatMarker << '\n';
@@ -585,7 +596,7 @@ namespace Spark::Persistence
                                 m_dbPath.c_str(), m_kvStore.size());
                 std::error_code removeError;
                 std::filesystem::remove(temporary, removeError);
-                return;
+                return false;
             }
         }
 
@@ -606,7 +617,10 @@ namespace Spark::Persistence
                             m_dbPath.c_str(), temporary.string().c_str(), replaceError.message().c_str());
             std::error_code removeError;
             std::filesystem::remove(temporary, removeError);
+            return false;
         }
+
+        return true;
     }
 
     void SQLiteConnection::LoadFromDisk()
@@ -975,8 +989,15 @@ namespace Spark::Persistence
 
                         if (allSucceeded)
                         {
-                            conn->CommitTransaction();
-                            result.success = true;
+                            if (conn->CommitTransaction())
+                            {
+                                result.success = true;
+                            }
+                            else
+                            {
+                                result.success = false;
+                                result.errorMessage = "Failed to commit transaction";
+                            }
                         }
                         else
                         {
