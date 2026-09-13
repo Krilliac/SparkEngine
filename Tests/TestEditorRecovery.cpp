@@ -520,3 +520,19 @@ TEST(EditorRecovery_ProjectPathResolutionRejectsEscapes)
                                                            resolved, error));
     }
 }
+
+TEST(EditorRecovery_EmbeddedNulInRelativePathIsRejected)
+{
+    ScopedRecoveryDirectory scratch;
+    SparkEditor::EditorRecoveryStore store(scratch.Path());
+
+    SparkEditor::EditorRecoverySnapshot snapshot;
+    snapshot.projectIdentity = "project-a";
+    snapshot.projectRelativeScene = std::string("Scenes/Main") + std::string("\0", 1) + ".sparkscene";
+    snapshot.sceneDisplayName = "Main";
+    snapshot.serializedWorld = R"({"entities":[]})";
+
+    std::string error;
+    EXPECT_FALSE(store.Save(snapshot, error));
+    EXPECT_FALSE(error.empty());
+}

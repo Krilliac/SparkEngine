@@ -53,6 +53,8 @@ namespace SparkEditor
         {
             if (value.empty())
                 return true;
+            if (value.find('\0') != std::string::npos)
+                return false;
 
             const fs::path path(value);
             if (path.is_absolute() || path.has_root_path() || path.has_root_name())
