@@ -626,7 +626,7 @@
 | `ReadStatus` | enum | GameModules | [TFWorldSave.h:L22](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h#L22) |  |
 | `ReflAttrMetadataFixture` | enum | Tests | [TestReflectionReal.cpp:L40](../../Tests/TestReflectionReal.cpp#L40) |  |
 | `ReloadResult` | enum | SparkEngine | [ModuleHotReload.h:L44](../../SparkEngine/Source/Engine/HotReload/ModuleHotReload.h#L44) | Result of a module reload attempt |
-| `RemoteDebugAuditDecision` | enum | SparkEngine | [RemoteDebugAccessControl.h:L74](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L74) | Secret-safe outcome for one attempted dispatch. |
+| `RemoteDebugAuditDecision` | enum | SparkEngine | [RemoteDebugAccessControl.h:L72](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L72) | Secret-safe outcome for one attempted dispatch. |
 | `RemoteDebugCapability` | enum | SparkEngine | [RemoteDebugAccessControl.h:L37](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L37) | Per-command capabilities; a command handler must declare one. |
 | `RemoteDebugRole` | enum | SparkEngine | [RemoteDebugAccessControl.h:L29](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L29) | Fixed least-privilege role policy for trusted local loopback. |
 | `RenderCommandType` | enum | SparkEngine | [RenderCommandRing.h:L28](../../SparkEngine/Source/Graphics/RenderCommandRing.h#L28) | Command types that can be posted to the render thread. |

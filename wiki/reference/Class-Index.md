@@ -350,7 +350,7 @@
 | `AuraDefinition` | struct | Tests | [TestGameplayStress.cpp:L339](../../Tests/TestGameplayStress.cpp#L339) |  |
 | `AuraEntry` | struct | SparkEditor | [AbilityEditorPanel.h:L54](../../SparkEditor/Source/Panels/AbilityEditorPanel.h#L54) |  |
 | `AuthenticationResult` | struct | SparkGateway | [GatewayCoordinator.h:L36](../../SparkGateway/src/GatewayCoordinator.h#L36) |  |
-| `AuthorizationResult` | struct | SparkEngine | [RemoteDebugAccessControl.h:L152](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L152) |  |
+| `AuthorizationResult` | struct | SparkEngine | [RemoteDebugAccessControl.h:L150](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L150) |  |
 | `AuthResult` | struct | GameModules | [MMOAccountSystem.h:L94](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L94) | Result of a login or registration attempt |
 | `AutoExposureSettings` | struct | SparkEngine | [PostProcessingTypes.h:L253](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L253) | Auto-exposure / eye adaptation settings |
 | `AutoExposureSettings` | struct | SparkEngine | [TonemapColorGrading.h:L69](../../SparkEngine/Source/Graphics/TonemapColorGrading.h#L69) |  |
@@ -1650,7 +1650,7 @@
 | `GPUTimerQuery` | struct | SparkEngine | [Profiler.h:L140](../../SparkEngine/Source/Utils/Profiler.h#L140) | GPU timing query wrapper |
 | `GPUTimestamp` | struct | SparkEngine | [GPUProfiler.h:L36](../../SparkEngine/Source/Graphics/GPUProfiler.h#L36) | Single GPU timing event with nesting depth. |
 | `GPUTimestampQuery` | class | SparkEngine | [GPUTimestampQuery.h:L63](../../SparkEngine/Source/Graphics/GPUTimestampQuery.h#L63) | Per-pass GPU timing system with double-buffered queries |
-| `GrantState` | struct | SparkEngine | [RemoteDebugAccessControl.h:L140](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L140) |  |
+| `GrantState` | struct | SparkEngine | [RemoteDebugAccessControl.h:L138](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L138) |  |
 | `Graph` | struct | Tests | [TestShaderGraphCompiler.cpp:L48](../../Tests/TestShaderGraphCompiler.cpp#L48) |  |
 | `GraphicsEngine` | class | GameModules | [AdvancedConsoleCommands.h:L10](../../GameModules/SparkGameFPS/Source/Console/AdvancedConsoleCommands.h#L10) | Console command declarations for unified GraphicsEngine |
 | `GraphicsEngine` | class | GameModules | [Game.h:L53](../../GameModules/SparkGameFPS/Source/Game/Game.h#L53) |  |
@@ -3304,12 +3304,12 @@
 | `Reloader` | struct | Tests | [Test_scripting_hardening.cpp:L35](../../Tests/harden/Test_scripting_hardening.cpp#L35) |  |
 | `ReloadEvent` | struct | SparkEngine | [ModuleHotReload.h:L68](../../SparkEngine/Source/Engine/HotReload/ModuleHotReload.h#L68) | Record of a reload event for history/logging |
 | `RemoteCommand` | struct | SparkEngine | [RemoteDebugSystem.h:L41](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L41) | A command/response message exchanged over the remote debug link. |
-| `RemoteDebugAccessControl` | class | SparkEngine | [RemoteDebugAccessControl.h:L124](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L124) | Authorization, replay, rate, and audit state owned by RemoteDebugServer. |
+| `RemoteDebugAccessControl` | class | SparkEngine | [RemoteDebugAccessControl.h:L122](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L122) | Authorization, replay, rate, and audit state owned by RemoteDebugServer. |
 | `RemoteDebugAccessControlTestHarness` | class | Tests | [TestRemoteDebugSystem.cpp:L25](../../Tests/TestRemoteDebugSystem.cpp#L25) |  |
 | `RemoteDebugAccessControlTestHarness` | class | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L35](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L35) |  |
-| `RemoteDebugAuditEvent` | struct | SparkEngine | [RemoteDebugAccessControl.h:L88](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L88) | Bounded audit data. Payloads, credentials, and grants are never retained here. |
+| `RemoteDebugAuditEvent` | struct | SparkEngine | [RemoteDebugAccessControl.h:L86](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L86) | Bounded audit data. Payloads, credentials, and grants are never retained here. |
 | `RemoteDebugClient` | class | SparkEngine | [RemoteDebugSystem.h:L587](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L587) | Connects to a running game and provides convenience debug methods. |
-| `RemoteDebugPrincipal` | class | SparkEngine | [RemoteDebugAccessControl.h:L104](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L104) | Opaque server-owned association for an authenticated local endpoint. |
+| `RemoteDebugPrincipal` | class | SparkEngine | [RemoteDebugAccessControl.h:L102](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L102) | Opaque server-owned association for an authenticated local endpoint. |
 | `RemoteDebugResponseEpochTestSeam` | struct | SparkEngine | [RemoteDebugSystem.h:L254](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L254) | Optional synchronization seam for deterministic epoch-race tests. |
 | `RemoteDebugServer` | class | SparkEngine | [RemoteDebugAccessControl.h:L26](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L26) |  |
 | `RemoteDebugServer` | class | SparkEngine | [RemoteDebugSystem.h:L261](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L261) | Owns logical server state and dispatches authenticated incoming commands. |

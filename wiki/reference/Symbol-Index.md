@@ -2299,7 +2299,7 @@
 | `authenticator` | function | Tests | [TestGatewaySecurity.cpp:L333](../../Tests/TestGatewaySecurity.cpp#L333) |  |
 | `AuthErrText` | function | GameModules | [TFLoginFlow.cpp:L30](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoginFlow.cpp#L30) |  |
 | `AuthorityActive` | function | GameModules | [TFAlertSystem.h:L187](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystem.h#L187) |  |
-| `AuthorizationResult` | struct | SparkEngine | [RemoteDebugAccessControl.h:L152](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L152) |  |
+| `AuthorizationResult` | struct | SparkEngine | [RemoteDebugAccessControl.h:L150](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L150) |  |
 | `AuthorTerrain` | function | Tests | [TestEditorSubsystemsReal.cpp:L69](../../Tests/TestEditorSubsystemsReal.cpp#L69) | Build a small authored terrain in the editor: heights, a bound texture layer, a detail mesh. |
 | `AuthResult` | struct | GameModules | [MMOAccountSystem.h:L94](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L94) | Result of a login or registration attempt |
 | `AutoComplete` | function | SparkEngine | [InGameConsole.h:L411](../../SparkEngine/Source/Utils/InGameConsole.h#L411) |  |
@@ -16989,7 +16989,7 @@
 | `Gradient2D` | function | SparkEngine | [FastNoise2SIMD.h:L126](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L126) | 2D gradient from hash |
 | `GradientCheck` | function | SparkEngine | [CpuNeuralTraining.h:L196](../../SparkEngine/Source/Graphics/Neural/CpuNeuralTraining.h#L196) | Numerical gradient check for a single sample (very slow — tests only). |
 | `GrantLives` | function | GameModules | [PlatformerPlayerController.h:L118](../../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.h#L118) | Grant lives without exceeding the configured maximum. |
-| `GrantState` | struct | SparkEngine | [RemoteDebugAccessControl.h:L140](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L140) |  |
+| `GrantState` | struct | SparkEngine | [RemoteDebugAccessControl.h:L138](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L138) |  |
 | `GrantTier` | function | GameModules | [TFDirectiveSystem.h:L108](../../GameModules/SparkGameMMOFPS/Source/Game/TFDirectiveSystem.h#L108) |  |
 | `graph` | function | Tests | [TestRenderGraph.cpp:L21](../../Tests/TestRenderGraph.cpp#L21) |  |
 | `graph` | function | Tests | [TestRenderGraph.cpp:L47](../../Tests/TestRenderGraph.cpp#L47) |  |
@@ -20743,7 +20743,7 @@
 | `IsWeaponUnlocked` | function | GameModules | [TFProgressionSystemMeta.cpp:L230](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemMeta.cpp#L230) |  |
 | `IsWeaponUnlocked` | function | GameModules | [TFProgressionSystemMeta.cpp:L321](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemMeta.cpp#L321) |  |
 | `IsWeatherSystemConnected` | function | SparkEditor | [WeatherFogPanel.h:L42](../../SparkEditor/Source/Panels/WeatherFogPanel.h#L42) | Whether a WeatherSystem is registered and can receive Apply. |
-| `IsWellFormedCommandType` | function | SparkEngine | [RemoteDebugAccessControl.h:L181](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L181) |  |
+| `IsWellFormedCommandType` | function | SparkEngine | [RemoteDebugAccessControl.h:L179](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L179) |  |
 | `IsWheelOnGround` | function | SparkEngine | [VehiclePhysics.h:L104](../../SparkEngine/Source/Physics/VehiclePhysics.h#L104) | Check if a wheel is touching the ground. |
 | `IsWheelOpen` | function | GameModules | [TFPingUI.h:L75](../../GameModules/SparkGameMMOFPS/Source/UI/TFPingUI.h#L75) |  |
 | `IsWireframeEnabled` | function | SparkEditor | [DebugVisualizerPanel.h:L38](../../SparkEditor/Source/Panels/DebugVisualizerPanel.h#L38) |  |
@@ -22478,11 +22478,11 @@
 | `lock` | function | SparkEngine | [AsyncDatabase.cpp:L917](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L917) |  |
 | `lock` | function | SparkEngine | [AsyncDatabase.cpp:L935](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L935) |  |
 | `lock` | function | SparkEngine | [AsyncDatabase.cpp:L1028](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L1028) |  |
-| `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L133](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L133) |  |
-| `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L193](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L193) |  |
-| `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L222](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L222) |  |
-| `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L287](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L287) |  |
-| `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L309](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L309) |  |
+| `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L131](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L131) |  |
+| `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L191](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L191) |  |
+| `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L219](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L219) |  |
+| `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L285](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L285) |  |
+| `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L307](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L307) |  |
 | `lock` | function | SparkEngine | [RemoteDebugSystem.h:L393](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L393) | Install or clear the data-free deterministic test seam. |
 | `lock` | function | SparkEngine | [RemoteDebugSystem.h:L402](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L402) |  |
 | `lock` | function | SparkEngine | [ReplaySystem.cpp:L36](../../SparkEngine/Source/Engine/Replay/ReplaySystem.cpp#L36) |  |
@@ -30479,7 +30479,7 @@
 | `RecordKill` | function | GameModules | [GameMode.h:L78](../../GameModules/SparkGameFPS/Source/Game/GameMode.h#L78) |  |
 | `RecordLagCompSnapshot` | function | GameModules | [TFServerSim.h:L159](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L159) |  |
 | `RecordLiveEdit` | function | SparkEngine | [PlayModeManager.h:L261](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L261) |  |
-| `RecordLocked` | function | SparkEngine | [RemoteDebugAccessControl.h:L313](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L313) |  |
+| `RecordLocked` | function | SparkEngine | [RemoteDebugAccessControl.h:L311](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L311) |  |
 | `RecordMemoryAllocation` | function | SparkEditor | [PerformanceProfiler.h:L157](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L157) | Record memory allocation |
 | `RecordMemoryDeallocation` | function | SparkEditor | [PerformanceProfiler.h:L163](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L163) | Record memory deallocation |
 | `RecordMiss` | function | SparkEngine | [CacheDebugger.h:L121](../../SparkEngine/Source/Utils/CacheDebugger.h#L121) |  |
@@ -30492,7 +30492,7 @@
 | `RecordOpen` | function | SparkEngine | [IODebugger.h:L144](../../SparkEngine/Source/Utils/IODebugger.h#L144) |  |
 | `RecordOpenedScene` | function | SparkEditor | [ProjectManager.h:L137](../../SparkEditor/Source/Core/ProjectManager.h#L137) | Persist a successfully opened/saved scene as project-relative state. |
 | `RecordOperation` | function | SparkEditor | [EditorCrashHandler.h:L77](../../SparkEditor/Source/Core/EditorCrashHandler.h#L77) |  |
-| `RecordOutcome` | function | SparkEngine | [RemoteDebugAccessControl.h:L284](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L284) |  |
+| `RecordOutcome` | function | SparkEngine | [RemoteDebugAccessControl.h:L282](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L282) |  |
 | `RecordPacketDrop` | function | SparkEditor | [NetworkDebugPanel.h:L199](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L199) | Record a dropped packet |
 | `RecordPacketDrop` | function | Tests | [TestNetworkDebugPanel.cpp:L61](../../Tests/TestNetworkDebugPanel.cpp#L61) |  |
 | `RecordPacketLost` | function | SparkEngine | [NetworkHealthMonitor.h:L122](../../SparkEngine/Source/Utils/NetworkHealthMonitor.h#L122) |  |
@@ -31146,14 +31146,14 @@
 | `RememberSpawnPoints` | function | Templates | [GameModule.h:L259](../../Templates/MMOStarter/Source/GameModule.h#L259) |  |
 | `RememberSpawnPoints` | function | Templates | [GameModule.h:L279](../../Templates/MultiplayerArena/Source/GameModule.h#L279) |  |
 | `RemoteCommand` | struct | SparkEngine | [RemoteDebugSystem.h:L41](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L41) | A command/response message exchanged over the remote debug link. |
-| `RemoteDebugAccessControl` | class | SparkEngine | [RemoteDebugAccessControl.h:L124](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L124) | Authorization, replay, rate, and audit state owned by RemoteDebugServer. |
+| `RemoteDebugAccessControl` | class | SparkEngine | [RemoteDebugAccessControl.h:L122](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L122) | Authorization, replay, rate, and audit state owned by RemoteDebugServer. |
 | `RemoteDebugAccessControlTestHarness` | class | Tests | [TestRemoteDebugSystem.cpp:L25](../../Tests/TestRemoteDebugSystem.cpp#L25) |  |
 | `RemoteDebugAccessControlTestHarness` | class | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L35](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L35) |  |
-| `RemoteDebugAuditDecision` | enum | SparkEngine | [RemoteDebugAccessControl.h:L74](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L74) | Secret-safe outcome for one attempted dispatch. |
-| `RemoteDebugAuditEvent` | struct | SparkEngine | [RemoteDebugAccessControl.h:L88](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L88) | Bounded audit data. Payloads, credentials, and grants are never retained here. |
+| `RemoteDebugAuditDecision` | enum | SparkEngine | [RemoteDebugAccessControl.h:L72](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L72) | Secret-safe outcome for one attempted dispatch. |
+| `RemoteDebugAuditEvent` | struct | SparkEngine | [RemoteDebugAccessControl.h:L86](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L86) | Bounded audit data. Payloads, credentials, and grants are never retained here. |
 | `RemoteDebugCapability` | enum | SparkEngine | [RemoteDebugAccessControl.h:L37](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L37) | Per-command capabilities; a command handler must declare one. |
 | `RemoteDebugClient` | class | SparkEngine | [RemoteDebugSystem.h:L587](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L587) | Connects to a running game and provides convenience debug methods. |
-| `RemoteDebugPrincipal` | class | SparkEngine | [RemoteDebugAccessControl.h:L104](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L104) | Opaque server-owned association for an authenticated local endpoint. |
+| `RemoteDebugPrincipal` | class | SparkEngine | [RemoteDebugAccessControl.h:L102](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L102) | Opaque server-owned association for an authenticated local endpoint. |
 | `RemoteDebugResponseEpochTestSeam` | struct | SparkEngine | [RemoteDebugSystem.h:L254](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L254) | Optional synchronization seam for deterministic epoch-race tests. |
 | `RemoteDebugRole` | enum | SparkEngine | [RemoteDebugAccessControl.h:L29](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L29) | Fixed least-privilege role policy for trusted local loopback. |
 | `RemoteDebugServer` | class | SparkEngine | [RemoteDebugAccessControl.h:L26](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L26) |  |
@@ -32999,7 +32999,7 @@
 | `Revive` | function | SparkEngine | [GameplayComponents.h:L89](../../SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h#L89) |  |
 | `Revive` | function | Tests | [TestECSStress.cpp:L39](../../Tests/TestECSStress.cpp#L39) |  |
 | `Revive` | function | Tests | [TestECSWorld.cpp:L37](../../Tests/TestECSWorld.cpp#L37) |  |
-| `RevokeAll` | function | SparkEngine | [RemoteDebugAccessControl.h:L307](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L307) | Revoke every active principal while retaining bounded audit history. |
+| `RevokeAll` | function | SparkEngine | [RemoteDebugAccessControl.h:L305](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L305) | Revoke every active principal while retaining bounded audit history. |
 | `RewindPose` | struct | SparkEngine | [LagCompensation.h:L46](../../SparkEngine/Source/Engine/Networking/LagCompensation.h#L46) | One entity's pose in a snapshot, as a vertical (Y-up) capsule. |
 | `RewindRaycast` | function | SparkEngine | [LagCompensation.h:L96](../../SparkEngine/Source/Engine/Networking/LagCompensation.h#L96) |  |
 | `RewindToTime` | function | SparkEngine | [NetworkManager.h:L345](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L345) |  |
