@@ -802,7 +802,7 @@
 | `ConsoleProcessManager` | class | SparkEngine | [ConsoleProcessManager.h:L40](../../SparkEngine/Source/Utils/ConsoleProcessManager.h#L40) | Manages communication with external SparkConsole process |
 | `ConsoleRBAC` | class | Tests | [TestConsoleRBAC.cpp:L25](../../Tests/TestConsoleRBAC.cpp#L25) |  |
 | `ConsoleSink` | class | SparkEngine | [ConsoleSink.h:L38](../../SparkEngine/Source/Utils/ConsoleSink.h#L38) | Logger sink that writes formatted messages to SimpleConsole |
-| `ConsoleStateGuard` | struct | Tests | [TestModuleABI.cpp:L623](../../Tests/TestModuleABI.cpp#L623) |  |
+| `ConsoleStateGuard` | struct | Tests | [TestModuleABI.cpp:L664](../../Tests/TestModuleABI.cpp#L664) |  |
 | `ConsoleStats` | struct | SparkEditor | [ConsolePanel.h:L173](../../SparkEditor/Source/Panels/ConsolePanel.h#L173) | Get console statistics |
 | `ConsoleStats` | struct | SparkEngine | [SparkConsole.h:L102](../../SparkEngine/Source/Utils/SparkConsole.h#L102) |  |
 | `ConstantBuffer` | struct | SparkEngine | [Shader.h:L51](../../SparkEngine/Source/Graphics/Shader.h#L51) | Legacy constant buffer structure for backward compatibility |
@@ -2454,7 +2454,7 @@
 | `ModSystem` | class | SparkEngine | [ModSystem.h:L77](../../SparkEngine/Source/Engine/Modding/ModSystem.h#L77) | Discovers, loads, and manages game modifications. |
 | `ModSystem` | class | SparkSDK | [IEngineContext.h:L91](../../SparkSDK/Include/Spark/IEngineContext.h#L91) |  |
 | `ModuleChangeEvent` | struct | SparkEngine | [ModuleHotReload.h:L33](../../SparkEngine/Source/Core/ModuleHotReload.h#L33) |  |
-| `ModuleContract` | struct | Tests | [TestModuleABI.cpp:L549](../../Tests/TestModuleABI.cpp#L549) |  |
+| `ModuleContract` | struct | Tests | [TestModuleABI.cpp:L590](../../Tests/TestModuleABI.cpp#L590) |  |
 | `ModuleEntry` | struct | SparkEditor | [GameModuleSelectorPanel.h:L63](../../SparkEditor/Source/Panels/GameModuleSelectorPanel.h#L63) |  |
 | `ModuleHotReload` | class | SparkEngine | [ModuleHotReload.h:L96](../../SparkEngine/Source/Engine/HotReload/ModuleHotReload.h#L96) | Runtime hot-reload system for game module DLLs |
 | `ModuleHotReloadManager` | class | SparkEngine | [EngineConsoleCommands.h:L17](../../SparkEngine/Source/Core/EngineConsoleCommands.h#L17) |  |
@@ -2471,7 +2471,7 @@
 | `ModuleManager` | class | SparkEngine | [SparkEngine.h:L28](../../SparkEngine/Source/Core/SparkEngine.h#L28) |  |
 | `ModuleManager` | class | SparkEngine | [SparkEngineWindowsInternal.h:L22](../../SparkEngine/Source/Core/SparkEngineWindowsInternal.h#L22) |  |
 | `ModuleManager` | class | SparkServer | [ServerApplication.h:L21](../../SparkServer/src/ServerApplication.h#L21) |  |
-| `ModuleManagerGuard` | struct | Tests | [TestModuleABI.cpp:L671](../../Tests/TestModuleABI.cpp#L671) |  |
+| `ModuleManagerGuard` | struct | Tests | [TestModuleABI.cpp:L712](../../Tests/TestModuleABI.cpp#L712) |  |
 | `ModuleSha256` | class | SparkEngine | [ModuleManager.cpp:L186](../../SparkEngine/Source/Core/ModuleManager.cpp#L186) |  |
 | `MonsterData` | struct | GameModules | [ARPGDemoEncounter.h:L22](../../GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.h#L22) |  |
 | `MonsterData` | struct | GameModules | [ARPGMonsterSystem.h:L53](../../GameModules/SparkGameARPG/Source/Monster/ARPGMonsterSystem.h#L53) | A spawned monster instance with level-scaled stats |
@@ -3749,7 +3749,7 @@
 | `SerializedEntity` | struct | SparkEngine | [SaveSystemTypes.h:L173](../../SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h#L173) |  |
 | `SerializedEntity` | struct | Tests | [TestSaveSystem.cpp:L80](../../Tests/TestSaveSystem.cpp#L80) |  |
 | `SerializedEntity` | struct | Tests | [TestSceneSerializer.cpp:L65](../../Tests/TestSceneSerializer.cpp#L65) |  |
-| `SerializerStateGuard` | struct | Tests | [TestModuleABI.cpp:L652](../../Tests/TestModuleABI.cpp#L652) |  |
+| `SerializerStateGuard` | struct | Tests | [TestModuleABI.cpp:L693](../../Tests/TestModuleABI.cpp#L693) |  |
 | `ServerApplication` | class | SparkServer | [ServerApplication.h:L77](../../SparkServer/src/ServerApplication.h#L77) |  |
 | `ServerBroadcastInfo` | struct | SparkEngine | [DedicatedServer.h:L170](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L170) | Information broadcast on LAN for server discovery |
 | `ServerBroadcastInfo` | struct | Tests | [TestDedicatedServer.cpp:L89](../../Tests/TestDedicatedServer.cpp#L89) |  |
