@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed deadlines
 - Platform certification now rejects unknown profiles in full evidence validation; unknown profiles remain diagnostic-only
 - Stable publication now rechecks the readiness contract immediately before its final acceptance PATCH
+- Installer CI now builds the InstallState regression executable before running the complete registered test set
 - RemoteDebug reserves built-in command types against public handler rebinding, AssetMigration rejects requested-type mismatches, GamePackager rejects traversal project names, and performance-budget baseline validation rejects malformed hardware IDs
 - SparkGameModule rejects SDK headers with ambiguous `SPARK_SDK_VERSION` definitions before configuring a module ABI sidecar
 - SparkInstaller persists `.sparkengine-install.json` through a flushed same-directory replacement and treats malformed state as non-existent

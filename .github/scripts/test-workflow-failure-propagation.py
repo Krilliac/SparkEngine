@@ -1632,6 +1632,13 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 unsafe = installer.replace("          set -o pipefail\n", "", 1)
                 self.assertEqual(unprotected_tee_steps(unsafe), ["Launch staged executable"])
 
+    def test_installer_builds_every_registered_contract_test(self) -> None:
+        build_step = named_step(self.build, "Build SparkInstaller and registered contract tests")
+        self.assertIn("SparkInstallerGitTests", build_step)
+        self.assertIn("SparkInstallerInstallStateTests", build_step)
+        self.assertIn("SparkBuildProcessRunnerTests", build_step)
+        self.assertIn("SparkBuildDownloaderTests", build_step)
+
     def test_generated_documentation_requires_the_captured_status_to_exit(self) -> None:
         generated_docs = named_step(
             self.build,

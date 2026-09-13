@@ -3346,6 +3346,7 @@ jobs:
           cmake --build build-installer/build --config Release --target
           SparkInstaller
           SparkInstallerGitTests
+          SparkInstallerInstallStateTests
           SparkBuildProcessRunnerTests
           SparkBuildDownloaderTests
           -j

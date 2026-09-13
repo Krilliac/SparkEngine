@@ -9864,7 +9864,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "aac592c11022a836"
+            "runDigest": "79e48800baec3e6c"
           },
           {
             "index": 3,
@@ -12260,13 +12260,14 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
+        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkInstallerInstallStateTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
         "commandProvenance": "literal",
         "targets": [
           "SparkBuildDownloaderTests",
           "SparkBuildProcessRunnerTests",
           "SparkInstaller",
-          "SparkInstallerGitTests"
+          "SparkInstallerGitTests",
+          "SparkInstallerInstallStateTests"
         ],
         "configuration": "Release",
         "buildDir": "build-installer/build",
@@ -12351,13 +12352,14 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
+        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkInstallerInstallStateTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
         "commandProvenance": "literal",
         "targets": [
           "SparkBuildDownloaderTests",
           "SparkBuildProcessRunnerTests",
           "SparkInstaller",
-          "SparkInstallerGitTests"
+          "SparkInstallerGitTests",
+          "SparkInstallerInstallStateTests"
         ],
         "configuration": "Release",
         "buildDir": "build-installer/build",
@@ -12442,13 +12444,14 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
+        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkInstallerInstallStateTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
         "commandProvenance": "literal",
         "targets": [
           "SparkBuildDownloaderTests",
           "SparkBuildProcessRunnerTests",
           "SparkInstaller",
-          "SparkInstallerGitTests"
+          "SparkInstallerGitTests",
+          "SparkInstallerInstallStateTests"
         ],
         "configuration": "Release",
         "buildDir": "build-installer/build",
@@ -13965,13 +13968,14 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
+        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkInstallerInstallStateTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
         "commandProvenance": "literal",
         "targets": [
           "SparkBuildDownloaderTests",
           "SparkBuildProcessRunnerTests",
           "SparkInstaller",
-          "SparkInstallerGitTests"
+          "SparkInstallerGitTests",
+          "SparkInstallerInstallStateTests"
         ],
         "configuration": "Release",
         "buildDir": "build-installer/build",
@@ -13999,13 +14003,14 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
+        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkInstallerInstallStateTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
         "commandProvenance": "literal",
         "targets": [
           "SparkBuildDownloaderTests",
           "SparkBuildProcessRunnerTests",
           "SparkInstaller",
-          "SparkInstallerGitTests"
+          "SparkInstallerGitTests",
+          "SparkInstallerInstallStateTests"
         ],
         "configuration": "Release",
         "buildDir": "build-installer/build",
@@ -14033,13 +14038,14 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
+        "command": "cmake --build build-installer/build --config Release --target SparkInstaller SparkInstallerGitTests SparkInstallerInstallStateTests SparkBuildProcessRunnerTests SparkBuildDownloaderTests -j",
         "commandProvenance": "literal",
         "targets": [
           "SparkBuildDownloaderTests",
           "SparkBuildProcessRunnerTests",
           "SparkInstaller",
-          "SparkInstallerGitTests"
+          "SparkInstallerGitTests",
+          "SparkInstallerInstallStateTests"
         ],
         "configuration": "Release",
         "buildDir": "build-installer/build",
