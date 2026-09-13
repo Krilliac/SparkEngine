@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321718 |
+| **SparkEngine/Source** | 321776 |
 | **SparkEditor/Source** | 103596 |
 | **GameModules** | 142616 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 183717 |
+| **Tests** | 183770 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~779605** |
+| **Total C++ (excl. ThirdParty)** | **~779716** |
 
 ### File Counts
 
@@ -34,7 +34,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 121162 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 121219 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,9 +42,9 @@ Graphics contains 121162 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121162 | 37.6% |
+| Graphics | 121219 | 37.6% |
 | Engine (all subsystems) | 89149 | 27.7% |
-| Utils | 46324 | 14.3% |
+| Utils | 46325 | 14.3% |
 | Core | 31148 | 9.6% |
 | Physics | 10799 | 3.3% |
 | Audio | 6884 | 2.1% |
@@ -110,7 +110,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 605 |
-| TEST() definitions | 7351 |
+| TEST() definitions | 7352 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -161,7 +161,7 @@ inventory is implementation evidence, not support certification.
 | `OpenGLDevice.cpp` | 2160 |
 | `ModuleManager.cpp` | 2052 |
 | `VulkanDevice.cpp` | 1991 |
-| `D3D11Device.cpp` | 1934 |
+| `D3D11Device.cpp` | 1991 |
 | `EngineSettings.cpp` | 1849 |
 | `NetworkConnection.cpp` | 1680 |
 | `GameplayLifecycleShared.cpp` | 1653 |
