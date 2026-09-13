@@ -19,6 +19,8 @@ chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
 pgrep -f "Xvfb :99" >/dev/null || (Xvfb :99 -screen 0 1600x900x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &)
 sleep 1
 
+capture_failures=0
+
 grab() {
     local out="$1"
     import -window root -display :99 "$out" 2>/dev/null
@@ -27,6 +29,7 @@ grab() {
         return 0
     else
         echo "  WARN: $out tiny or missing"
+        capture_failures=$((capture_failures + 1))
         return 1
     fi
 }
@@ -149,4 +152,8 @@ kill_editor
 echo
 echo "=== Output summary ==="
 ls -la "$OUT"/*.png 2>/dev/null | sort -k9
-true
+if [ "$capture_failures" -ne 0 ]; then
+    echo "ERROR: $capture_failures screenshot capture(s) failed"
+    exit 1
+fi
+exit 0
