@@ -2311,7 +2311,7 @@
       "target": "SparkBuildDownloaderTests",
       "kind": "executable",
       "file": "SparkBuild/CMakeLists.txt",
-      "line": 107,
+      "line": 111,
       "conditionFrames": [
         {
           "id": "SparkBuild/CMakeLists.txt:95",
@@ -3889,7 +3889,7 @@
       "declarations": [
         {
           "file": "SparkBuild/CMakeLists.txt",
-          "line": 107,
+          "line": 111,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

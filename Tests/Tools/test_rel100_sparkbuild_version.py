@@ -28,6 +28,10 @@ class SparkBuildVersionContractTests(unittest.TestCase):
         self.assertNotIn("v2.1", app)
 
         self.assertRegex(cmake, r"add_test\(NAME SparkBuildVersion\b")
+        self.assertRegex(
+            cmake,
+            r"add_dependencies\(SparkBuildProcessRunnerTests\s+SparkBuild\)",
+        )
         self.assertIn(
             "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkBuild v${PROJECT_VERSION}",
             cmake,

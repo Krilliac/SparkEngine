@@ -98,6 +98,10 @@ if(SPARKBUILD_BUILD_TESTS)
         tests/ProcessRunnerTests.cpp
     )
     target_link_libraries(SparkBuildProcessRunnerTests PRIVATE SparkBuildCore)
+    # SparkBuildVersion is a CTest contract over the executable. Keep the
+    # executable in the build graph whenever the workflow builds the focused
+    # process-runner target before invoking the complete test list.
+    add_dependencies(SparkBuildProcessRunnerTests SparkBuild)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(SparkBuildProcessRunnerTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
