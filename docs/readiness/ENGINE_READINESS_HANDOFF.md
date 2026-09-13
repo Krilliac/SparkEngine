@@ -10,7 +10,7 @@
 - Capabilities tracked: **22**
 - Ledger gates marked blocking: **18** (profile applicability determines release impact)
 - Gate states: **0 passing**, **0 at risk**, **18 blocked**, **0 not evaluated**
-- Work items: **58 total**, **49 unfinished ledger items marked blocking** (profile applicability determines release impact)
+- Work items: **58 total**, **48 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -230,7 +230,7 @@ Establish the only source of readiness truth and make CI report reality.
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **open** | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **open** | — | `RDY-000`, `SEC-100`, `OPS-100` |
-| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **open** | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
+| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **done** | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
 ### Wave 1 — Build, security, and release substrate
 
@@ -720,10 +720,10 @@ gh api repos/Krilliac/SparkEngine/branches/Working/protection
 
 ### DOC-410 — Repair and enforce deterministic repository documentation generation
 
-**Priority:** P0 · **Status:** open · **Wave:** 0 · **Area:** documentation · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** done · **Wave:** 0 · **Area:** documentation · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-A hostile audit found timestamp-only false greens, incomplete first-party source coverage, contradictory health evidence, fabricated mixed-case macro rows, and link-validation bypasses. The repair remains open until the exact final commit completes the blocking docs-health and site-data CI jobs.
+A hostile audit found timestamp-only false greens, incomplete first-party source coverage, contradictory health evidence, fabricated mixed-case macro rows, and link-validation bypasses. Deterministic generation, hostile documentation checks, link validation, and exact-commit docs-health and site-data CI evidence now pass; future documentation changes remain covered by the same blocking jobs.
 
 **Dependency contract**
 
