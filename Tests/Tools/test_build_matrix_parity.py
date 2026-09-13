@@ -1610,6 +1610,24 @@ class WorkflowWeakeningTests(unittest.TestCase):
             workflow_record(LIVE_WORKFLOW)["summary"]["buildAllTargetCount"],
         )
 
+    def test_canonical_preset_override_cannot_satisfy_a_profile(self) -> None:
+        mutated = LIVE_WORKFLOW.replace(
+            "cmake --preset windows-shipping",
+            "cmake --preset windows-shipping -DBUILD_GAME_MODULES=OFF",
+            1,
+        )
+        record = self.assert_weakening_is_visible(mutated, "canonical preset override")
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"] = record
+
+        findings = check_parity.check_workflow_semantics(data)
+
+        overrides = [
+            item for item in findings if item.category == "workflow-preset-overridden"
+        ]
+        self.assertEqual(len(overrides), 1)
+        self.assertIn("windows-shipping", overrides[0].message)
+
     def test_equals_target_form_cannot_disguise_single_target_build(self) -> None:
         mutated = LIVE_WORKFLOW.replace(
             "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1",

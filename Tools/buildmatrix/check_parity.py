@@ -132,6 +132,19 @@ def _as_bool(value: Any) -> bool | None:
     return None
 
 
+def _cache_values_match(expected: Any, observed: Any) -> bool:
+    """Compare CMake cache values using CMake's Boolean spellings when possible."""
+    if isinstance(expected, dict) and "value" in expected:
+        expected = expected["value"]
+    if isinstance(observed, dict) and "value" in observed:
+        observed = observed["value"]
+    expected_bool = _as_bool(expected)
+    observed_bool = _as_bool(observed)
+    if expected_bool is not None and observed_bool is not None:
+        return expected_bool == observed_bool
+    return str(expected).strip().casefold() == str(observed).strip().casefold()
+
+
 def check_sparkbuild_vs_cmake(
     cmake_options: list[dict[str, Any]],
     sparkbuild_options: list[dict[str, Any]],
@@ -1101,6 +1114,37 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
                 )
             )
         ]
+        if preset:
+            try:
+                resolved_preset = inventory_tool.resolve_configure_preset(presets, preset)
+            except inventory_tool.InventoryError:
+                resolved_preset = None
+            expected_cache = (
+                resolved_preset.get("cacheVariables", {})
+                if isinstance(resolved_preset, dict)
+                else {}
+            )
+            if isinstance(expected_cache, dict):
+                for entry in matching:
+                    options = entry.get("options", {})
+                    if not isinstance(options, dict):
+                        continue
+                    for name, observed in options.items():
+                        if name not in expected_cache:
+                            continue
+                        expected = expected_cache[name]
+                        if _cache_values_match(expected, observed):
+                            continue
+                        findings.append(
+                            Finding(
+                                "workflow-preset-overridden",
+                                severity,
+                                f"CI configure for canonical preset '{preset}' overrides "
+                                f"{name}={expected!r} with {observed!r}",
+                                f"{entry.get('job')}/{entry.get('step')}: explicit cache values must "
+                                "not change the reviewed preset that defines the stable-v1 product set.",
+                            )
+                        )
         blocking = [entry for entry in matching if mandatory(entry)]
         if preset and matching and not blocking:
             findings.append(
