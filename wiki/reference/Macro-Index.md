@@ -1414,9 +1414,9 @@
 | `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [Config.cpp:L14](../../SparkBuild/src/Config.cpp#L14) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [Downloader.cpp:L15](../../SparkBuild/src/Downloader.cpp#L15) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [ProcessRunner.h:L12](../../SparkBuild/src/ProcessRunner.h#L12) |  |
-| `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [SparkBuild.cpp:L17](../../SparkBuild/src/SparkBuild.cpp#L17) |  |
+| `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [SparkBuild.cpp:L22](../../SparkBuild/src/SparkBuild.cpp#L22) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [Terminal.cpp:L7](../../SparkBuild/src/Terminal.cpp#L7) |  |
-| `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [main.cpp:L8](../../SparkBuild/src/main.cpp#L8) |  |
+| `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [main.cpp:L12](../../SparkBuild/src/main.cpp#L12) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkCooker | [main.cpp:L17](../../SparkCooker/src/main.cpp#L17) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkCrashReporter | [CrashReporterApp.cpp:L27](../../SparkCrashReporter/src/CrashReporterApp.cpp#L27) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkDaemon | [main.cpp:L42](../../SparkDaemon/src/main.cpp#L42) |  |

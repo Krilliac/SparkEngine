@@ -1315,7 +1315,7 @@
       "description": "Build SparkBuild focused regression tests",
       "default": "ON",
       "file": "SparkBuild/CMakeLists.txt",
-      "line": 90,
+      "line": 94,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2311,10 +2311,10 @@
       "target": "SparkBuildDownloaderTests",
       "kind": "executable",
       "file": "SparkBuild/CMakeLists.txt",
-      "line": 103,
+      "line": 107,
       "conditionFrames": [
         {
-          "id": "SparkBuild/CMakeLists.txt:91",
+          "id": "SparkBuild/CMakeLists.txt:95",
           "branch": 0,
           "branches": [
             "SPARKBUILD_BUILD_TESTS"
@@ -2329,10 +2329,10 @@
       "target": "SparkBuildProcessRunnerTests",
       "kind": "executable",
       "file": "SparkBuild/CMakeLists.txt",
-      "line": 93,
+      "line": 97,
       "conditionFrames": [
         {
-          "id": "SparkBuild/CMakeLists.txt:91",
+          "id": "SparkBuild/CMakeLists.txt:95",
           "branch": 0,
           "branches": [
             "SPARKBUILD_BUILD_TESTS"
@@ -3889,7 +3889,7 @@
       "declarations": [
         {
           "file": "SparkBuild/CMakeLists.txt",
-          "line": 103,
+          "line": 107,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -3907,7 +3907,7 @@
       "declarations": [
         {
           "file": "SparkBuild/CMakeLists.txt",
-          "line": 93,
+          "line": 97,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
