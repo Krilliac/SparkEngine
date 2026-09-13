@@ -421,6 +421,39 @@ class DocsGenerationHostileTests(unittest.TestCase):
                         ["tracked.md"],
                     )
 
+    def test_windows_case_variant_of_tracked_input_is_not_undeclared(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-case-variant-") as directory:
+            root = Path(directory)
+            first = root / "first"
+            second = root / "second"
+            for snapshot in (first, second):
+                write(snapshot / "Tools" / "api-changelog.py", "tracked\n")
+                write(snapshot / "docs" / "api" / "README.md", "generated\n")
+            write(root / "tools" / "api-changelog.py", "tracked\n")
+            contract = {
+                "schemaVersion": 1,
+                "generators": [
+                    {
+                        "id": "api-docs",
+                        "script": "generate-api-docs.sh",
+                        "mode": "generate",
+                        "outputs": [
+                            {"path": "docs/api", "tracked": False, "tree": True},
+                        ],
+                    },
+                ],
+            }
+            with (
+                mock.patch.object(docs_currentness.os, "name", "nt"),
+                mock.patch.object(docs_currentness, "REPO_ROOT", root),
+            ):
+                docs_currentness.compare_outputs(
+                    contract,
+                    first,
+                    second,
+                    ["tools/api-changelog.py"],
+                )
+
     def test_newer_readme_cannot_hide_stale_source_or_missing_page(self) -> None:
         with MiniContract() as fixture:
             api = fixture.root / "docs" / "api"

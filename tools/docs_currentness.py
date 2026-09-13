@@ -421,10 +421,14 @@ def undeclared_generated_paths(root: Path, tracked: set[str]) -> list[str]:
         )
     except docs_contract.ContractError as exc:
         raise CurrentnessError(str(exc)) from exc
+    tracked_keys = {
+        path.casefold() if os.name == "nt" else path
+        for path in tracked
+    }
     return sorted(
         relative
         for relative in snapshot
-        if relative not in tracked
+        if (relative.casefold() if os.name == "nt" else relative) not in tracked_keys
         and relative != ".docs-tracked-files"
         and relative != HEALTH_OUTPUT_PATH.as_posix()
     )
