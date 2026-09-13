@@ -1374,6 +1374,30 @@
       "definitionScope": []
     },
     {
+      "name": "SPARK_IMGUI_ENABLE_FREETYPE",
+      "description": "Enable optional FreeType rasterizer",
+      "default": "ON",
+      "file": "cmake/BuildImGui.cmake",
+      "line": 24,
+      "conditionFrames": [
+        {
+          "id": "cmake/BuildImGui.cmake:17",
+          "branch": 0,
+          "branches": [
+            "IMGUI_INCLUDE_DIR"
+          ]
+        },
+        {
+          "id": "cmake/BuildImGui.cmake:18",
+          "branch": 0,
+          "branches": [
+            "NOT TARGET imgui"
+          ]
+        }
+      ],
+      "definitionScope": []
+    },
+    {
       "name": "SPARK_NATIVE_ARCH",
       "description": "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries.",
       "default": "OFF",
@@ -3180,7 +3204,7 @@
       "target": "imgui",
       "kind": "static_library",
       "file": "cmake/BuildImGui.cmake",
-      "line": 44,
+      "line": 50,
       "conditionFrames": [
         {
           "id": "cmake/BuildImGui.cmake:17",
@@ -3197,7 +3221,7 @@
           ]
         },
         {
-          "id": "cmake/BuildImGui.cmake:43",
+          "id": "cmake/BuildImGui.cmake:49",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -3212,7 +3236,7 @@
       "target": "imgui",
       "kind": "static_library",
       "file": "cmake/BuildImGui.cmake",
-      "line": 64,
+      "line": 70,
       "conditionFrames": [
         {
           "id": "cmake/BuildImGui.cmake:17",
@@ -3229,7 +3253,7 @@
           ]
         },
         {
-          "id": "cmake/BuildImGui.cmake:43",
+          "id": "cmake/BuildImGui.cmake:49",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -5027,7 +5051,7 @@
       "declarations": [
         {
           "file": "cmake/BuildImGui.cmake",
-          "line": 44,
+          "line": 50,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5035,7 +5059,7 @@
         },
         {
           "file": "cmake/BuildImGui.cmake",
-          "line": 64,
+          "line": 70,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7225,7 +7249,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "22226229ded23291"
+            "runDigest": "57f1b7cc9790652a"
           },
           {
             "index": 11,
@@ -10730,13 +10754,14 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DENABLE_VULKAN=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"",
+        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DENABLE_VULKAN=OFF  -DSPARK_IMGUI_ENABLE_FREETYPE=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "ENABLE_SDL2": "OFF",
           "ENABLE_VULKAN": "OFF",
+          "SPARK_IMGUI_ENABLE_FREETYPE": "OFF",
           "CMAKE_C_COMPILER": "clang",
           "CMAKE_CXX_COMPILER": "clang++",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -12641,13 +12666,14 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DENABLE_VULKAN=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"",
+        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DENABLE_VULKAN=OFF  -DSPARK_IMGUI_ENABLE_FREETYPE=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "ENABLE_SDL2": "OFF",
           "ENABLE_VULKAN": "OFF",
+          "SPARK_IMGUI_ENABLE_FREETYPE": "OFF",
           "CMAKE_C_COMPILER": "clang",
           "CMAKE_CXX_COMPILER": "clang++",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -14908,13 +14934,14 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DENABLE_VULKAN=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"",
+      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_SDL2=OFF  -DENABLE_VULKAN=OFF  -DSPARK_IMGUI_ENABLE_FREETYPE=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem ${MSAN_LIBCXX_PREFIX}/include/c++/v1 -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_C_FLAGS=\"-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=${{ github.workspace }}/Tests/msan_ignorelist.txt\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=memory -stdlib=libc++ -L${MSAN_LIBCXX_PREFIX}/lib -Wl,-rpath,${MSAN_LIBCXX_PREFIX}/lib -lc++abi\"",
       "commandProvenance": "literal",
       "options": {
         "CMAKE_BUILD_TYPE": "Debug",
         "BUILD_TESTS": "ON",
         "ENABLE_SDL2": "OFF",
         "ENABLE_VULKAN": "OFF",
+        "SPARK_IMGUI_ENABLE_FREETYPE": "OFF",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
