@@ -393,6 +393,22 @@ class TestSecondAuditReproductions(unittest.TestCase):
         self.assertEqual(report.skipped_by_status, {"suspended": 1})
         self.assertEqual(report.verdicts, [])
 
+    def test_19b_pending_metric_unit_mismatch_is_rejected_before_skip(self) -> None:
+        budget = _budget([_metric(status="pending_measurement", budget=None)])
+        measurement = copy.deepcopy(_result()["measurements"][0])
+        measurement["unit"] = "bytes"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget)
+            report = compare(
+                root,
+                _result([measurement]),
+                expected_sha=RESULT_SHA,
+            )
+        self.assertFalse(report.passed)
+        self.assertTrue(any("unit mismatch" in error for error in report.errors))
+        self.assertEqual(report.skipped_metrics, [])
+
     def test_20_uncertified_hardware_is_advisory_not_failed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
