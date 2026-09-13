@@ -43,6 +43,7 @@ MAX_COPY_FILE_BYTES = 16 * 1024 * 1024
 MAX_OUTPUT_FILES = 5000
 MAX_OUTPUT_BYTES = 256 * 1024 * 1024
 MAX_JSON_BYTES = 8 * 1024 * 1024
+HEALTH_OUTPUT_PATH = PurePosixPath("docs/.health.json")
 OUTPUT_OVERRIDE_ENVIRONMENT = (
     "SPARK_DOC_API_OUTPUT_DIR",
     "SPARK_DOC_API_DIR",
@@ -406,8 +407,49 @@ def tree_projection(root: Path) -> dict[str, tuple[int, str]]:
     return result
 
 
+def undeclared_generated_paths(root: Path, tracked: set[str]) -> list[str]:
+    try:
+        snapshot = docs_contract.generated_tree_snapshot(
+            root,
+            label="isolated documentation output",
+            max_files=MAX_COPY_FILES + MAX_OUTPUT_FILES + 1,
+            max_bytes=MAX_COPY_BYTES + MAX_OUTPUT_BYTES + MAX_JSON_BYTES,
+        )
+    except docs_contract.ContractError as exc:
+        raise CurrentnessError(str(exc)) from exc
+    return sorted(
+        relative
+        for relative in snapshot
+        if relative not in tracked
+        and relative != ".docs-tracked-files"
+        and relative != HEALTH_OUTPUT_PATH.as_posix()
+    )
+
+
 def compare_outputs(contract: dict, first: Path, second: Path, tracked: list[str]) -> None:
     tracked_set = set(tracked)
+    declared_files: set[str] = set()
+    declared_trees: list[PurePosixPath] = []
+    for generator in contract["generators"]:
+        for row in generator["outputs"]:
+            relative = safe_relative(row["path"])
+            if row.get("tree", False):
+                declared_trees.append(relative)
+            else:
+                declared_files.add(relative.as_posix())
+
+    for snapshot in (first, second):
+        unexpected = []
+        for path in undeclared_generated_paths(snapshot, tracked_set):
+            relative = PurePosixPath(path)
+            if path in declared_files or any(
+                relative == tree or tree in relative.parents for tree in declared_trees
+            ):
+                continue
+            unexpected.append(path)
+        if unexpected:
+            raise CurrentnessError(f"generator changed undeclared generated output: {unexpected[0]}")
+
     declared_tracked: set[str] = set()
     for generator in contract["generators"]:
         for row in generator["outputs"]:

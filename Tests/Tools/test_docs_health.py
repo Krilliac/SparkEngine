@@ -382,6 +382,41 @@ class DocsGenerationHostileTests(unittest.TestCase):
             )
             self.assertIn("not a regular non-reparse file", str(caught.exception))
 
+    def test_undeclared_isolated_output_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-undeclared-output-") as directory:
+            root = Path(directory)
+            first = root / "first"
+            second = root / "second"
+            for snapshot in (first, second):
+                write(snapshot / "tracked.md", "tracked\n")
+                write(snapshot / "docs" / "api" / "README.md", "generated\n")
+                write(snapshot / "docs" / "unlisted.md", "undeclared\n")
+            write(root / "tracked.md", "tracked\n")
+            contract = {
+                "schemaVersion": 1,
+                "generators": [
+                    {
+                        "id": "api-docs",
+                        "script": "generate-api-docs.sh",
+                        "mode": "generate",
+                        "outputs": [
+                            {"path": "docs/api", "tracked": False, "tree": True},
+                        ],
+                    },
+                ],
+            }
+            with mock.patch.object(docs_currentness, "REPO_ROOT", root):
+                with self.assertRaisesRegex(
+                    docs_currentness.CurrentnessError,
+                    "undeclared generated output",
+                ):
+                    docs_currentness.compare_outputs(
+                        contract,
+                        first,
+                        second,
+                        ["tracked.md"],
+                    )
+
     def test_newer_readme_cannot_hide_stale_source_or_missing_page(self) -> None:
         with MiniContract() as fixture:
             api = fixture.root / "docs" / "api"
