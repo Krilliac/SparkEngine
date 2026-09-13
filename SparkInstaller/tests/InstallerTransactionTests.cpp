@@ -50,6 +50,14 @@ namespace
             return 1;
         if (command == "rev-parse")
         {
+            if (fs::exists("force-final-head-failure"))
+            {
+                if (fs::exists("fake-git-initial-head-read"))
+                    return 95;
+                std::ofstream initialHeadRead("fake-git-initial-head-read", std::ios::binary | std::ios::trunc);
+                if (!initialHeadRead)
+                    return 96;
+            }
             std::cout << kFakeHeadCommit << '\n';
             return 0;
         }
@@ -243,12 +251,94 @@ namespace
         std::ifstream lastCheckout(destination / "fake-git-last-checkout", std::ios::binary);
         std::string restoredCommit;
         std::getline(lastCheckout, restoredCommit);
-        failures += Check(restoredCommit == kFakeHeadCommit,
-                          "failed update did not restore the previously working commit");
+        failures +=
+            Check(restoredCommit == kFakeHeadCommit, "failed update did not restore the previously working commit");
         failures += Check(log.find("rolling back update") != std::string::npos,
                           "failed update did not report that rollback was attempted");
         failures += Check(log.find("Done. Engine built at:") == std::string::npos,
                           "installer reported completion after update build failure");
+
+        fs::remove_all(root, error);
+        return failures;
+    }
+
+    int RunPostBuildHeadCommitFailureTest(const fs::path& executable)
+    {
+        const fs::path root = MakeTestRoot();
+        std::error_code error;
+        fs::create_directories(root / "tools", error);
+        int failures = Check(!error, "could not create final-head verification test root");
+        if (failures != 0)
+            return failures;
+
+        const fs::path fakeGit = root / "tools" /
+                                 (
+#ifdef _WIN32
+                                     "git.exe"
+#else
+                                     "git"
+#endif
+                                 );
+        fs::copy_file(executable, fakeGit, fs::copy_options::overwrite_existing, error);
+        failures += Check(!error, "could not create final-head fake git executable");
+#ifndef _WIN32
+        if (!error)
+        {
+            fs::permissions(fakeGit, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec,
+                            fs::perm_options::add, error);
+            failures += Check(!error, "could not make final-head fake git executable runnable");
+        }
+#endif
+
+        const fs::path destination = root / "install";
+        fs::create_directories(destination / ".git", error);
+        failures += Check(!error, "could not create final-head engine checkout");
+        std::ofstream cmakeLists(destination / "CMakeLists.txt");
+        cmakeLists << "cmake_minimum_required(VERSION 3.25)\n";
+        cmakeLists.close();
+        failures += Check(static_cast<bool>(cmakeLists), "could not create final-head CMakeLists");
+
+        SparkInstaller::InstallState previousState;
+        previousState.ref = "Working";
+        previousState.commit = std::string(kFakeHeadCommit);
+        previousState.generator = "Ninja";
+        previousState.buildType = "Release";
+        previousState.installerVersion = "1.0.0";
+        failures += Check(previousState.Save(destination.string()), "could not create prior valid install state");
+        std::ofstream failFinalHead(destination / "force-final-head-failure");
+        failFinalHead << "fail";
+        failFinalHead.close();
+        failures += Check(static_cast<bool>(failFinalHead), "could not create final-head failure fixture");
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), "could not prepend final-head fake git to PATH");
+
+        std::string log;
+        SparkInstaller::InstallerContext context;
+        context.frontend = SparkInstaller::Frontend::Headless;
+        context.destination = destination.string();
+        context.ref = "Working";
+        context.skipSubmoduleUpdate = true;
+        context.configManager.config.cmakePath = executable.string();
+        context.configManager.config.buildPath = (destination / "build").string();
+        context.log = [&log](const std::string& line)
+        {
+            log += line;
+            log.push_back('\n');
+        };
+
+        const int result = SparkInstaller::Installer::Run(context);
+        failures += Check(result != 0, "installer reported success without verifying the installed commit");
+
+        SparkInstaller::InstallState loaded;
+        failures += Check(SparkInstaller::InstallState::Load(destination.string(), loaded),
+                          "failed commit verification replaced the valid install state with an invalid marker");
+        failures += Check(loaded.commit == kFakeHeadCommit,
+                          "failed commit verification did not preserve the previous install state");
+        failures += Check(log.find("could not determine the installed commit") != std::string::npos,
+                          "installer did not report the final commit verification failure");
+        failures += Check(log.find("Done. Engine built at:") == std::string::npos,
+                          "installer reported completion after final commit verification failed");
 
         fs::remove_all(root, error);
         return failures;
@@ -263,5 +353,6 @@ int main(int argc, char* argv[])
     const fs::path executable = fs::absolute(argv[0]);
     const int persistenceFailure = RunInstallStatePersistenceFailureTest(executable);
     const int rollbackFailure = RunUpdateBuildFailureRollbackTest(executable);
-    return persistenceFailure == 0 && rollbackFailure == 0 ? 0 : 1;
+    const int finalHeadFailure = RunPostBuildHeadCommitFailureTest(executable);
+    return persistenceFailure == 0 && rollbackFailure == 0 && finalHeadFailure == 0 ? 0 : 1;
 }

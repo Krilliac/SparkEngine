@@ -143,7 +143,7 @@ if(SPARKINSTALLER_BUILD_TESTS)
         target_compile_options(SparkInstallerGitTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkInstallerGitTests COMMAND SparkInstallerGitTests)
-    set_tests_properties(SparkInstallerGitTests PROPERTIES TIMEOUT 15)
+    set_tests_properties(SparkInstallerGitTests PROPERTIES TIMEOUT 15 LABELS installer)
 
     add_executable(SparkInstallerInstallStateTests
         tests/InstallStateTests.cpp
@@ -159,7 +159,7 @@ if(SPARKINSTALLER_BUILD_TESTS)
         target_compile_options(SparkInstallerInstallStateTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkInstallerInstallStateTests COMMAND SparkInstallerInstallStateTests)
-    set_tests_properties(SparkInstallerInstallStateTests PROPERTIES TIMEOUT 10)
+    set_tests_properties(SparkInstallerInstallStateTests PROPERTIES TIMEOUT 10 LABELS installer)
 
     add_executable(SparkInstallerTransactionTests
         tests/InstallerTransactionTests.cpp
@@ -182,7 +182,7 @@ if(SPARKINSTALLER_BUILD_TESTS)
         target_compile_options(SparkInstallerTransactionTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkInstallerTransactionTests COMMAND SparkInstallerTransactionTests)
-    set_tests_properties(SparkInstallerTransactionTests PROPERTIES TIMEOUT 15)
+    set_tests_properties(SparkInstallerTransactionTests PROPERTIES TIMEOUT 15 LABELS installer)
 
     if(WIN32)
         set(_sparkinstaller_platform "Windows")
@@ -224,7 +224,7 @@ endif()
             "-DSPARK_VERSION_EXECUTABLE=$<TARGET_FILE:SparkInstaller>"
             "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkInstaller ${PROJECT_VERSION} (${_sparkinstaller_platform})"
             -P "${_sparkinstaller_version_test_script}")
-    set_tests_properties(SparkInstallerVersion PROPERTIES TIMEOUT 15)
+    set_tests_properties(SparkInstallerVersion PROPERTIES TIMEOUT 15 LABELS installer)
     unset(_sparkinstaller_version_test_script)
     unset(_sparkinstaller_platform)
 endif()

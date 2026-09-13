@@ -213,6 +213,12 @@ namespace SparkInstaller
         InstallState state;
         state.ref = ctx.ref;
         state.commit = git.HeadCommit(ctx.destination);
+        if (state.commit.empty())
+        {
+            Emit(ctx.log, "error: could not determine the installed commit; refusing to report success");
+            (void)rollbackUpdate("installed commit verification failure");
+            return 8;
+        }
         state.generator = SparkBuild::GeneratorToString(ctx.configManager.config.generator);
         state.buildType = SparkBuild::BuildTypeToString(ctx.configManager.config.buildType);
         state.installerVersion = kInstallerVersion;
