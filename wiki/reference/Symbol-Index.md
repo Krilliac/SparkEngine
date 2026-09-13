@@ -929,7 +929,7 @@
 | `AllocationHeader` | struct | SparkEngine | [DynamicPluginHost.cpp:L45](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L45) |  |
 | `AllocationHotSpot` | struct | SparkEngine | [MemoryDebugger.h:L73](../../SparkEngine/Source/Utils/MemoryDebugger.h#L73) | Hot-spot entry for allocation frequency analysis |
 | `AllocationRecord` | struct | SparkEngine | [MemoryDebugger.h:L45](../../SparkEngine/Source/Utils/MemoryDebugger.h#L45) | Information about a single tracked allocation |
-| `AllocatorCursorProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L396](../../Tests/harden/Test_persistence_SaveSystem.cpp#L396) |  |
+| `AllocatorCursorProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L399](../../Tests/harden/Test_persistence_SaveSystem.cpp#L399) |  |
 | `AllocHeadlessConsole` | function | SparkEngine | [SparkEngineWindowsHeadless.cpp:L96](../../SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp#L96) |  |
 | `AllocPort` | function | Tests | [TestServerLiveMockClient.cpp:L169](../../Tests/TestServerLiveMockClient.cpp#L169) |  |
 | `AllocRaw` | function | SparkEngine | [FrameAllocator.h:L81](../../SparkEngine/Source/Utils/FrameAllocator.h#L81) | Allocate raw bytes with given alignment |
@@ -3428,8 +3428,8 @@
 | `Candidate` | struct | GameModules | [TFLoadoutScreen.cpp:L33](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoadoutScreen.cpp#L33) |  |
 | `Candidate` | struct | SparkEngine | [SeamlessAreaManagerStreaming.cpp:L170](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManagerStreaming.cpp#L170) |  |
 | `Candidate` | struct | Tests | [TestSeamlessAreaManager.cpp:L152](../../Tests/TestSeamlessAreaManager.cpp#L152) |  |
-| `CandidateExtraComponentProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L381](../../Tests/harden/Test_persistence_SaveSystem.cpp#L381) |  |
-| `CandidateGhostProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L376](../../Tests/harden/Test_persistence_SaveSystem.cpp#L376) |  |
+| `CandidateExtraComponentProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L384](../../Tests/harden/Test_persistence_SaveSystem.cpp#L384) |  |
+| `CandidateGhostProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L379](../../Tests/harden/Test_persistence_SaveSystem.cpp#L379) |  |
 | `CanEquipWeapon` | function | GameModules | [Player.h:L388](../../GameModules/SparkGameFPS/Source/Game/Player.h#L388) | Check if a weapon switch is valid for the current class |
 | `CanGrowSnapshot` | function | SparkDaemon | [CollaborationService.cpp:L42](../../SparkDaemon/src/CollaborationService.cpp#L42) |  |
 | `CanHear` | function | SparkEngine | [PerceptionSystem.h:L267](../../SparkEngine/Source/Engine/AI/PerceptionSystem.h#L267) |  |
@@ -5969,7 +5969,7 @@
 | `coordinator` | function | Tests | [TestGatewayAreaControl.cpp:L255](../../Tests/TestGatewayAreaControl.cpp#L255) |  |
 | `copy` | function | SparkEngine | [NetworkManager.cpp:L68](../../SparkEngine/Source/Engine/Networking/NetworkManager.cpp#L68) |  |
 | `copy` | function | SparkEngine | [LocalFileCache.h:L196](../../SparkEngine/Source/Utils/LocalFileCache.h#L196) |  |
-| `copy` | function | Tests | [Test_persistence_SaveSystem.cpp:L319](../../Tests/harden/Test_persistence_SaveSystem.cpp#L319) |  |
+| `copy` | function | Tests | [Test_persistence_SaveSystem.cpp:L322](../../Tests/harden/Test_persistence_SaveSystem.cpp#L322) |  |
 | `CopyCompatibleFixtureToTemp` | function | Tests | [TestModuleABI.cpp:L83](../../Tests/TestModuleABI.cpp#L83) |  |
 | `CopyDirectoryContents` | function | SparkEditor | [BuildPipeline.cpp:L343](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L343) |  |
 | `CopyField` | function | GameModules | [TFOutfitSystemInternal.h:L40](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemInternal.h#L40) |  |
@@ -6023,11 +6023,11 @@
 | `Count` | function | Tests | [TestExtendedSystems.cpp:L478](../../Tests/TestExtendedSystems.cpp#L478) |  |
 | `Count` | function | Tests | [TestSceneConfigDatabase.cpp:L36](../../Tests/TestSceneConfigDatabase.cpp#L36) |  |
 | `CountAlive` | function | Tests | [TestGPUParticleSystem.cpp:L75](../../Tests/TestGPUParticleSystem.cpp#L75) |  |
-| `CountAllocatorCursorPrepare` | function | Tests | [Test_persistence_SaveSystem.cpp:L467](../../Tests/harden/Test_persistence_SaveSystem.cpp#L467) |  |
+| `CountAllocatorCursorPrepare` | function | Tests | [Test_persistence_SaveSystem.cpp:L470](../../Tests/harden/Test_persistence_SaveSystem.cpp#L470) |  |
 | `CountBelowTerrain` | function | GameModules | [TFChaosHarness.h:L94](../../GameModules/SparkGameMMOFPS/Source/Game/TFChaosHarness.h#L94) |  |
 | `CountBindingHazards` | function | Tests | [TestPostProcessingPipelineD3D11.cpp:L89](../../Tests/TestPostProcessingPipelineD3D11.cpp#L89) |  |
 | `CountByFaction` | function | Tests | [TestSparkGameRTS.cpp:L155](../../Tests/TestSparkGameRTS.cpp#L155) |  |
-| `CountCandidateTopologyPrepare` | function | Tests | [Test_persistence_SaveSystem.cpp:L442](../../Tests/harden/Test_persistence_SaveSystem.cpp#L442) |  |
+| `CountCandidateTopologyPrepare` | function | Tests | [Test_persistence_SaveSystem.cpp:L445](../../Tests/harden/Test_persistence_SaveSystem.cpp#L445) |  |
 | `countDist` | function | GameModules | [InventorySystem.h:L432](../../GameModules/SparkGameFPS/Source/Game/InventorySystem.h#L432) |  |
 | `countDist` | function | GameModules | [MMOInventorySystem.cpp:L289](../../GameModules/SparkGameMMO/Source/Inventory/MMOInventorySystem.cpp#L289) |  |
 | `countDist` | function | Tests | [TestInventorySystem.cpp:L195](../../Tests/TestInventorySystem.cpp#L195) |  |
@@ -6048,15 +6048,15 @@
 | `CountItem` | function | Tests | [TestInventorySystem.cpp:L139](../../Tests/TestInventorySystem.cpp#L139) |  |
 | `CountItem` | function | Tests | [TestInventorySystem.cpp:L150](../../Tests/TestInventorySystem.cpp#L150) |  |
 | `CountLayers` | function | SparkEngine | [LightLayers.h:L59](../../SparkEngine/Source/Graphics/LightLayers.h#L59) | Count enabled layers |
-| `CountMissingRestorePrepare` | function | Tests | [Test_persistence_SaveSystem.cpp:L429](../../Tests/harden/Test_persistence_SaveSystem.cpp#L429) |  |
+| `CountMissingRestorePrepare` | function | Tests | [Test_persistence_SaveSystem.cpp:L432](../../Tests/harden/Test_persistence_SaveSystem.cpp#L432) |  |
 | `CountPendingCrashManifests` | function | SparkEngine | [CrashHandler.cpp:L634](../../SparkEngine/Source/Utils/CrashHandler.cpp#L634) |  |
 | `CountReportsContaining` | function | Tests | [TestCrashHandlerGatingReal.cpp:L222](../../Tests/TestCrashHandlerGatingReal.cpp#L222) |  |
-| `CountRetirementPrepare` | function | Tests | [Test_persistence_SaveSystem.cpp:L448](../../Tests/harden/Test_persistence_SaveSystem.cpp#L448) |  |
+| `CountRetirementPrepare` | function | Tests | [Test_persistence_SaveSystem.cpp:L451](../../Tests/harden/Test_persistence_SaveSystem.cpp#L451) |  |
 | `CountSortedSequenceIntersection` | function | SparkEngine | [Telemetry.h:L892](../../SparkEngine/Source/Utils/Telemetry.h#L892) |  |
 | `CountStagedModuleImages` | function | Tests | [TestModuleABI.cpp:L160](../../Tests/TestModuleABI.cpp#L160) |  |
 | `CountStateSwitches` | function | SparkEngine | [DrawSortKey.h:L299](../../SparkEngine/Source/Graphics/DrawSortKey.h#L299) | Count the number of unique shader+material combinations in a sorted list. |
 | `CountTerrainEntities` | function | Tests | [TestEditorSubsystemsReal.cpp:L321](../../Tests/TestEditorSubsystemsReal.cpp#L321) |  |
-| `CountTransientCandidatePrepare` | function | Tests | [Test_persistence_SaveSystem.cpp:L461](../../Tests/harden/Test_persistence_SaveSystem.cpp#L461) |  |
+| `CountTransientCandidatePrepare` | function | Tests | [Test_persistence_SaveSystem.cpp:L464](../../Tests/harden/Test_persistence_SaveSystem.cpp#L464) |  |
 | `CoverCoverageFixture` | struct | Tests | [TestCoverageAI.cpp:L46](../../Tests/TestCoverageAI.cpp#L46) |  |
 | `CoverHeight` | enum | SparkEngine | [CoverSystem.h:L32](../../SparkEngine/Source/Engine/AI/CoverSystem.h#L32) | Whether a cover point requires crouching or allows standing. |
 | `CoverHeight` | enum | Tests | [TestCoverSystem.cpp:L38](../../Tests/TestCoverSystem.cpp#L38) |  |
@@ -7345,7 +7345,7 @@
 | `DecodeEditRequest` | function | SparkDaemon | [CollaborationProtocol.h:L198](../../SparkDaemon/src/CollaborationProtocol.h#L198) |  |
 | `DecodeHex` | function | SparkGateway | [GatewayAreaControl.cpp:L530](../../SparkGateway/src/GatewayAreaControl.cpp#L530) |  |
 | `DecodeHex` | function | SparkGateway | [GatewaySecurity.cpp:L42](../../SparkGateway/src/GatewaySecurity.cpp#L42) |  |
-| `DecodeHexFixture` | function | Tests | [Test_persistence_SaveSystem.cpp:L109](../../Tests/harden/Test_persistence_SaveSystem.cpp#L109) |  |
+| `DecodeHexFixture` | function | Tests | [Test_persistence_SaveSystem.cpp:L112](../../Tests/harden/Test_persistence_SaveSystem.cpp#L112) |  |
 | `DecodeJoinRequest` | function | SparkDaemon | [CollaborationProtocol.h:L142](../../SparkDaemon/src/CollaborationProtocol.h#L142) |  |
 | `DecodeJoinResponse` | function | SparkDaemon | [CollaborationProtocol.h:L160](../../SparkDaemon/src/CollaborationProtocol.h#L160) |  |
 | `DecodeJsonEscape` | function | SparkEditor | [ProjectManager.cpp:L174](../../SparkEditor/Source/Core/ProjectManager.cpp#L174) |  |
@@ -8491,7 +8491,7 @@
 | `DuplicateDescriptor` | function | Tests | [TestSparkError.cpp:L48](../../Tests/TestSparkError.cpp#L48) |  |
 | `DuplicateObject` | function | SparkEditor | [HierarchyPanel.h:L335](../../SparkEditor/Source/Panels/HierarchyPanel.h#L335) | Duplicate object |
 | `DuplicateSelectedEntity` | function | SparkEditor | [SceneViewPanel.h:L169](../../SparkEditor/Source/Panels/SceneViewPanel.h#L169) |  |
-| `DuplicateWireRecord` | function | Tests | [Test_persistence_SaveSystem.cpp:L308](../../Tests/harden/Test_persistence_SaveSystem.cpp#L308) |  |
+| `DuplicateWireRecord` | function | Tests | [Test_persistence_SaveSystem.cpp:L311](../../Tests/harden/Test_persistence_SaveSystem.cpp#L311) |  |
 | `DurableWrite` | function | SparkDaemon | [OrchestrationJournal.cpp:L53](../../SparkDaemon/src/OrchestrationJournal.cpp#L53) |  |
 | `DurableWrite` | function | SparkDaemon | [OrchestrationJournal.cpp:L258](../../SparkDaemon/src/OrchestrationJournal.cpp#L258) |  |
 | `DurableWrite` | function | SparkDaemon | [OrchestrationJournal.cpp:L299](../../SparkDaemon/src/OrchestrationJournal.cpp#L299) |  |
@@ -9404,7 +9404,7 @@
 | `EntityId` | alias | Tests | [TestSelectionManager.cpp:L19](../../Tests/TestSelectionManager.cpp#L19) |  |
 | `EntityId` | alias | Tests | [TestSpatialGrid.cpp:L45](../../Tests/TestSpatialGrid.cpp#L45) |  |
 | `EntityKilledEvent` | struct | SparkEngine | [EventSystem.h:L73](../../SparkEngine/Source/Engine/Events/EventSystem.h#L73) | Fired when an entity is killed/destroyed. |
-| `EntityPayloadStorage` | alias | SparkEngine | [SaveSystem.cpp:L1696](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1696) |  |
+| `EntityPayloadStorage` | alias | SparkEngine | [SaveSystem.cpp:L1703](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1703) |  |
 | `EntityPosition` | struct | SparkEngine | [ProximityTriggerSystem.h:L73](../../SparkEngine/Source/Engine/World/ProximityTriggerSystem.h#L73) | Lightweight entity position used for trigger overlap tests. |
 | `EntityPreset` | struct | SparkEngine | [EntityPresetManager.h:L36](../../SparkEngine/Source/Engine/ECS/EntityPresetManager.h#L36) | A pre-configured entity template with components and optional event rules |
 | `EntityPreset` | struct | Tests | [TestEntityPresetManager.cpp:L19](../../Tests/TestEntityPresetManager.cpp#L19) |  |
@@ -10549,9 +10549,9 @@
 | `file` | function | SparkEngine | [AsyncDatabase.cpp:L630](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L630) |  |
 | `file` | function | SparkEngine | [ReplaySystem.cpp:L348](../../SparkEngine/Source/Engine/Replay/ReplaySystem.cpp#L348) |  |
 | `file` | function | SparkEngine | [ReplaySystem.cpp:L408](../../SparkEngine/Source/Engine/Replay/ReplaySystem.cpp#L408) |  |
-| `file` | function | SparkEngine | [SaveSystem.cpp:L1752](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1752) |  |
-| `file` | function | SparkEngine | [SaveSystem.cpp:L1945](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1945) |  |
-| `file` | function | SparkEngine | [SaveSystem.cpp:L2230](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2230) |  |
+| `file` | function | SparkEngine | [SaveSystem.cpp:L1759](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1759) |  |
+| `file` | function | SparkEngine | [SaveSystem.cpp:L1952](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1952) |  |
+| `file` | function | SparkEngine | [SaveSystem.cpp:L2237](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2237) |  |
 | `file` | function | SparkEngine | [DirectStorageLoader.cpp:L241](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L241) |  |
 | `file` | function | SparkEngine | [SceneManifest.h:L202](../../SparkEngine/Source/Engine/Streaming/SceneManifest.h#L202) |  |
 | `file` | function | SparkEngine | [AssetMetadataLinux.cpp:L180](../../SparkEngine/Source/Graphics/AssetMetadataLinux.cpp#L180) |  |
@@ -10659,7 +10659,7 @@
 | `FileSink::OpenFile` | method | SparkEngine | [Logger.cpp:L585](../../SparkEngine/Source/Utils/Logger.cpp#L585) |  |
 | `FileSink::RotateFiles` | method | SparkEngine | [Logger.cpp:L631](../../SparkEngine/Source/Utils/Logger.cpp#L631) |  |
 | `FileSink::Write` | method | SparkEngine | [Logger.cpp:L707](../../SparkEngine/Source/Utils/Logger.cpp#L707) |  |
-| `fileSizeLimit` | function | Tests | [Test_persistence_SaveSystem.cpp:L658](../../Tests/harden/Test_persistence_SaveSystem.cpp#L658) |  |
+| `fileSizeLimit` | function | Tests | [Test_persistence_SaveSystem.cpp:L661](../../Tests/harden/Test_persistence_SaveSystem.cpp#L661) |  |
 | `fileStat` | struct | SparkEngine | [AssetMetadataLinux.cpp:L206](../../SparkEngine/Source/Graphics/AssetMetadataLinux.cpp#L206) |  |
 | `fileStat` | struct | SparkEngine | [MaterialSystemLinux.cpp:L133](../../SparkEngine/Source/Graphics/MaterialSystemLinux.cpp#L133) |  |
 | `FileState` | struct | SparkEngine | [ScriptHotReload.h:L151](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L151) |  |
@@ -10833,8 +10833,8 @@
 | `FindModule` | function | SparkEngine | [ModuleManager.h:L91](../../SparkEngine/Source/Core/ModuleManager.h#L91) |  |
 | `FindModuleMatches` | function | SparkLauncher | [LauncherProcess.cpp:L162](../../SparkLauncher/src/LauncherProcess.cpp#L162) |  |
 | `FindNamed` | function | Tests | [TestSaveSystemRoundTripReal.cpp:L38](../../Tests/TestSaveSystemRoundTripReal.cpp#L38) |  |
-| `FindNamedEntity` | function | Tests | [Test_persistence_SaveSystem.cpp:L337](../../Tests/harden/Test_persistence_SaveSystem.cpp#L337) |  |
-| `FindNamedEntity` | function | Tests | [Test_persistence_SaveSystem.cpp:L353](../../Tests/harden/Test_persistence_SaveSystem.cpp#L353) |  |
+| `FindNamedEntity` | function | Tests | [Test_persistence_SaveSystem.cpp:L340](../../Tests/harden/Test_persistence_SaveSystem.cpp#L340) |  |
+| `FindNamedEntity` | function | Tests | [Test_persistence_SaveSystem.cpp:L356](../../Tests/harden/Test_persistence_SaveSystem.cpp#L356) |  |
 | `FindNearestCover` | function | SparkEngine | [CoverSystem.h:L117](../../SparkEngine/Source/Engine/AI/CoverSystem.h#L117) | Find the nearest cover point to a position. |
 | `FindNearestCover` | function | Tests | [TestAIStress.cpp:L233](../../Tests/TestAIStress.cpp#L233) |  |
 | `FindNearestCover` | function | Tests | [TestCoverSystem.cpp:L65](../../Tests/TestCoverSystem.cpp#L65) |  |
@@ -11589,7 +11589,7 @@
 | `fs::exists` | method | SparkEditor | [AssetProcessors.cpp:L703](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L703) |  |
 | `fs::exists` | method | SparkEditor | [BasicMaterialEditorDrawing.cpp:L67](../../SparkEditor/Source/Panels/BasicMaterialEditorDrawing.cpp#L67) |  |
 | `fs::exists` | method | SparkEngine | [VirtualFileSystem.cpp:L156](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp#L156) |  |
-| `fs::exists` | method | SparkEngine | [SaveSystem.cpp:L1302](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1302) |  |
+| `fs::exists` | method | SparkEngine | [SaveSystem.cpp:L1309](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1309) |  |
 | `fs::exists` | method | SparkEngine | [FileUtils.h:L148](../../SparkEngine/Source/Utils/FileUtils.h#L148) |  |
 | `fs::exists` | method | SparkInstaller | [Installer.cpp:L31](../../SparkInstaller/src/Installer.cpp#L31) |  |
 | `fs::exists` | method | Tests | [TestAdvancedAssetPipeline.cpp:L105](../../Tests/TestAdvancedAssetPipeline.cpp#L105) |  |
@@ -19333,11 +19333,11 @@
 | `input` | function | Tests | [TestUILayoutExtensions.cpp:L189](../../Tests/TestUILayoutExtensions.cpp#L189) |  |
 | `input` | function | Tests | [TestUILayoutExtensions.cpp:L198](../../Tests/TestUILayoutExtensions.cpp#L198) |  |
 | `input` | function | Tests | [TestUILayoutExtensions.cpp:L207](../../Tests/TestUILayoutExtensions.cpp#L207) |  |
-| `input` | function | Tests | [Test_persistence_SaveSystem.cpp:L105](../../Tests/harden/Test_persistence_SaveSystem.cpp#L105) |  |
-| `input` | function | Tests | [Test_persistence_SaveSystem.cpp:L194](../../Tests/harden/Test_persistence_SaveSystem.cpp#L194) |  |
-| `input` | function | Tests | [Test_persistence_SaveSystem.cpp:L327](../../Tests/harden/Test_persistence_SaveSystem.cpp#L327) |  |
-| `input` | function | Tests | [Test_persistence_SaveSystem.cpp:L622](../../Tests/harden/Test_persistence_SaveSystem.cpp#L622) |  |
-| `input` | function | Tests | [Test_persistence_SaveSystem.cpp:L686](../../Tests/harden/Test_persistence_SaveSystem.cpp#L686) |  |
+| `input` | function | Tests | [Test_persistence_SaveSystem.cpp:L108](../../Tests/harden/Test_persistence_SaveSystem.cpp#L108) |  |
+| `input` | function | Tests | [Test_persistence_SaveSystem.cpp:L197](../../Tests/harden/Test_persistence_SaveSystem.cpp#L197) |  |
+| `input` | function | Tests | [Test_persistence_SaveSystem.cpp:L330](../../Tests/harden/Test_persistence_SaveSystem.cpp#L330) |  |
+| `input` | function | Tests | [Test_persistence_SaveSystem.cpp:L625](../../Tests/harden/Test_persistence_SaveSystem.cpp#L625) |  |
+| `input` | function | Tests | [Test_persistence_SaveSystem.cpp:L689](../../Tests/harden/Test_persistence_SaveSystem.cpp#L689) |  |
 | `InputAction` | enum | SparkEngine | [InputEnums.h:L19](../../SparkEngine/Source/Enums/InputEnums.h#L19) | Input action types |
 | `InputAction` | struct | SparkEngine | [PlatformInput.h:L167](../../SparkEngine/Source/Input/PlatformInput.h#L167) | A named input action bound to one or two physical keys/buttons. |
 | `InputAction` | struct | SparkSDK | [InputTypes.h:L86](../../SparkSDK/Include/Spark/InputTypes.h#L86) | Input action binding result |
@@ -20890,8 +20890,8 @@
 | `key` | function | SparkEditor | [EditorLaunchContext.h:L56](../../SparkEditor/Source/Utils/EditorLaunchContext.h#L56) |  |
 | `key` | function | SparkEngine | [RuntimePrefab.h:L325](../../SparkEngine/Source/Engine/ECS/RuntimePrefab.h#L325) | Retrieve a prefab by name. |
 | `Key` | alias | SparkEngine | [NetworkSecurity.h:L50](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L50) | Isolated obfuscation and token-lifecycle prototypes. |
-| `key` | function | SparkEngine | [SaveSystem.cpp:L2136](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2136) |  |
-| `key` | function | SparkEngine | [SaveSystem.cpp:L2175](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2175) |  |
+| `key` | function | SparkEngine | [SaveSystem.cpp:L2143](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2143) |  |
+| `key` | function | SparkEngine | [SaveSystem.cpp:L2182](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2182) |  |
 | `key` | function | SparkEngine | [ShaderHotReload.h:L224](../../SparkEngine/Source/Graphics/ShaderHotReload.h#L224) | Force recompile a specific shader by name. |
 | `key` | function | Tests | [TestGatewayAreaControl.cpp:L69](../../Tests/TestGatewayAreaControl.cpp#L69) |  |
 | `key` | function | Tests | [TestGatewayAreaControl.cpp:L122](../../Tests/TestGatewayAreaControl.cpp#L122) |  |
@@ -21411,7 +21411,7 @@
 | `LightTypeToString` | function | SparkEngine | [LightingSystem.h:L481](../../SparkEngine/Source/Graphics/LightingSystem.h#L481) |  |
 | `LightTypeToString` | function | SparkEngine | [LightingSystemInternalWindowsTypes.cpp:L23](../../SparkEngine/Source/Graphics/LightingSystemInternalWindowsTypes.cpp#L23) |  |
 | `LightTypeToString` | function | SparkEngine | [LightingSystemLinuxTypes.cpp:L117](../../SparkEngine/Source/Graphics/LightingSystemLinuxTypes.cpp#L117) |  |
-| `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1040](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1040) |  |
+| `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1093](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1093) |  |
 | `LinearFalloff` | function | GameModules | [TFWeaponMath.h:L57](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponMath.h#L57) |  |
 | `LinearFog` | function | SparkEngine | [FogSystem.h:L122](../../SparkEngine/Source/Graphics/FogSystem.h#L122) |  |
 | `LinearFogSettings` | struct | SparkEngine | [FogSystem.h:L83](../../SparkEngine/Source/Graphics/FogSystem.h#L83) |  |
@@ -21893,7 +21893,7 @@
 | `localtime_s` | function | SparkEngine | [PlatformTypes.h:L259](../../SparkEngine/Source/Core/PlatformTypes.h#L259) |  |
 | `LocalToAbsolute` | function | SparkEngine | [WorldOriginSystem.h:L149](../../SparkEngine/Source/Engine/World/WorldOriginSystem.h#L149) | Convert a local-space position to absolute world coordinates |
 | `localTransforms` | function | Tests | [Test_ai-anim_animation.cpp:L116](../../Tests/harden/Test_ai-anim_animation.cpp#L116) |  |
-| `LocateFirstSaveRecords` | function | Tests | [Test_persistence_SaveSystem.cpp:L229](../../Tests/harden/Test_persistence_SaveSystem.cpp#L229) |  |
+| `LocateFirstSaveRecords` | function | Tests | [Test_persistence_SaveSystem.cpp:L232](../../Tests/harden/Test_persistence_SaveSystem.cpp#L232) |  |
 | `lock` | function | GameModules | [PlayerConsole.cpp:L26](../../GameModules/SparkGameFPS/Source/Game/PlayerConsole.cpp#L26) |  |
 | `lock` | function | GameModules | [PlayerConsole.cpp:L42](../../GameModules/SparkGameFPS/Source/Game/PlayerConsole.cpp#L42) |  |
 | `lock` | function | GameModules | [PlayerConsole.cpp:L50](../../GameModules/SparkGameFPS/Source/Game/PlayerConsole.cpp#L50) |  |
@@ -23583,7 +23583,7 @@
 | `MakePoolClosedResult` | function | SparkEngine | [AsyncDatabase.cpp:L798](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L798) |  |
 | `MakePositionPacket` | function | Tests | [TestNetworkMMOIntegration.cpp:L150](../../Tests/TestNetworkMMOIntegration.cpp#L150) |  |
 | `MakeProbe` | function | Tests | [TestReflectionProbeCache.cpp:L25](../../Tests/TestReflectionProbeCache.cpp#L25) |  |
-| `MakeProbeComponentOps` | function | Tests | [Test_persistence_SaveSystem.cpp:L482](../../Tests/harden/Test_persistence_SaveSystem.cpp#L482) |  |
+| `MakeProbeComponentOps` | function | Tests | [Test_persistence_SaveSystem.cpp:L485](../../Tests/harden/Test_persistence_SaveSystem.cpp#L485) |  |
 | `MakeProductionReverbZone` | function | Tests | [TestAudioMixerBus.cpp:L17](../../Tests/TestAudioMixerBus.cpp#L17) |  |
 | `MakeReloadAPI` | function | Tests | [TestPluginABI.cpp:L332](../../Tests/TestPluginABI.cpp#L332) |  |
 | `MakeRendererSpecies` | function | Tests | [TestFoliageRenderer.cpp:L23](../../Tests/TestFoliageRenderer.cpp#L23) |  |
@@ -23615,7 +23615,7 @@
 | `MakeTempModsDir` | function | Tests | [Test_persistence_ModSystem.cpp:L20](../../Tests/harden/Test_persistence_ModSystem.cpp#L20) |  |
 | `MakeTemporarySibling` | function | SparkEditor | [BasicMaterialEditorPanel.cpp:L57](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp#L57) |  |
 | `MakeTemporarySibling` | function | SparkEditor | [JSONSceneSerializer.cpp:L150](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L150) |  |
-| `MakeTempSaveDir` | function | Tests | [Test_persistence_SaveSystem.cpp:L91](../../Tests/harden/Test_persistence_SaveSystem.cpp#L91) |  |
+| `MakeTempSaveDir` | function | Tests | [Test_persistence_SaveSystem.cpp:L94](../../Tests/harden/Test_persistence_SaveSystem.cpp#L94) |  |
 | `MakeTestClip` | function | Tests | [TestAnimationSystem.cpp:L473](../../Tests/TestAnimationSystem.cpp#L473) |  |
 | `MakeTestRedactionContext` | function | Tests | [TestCrashHandlerGatingReal.cpp:L69](../../Tests/TestCrashHandlerGatingReal.cpp#L69) |  |
 | `MakeTestRoot` | function | SparkInstaller | [InstallStateTests.cpp:L11](../../SparkInstaller/tests/InstallStateTests.cpp#L11) |  |
@@ -23698,7 +23698,7 @@
 | `MarkFree` | function | Tests | [TestCoverSystem.cpp:L118](../../Tests/TestCoverSystem.cpp#L118) |  |
 | `MarkFree` | function | Tests | [TestTacticalPointSystem.cpp:L93](../../Tests/TestTacticalPointSystem.cpp#L93) |  |
 | `MarkFullyDirty` | function | SparkEngine | [UIDirtyTracking.h:L200](../../SparkEngine/Source/Engine/UI/UIDirtyTracking.h#L200) | Mark the entire screen as dirty (for first frame, resize, etc.) |
-| `MarkLiveStorageBoundary` | function | Tests | [Test_persistence_SaveSystem.cpp:L454](../../Tests/harden/Test_persistence_SaveSystem.cpp#L454) |  |
+| `MarkLiveStorageBoundary` | function | Tests | [Test_persistence_SaveSystem.cpp:L457](../../Tests/harden/Test_persistence_SaveSystem.cpp#L457) |  |
 | `MarkLocalStateDirty` | function | GameModules | [MMOPlayerSystem.h:L130](../../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.h#L130) |  |
 | `MarkObstacleDirty` | function | SparkEngine | [NavMeshObstacles.h:L259](../../SparkEngine/Source/Engine/AI/NavMeshObstacles.h#L259) |  |
 | `MarkOccupied` | function | SparkEngine | [CoverSystem.h:L133](../../SparkEngine/Source/Engine/AI/CoverSystem.h#L133) | Mark a cover point as occupied by an entity. |
@@ -24032,7 +24032,7 @@
 | `MAX_PATH` | macro | SparkEngine | [PlatformTypes.h:L226](../../SparkEngine/Source/Core/PlatformTypes.h#L226) |  |
 | `maxC` | function | Tests | [TestFastNoise2SIMD.cpp:L310](../../Tests/TestFastNoise2SIMD.cpp#L310) |  |
 | `MaxHP` | function | Tests | [TestSparkGameRPG.cpp:L18](../../Tests/TestSparkGameRPG.cpp#L18) |  |
-| `maximumKey` | function | Tests | [Test_persistence_SaveSystem.cpp:L1079](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1079) |  |
+| `maximumKey` | function | Tests | [Test_persistence_SaveSystem.cpp:L1132](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1132) |  |
 | `maxPos` | function | SparkEditor | [SceneViewPanel.cpp:L134](../../SparkEditor/Source/Panels/SceneViewPanel.cpp#L134) |  |
 | `MayAttach` | function | Tests | [Test_scripting_hardening.cpp:L130](../../Tests/harden/Test_scripting_hardening.cpp#L130) |  |
 | `MB_ICONERROR` | macro | SparkEngine | [PlatformTypes.h:L312](../../SparkEngine/Source/Core/PlatformTypes.h#L312) |  |
@@ -24356,8 +24356,8 @@
 | `MetalSwapChain::Present` | method | SparkEngine | [MetalDevice.mm:L215](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.mm#L215) |  |
 | `MetalSwapChain::Resize` | method | SparkEngine | [MetalDevice.mm:L238](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.mm#L238) |  |
 | `MetalTexture` | class | SparkEngine | [MetalDevice.h:L154](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L154) |  |
-| `metaStr` | function | SparkEngine | [SaveSystem.cpp:L2046](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2046) |  |
-| `metaStr` | function | SparkEngine | [SaveSystem.cpp:L2261](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2261) |  |
+| `metaStr` | function | SparkEngine | [SaveSystem.cpp:L2053](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2053) |  |
+| `metaStr` | function | SparkEngine | [SaveSystem.cpp:L2268](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2268) |  |
 | `Metrics` | struct | SparkEngine | [ConstantBufferDiff.h:L103](../../SparkEngine/Source/Graphics/ConstantBufferDiff.h#L103) | Reset all cached slots at frame start if desired. |
 | `Metrics` | struct | SparkEngine | [LockFreeRingAllocator.h:L136](../../SparkEngine/Source/Utils/LockFreeRingAllocator.h#L136) |  |
 | `metricsLock` | function | SparkEngine | [AssetPipelineWindows.cpp:L164](../../SparkEngine/Source/Graphics/AssetPipelineWindows.cpp#L164) |  |
@@ -24398,7 +24398,7 @@
 | `MirrorMember` | struct | GameModules | [TFOutfitSystem.h:L129](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L129) |  |
 | `MirrorRec` | alias | GameModules | [TFVehicleSystem.h:L147](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L147) |  |
 | `MirrorRec` | struct | GameModules | [TFVehicleSystemRecords.h:L150](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystemRecords.h#L150) |  |
-| `MissingRestoreProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L366](../../Tests/harden/Test_persistence_SaveSystem.cpp#L366) |  |
+| `MissingRestoreProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L369](../../Tests/harden/Test_persistence_SaveSystem.cpp#L369) |  |
 | `MixBus` | struct | SparkEngine | [AudioMixer.h:L53](../../SparkEngine/Source/Audio/AudioMixer.h#L53) | A named audio channel group with volume and effect controls. |
 | `MixBusInfo` | struct | SparkEditor | [AudioMixerPanel.h:L34](../../SparkEditor/Source/Panels/AudioMixerPanel.h#L34) |  |
 | `MixerBusSettings` | struct | SparkEngine | [MusicManager.h:L48](../../SparkEngine/Source/Audio/MusicManager.h#L48) |  |
@@ -25780,7 +25780,7 @@
 | `NotifyLocalFire` | function | GameModules | [TFViewModel.h:L62](../../GameModules/SparkGameMMOFPS/Source/Game/TFViewModel.h#L62) |  |
 | `NotifyObjectOperation` | function | SparkEditor | [HierarchyPanel.h:L372](../../SparkEditor/Source/Panels/HierarchyPanel.h#L372) | Notify object operation occurred |
 | `NotifyPrefabsChanged` | function | SparkEditor | [PrefabManager.h:L222](../../SparkEditor/Source/Prefabs/PrefabManager.h#L222) |  |
-| `NotifyProbeRebound` | function | Tests | [Test_persistence_SaveSystem.cpp:L421](../../Tests/harden/Test_persistence_SaveSystem.cpp#L421) |  |
+| `NotifyProbeRebound` | function | Tests | [Test_persistence_SaveSystem.cpp:L424](../../Tests/harden/Test_persistence_SaveSystem.cpp#L424) |  |
 | `NotifyReboundFn` | alias | SparkEngine | [Reflection.h:L300](../../SparkEngine/Source/Core/Reflection.h#L300) |  |
 | `NotifyReload` | function | SparkEngine | [ShaderHotReload.h:L643](../../SparkEngine/Source/Graphics/ShaderHotReload.h#L643) | Invoke all registered reload callbacks. |
 | `NotifySceneLoad` | function | SparkEditor | [EditorPluginManager.h:L176](../../SparkEditor/Source/Core/EditorPluginManager.h#L176) | Notify all plugins of a scene load event |
@@ -25907,7 +25907,7 @@
 | `observer` | function | Tests | [TestPerceptionSystemMath.cpp:L242](../../Tests/TestPerceptionSystemMath.cpp#L242) |  |
 | `observer` | function | Tests | [TestPerceptionSystemMath.cpp:L251](../../Tests/TestPerceptionSystemMath.cpp#L251) |  |
 | `observer` | function | Tests | [TestPerceptionSystemMath.cpp:L263](../../Tests/TestPerceptionSystemMath.cpp#L263) |  |
-| `ObserveRetirementSnapshot` | function | Tests | [Test_persistence_SaveSystem.cpp:L473](../../Tests/harden/Test_persistence_SaveSystem.cpp#L473) |  |
+| `ObserveRetirementSnapshot` | function | Tests | [Test_persistence_SaveSystem.cpp:L476](../../Tests/harden/Test_persistence_SaveSystem.cpp#L476) |  |
 | `Obstacle` | struct | SparkEngine | [SteeringBehaviors.h:L37](../../SparkEngine/Source/Engine/AI/SteeringBehaviors.h#L37) |  |
 | `ObstacleAvoidance` | function | SparkEngine | [SteeringBehaviors.h:L247](../../SparkEngine/Source/Engine/AI/SteeringBehaviors.h#L247) |  |
 | `ObstacleDesc` | struct | SparkEngine | [NavMeshObstacles.h:L96](../../SparkEngine/Source/Engine/AI/NavMeshObstacles.h#L96) | Descriptor for a dynamic obstacle that carves into the NavMesh. |
@@ -26020,7 +26020,7 @@
 | `OnDeployDestroy` | function | GameModules | [TFDeployableSystem.h:L218](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.h#L218) |  |
 | `OnDeployUpdate` | function | GameModules | [TFDeployableSystem.h:L217](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.h#L217) |  |
 | `OnDestroy` | function | SparkEngine | [ReactiveSystem.h:L169](../../SparkEngine/Source/Engine/ECS/ReactiveSystem.h#L169) |  |
-| `OnDestroy` | function | Tests | [Test_persistence_SaveSystem.cpp:L363](../../Tests/harden/Test_persistence_SaveSystem.cpp#L363) |  |
+| `OnDestroy` | function | Tests | [Test_persistence_SaveSystem.cpp:L366](../../Tests/harden/Test_persistence_SaveSystem.cpp#L366) |  |
 | `OnDestruction` | function | SparkEngine | [DestructionSystem.h:L257](../../SparkEngine/Source/Engine/Destruction/DestructionSystem.h#L257) | Register callback for destruction events. |
 | `OnDialogueEvent` | function | SparkEngine | [DialogueSystem.h:L290](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h#L290) | Register callback for dialogue events. |
 | `OnDisconnect` | function | SparkEngine | [NetworkHealthMonitor.h:L125](../../SparkEngine/Source/Utils/NetworkHealthMonitor.h#L125) |  |
@@ -26565,7 +26565,7 @@
 | `original` | function | Tests | [TestSecurityParsersReal.cpp:L307](../../Tests/TestSecurityParsersReal.cpp#L307) |  |
 | `original` | function | Tests | [TestServiceTopologyController.cpp:L207](../../Tests/TestServiceTopologyController.cpp#L207) |  |
 | `original` | function | Tests | [TestUUID.cpp:L66](../../Tests/TestUUID.cpp#L66) |  |
-| `original` | function | Tests | [Test_persistence_SaveSystem.cpp:L623](../../Tests/harden/Test_persistence_SaveSystem.cpp#L623) |  |
+| `original` | function | Tests | [Test_persistence_SaveSystem.cpp:L626](../../Tests/harden/Test_persistence_SaveSystem.cpp#L626) |  |
 | `OriginRebasedCallback` | alias | SparkEngine | [WorldOriginSystem.h:L58](../../SparkEngine/Source/Engine/World/WorldOriginSystem.h#L58) | Callback invoked when the world origin is rebased |
 | `OriginRebasingStats` | struct | SparkEngine | [WorldOriginSystem.h:L63](../../SparkEngine/Source/Engine/World/WorldOriginSystem.h#L63) | Statistics about origin rebasing |
 | `origPositions` | function | SparkEngine | [InverseKinematicsFABRIK.cpp:L124](../../SparkEngine/Source/Engine/Animation/InverseKinematicsFABRIK.cpp#L124) |  |
@@ -26632,8 +26632,8 @@
 | `out` | function | Tests | [Test_ai-anim_animation.cpp:L57](../../Tests/harden/Test_ai-anim_animation.cpp#L57) |  |
 | `out` | function | Tests | [Test_ai-anim_navmesh.cpp:L68](../../Tests/harden/Test_ai-anim_navmesh.cpp#L68) |  |
 | `out` | function | Tests | [Test_persistence_ModSystem.cpp:L32](../../Tests/harden/Test_persistence_ModSystem.cpp#L32) |  |
-| `out` | function | Tests | [Test_persistence_SaveSystem.cpp:L83](../../Tests/harden/Test_persistence_SaveSystem.cpp#L83) |  |
-| `out` | function | Tests | [Test_persistence_SaveSystem.cpp:L599](../../Tests/harden/Test_persistence_SaveSystem.cpp#L599) |  |
+| `out` | function | Tests | [Test_persistence_SaveSystem.cpp:L86](../../Tests/harden/Test_persistence_SaveSystem.cpp#L86) |  |
+| `out` | function | Tests | [Test_persistence_SaveSystem.cpp:L602](../../Tests/harden/Test_persistence_SaveSystem.cpp#L602) |  |
 | `outDir` | function | SparkShaderCompiler | [main.cpp:L650](../../SparkShaderCompiler/src/main.cpp#L650) |  |
 | `outer` | function | Tests | [TestScopedTimer.cpp:L75](../../Tests/TestScopedTimer.cpp#L75) |  |
 | `outFile` | function | SparkBuild | [Downloader.cpp:L181](../../SparkBuild/src/Downloader.cpp#L181) |  |
@@ -26715,9 +26715,9 @@
 | `output` | function | Tests | [TestTelemetrySpool.cpp:L907](../../Tests/TestTelemetrySpool.cpp#L907) |  |
 | `output` | function | Tests | [TestTelemetrySpool.cpp:L1015](../../Tests/TestTelemetrySpool.cpp#L1015) |  |
 | `output` | function | Tests | [TestWorldBasicRender.cpp:L61](../../Tests/TestWorldBasicRender.cpp#L61) |  |
-| `output` | function | Tests | [Test_persistence_SaveSystem.cpp:L187](../../Tests/harden/Test_persistence_SaveSystem.cpp#L187) |  |
-| `output` | function | Tests | [Test_persistence_SaveSystem.cpp:L652](../../Tests/harden/Test_persistence_SaveSystem.cpp#L652) |  |
-| `output` | function | Tests | [Test_persistence_SaveSystem.cpp:L720](../../Tests/harden/Test_persistence_SaveSystem.cpp#L720) |  |
+| `output` | function | Tests | [Test_persistence_SaveSystem.cpp:L190](../../Tests/harden/Test_persistence_SaveSystem.cpp#L190) |  |
+| `output` | function | Tests | [Test_persistence_SaveSystem.cpp:L655](../../Tests/harden/Test_persistence_SaveSystem.cpp#L655) |  |
+| `output` | function | Tests | [Test_persistence_SaveSystem.cpp:L723](../../Tests/harden/Test_persistence_SaveSystem.cpp#L723) |  |
 | `output0` | function | Tests | [TestCpuNeuralInference.cpp:L137](../../Tests/TestCpuNeuralInference.cpp#L137) |  |
 | `output1` | function | Tests | [TestCpuNeuralInference.cpp:L166](../../Tests/TestCpuNeuralInference.cpp#L166) |  |
 | `output1` | function | Tests | [TestNeuralInference.cpp:L230](../../Tests/TestNeuralInference.cpp#L230) |  |
@@ -26736,7 +26736,7 @@
 | `outputNeg` | function | Tests | [TestCpuNeuralInference.cpp:L149](../../Tests/TestCpuNeuralInference.cpp#L149) |  |
 | `outputPatch` | function | SparkEngine | [NeuralPostProcessing.cpp:L174](../../SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.cpp#L174) |  |
 | `outputPatch` | function | SparkEngine | [NeuralPostProcessing.cpp:L398](../../SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.cpp#L398) |  |
-| `outputPath` | function | SparkEngine | [SaveSystem.cpp:L1737](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1737) |  |
+| `outputPath` | function | SparkEngine | [SaveSystem.cpp:L1744](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1744) |  |
 | `Overlaps` | function | SparkEngine | [Physics2DTypes.h:L89](../../SparkEngine/Source/Engine/2D/Physics2DTypes.h#L89) |  |
 | `Overlaps` | function | SparkEngine | [ProceduralGenerator.h:L81](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h#L81) |  |
 | `Overlaps` | function | SparkEngine | [DirtyRectTracker.h:L38](../../SparkEngine/Source/Graphics/DirtyRectTracker.h#L38) |  |
@@ -26748,7 +26748,7 @@
 | `oversized` | function | Tests | [TestEngineInterfaceProtocol.cpp:L100](../../Tests/TestEngineInterfaceProtocol.cpp#L100) |  |
 | `oversized` | function | Tests | [TestTelemetrySpool.cpp:L836](../../Tests/TestTelemetrySpool.cpp#L836) |  |
 | `oversizedBytes` | function | Tests | [TestTelemetrySpool.cpp:L837](../../Tests/TestTelemetrySpool.cpp#L837) |  |
-| `oversizedKey` | function | Tests | [Test_persistence_SaveSystem.cpp:L1090](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1090) |  |
+| `oversizedKey` | function | Tests | [Test_persistence_SaveSystem.cpp:L1143](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1143) |  |
 | `oversizedLog` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L531](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L531) |  |
 | `OWDynamicEventSystem` | class | GameModules | [SparkGameOpenWorld.h:L28](../../GameModules/SparkGameOpenWorld/Source/Core/SparkGameOpenWorld.h#L28) |  |
 | `OWDynamicEventSystem` | class | GameModules | [OWDynamicEventSystem.h:L69](../../GameModules/SparkGameOpenWorld/Source/Events/OWDynamicEventSystem.h#L69) | Dynamic world event spawning and lifecycle management |
@@ -27530,7 +27530,7 @@
 | `payload` | function | Tests | [TestSparkPak.cpp:L618](../../Tests/TestSparkPak.cpp#L618) |  |
 | `payload` | function | Tests | [TestSparkPak.cpp:L659](../../Tests/TestSparkPak.cpp#L659) |  |
 | `PayloadStorage` | alias | SparkEngine | [ComponentReflection.cpp:L304](../../SparkEngine/Source/Core/ComponentReflection.cpp#L304) |  |
-| `PayloadStorage` | alias | Tests | [Test_persistence_SaveSystem.cpp:L415](../../Tests/harden/Test_persistence_SaveSystem.cpp#L415) |  |
+| `PayloadStorage` | alias | Tests | [Test_persistence_SaveSystem.cpp:L418](../../Tests/harden/Test_persistence_SaveSystem.cpp#L418) |  |
 | `payloadWriter` | function | SparkEditor | [JSONSceneSerializer.cpp:L626](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L626) |  |
 | `Pbkdf2HmacSha256` | function | GameModules | [TFCrypto.cpp:L264](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L264) |  |
 | `Pbkdf2HmacSha256` | function | GameModules | [TFCrypto.h:L38](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.h#L38) |  |
@@ -28790,7 +28790,7 @@
 | `PrefabRegistry` | class | SparkEngine | [RuntimePrefab.h:L270](../../SparkEngine/Source/Engine/ECS/RuntimePrefab.h#L270) | Singleton registry that stores, retrieves, and spawns prefabs. |
 | `PrefilterPass` | function | SparkEngine | [BloomEffect.h:L87](../../SparkEngine/Source/Graphics/BloomEffect.h#L87) |  |
 | `prefix` | function | SparkEditor | [ConsolePanel.cpp:L487](../../SparkEditor/Source/Panels/ConsolePanel.cpp#L487) |  |
-| `prefix` | function | Tests | [Test_persistence_SaveSystem.cpp:L687](../../Tests/harden/Test_persistence_SaveSystem.cpp#L687) |  |
+| `prefix` | function | Tests | [Test_persistence_SaveSystem.cpp:L690](../../Tests/harden/Test_persistence_SaveSystem.cpp#L690) |  |
 | `PrefixAssets` | function | SparkEditor | [BasicMaterialEditorDrawing.cpp:L46](../../SparkEditor/Source/Panels/BasicMaterialEditorDrawing.cpp#L46) | Material texture paths are relative to Assets/ unless already prefixed |
 | `PreloadAssets` | function | SparkEngine | [AssetPipeline.h:L416](../../SparkEngine/Source/Graphics/AssetPipeline.h#L416) |  |
 | `PreparationFailure` | enum | SparkEngine | [EngineContext.cpp:L204](../../SparkEngine/Source/Core/EngineContext.cpp#L204) |  |
@@ -28806,7 +28806,7 @@
 | `PreparedStatementData::SetString` | method | SparkEngine | [AsyncDatabase.cpp:L120](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L120) |  |
 | `PreparedStatementID` | alias | SparkEngine | [AsyncDatabase.h:L76](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L76) |  |
 | `PreparedStatementParam` | struct | SparkEngine | [AsyncDatabase.h:L79](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L79) | A single parameter bound to a prepared statement slot. |
-| `PrepareFailureProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L371](../../Tests/harden/Test_persistence_SaveSystem.cpp#L371) |  |
+| `PrepareFailureProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L374](../../Tests/harden/Test_persistence_SaveSystem.cpp#L374) |  |
 | `PrepareHmacSha256Key` | function | SparkEngine | [PasswordHash.cpp:L164](../../SparkEngine/Source/Utils/PasswordHash.cpp#L164) |  |
 | `PrepareNetworkStop` | function | GameModules | [TFServerSim.h:L121](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L121) |  |
 | `PrepareNextClientID` | function | SparkEngine | [NetworkManager.h:L700](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L700) |  |
@@ -30100,7 +30100,7 @@
 | `ReadBytes` | function | SparkEngine | [Serializer.h:L288](../../SparkEngine/Source/Utils/Serializer.h#L288) | Read raw bytes into a caller-provided buffer. |
 | `ReadBytes` | function | SparkEngine | [TelemetrySpoolFormat.cpp:L57](../../SparkEngine/Source/Utils/TelemetrySpoolFormat.cpp#L57) |  |
 | `ReadBytes` | function | Tests | [TestNetBuffer.cpp:L137](../../Tests/TestNetBuffer.cpp#L137) |  |
-| `ReadBytes` | function | Tests | [Test_persistence_SaveSystem.cpp:L192](../../Tests/harden/Test_persistence_SaveSystem.cpp#L192) |  |
+| `ReadBytes` | function | Tests | [Test_persistence_SaveSystem.cpp:L195](../../Tests/harden/Test_persistence_SaveSystem.cpp#L195) |  |
 | `ReadCenterPixel` | function | Tests | [TestPostProcessingPipelineD3D11.cpp:L62](../../Tests/TestPostProcessingPipelineD3D11.cpp#L62) |  |
 | `ReadChunkData` | function | SparkEngine | [SoundEffect.h:L188](../../SparkEngine/Source/Audio/SoundEffect.h#L188) |  |
 | `ReadContainedFileFromHandle` | function | SparkEditor | [ProjectManager.cpp:L620](../../SparkEditor/Source/Core/ProjectManager.cpp#L620) |  |
@@ -30218,7 +30218,7 @@
 | `ReadHeader` | function | SparkEngine | [AssetMigration.h:L184](../../SparkEngine/Source/Core/AssetMigration.h#L184) | Deserialize an AssetFileHeader from a BinaryReader. |
 | `ReadHeader` | function | SparkEngine | [SparkPak.h:L156](../../SparkEngine/Source/Core/SparkPak.h#L156) | The file path this archive was opened from. |
 | `ReadHeaderBytes` | function | SparkEngine | [NeuralWeights.cpp:L22](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.cpp#L22) |  |
-| `ReadHeaderVersion` | function | Tests | [Test_persistence_SaveSystem.cpp:L325](../../Tests/harden/Test_persistence_SaveSystem.cpp#L325) |  |
+| `ReadHeaderVersion` | function | Tests | [Test_persistence_SaveSystem.cpp:L328](../../Tests/harden/Test_persistence_SaveSystem.cpp#L328) |  |
 | `ReadHealthFile` | function | SparkEditor | [ServiceTopologyController.h:L76](../../SparkEditor/Source/Panels/ServiceTopologyController.h#L76) |  |
 | `ReadHex4` | function | SparkEngine | [JsonUtils.h:L692](../../SparkEngine/Source/Utils/JsonUtils.h#L692) |  |
 | `ReadI32` | function | SparkEngine | [TerrainAssetFormat.h:L117](../../SparkEngine/Source/Graphics/TerrainAssetFormat.h#L117) |  |
@@ -30228,7 +30228,7 @@
 | `ReadInt` | function | Tests | [TestReplicationFields.cpp:L72](../../Tests/TestReplicationFields.cpp#L72) |  |
 | `ReadInt64` | function | GameModules | [TFDatabase.cpp:L68](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp#L68) |  |
 | `ReadInt64` | function | GameModules | [TFOutfitStoreDisk.cpp:L71](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStoreDisk.cpp#L71) |  |
-| `ReadIntegerAt` | function | Tests | [Test_persistence_SaveSystem.cpp:L198](../../Tests/harden/Test_persistence_SaveSystem.cpp#L198) |  |
+| `ReadIntegerAt` | function | Tests | [Test_persistence_SaveSystem.cpp:L201](../../Tests/harden/Test_persistence_SaveSystem.cpp#L201) |  |
 | `ReadJson` | function | GameModules | [TFWorldSave.h:L102](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h#L102) |  |
 | `ReadJson` | function | Tests | [TestLauncherProcess.cpp:L71](../../Tests/TestLauncherProcess.cpp#L71) |  |
 | `ReadJsonBool` | function | SparkEditor | [EditorWindowManager.h:L231](../../SparkEditor/Source/Core/EditorWindowManager.h#L231) |  |
@@ -30308,7 +30308,7 @@
 | `ReadTextFile` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L35](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L35) |  |
 | `ReadTextFile` | function | SparkEngine | [FileUtils.h:L51](../../SparkEngine/Source/Utils/FileUtils.h#L51) |  |
 | `ReadTextFile` | function | Tests | [TestEditorProjectMaterializationReal.cpp:L57](../../Tests/TestEditorProjectMaterializationReal.cpp#L57) |  |
-| `ReadTextFile` | function | Tests | [Test_persistence_SaveSystem.cpp:L103](../../Tests/harden/Test_persistence_SaveSystem.cpp#L103) |  |
+| `ReadTextFile` | function | Tests | [Test_persistence_SaveSystem.cpp:L106](../../Tests/harden/Test_persistence_SaveSystem.cpp#L106) |  |
 | `ReadTimestamp` | function | GameModules | [TFSocialSystemStore.cpp:L142](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp#L142) |  |
 | `ReadTOC` | function | SparkEngine | [SparkPak.h:L157](../../SparkEngine/Source/Core/SparkPak.h#L157) | The file path this archive was opened from. |
 | `ReadU16` | function | SparkEngine | [DatablockRegistry.h:L307](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L307) |  |
@@ -30360,7 +30360,7 @@
 | `Ready` | function | GameModules | [TFSecondaryMotion.h:L76](../../GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.h#L76) |  |
 | `Ready` | function | Tests | [TestAssetServiceClient.cpp:L85](../../Tests/TestAssetServiceClient.cpp#L85) |  |
 | `Ready` | function | Tests | [TestShaderServiceClient.cpp:L72](../../Tests/TestShaderServiceClient.cpp#L72) |  |
-| `Ready` | function | Tests | [Test_persistence_SaveSystem.cpp:L70](../../Tests/harden/Test_persistence_SaveSystem.cpp#L70) |  |
+| `Ready` | function | Tests | [Test_persistence_SaveSystem.cpp:L73](../../Tests/harden/Test_persistence_SaveSystem.cpp#L73) |  |
 | `ReadYesNo` | function | SparkBuild | [Terminal.cpp:L157](../../SparkBuild/src/Terminal.cpp#L157) |  |
 | `ReadYesNo` | function | SparkBuild | [Terminal.h:L44](../../SparkBuild/src/Terminal.h#L44) |  |
 | `real` | function | tools | [gvisor-wine-shim.c:L838](../../tools/gvisor-wine-shim.c#L838) |  |
@@ -30373,7 +30373,7 @@
 | `ReasonText` | function | GameModules | [TFRedeployRules.cpp:L79](../../GameModules/SparkGameMMOFPS/Source/Game/TFRedeployRules.cpp#L79) |  |
 | `ReasonText` | function | GameModules | [TFRedeployRules.h:L59](../../GameModules/SparkGameMMOFPS/Source/Game/TFRedeployRules.h#L59) |  |
 | `Rebind` | function | SparkEngine | [InputActionSystem.h:L261](../../SparkEngine/Source/Input/InputActionSystem.h#L261) | Rebind a specific key for an action (replaces first binding) |
-| `ReboundNotification` | struct | SparkEngine | [SaveSystem.cpp:L1451](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1451) |  |
+| `ReboundNotification` | struct | SparkEngine | [SaveSystem.cpp:L1458](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1458) |  |
 | `Rebuild` | function | SparkEngine | [PerceptionSystem.h:L387](../../SparkEngine/Source/Engine/AI/PerceptionSystem.h#L387) |  |
 | `Rebuild` | function | SparkEngine | [Octree.h:L168](../../SparkEngine/Source/Utils/Octree.h#L168) | Rebuild the tree from scratch. |
 | `RebuildAgentIndex` | function | SparkEngine | [AIBudgetLimiterCore.h:L176](../../SparkEngine/Source/Engine/AI/AIBudgetLimiterCore.h#L176) | Rebuild the entity-to-index lookup table for O(1) agent lookups. |
@@ -31046,7 +31046,7 @@
 | `registry` | function | SparkEditor | [RegionMapDataSource.cpp:L144](../../SparkEditor/Source/Panels/RegionMapDataSource.cpp#L144) |  |
 | `registry` | function | SparkEngine | [RenderGraph.h:L299](../../SparkEngine/Source/Graphics/RenderGraph.h#L299) |  |
 | `registry` | function | Tests | [TestRegionMapDataSource.cpp:L81](../../Tests/TestRegionMapDataSource.cpp#L81) |  |
-| `RegistryStorageIds` | function | Tests | [Test_persistence_SaveSystem.cpp:L499](../../Tests/harden/Test_persistence_SaveSystem.cpp#L499) |  |
+| `RegistryStorageIds` | function | Tests | [Test_persistence_SaveSystem.cpp:L502](../../Tests/harden/Test_persistence_SaveSystem.cpp#L502) |  |
 | `RegressionDetail` | struct | SparkEngine | [BenchmarkFramework.h:L41](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L41) |  |
 | `relative` | function | GameModules | [FPSAssetPaths.cpp:L107](../../GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp#L107) |  |
 | `relativeUtf8` | function | Tests | [assets.cpp:L39](../../Tests/PackageSmoke/FPSProgression/assets.cpp#L39) |  |
@@ -32287,8 +32287,8 @@
 | `ReplaceFileAtomically` | function | SparkEditor | [JSONSceneSerializer.cpp:L158](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L158) |  |
 | `ReplaceFileAtomically` | function | SparkEngine | [SaveSystem.cpp:L107](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L107) |  |
 | `ReplaceFileAtomically` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L84](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L84) |  |
-| `ReplaceFirstAscii` | function | Tests | [Test_persistence_SaveSystem.cpp:L145](../../Tests/harden/Test_persistence_SaveSystem.cpp#L145) |  |
-| `ReplaceLengthPrefixedString` | function | Tests | [Test_persistence_SaveSystem.cpp:L156](../../Tests/harden/Test_persistence_SaveSystem.cpp#L156) |  |
+| `ReplaceFirstAscii` | function | Tests | [Test_persistence_SaveSystem.cpp:L148](../../Tests/harden/Test_persistence_SaveSystem.cpp#L148) |  |
+| `ReplaceLengthPrefixedString` | function | Tests | [Test_persistence_SaveSystem.cpp:L159](../../Tests/harden/Test_persistence_SaveSystem.cpp#L159) |  |
 | `replacements` | function | SparkEngine | [AsyncDatabase.cpp:L297](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L297) |  |
 | `ReplaceOnce` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L101](../../Tests/TestGLTFStaticMeshLoader.cpp#L101) |  |
 | `Replay` | function | SparkEngine | [EngineSettings.h:L1033](../../SparkEngine/Source/Core/EngineSettings.h#L1033) |  |
@@ -32974,7 +32974,7 @@
 | `Retarget` | function | SparkEngine | [AnimationRetargeting.h:L231](../../SparkEngine/Source/Engine/Animation/AnimationRetargeting.h#L231) |  |
 | `RetargetedPose` | struct | SparkEngine | [AnimationRetargeting.h:L202](../../SparkEngine/Source/Engine/Animation/AnimationRetargeting.h#L202) |  |
 | `RetintPads` | function | GameModules | [TFVehicleTerminal.h:L57](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleTerminal.h#L57) |  |
-| `RetirementPlanProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L386](../../Tests/harden/Test_persistence_SaveSystem.cpp#L386) |  |
+| `RetirementPlanProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L389](../../Tests/harden/Test_persistence_SaveSystem.cpp#L389) |  |
 | `RetirementSnapshotProbe` | alias | SparkEngine | [Components.h:L97](../../SparkEngine/Source/Engine/ECS/Components.h#L97) |  |
 | `RetransmitTracker` | struct | Tests | [TestReliableChannel.cpp:L106](../../Tests/TestReliableChannel.cpp#L106) |  |
 | `Retriangulate` | function | SparkEngine | [BlendSpace.h:L156](../../SparkEngine/Source/Engine/Animation/BlendSpace.h#L156) | Rebuild the Delaunay triangulation from current samples (logically const — lazy cache). |
@@ -33944,7 +33944,7 @@
 | `SaveLayout` | function | SparkEditor | [EditorUI.h:L217](../../SparkEditor/Source/Core/EditorUI.h#L217) |  |
 | `SaveLayout` | function | SparkEditor | [EditorWindowManager.h:L113](../../SparkEditor/Source/Core/EditorWindowManager.h#L113) | Save the current layout under a name |
 | `SaveLayout` | function | Tests | [TestEditorWindowManager.cpp:L46](../../Tests/TestEditorWindowManager.cpp#L46) |  |
-| `SaveLoadLifecycleProbeEvent` | struct | Tests | [Test_persistence_SaveSystem.cpp:L356](../../Tests/harden/Test_persistence_SaveSystem.cpp#L356) |  |
+| `SaveLoadLifecycleProbeEvent` | struct | Tests | [Test_persistence_SaveSystem.cpp:L359](../../Tests/harden/Test_persistence_SaveSystem.cpp#L359) |  |
 | `SaveLockouts` | function | GameModules | [MMOPersistenceSystem.h:L243](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L243) |  |
 | `SaveMatch` | function | GameModules | [RTSEngineSystems.h:L64](../../GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.h#L64) | Save the full RTS match state to the given slot. |
 | `SaveMaterial` | function | SparkEditor | [MaterialEditorPanel.h:L204](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L204) | Save the current material. |
@@ -33999,33 +33999,33 @@
 | `SaveSystem` | class | SparkEngine | [SaveSystem.h:L408](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L408) |  |
 | `SaveSystem` | class | SparkSDK | [IEngineContext.h:L84](../../SparkSDK/Include/Spark/IEngineContext.h#L84) |  |
 | `SaveSystem::AutoSave` | method | SparkEngine | [SaveSystem.cpp:L1158](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1158) |  |
-| `SaveSystem::Console_GetSaveInfo` | method | SparkEngine | [SaveSystem.cpp:L2328](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2328) |  |
-| `SaveSystem::Console_ListSaves` | method | SparkEngine | [SaveSystem.cpp:L2315](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2315) |  |
+| `SaveSystem::Console_GetSaveInfo` | method | SparkEngine | [SaveSystem.cpp:L2335](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2335) |  |
+| `SaveSystem::Console_ListSaves` | method | SparkEngine | [SaveSystem.cpp:L2322](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2322) |  |
 | `SaveSystem::DeleteSave` | method | SparkEngine | [SaveSystem.cpp:L1165](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1165) |  |
-| `SaveSystem::DeserializeWorld` | method | SparkEngine | [SaveSystem.cpp:L1429](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1429) |  |
+| `SaveSystem::DeserializeWorld` | method | SparkEngine | [SaveSystem.cpp:L1436](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1436) |  |
 | `SaveSystem::GetInstance` | method | SparkEngine | [EngineConsoleCommands.cpp:L121](../../SparkEngine/Source/Core/EngineConsoleCommands.cpp#L121) |  |
 | `SaveSystem::GetInstance` | method | SparkEngine | [EngineConsoleCommands.cpp:L138](../../SparkEngine/Source/Core/EngineConsoleCommands.cpp#L138) |  |
 | `SaveSystem::GetInstance` | method | SparkEngine | [SaveSystem.cpp:L1014](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1014) |  |
-| `SaveSystem::GetSaveMetadata` | method | SparkEngine | [SaveSystem.cpp:L1267](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1267) |  |
-| `SaveSystem::GetSavePath` | method | SparkEngine | [SaveSystem.cpp:L2304](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2304) |  |
-| `SaveSystem::GetSaveSlots` | method | SparkEngine | [SaveSystem.cpp:L1203](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1203) |  |
+| `SaveSystem::GetSaveMetadata` | method | SparkEngine | [SaveSystem.cpp:L1274](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1274) |  |
+| `SaveSystem::GetSavePath` | method | SparkEngine | [SaveSystem.cpp:L2311](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2311) |  |
+| `SaveSystem::GetSaveSlots` | method | SparkEngine | [SaveSystem.cpp:L1210](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1210) |  |
 | `SaveSystem::Initialize` | method | SparkEngine | [SaveSystem.cpp:L1020](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1020) |  |
-| `SaveSystem::IsComponentTransient` | method | SparkEngine | [SaveSystem.cpp:L1285](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1285) |  |
-| `SaveSystem::IsValidSlotName` | method | SparkEngine | [SaveSystem.cpp:L2292](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2292) |  |
+| `SaveSystem::IsComponentTransient` | method | SparkEngine | [SaveSystem.cpp:L1292](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1292) |  |
+| `SaveSystem::IsValidSlotName` | method | SparkEngine | [SaveSystem.cpp:L2299](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2299) |  |
 | `SaveSystem::Load` | method | SparkEngine | [SaveSystem.cpp:L1065](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1065) |  |
 | `SaveSystem::Load` | method | SparkEngine | [SaveSystem.cpp:L1071](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1071) |  |
 | `SaveSystem::Load` | method | SparkEngine | [SaveSystem.cpp:L1077](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1077) |  |
-| `SaveSystem::MarkComponentTransient` | method | SparkEngine | [SaveSystem.cpp:L1276](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1276) |  |
-| `SaveSystem::MigrateToCurrentVersion` | method | SparkEngine | [SaveSystem.cpp:L1388](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1388) |  |
+| `SaveSystem::MarkComponentTransient` | method | SparkEngine | [SaveSystem.cpp:L1283](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1283) |  |
+| `SaveSystem::MigrateToCurrentVersion` | method | SparkEngine | [SaveSystem.cpp:L1395](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1395) |  |
 | `SaveSystem::QuickLoad` | method | SparkEngine | [SaveSystem.cpp:L1153](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1153) |  |
 | `SaveSystem::QuickSave` | method | SparkEngine | [SaveSystem.cpp:L1145](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1145) |  |
-| `SaveSystem::ReadFromFile` | method | SparkEngine | [SaveSystem.cpp:L1909](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1909) |  |
-| `SaveSystem::ReadMetadataOnly` | method | SparkEngine | [SaveSystem.cpp:L2226](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2226) |  |
+| `SaveSystem::ReadFromFile` | method | SparkEngine | [SaveSystem.cpp:L1916](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1916) |  |
+| `SaveSystem::ReadMetadataOnly` | method | SparkEngine | [SaveSystem.cpp:L2233](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2233) |  |
 | `SaveSystem::Save` | method | SparkEngine | [SaveSystem.cpp:L1045](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1045) |  |
 | `SaveSystem::Save` | method | SparkEngine | [SaveSystem.cpp:L1050](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1050) |  |
-| `SaveSystem::SaveExists` | method | SparkEngine | [SaveSystem.cpp:L1291](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1291) |  |
-| `SaveSystem::SerializeWorld` | method | SparkEngine | [SaveSystem.cpp:L1305](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1305) |  |
-| `SaveSystem::WriteToFile` | method | SparkEngine | [SaveSystem.cpp:L1714](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1714) |  |
+| `SaveSystem::SaveExists` | method | SparkEngine | [SaveSystem.cpp:L1298](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1298) |  |
+| `SaveSystem::SerializeWorld` | method | SparkEngine | [SaveSystem.cpp:L1312](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1312) |  |
+| `SaveSystem::WriteToFile` | method | SparkEngine | [SaveSystem.cpp:L1721](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1721) |  |
 | `SaveSystemPanel` | class | SparkEditor | [SaveSystemPanel.h:L29](../../SparkEditor/Source/Panels/SaveSystemPanel.h#L29) | Panel for browsing and managing the save files on disk |
 | `SaveSystemPanel::CanLoad` | method | SparkEditor | [SaveSystemPanel.cpp:L174](../../SparkEditor/Source/Panels/SaveSystemPanel.cpp#L174) |  |
 | `SaveSystemPanel::DeleteSlot` | method | SparkEditor | [SaveSystemPanel.cpp:L134](../../SparkEditor/Source/Panels/SaveSystemPanel.cpp#L134) |  |
@@ -34070,7 +34070,7 @@
 | `SaveWeights` | function | SparkEngine | [NeuralFunctionApproximator.cpp:L148](../../SparkEngine/Source/Graphics/Neural/NeuralFunctionApproximator.cpp#L148) |  |
 | `SaveWeights` | function | SparkEngine | [NeuralWeights.cpp:L68](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.cpp#L68) |  |
 | `SaveWeights` | function | SparkEngine | [NeuralWeights.h:L107](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.h#L107) |  |
-| `SaveWireOffsets` | struct | Tests | [Test_persistence_SaveSystem.cpp:L216](../../Tests/harden/Test_persistence_SaveSystem.cpp#L216) |  |
+| `SaveWireOffsets` | struct | Tests | [Test_persistence_SaveSystem.cpp:L219](../../Tests/harden/Test_persistence_SaveSystem.cpp#L219) |  |
 | `SaveWorld` | function | SparkEditor | [LevelStreamingSystem.h:L110](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L110) | Save current world composition to file |
 | `SaveWorld` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L587](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L587) |  |
 | `SaveWorld` | function | SparkEngine | [ReflectedSceneSerializer.h:L35](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h#L35) |  |
@@ -34316,8 +34316,8 @@
 | `ScopedLoggerBaseline` | struct | Tests | [ScopedLoggerBaseline.h:L20](../../Tests/ScopedLoggerBaseline.h#L20) |  |
 | `ScopedManifestCredentialWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L91](../../SparkCrashReporter/src/CrashReporterApp.cpp#L91) |  |
 | `ScopedManifestCredentialWiper` | function | SparkCrashReporter | [CrashReporterApp.cpp:L94](../../SparkCrashReporter/src/CrashReporterApp.cpp#L94) |  |
-| `ScopedMinimumFileSizeLimit` | class | Tests | [Test_persistence_SaveSystem.cpp:L40](../../Tests/harden/Test_persistence_SaveSystem.cpp#L40) |  |
-| `ScopedMinimumFileSizeLimit` | function | Tests | [Test_persistence_SaveSystem.cpp:L43](../../Tests/harden/Test_persistence_SaveSystem.cpp#L43) |  |
+| `ScopedMinimumFileSizeLimit` | class | Tests | [Test_persistence_SaveSystem.cpp:L43](../../Tests/harden/Test_persistence_SaveSystem.cpp#L43) |  |
+| `ScopedMinimumFileSizeLimit` | function | Tests | [Test_persistence_SaveSystem.cpp:L46](../../Tests/harden/Test_persistence_SaveSystem.cpp#L46) |  |
 | `ScopedModuleEnvironment` | class | Tests | [TestModuleLifecycleReal.cpp:L81](../../Tests/TestModuleLifecycleReal.cpp#L81) | A SPARK_MODULE_ABI_ |
 | `ScopedNativeHandle` | class | SparkCrashReporter | [CrashReporterApp.cpp:L546](../../SparkCrashReporter/src/CrashReporterApp.cpp#L546) |  |
 | `ScopedNativeHandle` | function | SparkCrashReporter | [CrashReporterApp.cpp:L558](../../SparkCrashReporter/src/CrashReporterApp.cpp#L558) |  |
@@ -37745,7 +37745,7 @@
 | `SkipWhitespace` | function | SparkCrashReporter | [CrashReporterApp.cpp:L150](../../SparkCrashReporter/src/CrashReporterApp.cpp#L150) |  |
 | `SkipWhitespace` | function | SparkEngine | [JsonUtils.h:L531](../../SparkEngine/Source/Utils/JsonUtils.h#L531) |  |
 | `SkipWhitespaceAndPunct` | function | SparkEditor | [EditorLayoutManager.cpp:L296](../../SparkEditor/Source/Core/EditorLayoutManager.cpp#L296) |  |
-| `SkipWireString` | function | Tests | [Test_persistence_SaveSystem.cpp:L207](../../Tests/harden/Test_persistence_SaveSystem.cpp#L207) |  |
+| `SkipWireString` | function | Tests | [Test_persistence_SaveSystem.cpp:L210](../../Tests/harden/Test_persistence_SaveSystem.cpp#L210) |  |
 | `SkyAtmosphere` | struct | Tests | [TestSkyAtmosphere.cpp:L33](../../Tests/TestSkyAtmosphere.cpp#L33) |  |
 | `SkyAtmosphereSystem` | class | SparkEngine | [SkyAtmosphere.h:L108](../../SparkEngine/Source/Graphics/SkyAtmosphere.h#L108) | Analytical sky rendering using the Preetham/Perez distribution model. |
 | `SkyAtmosphereSystem::ComputeSkyColor` | method | SparkEngine | [SkyAtmosphere.cpp:L167](../../SparkEngine/Source/Graphics/SkyAtmosphere.cpp#L167) |  |
@@ -39033,7 +39033,7 @@
 | `StageBuiltFPSStarterTemplateRoot` | function | Tests | [TestEditorProjectMaterializationReal.cpp:L70](../../Tests/TestEditorProjectMaterializationReal.cpp#L70) |  |
 | `StagedFile` | struct | SparkEngine | [SparkPakWriter.h:L57](../../SparkEngine/Source/Core/SparkPakWriter.h#L57) | Number of files staged for writing. |
 | `stagedOutputCleanup` | function | SparkEditor | [BuildPipeline.cpp:L959](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L959) |  |
-| `StagedStorage` | struct | SparkEngine | [SaveSystem.cpp:L1444](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1444) |  |
+| `StagedStorage` | struct | SparkEngine | [SaveSystem.cpp:L1451](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1451) |  |
 | `StageFiles` | function | SparkEditor | [VersionControlSystem.h:L133](../../SparkEditor/Source/VersionControl/VersionControlSystem.h#L133) | Stage files for commit |
 | `StageModuleForPosixLoad` | function | SparkEngine | [ModuleManager.cpp:L521](../../SparkEngine/Source/Core/ModuleManager.cpp#L521) |  |
 | `StageName` | function | SparkEngine | [ShaderDiskCache.h:L96](../../SparkEngine/Source/Graphics/ShaderDiskCache.h#L96) | Count of daemon misses/errors since initialization (test/diagnostic). |
@@ -39359,7 +39359,7 @@
 | `std::filesystem::u8path` | method | Tests | [TestModuleLifecycleReal.cpp:L36](../../Tests/TestModuleLifecycleReal.cpp#L36) |  |
 | `std::filesystem::weakly_canonical` | method | Tests | [TestEditorSubsystems.cpp:L763](../../Tests/TestEditorSubsystems.cpp#L763) |  |
 | `std::find` | method | SparkConsole | [ConsoleApp.cpp:L779](../../SparkConsole/src/ConsoleApp.cpp#L779) |  |
-| `std::find` | method | SparkEngine | [SaveSystem.cpp:L1287](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1287) |  |
+| `std::find` | method | SparkEngine | [SaveSystem.cpp:L1294](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1294) |  |
 | `std::find` | method | SparkEngine | [ContainerUtils.h:L126](../../SparkEngine/Source/Utils/ContainerUtils.h#L126) |  |
 | `std::find` | method | SparkShaderCompiler | [main.cpp:L597](../../SparkShaderCompiler/src/main.cpp#L597) |  |
 | `std::find` | method | Templates | [GameModule.h:L260](../../Templates/RPGStarter/Source/GameModule.h#L260) |  |
@@ -39529,19 +39529,19 @@
 | `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L989](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L989) |  |
 | `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L992](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L992) |  |
 | `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L995](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L995) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1487](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1487) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1522](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1522) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1530](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1530) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1546](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1546) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1575](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1575) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1578](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1578) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1591](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1591) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1597](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1597) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1603](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1603) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1611](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1611) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1623](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1623) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1636](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1636) |  |
-| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1638](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1638) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1494](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1494) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1529](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1529) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1537](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1537) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1553](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1553) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1582](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1582) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1585](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1585) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1598](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1598) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1604](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1604) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1610](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1610) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1618](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1618) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1630](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1630) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1643](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1643) |  |
+| `std::runtime_error` | method | SparkEngine | [SaveSystem.cpp:L1645](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1645) |  |
 | `std::runtime_error` | method | Tests | [ScopedEditorProfile.h:L51](../../Tests/Fixtures/ScopedEditorProfile.h#L51) |  |
 | `std::runtime_error` | method | Tests | [TestAIStress.cpp:L51](../../Tests/TestAIStress.cpp#L51) |  |
 | `std::runtime_error` | method | Tests | [TestEditorSubsystems.cpp:L1695](../../Tests/TestEditorSubsystems.cpp#L1695) |  |
@@ -39552,9 +39552,9 @@
 | `std::runtime_error` | method | Tests | [TestScopeGuard.cpp:L140](../../Tests/TestScopeGuard.cpp#L140) |  |
 | `std::runtime_error` | method | Tests | [TestScopeGuard.cpp:L155](../../Tests/TestScopeGuard.cpp#L155) |  |
 | `std::runtime_error` | method | Tests | [TestSparkBuildConfig.cpp:L38](../../Tests/TestSparkBuildConfig.cpp#L38) |  |
-| `std::runtime_error` | method | Tests | [Test_persistence_SaveSystem.cpp:L439](../../Tests/harden/Test_persistence_SaveSystem.cpp#L439) |  |
-| `std::runtime_error` | method | Tests | [Test_persistence_SaveSystem.cpp:L479](../../Tests/harden/Test_persistence_SaveSystem.cpp#L479) |  |
-| `std::runtime_error` | method | Tests | [Test_persistence_SaveSystem.cpp:L2033](../../Tests/harden/Test_persistence_SaveSystem.cpp#L2033) |  |
+| `std::runtime_error` | method | Tests | [Test_persistence_SaveSystem.cpp:L442](../../Tests/harden/Test_persistence_SaveSystem.cpp#L442) |  |
+| `std::runtime_error` | method | Tests | [Test_persistence_SaveSystem.cpp:L482](../../Tests/harden/Test_persistence_SaveSystem.cpp#L482) |  |
+| `std::runtime_error` | method | Tests | [Test_persistence_SaveSystem.cpp:L2086](../../Tests/harden/Test_persistence_SaveSystem.cpp#L2086) |  |
 | `std::runtime_error` | method | Tests | [Test_tests_enginecontext_real.cpp:L281](../../Tests/harden/Test_tests_enginecontext_real.cpp#L281) |  |
 | `std::runtime_error` | method | Tests | [Test_tests_enginecontext_real.cpp:L338](../../Tests/harden/Test_tests_enginecontext_real.cpp#L338) |  |
 | `std::runtime_error` | method | Tests | [Test_tests_enginecontext_real.cpp:L379](../../Tests/harden/Test_tests_enginecontext_real.cpp#L379) |  |
@@ -40445,7 +40445,7 @@
 | `Swap` | function | SparkEngine | [RTHandleSystem.h:L251](../../SparkEngine/Source/Graphics/RTHandleSystem.h#L251) |  |
 | `SwapChainFallback` | struct | SparkEngine | [D3D11Device.cpp:L208](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp#L208) |  |
 | `SwapComponentStorageContents` | function | SparkEngine | [ComponentReflection.cpp:L302](../../SparkEngine/Source/Core/ComponentReflection.cpp#L302) |  |
-| `SwapProbeStorageContents` | function | Tests | [Test_persistence_SaveSystem.cpp:L413](../../Tests/harden/Test_persistence_SaveSystem.cpp#L413) |  |
+| `SwapProbeStorageContents` | function | Tests | [Test_persistence_SaveSystem.cpp:L416](../../Tests/harden/Test_persistence_SaveSystem.cpp#L416) |  |
 | `SwapStorageContentsFn` | alias | SparkEngine | [Reflection.h:L299](../../SparkEngine/Source/Core/Reflection.h#L299) |  |
 | `SwapWorld` | function | SparkEditor | [EditorUI.h:L455](../../SparkEditor/Source/Core/EditorUI.h#L455) | Atomically replace the edited document World. Clears the |
 | `SweepBoxVsBox` | function | SparkEngine | [CollisionSystem.h:L436](../../SparkEngine/Source/Physics/CollisionSystem.h#L436) |  |
@@ -43168,9 +43168,9 @@
 | `ThreatInfo` | struct | SparkEngine | [GroupAI.h:L103](../../SparkEngine/Source/Engine/AI/GroupAI.h#L103) | Information about a known threat shared across the group. |
 | `ThreatInfo` | struct | Tests | [TestGroupAI.cpp:L31](../../Tests/TestGroupAI.cpp#L31) |  |
 | `Three` | alias | Tests | [TestTypeTraits.cpp:L89](../../Tests/TestTypeTraits.cpp#L89) |  |
-| `ThrowAfterPreparingLiveStorage` | function | Tests | [Test_persistence_SaveSystem.cpp:L435](../../Tests/harden/Test_persistence_SaveSystem.cpp#L435) |  |
+| `ThrowAfterPreparingLiveStorage` | function | Tests | [Test_persistence_SaveSystem.cpp:L438](../../Tests/harden/Test_persistence_SaveSystem.cpp#L438) |  |
 | `ThrowerRec` | struct | GameModules | [TFGrenadeSystem.h:L164](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystem.h#L164) |  |
-| `ThrowingSaveDestroyObserver` | struct | Tests | [Test_persistence_SaveSystem.cpp:L361](../../Tests/harden/Test_persistence_SaveSystem.cpp#L361) |  |
+| `ThrowingSaveDestroyObserver` | struct | Tests | [Test_persistence_SaveSystem.cpp:L364](../../Tests/harden/Test_persistence_SaveSystem.cpp#L364) |  |
 | `Tick` | function | GameModules | [TFOutfitStore.h:L100](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h#L100) |  |
 | `Tick` | struct | GameModules | [TFHUDDraw.cpp:L226](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUDDraw.cpp#L226) |  |
 | `Tick` | function | SparkEngine | [DynamicPluginHost.h:L55](../../SparkEngine/Source/Core/DynamicPluginHost.h#L55) |  |
@@ -43618,7 +43618,7 @@
 | `TransientAllocation` | struct | Tests | [TestTransientBufferAllocator.cpp:L13](../../Tests/TestTransientBufferAllocator.cpp#L13) |  |
 | `TransientBufferAllocator` | class | SparkEngine | [TransientBufferAllocator.h:L60](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L60) | Per-frame linear allocator for transient vertex and index buffers. |
 | `TransientBufferAllocator` | function | SparkEngine | [TransientBufferAllocator.h:L67](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L67) |  |
-| `TransientCandidateProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L391](../../Tests/harden/Test_persistence_SaveSystem.cpp#L391) |  |
+| `TransientCandidateProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L394](../../Tests/harden/Test_persistence_SaveSystem.cpp#L394) |  |
 | `TransientResourceDesc` | struct | SparkEngine | [TransientResourcePool.h:L29](../../SparkEngine/Source/Graphics/RenderGraph/TransientResourcePool.h#L29) | Describes a transient GPU resource for pool matching. |
 | `TransientResourcePool` | class | SparkEngine | [TransientResourcePool.h:L74](../../SparkEngine/Source/Graphics/RenderGraph/TransientResourcePool.h#L74) |  |
 | `TransientResourcePool::AcquireResource` | method | SparkEngine | [TransientResourcePool.cpp:L34](../../SparkEngine/Source/Graphics/RenderGraph/TransientResourcePool.cpp#L34) |  |
@@ -43733,7 +43733,7 @@
 | `TRUE` | macro | SparkEngine | [PlatformTypes.h:L109](../../SparkEngine/Source/Core/PlatformTypes.h#L109) |  |
 | `Truncate` | function | SparkEngine | [SteeringBehaviors.h:L97](../../SparkEngine/Source/Engine/AI/SteeringBehaviors.h#L97) |  |
 | `truncated` | function | Tests | [TestDaemonConcurrent.cpp:L307](../../Tests/TestDaemonConcurrent.cpp#L307) |  |
-| `truncated` | function | Tests | [Test_persistence_SaveSystem.cpp:L629](../../Tests/harden/Test_persistence_SaveSystem.cpp#L629) |  |
+| `truncated` | function | Tests | [Test_persistence_SaveSystem.cpp:L632](../../Tests/harden/Test_persistence_SaveSystem.cpp#L632) |  |
 | `TryAcquire` | function | SparkEngine | [WorkSema.h:L98](../../SparkEngine/Source/Utils/WorkSema.h#L98) | Try to acquire without blocking. |
 | `TryActivate` | function | Tests | [TestECSystemSpecialized.cpp:L329](../../Tests/TestECSystemSpecialized.cpp#L329) |  |
 | `TryCalculateQueuedEventBytes` | function | SparkEngine | [Telemetry.h:L925](../../SparkEngine/Source/Utils/Telemetry.h#L925) |  |
@@ -45195,8 +45195,8 @@
 | `UUID` | function | SparkEngine | [UUID.h:L62](../../SparkEngine/Source/Utils/UUID.h#L62) |  |
 | `UUID` | function | SparkEngine | [UUID.h:L90](../../SparkEngine/Source/Utils/UUID.h#L90) |  |
 | `val` | function | GameModules | [LootSystem.cpp:L147](../../GameModules/SparkGameFPS/Source/Game/LootSystem.cpp#L147) |  |
-| `val` | function | SparkEngine | [SaveSystem.cpp:L2143](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2143) |  |
-| `val` | function | SparkEngine | [SaveSystem.cpp:L2182](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2182) |  |
+| `val` | function | SparkEngine | [SaveSystem.cpp:L2150](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2150) |  |
+| `val` | function | SparkEngine | [SaveSystem.cpp:L2189](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L2189) |  |
 | `val` | function | Tests | [TestReplicationFields.cpp:L88](../../Tests/TestReplicationFields.cpp#L88) |  |
 | `ValCoord2D` | function | SparkEngine | [FastNoiseLite.h:L224](../../SparkEngine/Source/Graphics/FastNoiseLite.h#L224) | Value noise: hash to float in [-1, 1] |
 | `ValCoord2D` | function | Tests | [TestGraphicsIntegration.cpp:L559](../../Tests/TestGraphicsIntegration.cpp#L559) |  |
@@ -46626,7 +46626,7 @@
 | `WorldCompositionSettings` | struct | SparkEditor | [LevelStreamingTypes.h:L152](../../SparkEditor/Source/LevelStreaming/LevelStreamingTypes.h#L152) | World composition settings |
 | `WorldConfig` | function | SparkEngine | [EngineSettings.h:L1003](../../SparkEngine/Source/Core/EngineSettings.h#L1003) |  |
 | `WorldConfig` | function | SparkEngine | [EngineSettings.h:L1004](../../SparkEngine/Source/Core/EngineSettings.h#L1004) |  |
-| `WorldContainsNamedEntity` | function | Tests | [Test_persistence_SaveSystem.cpp:L351](../../Tests/harden/Test_persistence_SaveSystem.cpp#L351) |  |
+| `WorldContainsNamedEntity` | function | Tests | [Test_persistence_SaveSystem.cpp:L354](../../Tests/harden/Test_persistence_SaveSystem.cpp#L354) |  |
 | `WorldDeltaToParentLocal` | function | SparkEditor | [SceneEditTools.cpp:L300](../../SparkEditor/Source/Gizmos/SceneEditTools.cpp#L300) |  |
 | `WorldDeltaToParentLocal` | function | SparkEditor | [SceneEditTools.h:L104](../../SparkEditor/Source/Gizmos/SceneEditTools.h#L104) | Convert a world-space translation delta into the local space of |
 | `WorldDrop` | struct | GameModules | [LootSystem.h:L55](../../GameModules/SparkGameFPS/Source/Game/LootSystem.h#L55) | A dropped item in the world waiting for pickup |
@@ -46814,7 +46814,7 @@
 | `WriteBytes` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L110](../../Tests/TestGLTFStaticMeshLoader.cpp#L110) |  |
 | `WriteBytes` | function | Tests | [TestNetBuffer.cpp:L61](../../Tests/TestNetBuffer.cpp#L61) |  |
 | `WriteBytes` | function | Tests | [TestServerMockClient.cpp:L102](../../Tests/TestServerMockClient.cpp#L102) |  |
-| `WriteBytes` | function | Tests | [Test_persistence_SaveSystem.cpp:L185](../../Tests/harden/Test_persistence_SaveSystem.cpp#L185) |  |
+| `WriteBytes` | function | Tests | [Test_persistence_SaveSystem.cpp:L188](../../Tests/harden/Test_persistence_SaveSystem.cpp#L188) |  |
 | `WriteChildError` | function | SparkDaemon | [OrchestrationService.cpp:L51](../../SparkDaemon/src/OrchestrationService.cpp#L51) |  |
 | `WriteCommandOutput` | function | SparkEngine | [SparkEngineWindows.cpp:L55](../../SparkEngine/Source/Core/SparkEngineWindows.cpp#L55) |  |
 | `WriteConfigFixture` | function | Tests | [TestSparkBuildConfig.cpp:L20](../../Tests/TestSparkBuildConfig.cpp#L20) |  |
@@ -46919,7 +46919,7 @@
 | `WriteRegionMapDocumentAtomically` | function | SparkEditor | [RegionMapDataSource.cpp:L220](../../SparkEditor/Source/Panels/RegionMapDataSource.cpp#L220) |  |
 | `WriteRegionMapDocumentAtomically` | function | SparkEditor | [RegionMapDataSource.h:L37](../../SparkEditor/Source/Panels/RegionMapDataSource.h#L37) |  |
 | `WriteSaveFile` | function | Templates | [GameModule.h:L284](../../Templates/RPGStarter/Source/GameModule.h#L284) |  |
-| `WriteSaveHeader` | function | Tests | [Test_persistence_SaveSystem.cpp:L81](../../Tests/harden/Test_persistence_SaveSystem.cpp#L81) |  |
+| `WriteSaveHeader` | function | Tests | [Test_persistence_SaveSystem.cpp:L84](../../Tests/harden/Test_persistence_SaveSystem.cpp#L84) |  |
 | `WriteSeatComp` | function | GameModules | [TFVehicleSystem.h:L198](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L198) |  |
 | `WriteShader` | function | Tests | [TestShaderHotReloadPhaseU.cpp:L45](../../Tests/TestShaderHotReloadPhaseU.cpp#L45) |  |
 | `WriteSigned` | function | SparkEditor | [JSONSceneSerializer.cpp:L362](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L362) |  |

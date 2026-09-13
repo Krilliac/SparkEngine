@@ -322,7 +322,7 @@
 | `EntityID` | alias | Tests | [TestSceneSerializer.cpp:L31](../../Tests/TestSceneSerializer.cpp#L31) |  |
 | `EntityId` | alias | Tests | [TestSelectionManager.cpp:L19](../../Tests/TestSelectionManager.cpp#L19) |  |
 | `EntityId` | alias | Tests | [TestSpatialGrid.cpp:L45](../../Tests/TestSpatialGrid.cpp#L45) |  |
-| `EntityPayloadStorage` | alias | SparkEngine | [SaveSystem.cpp:L1696](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1696) |  |
+| `EntityPayloadStorage` | alias | SparkEngine | [SaveSystem.cpp:L1703](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1703) |  |
 | `EntityTemplateCreator` | alias | SparkEditor | [ObjectPlacementPanel.h:L76](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L76) |  |
 | `EntityVisitor` | alias | SparkEngine | [SpatialGrid.h:L91](../../SparkEngine/Source/Engine/World/SpatialGrid.h#L91) |  |
 | `EntryIter` | alias | SparkDaemon | [AssetService.h:L105](../../SparkDaemon/src/AssetService.h#L105) |  |
@@ -638,7 +638,7 @@
 | `KillcamNotifyFn` | alias | GameModules | [TFDeathRecap.h:L80](../../GameModules/SparkGameMMOFPS/Source/UI/TFDeathRecap.h#L80) |  |
 | `LanBroadcastSocketFactory` | alias | SparkEngine | [DedicatedServer.h:L189](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L189) | Immutable state consumed by one LAN broadcast iteration. |
 | `LayerEvalFunc` | alias | SparkEngine | [CpuNeuralInference.cpp:L32](../../SparkEngine/Source/Graphics/Neural/CpuNeuralInference.cpp#L32) |  |
-| `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1040](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1040) |  |
+| `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1093](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1093) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L102](../../Tests/TestTypeTraits.cpp#L102) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L114](../../Tests/TestTypeTraits.cpp#L114) |  |
 | `LoadCompletionCallback` | alias | SparkEngine | [DirectStorageLoader.h:L66](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L66) | Callback invoked when a load completes |
@@ -757,7 +757,7 @@
 | `PasswordBuffer` | alias | Tests | [TestMMOCredentialSecurity.cpp:L13](../../Tests/TestMMOCredentialSecurity.cpp#L13) |  |
 | `PawnInfo` | alias | GameModules | [TFPlayerSystem.h:L42](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystem.h#L42) |  |
 | `PayloadStorage` | alias | SparkEngine | [ComponentReflection.cpp:L304](../../SparkEngine/Source/Core/ComponentReflection.cpp#L304) |  |
-| `PayloadStorage` | alias | Tests | [Test_persistence_SaveSystem.cpp:L415](../../Tests/harden/Test_persistence_SaveSystem.cpp#L415) |  |
+| `PayloadStorage` | alias | Tests | [Test_persistence_SaveSystem.cpp:L418](../../Tests/harden/Test_persistence_SaveSystem.cpp#L418) |  |
 | `pclose` | macro | SparkEditor | [VersionControlRender.cpp:L16](../../SparkEditor/Source/VersionControl/VersionControlRender.cpp#L16) |  |
 | `PeerConnectedCallback` | alias | SparkEditor | [CollaborativeEditSession.h:L159](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L159) |  |
 | `PeerDisconnectedCallback` | alias | SparkEditor | [CollaborativeEditSession.h:L160](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L160) |  |

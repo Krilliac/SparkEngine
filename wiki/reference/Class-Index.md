@@ -131,7 +131,7 @@
 | `AllocationHeader` | struct | SparkEngine | [DynamicPluginHost.cpp:L45](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L45) |  |
 | `AllocationHotSpot` | struct | SparkEngine | [MemoryDebugger.h:L73](../../SparkEngine/Source/Utils/MemoryDebugger.h#L73) | Hot-spot entry for allocation frequency analysis |
 | `AllocationRecord` | struct | SparkEngine | [MemoryDebugger.h:L45](../../SparkEngine/Source/Utils/MemoryDebugger.h#L45) | Information about a single tracked allocation |
-| `AllocatorCursorProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L396](../../Tests/harden/Test_persistence_SaveSystem.cpp#L396) |  |
+| `AllocatorCursorProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L399](../../Tests/harden/Test_persistence_SaveSystem.cpp#L399) |  |
 | `AmbientAudioDef` | struct | GameModules | [TFDataTables.h:L166](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.h#L166) |  |
 | `AngelScriptEngine` | class | SparkEngine | [EngineContext.h:L40](../../SparkEngine/Source/Core/EngineContext.h#L40) |  |
 | `AngelScriptEngine` | class | SparkEngine | [EngineSetup.h:L32](../../SparkEngine/Source/Core/EngineSetup.h#L32) |  |
@@ -538,8 +538,8 @@
 | `Candidate` | struct | GameModules | [TFLoadoutScreen.cpp:L33](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoadoutScreen.cpp#L33) |  |
 | `Candidate` | struct | SparkEngine | [SeamlessAreaManagerStreaming.cpp:L170](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManagerStreaming.cpp#L170) |  |
 | `Candidate` | struct | Tests | [TestSeamlessAreaManager.cpp:L152](../../Tests/TestSeamlessAreaManager.cpp#L152) |  |
-| `CandidateExtraComponentProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L381](../../Tests/harden/Test_persistence_SaveSystem.cpp#L381) |  |
-| `CandidateGhostProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L376](../../Tests/harden/Test_persistence_SaveSystem.cpp#L376) |  |
+| `CandidateExtraComponentProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L384](../../Tests/harden/Test_persistence_SaveSystem.cpp#L384) |  |
+| `CandidateGhostProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L379](../../Tests/harden/Test_persistence_SaveSystem.cpp#L379) |  |
 | `CapState` | struct | Tests | [TestTFCaptureMath.cpp:L40](../../Tests/TestTFCaptureMath.cpp#L40) |  |
 | `CaptureResult` | struct | SparkEngine | [ScreenCapture.h:L51](../../SparkEngine/Source/Graphics/ScreenCapture.h#L51) | Result of a capture operation |
 | `CascadedShadowMap` | struct | SparkEngine | [LightingSystem.h:L243](../../SparkEngine/Source/Graphics/LightingSystem.h#L243) | Cascaded shadow map data |
@@ -2377,7 +2377,7 @@
 | `Mirror` | struct | GameModules | [TFSquadSystem.h:L205](../../GameModules/SparkGameMMOFPS/Source/Game/TFSquadSystem.h#L205) |  |
 | `MirrorMember` | struct | GameModules | [TFOutfitSystem.h:L129](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L129) |  |
 | `MirrorRec` | struct | GameModules | [TFVehicleSystemRecords.h:L150](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystemRecords.h#L150) |  |
-| `MissingRestoreProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L366](../../Tests/harden/Test_persistence_SaveSystem.cpp#L366) |  |
+| `MissingRestoreProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L369](../../Tests/harden/Test_persistence_SaveSystem.cpp#L369) |  |
 | `MixBus` | struct | SparkEngine | [AudioMixer.h:L53](../../SparkEngine/Source/Audio/AudioMixer.h#L53) | A named audio channel group with volume and effect controls. |
 | `MixBusInfo` | struct | SparkEditor | [AudioMixerPanel.h:L34](../../SparkEditor/Source/Panels/AudioMixerPanel.h#L34) |  |
 | `MixerBusSettings` | struct | SparkEngine | [MusicManager.h:L48](../../SparkEngine/Source/Audio/MusicManager.h#L48) |  |
@@ -3067,7 +3067,7 @@
 | `PreparedStatementData` | struct | SparkEngine | [AsyncDatabase.h:L85](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L85) | Prepared statement handle with bindable parameters. |
 | `PreparedStatementData` | class | Tests | [TestAsyncDatabase.cpp:L99](../../Tests/TestAsyncDatabase.cpp#L99) |  |
 | `PreparedStatementParam` | struct | SparkEngine | [AsyncDatabase.h:L79](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L79) | A single parameter bound to a prepared statement slot. |
-| `PrepareFailureProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L371](../../Tests/harden/Test_persistence_SaveSystem.cpp#L371) |  |
+| `PrepareFailureProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L374](../../Tests/harden/Test_persistence_SaveSystem.cpp#L374) |  |
 | `previousAction` | struct | SparkEditor | [EditorCrashHandler.cpp:L53](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L53) |  |
 | `PrivatePluginCopy` | class | SparkEngine | [DynamicPluginHost.cpp:L194](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L194) |  |
 | `Probe` | struct | Tests | [TestExtendedSystems.cpp:L838](../../Tests/TestExtendedSystems.cpp#L838) |  |
@@ -3260,7 +3260,7 @@
 | `Reader` | class | SparkEngine | [TerrainAssetFormat.h:L74](../../SparkEngine/Source/Graphics/TerrainAssetFormat.h#L74) | Bounds-checked cursor over a .sparkterrain stream. |
 | `ReadOnlyAdmissionBuffer` | class | SparkGateway | [GatewayAreaControl.cpp:L1110](../../SparkGateway/src/GatewayAreaControl.cpp#L1110) |  |
 | `ReadState` | struct | SparkEngine | [CrashReportUploader.cpp:L962](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L962) |  |
-| `ReboundNotification` | struct | SparkEngine | [SaveSystem.cpp:L1451](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1451) |  |
+| `ReboundNotification` | struct | SparkEngine | [SaveSystem.cpp:L1458](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1458) |  |
 | `Rec` | struct | GameModules | [TFDeployableSystem.h:L155](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.h#L155) |  |
 | `Rec` | struct | GameModules | [TFDirectiveSystem.h:L94](../../GameModules/SparkGameMMOFPS/Source/Game/TFDirectiveSystem.h#L94) |  |
 | `RecentProject` | struct | SparkEditor | [ProjectManager.h:L96](../../SparkEditor/Source/Core/ProjectManager.h#L96) | Recent project entry for the project browser |
@@ -3409,7 +3409,7 @@
 | `ResponseRule` | struct | SparkEngine | [DynamicResponseSystem.h:L135](../../SparkEngine/Source/Engine/Dialogue/DynamicResponseSystem.h#L135) | A response rule: when signal X is received and conditions pass, |
 | `ResponseRule` | struct | Tests | [TestDynamicResponseSystem.cpp:L24](../../Tests/TestDynamicResponseSystem.cpp#L24) |  |
 | `RetargetedPose` | struct | SparkEngine | [AnimationRetargeting.h:L202](../../SparkEngine/Source/Engine/Animation/AnimationRetargeting.h#L202) |  |
-| `RetirementPlanProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L386](../../Tests/harden/Test_persistence_SaveSystem.cpp#L386) |  |
+| `RetirementPlanProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L389](../../Tests/harden/Test_persistence_SaveSystem.cpp#L389) |  |
 | `RetransmitTracker` | struct | Tests | [TestReliableChannel.cpp:L106](../../Tests/TestReliableChannel.cpp#L106) |  |
 | `ReverbParameters` | struct | SparkEngine | [AudioMixer.h:L94](../../SparkEngine/Source/Audio/AudioMixer.h#L94) | Detailed reverb configuration parameters. |
 | `ReverbZone` | struct | SparkEngine | [AudioMixer.h:L114](../../SparkEngine/Source/Audio/AudioMixer.h#L114) | A spatial volume that applies reverb to sounds within it. |
@@ -3560,7 +3560,7 @@
 | `SaveData` | struct | SparkEngine | [SaveSystemTypes.h:L187](../../SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h#L187) |  |
 | `SaveData` | struct | Tests | [TestAdversarialEngine.cpp:L85](../../Tests/TestAdversarialEngine.cpp#L85) |  |
 | `SavedBinding` | struct | SparkEngine | [AngelScriptEngine.cpp:L605](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp#L605) |  |
-| `SaveLoadLifecycleProbeEvent` | struct | Tests | [Test_persistence_SaveSystem.cpp:L356](../../Tests/harden/Test_persistence_SaveSystem.cpp#L356) |  |
+| `SaveLoadLifecycleProbeEvent` | struct | Tests | [Test_persistence_SaveSystem.cpp:L359](../../Tests/harden/Test_persistence_SaveSystem.cpp#L359) |  |
 | `SaveRepresentationLimits` | struct | SparkEngine | [SaveSystemTypes.h:L37](../../SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h#L37) |  |
 | `SaveSlotInfo` | struct | SparkEditor | [SaveSystemPanel.h:L33](../../SparkEditor/Source/Panels/SaveSystemPanel.h#L33) |  |
 | `SaveSystem` | class | GameModules | [Game.h:L46](../../GameModules/SparkGameFPS/Source/Game/Game.h#L46) |  |
@@ -3571,7 +3571,7 @@
 | `SaveSystemPanel` | class | SparkEditor | [SaveSystemPanel.h:L29](../../SparkEditor/Source/Panels/SaveSystemPanel.h#L29) | Panel for browsing and managing the save files on disk |
 | `SaveSystemSettings` | struct | SparkEngine | [EngineSettings.h:L785](../../SparkEngine/Source/Core/EngineSettings.h#L785) |  |
 | `SaveSystemSettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L470](../../Tests/TestEngineSettingsEdgeCases.cpp#L470) |  |
-| `SaveWireOffsets` | struct | Tests | [Test_persistence_SaveSystem.cpp:L216](../../Tests/harden/Test_persistence_SaveSystem.cpp#L216) |  |
+| `SaveWireOffsets` | struct | Tests | [Test_persistence_SaveSystem.cpp:L219](../../Tests/harden/Test_persistence_SaveSystem.cpp#L219) |  |
 | `Scan` | struct | GameModules | [TFBotSystemCombat.cpp:L34](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemCombat.cpp#L34) |  |
 | `Scatter` | struct | SparkEditor | [DecorLayoutEditorPanel.h:L71](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h#L71) |  |
 | `ScatterSpec` | struct | GameModules | [TFRegionDecor.h:L140](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecor.h#L140) |  |
@@ -3639,7 +3639,7 @@
 | `ScopedInjectedContext` | class | Tests | [TestEditorPanelsRealBackends.cpp:L83](../../Tests/TestEditorPanelsRealBackends.cpp#L83) | Installs an injected EngineContext for one scope and clears it on exit. |
 | `ScopedLoggerBaseline` | struct | Tests | [ScopedLoggerBaseline.h:L20](../../Tests/ScopedLoggerBaseline.h#L20) |  |
 | `ScopedManifestCredentialWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L91](../../SparkCrashReporter/src/CrashReporterApp.cpp#L91) |  |
-| `ScopedMinimumFileSizeLimit` | class | Tests | [Test_persistence_SaveSystem.cpp:L40](../../Tests/harden/Test_persistence_SaveSystem.cpp#L40) |  |
+| `ScopedMinimumFileSizeLimit` | class | Tests | [Test_persistence_SaveSystem.cpp:L43](../../Tests/harden/Test_persistence_SaveSystem.cpp#L43) |  |
 | `ScopedModuleEnvironment` | class | Tests | [TestModuleLifecycleReal.cpp:L81](../../Tests/TestModuleLifecycleReal.cpp#L81) | A SPARK_MODULE_ABI_ |
 | `ScopedNativeHandle` | class | SparkCrashReporter | [CrashReporterApp.cpp:L546](../../SparkCrashReporter/src/CrashReporterApp.cpp#L546) |  |
 | `ScopedNetworkBindMode` | class | Tests | [TestNetworkManagerIntegration.cpp:L194](../../Tests/TestNetworkManagerIntegration.cpp#L194) |  |
@@ -4047,7 +4047,7 @@
 | `StackTrace` | class | SparkEngine | [Logger.h:L64](../../SparkEngine/Source/Utils/Logger.h#L64) |  |
 | `StackTrace` | class | SparkEngine | [StackTrace.h:L92](../../SparkEngine/Source/Utils/StackTrace.h#L92) | Captured stack trace with symbol resolution |
 | `StagedFile` | struct | SparkEngine | [SparkPakWriter.h:L57](../../SparkEngine/Source/Core/SparkPakWriter.h#L57) | Number of files staged for writing. |
-| `StagedStorage` | struct | SparkEngine | [SaveSystem.cpp:L1444](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1444) |  |
+| `StagedStorage` | struct | SparkEngine | [SaveSystem.cpp:L1451](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1451) |  |
 | `StandaloneCollaborationClient` | class | SparkEditor | [CollaborativeEditSession.h:L63](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L63) |  |
 | `StandaloneCollaborationClient` | class | SparkEditor | [StandaloneCollaborationClient.h:L24](../../SparkEditor/Source/Communication/StandaloneCollaborationClient.h#L24) | Production client for SparkCollabServer's capability-based protocol. |
 | `StandaloneConsole` | class | Tests | [TestAdversarialEngine.cpp:L1206](../../Tests/TestAdversarialEngine.cpp#L1206) |  |
@@ -4611,7 +4611,7 @@
 | `ThreatInfo` | struct | SparkEngine | [GroupAI.h:L103](../../SparkEngine/Source/Engine/AI/GroupAI.h#L103) | Information about a known threat shared across the group. |
 | `ThreatInfo` | struct | Tests | [TestGroupAI.cpp:L31](../../Tests/TestGroupAI.cpp#L31) |  |
 | `ThrowerRec` | struct | GameModules | [TFGrenadeSystem.h:L164](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystem.h#L164) |  |
-| `ThrowingSaveDestroyObserver` | struct | Tests | [Test_persistence_SaveSystem.cpp:L361](../../Tests/harden/Test_persistence_SaveSystem.cpp#L361) |  |
+| `ThrowingSaveDestroyObserver` | struct | Tests | [Test_persistence_SaveSystem.cpp:L364](../../Tests/harden/Test_persistence_SaveSystem.cpp#L364) |  |
 | `Tick` | struct | GameModules | [TFHUDDraw.cpp:L226](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUDDraw.cpp#L226) |  |
 | `TierTemplate` | struct | GameModules | [TFRegionDecor.h:L147](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecor.h#L147) |  |
 | `TierTemplate` | struct | SparkEditor | [DecorLayoutEditorPanel.h:L80](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h#L80) |  |
@@ -4696,7 +4696,7 @@
 | `TransientAllocation` | struct | SparkEngine | [TransientBufferAllocator.h:L44](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L44) | Result of a transient buffer allocation. |
 | `TransientAllocation` | struct | Tests | [TestTransientBufferAllocator.cpp:L13](../../Tests/TestTransientBufferAllocator.cpp#L13) |  |
 | `TransientBufferAllocator` | class | SparkEngine | [TransientBufferAllocator.h:L60](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L60) | Per-frame linear allocator for transient vertex and index buffers. |
-| `TransientCandidateProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L391](../../Tests/harden/Test_persistence_SaveSystem.cpp#L391) |  |
+| `TransientCandidateProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L394](../../Tests/harden/Test_persistence_SaveSystem.cpp#L394) |  |
 | `TransientResourceDesc` | struct | SparkEngine | [TransientResourcePool.h:L29](../../SparkEngine/Source/Graphics/RenderGraph/TransientResourcePool.h#L29) | Describes a transient GPU resource for pool matching. |
 | `TransientResourcePool` | class | SparkEngine | [TransientResourcePool.h:L74](../../SparkEngine/Source/Graphics/RenderGraph/TransientResourcePool.h#L74) |  |
 | `Transition` | struct | SparkEngine | [StateMachine.h:L263](../../SparkEngine/Source/Utils/StateMachine.h#L263) |  |
