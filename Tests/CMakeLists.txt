@@ -1673,6 +1673,17 @@ set_tests_properties(SparkSDKRequiresInstalledVersionHeader PROPERTIES
     LABELS "sdk;package;unit"
     TIMEOUT 30)
 
+add_test(
+    NAME SparkSDKComponentCompleteness
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+        "-DSPARK_CONFIG=$<CONFIG>"
+        "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/sdk-component-completeness/$<CONFIG>"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestSparkSDKComponentCompleteness.cmake)
+set_tests_properties(SparkSDKComponentCompleteness PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 660)
+
 # ----------------------------------------------------------------------------
 # Installed-SDK template gate (opt-in)
 # ----------------------------------------------------------------------------

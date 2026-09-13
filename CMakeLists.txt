@@ -2629,6 +2629,37 @@ install(FILES "${SPARK_GENERATED_INCLUDE_DIR}/Spark/GeneratedVersion.h"
     COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
 
+# Keep the public SDK component self-contained. Consumers selecting only this
+# component need the legal materials, SDK documentation, and one buildable
+# example alongside the headers and exported targets; the runtime component's
+# root copies below are retained for executable-package validation.
+spark_install_tracked_directory(
+    SOURCE SparkSDK
+    DESTINATION share/SparkEngine/sdk
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+    INCLUDE_REGEXES "/README[.]md$"
+)
+install(FILES "${CMAKE_BINARY_DIR}/SparkEngineLicense.txt"
+    DESTINATION share/SparkEngine/sdk
+    RENAME LICENSE.txt
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+)
+install(FILES "${SPARK_THIRD_PARTY_NOTICES_FILE}"
+    DESTINATION share/SparkEngine/sdk
+    RENAME THIRD_PARTY_NOTICES.txt
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+)
+spark_install_tracked_directory(
+    SOURCE Templates/EmptyProject
+    DESTINATION share/SparkEngine/sdk/examples/EmptyProject
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+    EXCLUDE_REGEXES
+        "/(build[^/]*|dist|Binaries|Intermediate|Saved|Saves|Logs|Screenshots|TestScreenshots|Temp|[.]vs|[.]cache|CMakeFiles|__pycache__|[.]pytest_cache)(/|$)"
+        "/(CMakeCache[.]txt|cmake_install[.]cmake|CTestTestfile[.]cmake|compile_commands[.]json|install_manifest[.]txt|[.]ninja_deps|[.]ninja_log|exec_audit[.]log|spark_trace[.]json|mmo_data[.]db)$"
+        "[.]py[co]$"
+        "[.]user$"
+)
+
 if(TARGET SparkAssetPipelineCore)
     spark_install_tracked_directory(
         SOURCE SparkAssetPipelineCore/include
