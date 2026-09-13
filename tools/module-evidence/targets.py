@@ -345,6 +345,28 @@ def check_target(
                 f"source tree does not build this target"
             )
 
+    artifacts = target.get("artifacts", [])
+    declared_names = {
+        Path(filename).name
+        for filename in declared_libraries.values()
+        if isinstance(filename, str) and filename
+    }
+    expected_artifact_names = set(declared_names)
+    expected_artifact_names.update(
+        f"lib{name}" for name in declared_names if not name.startswith("lib")
+    )
+    artifact_names = {
+        Path(artifact).name
+        for artifact in artifacts
+        if isinstance(artifact, str) and artifact
+    } if isinstance(artifacts, list) else set()
+    if not artifact_names or not artifact_names.intersection(expected_artifact_names):
+        errors.append(
+            f"{label}: CMake target {target_name!r} has no output artifact "
+            f"matching the declared module libraries {sorted(expected_artifact_names)} "
+            f"— a target without its module artifact is not build evidence"
+        )
+
     # nameOnDisk is what CMake will actually write — but it is toolchain
     # dependent, not a stable literal.  The same target is libSparkGameFPS.dll
     # under MinGW, SparkGameFPS.dll under MSVC and libSparkGameFPS.so under

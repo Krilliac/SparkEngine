@@ -482,6 +482,17 @@ class TestTargetProof(FixtureCase):
         self.assertRejected(base_manifest(), "B02",
                             target_index=target_index(sources=[]))
 
+    def test_target_without_a_module_artifact_is_rejected(self) -> None:
+        evidence = target_index()
+        evidence["targets"][INCLUDED]["artifacts"] = []
+        errors = self.assertRejected(
+            base_manifest(), "B02c", target_index=evidence,
+        )
+        self.assertTrue(
+            any("output artifact" in error.lower() for error in errors),
+            errors,
+        )
+
     def test_B02b_sources_outside_declared_tree_are_rejected(self) -> None:
         self.assertRejected(
             base_manifest(), "B02b",
