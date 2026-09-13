@@ -336,6 +336,14 @@ class TestTrackedInventory(FakeRepoCase):
         self.commit()
         self.assert_violation("tracked file is in no declared container")
 
+    def test_allowlist_cannot_exempt_an_unlisted_root_payload(self) -> None:
+        data = self.lock()
+        data["allowed_root_files"].append("ThirdParty/EVIL.md")
+        self.set_lock(data)
+        self.write("ThirdParty/EVIL.md", "forged dependency payload\n")
+        self.commit()
+        self.assert_violation("allowed_root_files")
+
     def test_untracked_payload_is_detected(self) -> None:
         self.write("ThirdParty/Utils/demo/untracked.h", "/* payload */\n")
         self.assert_violation("worktree differs from the index")

@@ -53,6 +53,11 @@ WORKFLOWS_DIR = ".github/workflows"
 LOCKFILE_VERSION = 2
 AUTHORITATIVE_ROOT = "ThirdParty"
 AUTHORITATIVE_ROOTS = frozenset({AUTHORITATIVE_ROOT})
+APPROVED_ROOT_FILES = frozenset({
+    "ThirdParty/POLICY.md",
+    "ThirdParty/dependencies.lock",
+    "ThirdParty/supply-chain.lock",
+})
 
 # ── Resource bounds ───────────────────────────────────────────────────
 # Every one of these is an order of magnitude above the real repository.  They
@@ -665,6 +670,31 @@ def check_container_model(lockfile: dict[str, Any], result: CheckResult) -> None
                 "aliases verify on case-insensitive filesystems only",
             )
         lowered.setdefault(key, path)
+
+
+def check_allowed_root_files(lockfile: dict[str, Any], result: CheckResult) -> None:
+    """Keep the payload-coverage exception limited to governance metadata."""
+    allowed = lockfile["allowed_root_files"]
+    listed = set(allowed)
+    unexpected = sorted(listed - APPROVED_ROOT_FILES)
+    missing = sorted(APPROVED_ROOT_FILES - listed)
+    duplicate_count = len(allowed) - len(listed)
+    if not unexpected and not missing and duplicate_count == 0:
+        return
+
+    details: list[str] = []
+    if unexpected:
+        details.append(f"unexpected={unexpected}")
+    if missing:
+        details.append(f"missing={missing}")
+    if duplicate_count:
+        details.append(f"duplicate_entries={duplicate_count}")
+    result.error(
+        "inventory",
+        LOCKFILE_REL,
+        "allowed_root_files must exactly match the approved governance files "
+        f"({'; '.join(details)})",
+    )
 
 
 # ── Check: complete tracked inventory and tree digests ────────────────
@@ -1816,6 +1846,7 @@ def run_all_checks(root: Path, root_resolved: Path) -> tuple[CheckResult, dict[s
     result = CheckResult()
 
     check_container_model(lockfile, result)
+    check_allowed_root_files(lockfile, result)
     check_link_hygiene(root, result)
     tracked = git_tracked_thirdparty(root)
     assigned = check_tracked_inventory(root, lockfile, tracked, result)
