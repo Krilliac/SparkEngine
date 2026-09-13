@@ -1,11 +1,14 @@
 // Test_persistence_SaveSystem.cpp
-// Regression for two SaveSystem findings:
+// Regression for three SaveSystem findings:
 //   P1: Load/ReadFromFile never validated the save-format version. A file written by a
 //       newer, incompatible format is now rejected instead of silently misinterpreted.
 //   P2: GetSaveMetadata now uses a metadata-only read path; this test also confirms it
 //       still parses the metadata header correctly.
-// Both are exercised through the public GetSaveMetadata() (which needs no World/ECS),
-// by hand-crafting .spark_save files with the real on-disk binary layout.
+//   P3: DeleteSave must evict primary and retained-copy entries from LocalFileCache so
+//       a deleted slot cannot be resurrected from stale cached bytes.
+// P1 and P2 are exercised through the public GetSaveMetadata() (which needs no World/ECS),
+// by hand-crafting .spark_save files with the real on-disk binary layout. P3 uses the
+// production-linked Save/Load/Delete path with an attached LocalFileCache.
 
 #include "TestFramework.h"
 #include "Core/Reflection.h"
@@ -760,6 +763,56 @@ TEST(SaveSystem_Save_ReplacesExistingSlotAtomically)
     EXPECT_TRUE(ss.Load("same-slot", loadedWorld));
     EXPECT_EQ(loadedWorld.GetEntityCount(), 2u);
 
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_DeleteSave_EvictsCachedPrimaryAndBackup)
+{
+    const std::string dir = MakeTempSaveDir("delete_cached_revisions");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    ss.SetFileCache(nullptr);
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    LocalFileCache cache;
+    ss.SetFileCache(&cache);
+
+    World firstWorld;
+    const EntityID firstEntity = firstWorld.CreateEntity("cached-first-revision");
+    firstWorld.AddComponent<Transform>(firstEntity);
+    SaveMetadata firstMetadata;
+    firstMetadata.saveName = "Cached first revision";
+    EXPECT_TRUE(ss.Save("cached-delete", firstWorld, firstMetadata));
+
+    World secondWorld;
+    const EntityID secondEntity = secondWorld.CreateEntity("cached-second-revision");
+    secondWorld.AddComponent<Transform>(secondEntity);
+    SaveMetadata secondMetadata;
+    secondMetadata.saveName = "Cached second revision";
+    EXPECT_TRUE(ss.Save("cached-delete", secondWorld, secondMetadata));
+
+    const auto primaryPath = std::filesystem::path(dir) / "cached-delete.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "cached-delete.spark_save.bak";
+    EXPECT_TRUE(std::filesystem::exists(primaryPath));
+    EXPECT_TRUE(std::filesystem::exists(backupPath));
+
+    World cachedPrimary;
+    EXPECT_TRUE(ss.Load("cached-delete", cachedPrimary));
+    EXPECT_TRUE(cache.Contains(primaryPath.string()));
+
+    const auto cachedBackup = cache.ReadBinary(backupPath.string());
+    EXPECT_TRUE(cachedBackup.IsOk());
+    EXPECT_TRUE(cache.Contains(backupPath.string()));
+
+    EXPECT_TRUE(ss.DeleteSave("cached-delete"));
+    EXPECT_FALSE(std::filesystem::exists(primaryPath));
+    EXPECT_FALSE(std::filesystem::exists(backupPath));
+    EXPECT_FALSE(cache.Contains(primaryPath.string()));
+    EXPECT_FALSE(cache.Contains(backupPath.string()));
+
+    World afterDelete;
+    EXPECT_FALSE(ss.Load("cached-delete", afterDelete));
+
+    ss.SetFileCache(nullptr);
     std::filesystem::remove_all(dir);
 }
 

@@ -1186,6 +1186,13 @@ namespace Spark
             // otherwise recover a slot the player just deleted.
             std::error_code backupError;
             fs::remove(path + kSaveBackupSuffix, backupError);
+            if (m_fileCache)
+            {
+                // DeleteSave bypasses LocalFileCache for the filesystem operation;
+                // evict both keys so a later Load cannot resurrect deleted bytes.
+                m_fileCache->Invalidate(path);
+                m_fileCache->Invalidate(path + kSaveBackupSuffix);
+            }
             return true;
         }
         catch (const std::exception& e)
