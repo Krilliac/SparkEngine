@@ -541,6 +541,15 @@ function testWorkflowShape() {
     assert(!scanner.includes('config-file:'));
     assert(scanner.includes('archive: false'));
     assert(scanner.includes('name: Bind raw CodeQL SARIF to exact source attempt'));
+    assert(scanner.includes(
+        '    - name: Bind raw CodeQL SARIF to exact source attempt\n' +
+        '      if: always()\n' +
+        '      uses: actions/github-script@',
+    ), 'raw SARIF binding must run after a failed CodeQL upload attempt');
+    assert(scanner.includes("const stat = fs.lstatSync(source);"),
+        'raw SARIF binding must inspect the exact source file');
+    assert(scanner.includes("if (!stat.isFile() || stat.isSymbolicLink() || fs.existsSync(target))"),
+        'raw SARIF binding must remain fail-closed for missing or unsafe files');
     assert.strictEqual((scanner.match(/codeql-\$\{\{ matrix\.language \}\}-attempt-\$\{\{ github\.run_attempt \}\}\.sarif/g) || []).length, 2,
         'the trusted rename and direct upload must use the same exact-attempt SARIF file name');
     assert(scanner.includes('output: ${{ runner.temp }}/codeql-sarif'));
