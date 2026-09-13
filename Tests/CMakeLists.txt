@@ -1468,6 +1468,34 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             "for the stable-v1 module-profile lifecycle gate")
     endif()
 
+    # Keep nested MSVC consumer try-compiles below the Windows path-length
+    # pressure that makes FileTracker fail before the consumer can configure.
+    # The build-directory hash keeps separate worktrees/configurations isolated.
+    string(MD5 _spark_mod310_build_id "${CMAKE_BINARY_DIR}")
+    string(SUBSTRING "${_spark_mod310_build_id}" 0 8 _spark_mod310_build_id)
+    set(_spark_mod310_test_root "$ENV{TEMP}/m310-${_spark_mod310_build_id}")
+
+    # The nested package project also runs CMake try-compiles. Prefer the
+    # bundled Ninja binary over a nested Visual Studio project so those probes
+    # do not inherit FileTracker's long-path failure mode.
+    set(_spark_mod310_consumer_generator "${CMAKE_GENERATOR}")
+    set(_spark_mod310_consumer_platform "${CMAKE_GENERATOR_PLATFORM}")
+    set(_spark_mod310_consumer_toolset "${CMAKE_GENERATOR_TOOLSET}")
+    set(_spark_mod310_consumer_make_program "${CMAKE_MAKE_PROGRAM}")
+    get_filename_component(_spark_mod310_cmake_bin "${CMAKE_COMMAND}" DIRECTORY)
+    get_filename_component(_spark_mod310_cmake_dist "${_spark_mod310_cmake_bin}" DIRECTORY)
+    get_filename_component(_spark_mod310_cmake_bundle "${_spark_mod310_cmake_dist}" DIRECTORY)
+    set(_spark_mod310_ninja "${_spark_mod310_cmake_bundle}/Ninja/ninja.exe")
+    if(NOT EXISTS "${_spark_mod310_ninja}")
+        find_program(_spark_mod310_ninja NAMES ninja ninja.exe)
+    endif()
+    if(_spark_mod310_ninja)
+        set(_spark_mod310_consumer_generator "Ninja Multi-Config")
+        set(_spark_mod310_consumer_platform "")
+        set(_spark_mod310_consumer_toolset "")
+        set(_spark_mod310_consumer_make_program "${_spark_mod310_ninja}")
+    endif()
+
     # Exercise the stable-v1 first-party slice through the production host and
     # real module DLL. Generator expressions keep every path correct for the
     # selected Visual Studio/Ninja Multi-Config configuration.
@@ -1503,6 +1531,51 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         LABELS "nullrhi-headless;stable-v1;integration;source-tree"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+
+    # MOD-310 selector contracts. Each entry invokes a real production-source
+    # or installed-package test; these are bounded evidence slices, not a
+    # declaration that the full FPS module is public-SDK compliant or released.
+    add_test(
+        NAME FPSSinglePlayerSlice_RespawnProductionSource
+        COMMAND $<TARGET_FILE:SparkTests> --quiet --warn-is-error)
+    set_tests_properties(FPSSinglePlayerSlice_RespawnProductionSource PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=FPSRespawn_;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "module;stable-v1;fps;production-source"
+        RUN_SERIAL TRUE
+        TIMEOUT 30)
+
+    add_test(
+        NAME FPSPackage_InstalledRuntime
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_CONFIG=$<CONFIG>"
+            "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/p/$<CONFIG>"
+            -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
+    set_tests_properties(FPSPackage_InstalledRuntime PROPERTIES
+        LABELS "module;stable-v1;fps;package;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+
+    add_test(
+        NAME FPSPublicSDK_InstalledConsumers
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_CONFIG=$<CONFIG>"
+            "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/s/$<CONFIG>"
+            "-DSPARK_CONSUMER_GENERATOR=${_spark_mod310_consumer_generator}"
+            "-DSPARK_CONSUMER_PLATFORM=${_spark_mod310_consumer_platform}"
+            "-DSPARK_CONSUMER_TOOLSET=${_spark_mod310_consumer_toolset}"
+            "-DSPARK_CONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+            "-DSPARK_CONSUMER_MAKE_PROGRAM=${_spark_mod310_consumer_make_program}"
+            "-DSPARK_CONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+            "-DSPARK_CONSUMER_CTEST=${CMAKE_CTEST_COMMAND}"
+            -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPublicSDK.cmake)
+    set_tests_properties(FPSPublicSDK_InstalledConsumers PROPERTIES
+        LABELS "module;stable-v1;fps;sdk;package;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 600)
 endif()
 
 add_test(
