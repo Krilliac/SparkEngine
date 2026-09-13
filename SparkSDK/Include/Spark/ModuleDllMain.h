@@ -52,7 +52,7 @@ namespace Spark
 {
     class SimpleConsole;
     class InvalidStateDetector;
-}
+} // namespace Spark
 
 namespace Spark::Detail
 {

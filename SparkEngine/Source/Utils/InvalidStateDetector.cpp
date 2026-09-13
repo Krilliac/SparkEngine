@@ -52,7 +52,7 @@ namespace Spark
     } // namespace Detail
 
     InvalidStateDetector::ScopedRegistrationOwner::ScopedRegistrationOwner(InvalidStateDetector& detector,
-                                                                             std::string ownerId)
+                                                                           std::string ownerId)
         : m_detector(detector), m_previousOwner(std::move(detector.m_registrationOwner))
     {
         detector.m_registrationOwner = std::move(ownerId);
@@ -149,8 +149,9 @@ namespace Spark
 
     void InvalidStateDetector::RemoveRulesByCategory(const std::string& category)
     {
-        std::erase_if(m_rules, [&](const StateValidationRule& r)
-                      { return r.category == category && (m_registrationOwner.empty() || r.ownerId == m_registrationOwner); });
+        std::erase_if(
+            m_rules, [&](const StateValidationRule& r)
+            { return r.category == category && (m_registrationOwner.empty() || r.ownerId == m_registrationOwner); });
     }
 
     size_t InvalidStateDetector::RemoveRulesByOwner(const std::string& ownerId)

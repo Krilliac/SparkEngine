@@ -359,15 +359,15 @@ namespace Spark
                 }
                 else
                 {
-                // Modules share the host console. Letting a second registrant
-                // take a live name would silently replace the handler — and with
-                // the default permission, downgrade an Admin command to Player.
-                SPARK_LOG_WARN(Spark::LogCategory::Core,
-                               "Console command '%s' is already owned by '%s'; registration from '%s' refused",
-                               name.c_str(),
-                               existing->second.ownerId.empty() ? "engine" : existing->second.ownerId.c_str(),
-                               effectiveOwner.empty() ? "engine" : effectiveOwner.c_str());
-                return false;
+                    // Modules share the host console. Letting a second registrant
+                    // take a live name would silently replace the handler — and with
+                    // the default permission, downgrade an Admin command to Player.
+                    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                                   "Console command '%s' is already owned by '%s'; registration from '%s' refused",
+                                   name.c_str(),
+                                   existing->second.ownerId.empty() ? "engine" : existing->second.ownerId.c_str(),
+                                   effectiveOwner.empty() ? "engine" : effectiveOwner.c_str());
+                    return false;
                 }
             }
             if (effectivePermission < existing->second.requiredPermission)

@@ -12,7 +12,7 @@ namespace
     constexpr const char* kCommandName = "registry_fixture_status";
     constexpr const char* kRuleName = "RegistryFixture.Rule";
     constexpr const char* kRuleCategory = "RegistryFixture";
-}
+} // namespace
 
 class RegistryLifecycleModule final : public Spark::IModule
 {
@@ -30,12 +30,13 @@ class RegistryLifecycleModule final : public Spark::IModule
     bool OnLoad(Spark::IEngineContext*) override
     {
         auto& console = Spark::SimpleConsole::GetInstance();
-        console.RegisterCommand(kCommandName, [](const std::vector<std::string>&) { return std::string{"fixture"}; },
-                                "Registry lifecycle fixture command", "Tests");
+        console.RegisterCommand(
+            kCommandName, [](const std::vector<std::string>&) { return std::string{"fixture"}; },
+            "Registry lifecycle fixture command", "Tests");
 
-        Spark::InvalidStateDetector::GetInstance().AddRule(
-            {kRuleName, kRuleCategory, Spark::StateViolationSeverity::Warning, true,
-             [](World&, std::vector<Spark::StateViolation>&) {}});
+        Spark::InvalidStateDetector::GetInstance().AddRule({kRuleName, kRuleCategory,
+                                                            Spark::StateViolationSeverity::Warning, true,
+                                                            [](World&, std::vector<Spark::StateViolation>&) {}});
         return true;
     }
 
