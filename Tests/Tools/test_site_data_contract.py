@@ -418,6 +418,35 @@ class LegalContractConsistencyTests(ContractTestCase):
         self.assert_rejected(mutated, "GOV-400 cannot be done while policyGaps remain")
 
 
+class LegalPublicWordingTests(ContractTestCase):
+    """Public legal wording cannot outrun the reviewed license declaration."""
+
+    def test_non_osi_license_rejects_unreviewed_project_open_source_claims(self) -> None:
+        validator = site_data_validate.Validator(copy.deepcopy(self.contract))
+        with self.assertRaises(SiteDataError) as raised:
+            validator.validate(legal=True)
+
+        errors = str(raised.exception)
+        self.assertIn("unreviewed open-source wording", errors)
+        self.assertIn("README.md", errors)
+        self.assertIn("wiki/Home.md", errors)
+        self.assertIn("wiki/getting-started/FAQ.md", errors)
+
+    def test_negated_wording_is_allowed_for_explaining_the_distinction(self) -> None:
+        errors = site_data_validate.legal_public_wording_errors(
+            {"osiApproved": False},
+            {"legal.md": "This project is not open-source under an OSI-approved license."},
+        )
+        self.assertEqual([], errors)
+
+    def test_osi_approved_declaration_does_not_apply_the_custom_license_guard(self) -> None:
+        errors = site_data_validate.legal_public_wording_errors(
+            {"osiApproved": True},
+            {"README.md": "A C++23 open-source game engine."},
+        )
+        self.assertEqual([], errors)
+
+
 class TransitiveDependencyTests(ContractTestCase):
     """Frozen case 4: profile dependency closure is transitive and diagnostic."""
 
