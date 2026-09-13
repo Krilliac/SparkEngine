@@ -314,6 +314,40 @@ TEST(ReflectedScene_SaveIsAtomicAndLoadRecoversPreviousGoodBackup)
     EXPECT_EQ(names.get<NameComponent>(*names.begin()).name, std::string("First"));
 }
 
+TEST(ReflectedScene_LoadFallbackDoesNotAppendPartiallyReadPrimary)
+{
+    TemporaryReflectedScene file;
+
+    World first;
+    first.CreateEntity("First");
+    ASSERT_TRUE(SaveWorld(first, file.Path().string()));
+
+    World replacement;
+    replacement.CreateEntity("Replacement");
+    ASSERT_TRUE(SaveWorld(replacement, file.Path().string()));
+
+    // The second entity is created before its invalid parent value throws.
+    // LoadWorld must not retain either partially-read primary entity when it
+    // falls back to the previous-good backup.
+    {
+        std::ofstream corrupt(file.Path(), std::ios::binary | std::ios::trunc);
+        corrupt << R"json({
+            "version": 1,
+            "entities": [
+                {"id": 1, "name": "Partial", "components": []},
+                {"id": 2, "name": "Invalid", "parent": "not-an-integer", "components": []}
+            ]
+        })json";
+    }
+
+    World recovered;
+    ASSERT_TRUE(LoadWorld(recovered, file.Path().string()));
+    EXPECT_EQ(recovered.GetEntityCount(), static_cast<size_t>(1));
+    const auto names = recovered.GetEntitiesWith<NameComponent>();
+    ASSERT_TRUE(names.begin() != names.end());
+    EXPECT_EQ(names.get<NameComponent>(*names.begin()).name, std::string("First"));
+}
+
 TEST(World_DestroyEntityRepairsHierarchyLinks)
 {
     World world;
