@@ -514,7 +514,8 @@ function assertNoMutation(result) {
 }
 
 function testWorkflowShape() {
-    const scanner = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql.yml'), 'utf8');
+    const scanner = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql.yml'), 'utf8')
+        .replace(/\r\n/g, '\n');
     const reporter = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql-report.yml'), 'utf8');
     const combined = `${scanner}\n${reporter}`;
     const actionUses = [...combined.matchAll(/^\s*uses:\s*([^\s#]+)/gm)].map(match => match[1]);
