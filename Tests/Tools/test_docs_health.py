@@ -444,7 +444,7 @@ class DocsGenerationHostileTests(unittest.TestCase):
                 ],
             }
             with (
-                mock.patch.object(docs_currentness.os, "name", "nt"),
+                mock.patch.object(docs_currentness, "CASE_INSENSITIVE_TRACKED_PATHS", True),
                 mock.patch.object(docs_currentness, "REPO_ROOT", root),
             ):
                 docs_currentness.compare_outputs(

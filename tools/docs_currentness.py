@@ -44,6 +44,11 @@ MAX_OUTPUT_FILES = 5000
 MAX_OUTPUT_BYTES = 256 * 1024 * 1024
 MAX_JSON_BYTES = 8 * 1024 * 1024
 HEALTH_OUTPUT_PATH = PurePosixPath("docs/.health.json")
+# Keep this decision independent from the mutable ``os`` module object.  Tests
+# may need to exercise Windows path semantics on a non-Windows host; changing
+# ``os.name`` globally also changes pathlib's path factory and makes that test
+# construct WindowsPath instances that cannot run on Linux.
+CASE_INSENSITIVE_TRACKED_PATHS = os.name == "nt"
 OUTPUT_OVERRIDE_ENVIRONMENT = (
     "SPARK_DOC_API_OUTPUT_DIR",
     "SPARK_DOC_API_DIR",
@@ -422,13 +427,13 @@ def undeclared_generated_paths(root: Path, tracked: set[str]) -> list[str]:
     except docs_contract.ContractError as exc:
         raise CurrentnessError(str(exc)) from exc
     tracked_keys = {
-        path.casefold() if os.name == "nt" else path
+        path.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else path
         for path in tracked
     }
     return sorted(
         relative
         for relative in snapshot
-        if (relative.casefold() if os.name == "nt" else relative) not in tracked_keys
+        if (relative.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else relative) not in tracked_keys
         and relative != ".docs-tracked-files"
         and relative != HEALTH_OUTPUT_PATH.as_posix()
     )
