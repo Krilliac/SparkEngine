@@ -947,6 +947,31 @@ class TestCorpusBinding(FixtureTestCase):
         with self.assertPolicyError("never compares its input size against SPARK_FUZZ_MAX_INPUT_BYTES"):
             self.fixture.load_corpora()
 
+    def test_harness_must_reject_oversized_input_before_parser_call(self) -> None:
+        self.fixture.make_fuzzed()
+        self.fixture.rewrite_harness(
+            HARNESS.replace(
+                "return 0;\n    }\n    ParseExampleDocument",
+                "(void)size;\n    }\n    ParseExampleDocument",
+                1,
+            )
+        )
+        with self.assertPolicyError("does not reject oversized input before calling the parser"):
+            self.fixture.load_corpora()
+
+    def test_harness_must_guard_before_every_parser_call(self) -> None:
+        self.fixture.make_fuzzed()
+        self.fixture.rewrite_harness(
+            HARNESS.replace(
+                "    if (size > SPARK_FUZZ_MAX_INPUT_BYTES)",
+                "    ParseExampleDocument(data, size, SPARK_FUZZ_MAX_DEPTH);\n"
+                "    if (size > SPARK_FUZZ_MAX_INPUT_BYTES)",
+                1,
+            )
+        )
+        with self.assertPolicyError("does not reject oversized input before calling the parser"):
+            self.fixture.load_corpora()
+
     def test_harness_must_call_the_declared_entry_symbol(self) -> None:
         self.fixture.make_fuzzed()
         self.fixture.rewrite_harness(HARNESS.replace("ParseExampleDocument(data, size, SPARK_FUZZ_MAX_DEPTH);", "(void)SPARK_FUZZ_MAX_DEPTH;"))
