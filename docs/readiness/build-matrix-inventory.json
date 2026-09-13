@@ -1360,7 +1360,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1572,
+      "line": 1588,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1992,7 +1992,7 @@
       "target": "${TARGET_NAME}",
       "kind": "unresolved",
       "file": "cmake/SparkGameModule.cmake",
-      "line": 186,
+      "line": 190,
       "conditionFrames": [],
       "definitionScope": [
         "spark_add_game_module"
@@ -3501,7 +3501,7 @@
       "declarations": [
         {
           "file": "cmake/SparkGameModule.cmake",
-          "line": 186,
+          "line": 190,
           "kind": "unresolved",
           "origin": "function-template",
           "definitionScope": [
