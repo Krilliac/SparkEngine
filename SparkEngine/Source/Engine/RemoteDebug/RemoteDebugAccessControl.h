@@ -47,12 +47,10 @@ namespace Spark::RemoteDebug
         return static_cast<RemoteDebugCapability>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
     }
 
-    [[nodiscard]] constexpr bool HasRemoteDebugCapability(RemoteDebugCapability granted,
-                                                           RemoteDebugCapability required)
+    [[nodiscard]] constexpr bool HasRemoteDebugCapability(RemoteDebugCapability granted, RemoteDebugCapability required)
     {
         return required == RemoteDebugCapability::None ||
-               (static_cast<uint32_t>(granted) & static_cast<uint32_t>(required)) ==
-                   static_cast<uint32_t>(required);
+               (static_cast<uint32_t>(granted) & static_cast<uint32_t>(required)) == static_cast<uint32_t>(required);
     }
 
     [[nodiscard]] constexpr RemoteDebugCapability CapabilitiesForRemoteDebugRole(RemoteDebugRole role)
@@ -200,8 +198,7 @@ namespace Spark::RemoteDebug
                                            ? std::numeric_limits<uint64_t>::max()
                                            : now + lifetimeMilliseconds;
             const auto capabilities = CapabilitiesForRemoteDebugRole(role);
-            GrantState state{"trusted-local-loopback", "in-process-loopback", role, capabilities, expiresAt, 0, now,
-                             0};
+            GrantState state{"trusted-local-loopback", "in-process-loopback", role, capabilities, expiresAt, 0, now, 0};
             m_grants.emplace(grantId, state);
 
             RemoteDebugPrincipal principal;
@@ -254,7 +251,8 @@ namespace Spark::RemoteDebug
 
             if (requestId <= state.highestRequestId)
             {
-                RecordLocked(state.subject, state.source, commandType, requestId, RemoteDebugAuditDecision::ReplayDenied);
+                RecordLocked(state.subject, state.source, commandType, requestId,
+                             RemoteDebugAuditDecision::ReplayDenied);
                 return {false, RemoteDebugAuditDecision::ReplayDenied};
             }
             state.highestRequestId = requestId;

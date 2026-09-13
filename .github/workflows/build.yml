@@ -3348,6 +3348,7 @@ jobs:
           SparkInstaller
           SparkInstallerGitTests
           SparkInstallerInstallStateTests
+          SparkInstallerTransactionTests
           SparkBuildProcessRunnerTests
           SparkBuildDownloaderTests
           -j

@@ -1638,6 +1638,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         build_step = named_step(self.build, "Build SparkInstaller and registered contract tests")
         self.assertIn("SparkInstallerGitTests", build_step)
         self.assertIn("SparkInstallerInstallStateTests", build_step)
+        self.assertIn("SparkInstallerTransactionTests", build_step)
         self.assertIn("SparkBuildProcessRunnerTests", build_step)
         self.assertIn("SparkBuildDownloaderTests", build_step)
 
