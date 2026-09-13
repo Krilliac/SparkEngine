@@ -161,10 +161,10 @@ TEST(GoldenImageTest_HasRegressions_OneFailure)
     EXPECT_TRUE(Spark::GoldenImageTestRunner::HasRegressions(results));
 }
 
-TEST(GoldenImageTest_HasRegressions_EmptyResults)
+TEST(GoldenImageTest_HasRegressions_EmptyResultsFailClosed)
 {
     std::vector<Spark::ImageComparisonResult> results;
-    EXPECT_FALSE(Spark::GoldenImageTestRunner::HasRegressions(results));
+    EXPECT_TRUE(Spark::GoldenImageTestRunner::HasRegressions(results));
 }
 
 // ============================================================================
