@@ -30,6 +30,10 @@
 #error SPARK_TEST_COMPATIBLE_MODULE_PATH must name the compatible module fixture
 #endif
 
+#ifndef SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH
+#error SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH must name the registry lifecycle module fixture
+#endif
+
 #ifndef SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH
 #error SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH must name the sibling-dependent module fixture
 #endif
@@ -744,6 +748,53 @@ TEST(ModuleABI_SparkGameShutdownReleasesHostRegistryCallbacksBeforeUnload)
     EXPECT_EQ(manager.GetModuleCount(), size_t{0});
 }
 #endif
+
+TEST(ModuleABI_ReloadPreservesHostRegistryCallbacks)
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    auto& detector = Spark::InvalidStateDetector::GetInstance();
+    const std::string commandName = "registry_fixture_status";
+    const std::string ruleCategory = "RegistryFixture";
+    const bool consoleWasInitialized = console.IsInitialized();
+    struct RegistryStateGuard final
+    {
+        Spark::SimpleConsole& console;
+        Spark::InvalidStateDetector& detector;
+        bool restoreUninitialized;
+        ~RegistryStateGuard()
+        {
+            detector.RemoveRulesByCategory("RegistryFixture");
+            console.UnregisterCommand("registry_fixture_status");
+            if (restoreUninitialized)
+                console.Shutdown();
+        }
+    } registryState{console, detector, !consoleWasInitialized};
+
+    if (!consoleWasInitialized)
+        ASSERT_TRUE(console.Initialize());
+    detector.RemoveRulesByCategory(ruleCategory);
+    ASSERT_FALSE(console.HasCommand(commandName));
+
+    const uint32_t initialRuleCount = detector.GetRuleCount();
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+    ASSERT_TRUE(console.HasCommand(commandName));
+    EXPECT_EQ(detector.GetRuleCount(), initialRuleCount + 1);
+
+    // The replacement is initialized before the outgoing image's OnUnload.
+    // Its command and rule must survive that handoff and remain owned by the
+    // live replacement rather than being removed by the outgoing instance.
+    ASSERT_TRUE(manager.ReloadModule("Spark Registry Lifecycle Fixture", &context));
+    EXPECT_TRUE(console.HasCommand(commandName));
+    EXPECT_EQ(detector.GetRuleCount(), initialRuleCount + 1);
+
+    ASSERT_TRUE(manager.ShutdownAll());
+    EXPECT_FALSE(console.HasCommand(commandName));
+    EXPECT_EQ(detector.GetRuleCount(), initialRuleCount);
+    manager.UnloadAll();
+}
 
 TEST(ModuleABI_FailedReplacementInitializationPreservesWorkingModule)
 {

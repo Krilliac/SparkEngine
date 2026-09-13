@@ -707,6 +707,8 @@ add_library(SparkMismatchedModuleFixture SHARED
     Fixtures/ModuleABI/MismatchedModule.cpp)
 add_library(SparkCompatibleModuleFixture SHARED
     Fixtures/ModuleABI/CompatibleModule.cpp)
+add_library(SparkRegistryLifecycleModuleFixture SHARED
+    Fixtures/ModuleABI/RegistryLifecycleModule.cpp)
 add_library(SparkLegacyModuleFixture SHARED
     Fixtures/ModuleABI/LegacyModule.cpp)
 add_library(SparkModuleSiblingDependency SHARED
@@ -725,6 +727,22 @@ foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkCompatibleMod
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
 endforeach()
+
+target_compile_features(SparkRegistryLifecycleModuleFixture PRIVATE cxx_std_23)
+target_compile_definitions(SparkRegistryLifecycleModuleFixture PRIVATE SPARK_MODULE_DLL)
+target_include_directories(SparkRegistryLifecycleModuleFixture PRIVATE
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+    "${CMAKE_SOURCE_DIR}/SparkSDK/Include"
+    "${SPARK_GENERATED_INCLUDE_DIR}")
+if(WIN32)
+    target_link_libraries(SparkRegistryLifecycleModuleFixture PRIVATE SparkEngineLib)
+elseif(TARGET SparkEngineInterface)
+    target_link_libraries(SparkRegistryLifecycleModuleFixture PRIVATE SparkEngineInterface)
+endif()
+if(MSVC)
+    set_property(TARGET SparkRegistryLifecycleModuleFixture PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 
 target_include_directories(SparkLegacyModuleFixture PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
@@ -760,14 +778,17 @@ math(EXPR SPARK_TEST_MISMATCHED_SDK_VERSION
 spark_configure_module_abi(SparkMismatchedModuleFixture
     SDK_VERSION "${SPARK_TEST_MISMATCHED_SDK_VERSION}")
 spark_configure_module_abi(SparkCompatibleModuleFixture)
+spark_configure_module_abi(SparkRegistryLifecycleModuleFixture)
 spark_configure_module_abi(SparkLegacyModuleFixture)
 spark_configure_module_abi(SparkSiblingDependentModuleFixture)
 
-add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture SparkLegacyModuleFixture
+add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture
+    SparkRegistryLifecycleModuleFixture SparkLegacyModuleFixture
     SparkSiblingDependentModuleFixture)
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_MISMATCHED_MODULE_PATH="$<TARGET_FILE:SparkMismatchedModuleFixture>"
     SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>"
+    SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH="$<TARGET_FILE:SparkRegistryLifecycleModuleFixture>"
     SPARK_TEST_LEGACY_MODULE_PATH="$<TARGET_FILE:SparkLegacyModuleFixture>"
     SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH="$<TARGET_FILE:SparkSiblingDependentModuleFixture>")
 

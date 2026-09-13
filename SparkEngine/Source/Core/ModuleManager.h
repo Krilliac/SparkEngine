@@ -334,6 +334,7 @@ class ModuleManager
         bool initialized = false;
         bool isLegacyAdapter = false;                     ///< True if wrapping IGameModule
         Spark::ModuleKind kind = Spark::ModuleKind::Game; ///< Load-policy class (one Game per process)
+        std::string registrationOwner;                    ///< Unique registry owner for this module image
         std::string transientImagePath;                   ///< Shadow image removed after the module library is closed
     };
 
@@ -342,6 +343,8 @@ class ModuleManager
 
     /** @brief Unload a single module entry */
     void UnloadEntry(LoadedModule& entry);
+    /** @brief Remove host registry callbacks before an image can be unmapped. */
+    void UnregisterModuleRegistrations(const LoadedModule& entry);
 
     ModuleLifecycleRecord& FindOrCreateLifecycleRecord(std::string_view module);
 

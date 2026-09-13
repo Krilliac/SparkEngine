@@ -51,12 +51,15 @@ extern "C" BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
 namespace Spark
 {
     class SimpleConsole;
+    class InvalidStateDetector;
 }
 
 namespace Spark::Detail
 {
     // Defined in SparkConsole.cpp (statically linked into this DLL).
     void InjectConsoleInstance(SimpleConsole* instance);
+    // Defined in InvalidStateDetector.cpp (statically linked into this DLL).
+    void InjectInvalidStateDetector(InvalidStateDetector* instance);
 } // namespace Spark::Detail
 
 /**
@@ -69,6 +72,17 @@ namespace Spark::Detail
 extern "C" __declspec(dllexport) void SparkModuleInjectConsole(void* hostConsole)
 {
     Spark::Detail::InjectConsoleInstance(static_cast<Spark::SimpleConsole*>(hostConsole));
+}
+
+/**
+ * @brief Host-detector injection hook, called by ModuleManager after load.
+ *
+ * Windows modules statically link SparkEngineLib and would otherwise keep a
+ * private InvalidStateDetector singleton whose rules the host never scans.
+ */
+extern "C" __declspec(dllexport) void SparkModuleInjectInvalidStateDetector(void* hostDetector)
+{
+    Spark::Detail::InjectInvalidStateDetector(static_cast<Spark::InvalidStateDetector*>(hostDetector));
 }
 
 /**

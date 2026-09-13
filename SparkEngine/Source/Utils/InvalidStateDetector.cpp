@@ -17,6 +17,7 @@
 #include "../Engine/ECS/Components/PlacementComponents.h"
 
 #include <algorithm>
+#include <atomic>
 #include <format>
 #include <sstream>
 #include <unordered_set>
@@ -24,10 +25,42 @@
 namespace Spark
 {
 
+    namespace
+    {
+        std::atomic<InvalidStateDetector*> s_injectedDetector{nullptr};
+    }
+
     InvalidStateDetector& InvalidStateDetector::GetInstance()
     {
+        if (InvalidStateDetector* injected = s_injectedDetector.load(std::memory_order_acquire))
+            return *injected;
         static InvalidStateDetector instance;
         return instance;
+    }
+
+    void InvalidStateDetector::SetGlobalInstance(InvalidStateDetector* instance)
+    {
+        s_injectedDetector.store(instance, std::memory_order_release);
+    }
+
+    namespace Detail
+    {
+        void InjectInvalidStateDetector(InvalidStateDetector* instance)
+        {
+            InvalidStateDetector::SetGlobalInstance(instance);
+        }
+    } // namespace Detail
+
+    InvalidStateDetector::ScopedRegistrationOwner::ScopedRegistrationOwner(InvalidStateDetector& detector,
+                                                                             std::string ownerId)
+        : m_detector(detector), m_previousOwner(std::move(detector.m_registrationOwner))
+    {
+        detector.m_registrationOwner = std::move(ownerId);
+    }
+
+    InvalidStateDetector::ScopedRegistrationOwner::~ScopedRegistrationOwner()
+    {
+        m_detector.m_registrationOwner = std::move(m_previousOwner);
     }
 
     // =========================================================================
@@ -89,6 +122,8 @@ namespace Spark
 
     void InvalidStateDetector::AddRule(StateValidationRule rule)
     {
+        if (rule.ownerId.empty())
+            rule.ownerId = m_registrationOwner;
         m_rules.push_back(std::move(rule));
     }
 
@@ -98,6 +133,8 @@ namespace Spark
         {
             if (rule.name == name)
             {
+                if (!m_registrationOwner.empty() && rule.ownerId != m_registrationOwner)
+                    continue;
                 rule.enabled = enabled;
                 return;
             }
@@ -106,17 +143,29 @@ namespace Spark
 
     void InvalidStateDetector::RemoveRule(const std::string& name)
     {
-        std::erase_if(m_rules, [&](const StateValidationRule& r) { return r.name == name; });
+        std::erase_if(m_rules, [&](const StateValidationRule& r)
+                      { return r.name == name && (m_registrationOwner.empty() || r.ownerId == m_registrationOwner); });
     }
 
     void InvalidStateDetector::RemoveRulesByCategory(const std::string& category)
     {
-        std::erase_if(m_rules, [&](const StateValidationRule& r) { return r.category == category; });
+        std::erase_if(m_rules, [&](const StateValidationRule& r)
+                      { return r.category == category && (m_registrationOwner.empty() || r.ownerId == m_registrationOwner); });
+    }
+
+    size_t InvalidStateDetector::RemoveRulesByOwner(const std::string& ownerId)
+    {
+        if (ownerId.empty())
+            return 0;
+        return std::erase_if(m_rules, [&](const StateValidationRule& r) { return r.ownerId == ownerId; });
     }
 
     void InvalidStateDetector::ClearRules()
     {
-        m_rules.clear();
+        if (m_registrationOwner.empty())
+            m_rules.clear();
+        else
+            RemoveRulesByOwner(m_registrationOwner);
     }
 
     // =========================================================================

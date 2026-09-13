@@ -11,6 +11,7 @@
 #include "Spark/ModuleABI.h"
 #include "Spark/Version.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/InvalidStateDetector.h"
 #include "Utils/LocalFileCache.h"
 #include "Utils/JsonUtils.h"
 #include "Utils/Validate.h"
@@ -56,6 +57,13 @@ namespace
     void* s_imguiUserData = nullptr;
     std::mutex s_teardownLifecycleEvidenceMutex;
     ModuleManager::LifecycleEvidence s_lastTeardownLifecycleEvidence;
+    std::atomic<uint64_t> s_moduleRegistrationSerial{0};
+
+    std::string MakeModuleRegistrationOwner(std::string_view moduleName)
+    {
+        return std::string(moduleName) + "#" +
+               std::to_string(s_moduleRegistrationSerial.fetch_add(1, std::memory_order_relaxed));
+    }
 
     void AccumulateLifecycleEvidence(ModuleManager::LifecycleEvidence& target,
                                      const ModuleManager::LifecycleEvidence& source)
@@ -826,6 +834,13 @@ bool ModuleManager::LoadModule(const std::string& path)
         inject(&Spark::SimpleConsole::GetInstance());
     }
 
+    using InjectInvalidStateDetectorFn = void (*)(void*);
+    if (auto injectDetector = reinterpret_cast<InjectInvalidStateDetectorFn>(
+            GetProcAddress(static_cast<HMODULE>(handle), "SparkModuleInjectInvalidStateDetector")))
+    {
+        injectDetector(&Spark::InvalidStateDetector::GetInstance());
+    }
+
     // Inject the host EngineContext the same way. SparkEngineLib is a static lib
     // linked into every module DLL, so the module's g_engineContext global is a
     // per-image copy that is null inside the module — EngineContext::Get() there
@@ -930,6 +945,7 @@ bool ModuleManager::LoadModule(const std::string& path)
         entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = false;
         entry.kind = info.kind;
+        entry.registrationOwner = MakeModuleRegistrationOwner(info.name);
 #ifndef _WIN32
         entry.transientImagePath = PathToUtf8(stagedImage.Get());
 #endif
@@ -1010,6 +1026,7 @@ bool ModuleManager::LoadModule(const std::string& path)
         entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = true;
         entry.kind = Spark::ModuleKind::Game;
+        entry.registrationOwner = MakeModuleRegistrationOwner(info.name);
 #ifndef _WIN32
         entry.transientImagePath = PathToUtf8(stagedImage.Get());
 #endif
@@ -1302,6 +1319,9 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
 
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Initializing module: %s", entry.name.c_str());
         console.LogInfo("Initializing module: " + entry.name);
+        Spark::SimpleConsole::ScopedRegistrationOwner consoleOwner(console, entry.registrationOwner);
+        auto& detector = Spark::InvalidStateDetector::GetInstance();
+        Spark::InvalidStateDetector::ScopedRegistrationOwner detectorOwner(detector, entry.registrationOwner);
         if (entry.instance->OnLoad(context))
         {
             // A manager lifetime owns fresh evidence. Clear same-name records
@@ -1353,6 +1373,7 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
             }
             entry.instance = nullptr;
             entry.destroyFn = nullptr;
+            UnregisterModuleRegistrations(entry);
         }
     }
 
@@ -1508,20 +1529,15 @@ void ModuleManager::ShutdownAllAfterPreflight()
         if (it->initialized && it->instance)
         {
             console.LogInfo("Shutting down module: " + it->name);
+            Spark::SimpleConsole::ScopedRegistrationOwner consoleOwner(console, it->registrationOwner);
+            auto& detector = Spark::InvalidStateDetector::GetInstance();
+            Spark::InvalidStateDetector::ScopedRegistrationOwner detectorOwner(detector, it->registrationOwner);
             it->instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
             if (!it->isLegacyAdapter)
                 ++FindOrCreateLifecycleRecord(it->name).onUnload;
             it->initialized = false;
-            // Console handlers a module registered under its own id live in the
-            // host registry and outlive the DLL unless the host drops them. The
-            // module id is the owner token every SDK module registers with.
-            const size_t removed = console.UnregisterCommandsByOwner(it->name);
-            if (removed != 0)
-            {
-                SPARK_LOG_INFO(Spark::LogCategory::Core, "Removed %zu console command(s) owned by module '%s'", removed,
-                               it->name.c_str());
-            }
+            UnregisterModuleRegistrations(*it);
         }
     }
 }
@@ -1664,16 +1680,9 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
             }
         }
 
-        // Drop the outgoing module's console commands before the replacement's
-        // OnLoad runs. They are host-registry entries pointing into an image that
-        // the swap below unmaps, and doing it after the swap would delete the
-        // replacement's own registrations instead: it re-registers under the same
-        // owner token, so the two sets are indistinguishable by then.
-        const size_t removedCommands = console.UnregisterCommandsByOwner(name);
-
         // Initialize the replacement before touching the working instance. A
         // failed OnLoad is cleaned up by InitializeAll and leaves the old
-        // module, including its in-memory state, intact.
+        // module, including its in-memory state and registry callbacks, intact.
         stagedManager.InitializeAll(context);
         AccumulateLifecycleEvidence(m_lifecycleEvidence, stagedManager.m_lifecycleEvidence);
         stagedManager.m_lifecycleEvidence = {};
@@ -1681,12 +1690,6 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         {
             stagedManager.UnloadAll();
             removeShadowFiles();
-            if (removedCommands != 0)
-            {
-                console.LogWarning("Console commands owned by '" + name +
-                                   "' were removed for the reload and the preserved module cannot re-register them; "
-                                   "reload again once the module is fixed");
-            }
             return failReload("Staged replacement initialization failed; preserving module: " + name);
         }
 
@@ -1707,11 +1710,15 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         // Commit only after the replacement is fully usable.
         if (entry.initialized && entry.instance)
         {
+            Spark::SimpleConsole::ScopedRegistrationOwner consoleOwner(console, entry.registrationOwner);
+            auto& detector = Spark::InvalidStateDetector::GetInstance();
+            Spark::InvalidStateDetector::ScopedRegistrationOwner detectorOwner(detector, entry.registrationOwner);
             entry.instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
             if (!entry.isLegacyAdapter)
                 ++FindOrCreateLifecycleRecord(entry.name).onUnload;
         }
+        UnregisterModuleRegistrations(entry);
         UnloadEntry(entry);
         m_modules[index] = std::move(replacement);
         auto& faultIsolator = Spark::SubsystemFaultIsolator::GetInstance();
@@ -1747,7 +1754,7 @@ void ModuleManager::UnloadAll()
         // A module whose OnLoad failed after registering commands still has
         // handlers in the host console; the image is about to be unmapped, so
         // drop them before the code they point at disappears.
-        Spark::SimpleConsole::GetInstance().UnregisterCommandsByOwner(entry->name);
+        UnregisterModuleRegistrations(*entry);
         UnloadEntry(*entry);
         entry = m_modules.erase(entry);
     }
@@ -1897,6 +1904,22 @@ void ModuleManager::SortModules()
     }
 
     m_modules = std::move(sorted);
+}
+
+void ModuleManager::UnregisterModuleRegistrations(const LoadedModule& entry)
+{
+    if (entry.registrationOwner.empty())
+        return;
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const size_t removedCommands = console.UnregisterCommandsByOwner(entry.registrationOwner);
+    const size_t removedRules = Spark::InvalidStateDetector::GetInstance().RemoveRulesByOwner(entry.registrationOwner);
+    if (removedCommands != 0 || removedRules != 0)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core,
+                       "Removed %zu console command(s) and %zu invalid-state rule(s) owned by module '%s'",
+                       removedCommands, removedRules, entry.name.c_str());
+    }
 }
 
 void ModuleManager::UnloadEntry(LoadedModule& entry)
