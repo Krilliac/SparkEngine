@@ -281,6 +281,10 @@ def run_snapshot(root: Path, tracked_manifest: Path, sha: str, committed_at: str
         "SPARKENGINE_DOC_SOURCE_SHA": sha,
         "SPARKENGINE_DOC_SOURCE_COMMITTED_AT": committed_at,
         "GENERATED_DATE": source_commit_utc_date(committed_at),
+        # The API generator imports repository modules.  Prevent Python from
+        # leaving __pycache__ files in the isolated snapshot, where they would
+        # look like undeclared generated documentation output.
+        "PYTHONDONTWRITEBYTECODE": "1",
         "SPARK_DOC_HEALTH_OUTPUT": str(root / "docs" / ".health.json"),
         "SPARK_DOC_HEALTH_INNER": "1",
     })

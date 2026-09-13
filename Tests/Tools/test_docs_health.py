@@ -292,6 +292,10 @@ class DocsGenerationHostileTests(unittest.TestCase):
             [environment.get("GENERATED_DATE") for environment in environments],
             ["2026-09-01", "2026-09-01", "2026-09-01"],
         )
+        self.assertEqual(
+            {environment.get("PYTHONDONTWRITEBYTECODE") for environment in environments},
+            {"1"},
+        )
 
     def test_bounded_process_timeout_terminates_descendants_promptly(self) -> None:
         child = (
