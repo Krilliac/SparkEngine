@@ -902,6 +902,25 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
         self.assertEqual(len(api.patch_calls), 0)
 
     @patch("subprocess.run")
+    def test_blocks_on_asset_drift_after_other_preflight_checks(self, mock_run):
+        """A release changed during preflight must not reach the publication PATCH."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{SHA}\trefs/tags/{RELEASE_TAG}\n"
+        )
+        api = FakeApi()
+        original_fetch = api.fetch
+
+        def mutate_after_working_check(url, token):
+            if url.endswith("/commits/Working"):
+                api.assets[0]["digest"] = "sha256:" + "f" * 64
+            return original_fetch(url, token)
+
+        api.fetch = mutate_after_working_check
+        with self.assertRaisesRegex(MODULE.GateError, "digest mismatch"):
+            self._run_gate(api)
+        self.assertEqual(api.patch_calls, [])
+
+    @patch("subprocess.run")
     def test_blocks_on_non_draft(self, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0, stdout=f"{SHA}\trefs/tags/{RELEASE_TAG}\n"

@@ -529,6 +529,13 @@ def acceptance_gate(
     verify_tag(token, release_tag, target_sha)
     verify_ci_gate(api_url, token, repository, target_sha)
     verify_working(api_url, token, repository, target_sha)
+    # The checks above can take several API round trips. Re-read the mutable
+    # release boundary immediately before publication so a concurrent asset or
+    # visibility change cannot rely on the earlier stale snapshot.
+    verify_draft_release(
+        api_url, token, repository, release_id, release_tag, is_versioned,
+        expected_names, expected_digests,
+    )
 
     patch_body: dict[str, Any] = {"draft": False}
     if is_versioned:
