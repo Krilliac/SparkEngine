@@ -2066,7 +2066,7 @@
 | `JumpPadObject` | class | GameModules | [InteractiveObject.h:L282](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L282) | Jump pad that launches the player upward |
 | `Key` | struct | SparkDaemon | [AssetService.h:L80](../../SparkDaemon/src/AssetService.h#L80) |  |
 | `Key` | struct | SparkDaemon | [ShaderService.h:L90](../../SparkDaemon/src/ShaderService.h#L90) |  |
-| `KeyFileAuthenticator` | class | SparkGateway | [GatewaySecurity.h:L33](../../SparkGateway/src/GatewaySecurity.h#L33) |  |
+| `KeyFileAuthenticator` | class | SparkGateway | [GatewaySecurity.h:L34](../../SparkGateway/src/GatewaySecurity.h#L34) |  |
 | `Keyframe` | struct | SparkEngine | [AssetPipeline.h:L117](../../SparkEngine/Source/Graphics/AssetPipeline.h#L117) | Animation data structure |
 | `KeyHash` | struct | SparkDaemon | [AssetService.h:L91](../../SparkDaemon/src/AssetService.h#L91) |  |
 | `KeyHash` | struct | SparkDaemon | [ShaderService.h:L102](../../SparkDaemon/src/ShaderService.h#L102) |  |
