@@ -1639,6 +1639,17 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
             return failReload("Staged replacement identity does not match module: " + name);
         }
 
+        // The replacement image is the code that will own the live process
+        // after the swap. It must make the same transactional-hot-reload
+        // promise as the outgoing image; otherwise an updated module can
+        // silently opt into a lifecycle it explicitly declared unsafe.
+        if (!stagedManager.m_modules.front().instance->SupportsHotReload())
+        {
+            stagedManager.UnloadAll();
+            removeShadowFiles();
+            return failReload("Staged replacement does not support transactional hot reload: " + name);
+        }
+
         const Spark::ModuleKind replacementKind = stagedManager.m_modules.front().kind;
         if (replacementKind == Spark::ModuleKind::Game)
         {

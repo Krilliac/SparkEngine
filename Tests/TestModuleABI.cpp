@@ -156,6 +156,18 @@ namespace
 #endif
     }
 
+    void SetSupportsHotReloadEnvironment(bool enabled)
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_MODULE_ABI_VETO_HOT_RELOAD", enabled ? "1" : "");
+#else
+        if (enabled)
+            setenv("SPARK_MODULE_ABI_VETO_HOT_RELOAD", "1", 1);
+        else
+            unsetenv("SPARK_MODULE_ABI_VETO_HOT_RELOAD");
+#endif
+    }
+
 #ifndef _WIN32
     size_t CountStagedModuleImages(const std::filesystem::path& source)
     {
@@ -503,6 +515,35 @@ TEST(ModuleABI_UnloadVetoPreservesInitializedWorkingModule)
 
     SetVetoUnloadEnvironment(false);
     EXPECT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    RemoveModuleCopy(modulePath);
+}
+
+TEST(ModuleABI_ReplacementHotReloadVetoPreservesInitializedWorkingModule)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkReplacementHotReloadVetoModule");
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(modulePath.string()));
+    manager.InitializeAll(&context);
+
+    Spark::IModule* const workingInstance = manager.GetModule("Spark Compatible ABI Fixture");
+    ASSERT_TRUE(workingInstance != nullptr);
+
+    // The already-loaded image captured the allow decision at construction.
+    // Only the staged replacement sees this veto, so the test covers the
+    // replacement-side contract rather than the existing-image preflight.
+    SetSupportsHotReloadEnvironment(true);
+    const bool reloadSucceeded = manager.ReloadModule("Spark Compatible ABI Fixture", &context);
+    SetSupportsHotReloadEnvironment(false);
+
+    EXPECT_FALSE(reloadSucceeded);
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "replacement");
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "hot reload");
+    EXPECT_TRUE(manager.GetModule("Spark Compatible ABI Fixture") == workingInstance);
+    EXPECT_TRUE(manager.HasInitializedModules());
+
+    manager.ShutdownAll();
     manager.UnloadAll();
     RemoveModuleCopy(modulePath);
 }

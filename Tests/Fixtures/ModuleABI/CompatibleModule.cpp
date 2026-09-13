@@ -33,6 +33,12 @@ namespace
     class CompatibleModule final : public Spark::IModule
     {
       public:
+        CompatibleModule()
+        {
+            const char* vetoHotReload = std::getenv("SPARK_MODULE_ABI_VETO_HOT_RELOAD");
+            m_supportsHotReload = !vetoHotReload || vetoHotReload[0] == '\0';
+        }
+
         Spark::ModuleInfo GetModuleInfo() const override
         {
             Spark::ModuleInfo info{};
@@ -54,7 +60,11 @@ namespace
             const char* vetoUnload = std::getenv("SPARK_MODULE_ABI_VETO_UNLOAD");
             return !vetoUnload || vetoUnload[0] == '\0';
         }
+        bool SupportsHotReload() const override { return m_supportsHotReload; }
         void OnUpdate(float) override {}
+
+      private:
+        bool m_supportsHotReload = true;
     };
 } // namespace
 
