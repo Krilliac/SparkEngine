@@ -1360,7 +1360,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1703,
+      "line": 1727,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -5765,7 +5765,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 30,
+    "jobCount": 31,
     "jobs": [
       {
         "id": "fuzz-policy",
@@ -6624,6 +6624,59 @@
             "hasRun": true,
             "env": [],
             "runDigest": "d7a7780b5f1ef6cd"
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
+      {
+        "id": "license-compliance",
+        "name": "License compliance",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": "absent",
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
+        "stepCount": 2,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Run legal contract validator",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "f02b79ae5aa2aa33"
           }
         ],
         "envNames": [],
@@ -9727,6 +9780,7 @@
           "validate-ops100",
           "check-thirdparty-manifest",
           "check-supply-chain",
+          "license-compliance",
           "build-linux-asan",
           "build-linux-tsan",
           "telemetry-integration",
@@ -10377,6 +10431,7 @@
           "validate-ops100",
           "check-thirdparty-manifest",
           "check-supply-chain",
+          "license-compliance",
           "build-linux-asan",
           "build-linux-tsan",
           "telemetry-integration",
@@ -14815,8 +14870,8 @@
       }
     ],
     "summary": {
-      "jobCount": 30,
-      "matrixLegCount": 38,
+      "jobCount": 31,
+      "matrixLegCount": 39,
       "pathFilteredEventCount": 0,
       "configureCount": 26,
       "buildCount": 26,
@@ -14824,7 +14879,7 @@
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,
-      "blockingJobCount": 22,
+      "blockingJobCount": 23,
       "advisoryJobCount": 3,
       "conditionalJobCount": 5,
       "builtOsConfigurationPairs": [

@@ -112,7 +112,7 @@
       "wave": 6,
       "area": "governance",
       "owner": "unassigned",
-      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, and the audited public surfaces now use source-available terminology. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.",
+      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, the audited public surfaces now use source-available terminology, and build.yml now runs the legal validator in a required license-compliance job. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.",
       "dependencies": [
         "RDY-000",
         "SEC-110",
@@ -194,7 +194,6 @@
         "stable-v1": "shared"
       },
       "plannedCiJobs": [
-        "license-compliance"
       ],
       "plannedTestSelectors": [
         "LicenseInventory_*",

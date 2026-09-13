@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321819 |
+| **SparkEngine/Source** | 321579 |
 | **SparkEditor/Source** | 103612 |
 | **GameModules** | 142616 |
 | **External services** | 11283 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 184004 |
+| **Tests** | 184068 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~780118** |
+| **Total C++ (excl. ThirdParty)** | **~779942** |
 
 ### File Counts
 
@@ -43,10 +43,10 @@ Graphics contains 121219 lines, or 37% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 121219 | 37.6% |
-| Engine (all subsystems) | 89149 | 27.7% |
-| Utils | 46331 | 14.3% |
+| Engine (all subsystems) | 89164 | 27.7% |
+| Utils | 46067 | 14.3% |
 | Core | 31185 | 9.6% |
-| Physics | 10799 | 3.3% |
+| Physics | 10808 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
 | SceneManager | 2627 | 0.8% |
@@ -64,7 +64,7 @@ Graphics contains 121219 lines, or 37% of `SparkEngine/Source`. This is a source
 | Gameplay | 7925 |
 | Animation | 6876 |
 | Scripting | 5096 |
-| SaveSystem | 3718 |
+| SaveSystem | 3733 |
 | UI | 2522 |
 | Streaming | 2123 |
 | Editor | 1737 |
@@ -110,7 +110,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 605 |
-| TEST() definitions | 7358 |
+| TEST() definitions | 7359 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -156,10 +156,10 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `SaveSystem.cpp` | 2354 |
-| `CrashHandler.cpp` | 2282 |
+| `SaveSystem.cpp` | 2369 |
 | `OpenGLDevice.cpp` | 2160 |
 | `ModuleManager.cpp` | 2089 |
+| `CrashHandler.cpp` | 2018 |
 | `VulkanDevice.cpp` | 1991 |
 | `D3D11Device.cpp` | 1991 |
 | `EngineSettings.cpp` | 1849 |

@@ -108,7 +108,14 @@ endif()
 
 file(REAL_PATH "${_spark_package_root_normalized}" _spark_package_root_real)
 if(CMAKE_HOST_WIN32)
-    string(TOLOWER "${_spark_package_root_normalized}" _spark_package_root_compare)
+    # The bounded native reparse probe above has already established that this
+    # directory and its fixed package children do not cross a reparse point.
+    # REAL_PATH may still expand a harmless Windows 8.3 alias (for example
+    # RUNNER~1) to its long spelling; use that canonical spelling for all
+    # subsequent child checks instead of treating short-name normalization as
+    # a symlink traversal.
+    set(_spark_package_root_normalized "${_spark_package_root_real}")
+    string(TOLOWER "${_spark_package_root_real}" _spark_package_root_compare)
     string(TOLOWER "${_spark_package_root_real}" _spark_package_root_real_compare)
 else()
     set(_spark_package_root_compare "${_spark_package_root_normalized}")

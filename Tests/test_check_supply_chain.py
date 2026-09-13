@@ -95,6 +95,7 @@ CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 LOCK_SKELETON = {
     "version": 2,
     "description": "fixture lockfile",
+    "exceptions": [],
     "submodule_gitlinks": {},
     "managed_vendored_dirs": ["ThirdParty/Utils/demo"],
     "project_owned_dirs": {
@@ -952,6 +953,89 @@ class TestGitmodulesReconciliation(FakeRepoCase):
         self.assert_violation("declares no path")
 
 
+class TestExceptionSchema(FakeRepoCase):
+
+    @staticmethod
+    def _exception(**overrides: str) -> dict[str, str]:
+        record = {
+            "id": "SEC-110-EX-001",
+            "scope": "dependency-policy",
+            "owner": "supply-chain-maintainer",
+            "justification": "Temporary scanner exception is tracked for review.",
+            "expires": "2099-12-31",
+        }
+        record.update(overrides)
+        return record
+
+    def test_expired_exception_is_a_policy_violation(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(expires="2000-01-01")]
+        self.set_lock(data)
+        self.assert_violation("expired", "SEC-110-EX-001")
+
+    def test_missing_exception_owner_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        record = self._exception()
+        del record["owner"]
+        data["exceptions"] = [record]
+        self.set_lock(data)
+        self.assert_fatal("owner")
+
+    def test_placeholder_exception_owner_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(owner="unassigned")]
+        self.set_lock(data)
+        self.assert_fatal("owned")
+
+    def test_malformed_exception_expiry_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(expires="2099-02-29")]
+        self.set_lock(data)
+        self.assert_fatal("expires")
+
+    def test_duplicate_exception_ids_are_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(), self._exception(scope="other")]
+        self.set_lock(data)
+        self.assert_fatal("duplicate")
+
+    def test_unknown_exception_fields_are_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(severity="high")]
+        self.set_lock(data)
+        self.assert_fatal("fields")
+
+    def test_exception_collection_is_required(self) -> None:
+        data = self.lock()
+        data.pop("exceptions", None)
+        self.set_lock(data)
+        self.assert_fatal("exceptions")
+
+    def test_short_exception_justification_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(justification="temporary")]
+        self.set_lock(data)
+        self.assert_fatal("justification")
+
+    def test_case_variant_exception_ids_are_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [
+            self._exception(),
+            self._exception(id="sec-110-ex-001", scope="other"),
+        ]
+        self.set_lock(data)
+        self.assert_fatal("duplicate")
+
+    def test_exception_collection_is_bounded(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [
+            self._exception(id=f"SEC-110-EX-{index:03d}")
+            for index in range(257)
+        ]
+        self.set_lock(data)
+        self.assert_fatal("MAX_EXCEPTIONS")
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Sentinel integrity
 # ═══════════════════════════════════════════════════════════════════════
@@ -1150,6 +1234,7 @@ class TestSchemaValidation(unittest.TestCase):
         base = {
             "version": 2,
             "description": "test",
+            "exceptions": [],
             "submodule_gitlinks": {},
             "managed_vendored_dirs": [],
             "project_owned_dirs": {},

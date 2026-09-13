@@ -639,7 +639,7 @@
 | `KillcamNotifyFn` | alias | GameModules | [TFDeathRecap.h:L80](../../GameModules/SparkGameMMOFPS/Source/UI/TFDeathRecap.h#L80) |  |
 | `LanBroadcastSocketFactory` | alias | SparkEngine | [DedicatedServer.h:L189](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L189) | Immutable state consumed by one LAN broadcast iteration. |
 | `LayerEvalFunc` | alias | SparkEngine | [CpuNeuralInference.cpp:L32](../../SparkEngine/Source/Graphics/Neural/CpuNeuralInference.cpp#L32) |  |
-| `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1093](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1093) |  |
+| `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1135](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1135) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L102](../../Tests/TestTypeTraits.cpp#L102) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L114](../../Tests/TestTypeTraits.cpp#L114) |  |
 | `LoadCompletionCallback` | alias | SparkEngine | [DirectStorageLoader.h:L66](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L66) | Callback invoked when a load completes |
@@ -730,7 +730,7 @@
 | `NotifyCallback` | alias | SparkEngine | [AnimNotify.h:L142](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L142) | Manages animation notifies across all clips |
 | `NotifyReboundFn` | alias | SparkEngine | [Reflection.h:L300](../../SparkEngine/Source/Core/Reflection.h#L300) |  |
 | `NS` | alias | SparkEngine | [EngineSettings.cpp:L211](../../SparkEngine/Source/Core/EngineSettings.cpp#L211) |  |
-| `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L223](../../SparkEngine/Source/Utils/CrashHandler.cpp#L223) |  |
+| `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L227](../../SparkEngine/Source/Utils/CrashHandler.cpp#L227) |  |
 | `ObjectID` | alias | SparkEditor | [SceneFileTypes.h:L38](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L38) | Unique identifier for scene objects |
 | `ObjectKeys` | alias | GameModules | [TFSocialSystemStore.cpp:L43](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp#L43) |  |
 | `ObjectType` | alias | SparkEngine | [JsonUtils.h:L99](../../SparkEngine/Source/Utils/JsonUtils.h#L99) | A JSON value that can be null, bool, number, string, array, or object. |
@@ -839,7 +839,7 @@
 | `RHIShaderHandle` | alias | SparkEngine | [RHITypes.h:L452](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L452) |  |
 | `RHITextureHandle` | alias | SparkEngine | [RHITypes.h:L451](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L451) |  |
 | `RS` | alias | SparkEngine | [EngineSettings.cpp:L102](../../SparkEngine/Source/Core/EngineSettings.cpp#L102) |  |
-| `RtlDllShutdownInProgressFn` | alias | SparkEngine | [CrashHandler.cpp:L872](../../SparkEngine/Source/Utils/CrashHandler.cpp#L872) |  |
+| `RtlDllShutdownInProgressFn` | alias | SparkEngine | [CrashHandler.cpp:L787](../../SparkEngine/Source/Utils/CrashHandler.cpp#L787) |  |
 | `S_FALSE` | macro | SparkEngine | [PlatformTypes.h:L62](../../SparkEngine/Source/Core/PlatformTypes.h#L62) |  |
 | `S_OK` | macro | SparkEngine | [PlatformTypes.h:L59](../../SparkEngine/Source/Core/PlatformTypes.h#L59) |  |
 | `SamplerHandle` | alias | SparkEngine | [RHIHandlePool.h:L100](../../SparkEngine/Source/Graphics/RHI/RHIHandlePool.h#L100) |  |

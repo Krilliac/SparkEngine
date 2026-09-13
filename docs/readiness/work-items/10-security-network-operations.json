@@ -97,7 +97,7 @@
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open.",
+      "rationale": "Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. 2026-09-13 progress: the supply-chain lock now requires a bounded, case-insensitive-unique, non-waiving exception schema with named owners, valid expiries, adversarial tests, and required legal-compliance CI wiring. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open.",
       "dependencies": [
         "CI-100"
       ],
@@ -628,7 +628,7 @@
       "wave": 1,
       "area": "operations",
       "owner": "unassigned",
-      "rationale": "Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. 2026-09-12 progress: crash-upload proxy and FTP endpoint logs now retain only scheme and host, with Dropbox capability URLs fully redacted; production-linked regressions cover credentials, paths, queries, fragments, malformed URLs, and bearer data. OPS-100 remains open because networking/CURL builds retain a legacy in-process direct-upload configuration with reusable credentials, and controlled relay delivery, scoped authorization, release symbolication, privacy/retention review, and exact-SHA crash evidence are absent.",
+      "rationale": "Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. 2026-09-12 progress: crash-upload proxy and FTP endpoint logs now retain only scheme and host, with Dropbox capability URLs fully redacted; production-linked regressions cover credentials, paths, queries, fragments, malformed URLs, and bearer data. 2026-09-13 progress: CrashHandler no longer invokes the legacy in-process uploader or archive/consent fallback; it always publishes a local manifest and launches the read-only reporter for interactive processes, with a source-policy regression. OPS-100 remains open because the standalone uploader/configuration compatibility surface, controlled relay delivery, scoped authorization, release symbolication, privacy/retention review, and exact-SHA crash evidence are absent.",
       "dependencies": [],
       "parallelWith": [
         "SEC-100",

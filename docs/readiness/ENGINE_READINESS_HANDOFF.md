@@ -1337,7 +1337,7 @@ ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure --no-te
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open.
+Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. 2026-09-13 progress: the supply-chain lock now requires a bounded, case-insensitive-unique, non-waiving exception schema with named owners, valid expiries, adversarial tests, and required legal-compliance CI wiring. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open.
 
 **Dependency contract**
 
@@ -1507,7 +1507,7 @@ ctest --test-dir build/linux-fuzz -L fuzz-smoke --output-on-failure --no-tests=e
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** operations · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. 2026-09-12 progress: crash-upload proxy and FTP endpoint logs now retain only scheme and host, with Dropbox capability URLs fully redacted; production-linked regressions cover credentials, paths, queries, fragments, malformed URLs, and bearer data. OPS-100 remains open because networking/CURL builds retain a legacy in-process direct-upload configuration with reusable credentials, and controlled relay delivery, scoped authorization, release symbolication, privacy/retention review, and exact-SHA crash evidence are absent.
+Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. 2026-09-12 progress: crash-upload proxy and FTP endpoint logs now retain only scheme and host, with Dropbox capability URLs fully redacted; production-linked regressions cover credentials, paths, queries, fragments, malformed URLs, and bearer data. 2026-09-13 progress: CrashHandler no longer invokes the legacy in-process uploader or archive/consent fallback; it always publishes a local manifest and launches the read-only reporter for interactive processes, with a source-policy regression. OPS-100 remains open because the standalone uploader/configuration compatibility surface, controlled relay delivery, scoped authorization, release symbolication, privacy/retention review, and exact-SHA crash evidence are absent.
 
 **Dependency contract**
 
@@ -4695,7 +4695,7 @@ ctest --test-dir build/windows-shipping -L gltf-d3d11 --output-on-failure --no-t
 **Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** governance · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, and the audited public surfaces now use source-available terminology. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.
+The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, the audited public surfaces now use source-available terminology, and build.yml now runs the legal validator in a required license-compliance job. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.
 
 **Dependency contract**
 

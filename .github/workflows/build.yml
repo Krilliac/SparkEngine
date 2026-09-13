@@ -468,6 +468,20 @@ jobs:
     - name: Supply-chain adversarial tests
       run: python3 -m unittest Tests.test_check_supply_chain -v
 
+  license-compliance:
+    name: "License compliance"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Run legal contract validator
+      run: |
+        set -euo pipefail
+        timeout 3m python3 tools/site-data/validate.py --legal
+
   # ===========================================================================
   # Linux Build — GCC with AddressSanitizer + UBSan + LSan
   # ===========================================================================
@@ -3221,6 +3235,7 @@ jobs:
       - validate-ops100
       - check-thirdparty-manifest
       - check-supply-chain
+      - license-compliance
       - build-linux-asan
       - build-linux-tsan
       - telemetry-integration
@@ -3634,6 +3649,7 @@ jobs:
       - validate-ops100
       - check-thirdparty-manifest
       - check-supply-chain
+      - license-compliance
       - build-linux-asan
       - build-linux-tsan
       - telemetry-integration
@@ -3658,6 +3674,6 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py

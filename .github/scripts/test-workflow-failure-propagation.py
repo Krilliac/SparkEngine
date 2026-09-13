@@ -45,6 +45,7 @@ REQUIRED_CI_JOBS = (
     "validate-ops100",
     "check-thirdparty-manifest",
     "check-supply-chain",
+    "license-compliance",
     "build-linux-asan",
     "build-linux-tsan",
     "telemetry-integration",
@@ -1118,6 +1119,36 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         )
         enforced_jobs = json.loads(verifier["env"]["EXPECTED_REQUIRED_JOBS_JSON"])
         self.assertEqual(enforced_jobs, declared_jobs)
+
+    def test_license_compliance_job_is_required_and_fail_closed(self) -> None:
+        document = parse_workflow_yaml(self.build)
+        job = document["jobs"].get("license-compliance")
+        self.assertIsInstance(job, dict)
+        assert isinstance(job, dict)
+        report = document["jobs"]["report-ci-errors"]
+        self.assertIn("license-compliance", report["needs"])
+        self.assertEqual(job.get("runs-on"), "ubuntu-24.04")
+        self.assertEqual(job.get("permissions"), {"contents": "read"})
+        self.assertNotIn("if", job)
+        self.assertNotIn("continue-on-error", job)
+
+        steps = job.get("steps")
+        self.assertIsInstance(steps, list)
+        assert isinstance(steps, list)
+        legal_steps = [
+            step
+            for step in steps
+            if isinstance(step, dict) and step.get("name") == "Run legal contract validator"
+        ]
+        self.assertEqual(len(legal_steps), 1)
+        legal_step = legal_steps[0]
+        self.assertNotIn("if", legal_step)
+        self.assertNotIn("continue-on-error", legal_step)
+        self.assertEqual(
+            str(legal_step.get("run", "")).strip(),
+            "set -euo pipefail\ntimeout 3m python3 tools/site-data/validate.py --legal",
+        )
+        self.assertNotIn("|| true", str(legal_step.get("run", "")))
 
     def test_release_workflow_is_yaml_parseable(self) -> None:
         document = yaml.safe_load(self.release)

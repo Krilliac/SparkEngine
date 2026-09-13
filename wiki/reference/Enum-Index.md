@@ -185,7 +185,7 @@
 | `CraftingDiscipline` | enum | GameModules | [MMOEnums.h:L73](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L73) | Crafting skill disciplines |
 | `CraftingStation` | enum | GameModules | [MMOEnums.h:L59](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L59) | Crafting station types required for recipes |
 | `CraftState` | enum | SparkEngine | [LootAndCraftingSystem.h:L266](../../SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h#L266) | State of an in-progress craft |
-| `CrashReportDelivery` | enum | SparkEngine | [CrashHandler.cpp:L580](../../SparkEngine/Source/Utils/CrashHandler.cpp#L580) |  |
+| `CrashReportDelivery` | enum | SparkEngine | [CrashHandler.cpp:L497](../../SparkEngine/Source/Utils/CrashHandler.cpp#L497) |  |
 | `CrosshairStyle` | enum | GameModules | [HUDSystem.h:L33](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L33) | Crosshair style options |
 | `CSGOperation` | enum | SparkEngine | [CSGSystem.h:L80](../../SparkEngine/Source/Engine/LevelDesign/CSGSystem.h#L80) | Boolean operation types |
 | `CullMode` | enum | SparkEditor | [RenderingEnums.h:L84](../../SparkEditor/Source/Enums/RenderingEnums.h#L84) | Cull modes |

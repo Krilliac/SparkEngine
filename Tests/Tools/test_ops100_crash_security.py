@@ -6,6 +6,7 @@ import importlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -61,6 +62,17 @@ class CrashSecurityTests(unittest.TestCase):
             "kMaxCrashLogBytes = 8 * 1024 * 1024",
         ):
             self.assertIn(declaration, source)
+
+    def test_crash_handler_has_no_in_process_transport_fallback(self) -> None:
+        source = (ROOT / "SparkEngine" / "Source" / "Utils" / "CrashHandler.cpp").read_text(encoding="utf-8")
+        self.assertNotIn('"Utils/CrashReportUploader.h"', source)
+        self.assertNotRegex(source, re.compile(r"\bUploadCrashReport\s*\("))
+        self.assertNotIn("Reporter-unavailable fallback", source)
+        self.assertNotIn(
+            "ShouldLaunchReadOnlyReporter(g_cfg.enableCrashReporting, g_cfg.headlessMode)",
+            source,
+        )
+        self.assertIn("if (!g_cfg.headlessMode)", source)
 
     def test_missing_referenced_log_is_fatal(self) -> None:
         manifest = self.write_manifest({"logFile": "missing.log"})

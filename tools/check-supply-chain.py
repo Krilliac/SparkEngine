@@ -31,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import hashlib
 import json
 import os
@@ -82,6 +83,7 @@ MAX_WALK_DEPTH = 24
 MAX_WORKFLOW_FILES = 512
 MAX_ACTION_PIN_KEYS = 512
 MAX_ACTION_PIN_SHAS = 32
+MAX_EXCEPTIONS = 256
 MAX_VIOLATIONS = 500
 
 MIN_LICENSE_SIZE = 200
@@ -125,6 +127,10 @@ MANIFEST_FIELD_COUNT = 10
 ) = range(MANIFEST_FIELD_COUNT)
 
 VALID_SEVERITIES = frozenset({"ERROR", "WARN"})
+EXCEPTION_FIELDS = frozenset({"id", "scope", "owner", "justification", "expires"})
+EXCEPTION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
+EXCEPTION_SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{1,127}$")
+EXCEPTION_PLACEHOLDER_OWNERS = frozenset({"", "none", "n/a", "tbd", "todo", "unknown", "unassigned"})
 
 
 def _fatal(msg: str) -> None:
@@ -611,6 +617,67 @@ def validate_lockfile_schema(data: dict[str, Any]) -> None:
         for sha in shas:
             if not isinstance(sha, str) or not SHA40_HEX_RE.match(sha):
                 _fatal(f"action_pins[{repo!r}]: invalid SHA: {sha!r}")
+
+    exceptions = data.get("exceptions")
+    if not isinstance(exceptions, list):
+        _fatal("lockfile missing or invalid list field: exceptions")
+    if len(exceptions) > MAX_EXCEPTIONS:
+        _fatal(f"exception count exceeds MAX_EXCEPTIONS ({MAX_EXCEPTIONS})")
+
+    seen_ids: set[str] = set()
+    for index, exception in enumerate(exceptions):
+        label = f"exceptions[{index}]"
+        if not isinstance(exception, dict):
+            _fatal(f"{label}: entry must be an object")
+        missing = sorted(EXCEPTION_FIELDS - exception.keys())
+        unknown = sorted(exception.keys() - EXCEPTION_FIELDS)
+        if missing or unknown:
+            _fatal(f"{label}: invalid fields; missing={missing}, unknown={unknown}")
+
+        exception_id = exception["id"]
+        if not isinstance(exception_id, str) or not EXCEPTION_ID_RE.fullmatch(exception_id):
+            _fatal(f"{label}.id: invalid exception id: {exception_id!r}")
+        normalized_id = exception_id.casefold()
+        if normalized_id in seen_ids:
+            _fatal(f"{label}: duplicate exception id: {exception_id!r}")
+        seen_ids.add(normalized_id)
+
+        scope = exception["scope"]
+        if not isinstance(scope, str) or not EXCEPTION_SCOPE_RE.fullmatch(scope):
+            _fatal(f"{label}.scope: invalid exception scope: {scope!r}")
+
+        owner = exception["owner"]
+        if (not isinstance(owner, str) or not owner.strip() or
+                owner.strip().casefold() in EXCEPTION_PLACEHOLDER_OWNERS):
+            _fatal(f"{label}.owner: exception must be owned by a named maintainer")
+        if len(owner.strip()) > 128:
+            _fatal(f"{label}.owner: owner is too long")
+
+        justification = exception["justification"]
+        if not isinstance(justification, str) or len(justification.strip()) < 16:
+            _fatal(f"{label}.justification: justification must contain at least 16 characters")
+        if len(justification) > 2048:
+            _fatal(f"{label}.justification: justification is too long")
+
+        expires = exception["expires"]
+        if not isinstance(expires, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", expires):
+            _fatal(f"{label}.expires: expected an ISO date YYYY-MM-DD")
+        try:
+            date.fromisoformat(expires)
+        except ValueError:
+            _fatal(f"{label}.expires: invalid ISO date: {expires!r}")
+
+
+def check_exception_expiry(lockfile: dict[str, Any], result: CheckResult) -> None:
+    today = date.today()
+    for index, exception in enumerate(lockfile["exceptions"]):
+        expiry = date.fromisoformat(exception["expires"])
+        if expiry < today:
+            result.error(
+                "exception",
+                f"{LOCKFILE_REL}:exceptions[{index}]",
+                f"exception {exception['id']!r} expired on {exception['expires']}",
+            )
 
 
 # ── Container model ───────────────────────────────────────────────────
@@ -1704,6 +1771,7 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
             "tools/check-supply-chain.py on every CI run. Update with: "
             "python tools/check-supply-chain.py --update",
         ),
+        "exceptions": existing["exceptions"],
         "submodule_gitlinks": dict(sorted(gitlinks.items())),
         "managed_vendored_dirs": managed,
         "project_owned_dirs": owned,
@@ -1851,6 +1919,7 @@ def run_all_checks(root: Path, root_resolved: Path) -> tuple[CheckResult, dict[s
     lockfile = load_lockfile(root, root_resolved)
     result = CheckResult()
 
+    check_exception_expiry(lockfile, result)
     check_container_model(lockfile, result)
     check_allowed_root_files(lockfile, result)
     check_link_hygiene(root, result)
