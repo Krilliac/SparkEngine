@@ -33,12 +33,14 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CERT_DIR = REPO_ROOT / "Tools" / "platform-cert"
 sys.path.insert(0, str(CERT_DIR))
 
 import bundle_verify  # noqa: E402
+import collect_evidence as collector  # noqa: E402
 import dependency_authority as da  # noqa: E402
 import safe_fs  # noqa: E402
 import validate_certification as vc  # noqa: E402
@@ -2100,6 +2102,18 @@ class TestValidationResult(unittest.TestCase):
         result = vc.ValidationResult()
         result.error("boom")
         self.assertIn("boom", result.summary())
+
+
+class TestCollectorHostMeasurement(unittest.TestCase):
+    def test_msvc_without_toolset_identity_is_refused(self) -> None:
+        banner = "Microsoft (R) C/C++ Optimizing Compiler Version 19.42.34435 for x64"
+        command = [sys.executable, "-c", f"print({banner!r})"]
+
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(collector.CollectionError) as raised:
+                collector.measure_compiler(command, repo_root=REPO_ROOT)
+
+        self.assertIn("VCToolsVersion", str(raised.exception))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
