@@ -145,3 +145,75 @@ assert "persist-credentials: false" in ci_error_reporter
 
 assert workflow.count("pull-requests: write") == 2
 PY
+
+# Execute the exact final coverage-enforcement command with controlled GitHub
+# step outcomes. A skipped or cancelled producer is not usable coverage
+# evidence, even though GitHub exposes those outcomes separately from failure.
+"${PYTHON[@]}" - "$WORKFLOW" <<'PY'
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import yaml
+
+workflow = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8"))
+coverage_steps = workflow["jobs"]["coverage"]["steps"]
+enforcement = next(
+    step for step in coverage_steps
+    if step.get("name") == "Enforce coverage test and threshold results"
+)
+run = enforcement["run"]
+
+if os.name == "nt":
+    git_bash = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+    bash = str(git_bash) if git_bash.is_file() else shutil.which("bash")
+else:
+    bash = shutil.which("bash")
+if not bash:
+    raise AssertionError("bash is required to execute the workflow coverage gate")
+
+
+def execute(outcomes):
+    environment = os.environ.copy()
+    environment.update(outcomes)
+    return subprocess.run(
+        [bash, "-c", run],
+        cwd=Path.cwd(),
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+success = execute({
+    "TEST_OUTCOME": "success",
+    "GENERATE_OUTCOME": "success",
+    "THRESHOLD_OUTCOME": "success",
+})
+if success.returncode != 0:
+    raise AssertionError(f"all-success coverage evidence must pass: {success.stderr}")
+
+for label, outcomes in (
+    ("test skipped", {"TEST_OUTCOME": "skipped"}),
+    ("test cancelled", {"TEST_OUTCOME": "cancelled"}),
+    ("coverage generation skipped", {"GENERATE_OUTCOME": "skipped"}),
+    ("threshold cancelled", {"THRESHOLD_OUTCOME": "cancelled"}),
+):
+    combined = {
+        "TEST_OUTCOME": "success",
+        "GENERATE_OUTCOME": "success",
+        "THRESHOLD_OUTCOME": "success",
+    }
+    combined.update(outcomes)
+    result = execute(combined)
+    if result.returncode == 0:
+        raise AssertionError(f"{label} was accepted as successful coverage evidence")
+
+for name in ("Test", "Generate coverage", "Per-subsystem coverage analysis"):
+    step = next(step for step in coverage_steps if step.get("name") == name)
+    if "continue-on-error" in step:
+        raise AssertionError(f"{name} suppresses a required coverage failure")
+PY

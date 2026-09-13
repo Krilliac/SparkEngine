@@ -2656,7 +2656,6 @@ jobs:
         run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
       - name: Test
         id: coverage-tests
-        continue-on-error: true
         env:
           SPARK_TEST_EXCLUDE: "LoadTest_"
         run: |
@@ -2669,7 +2668,6 @@ jobs:
       - name: Generate coverage
         id: generate-coverage
         if: always()
-        continue-on-error: true
         # lcov is noisy on warnings and sometimes emits non-zero exit
         # codes even with --ignore-errors. Capture each command's exit
         # status explicitly so we can continue into the per-subsystem
@@ -2710,7 +2708,6 @@ jobs:
       - name: Per-subsystem coverage analysis
         id: subsystem-coverage
         if: always()
-        continue-on-error: true
         run: |
           set +e
           chmod +x scripts/coverage-report.sh
@@ -2844,16 +2841,16 @@ jobs:
           THRESHOLD_OUTCOME: ${{ steps.subsystem-coverage.outcome }}
         run: |
           failed=0
-          if [ "$TEST_OUTCOME" = "failure" ]; then
-            echo "::error::SparkTests failed during the coverage run"
+          if [ "$TEST_OUTCOME" != "success" ]; then
+            echo "::error::SparkTests coverage step ended as '$TEST_OUTCOME'"
             failed=1
           fi
-          if [ "$GENERATE_OUTCOME" = "failure" ]; then
-            echo "::error::Coverage generation failed"
+          if [ "$GENERATE_OUTCOME" != "success" ]; then
+            echo "::error::Coverage generation step ended as '$GENERATE_OUTCOME'"
             failed=1
           fi
-          if [ "$THRESHOLD_OUTCOME" = "failure" ]; then
-            echo "::error::One or more coverage thresholds failed"
+          if [ "$THRESHOLD_OUTCOME" != "success" ]; then
+            echo "::error::Coverage threshold step ended as '$THRESHOLD_OUTCOME'"
             failed=1
           fi
           exit "$failed"
