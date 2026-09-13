@@ -1592,7 +1592,7 @@ ctest --test-dir build/linux-shipping -R TelemetrySpool --output-on-failure --no
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** platform · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification. 2026-09-12 progress: full platform-cert validation now rejects unknown profiles even when a caller enables matrix-only diagnostic compatibility; unknown profiles cannot produce certified evidence. Clean Windows 11, driver, installer, upgrade, rollback, and hosted certification evidence remain open.
+Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification. 2026-09-12 progress: full platform-cert validation now rejects unknown profiles even when a caller enables matrix-only diagnostic compatibility; unknown profiles cannot produce certified evidence. 2026-09-13 progress: root Visual Studio profiles now retain measured compiler path/identity/version, x64 architecture, and Windows SDK provenance in the CMake cache, with parity regressions for missing and mismatched values. Clean Windows 11, driver, installer, upgrade, rollback, and hosted certification evidence remain open.
 
 **Dependency contract**
 

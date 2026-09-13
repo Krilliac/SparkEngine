@@ -10,7 +10,7 @@
       "wave": 2,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification. 2026-09-12 progress: full platform-cert validation now rejects unknown profiles even when a caller enables matrix-only diagnostic compatibility; unknown profiles cannot produce certified evidence. Clean Windows 11, driver, installer, upgrade, rollback, and hosted certification evidence remain open.",
+      "rationale": "Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification. 2026-09-12 progress: full platform-cert validation now rejects unknown profiles even when a caller enables matrix-only diagnostic compatibility; unknown profiles cannot produce certified evidence. 2026-09-13 progress: root Visual Studio profiles now retain measured compiler path/identity/version, x64 architecture, and Windows SDK provenance in the CMake cache, with parity regressions for missing and mismatched values. Clean Windows 11, driver, installer, upgrade, rollback, and hosted certification evidence remain open.",
       "dependencies": [
         "BLD-100",
         "REL-100",
