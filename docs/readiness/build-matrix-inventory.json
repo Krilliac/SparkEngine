@@ -9198,7 +9198,7 @@
             "uses": "",
             "shell": "",
             "if": "absent",
-            "continueOnError": true,
+            "continueOnError": "absent",
             "hasRun": true,
             "env": [
               "SPARK_TEST_EXCLUDE"
@@ -9212,7 +9212,7 @@
             "uses": "",
             "shell": "",
             "if": "always()",
-            "continueOnError": true,
+            "continueOnError": "absent",
             "hasRun": true,
             "env": [],
             "runDigest": "e2780fe0ed4b2ead"
@@ -9224,7 +9224,7 @@
             "uses": "",
             "shell": "",
             "if": "always()",
-            "continueOnError": true,
+            "continueOnError": "absent",
             "hasRun": true,
             "env": [],
             "runDigest": "5d6b6f2886b08bee"
@@ -9312,7 +9312,7 @@
               "TEST_OUTCOME",
               "THRESHOLD_OUTCOME"
             ],
-            "runDigest": "1fb1cd18dad5e0a7"
+            "runDigest": "798da9bc43c91e2a"
           }
         ],
         "envNames": [],
