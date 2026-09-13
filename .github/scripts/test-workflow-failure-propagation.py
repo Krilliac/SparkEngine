@@ -29,6 +29,7 @@ TRUSTED_CI_AGGREGATE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "trusted-c
 README = REPO_ROOT / "README.md"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
 CMAKE_ROOT = REPO_ROOT / "CMakeLists.txt"
+BUILD_IMGUI_CMAKE = REPO_ROOT / "cmake" / "BuildImGui.cmake"
 TEMPLATE_VERIFIER = REPO_ROOT / "cmake" / "VerifyInstalledTemplates.cmake"
 TEMPLATE_RUNTIME_HEADER = REPO_ROOT / "SparkEngine" / "Source" / "Game" / "TemplateRuntime.h"
 FPS_TEMPLATE_HEADER = REPO_ROOT / "Templates" / "FPSStarter" / "Source" / "GameModule.h"
@@ -1086,6 +1087,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         cls.site_data_publish = SITE_DATA_PUBLISH_WORKFLOW.read_text(encoding="utf-8")
         cls.readme = README.read_text(encoding="utf-8")
         cls.cmake = CMAKE_ROOT.read_text(encoding="utf-8")
+        cls.build_imgui = BUILD_IMGUI_CMAKE.read_text(encoding="utf-8")
         cls.template_verifier = TEMPLATE_VERIFIER.read_text(encoding="utf-8")
         cls.template_runtime = TEMPLATE_RUNTIME_HEADER.read_text(encoding="utf-8")
         cls.fps_template = FPS_TEMPLATE_HEADER.read_text(encoding="utf-8")
@@ -1672,6 +1674,25 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         msan_block = named_step(self.build, "Run Tests under MSan")
         self.assertIn("--runtime-env MSAN_OPTIONS", msan_block)
         self.assertIn("--sanitizer msan", msan_block)
+
+        # The hosted MSan lane cannot make the distro FreeType shared library
+        # instrumented.  If the optional ImGui backend is enabled, editor font
+        # tests enter that uninstrumented library and produce an incomplete
+        # sanitizer run before JUnit can be written.  Keep MSan strict by
+        # making the build select ImGui's instrumented-free stb path instead.
+        self.assertIn("-DSPARK_IMGUI_ENABLE_FREETYPE=OFF", self.build)
+        self.assertIn(
+            'option(SPARK_IMGUI_ENABLE_FREETYPE "Enable optional FreeType rasterizer" ON)',
+            self.build_imgui,
+        )
+        self.assertIn(
+            "if(SPARK_IMGUI_ENABLE_FREETYPE)\n            find_package(Freetype QUIET)",
+            self.build_imgui,
+        )
+        self.assertIn(
+            "else()\n            set(Freetype_FOUND FALSE)",
+            self.build_imgui,
+        )
 
     def test_asan_tsan_are_required_msan_is_optional(self) -> None:
         gate_section = self.build[self.build.index("required-ci-gate:"):]

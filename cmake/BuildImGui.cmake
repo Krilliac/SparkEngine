@@ -21,7 +21,13 @@ if(IMGUI_INCLUDE_DIR)
         # Optional FreeType rasterizer — produces visibly smoother text than the
         # default stb_truetype rasterizer (matches the SparkEditor hi-fi design).
         # Linux: install libfreetype-dev. Windows/macOS: vcpkg or system freetype.
-        find_package(Freetype QUIET)
+        option(SPARK_IMGUI_ENABLE_FREETYPE "Enable optional FreeType rasterizer" ON)
+        if(SPARK_IMGUI_ENABLE_FREETYPE)
+            find_package(Freetype QUIET)
+        else()
+            set(Freetype_FOUND FALSE)
+            message(STATUS "Dear ImGui: FreeType disabled by SPARK_IMGUI_ENABLE_FREETYPE=OFF — falling back to stb_truetype rasterizer")
+        endif()
         set(_IMGUI_FREETYPE_SOURCES "")
         if(Freetype_FOUND)
             list(APPEND _IMGUI_FREETYPE_SOURCES
