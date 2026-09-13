@@ -121,12 +121,41 @@ def _find_codemodel(reply_dir: Path) -> Path:
     )
 
 
+def _portable_file_api_path(value: Any, root_value: Any) -> str:
+    """Make an absolute File API path relative to its recorded root.
+
+    CMake may emit absolute paths in the codemodel.  Evidence is consumed by
+    another job and must not bind itself to a runner-specific checkout path.
+    Only paths lexically below the codemodel's source/build root are
+    relativized; a foreign absolute path is retained so the validator can
+    reject it as foreign rather than accidentally turning it into valid
+    repository-relative evidence.
+    """
+    if not isinstance(value, str):
+        return ""
+    normalized = value.replace("\\", "/")
+    if not isinstance(root_value, str) or not root_value:
+        return normalized
+
+    candidate = Path(value)
+    root = Path(root_value)
+    if not candidate.is_absolute() or not root.is_absolute():
+        return normalized
+    try:
+        return candidate.relative_to(root).as_posix()
+    except (OSError, ValueError):
+        return normalized
+
+
 def extract_from_reply(reply_dir: Path) -> dict[str, dict[str, Any]]:
     """Build the target index from a CMake File API reply directory."""
     codemodel_path = _find_codemodel(reply_dir)
     codemodel = strict_json.load_file(
         codemodel_path, limits=strict_json.MODULE_TARGET_LIMITS
     )
+    codemodel_paths = codemodel.get("paths", {})
+    source_root = codemodel_paths.get("source") if isinstance(codemodel_paths, dict) else None
+    build_root = codemodel_paths.get("build") if isinstance(codemodel_paths, dict) else None
 
     index: dict[str, dict[str, Any]] = {}
     for configuration in codemodel.get("configurations", []):
@@ -143,27 +172,27 @@ def extract_from_reply(reply_dir: Path) -> dict[str, dict[str, Any]]:
                 continue
             sources = sorted(
                 {
-                    s["path"].replace("\\", "/")
+                    _portable_file_api_path(s["path"], source_root)
                     for s in target.get("sources", [])
-                    if isinstance(s, dict) and s.get("path")
+                    if isinstance(s, dict) and isinstance(s.get("path"), str) and s["path"]
                 }
             )
             artifacts = sorted(
                 {
-                    a["path"].replace("\\", "/")
+                    _portable_file_api_path(a["path"], build_root)
                     for a in target.get("artifacts", [])
-                    if isinstance(a, dict) and a.get("path")
+                    if isinstance(a, dict) and isinstance(a.get("path"), str) and a["path"]
                 }
             )
+            target_paths = target.get("paths", {})
+            target_source = target_paths.get("source", "") if isinstance(target_paths, dict) else ""
             entry = index.setdefault(
                 name,
                 {
                     "name": name,
                     "type": target.get("type", ""),
                     "nameOnDisk": target.get("nameOnDisk", ""),
-                    "sourceDirectory": (
-                        target.get("paths", {}).get("source", "").replace("\\", "/")
-                    ),
+                    "sourceDirectory": _portable_file_api_path(target_source, source_root),
                     "sources": [],
                     "artifacts": [],
                     "configurations": [],
