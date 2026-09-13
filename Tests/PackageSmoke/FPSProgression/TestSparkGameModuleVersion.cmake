@@ -11,10 +11,11 @@ file(REMOVE_RECURSE "${FIXTURE}")
 file(MAKE_DIRECTORY "${FIXTURE}/project/SparkSDK/Include/Spark")
 file(WRITE "${FIXTURE}/project/SparkSDK/Include/Spark/Version.h"
     "#pragma once\n#define SPARK_SDK_VERSION 4\n#define SPARK_SDK_VERSION 3\n")
+file(TO_CMAKE_PATH "${SPARK_GAME_MODULE_CMAKE}" _spark_game_module_cmake)
 file(WRITE "${FIXTURE}/project/CMakeLists.txt"
     "cmake_minimum_required(VERSION 3.25)\n"
     "project(SparkAmbiguousSDKVersion LANGUAGES CXX)\n"
-    "include(\"${SPARK_GAME_MODULE_CMAKE}\")\n")
+    "include(\"${_spark_game_module_cmake}\")\n")
 
 set(configure "${CMAKE_COMMAND}" -S "${FIXTURE}/project" -B "${FIXTURE}/build"
     -G "${CONSUMER_GENERATOR}"

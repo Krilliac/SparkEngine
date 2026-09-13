@@ -1554,6 +1554,16 @@ set_tests_properties(SparkInstalledPackageRejectsMissingVersionDiagnostics PROPE
     TIMEOUT 30)
 
 add_test(
+    NAME SparkInstalledPackageRejectsMissingPublicSDKHeader
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/incomplete-sdk-public-header/$<CONFIG>"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestSparkEnginePackageRequiresPublicHeader.cmake)
+set_tests_properties(SparkInstalledPackageRejectsMissingPublicSDKHeader PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 30)
+
+add_test(
     NAME SparkSDKRequiresInstalledVersionHeader
     COMMAND ${CMAKE_COMMAND}
         "-DSPARK_GAME_MODULE_CMAKE=${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
