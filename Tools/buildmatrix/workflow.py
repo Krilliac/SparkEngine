@@ -1038,6 +1038,13 @@ def _parse_cmake_build(
                 result["targets"].append(args[index])
                 index += 1
             continue
+        if argument.startswith("--target="):
+            target = argument.split("=", 1)[1]
+            if not target:
+                raise WorkflowError(f"{context.get('job')}/{context.get('step')}: --target lacks a value")
+            result["targets"].append(target)
+            index += 1
+            continue
         if argument in {"--parallel", "-j"}:
             following = args[index + 1] if index + 1 < len(args) else ""
             result["parallel"] = following if following and not following.startswith("-") else "auto"

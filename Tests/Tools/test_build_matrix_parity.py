@@ -1597,6 +1597,28 @@ class WorkflowWeakeningTests(unittest.TestCase):
             workflow_record(LIVE_WORKFLOW)["summary"]["buildAllTargetCount"],
         )
 
+    def test_equals_target_form_cannot_disguise_single_target_build(self) -> None:
+        mutated = LIVE_WORKFLOW.replace(
+            "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1",
+            "cmake --build --preset windows-shipping --config MinSizeRel --target=SparkEngine --parallel 1",
+            1,
+        )
+        record = self.assert_weakening_is_visible(mutated, "equals-form single-target build")
+        shipping_builds = [
+            entry
+            for entry in record["buildInvocations"]
+            if entry.get("job") == "build-windows-shipping"
+            and entry.get("preset") == "windows-shipping"
+        ]
+        self.assertEqual(len(shipping_builds), 1)
+        self.assertEqual(shipping_builds[0]["targets"], ["SparkEngine"])
+        self.assertFalse(shipping_builds[0]["buildsAllTargets"])
+
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"] = record
+        categories = finding_categories(check_parity.check_workflow_semantics(data))
+        self.assertIn("workflow-products-not-built", categories)
+
     def test_default_build_records_all_targets_explicitly(self) -> None:
         record = workflow_record(
             workflow_document(
