@@ -176,11 +176,33 @@ class FakeApi:
             return _ci_jobs_payload(jobs[start : start + MODULE.CI_PAGE_SIZE])
         raise MODULE.GateError(f"unexpected API path: {url}")
 
-    def patch(self, url: str, token: str, body: dict) -> Any:
+    def patch(self, url: str, token: str, body: dict, **_kwargs: Any) -> Any:
         self.patch_calls.append((url, body))
         if self.patch_should_fail:
             raise MODULE.GateError("PATCH failed")
         return self.published
+
+
+class PostPatchTamperApi(FakeApi):
+    """Expose an asset mutation between publication and post-PATCH recheck."""
+
+    def __init__(self):
+        super().__init__()
+        self.tampered_assets = _default_assets()
+        self.tampered_assets[0]["digest"] = "sha256:" + "f" * 64
+
+    def fetch(self, url: str, token: str) -> Any:
+        if f"/releases/{RELEASE_ID}/assets" in url and self.patch_calls:
+            return self.tampered_assets
+        return super().fetch(url, token)
+
+    def patch(self, url: str, token: str, body: dict, **_kwargs: Any) -> Any:
+        self.patch_calls.append((url, body))
+        response = dict(self.published)
+        response["draft"] = body.get("draft")
+        if "prerelease" in body:
+            response["prerelease"] = body["prerelease"]
+        return response
 
 
 class TestVerifyDraftRelease(unittest.TestCase):
@@ -867,6 +889,20 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
         api = FakeApi(patch_should_fail=True)
         with self.assertRaisesRegex(MODULE.GateError, "PATCH failed"):
             self._run_gate(api)
+
+    @patch("subprocess.run")
+    def test_redrafts_when_assets_change_after_publication(self, mock_run):
+        """A post-PATCH asset race must not leave a public tampered release."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{SHA}\trefs/tags/{RELEASE_TAG}\n"
+        )
+        api = PostPatchTamperApi()
+        with self.assertRaisesRegex(MODULE.GateError, "post-PATCH"):
+            self._run_gate(api)
+        self.assertEqual(
+            [body["draft"] for _url, body in api.patch_calls],
+            [False, True],
+        )
 
 
 class TestInputValidation(unittest.TestCase):

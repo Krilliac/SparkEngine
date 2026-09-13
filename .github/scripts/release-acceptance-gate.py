@@ -72,7 +72,13 @@ def _mark_patch_started() -> None:
         raise GateError(f"cannot record release PATCH attempt: {error}") from error
 
 
-def _patch_json(url: str, token: str, body: dict[str, Any]) -> Any:
+def _patch_json(
+    url: str,
+    token: str,
+    body: dict[str, Any],
+    *,
+    mark_attempt: bool = True,
+) -> Any:
     data = json.dumps(body).encode("utf-8")
     request = Request(
         url,
@@ -86,7 +92,8 @@ def _patch_json(url: str, token: str, body: dict[str, Any]) -> Any:
             "User-Agent": "SparkEngine-release-acceptance-gate",
         },
     )
-    _mark_patch_started()
+    if mark_attempt:
+        _mark_patch_started()
     try:
         with urlopen(request, timeout=30) as response:  # noqa: S310
             return json.load(response)
@@ -172,6 +179,30 @@ def _fetch_release_assets(
     raise GateError(f"release assets exceed the {MAX_ASSET_PAGES}-page acceptance limit")
 
 
+def _verify_release_assets(
+    assets: list[dict[str, Any]],
+    expected_names: list[str],
+    expected_digests: dict[str, str],
+) -> None:
+    """Verify the complete asset inventory against the frozen manifest."""
+    asset_names = {asset["name"] for asset in assets}
+    if len(assets) != len(expected_names) or asset_names != set(expected_names):
+        missing = set(expected_names) - asset_names
+        extra = asset_names - set(expected_names)
+        raise GateError(f"asset mismatch — missing: {missing}, extra: {extra}")
+
+    for asset in assets:
+        name = asset["name"]
+        if asset.get("state") != "uploaded":
+            raise GateError(f"asset '{name}' is not in 'uploaded' state")
+        expected_digest = expected_digests[name]
+        actual_digest = asset.get("digest")
+        if not isinstance(actual_digest, str) or actual_digest.lower() != expected_digest:
+            raise GateError(
+                f"asset '{name}' digest mismatch: expected {expected_digest}, got {actual_digest}"
+            )
+
+
 def verify_draft_release(
     api_url: str,
     token: str,
@@ -198,20 +229,35 @@ def verify_draft_release(
 
     assets = _fetch_release_assets(api_url, token, repository, release_id)
 
-    asset_names = {asset["name"] for asset in assets}
-    if len(assets) != len(expected_names) or asset_names != set(expected_names):
-        missing = set(expected_names) - asset_names
-        extra = asset_names - set(expected_names)
-        raise GateError(f"asset mismatch — missing: {missing}, extra: {extra}")
+    _verify_release_assets(assets, expected_names, expected_digests)
 
-    for asset in assets:
-        name = asset["name"]
-        if asset.get("state") != "uploaded":
-            raise GateError(f"asset '{name}' is not in 'uploaded' state")
-        expected_digest = expected_digests[name]
-        actual_digest = asset.get("digest")
-        if not isinstance(actual_digest, str) or actual_digest.lower() != expected_digest:
-            raise GateError(f"asset '{name}' digest mismatch: expected {expected_digest}, got {actual_digest}")
+
+def verify_published_release(
+    api_url: str,
+    token: str,
+    repository: str,
+    release_id: int,
+    release_tag: str,
+    is_versioned: bool,
+    published: Any,
+    expected_names: list[str],
+    expected_digests: dict[str, str],
+) -> None:
+    """Re-check publication response and assets before reporting success."""
+    if not isinstance(published, dict):
+        raise GateError("publication PATCH response is not an object")
+    if published.get("id") != release_id:
+        raise GateError("published release ID mismatch")
+    if published.get("tag_name") != release_tag:
+        raise GateError("published release tag mismatch")
+    if published.get("draft") is not False:
+        raise GateError("publication PATCH did not clear draft flag")
+    expected_prerelease = not is_versioned
+    if published.get("prerelease") is not expected_prerelease:
+        raise GateError("publication PATCH returned the wrong release channel")
+
+    assets = _fetch_release_assets(api_url, token, repository, release_id)
+    _verify_release_assets(assets, expected_names, expected_digests)
 
 
 def verify_tag(
@@ -473,18 +519,42 @@ def acceptance_gate(
         patch_body,
     )
 
-    if not isinstance(published, dict):
-        raise GateError("publication PATCH response is not an object")
-    if published.get("id") != release_id:
-        raise GateError("published release ID mismatch")
-    if published.get("tag_name") != release_tag:
-        raise GateError("published release tag mismatch")
-    if published.get("draft") is not False:
-        raise GateError("publication PATCH did not clear draft flag")
-    if is_versioned and published.get("prerelease") is not False:
-        raise GateError("stable publication PATCH did not clear prerelease flag")
-    if not is_versioned and published.get("prerelease") is not True:
-        raise GateError("nightly publication PATCH did not set prerelease flag")
+    try:
+        verify_published_release(
+            api_url,
+            token,
+            repository,
+            release_id,
+            release_tag,
+            is_versioned,
+            published,
+            expected_names,
+            expected_digests,
+        )
+    except GateError as publication_error:
+        try:
+            redrafted = _patch_json(
+                f"{api_url}/repos/{repository}/releases/{release_id}",
+                token,
+                {"draft": True, "make_latest": "false"},
+                mark_attempt=False,
+            )
+            if (
+                not isinstance(redrafted, dict)
+                or redrafted.get("id") != release_id
+                or redrafted.get("tag_name") != release_tag
+                or redrafted.get("draft") is not True
+            ):
+                raise GateError("redraft PATCH did not prove a mutable draft release")
+        except GateError as redraft_error:
+            raise GateError(
+                f"post-PATCH publication validation failed ({publication_error}); "
+                f"redraft failed ({redraft_error})"
+            ) from redraft_error
+        raise GateError(
+            f"post-PATCH publication validation failed; release was redrafted: "
+            f"{publication_error}"
+        ) from publication_error
 
     return published
 
