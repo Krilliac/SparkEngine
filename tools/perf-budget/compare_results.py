@@ -188,7 +188,20 @@ def compare(budget_dir: Path, result_data: Any, *,
         expected_sha=expected_sha,
     ))
     if result_errors:
-        return _empty_report(result_errors, result_data)
+        empty_measurement_only = (
+            isinstance(result_data, dict)
+            and isinstance(result_data.get("measurements"), list)
+            and not result_data["measurements"]
+            and result_errors == [
+                "result: measurements must contain at least one measurement"
+            ]
+        )
+        if not empty_measurement_only:
+            return _empty_report(result_errors, result_data)
+        # Keep the validator's evidence-integrity error in the report while
+        # continuing far enough to add the comparator's more specific
+        # pending/suspended/active-metric diagnostic below.
+        errors.extend(result_errors)
     assert isinstance(result_data, dict)
 
     result_hardware = result_data["hardwareRowId"]

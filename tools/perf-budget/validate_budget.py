@@ -992,6 +992,10 @@ def validate_result(data: Any, hardware_ids: Any, *,
     ))
     if not isinstance(measurements, list):
         return errors
+    if not measurements:
+        errors.append(
+            "result: measurements must contain at least one measurement"
+        )
 
     seen_ids: set[str] = set()
     for index, measurement in enumerate(measurements[:MAX_MEASUREMENTS]):

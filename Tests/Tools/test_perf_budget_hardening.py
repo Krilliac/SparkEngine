@@ -499,6 +499,16 @@ class TestAdditionalGovernanceClosure(unittest.TestCase):
 class TestFinalAuditClosure(unittest.TestCase):
     """Hostile cases from the final independent PERF-100 audit."""
 
+    def test_empty_result_fails_when_all_metrics_are_pending(self) -> None:
+        budget = _budget([_metric(status="pending_measurement", budget=None)])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget)
+            report = compare(root, _result([]), expected_sha=RESULT_SHA)
+        self.assertFalse(report.passed)
+        self.assertTrue(any("at least one measurement" in error
+                            for error in report.errors))
+
     def test_empty_measurements_with_only_suspended_budget_fail_closed(self) -> None:
         budget = _budget([_metric(status="suspended", budget=16.0)])
         with tempfile.TemporaryDirectory() as temporary:
