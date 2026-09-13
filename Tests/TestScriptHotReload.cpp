@@ -81,8 +81,8 @@ namespace
                 auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - p.at).count();
                 if (ms >= static_cast<long long>(m_debounceMs))
                 {
-                    ProcessChange(p.path);
-                    n++;
+                    if (ProcessChange(p.path))
+                        n++;
                 }
                 else
                     keep.push_back(p);
@@ -95,8 +95,8 @@ namespace
             int n = 0;
             for (const auto& [p, _] : m_fileStates)
             {
-                ProcessChange(p);
-                n++;
+                if (ProcessChange(p))
+                    n++;
             }
             return n;
         }
@@ -123,12 +123,11 @@ namespace
             TimePoint at;
         };
 
-        void ProcessChange(const std::string& filePath)
+        bool ProcessChange(const std::string& filePath)
         {
             if (!m_recompileCb)
-                return;
+                return false;
             auto result = m_recompileCb(filePath);
-            m_recompileCount++;
             if (!result.success)
             {
                 m_errorCount++;
@@ -137,7 +136,10 @@ namespace
                     m_recentErrors.erase(m_recentErrors.begin());
                 if (m_errorCb)
                     m_errorCb(result);
+                return false;
             }
+            m_recompileCount++;
+            return true;
         }
 
         std::vector<std::string> m_watchDirs;
@@ -301,7 +303,7 @@ TEST(ScriptHotReload_NoCallbackSetDoesNotCrash)
     mgr.Start();
     mgr.SimulateAddFile("test.as", 1);
     mgr.SimulateFileChange("test.as", 2, kT0);
-    EXPECT_EQ(mgr.PollChanges(kT0), 1);
+    EXPECT_EQ(mgr.PollChanges(kT0), 0);
 }
 
 // 7. Error callback invocation

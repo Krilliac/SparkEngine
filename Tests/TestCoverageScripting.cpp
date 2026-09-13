@@ -176,8 +176,8 @@ TEST(CoverageScripting_HotReloadBoundsErrorHistoryAndReportsFailures)
     manager.AddWatchDirectory(scripts.Root().string());
     manager.Start();
 
-    EXPECT_EQ(manager.RecompileAll(), 12);
-    EXPECT_EQ(manager.GetRecompileCount(), 12);
+    EXPECT_EQ(manager.RecompileAll(), 0);
+    EXPECT_EQ(manager.GetRecompileCount(), 0);
     EXPECT_EQ(manager.GetErrorCount(), 12);
     EXPECT_EQ(errorCallbacks, 12);
     EXPECT_EQ(manager.GetRecentErrors().size(), static_cast<size_t>(10));
@@ -190,8 +190,44 @@ TEST(CoverageScripting_HotReloadBoundsErrorHistoryAndReportsFailures)
     Spark::Scripting::ScriptHotReloadManager noCompiler;
     noCompiler.AddWatchDirectory(scripts.Root().string());
     noCompiler.Start();
-    EXPECT_EQ(noCompiler.RecompileAll(), 12);
+    EXPECT_EQ(noCompiler.RecompileAll(), 0);
     EXPECT_EQ(noCompiler.GetRecompileCount(), 0);
+}
+
+TEST(CoverageScripting_HotReloadDoesNotCountFailedCompilesAsSuccess)
+{
+    TempScriptTree scripts("failed-count");
+    scripts.Write("broken.as", "syntax error\n");
+
+    int callbackCount = 0;
+    Spark::Scripting::ScriptHotReloadManager manager;
+    manager.SetDebounceMs(0);
+    manager.SetRecompileCallback(
+        [&](const std::string& file)
+        {
+            ++callbackCount;
+            RecompileResult result;
+            result.success = false;
+            result.filePath = file;
+            result.errorMessage = "syntax error";
+            return result;
+        });
+    manager.AddWatchDirectory(scripts.Root().string());
+    manager.Start();
+
+    // RecompileAll must report completed recompiles, not failed attempts.
+    EXPECT_EQ(manager.RecompileAll(), 0);
+    EXPECT_EQ(manager.GetRecompileCount(), 0);
+    EXPECT_EQ(manager.GetErrorCount(), 1);
+
+    // The same contract applies to debounced PollChanges().  The size change
+    // makes this deterministic without depending on filesystem timestamp
+    // resolution.
+    scripts.Write("broken.as", "still syntax error, changed\n");
+    EXPECT_EQ(manager.PollChanges(), 0);
+    EXPECT_EQ(manager.GetRecompileCount(), 0);
+    EXPECT_EQ(manager.GetErrorCount(), 2);
+    EXPECT_EQ(callbackCount, 2);
 }
 
 TEST(CoverageScripting_SandboxConsoleAndNestedExecutionPaths)
