@@ -1277,7 +1277,7 @@ std::string ModuleManager::GetInitializedGameModuleName() const
     return {};
 }
 
-void ModuleManager::InitializeAll(Spark::IEngineContext* context)
+bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
 {
     SPARK_EXPECTS(context != nullptr);
     auto& console = Spark::SimpleConsole::GetInstance();
@@ -1285,9 +1285,10 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
     if (!context)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "InitializeAll called with null context");
-        return;
+        return false;
     }
 
+    bool allInitialized = true;
     for (auto& entry : m_modules)
     {
         if (entry.initialized)
@@ -1295,6 +1296,7 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
         if (!entry.instance)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Core, "Module '%s' has null instance — skipped", entry.name.c_str());
+            allInitialized = false;
             continue;
         }
 
@@ -1321,6 +1323,7 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
         else
         {
             console.LogError("Module initialization failed: " + entry.name);
+            allInitialized = false;
 
             // Failed-boot teardown ordering (W10 exit AV): a module that fails
             // OnLoad never gets OnUnload from ShutdownAll (initialized stays
@@ -1352,6 +1355,8 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
             entry.destroyFn = nullptr;
         }
     }
+
+    return allInitialized;
 }
 
 void ModuleManager::UpdateAll(float deltaTime)

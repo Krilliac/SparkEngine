@@ -166,8 +166,10 @@ class ModuleManager
     /**
      * @brief Initialize all loaded modules (sorted by loadOrder)
      * @param context Engine context passed to each module's OnLoad()
+     * @return true when every loaded module initialized successfully; false when
+     *         the context is null or any module could not initialize
      */
-    void InitializeAll(Spark::IEngineContext* context);
+    bool InitializeAll(Spark::IEngineContext* context);
 
     /** @brief Call OnUpdate() on all modules in load order */
     void UpdateAll(float deltaTime);

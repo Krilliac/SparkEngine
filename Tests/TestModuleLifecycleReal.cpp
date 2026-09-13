@@ -287,6 +287,20 @@ TEST(ModuleLifecycle_RecordsFailedNewStyleModuleInitialization)
     manager.UnloadAll();
 }
 
+TEST(ModuleLifecycle_InitializeAllReturnsFailureWhenOnLoadFails)
+{
+    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+
+    EXPECT_FALSE(manager.InitializeAll(&context));
+    EXPECT_FALSE(manager.HasInitializedModules());
+
+    manager.UnloadAll();
+}
+
 TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
 {
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadRetry");
