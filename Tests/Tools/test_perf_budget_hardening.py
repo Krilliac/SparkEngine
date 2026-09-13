@@ -573,6 +573,39 @@ class TestFinalAuditClosure(unittest.TestCase):
         self.assertTrue(any("selfApprovalAllowed=true is forbidden" in error
                             for error in report.errors))
 
+    def test_cli_rejects_non_authoritative_hardware_as_release_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, hardware=_hardware(certified=False))
+            result_path = root / "results.json"
+            result_path.write_text(
+                json.dumps(_result()),
+                encoding="utf-8",
+            )
+
+            for extra_args in ([], ["--json"]):
+                with self.subTest(extra_args=extra_args):
+                    completed = subprocess.run(
+                        [
+                            sys.executable,
+                            str(TOOL_DIR / "compare_results.py"),
+                            str(root),
+                            str(result_path),
+                            "--expected-sha",
+                            RESULT_SHA,
+                            *extra_args,
+                        ],
+                        cwd=TOOL_DIR,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertNotEqual(
+                        completed.returncode,
+                        0,
+                        completed.stdout + completed.stderr,
+                    )
+
     def test_seven_and_eight_character_prefix_aliases_are_rejected(self) -> None:
         metric = _metric()
         baseline = _baseline(metric_definition=metric)

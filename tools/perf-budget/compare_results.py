@@ -401,8 +401,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(rendered)
     else:
-        qualifier = "" if report.authoritative else " (ADVISORY)"
-        status = "PASS" if report.passed else "FAIL"
+        qualifier = "" if report.authoritative else " (NON-AUTHORITATIVE)"
+        status = "PASS" if report.passed and report.authoritative else "FAIL"
         print(
             f"{status}{qualifier}: {report.passed_count} passed, "
             f"{report.failed_count} failed, "
@@ -427,7 +427,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [ADVISORY] {advisory}")
         for error in report.errors:
             print(f"  [ERROR] {error}")
-    return 0 if report.passed else 1
+    # A clean comparison on uncertified hardware remains useful as an
+    # advisory library result, but the command is a release-evidence boundary.
+    # Never let a shell/CI caller mistake that advisory result for a certified
+    # pass just because the measured values are within budget.
+    return 0 if report.passed and report.authoritative else 1
 
 
 if __name__ == "__main__":
