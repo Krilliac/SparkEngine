@@ -1899,7 +1899,7 @@ ctest --test-dir build/linux-tsan -L lifecycle --output-on-failure --no-tests=er
 **Priority:** P1 · **Status:** open · **Wave:** 2 · **Area:** editor · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate. 2026-09-05 progress: World-document create/delete/duplicate/reparent/rename/translate/rotate/scale and inspector edits are command-backed (one CommandHistory entry per gizmo drag); all three transform gizmos ship. 2026-09-12 progress: UndoRedoManager now restores its dispatch-depth boundary through RAII when a command throws, with a production regression proving the manager does not remain in dispatch state or enqueue a failed command. Still open: asset browse/drag/assign path, author-to-installed-runtime round trip, and the crash-recovery pipeline (RecoveryCallback, RecordOperation callers, recovery dialog remain unwired; do not claim crash recovery works).
+Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate. 2026-09-05 progress: World-document create/delete/duplicate/reparent/rename/translate/rotate/scale and inspector edits are command-backed (one CommandHistory entry per gizmo drag); all three transform gizmos ship. 2026-09-12 progress: UndoRedoManager now restores its dispatch-depth boundary through RAII when a command throws, with a production regression proving the manager does not remain in dispatch state or enqueue a failed command. 2026-09-13 progress: recovery saves now validate the strict scene schema before replacing the primary snapshot, with a malformed-structured-scene regression. Still open: asset browse/drag/assign path, author-to-installed-runtime round trip, and the crash-recovery pipeline (RecoveryCallback, RecordOperation callers, recovery dialog remain unwired; do not claim crash recovery works).
 
 **Dependency contract**
 
@@ -1941,7 +1941,7 @@ ctest --test-dir build/windows-shipping -L editor-integration --output-on-failur
 
 **Automated evidence**
 
-- Test selectors: `EditorUndo_*`, `EditorGizmo_*`, `EditorAssetDrag_*`, `EditorCookPackage_*`, `EditorUndoHierarchy_*`
+- Test selectors: `EditorUndo_*`, `EditorGizmo_*`, `EditorAssetDrag_*`, `EditorCookPackage_*`, `EditorUndoHierarchy_*`, `EditorRecovery_*`
 - Required CI jobs: `editor-integration`, `editor-package-roundtrip`
 - Performance / reliability budgets:
   - Representative project load/save/cook/editor-interaction budgets from PERF-100

@@ -2748,7 +2748,7 @@
 | `ParallelPerceptionSystem` | class | SparkEngine | [ParallelPerception.h:L120](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L120) |  |
 | `ParallelSystemExecutor` | class | SparkEngine | [ParallelSystemExecutor.h:L73](../../SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.h#L73) | Executes ECS systems in parallel where safe, serial where required. |
 | `ParameterDecl` | struct | SparkEngine | [MaterialDefinition.h:L104](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L104) | Declaration of a single material parameter with metadata. |
-| `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecovery.cpp:L382](../../SparkEditor/Source/Core/EditorRecovery.cpp#L382) |  |
+| `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecovery.cpp:L398](../../SparkEditor/Source/Core/EditorRecovery.cpp#L398) |  |
 | `ParsedScene` | struct | SparkEditor | [SceneImportPanel.h:L85](../../SparkEditor/Source/Panels/SceneImportPanel.h#L85) | Full parse result for one .scene file. |
 | `Parser` | class | SparkEngine | [JsonUtils.h:L409](../../SparkEngine/Source/Utils/JsonUtils.h#L409) |  |
 | `ParseResult` | struct | SparkServer | [ServerApplication.h:L53](../../SparkServer/src/ServerApplication.h#L53) |  |
