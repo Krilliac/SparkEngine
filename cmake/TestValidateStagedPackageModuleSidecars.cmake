@@ -397,6 +397,26 @@ set(_spark_module_prefix "")
 set(_spark_module_suffix ".dll")
 set(_spark_runtime_modules "SparkGameFPS")
 get_filename_component(_spark_validator_directory "${SPARK_VALIDATOR}" DIRECTORY)
+
+# Runtime-layout fixtures use text stand-ins for PE files so this contract can
+# run on every validation host.  The native package smoke itself must therefore
+# stay in the runtime validator; a file-only fixture must not silently become
+# the only proof that the staged executable can load the staged FPS module.
+file(READ "${SPARK_VALIDATOR}" _spark_validator_source)
+foreach(_spark_required_runtime_smoke_token IN ITEMS
+        "SPARK_PACKAGE_LAYOUT STREQUAL \"runtime\""
+        "RunSparkHeadlessNullRHILifecycle.cmake"
+        "-DSPARK_RHI_BACKEND=null"
+        "-DSPARK_WORKING_DIRECTORY=\${SPARK_PACKAGE_ROOT}/bin")
+    string(FIND "${_spark_validator_source}" "${_spark_required_runtime_smoke_token}"
+        _spark_runtime_smoke_token_position)
+    if(_spark_runtime_smoke_token_position EQUAL -1)
+        message(FATAL_ERROR
+            "Runtime layout validator is missing packaged NullRHI execution contract: "
+            "${_spark_required_runtime_smoke_token}")
+    endif()
+endforeach()
+
 file(STRINGS "${_spark_validator_directory}/../SparkSDK/Include/Spark/Version.h"
     _spark_runtime_sdk_line REGEX "^#define SPARK_SDK_VERSION [0-9]+$")
 string(REGEX MATCH "[0-9]+$" _spark_runtime_sdk_version "${_spark_runtime_sdk_line}")
