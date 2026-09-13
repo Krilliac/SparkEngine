@@ -264,3 +264,25 @@ TEST(AssetMigration_MigrateAsset_RejectsExpectedTypeMismatch)
 
     registry.Shutdown();
 }
+
+TEST(AssetMigration_MigrateAsset_RejectsFutureVersionWithoutMutation)
+{
+    Spark::AssetFileHeader header;
+    header.assetType = Spark::AssetType::Scene;
+    header.version = {2, 0, 0};
+    header.headerSize = sizeof(Spark::AssetFileHeader);
+    header.dataSize = 0;
+    header.checksum = 0;
+
+    std::vector<uint8_t> data(sizeof(Spark::AssetFileHeader));
+    std::memcpy(data.data(), &header, sizeof(header));
+    const std::vector<uint8_t> original = data;
+
+    auto& registry = Spark::AssetMigrationRegistry::GetInstance();
+    registry.Initialize();
+
+    EXPECT_FALSE(registry.MigrateAsset(data, Spark::AssetType::Scene));
+    EXPECT_TRUE(data == original);
+
+    registry.Shutdown();
+}

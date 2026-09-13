@@ -382,7 +382,9 @@ namespace Spark
                 return false;
 
             AssetVersion targetVer = GetCurrentVersion(type);
-            if (header.version >= targetVer)
+            if (header.version > targetVer)
+                return false;
+            if (header.version == targetVer)
                 return true; // Already current
 
             auto path = GetMigrationPath(header.version, targetVer, type);
