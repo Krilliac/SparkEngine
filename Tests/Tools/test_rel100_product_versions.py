@@ -22,6 +22,7 @@ PRODUCTS = (
     "SparkAutomation",
     "SparkCrashReporter",
 )
+EXECUTABLE_SUFFIX = ".exe" if sys.platform == "win32" else ""
 BIN_DIR: Path | None = None
 ENGINE_VERSION: str | None = None
 
@@ -47,7 +48,7 @@ class ShippedProductVersionTests(unittest.TestCase):
     def test_pipeline_tools_report_the_authoritative_engine_version(self) -> None:
         for product in PRODUCTS:
             with self.subTest(product=product):
-                executable = self.bin_dir / f"{product}.exe"
+                executable = self.bin_dir / f"{product}{EXECUTABLE_SUFFIX}"
                 result = subprocess.run(
                     [str(executable), "--version"],
                     capture_output=True,
