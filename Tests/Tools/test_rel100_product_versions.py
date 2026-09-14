@@ -22,8 +22,8 @@ PRODUCTS = (
     "SparkAutomation",
     "SparkCrashReporter",
 )
-BIN_DIR: Path
-ENGINE_VERSION: str
+BIN_DIR: Path | None = None
+ENGINE_VERSION: str | None = None
 
 
 def read_engine_version() -> str:
@@ -37,7 +37,11 @@ def read_engine_version() -> str:
 class ShippedProductVersionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        if BIN_DIR is None:
+            raise unittest.SkipTest("requires --bin-dir when run as an executable contract")
         cls.bin_dir = BIN_DIR
+        if ENGINE_VERSION is None:
+            raise AssertionError("the executable contract did not resolve the engine version")
         cls.version = ENGINE_VERSION
 
     def test_pipeline_tools_report_the_authoritative_engine_version(self) -> None:
