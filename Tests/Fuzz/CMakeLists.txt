@@ -18,10 +18,14 @@ target_compile_features(SparkFuzzJsonUtils PRIVATE cxx_std_23)
 target_compile_options(SparkFuzzJsonUtils PRIVATE
     -fsanitize=fuzzer,address,undefined
     -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
 )
 target_link_options(SparkFuzzJsonUtils PRIVATE
     -fsanitize=fuzzer,address,undefined
     -fno-omit-frame-pointer
+    -Wl,--gc-sections
 )
 
 add_test(
