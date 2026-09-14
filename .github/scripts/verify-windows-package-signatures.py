@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import tempfile
 
 SIGNATURE_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
@@ -106,6 +107,30 @@ def _validate_signature_evidence(signature, thumbprint, artifact_name):
         raise ValueError("Invalid signature certificate evidence schema")
 
 
+def _write_report(report_path, report):
+    """Publish diagnostics without following a redirected report path."""
+    report_path = Path(report_path)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    if report_path.exists() or report_path.is_symlink():
+        regular_file(report_path)
+    elif _has_link_component(report_path.parent):
+        raise ValueError(f"Signature report path contains link traversal: {report_path}")
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{report_path.name}.", dir=report_path.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(report, stream, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, report_path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def verify(packages, version, source_sha, thumbprint, report_path, *, powershell, runner=subprocess.run):
     report = {"scope": "stable-windows-outer-installers-only", "version": version, "source_sha": source_sha,
               "publisher_thumbprint": thumbprint.upper(), "passed": False, "artifacts": [], "errors": []}
@@ -135,8 +160,10 @@ def verify(packages, version, source_sha, thumbprint, report_path, *, powershell
         report["passed"] = True
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         report["errors"].append(str(error))
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    try:
+        _write_report(report_path, report)
+    except (OSError, ValueError):
+        return 1
     return int(not report["passed"])
 
 
@@ -147,6 +174,7 @@ def check_hashes(packages, version, source_sha, report_path):
         if not re.fullmatch(r"[0-9a-fA-F]{40}", thumbprint):
             raise ValueError("SPARK_RELEASE_SIGNER_THUMBPRINT must configure the publisher certificate's 40-hex thumbprint")
         files = selected_packages(packages, version, source_sha)
+        regular_file(report_path)
         report = json.loads(
             report_path.read_text(encoding="utf-8"),
             object_pairs_hook=_reject_duplicate_json_keys,

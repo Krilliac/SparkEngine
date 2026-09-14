@@ -220,6 +220,71 @@ class SignatureTests(unittest.TestCase):
                     0,
                 )
 
+    def test_report_symlink_is_rejected_without_overwriting_target(self):
+        """Signature diagnostics must not follow a redirected report path."""
+        self.assertIsNotNone(MODULE)
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            packages = root / "packages"
+            packages.mkdir()
+            for suffix in (".exe", ".msi"):
+                (packages / (PREFIX + suffix)).write_bytes(b"fixture " + suffix.encode())
+
+            redirected = root / "redirected.json"
+            redirected.write_text("do not overwrite", encoding="utf-8")
+            report = root / "result.json"
+            try:
+                report.symlink_to(redirected)
+            except OSError as exc:
+                self.skipTest(f"symlink fixture is unavailable: {exc}")
+
+            evidence = {
+                "Status": "Valid",
+                "SignatureType": "Authenticode",
+                "SignerThumbprint": THUMBPRINT,
+                "SignerSubject": "CN=Fixture",
+                "TimestampThumbprint": "C" * 40,
+                "TimestampSubject": "CN=Timestamp",
+            }
+
+            def runner(argv, **kwargs):
+                return subprocess.CompletedProcess(argv, 0, json.dumps(evidence), "")
+
+            result = MODULE.verify(
+                packages, "1.2.3", SOURCE, THUMBPRINT, report,
+                powershell="trusted-powershell", runner=runner,
+            )
+            self.assertEqual(result, 1)
+            self.assertEqual(redirected.read_text(encoding="utf-8"), "do not overwrite")
+
+            valid_report = root / "valid-report.json"
+            valid_report.write_text(json.dumps({
+                "scope": "stable-windows-outer-installers-only",
+                "version": "1.2.3",
+                "source_sha": SOURCE,
+                "publisher_thumbprint": THUMBPRINT,
+                "passed": True,
+                "artifacts": [
+                    {
+                        "name": path.name,
+                        "sha256": MODULE.digest(path),
+                        "signature": evidence,
+                    }
+                    for path in sorted(packages.iterdir())
+                ],
+            }), encoding="utf-8")
+            report.unlink()
+            report.symlink_to(valid_report)
+            with mock.patch.dict(
+                os.environ,
+                {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT},
+                clear=False,
+            ):
+                self.assertNotEqual(
+                    MODULE.check_hashes(packages, "1.2.3", SOURCE, report),
+                    0,
+                )
+
     def test_symlink_rejected(self):
         self.assertIsNotNone(MODULE)
         with tempfile.TemporaryDirectory() as raw:
