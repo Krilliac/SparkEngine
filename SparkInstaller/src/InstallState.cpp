@@ -1,6 +1,7 @@
 #include "InstallState.h"
 
 #include <chrono>
+#include <cstdint>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -13,6 +14,8 @@ namespace SparkInstaller
 
     namespace
     {
+        constexpr std::uintmax_t kMaxInstallStateBytes = 64u * 1024u;
+
         std::string Escape(const std::string& s)
         {
             std::string out;
@@ -48,12 +51,35 @@ namespace SparkInstaller
         // Does not validate full JSON syntax — this file is only ever produced by us.
         bool ReadFile(const std::string& path, std::string& contents)
         {
+            std::error_code error;
+            const std::uintmax_t fileSize = fs::file_size(path, error);
+            if (error || fileSize > kMaxInstallStateBytes)
+                return false;
+
             std::ifstream in(path, std::ios::binary);
             if (!in)
                 return false;
-            std::ostringstream ss;
-            ss << in.rdbuf();
-            contents = ss.str();
+
+            // Allocate only from the bounded stat result, then read exactly that
+            // many bytes. A one-byte probe catches a file that grew between the
+            // stat and open/read without ever slurping the growth into memory.
+            contents.assign(static_cast<size_t>(fileSize), '\0');
+            if (fileSize != 0)
+            {
+                in.read(contents.data(), static_cast<std::streamsize>(fileSize));
+                if (in.gcount() != static_cast<std::streamsize>(fileSize))
+                {
+                    contents.clear();
+                    return false;
+                }
+            }
+
+            char extra = '\0';
+            if (in.read(&extra, 1) || !in.eof())
+            {
+                contents.clear();
+                return false;
+            }
             return true;
         }
 

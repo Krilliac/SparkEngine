@@ -89,13 +89,41 @@ namespace
         std::filesystem::remove_all(root, error);
         return failures;
     }
+
+    int RunOversizedMarkerRejectedBeforeParsingTest()
+    {
+        const auto root = MakeTestRoot();
+        std::error_code error;
+        std::filesystem::create_directories(root, error);
+        int failures = Check(!error, "could not create oversized-marker test root");
+        if (failures != 0)
+            return failures;
+
+        std::ofstream marker(root / SparkInstaller::InstallState::FileName(), std::ios::binary | std::ios::trunc);
+        marker << '{'
+               << "\"schema\":1,\"ref\":\"stable-v1\",\"commit\":\"0123456789abcdef\","
+               << "\"destination\":\"C:/SparkEngine\",\"generator\":\"Ninja\","
+               << "\"build_type\":\"Release\",\"built_at\":\"2026-09-13T00:00:00Z\","
+               << "\"installer_version\":\"1.0.0\",\"payload\":\"" << std::string(64 * 1024, 'x') << "\"}";
+        marker.close();
+
+        SparkInstaller::InstallState loaded;
+        failures += Check(!SparkInstaller::InstallState::Load(root.string(), loaded),
+                          "oversized install state was accepted");
+        failures += Check(!SparkInstaller::InstallState::Exists(root.string()),
+                          "oversized install state was treated as an existing install");
+
+        std::filesystem::remove_all(root, error);
+        return failures;
+    }
 } // namespace
 
 int main()
 {
     const int atomicReplacement = RunAtomicReplacementTest();
     const int malformedMarker = RunMalformedMarkerFailClosedTest();
-    if (atomicReplacement == 0 && malformedMarker == 0)
+    const int oversizedMarker = RunOversizedMarkerRejectedBeforeParsingTest();
+    if (atomicReplacement == 0 && malformedMarker == 0 && oversizedMarker == 0)
         std::cout << "SparkInstaller install-state recovery tests passed\n";
-    return atomicReplacement == 0 && malformedMarker == 0 ? 0 : 1;
+    return atomicReplacement == 0 && malformedMarker == 0 && oversizedMarker == 0 ? 0 : 1;
 }
