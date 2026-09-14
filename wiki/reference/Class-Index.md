@@ -42,7 +42,7 @@
 | `AccessibilitySettings` | struct | Tests | [TestEngineSettingsEdgeCases.cpp:L433](../../Tests/TestEngineSettingsEdgeCases.cpp#L433) |  |
 | `AccessibilitySystem` | class | SparkEngine | [AccessibilitySystem.h:L110](../../SparkEngine/Source/Engine/Accessibility/AccessibilitySystem.h#L110) | Singleton managing all engine accessibility features. |
 | `AccountData` | struct | GameModules | [MMOAccountSystem.h:L60](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L60) | Account data stored in the database |
-| `AccumulatedMetric` | struct | SparkEngine | [BenchmarkFramework.h:L103](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L103) |  |
+| `AccumulatedMetric` | struct | SparkEngine | [BenchmarkFramework.h:L106](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L106) |  |
 | `AchievementCriterion` | struct | GameModules | [MMOAchievementSystem.h:L23](../../GameModules/SparkGameMMO/Source/Achievement/MMOAchievementSystem.h#L23) | A single criterion within an achievement |
 | `AchievementDef` | struct | GameModules | [MMOAchievementSystem.h:L40](../../GameModules/SparkGameMMO/Source/Achievement/MMOAchievementSystem.h#L40) | An achievement definition |
 | `AchievementDefinition` | struct | SparkEngine | [AchievementSystem.h:L88](../../SparkEngine/Source/Engine/Gameplay/AchievementSystem.h#L88) | Static definition of an achievement. |
@@ -383,7 +383,7 @@
 | `BehaviorTreeHandleTag` | struct | SparkEngine | [OpaqueHandle.h:L88](../../SparkEngine/Source/Utils/OpaqueHandle.h#L88) |  |
 | `BenchmarkBaseline` | struct | SparkEngine | [BenchmarkFramework.h:L34](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L34) |  |
 | `BenchmarkComparison` | struct | SparkEngine | [BenchmarkFramework.h:L50](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L50) |  |
-| `BenchmarkFramework` | class | SparkEngine | [BenchmarkFramework.h:L68](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L68) |  |
+| `BenchmarkFramework` | class | SparkEngine | [BenchmarkFramework.h:L71](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L71) |  |
 | `BenchmarkMetric` | struct | SparkEngine | [BenchmarkFramework.h:L18](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L18) |  |
 | `BenchmarkResult` | struct | SparkEngine | [BenchmarkFramework.h:L26](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L26) |  |
 | `BigEvent` | struct | Tests | [TestAdversarialEngine.cpp:L235](../../Tests/TestAdversarialEngine.cpp#L235) |  |
@@ -1785,7 +1785,7 @@
 | `IAudioBackend` | class | SparkEngine | [IAudioBackend.h:L29](../../SparkEngine/Source/Audio/IAudioBackend.h#L29) | Abstract interface for audio backend implementations |
 | `IAudioBackend` | class | SparkEngine | [EngineRuntime.h:L43](../../SparkEngine/Source/Core/EngineRuntime.h#L43) |  |
 | `IAudioBackend` | class | SparkEngine | [Sequencer.h:L25](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L25) |  |
-| `IBenchmarkScenario` | class | SparkEngine | [BenchmarkFramework.h:L57](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L57) |  |
+| `IBenchmarkScenario` | class | SparkEngine | [BenchmarkFramework.h:L60](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L60) |  |
 | `IChannel` | struct | SparkEngine | [EntityEventBus.h:L261](../../SparkEngine/Source/Utils/EntityEventBus.h#L261) |  |
 | `IChannel` | struct | SparkEngine | [EventBus.h:L274](../../SparkEngine/Source/Utils/EventBus.h#L274) |  |
 | `ICommand` | class | SparkEditor | [CommandHistory.h:L60](../../SparkEditor/Source/CommandHistory.h#L60) | Interface for a reversible editor command. |

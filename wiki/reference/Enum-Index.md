@@ -541,7 +541,7 @@
 | `PanelCategory` | enum | SparkEditor | [EditorPanel.h:L25](../../SparkEditor/Source/Core/EditorPanel.h#L25) | Category classification for editor panels. |
 | `PanelType` | enum | SparkEditor | [CoreEditorEnums.h:L33](../../SparkEditor/Source/Enums/CoreEditorEnums.h#L33) | Editor panel types |
 | `ParamType` | enum | SparkEngine | [MaterialDefinition.h:L70](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L70) | Parameter types supported in material definitions |
-| `ParseResult` | enum | SparkShaderCompiler | [main.cpp:L450](../../SparkShaderCompiler/src/main.cpp#L450) |  |
+| `ParseResult` | enum | SparkShaderCompiler | [main.cpp:L449](../../SparkShaderCompiler/src/main.cpp#L449) |  |
 | `ParticleBlendMode` | enum | SparkEngine | [GPUParticleTypes.h:L34](../../SparkEngine/Source/Graphics/GPUParticleTypes.h#L34) | Blend modes for particle rendering |
 | `ParticleBlendMode` | enum | SparkEngine | [ParticleSystem.h:L43](../../SparkEngine/Source/Graphics/ParticleSystem.h#L43) | Blend modes for particle rendering |
 | `ParticleSpace` | enum | SparkEngine | [GPUParticleTypes.h:L45](../../SparkEngine/Source/Graphics/GPUParticleTypes.h#L45) | Space in which particles simulate |
