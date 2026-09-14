@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cerrno>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -24,6 +26,9 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <Windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 namespace Spark::Persistence
@@ -589,6 +594,16 @@ namespace Spark::Persistence
                 file << EscapeKVField(key) << '\t' << EscapeKVField(value) << '\n';
             }
 
+            file.flush();
+            if (!file)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: flush error writing '%s' (%zu entries)",
+                                temporary.string().c_str(), m_kvStore.size());
+                std::error_code removeError;
+                std::filesystem::remove(temporary, removeError);
+                return false;
+            }
+
             file.close();
             if (file.fail())
             {
@@ -599,6 +614,66 @@ namespace Spark::Persistence
                 return false;
             }
         }
+
+        // Seal the complete temporary revision before the atomic name swap. The
+        // Windows replace flag below covers the rename itself; explicitly flushing
+        // the file here also makes the durability boundary clear and gives POSIX
+        // the equivalent data-write ordering before rename.
+#ifdef _WIN32
+        HANDLE temporaryHandle = ::CreateFileW(temporary.c_str(), GENERIC_READ | GENERIC_WRITE,
+                                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (temporaryHandle == INVALID_HANDLE_VALUE)
+        {
+            const DWORD error = ::GetLastError();
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: failed to reopen '%s' for durable flush: %s",
+                            temporary.string().c_str(), std::system_category().message(static_cast<int>(error)).c_str());
+            std::error_code removeError;
+            std::filesystem::remove(temporary, removeError);
+            return false;
+        }
+        const BOOL flushed = ::FlushFileBuffers(temporaryHandle);
+        const DWORD flushError = flushed ? ERROR_SUCCESS : ::GetLastError();
+        ::CloseHandle(temporaryHandle);
+        if (!flushed)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: durable flush failed for '%s': %s", temporary.string().c_str(),
+                            std::system_category().message(static_cast<int>(flushError)).c_str());
+            std::error_code removeError;
+            std::filesystem::remove(temporary, removeError);
+            return false;
+        }
+#else
+        int temporaryFd = ::open(temporary.c_str(), O_RDONLY
+#ifdef O_CLOEXEC
+                                  | O_CLOEXEC
+#endif
+        );
+        if (temporaryFd < 0)
+        {
+            const int error = errno;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: failed to reopen '%s' for durable flush: %s",
+                            temporary.string().c_str(), std::strerror(error));
+            std::error_code removeError;
+            std::filesystem::remove(temporary, removeError);
+            return false;
+        }
+        const int flushResult = ::fsync(temporaryFd);
+        const int flushError = flushResult == 0 ? 0 : errno;
+        ::close(temporaryFd);
+        if (flushResult != 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "AsyncDatabase: durable flush failed for '%s': %s", temporary.string().c_str(),
+                            std::strerror(flushError));
+            std::error_code removeError;
+            std::filesystem::remove(temporary, removeError);
+            return false;
+        }
+#endif
 
         // Replace in one step so the destination is never missing: std::filesystem::rename
         // does not overwrite on Windows, where MoveFileEx does.

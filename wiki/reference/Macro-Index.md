@@ -717,7 +717,7 @@
 | `NOMINMAX` | macro | SparkEditor | [JSONSceneSerializer.cpp:L34](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L34) |  |
 | `NOMINMAX` | macro | SparkEngine | [DynamicPluginHost.cpp:L32](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L32) |  |
 | `NOMINMAX` | macro | SparkEngine | [GameImGuiLayer.h:L31](../../SparkEngine/Source/Core/GameImGuiLayer.h#L31) |  |
-| `NOMINMAX` | macro | SparkEngine | [AsyncDatabase.cpp:L21](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L21) |  |
+| `NOMINMAX` | macro | SparkEngine | [AsyncDatabase.cpp:L23](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L23) |  |
 | `NOMINMAX` | macro | SparkEngine | [SaveSystem.cpp:L26](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L26) |  |
 | `NOMINMAX` | macro | SparkEngine | [ReflectedSceneSerializer.cpp:L17](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L17) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashArtifactDirectory.h:L18](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L18) |  |
@@ -1292,7 +1292,7 @@
 | `T` | alias | SparkEditor | [EditorCommands.h:L131](../../SparkEditor/Source/UndoRedo/EditorCommands.h#L131) |  |
 | `T` | alias | SparkEditor | [EditorCommands.h:L157](../../SparkEditor/Source/UndoRedo/EditorCommands.h#L157) |  |
 | `T` | alias | SparkEngine | [EventResponseSystem.cpp:L727](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L727) |  |
-| `T` | alias | SparkEngine | [AsyncDatabase.cpp:L303](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L303) |  |
+| `T` | alias | SparkEngine | [AsyncDatabase.cpp:L308](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L308) |  |
 | `T` | alias | SparkEngine | [JsonUtils.h:L128](../../SparkEngine/Source/Utils/JsonUtils.h#L128) |  |
 | `TAAS` | alias | SparkEngine | [EngineSettings.cpp:L256](../../SparkEngine/Source/Core/EngineSettings.cpp#L256) |  |
 | `TerrainID` | alias | Tests | [TestTerrainRenderer.cpp:L13](../../Tests/TestTerrainRenderer.cpp#L13) |  |
@@ -1428,7 +1428,7 @@
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [GameModuleLoader.cpp:L14](../../SparkEngine/Source/Core/GameModuleLoader.cpp#L14) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [ModuleManager.cpp:L39](../../SparkEngine/Source/Core/ModuleManager.cpp#L39) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [StartupSplash.cpp:L23](../../SparkEngine/Source/Core/StartupSplash.cpp#L23) |  |
-| `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [AsyncDatabase.cpp:L24](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L24) |  |
+| `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [AsyncDatabase.cpp:L26](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L26) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [MemoryIntegrity.cpp:L25](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp#L25) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [CrashArtifactDirectory.h:L15](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L15) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [CrashHandlerSupport.h:L26](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L26) |  |

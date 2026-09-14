@@ -1576,16 +1576,16 @@
 | `AsyncComputeScheduler::Shutdown` | method | SparkEngine | [AsyncComputeScheduler.cpp:L58](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.cpp#L58) |  |
 | `AsyncComputeScheduler::SubmitComputeWork` | method | SparkEngine | [AsyncComputeScheduler.cpp:L154](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.cpp#L154) |  |
 | `AsyncComputeScheduler::WaitForCompletion` | method | SparkEngine | [AsyncComputeScheduler.cpp:L227](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.cpp#L227) |  |
-| `AsyncDatabasePool::AsyncQuery` | method | SparkEngine | [AsyncDatabase.cpp:L807](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L807) |  |
-| `AsyncDatabasePool::AsyncQueryWithCallback` | method | SparkEngine | [AsyncDatabase.cpp:L837](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L837) |  |
-| `AsyncDatabasePool::AsyncTransaction` | method | SparkEngine | [AsyncDatabase.cpp:L868](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L868) |  |
-| `AsyncDatabasePool::Close` | method | SparkEngine | [AsyncDatabase.cpp:L734](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L734) |  |
-| `AsyncDatabasePool::Open` | method | SparkEngine | [AsyncDatabase.cpp:L690](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L690) |  |
-| `AsyncDatabasePool::PrepareStatement` | method | SparkEngine | [AsyncDatabase.cpp:L778](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L778) |  |
-| `AsyncDatabasePool::ProcessCallbacks` | method | SparkEngine | [AsyncDatabase.cpp:L913](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L913) |  |
-| `AsyncDatabasePool::SyncQuery` | method | SparkEngine | [AsyncDatabase.cpp:L897](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L897) |  |
-| `AsyncDatabasePool::WaitForWorkItem` | method | SparkEngine | [AsyncDatabase.cpp:L930](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L930) |  |
-| `AsyncDatabasePool::WorkerThread` | method | SparkEngine | [AsyncDatabase.cpp:L946](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L946) |  |
+| `AsyncDatabasePool::AsyncQuery` | method | SparkEngine | [AsyncDatabase.cpp:L882](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L882) |  |
+| `AsyncDatabasePool::AsyncQueryWithCallback` | method | SparkEngine | [AsyncDatabase.cpp:L912](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L912) |  |
+| `AsyncDatabasePool::AsyncTransaction` | method | SparkEngine | [AsyncDatabase.cpp:L943](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L943) |  |
+| `AsyncDatabasePool::Close` | method | SparkEngine | [AsyncDatabase.cpp:L809](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L809) |  |
+| `AsyncDatabasePool::Open` | method | SparkEngine | [AsyncDatabase.cpp:L765](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L765) |  |
+| `AsyncDatabasePool::PrepareStatement` | method | SparkEngine | [AsyncDatabase.cpp:L853](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L853) |  |
+| `AsyncDatabasePool::ProcessCallbacks` | method | SparkEngine | [AsyncDatabase.cpp:L988](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L988) |  |
+| `AsyncDatabasePool::SyncQuery` | method | SparkEngine | [AsyncDatabase.cpp:L972](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L972) |  |
+| `AsyncDatabasePool::WaitForWorkItem` | method | SparkEngine | [AsyncDatabase.cpp:L1005](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L1005) |  |
+| `AsyncDatabasePool::WorkerThread` | method | SparkEngine | [AsyncDatabase.cpp:L1021](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L1021) |  |
 | `AsyncQuery` | function | SparkEngine | [AsyncDatabase.h:L218](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L218) | Enqueue an async query, returning a future for the result. |
 | `AsyncQueryWithCallback` | function | SparkEngine | [AsyncDatabase.h:L222](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L222) | Enqueue an async query with a completion callback. |
 | `AsyncThreadFunc` | function | SparkBuild | [ProcessRunner.h:L41](../../SparkBuild/src/ProcessRunner.h#L41) |  |
@@ -4591,11 +4591,11 @@
 | `constexpr` | function | SparkEngine | [EventResponseSystem.cpp:L732](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L732) |  |
 | `constexpr` | function | SparkEngine | [EventResponseSystem.cpp:L734](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L734) |  |
 | `constexpr` | function | SparkEngine | [EventResponseSystem.cpp:L736](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L736) |  |
-| `constexpr` | function | SparkEngine | [AsyncDatabase.cpp:L304](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L304) |  |
-| `constexpr` | function | SparkEngine | [AsyncDatabase.cpp:L308](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L308) |  |
-| `constexpr` | function | SparkEngine | [AsyncDatabase.cpp:L312](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L312) |  |
-| `constexpr` | function | SparkEngine | [AsyncDatabase.cpp:L316](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L316) |  |
-| `constexpr` | function | SparkEngine | [AsyncDatabase.cpp:L332](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L332) |  |
+| `constexpr` | function | SparkEngine | [AsyncDatabase.cpp:L309](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L309) |  |
+| `constexpr` | function | SparkEngine | [AsyncDatabase.cpp:L313](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L313) |  |
+| `constexpr` | function | SparkEngine | [AsyncDatabase.cpp:L317](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L317) |  |
+| `constexpr` | function | SparkEngine | [AsyncDatabase.cpp:L321](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L321) |  |
+| `constexpr` | function | SparkEngine | [AsyncDatabase.cpp:L337](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L337) |  |
 | `constexpr` | function | SparkEngine | [UIFactory.h:L68](../../SparkEngine/Source/Engine/UI/UIFactory.h#L68) |  |
 | `constexpr` | function | SparkEngine | [UIFactory.h:L70](../../SparkEngine/Source/Engine/UI/UIFactory.h#L70) |  |
 | `constexpr` | function | SparkEngine | [TonemapColorGrading.cpp:L275](../../SparkEngine/Source/Graphics/TonemapColorGrading.cpp#L275) |  |
@@ -5757,7 +5757,7 @@
 | `DataTable` | function | SparkEngine | [DataTableSystem.h:L117](../../SparkEngine/Source/Engine/DataTable/DataTableSystem.h#L117) | Construct an empty table with an optional ID column name. |
 | `DayFrac` | function | GameModules | [TFDayNight.h:L118](../../GameModules/SparkGameMMOFPS/Source/World/TFDayNight.h#L118) |  |
 | `DaysFromCivil` | function | GameModules | [TFOutfitStore.cpp:L63](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.cpp#L63) |  |
-| `dbLock` | function | SparkEngine | [AsyncDatabase.cpp:L965](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L965) |  |
+| `dbLock` | function | SparkEngine | [AsyncDatabase.cpp:L1040](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L1040) |  |
 | `dd` | function | Tests | [Test_ui-2d_ui.cpp:L24](../../Tests/harden/Test_ui-2d_ui.cpp#L24) |  |
 | `dd` | function | Tests | [Test_ui-2d_ui.cpp:L44](../../Tests/harden/Test_ui-2d_ui.cpp#L44) |  |
 | `DDGIProbeSystem::CopyProbeData` | method | SparkEngine | [DDGIProbeSystem.cpp:L287](../../SparkEngine/Source/Graphics/DDGIProbeSystem.cpp#L287) |  |
@@ -6189,7 +6189,7 @@
 | `DeserializeWorld` | function | SparkEngine | [SaveSystem.h:L694](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L694) |  |
 | `DespawnBot` | function | GameModules | [TFBotSystem.h:L206](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystem.h#L206) |  |
 | `destination` | function | SparkEditor | [JSONSceneSerializer.cpp:L531](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L531) |  |
-| `destination` | function | SparkEngine | [AsyncDatabase.cpp:L574](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L574) |  |
+| `destination` | function | SparkEngine | [AsyncDatabase.cpp:L579](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L579) |  |
 | `DestinationForPass` | function | SparkEngine | [PostProcessingTypes.h:L72](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L72) |  |
 | `Destroy` | function | SparkEngine | [RenderTarget.h:L128](../../SparkEngine/Source/Graphics/RenderTarget.h#L128) | Destroy DirectX resources |
 | `Destroy` | function | Tests | [ForwardMinorPlugin.cpp:L15](../../Tests/Fixtures/PluginABI/ForwardMinorPlugin.cpp#L15) |  |
@@ -7723,8 +7723,8 @@
 | `EscapeJsonString` | function | SparkEditor | [ProjectManager.cpp:L2529](../../SparkEditor/Source/Core/ProjectManager.cpp#L2529) |  |
 | `EscapeJsonString` | function | SparkEditor | [ProjectManager.cpp:L2530](../../SparkEditor/Source/Core/ProjectManager.cpp#L2530) |  |
 | `EscapeJsonString` | function | SparkEditor | [ProjectManager.cpp:L2531](../../SparkEditor/Source/Core/ProjectManager.cpp#L2531) |  |
-| `EscapeKVField` | function | SparkEngine | [AsyncDatabase.cpp:L162](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L162) |  |
-| `EscapeKVField` | function | SparkEngine | [AsyncDatabase.cpp:L589](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L589) |  |
+| `EscapeKVField` | function | SparkEngine | [AsyncDatabase.cpp:L167](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L167) |  |
+| `EscapeKVField` | function | SparkEngine | [AsyncDatabase.cpp:L594](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L594) |  |
 | `EscapeString` | function | SparkEngine | [JsonUtils.h:L1093](../../SparkEngine/Source/Utils/JsonUtils.h#L1093) |  |
 | `EstimateCompressedSize` | function | SparkEngine | [AnimationCompression.h:L116](../../SparkEngine/Source/Engine/Animation/AnimationCompression.h#L116) |  |
 | `EstimateCompressedSize` | function | SparkEngine | [TextureCompressor.h:L120](../../SparkEngine/Source/Graphics/TextureCompressor.h#L120) | Estimate compressed size for given dimensions and format |
@@ -7982,7 +7982,7 @@
 | `ExecuteGit` | function | SparkEditor | [VersionControlSystem.h:L403](../../SparkEditor/Source/VersionControl/VersionControlSystem.h#L403) |  |
 | `ExecuteInput` | function | SparkEngine | [InGameConsole.h:L377](../../SparkEngine/Source/Utils/InGameConsole.h#L377) |  |
 | `ExecutePhase` | function | SparkEngine | [GameplaySystemLifecycle.cpp:L73](../../SparkEngine/Source/Core/GameplaySystemLifecycle.cpp#L73) |  |
-| `ExecuteRaw` | function | SparkEngine | [AsyncDatabase.cpp:L384](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L384) |  |
+| `ExecuteRaw` | function | SparkEngine | [AsyncDatabase.cpp:L389](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L389) |  |
 | `ExecuteRaw` | function | SparkEngine | [AsyncDatabase.h:L127](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L127) |  |
 | `ExecuteRaw` | function | SparkEngine | [AsyncDatabase.h:L156](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L156) |  |
 | `ExecuteRcon` | function | SparkEngine | [DedicatedServer.h:L291](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L291) | Execute a trusted in-process RCON command string, e.g. "kick 3 cheating". |
@@ -8526,8 +8526,8 @@
 | `file` | function | SparkEngine | [ModSystemIO.cpp:L73](../../SparkEngine/Source/Engine/Modding/ModSystemIO.cpp#L73) |  |
 | `file` | function | SparkEngine | [VirtualFileSystem.cpp:L162](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp#L162) |  |
 | `file` | function | SparkEngine | [VirtualFileSystem.cpp:L189](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp#L189) |  |
-| `file` | function | SparkEngine | [AsyncDatabase.cpp:L578](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L578) |  |
-| `file` | function | SparkEngine | [AsyncDatabase.cpp:L630](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L630) |  |
+| `file` | function | SparkEngine | [AsyncDatabase.cpp:L583](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L583) |  |
+| `file` | function | SparkEngine | [AsyncDatabase.cpp:L705](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L705) |  |
 | `file` | function | SparkEngine | [ReplaySystem.cpp:L348](../../SparkEngine/Source/Engine/Replay/ReplaySystem.cpp#L348) |  |
 | `file` | function | SparkEngine | [ReplaySystem.cpp:L408](../../SparkEngine/Source/Engine/Replay/ReplaySystem.cpp#L408) |  |
 | `file` | function | SparkEngine | [SaveSystem.cpp:L1759](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1759) |  |
@@ -19244,16 +19244,16 @@
 | `lock` | function | SparkEngine | [WorldServer.cpp:L757](../../SparkEngine/Source/Engine/Networking/WorldServer.cpp#L757) |  |
 | `lock` | function | SparkEngine | [WorldServer.cpp:L851](../../SparkEngine/Source/Engine/Networking/WorldServer.cpp#L851) |  |
 | `lock` | function | SparkEngine | [WorldServer.h:L306](../../SparkEngine/Source/Engine/Networking/WorldServer.h#L306) | Get a snapshot copy of the world server statistics. |
-| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L719](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L719) |  |
-| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L740](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L740) |  |
-| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L817](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L817) |  |
-| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L847](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L847) |  |
-| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L863](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L863) |  |
-| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L877](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L877) |  |
-| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L902](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L902) |  |
-| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L917](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L917) |  |
-| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L935](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L935) |  |
-| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L1028](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L1028) |  |
+| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L794](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L794) |  |
+| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L815](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L815) |  |
+| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L892](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L892) |  |
+| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L922](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L922) |  |
+| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L938](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L938) |  |
+| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L952](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L952) |  |
+| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L977](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L977) |  |
+| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L992](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L992) |  |
+| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L1010](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L1010) |  |
+| `lock` | function | SparkEngine | [AsyncDatabase.cpp:L1103](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L1103) |  |
 | `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L131](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L131) |  |
 | `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L191](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L191) |  |
 | `lock` | function | SparkEngine | [RemoteDebugAccessControl.h:L219](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L219) |  |
@@ -20261,7 +20261,7 @@
 | `MakePacket` | function | Tests | [TestNetworkMMOIntegration.cpp:L157](../../Tests/TestNetworkMMOIntegration.cpp#L157) |  |
 | `MakePacket` | function | Tests | [TestNetworkMMOIntegration.cpp:L163](../../Tests/TestNetworkMMOIntegration.cpp#L163) |  |
 | `MakePanel` | function | Tests | [TestEditorLayoutManager.cpp:L252](../../Tests/TestEditorLayoutManager.cpp#L252) |  |
-| `MakePoolClosedResult` | function | SparkEngine | [AsyncDatabase.cpp:L798](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L798) |  |
+| `MakePoolClosedResult` | function | SparkEngine | [AsyncDatabase.cpp:L873](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L873) |  |
 | `MakePositionPacket` | function | Tests | [TestNetworkMMOIntegration.cpp:L150](../../Tests/TestNetworkMMOIntegration.cpp#L150) |  |
 | `MakeProbe` | function | Tests | [TestReflectionProbeCache.cpp:L25](../../Tests/TestReflectionProbeCache.cpp#L25) |  |
 | `MakeProbeComponentOps` | function | Tests | [Test_persistence_SaveSystem.cpp:L485](../../Tests/harden/Test_persistence_SaveSystem.cpp#L485) |  |
@@ -24416,11 +24416,11 @@
 | `Prepare` | function | Tests | [TestSparkGatewayCoordinator.cpp:L37](../../Tests/TestSparkGatewayCoordinator.cpp#L37) |  |
 | `PrepareComponentStorage` | function | SparkEngine | [ComponentReflection.cpp:L297](../../SparkEngine/Source/Core/ComponentReflection.cpp#L297) |  |
 | `PreparedStatementData` | function | Tests | [TestAsyncDatabase.cpp:L102](../../Tests/TestAsyncDatabase.cpp#L102) |  |
-| `PreparedStatementData::ClearParams` | method | SparkEngine | [AsyncDatabase.cpp:L138](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L138) |  |
-| `PreparedStatementData::SetDouble` | method | SparkEngine | [AsyncDatabase.cpp:L111](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L111) |  |
-| `PreparedStatementData::SetInt` | method | SparkEngine | [AsyncDatabase.cpp:L102](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L102) |  |
-| `PreparedStatementData::SetNull` | method | SparkEngine | [AsyncDatabase.cpp:L129](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L129) |  |
-| `PreparedStatementData::SetString` | method | SparkEngine | [AsyncDatabase.cpp:L120](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L120) |  |
+| `PreparedStatementData::ClearParams` | method | SparkEngine | [AsyncDatabase.cpp:L143](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L143) |  |
+| `PreparedStatementData::SetDouble` | method | SparkEngine | [AsyncDatabase.cpp:L116](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L116) |  |
+| `PreparedStatementData::SetInt` | method | SparkEngine | [AsyncDatabase.cpp:L107](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L107) |  |
+| `PreparedStatementData::SetNull` | method | SparkEngine | [AsyncDatabase.cpp:L134](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L134) |  |
+| `PreparedStatementData::SetString` | method | SparkEngine | [AsyncDatabase.cpp:L125](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L125) |  |
 | `PrepareHmacSha256Key` | function | SparkEngine | [PasswordHash.cpp:L164](../../SparkEngine/Source/Utils/PasswordHash.cpp#L164) |  |
 | `PrepareNetworkStop` | function | GameModules | [TFServerSim.h:L121](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L121) |  |
 | `PrepareNextClientID` | function | SparkEngine | [NetworkManager.h:L700](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L700) |  |
@@ -25046,10 +25046,10 @@
 | `QueryRegionCapturable` | function | GameModules | [TFBotSystemInternal.h:L132](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemInternal.h#L132) |  |
 | `QueryRegionOwner` | function | GameModules | [TFBotSystemInternal.h:L119](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemInternal.h#L119) |  |
 | `QueryRow` | function | Tests | [TestAsyncDatabase.cpp:L23](../../Tests/TestAsyncDatabase.cpp#L23) |  |
-| `QueryRow::GetDouble` | method | SparkEngine | [AsyncDatabase.cpp:L54](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L54) |  |
-| `QueryRow::GetInt` | method | SparkEngine | [AsyncDatabase.cpp:L36](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L36) |  |
-| `QueryRow::GetString` | method | SparkEngine | [AsyncDatabase.cpp:L72](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L72) |  |
-| `QueryRow::IsNull` | method | SparkEngine | [AsyncDatabase.cpp:L89](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L89) |  |
+| `QueryRow::GetDouble` | method | SparkEngine | [AsyncDatabase.cpp:L59](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L59) |  |
+| `QueryRow::GetInt` | method | SparkEngine | [AsyncDatabase.cpp:L41](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L41) |  |
+| `QueryRow::GetString` | method | SparkEngine | [AsyncDatabase.cpp:L77](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L77) |  |
+| `QueryRow::IsNull` | method | SparkEngine | [AsyncDatabase.cpp:L94](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L94) |  |
 | `QueryScalar` | function | SparkEngine | [NeuralFunctionApproximator.h:L160](../../SparkEngine/Source/Graphics/Neural/NeuralFunctionApproximator.h#L160) | Convenience: evaluate a 2-input, 1-output scalar function. |
 | `QueryScalar` | function | SparkEngine | [NeuralFunctionApproximator.h:L163](../../SparkEngine/Source/Graphics/Neural/NeuralFunctionApproximator.h#L163) | Convenience: evaluate a 1-input, 1-output scalar function. |
 | `QueryScores` | function | SparkEngine | [OnlineServices.h:L164](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L164) |  |
@@ -27517,7 +27517,7 @@
 | `ReplaceFileAtomically` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L84](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L84) |  |
 | `ReplaceFirstAscii` | function | Tests | [Test_persistence_SaveSystem.cpp:L148](../../Tests/harden/Test_persistence_SaveSystem.cpp#L148) |  |
 | `ReplaceLengthPrefixedString` | function | Tests | [Test_persistence_SaveSystem.cpp:L159](../../Tests/harden/Test_persistence_SaveSystem.cpp#L159) |  |
-| `replacements` | function | SparkEngine | [AsyncDatabase.cpp:L297](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L297) |  |
+| `replacements` | function | SparkEngine | [AsyncDatabase.cpp:L302](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L302) |  |
 | `ReplaceOnce` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L101](../../Tests/TestGLTFStaticMeshLoader.cpp#L101) |  |
 | `Replay` | function | SparkEngine | [EngineSettings.h:L1033](../../SparkEngine/Source/Core/EngineSettings.h#L1033) |  |
 | `Replay` | function | SparkEngine | [EngineSettings.h:L1034](../../SparkEngine/Source/Core/EngineSettings.h#L1034) |  |
@@ -32980,16 +32980,16 @@
 | `SpriteEditorPanel::RenderTexturePreview` | method | SparkEditor | [SpriteEditorPanel.cpp:L96](../../SparkEditor/Source/Panels/SpriteEditorPanel.cpp#L96) |  |
 | `SpriteEditorPanel::Shutdown` | method | SparkEditor | [SpriteEditorPanel.cpp:L91](../../SparkEditor/Source/Panels/SpriteEditorPanel.cpp#L91) |  |
 | `SpriteEditorPanel::Update` | method | SparkEditor | [SpriteEditorPanel.cpp:L31](../../SparkEditor/Source/Panels/SpriteEditorPanel.cpp#L31) |  |
-| `SQLiteConnection::BeginTransaction` | method | SparkEngine | [AsyncDatabase.cpp:L524](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L524) |  |
-| `SQLiteConnection::Close` | method | SparkEngine | [AsyncDatabase.cpp:L265](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L265) |  |
-| `SQLiteConnection::CommitTransaction` | method | SparkEngine | [AsyncDatabase.cpp:L535](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L535) |  |
-| `SQLiteConnection::Execute` | method | SparkEngine | [AsyncDatabase.cpp:L284](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L284) |  |
-| `SQLiteConnection::ExecuteRaw` | method | SparkEngine | [AsyncDatabase.cpp:L387](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L387) |  |
-| `SQLiteConnection::FlushToDisk` | method | SparkEngine | [AsyncDatabase.cpp:L569](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L569) |  |
-| `SQLiteConnection::LoadFromDisk` | method | SparkEngine | [AsyncDatabase.cpp:L626](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L626) |  |
-| `SQLiteConnection::Open` | method | SparkEngine | [AsyncDatabase.cpp:L237](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L237) |  |
-| `SQLiteConnection::PrepareStatement` | method | SparkEngine | [AsyncDatabase.cpp:L278](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L278) |  |
-| `SQLiteConnection::RollbackTransaction` | method | SparkEngine | [AsyncDatabase.cpp:L558](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L558) |  |
+| `SQLiteConnection::BeginTransaction` | method | SparkEngine | [AsyncDatabase.cpp:L529](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L529) |  |
+| `SQLiteConnection::Close` | method | SparkEngine | [AsyncDatabase.cpp:L270](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L270) |  |
+| `SQLiteConnection::CommitTransaction` | method | SparkEngine | [AsyncDatabase.cpp:L540](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L540) |  |
+| `SQLiteConnection::Execute` | method | SparkEngine | [AsyncDatabase.cpp:L289](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L289) |  |
+| `SQLiteConnection::ExecuteRaw` | method | SparkEngine | [AsyncDatabase.cpp:L392](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L392) |  |
+| `SQLiteConnection::FlushToDisk` | method | SparkEngine | [AsyncDatabase.cpp:L574](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L574) |  |
+| `SQLiteConnection::LoadFromDisk` | method | SparkEngine | [AsyncDatabase.cpp:L701](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L701) |  |
+| `SQLiteConnection::Open` | method | SparkEngine | [AsyncDatabase.cpp:L242](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L242) |  |
+| `SQLiteConnection::PrepareStatement` | method | SparkEngine | [AsyncDatabase.cpp:L283](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L283) |  |
+| `SQLiteConnection::RollbackTransaction` | method | SparkEngine | [AsyncDatabase.cpp:L563](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L563) |  |
 | `sqrtf` | function | SparkEngine | [GameObject.cpp:L208](../../SparkEngine/Source/Game/GameObject.cpp#L208) |  |
 | `sqrtf` | function | SparkEngine | [CollisionSystem.cpp:L318](../../SparkEngine/Source/Physics/CollisionSystem.cpp#L318) |  |
 | `sqrtf` | function | SparkEngine | [MathUtils.cpp:L96](../../SparkEngine/Source/Utils/MathUtils.cpp#L96) |  |
@@ -34090,7 +34090,7 @@
 | `stream` | function | SparkEngine | [StartupSplash.cpp:L453](../../SparkEngine/Source/Core/StartupSplash.cpp#L453) |  |
 | `stream` | function | SparkEngine | [EntityArchetypeLoader.cpp:L41](../../SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp#L41) |  |
 | `stream` | function | SparkEngine | [DedicatedServer.cpp:L769](../../SparkEngine/Source/Engine/Networking/DedicatedServer.cpp#L769) |  |
-| `stream` | function | SparkEngine | [AsyncDatabase.cpp:L393](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L393) |  |
+| `stream` | function | SparkEngine | [AsyncDatabase.cpp:L398](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L398) |  |
 | `stream` | function | SparkEngine | [SaveSystem.cpp:L210](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L210) |  |
 | `stream` | function | SparkEngine | [SceneManifest.h:L96](../../SparkEngine/Source/Engine/Streaming/SceneManifest.h#L96) |  |
 | `stream` | function | SparkEngine | [UIFactory.cpp:L88](../../SparkEngine/Source/Engine/UI/UIFactory.cpp#L88) |  |
@@ -34514,7 +34514,7 @@
 | `templateText` | function | Tests | [TestEditorSubsystems.cpp:L956](../../Tests/TestEditorSubsystems.cpp#L956) |  |
 | `TemplateTreeContainsLinks` | function | SparkEditor | [ProjectManager.cpp:L868](../../SparkEditor/Source/Core/ProjectManager.cpp#L868) |  |
 | `TemporalFilter` | function | SparkEngine | [FroxelVolumetricFog.h:L161](../../SparkEngine/Source/Graphics/FroxelVolumetricFog.h#L161) | Pass 3: Temporal reprojection and filtering |
-| `temporary` | function | SparkEngine | [AsyncDatabase.cpp:L575](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L575) |  |
+| `temporary` | function | SparkEngine | [AsyncDatabase.cpp:L580](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L580) |  |
 | `temporaryCleanup` | function | SparkEditor | [JSONSceneSerializer.cpp:L533](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L533) |  |
 | `TemporaryDirectory` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L25](../../Tests/TestGLTFStaticMeshLoader.cpp#L25) |  |
 | `TemporaryFileCleanup` | function | SparkEditor | [JSONSceneSerializer.cpp:L175](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L175) |  |
@@ -36792,7 +36792,7 @@
 | `TrainOffline` | function | SparkEngine | [NeuralFunctionApproximator.h:L135](../../SparkEngine/Source/Graphics/Neural/NeuralFunctionApproximator.h#L135) |  |
 | `TrainSample` | function | SparkEngine | [CpuNeuralTraining.h:L181](../../SparkEngine/Source/Graphics/Neural/CpuNeuralTraining.h#L181) | Single-sample online Adam update. |
 | `trampoline` | function | tools | [gvisor-wine-shim.c:L533](../../tools/gvisor-wine-shim.c#L533) |  |
-| `Transaction::Append` | method | SparkEngine | [AsyncDatabase.cpp:L147](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L147) |  |
+| `Transaction::Append` | method | SparkEngine | [AsyncDatabase.cpp:L152](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L152) |  |
 | `Transcode` | function | SparkEngine | [BasisTranscoder.h:L167](../../SparkEngine/Source/Graphics/BasisTranscoder.h#L167) |  |
 | `TranscodeBlocks` | function | SparkEngine | [BasisTranscoder.h:L261](../../SparkEngine/Source/Graphics/BasisTranscoder.h#L261) | Transcode Basis blocks to a target compressed format |
 | `Transfer` | function | Tests | [TestSparkGatewayCoordinator.cpp:L41](../../Tests/TestSparkGatewayCoordinator.cpp#L41) |  |
@@ -37230,7 +37230,7 @@
 | `Unequip` | function | GameModules | [RPGCharacterSystem.h:L135](../../GameModules/SparkGameRPG/Source/Character/RPGCharacterSystem.h#L135) |  |
 | `UnescapeJson` | function | SparkEditor | [EditorWindowManager.cpp:L342](../../SparkEditor/Source/Core/EditorWindowManager.cpp#L342) |  |
 | `UnescapeJson` | function | SparkEditor | [EditorWindowManager.h:L229](../../SparkEditor/Source/Core/EditorWindowManager.h#L229) |  |
-| `UnescapeKVField` | function | SparkEngine | [AsyncDatabase.cpp:L192](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L192) |  |
+| `UnescapeKVField` | function | SparkEngine | [AsyncDatabase.cpp:L197](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L197) |  |
 | `Unexpected` | function | SparkEngine | [Expected.h:L39](../../SparkEngine/Source/Utils/Expected.h#L39) |  |
 | `unhandled_exception` | function | SparkEngine | [CoroutineTypes.h:L200](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L200) |  |
 | `uni` | function | GameModules | [TFWeaponMath.h:L72](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponMath.h#L72) |  |

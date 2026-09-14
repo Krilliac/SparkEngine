@@ -179,6 +179,14 @@ it on demand. `DeleteSave()` removes both the slot file and its `.bak`.
 file is unreadable. There is no trailing payload checksum yet (tracked under
 `SAVE-230`).
 
+The file-based `AsyncDatabase` fallback uses the same safe publication shape for
+its KV revision: it writes a sibling `.tmp`, explicitly flushes that complete
+revision (`FlushFileBuffers` on Windows, `fsync` on POSIX), and only then swaps
+the destination name. This prevents an interrupted write from truncating the
+last readable store. It does not supply schema migrations, concurrent MMO
+ownership, backup/restore rehearsal, or disaster recovery; those remain tracked
+by `DATA-120`.
+
 `SaveMetadata::slotName` is never written to disk; `GetSaveSlots()` and
 `GetSaveMetadata()` populate it from the file name so callers can address the
 slot they enumerated.

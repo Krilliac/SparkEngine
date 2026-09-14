@@ -1751,6 +1751,14 @@ endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME AsyncDatabaseDurabilityContract
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_async_database_durability.py)
+    set_tests_properties(AsyncDatabaseDurabilityContract PROPERTIES
+        LABELS "persistence;durability;static;python"
+        TIMEOUT 30)
+
     if(TARGET SparkShaderCompiler AND TARGET SparkCooker AND
        TARGET SparkAutomation AND TARGET SparkCrashReporter)
         add_test(
