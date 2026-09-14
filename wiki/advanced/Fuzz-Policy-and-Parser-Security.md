@@ -98,12 +98,12 @@ python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --emit-json \
 python3 -m unittest discover -s Tests/fuzz-policy -p "test_*.py" -v
 bash tools/check-fuzz-policy.sh          # also runs via tools/validate-all.sh
 
-# Ubuntu/Debian needs GCC 13's C++23 libstdc++ headers/runtime. The Clang
-# libFuzzer archive uses the same libstdc++ ABI, so do not mix in libc++.
-sudo apt-get install -y clang cmake g++-13 libstdc++-13-dev
-CXX=clang++ \
-  CXXFLAGS="-std=c++23 -nostdinc++ -stdlib=libstdc++ -isystem /usr/include/c++/13 -isystem /usr/include/x86_64-linux-gnu/c++/13 -isystem /usr/lib/gcc/x86_64-linux-gnu/13/include" \
-  LDFLAGS="-stdlib=libstdc++ -L/usr/lib/gcc/x86_64-linux-gnu/13" \
+# Ubuntu/Debian needs libc++ for the production C++23 headers. The distro
+# libFuzzer archive is built with libstdc++; the target links that runtime ABI
+# after libc++ without crossing C++ types through the fuzzer callback.
+sudo apt-get install -y clang cmake libc++-dev libc++abi-dev
+CXX=clang++ CXXFLAGS="-stdlib=libc++" \
+  LDFLAGS="-stdlib=libc++ -lc++abi" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
 cmake --build build/fuzz-policy --target SparkFuzzJsonUtils

@@ -1665,9 +1665,9 @@
         },
         "cacheVariables": {
           "BUILD_GAME_MODULES": "OFF",
-          "CMAKE_CXX_FLAGS": "-std=c++23 -nostdinc++ -stdlib=libstdc++ -isystem /usr/include/c++/13 -isystem /usr/include/x86_64-linux-gnu/c++/13 -isystem /usr/lib/gcc/x86_64-linux-gnu/13/include",
-          "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libstdc++ -L/usr/lib/gcc/x86_64-linux-gnu/13",
-          "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libstdc++ -L/usr/lib/gcc/x86_64-linux-gnu/13",
+          "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+          "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
+          "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++",
           "ENABLE_ANGELSCRIPT": "OFF",
           "ENABLE_ASSET_PIPELINE_TOOLS": "OFF",
           "ENABLE_AUTOMATION_HOST": "OFF",
@@ -5913,7 +5913,7 @@
           },
           {
             "index": 1,
-            "name": "Install Clang C++23 libstdc++ toolchain",
+            "name": "Install Clang C++23 libc++ toolchain",
             "id": "",
             "uses": "",
             "shell": "",
@@ -5921,7 +5921,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "0b4add1510fbed76"
+            "runDigest": "64348c77c76429bd"
           },
           {
             "index": 2,
