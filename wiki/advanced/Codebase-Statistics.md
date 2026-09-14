@@ -15,17 +15,17 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 | **GameModules** | 142616 |
 | **External services** | 11283 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 184265 |
+| **Tests** | 184302 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~780438** |
+| **Total C++ (excl. ThirdParty)** | **~780475** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hh/.hpp/.hxx/.inl) | 1059 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1583 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1584 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
@@ -117,8 +117,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| CMake option() declarations | 32 |
-| ENABLE_* feature toggles | 24 |
+| CMake option() declarations | 33 |
+| ENABLE_* feature toggles | 25 |
 | Game modules | 11 |
 | SDK public headers | 16 |
 | Documented build compiler paths | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
