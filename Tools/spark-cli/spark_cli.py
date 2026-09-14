@@ -1074,7 +1074,9 @@ def _assemble_runnable_package(project_root, project_file, project_info, source_
                           runtime_directory)
     if error:
         return None, error
-    for directory in ("Assets", "Scenes", "Config"):
+    # Project .spk archives are mounted from Data/ beside the packaged host.
+    # Keep them in the runnable package alongside the loose content.
+    for directory in ("Assets", "Scenes", "Config", "Data"):
         _, error = _copy_tree(project_root / directory, destination / directory, project_root)
         if error:
             return None, error
@@ -1295,13 +1297,19 @@ def cmd_package(args):
         )
         return 1
     resolved_package_directory = package_directory.resolve()
-    protected = [project_root, project_root / "Assets", project_root / "Scenes", project_root / "Config"]
+    protected = [
+        project_root,
+        project_root / "Assets",
+        project_root / "Scenes",
+        project_root / "Config",
+        project_root / "Data",
+    ]
     if (resolved_package_directory == project_root or
             _path_is_within(project_root, resolved_package_directory) or
             any(_path_is_within(resolved_package_directory, path) for path in protected[1:])):
         print(
             "Error: Package output cannot replace or contain the project root, "
-            "or live inside Assets, Scenes, or Config."
+            "or live inside Assets, Scenes, Config, or Data."
         )
         return 1
     build_directory = configured_build_dir(project_root, config)
