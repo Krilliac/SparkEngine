@@ -68,15 +68,15 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-    - name: Install Clang C++23 standard library
+    - name: Install Clang C++23 libstdc++ toolchain
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake libc++-dev libc++abi-dev
+        sudo apt-get install -y clang cmake g++-13
 
     - name: Configure fuzz-policy checks
       env:
-        CXXFLAGS: "-stdlib=libc++"
-        LDFLAGS: "-stdlib=libc++ -lc++abi"
+        CXXFLAGS: "-stdlib=libstdc++ --gcc-toolchain=/usr"
+        LDFLAGS: "-stdlib=libstdc++ --gcc-toolchain=/usr"
       run: cmake -S tools/fuzz-policy -B build/fuzz-policy
 
     - name: Run blocking fuzz-policy target
