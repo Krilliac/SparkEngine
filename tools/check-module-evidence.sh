@@ -13,9 +13,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 EVIDENCE_DIR="$SCRIPT_DIR/module-evidence"
 
-PYTHON="${PYTHON:-python3}"
-if ! command -v "$PYTHON" &>/dev/null; then
-    PYTHON="python"
+if [ -n "${PYTHON:-}" ]; then
+    if ! command -v "$PYTHON" &>/dev/null || ! "$PYTHON" --version &>/dev/null; then
+        echo "check-module-evidence: configured PYTHON is not runnable: $PYTHON" >&2
+        exit 1
+    fi
+else
+    for candidate in python3 python; do
+        if command -v "$candidate" &>/dev/null && "$candidate" --version &>/dev/null; then
+            PYTHON="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "${PYTHON:-}" ]; then
+    echo "check-module-evidence: no runnable Python interpreter found" >&2
+    exit 1
 fi
 
 cd "$PROJECT_ROOT"
