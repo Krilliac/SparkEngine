@@ -9554,8 +9554,8 @@
 | `errorString` | function | SparkEngine | [ShaderCompilationWindowsFileLoad.cpp:L137](../../SparkEngine/Source/Graphics/ShaderCompilationWindowsFileLoad.cpp#L137) |  |
 | `ES` | alias | SparkEngine | [EngineSettings.cpp:L189](../../SparkEngine/Source/Core/EngineSettings.cpp#L189) |  |
 | `Escape` | function | SparkAutomation | [main.cpp:L640](../../SparkAutomation/src/main.cpp#L640) |  |
-| `Escape` | function | SparkAutomation | [main.cpp:L662](../../SparkAutomation/src/main.cpp#L662) |  |
-| `Escape` | function | SparkAutomation | [main.cpp:L666](../../SparkAutomation/src/main.cpp#L666) |  |
+| `Escape` | function | SparkAutomation | [main.cpp:L661](../../SparkAutomation/src/main.cpp#L661) |  |
+| `Escape` | function | SparkAutomation | [main.cpp:L665](../../SparkAutomation/src/main.cpp#L665) |  |
 | `Escape` | function | SparkInstaller | [InstallState.cpp:L19](../../SparkInstaller/src/InstallState.cpp#L19) |  |
 | `Escape` | function | SparkInstaller | [InstallState.cpp:L233](../../SparkInstaller/src/InstallState.cpp#L233) |  |
 | `Escape` | function | SparkInstaller | [InstallState.cpp:L234](../../SparkInstaller/src/InstallState.cpp#L234) |  |

@@ -644,8 +644,7 @@ int main(int argc, char** argv)
          << ",\n  \"durationMs\": " << process.durationMs << ",\n  \"capturedLogPath\": \""
          << Escape(plan.capturedLog.string(), false) << "\""
          << ",\n  \"capturedLogTruncated\": " << (log.size() > diagnosticTail.size() ? "true" : "false")
-         << ",\n  \"capturedLogTail\": \"" << Escape(diagnosticTail, false) << "\""
-         << ",\n  \"failures\": [";
+         << ",\n  \"capturedLogTail\": \"" << Escape(diagnosticTail, false) << "\"" << ",\n  \"failures\": [";
     for (size_t index = 0; index < failures.size(); ++index)
         json << (index ? ", " : "") << "\"" << Escape(failures[index], false) << "\"";
     json << "]\n}\n";
