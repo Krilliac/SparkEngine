@@ -1408,6 +1408,14 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertEqual(corpus.budget.max_corpus_bytes, 4096)
         self.assertEqual(corpus.budget.smoke_seconds, 5)
 
+    def test_json_utils_fuzzer_link_keeps_compiler_runtimes_abi_compatible(self) -> None:
+        cmake = (REPO_ROOT / "Tests" / "Fuzz" / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("-fsanitize=fuzzer-no-link,address,undefined", cmake)
+        self.assertNotIn("-fsanitize=fuzzer,address,undefined", cmake)
+        self.assertIn('"-print-file-name=${SPARK_LIBFUZZER_RUNTIME_NAME}"', cmake)
+        self.assertIn("-Wl,--whole-archive,${SPARK_LIBFUZZER_RUNTIME},--no-whole-archive", cmake)
+        self.assertIn("stdc++", cmake)
+
     def test_named_verified_misses_are_inventoried(self) -> None:
         inventory = parser_inventory.load_inventory(REPO_ROOT)
         owned = {source for parser in inventory.parsers for source in parser.source_files}
