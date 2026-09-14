@@ -71,12 +71,12 @@ jobs:
     - name: Install Clang C++23 libstdc++ toolchain
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake g++-13
+        sudo apt-get install -y clang cmake g++-13 libstdc++-13-dev
 
     - name: Configure fuzz-policy checks
       env:
-        CXXFLAGS: "-stdlib=libstdc++ --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13"
-        LDFLAGS: "-stdlib=libstdc++ --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13"
+        CXXFLAGS: "-std=c++23 -nostdinc++ -stdlib=libstdc++ -isystem /usr/include/c++/13 -isystem /usr/include/x86_64-linux-gnu/c++/13 -isystem /usr/lib/gcc/x86_64-linux-gnu/13/include"
+        LDFLAGS: "-stdlib=libstdc++ -L/usr/lib/gcc/x86_64-linux-gnu/13"
       run: cmake -S tools/fuzz-policy -B build/fuzz-policy
 
     - name: Run blocking fuzz-policy target
