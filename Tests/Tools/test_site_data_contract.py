@@ -1217,6 +1217,15 @@ class PublicClaimInvariantTests(ContractTestCase):
                     [],
                 )
 
+    def test_multiplayer_quick_start_keeps_rcon_local_only(self) -> None:
+        quick_start = (REPO_ROOT / "wiki" / "subsystems" / "Multiplayer-Quick-Start.md").read_text(
+            encoding="utf-8", errors="replace"
+        )
+        self.assertIn("trusted local administration", quick_start)
+        self.assertIn("remote RCON is unavailable", quick_start)
+        self.assertIn("There is no network RCON listener", quick_start)
+        self.assertNotIn('config.rconPassword = "admin123";', quick_start)
+
     def test_negative_tests_have_no_tracked_file_mutation_calls(self) -> None:
         tree = ast.parse(TEST_PATH.read_text(encoding="utf-8"))
         forbidden: list[str] = []
