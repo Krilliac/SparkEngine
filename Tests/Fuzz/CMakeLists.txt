@@ -33,9 +33,15 @@ target_link_options(SparkFuzzJsonUtils PRIVATE
 )
 # Ubuntu's compiler-rt libFuzzer archive is built with libstdc++, while the
 # production sources use libc++ for their C++23 implementation. The fuzzer
-# callback has no C++ type boundary, so retain libc++ for the target and add
-# libstdc++ only after the runtime archive to resolve its private symbols.
-target_link_libraries(SparkFuzzJsonUtils PRIVATE Threads::Threads stdc++)
+# callback has no C++ type boundary, so keep libc++ for production code and
+# retain libstdc++ explicitly; --as-needed would otherwise discard it before
+# compiler-rt's archive introduces its private std::__cxx11 references.
+target_link_libraries(SparkFuzzJsonUtils PRIVATE Threads::Threads)
+target_link_options(SparkFuzzJsonUtils PRIVATE
+    -Wl,--no-as-needed
+    -lstdc++
+    -Wl,--as-needed
+)
 
 add_test(
     NAME FuzzJsonUtilsSmoke
