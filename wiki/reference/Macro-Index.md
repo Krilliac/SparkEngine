@@ -708,7 +708,7 @@
 | `NetworkTime` | alias | SparkEngine | [NetworkManager.h:L91](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L91) |  |
 | `NOMINMAX` | macro | GameModules | [TFSavePaths.h:L22](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L22) |  |
 | `NOMINMAX` | macro | SparkAssetPipelineCore | [AssetCooker.cpp:L18](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L18) |  |
-| `NOMINMAX` | macro | SparkCooker | [main.cpp:L18](../../SparkCooker/src/main.cpp#L18) |  |
+| `NOMINMAX` | macro | SparkCooker | [main.cpp:L22](../../SparkCooker/src/main.cpp#L22) |  |
 | `NOMINMAX` | macro | SparkCrashReporter | [CrashReporterApp.cpp:L28](../../SparkCrashReporter/src/CrashReporterApp.cpp#L28) |  |
 | `NOMINMAX` | macro | SparkDaemon | [OrchestrationService.cpp:L18](../../SparkDaemon/src/OrchestrationService.cpp#L18) |  |
 | `NOMINMAX` | macro | SparkDaemon | [OrchestratorIdentity.cpp:L20](../../SparkDaemon/src/OrchestratorIdentity.cpp#L20) |  |
@@ -1417,7 +1417,7 @@
 | `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [SparkBuild.cpp:L22](../../SparkBuild/src/SparkBuild.cpp#L22) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [Terminal.cpp:L7](../../SparkBuild/src/Terminal.cpp#L7) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkBuild | [main.cpp:L12](../../SparkBuild/src/main.cpp#L12) |  |
-| `WIN32_LEAN_AND_MEAN` | macro | SparkCooker | [main.cpp:L17](../../SparkCooker/src/main.cpp#L17) |  |
+| `WIN32_LEAN_AND_MEAN` | macro | SparkCooker | [main.cpp:L21](../../SparkCooker/src/main.cpp#L21) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkCrashReporter | [CrashReporterApp.cpp:L27](../../SparkCrashReporter/src/CrashReporterApp.cpp#L27) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkDaemon | [main.cpp:L42](../../SparkDaemon/src/main.cpp#L42) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEditor | [BuildPipeline.cpp:L24](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L24) |  |

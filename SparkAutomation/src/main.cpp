@@ -16,6 +16,10 @@
 #include <unordered_set>
 #include <vector>
 
+#ifndef SPARK_AUTOMATION_VERSION
+#error "SPARK_AUTOMATION_VERSION must be supplied by the build system"
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -479,14 +483,21 @@ namespace
 
     void Usage()
     {
-        std::cout << "Usage: SparkAutomation --executable <path> [--working-dir <dir>] [--frames N] "
+        std::cout << "SparkAutomation " SPARK_AUTOMATION_VERSION "\n"
+                     "Usage: SparkAutomation --executable <path> [--working-dir <dir>] [--frames N] "
                      "[--timeout-ms N] [--expected-exit N] [--screenshot <path>] [--log-contains <text>] "
-                     "[--captured-log <path>] [--json <path>] [--junit <path>] [-- <runtime args>]\n";
+                     "[--captured-log <path>] [--json <path>] [--junit <path>] [--version] [-- <runtime args>]\n";
     }
 } // namespace
 
 int main(int argc, char** argv)
 {
+    if (argc == 2 && (std::string(argv[1]) == "--version" || std::string(argv[1]) == "-version"))
+    {
+        std::cout << "SparkAutomation " SPARK_AUTOMATION_VERSION "\n";
+        return 0;
+    }
+
     Plan plan;
     bool runtimeArguments = false;
     for (int index = 1; index < argc; ++index)

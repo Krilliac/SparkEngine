@@ -43,6 +43,10 @@
 #include "../../SparkEngine/Source/Graphics/RHI/RHIFactory.h"
 #include "../../SparkEngine/Source/Graphics/RHI/RHITypes.h"
 
+#ifndef SPARK_SHADER_COMPILER_VERSION
+#error "SPARK_SHADER_COMPILER_VERSION must be supplied by the build system"
+#endif
+
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
@@ -71,7 +75,8 @@ struct CompilerConfig
 
 static void PrintUsage(const char* programName)
 {
-    std::cout << "SparkShaderCompiler - Spark Engine Offline Shader Compiler\n"
+    std::cout << "SparkShaderCompiler " SPARK_SHADER_COMPILER_VERSION
+              << " - Spark Engine Offline Shader Compiler\n"
               << "\n"
               << "Usage: " << programName << " <input> [options]\n"
               << "\n"
@@ -93,6 +98,7 @@ static void PrintUsage(const char* programName)
               << "  -reflect         Print shader reflection data (SPIR-V output only)\n"
               << "  -batch <dir>     Compile all shaders in directory (not with a positional input)\n"
               << "  -v               Verbose output\n"
+              << "  --version        Show the tool version\n"
               << "  -h, --help       Show this help\n"
               << "\n"
               << "Examples:\n"
@@ -559,6 +565,12 @@ static ParseResult ParseArgs(int argc, char* argv[], CompilerConfig& config)
 
 int main(int argc, char* argv[])
 {
+    if (argc == 2 && (std::string(argv[1]) == "--version" || std::string(argv[1]) == "-version"))
+    {
+        std::cout << "SparkShaderCompiler " SPARK_SHADER_COMPILER_VERSION "\n";
+        return 0;
+    }
+
     CompilerConfig config;
 
     const ParseResult parseResult = ParseArgs(argc, argv, config);

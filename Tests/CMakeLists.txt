@@ -1751,6 +1751,18 @@ endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    if(TARGET SparkShaderCompiler AND TARGET SparkCooker AND
+       TARGET SparkAutomation AND TARGET SparkCrashReporter)
+        add_test(
+            NAME SparkStableProductVersions
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_rel100_product_versions.py
+                --bin-dir $<TARGET_FILE_DIR:SparkShaderCompiler>)
+        set_tests_properties(SparkStableProductVersions PROPERTIES
+            LABELS "release;version;integration"
+            TIMEOUT 60)
+    endif()
+
     add_test(
         NAME BlenderMMOAssetSourceContract
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/blender/validate_mmo_props.py

@@ -719,7 +719,7 @@
 | `CompatibleModule` | class | Tests | [CompatibleModule.cpp:L33](../../Tests/Fixtures/ModuleABI/CompatibleModule.cpp#L33) |  |
 | `CompiledShaderBlob` | struct | SparkEngine | [ShaderCrossCompiler.h:L71](../../SparkEngine/Source/Graphics/ShaderCrossCompiler.h#L71) |  |
 | `CompiledVariant` | struct | SparkEngine | [ShaderVariantSystem.h:L113](../../SparkEngine/Source/Graphics/ShaderVariantSystem.h#L113) |  |
-| `CompilerConfig` | struct | SparkShaderCompiler | [main.cpp:L50](../../SparkShaderCompiler/src/main.cpp#L50) |  |
+| `CompilerConfig` | struct | SparkShaderCompiler | [main.cpp:L54](../../SparkShaderCompiler/src/main.cpp#L54) |  |
 | `CompileResult` | struct | Tests | [TestVisualScriptCompiler.cpp:L108](../../Tests/TestVisualScriptCompiler.cpp#L108) |  |
 | `CompletedCallback` | struct | SparkEngine | [AsyncDatabase.h:L255](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L255) |  |
 | `CompletionState` | struct | Tests | [TestDirectStorageLoader.cpp:L246](../../Tests/TestDirectStorageLoader.cpp#L246) |  |
@@ -2943,7 +2943,7 @@
 | `PixelShaderResource` | class | SparkEngine | [Shader.h:L254](../../SparkEngine/Source/Graphics/Shader.h#L254) | Pixel shader resource |
 | `PlacementBrush` | struct | SparkEditor | [ObjectPlacementPanel.h:L40](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L40) |  |
 | `Plain` | struct | Tests | [TestTypeTraits.cpp:L72](../../Tests/TestTypeTraits.cpp#L72) |  |
-| `Plan` | struct | SparkAutomation | [main.cpp:L35](../../SparkAutomation/src/main.cpp#L35) |  |
+| `Plan` | struct | SparkAutomation | [main.cpp:L39](../../SparkAutomation/src/main.cpp#L39) |  |
 | `Plane` | struct | SparkEngine | [FrustumCulling.h:L81](../../SparkEngine/Source/Graphics/FrustumCulling.h#L81) | A single plane in Hessian normal form (ax + by + cz + d = 0). |
 | `Plane` | struct | Tests | [TestFrustumCulling.cpp:L33](../../Tests/TestFrustumCulling.cpp#L33) |  |
 | `Plane` | struct | Tests | [TestParallelCulling.cpp:L29](../../Tests/TestParallelCulling.cpp#L29) |  |
@@ -3677,7 +3677,7 @@
 | `ScoredPoint` | struct | SparkEngine | [TacticalPointSystem.cpp:L115](../../SparkEngine/Source/Engine/AI/TacticalPointSystem.cpp#L115) |  |
 | `ScratchCrashDir` | class | Tests | [TestEditorCrashHandlerFilterReal.cpp:L28](../../Tests/TestEditorCrashHandlerFilterReal.cpp#L28) | Unique scratch directory removed on scope exit. |
 | `ScratchDir` | class | Tests | [TestEditorSubsystemsReal.cpp:L39](../../Tests/TestEditorSubsystemsReal.cpp#L39) | Unique scratch directory for one test, removed by the destructor. |
-| `ScratchDirectory` | class | SparkCooker | [main.cpp:L37](../../SparkCooker/src/main.cpp#L37) |  |
+| `ScratchDirectory` | class | SparkCooker | [main.cpp:L41](../../SparkCooker/src/main.cpp#L41) |  |
 | `ScratchDirectory` | class | SparkCrashReporter | [CrashReporterManifestTests.cpp:L19](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L19) |  |
 | `ScratchRepo` | class | Tests | [TestVersionControlSystemGitReal.cpp:L27](../../Tests/TestVersionControlSystemGitReal.cpp#L27) | A throwaway git repository with a deterministic local identity. |
 | `ScreenCapture` | class | SparkEngine | [ScreenCapture.h:L66](../../SparkEngine/Source/Graphics/ScreenCapture.h#L66) | Screenshot and frame sequence capture system |
@@ -5034,7 +5034,7 @@
 | `WizardGui` | class | SparkInstaller | [WizardGui.h:L7](../../SparkInstaller/src/gui/WizardGui.h#L7) |  |
 | `WizardStep` | struct | SparkEditor | [EditorAutomation.h:L106](../../SparkEditor/Source/Panels/EditorAutomation.h#L106) | A step in an editor wizard |
 | `WizardTui` | class | SparkInstaller | [WizardTui.h:L7](../../SparkInstaller/src/tui/WizardTui.h#L7) |  |
-| `WorkerJob` | struct | SparkCooker | [main.cpp:L29](../../SparkCooker/src/main.cpp#L29) |  |
+| `WorkerJob` | struct | SparkCooker | [main.cpp:L33](../../SparkCooker/src/main.cpp#L33) |  |
 | `WorkflowContext` | struct | SparkEditor | [EditorWorkflow.h:L28](../../SparkEditor/Source/Workflow/EditorWorkflow.h#L28) |  |
 | `WorkflowPanel` | class | SparkEditor | [WorkflowPanel.h:L25](../../SparkEditor/Source/Panels/WorkflowPanel.h#L25) | Editor panel for browsing and executing registered workflows. |
 | `WorkflowRegistry` | class | SparkEditor | [EditorWorkflow.h:L116](../../SparkEditor/Source/Workflow/EditorWorkflow.h#L116) |  |

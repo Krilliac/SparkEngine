@@ -1548,6 +1548,13 @@ jobs:
         # 2-core runner. /MP stays; the project-level parallelism is capped.
         cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee build-matrix-windows-shipping-build.log
 
+    - name: Verify stable Shipping product versions
+      shell: bash
+      run: |
+        set -euo pipefail
+        python Tests/Tools/test_rel100_product_versions.py \
+          --bin-dir build/windows-shipping/bin/MinSizeRel
+
     - name: Capture Windows Shipping provenance
       shell: bash
       run: |
