@@ -18,6 +18,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -357,6 +358,124 @@ TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
 
     hotReload.Stop();
     ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    if (!consoleWasInitialized)
+        console.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(directory, ec);
+}
+
+TEST(ModuleHotReload_PollChangesContainsNonStandardCallbackExceptions)
+{
+    const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadPollCallbackException");
+    const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+    std::filesystem::path modulePath = directory / "PollCallbackExceptionModule";
+    modulePath += source.extension();
+    ASSERT_TRUE(CopyFixtureImage(modulePath));
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const bool consoleWasInitialized = console.IsInitialized();
+    ASSERT_TRUE(console.Initialize());
+
+    Spark::ModuleHotReloadManager hotReload;
+    hotReload.Initialize(&manager, &context);
+    hotReload.SetDebounceMs(0);
+    hotReload.WatchModule("Spark Compatible ABI Fixture", PathToUtf8(modulePath));
+    hotReload.Start();
+
+    bool callbackRan = false;
+    hotReload.SetReloadCallback(
+        [&](const std::string&, bool success)
+        {
+            callbackRan = true;
+            EXPECT_TRUE(success);
+            throw 42;
+        });
+
+    std::error_code changeError;
+    const auto previousTime = std::filesystem::last_write_time(modulePath, changeError);
+    ASSERT_FALSE(changeError);
+    std::filesystem::last_write_time(modulePath, previousTime + std::chrono::seconds(2), changeError);
+    ASSERT_FALSE(changeError);
+
+    bool callbackEscaped = false;
+    int reloadedCount = -1;
+    try
+    {
+        reloadedCount = hotReload.PollChanges();
+    }
+    catch (...)
+    {
+        callbackEscaped = true;
+    }
+
+    EXPECT_TRUE(callbackRan);
+    EXPECT_FALSE(callbackEscaped);
+    EXPECT_EQ(reloadedCount, 1);
+    EXPECT_EQ(hotReload.GetReloadCount(), 1);
+
+    hotReload.Stop();
+    EXPECT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    if (!consoleWasInitialized)
+        console.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(directory, ec);
+}
+
+TEST(ModuleHotReload_ForceReloadContainsStandardCallbackExceptions)
+{
+    const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadForceCallbackException");
+    const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+    std::filesystem::path modulePath = directory / "ForceCallbackExceptionModule";
+    modulePath += source.extension();
+    ASSERT_TRUE(CopyFixtureImage(modulePath));
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const bool consoleWasInitialized = console.IsInitialized();
+    ASSERT_TRUE(console.Initialize());
+
+    Spark::ModuleHotReloadManager hotReload;
+    hotReload.Initialize(&manager, &context);
+
+    bool callbackRan = false;
+    hotReload.SetReloadCallback(
+        [&](const std::string&, bool success)
+        {
+            callbackRan = true;
+            EXPECT_TRUE(success);
+            throw std::runtime_error("reload callback failure");
+        });
+
+    bool callbackEscaped = false;
+    bool reloadSucceeded = false;
+    try
+    {
+        reloadSucceeded = hotReload.ForceReload("Spark Compatible ABI Fixture");
+    }
+    catch (...)
+    {
+        callbackEscaped = true;
+    }
+
+    EXPECT_TRUE(callbackRan);
+    EXPECT_FALSE(callbackEscaped);
+    EXPECT_TRUE(reloadSucceeded);
+    EXPECT_EQ(hotReload.GetReloadCount(), 1);
+
+    EXPECT_TRUE(manager.ShutdownAll());
     manager.UnloadAll();
     if (!consoleWasInitialized)
         console.Shutdown();

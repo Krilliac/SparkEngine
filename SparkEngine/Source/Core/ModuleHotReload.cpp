@@ -9,6 +9,7 @@
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>
+#include <exception>
 #include <sstream>
 #include <thread>
 
@@ -178,7 +179,23 @@ namespace Spark
             }
 
             if (callback)
-                callback(pending.moduleName, success);
+            {
+                try
+                {
+                    callback(pending.moduleName, success);
+                }
+                catch (const std::exception& e)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "Module hot-reload callback for '%s' threw: %s",
+                                    pending.moduleName.c_str(), e.what());
+                }
+                catch (...)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "Module hot-reload callback for '%s' threw unknown exception",
+                                    pending.moduleName.c_str());
+                }
+            }
         }
 
         return reloadedCount;
@@ -222,7 +239,22 @@ namespace Spark
         }
 
         if (callback)
-            callback(moduleName, success);
+        {
+            try
+            {
+                callback(moduleName, success);
+            }
+            catch (const std::exception& e)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Module hot-reload callback for '%s' threw: %s",
+                                moduleName.c_str(), e.what());
+            }
+            catch (...)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Module hot-reload callback for '%s' threw unknown exception",
+                                moduleName.c_str());
+            }
+        }
 
         return success;
     }

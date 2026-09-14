@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321658 |
+| **SparkEngine/Source** | 321690 |
 | **SparkEditor/Source** | 103612 |
 | **GameModules** | 142616 |
 | **External services** | 11283 |
 | **Asset pipeline** | 2525 |
-| **Tests** | 184146 |
+| **Tests** | 184265 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~780288** |
+| **Total C++ (excl. ThirdParty)** | **~780439** |
 
 ### File Counts
 
@@ -45,7 +45,7 @@ Graphics contains 121219 lines, or 37% of `SparkEngine/Source`. This is a source
 | Graphics | 121219 | 37.6% |
 | Engine (all subsystems) | 89235 | 27.7% |
 | Utils | 46075 | 14.3% |
-| Core | 31185 | 9.6% |
+| Core | 31217 | 9.7% |
 | Physics | 10808 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
@@ -110,7 +110,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 605 |
-| TEST() definitions | 7361 |
+| TEST() definitions | 7363 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
