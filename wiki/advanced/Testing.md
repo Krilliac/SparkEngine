@@ -111,6 +111,13 @@ All macros use `do { ... } while(0)` for safe use in if/else blocks. Failed asse
   assertions to failures in both ctest lanes; it stays OFF because
   `Tests/TestWarnings.h` still carries waivers whose comments document real
   non-determinism.
+- Every whole-test waiver is cross-checked by the blocking CI-110 command
+  `python Tools/validate_test_warnings.py` against
+  `Tests/test-warning-waivers.json`. The metadata must have exact pattern
+  parity, a named owner, and a future `YYYY-MM-DD` expiry; missing, duplicate,
+  unowned, or expired entries fail the workflow. Prefer `EXPECT_WARN_ONLY` for
+  a single environment-sensitive assertion so unrelated assertions remain
+  strict.
 
 ### Production-source census
 

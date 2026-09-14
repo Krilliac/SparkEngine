@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "waivers": [
+    {
+      "pattern": "ScopedTimer_MeasuresTime",
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "ScopedTimer_ElapsedIncreases",
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "FreezeDetector_WarningOnMissedHeartbeat",
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "FreezeDetector_RecoveryRequestedOnFreeze",
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "FreezeDetector_CriticalAfterMaxRecoveryAttempts",
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "CollabEdit_HostAndConnect",
+      "owner": "editor",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "LiveEditBridge_ConnectToRefusedPort",
+      "owner": "networking",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation",
+      "owner": "networking",
+      "expires": "2026-12-31"
+    }
+  ]
+}

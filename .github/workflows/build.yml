@@ -102,6 +102,12 @@ jobs:
     - name: Test sanitizer JUnit evidence parser
       run: python3 .github/scripts/test-verify-sanitizer-evidence.py
 
+    - name: Validate flaky warning ownership and expiry
+      run: python3 Tools/validate_test_warnings.py
+
+    - name: Test flaky warning ownership and expiry policy
+      run: python3 Tests/Tools/test_validate_test_warnings.py
+
     - name: Test required-job gate
       run: python3 .github/scripts/test-verify-required-jobs.py
 
