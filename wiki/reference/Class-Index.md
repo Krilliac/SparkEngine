@@ -4650,7 +4650,7 @@
 | `Toast` | struct | GameModules | [TFMedalSystem.h:L235](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystem.h#L235) |  |
 | `TOCEntry` | struct | Tests | [TestSparkPak.cpp:L79](../../Tests/TestSparkPak.cpp#L79) |  |
 | `TOCEntry` | struct | Tests | [TestSparkPak.cpp:L153](../../Tests/TestSparkPak.cpp#L153) |  |
-| `TokenEntry` | struct | SparkEngine | [NetworkSecurity.h:L179](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L179) | Enable or disable prototype XOR obfuscation in legacy callers. |
+| `TokenEntry` | struct | SparkEngine | [NetworkSecurity.h:L187](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L187) | Enable or disable prototype XOR obfuscation in legacy callers. |
 | `TonemapCB` | struct | SparkEngine | [TonemapColorGrading.h:L154](../../SparkEngine/Source/Graphics/TonemapColorGrading.h#L154) |  |
 | `TonemapColorGrading` | class | SparkEngine | [TonemapColorGrading.h:L113](../../SparkEngine/Source/Graphics/TonemapColorGrading.h#L113) | Combined auto-exposure, tonemapping, and color grading pass |
 | `TonemappingSettings` | struct | SparkEngine | [PostProcessingTypes.h:L240](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L240) | Tonemapping settings (HDR to LDR conversion) |

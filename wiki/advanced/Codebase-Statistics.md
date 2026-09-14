@@ -10,7 +10,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321660 |
+| **SparkEngine/Source** | 321658 |
 | **SparkEditor/Source** | 103612 |
 | **GameModules** | 142616 |
 | **External services** | 11283 |
@@ -18,7 +18,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 | **Tests** | 184146 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~780257** |
+| **Total C++ (excl. ThirdParty)** | **~780288** |
 
 ### File Counts
 
@@ -43,7 +43,7 @@ Graphics contains 121219 lines, or 37% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 121219 | 37.6% |
-| Engine (all subsystems) | 89237 | 27.7% |
+| Engine (all subsystems) | 89235 | 27.7% |
 | Utils | 46075 | 14.3% |
 | Core | 31185 | 9.6% |
 | Physics | 10808 | 3.3% |
@@ -58,7 +58,7 @@ Graphics contains 121219 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 15170 |
+| Networking | 15168 |
 | AI | 13490 |
 | ECS | 8497 |
 | Gameplay | 7925 |
