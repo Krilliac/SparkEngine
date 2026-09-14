@@ -2069,6 +2069,51 @@ TEST(SaveMigration_ImmutableV1FixtureLoadsWithoutRewritingSourceOrSlot)
     std::filesystem::remove_all(dir);
 }
 
+TEST(SaveMigration_ImmutableV2FixtureLoadsAndAddsHierarchyRoots)
+{
+    const auto fixturePath = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests" / "Fixtures" / "Compatibility" /
+                             "SaveSystem" / "v2-screenshot-without-hierarchy.spark_save.hex";
+    const std::string fixtureBefore = ReadTextFile(fixturePath);
+    const std::vector<char> legacyBytes = DecodeHexFixture(fixtureBefore);
+    ASSERT_EQ(legacyBytes.size(), static_cast<size_t>(307));
+
+    const std::string dir = MakeTempSaveDir("v2_fixture");
+    const auto slotPath = std::filesystem::path(dir) / "legacy-v2.spark_save";
+    ASSERT_TRUE(WriteBytes(slotPath, legacyBytes));
+
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+    EXPECT_EQ(ReadHeaderVersion(slotPath), 2u);
+
+    SaveMetadata metadata;
+    EXPECT_TRUE(saveSystem.GetSaveMetadata("legacy-v2", metadata));
+    EXPECT_EQ(metadata.version, kCurrentSaveVersion);
+    EXPECT_EQ(metadata.saveName, std::string("Legacy screenshotless save"));
+    EXPECT_EQ(metadata.screenshotPath, std::string("Screenshots/legacy.png"));
+
+    World loadedWorld;
+    loadedWorld.CreateEntity("must-be-replaced-only-on-success");
+    std::unordered_map<std::string, std::string> customState = {{"sentinel", "replace-on-success"}};
+    EXPECT_TRUE(saveSystem.Load("legacy-v2", loadedWorld, customState));
+    EXPECT_EQ(loadedWorld.GetEntityCount(), 1u);
+
+    const EntityID legacyPlayer = FindNamedEntity(loadedWorld, "legacy-player");
+    ASSERT_TRUE(legacyPlayer != entt::null);
+    const Transform* transform = loadedWorld.GetComponent<Transform>(legacyPlayer);
+    ASSERT_TRUE(transform != nullptr);
+    EXPECT_TRUE(transform->parent == entt::null);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("legacy.key"), std::string("legacy-value"));
+
+    // Migration is in memory only: neither the checked-in fixture nor the copied
+    // N-1 slot is rewritten as a side effect of reading it.
+    EXPECT_EQ(ReadHeaderVersion(slotPath), 2u);
+    EXPECT_TRUE(ReadBytes(slotPath) == legacyBytes);
+    EXPECT_EQ(ReadTextFile(fixturePath), fixtureBefore);
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST(SaveMigration_UnknownComponentFailsWithoutMutatingWorldOrCustomState)
 {
     const std::string dir = MakeTempSaveDir("unknown_component");
