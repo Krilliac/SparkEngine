@@ -101,8 +101,8 @@ bash tools/check-fuzz-policy.sh          # also runs via tools/validate-all.sh
 # Ubuntu/Debian needs GCC 13's C++23 libstdc++ headers/runtime. The Clang
 # libFuzzer archive uses the same libstdc++ ABI, so do not mix in libc++.
 sudo apt-get install -y clang cmake g++-13
-CXX=clang++ CXXFLAGS="-stdlib=libstdc++ --gcc-toolchain=/usr" \
-  LDFLAGS="-stdlib=libstdc++ --gcc-toolchain=/usr" \
+CXX=clang++ CXXFLAGS="-stdlib=libstdc++ --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13" \
+  LDFLAGS="-stdlib=libstdc++ --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
 cmake --build build/fuzz-policy --target SparkFuzzJsonUtils

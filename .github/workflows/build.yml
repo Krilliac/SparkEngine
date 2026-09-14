@@ -75,8 +75,8 @@ jobs:
 
     - name: Configure fuzz-policy checks
       env:
-        CXXFLAGS: "-stdlib=libstdc++ --gcc-toolchain=/usr"
-        LDFLAGS: "-stdlib=libstdc++ --gcc-toolchain=/usr"
+        CXXFLAGS: "-stdlib=libstdc++ --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13"
+        LDFLAGS: "-stdlib=libstdc++ --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13"
       run: cmake -S tools/fuzz-policy -B build/fuzz-policy
 
     - name: Run blocking fuzz-policy target

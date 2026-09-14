@@ -1665,9 +1665,9 @@
         },
         "cacheVariables": {
           "BUILD_GAME_MODULES": "OFF",
-          "CMAKE_CXX_FLAGS": "-stdlib=libstdc++ --gcc-toolchain=/usr",
-          "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libstdc++ --gcc-toolchain=/usr",
-          "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libstdc++ --gcc-toolchain=/usr",
+          "CMAKE_CXX_FLAGS": "-stdlib=libstdc++ --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13",
+          "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libstdc++ --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13",
+          "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libstdc++ --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13",
           "ENABLE_ANGELSCRIPT": "OFF",
           "ENABLE_ASSET_PIPELINE_TOOLS": "OFF",
           "ENABLE_AUTOMATION_HOST": "OFF",
