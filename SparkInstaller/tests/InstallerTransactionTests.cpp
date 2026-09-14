@@ -35,7 +35,7 @@ namespace
             return 97;
 
         const std::string_view command = argv[1];
-        if (command == "--version" || command == "fetch" || command == "-S")
+        if (command == "--version" || command == "fetch" || command == "-S" || command == "status")
             return 0;
         if (command == "checkout")
         {

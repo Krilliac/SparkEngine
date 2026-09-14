@@ -75,8 +75,7 @@ struct CompilerConfig
 
 static void PrintUsage(const char* programName)
 {
-    std::cout << "SparkShaderCompiler " SPARK_SHADER_COMPILER_VERSION
-              << " - Spark Engine Offline Shader Compiler\n"
+    std::cout << "SparkShaderCompiler " SPARK_SHADER_COMPILER_VERSION << " - Spark Engine Offline Shader Compiler\n"
               << "\n"
               << "Usage: " << programName << " <input> [options]\n"
               << "\n"

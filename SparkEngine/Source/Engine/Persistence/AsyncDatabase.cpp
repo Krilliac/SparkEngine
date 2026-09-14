@@ -626,9 +626,9 @@ namespace Spark::Persistence
         if (temporaryHandle == INVALID_HANDLE_VALUE)
         {
             const DWORD error = ::GetLastError();
-            SPARK_LOG_ERROR(Spark::LogCategory::Core,
-                            "AsyncDatabase: failed to reopen '%s' for durable flush: %s",
-                            temporary.string().c_str(), std::system_category().message(static_cast<int>(error)).c_str());
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to reopen '%s' for durable flush: %s",
+                            temporary.string().c_str(),
+                            std::system_category().message(static_cast<int>(error)).c_str());
             std::error_code removeError;
             std::filesystem::remove(temporary, removeError);
             return false;
@@ -638,24 +638,23 @@ namespace Spark::Persistence
         ::CloseHandle(temporaryHandle);
         if (!flushed)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core,
-                            "AsyncDatabase: durable flush failed for '%s': %s", temporary.string().c_str(),
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: durable flush failed for '%s': %s",
+                            temporary.string().c_str(),
                             std::system_category().message(static_cast<int>(flushError)).c_str());
             std::error_code removeError;
             std::filesystem::remove(temporary, removeError);
             return false;
         }
 #else
-        int temporaryFd = ::open(temporary.c_str(), O_RDONLY
+        int temporaryOpenFlags = O_RDONLY;
 #ifdef O_CLOEXEC
-                                  | O_CLOEXEC
+        temporaryOpenFlags |= O_CLOEXEC;
 #endif
-        );
+        int temporaryFd = ::open(temporary.c_str(), temporaryOpenFlags);
         if (temporaryFd < 0)
         {
             const int error = errno;
-            SPARK_LOG_ERROR(Spark::LogCategory::Core,
-                            "AsyncDatabase: failed to reopen '%s' for durable flush: %s",
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to reopen '%s' for durable flush: %s",
                             temporary.string().c_str(), std::strerror(error));
             std::error_code removeError;
             std::filesystem::remove(temporary, removeError);
@@ -666,9 +665,8 @@ namespace Spark::Persistence
         ::close(temporaryFd);
         if (flushResult != 0)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core,
-                            "AsyncDatabase: durable flush failed for '%s': %s", temporary.string().c_str(),
-                            std::strerror(flushError));
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: durable flush failed for '%s': %s",
+                            temporary.string().c_str(), std::strerror(flushError));
             std::error_code removeError;
             std::filesystem::remove(temporary, removeError);
             return false;

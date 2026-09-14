@@ -641,8 +641,8 @@ int main(int argc, char** argv)
          << "  \"passed\": " << (passed ? "true" : "false")
          << ",\n  \"timedOut\": " << (process.timedOut ? "true" : "false") << ",\n  \"exitCode\": " << process.exitCode
          << ",\n  \"expectedExit\": " << plan.expectedExit << ",\n  \"frameLimit\": " << plan.frames
-         << ",\n  \"durationMs\": " << process.durationMs
-         << ",\n  \"capturedLogPath\": \"" << Escape(plan.capturedLog.string(), false) << "\""
+         << ",\n  \"durationMs\": " << process.durationMs << ",\n  \"capturedLogPath\": \""
+         << Escape(plan.capturedLog.string(), false) << "\""
          << ",\n  \"capturedLogTruncated\": " << (log.size() > diagnosticTail.size() ? "true" : "false")
          << ",\n  \"capturedLogTail\": \"" << Escape(diagnosticTail, false) << "\""
          << ",\n  \"failures\": [";
@@ -674,8 +674,7 @@ int main(int argc, char** argv)
     std::cout << json.str();
     if (!passed && !diagnosticTail.empty())
     {
-        std::cerr << "--- captured log tail: " << plan.capturedLog.string() << " ---\n"
-                  << diagnosticTail;
+        std::cerr << "--- captured log tail: " << plan.capturedLog.string() << " ---\n" << diagnosticTail;
         if (diagnosticTail.back() != '\n')
             std::cerr << '\n';
     }
