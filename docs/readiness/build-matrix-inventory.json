@@ -2703,6 +2703,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzJsonUtils",
+      "kind": "executable",
+      "file": "Tests/Fuzz/CMakeLists.txt",
+      "line": 10,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkGame",
       "kind": "shared_library",
       "file": "GameModules/SparkGame/CMakeLists.txt",
@@ -4312,6 +4322,24 @@
           "line": 815,
           "kind": "shared_library",
           "origin": "wrapper-call",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzJsonUtils",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/Fuzz/CMakeLists.txt",
+          "line": 10,
+          "kind": "executable",
+          "origin": "declaration",
           "definitionScope": [],
           "resolved": true
         }
