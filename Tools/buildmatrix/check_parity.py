@@ -1225,7 +1225,8 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
 _MSVC_TOOLSET_PATH_RE = re.compile(r"/VC/Tools/MSVC/([^/]+)/", re.IGNORECASE)
 _MSVC_TOOLSET_VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\Z")
 _MSVC_COMPILER_PATH_RE = re.compile(
-    r"/VC/Tools/MSVC/([^/]+)/bin/Hostx64/x64/cl\.exe\Z", re.IGNORECASE
+    r"(?:[A-Za-z]:/|//).+?/VC/Tools/MSVC/([^/]+)/bin/Hostx64/x64/cl\.exe\Z",
+    re.IGNORECASE,
 )
 _MSVC_COMPILER_VERSION_RE = re.compile(r"19\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\Z")
 _WINDOWS_SDK_VERSION_RE = re.compile(r"10\.0\.[0-9]{5}\.[0-9]\Z")

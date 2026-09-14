@@ -2215,6 +2215,13 @@ class CodemodelProvenanceTests(unittest.TestCase):
         categories = self.categories(self.bound_data(evidence))
         self.assertIn("codemodel-toolchain-incomplete", categories)
 
+    def test_valid_absolute_msvc_compiler_path_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+
+        categories = self.categories(self.bound_data(evidence))
+        self.assertNotIn("codemodel-toolchain-mismatch", categories)
+
     def test_msvc_compiler_path_must_agree_with_linker_toolset(self) -> None:
         cache = dict(self.shipping_cache)
         cache["SPARK_TOOLCHAIN_CXX_COMPILER"] = MSVC_CXX_COMPILER_PATH.replace(

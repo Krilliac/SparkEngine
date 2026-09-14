@@ -158,6 +158,13 @@ CI installs sccache v0.17.0 from the GitHub release verified against a SHA-256 l
 
 The advisory `build-windows-vs2026` job follows the same recipe inside the VS 2026 developer environment (vswhere `[18.0,19.0)`, default v145 toolset) without `-DBUILD_GAME_MODULES=ON`; it fails visibly when that toolchain is absent instead of reporting a green no-op. `build-windows-shipping` still configures through the `windows-shipping` preset (Visual Studio 17 2022 generator, v143) and uses no compiler cache.
 
+The build-matrix provenance checker records the absolute C++ compiler path in
+addition to the Visual Studio generator instance, archiver, and linker. It
+accepts only an absolute Windows x64 MSVC `cl.exe` path whose concrete toolset
+version agrees with the other recorded tools. This is provenance validation,
+not hosted reproducibility evidence: BLD-100 still requires two clean Windows
+Shipping builds and an externally verified comparison.
+
 ## macOS (job `build-macos`, `continue-on-error`)
 
 ```bash
