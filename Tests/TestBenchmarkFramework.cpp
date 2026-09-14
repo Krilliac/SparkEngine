@@ -251,8 +251,7 @@ TEST(BenchmarkFramework_CompareWithBaseline_MissingBaselineFailsClosed)
     baseline.scenarioName = "CoveredScene";
     baseline.metrics = {{"FrameTime", 10.0}};
 
-    auto comparisons = bench.CompareWithBaseline(
-        {coveredResult, missingResult}, {baseline});
+    auto comparisons = bench.CompareWithBaseline({coveredResult, missingResult}, {baseline});
     EXPECT_EQ(comparisons.size(), 2u);
     EXPECT_TRUE(comparisons[0].passed);
     EXPECT_FALSE(comparisons[1].passed);
