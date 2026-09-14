@@ -1665,6 +1665,9 @@
         },
         "cacheVariables": {
           "BUILD_GAME_MODULES": "OFF",
+          "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+          "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++ -lc++abi",
+          "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++",
           "ENABLE_ANGELSCRIPT": "OFF",
           "ENABLE_ASSET_PIPELINE_TOOLS": "OFF",
           "ENABLE_AUTOMATION_HOST": "OFF",
@@ -5894,7 +5897,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 6,
+        "stepCount": 7,
         "steps": [
           {
             "index": 0,
@@ -5910,7 +5913,7 @@
           },
           {
             "index": 1,
-            "name": "Configure fuzz-policy checks",
+            "name": "Install Clang C++23 standard library",
             "id": "",
             "uses": "",
             "shell": "",
@@ -5918,10 +5921,25 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "b22b3da5c91fad33"
+            "runDigest": "64348c77c76429bd"
           },
           {
             "index": 2,
+            "name": "Configure fuzz-policy checks",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "CXXFLAGS",
+              "LDFLAGS"
+            ],
+            "runDigest": "b22b3da5c91fad33"
+          },
+          {
+            "index": 3,
             "name": "Run blocking fuzz-policy target",
             "id": "",
             "uses": "",
@@ -5933,7 +5951,7 @@
             "runDigest": "294c9a40d1798602"
           },
           {
-            "index": 3,
+            "index": 4,
             "name": "Build production fuzz smoke target",
             "id": "",
             "uses": "",
@@ -5945,7 +5963,7 @@
             "runDigest": "c0fad0249e6b10c6"
           },
           {
-            "index": 4,
+            "index": 5,
             "name": "Run adversarial policy tests",
             "id": "",
             "uses": "",
@@ -5957,7 +5975,7 @@
             "runDigest": "02f0d4615a6259d9"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "Run production fuzz smoke",
             "id": "",
             "uses": "",
@@ -10663,7 +10681,7 @@
       {
         "job": "fuzz-policy",
         "step": "Configure fuzz-policy checks",
-        "stepIndex": 1,
+        "stepIndex": 2,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -10685,7 +10703,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run blocking fuzz-policy target",
-        "stepIndex": 2,
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -10712,7 +10730,7 @@
       {
         "job": "fuzz-policy",
         "step": "Build production fuzz smoke target",
-        "stepIndex": 3,
+        "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -10739,7 +10757,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run adversarial policy tests",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -10762,7 +10780,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run production fuzz smoke",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -12857,7 +12875,7 @@
       {
         "job": "fuzz-policy",
         "step": "Configure fuzz-policy checks",
-        "stepIndex": 1,
+        "stepIndex": 2,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -13665,7 +13683,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run blocking fuzz-policy target",
-        "stepIndex": 2,
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -13692,7 +13710,7 @@
       {
         "job": "fuzz-policy",
         "step": "Build production fuzz smoke target",
-        "stepIndex": 3,
+        "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -14454,7 +14472,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run adversarial policy tests",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -14477,7 +14495,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run production fuzz smoke",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -15178,7 +15196,7 @@
     {
       "job": "fuzz-policy",
       "step": "Configure fuzz-policy checks",
-      "stepIndex": 1,
+      "stepIndex": 2,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "linux",
