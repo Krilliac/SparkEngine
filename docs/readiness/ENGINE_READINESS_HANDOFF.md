@@ -1314,6 +1314,8 @@ ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure --no-te
 - Documentation:
   - `SECURITY.md`
   - `wiki/subsystems/Dedicated-Server.md`
+  - `wiki/subsystems/Memory-Integrity.md`
+  - `wiki/advanced/Memory-Integrity-System.md`
 - Readiness contract:
   - G07
   - G12

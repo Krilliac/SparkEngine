@@ -59,7 +59,9 @@
       ],
       "documentationUpdates": [
         "SECURITY.md",
-        "wiki/subsystems/Dedicated-Server.md"
+        "wiki/subsystems/Dedicated-Server.md",
+        "wiki/subsystems/Memory-Integrity.md",
+        "wiki/advanced/Memory-Integrity-System.md"
       ],
       "readinessChanges": [
         "G07",
