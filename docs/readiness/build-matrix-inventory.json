@@ -5867,7 +5867,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 35,
+        "stepCount": 37,
         "steps": [
           {
             "index": 0,
@@ -5919,6 +5919,30 @@
           },
           {
             "index": 4,
+            "name": "Validate flaky warning ownership and expiry",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "5ae22522734f1cc7"
+          },
+          {
+            "index": 5,
+            "name": "Test flaky warning ownership and expiry policy",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "57c97a09c6c4a003"
+          },
+          {
+            "index": 6,
             "name": "Test required-job gate",
             "id": "",
             "uses": "",
@@ -5930,7 +5954,7 @@
             "runDigest": "a688de9d2e6d4cfe"
           },
           {
-            "index": 5,
+            "index": 7,
             "name": "Test exact-commit release gate",
             "id": "",
             "uses": "",
@@ -5942,7 +5966,7 @@
             "runDigest": "b660839f28f576e8"
           },
           {
-            "index": 6,
+            "index": 8,
             "name": "Test release acceptance publication gate",
             "id": "",
             "uses": "",
@@ -5954,7 +5978,7 @@
             "runDigest": "cbb77367c2125ead"
           },
           {
-            "index": 7,
+            "index": 9,
             "name": "Test the build-matrix exact-source status gate",
             "id": "",
             "uses": "",
@@ -5966,7 +5990,7 @@
             "runDigest": "49a6266d08a82878"
           },
           {
-            "index": 8,
+            "index": 10,
             "name": "Test crash-consistent release download counters",
             "id": "",
             "uses": "",
@@ -5978,7 +6002,7 @@
             "runDigest": "660224552d6751a4"
           },
           {
-            "index": 9,
+            "index": 11,
             "name": "Test Windows package signature orchestration",
             "id": "",
             "uses": "",
@@ -5990,7 +6014,7 @@
             "runDigest": "4ecaca6b345e4746"
           },
           {
-            "index": 10,
+            "index": 12,
             "name": "Test native MSI qualification orchestration",
             "id": "",
             "uses": "",
@@ -6002,7 +6026,7 @@
             "runDigest": "9c8bed06b88ba1bd"
           },
           {
-            "index": 11,
+            "index": 13,
             "name": "Test exact release asset publication boundary",
             "id": "",
             "uses": "",
@@ -6014,7 +6038,7 @@
             "runDigest": "c1cda3d75fd3d19c"
           },
           {
-            "index": 12,
+            "index": 14,
             "name": "Test release publication recovery",
             "id": "",
             "uses": "",
@@ -6026,7 +6050,7 @@
             "runDigest": "b5a4aee105620528"
           },
           {
-            "index": 13,
+            "index": 15,
             "name": "Test extracted portable-package validation",
             "id": "",
             "uses": "",
@@ -6038,7 +6062,7 @@
             "runDigest": "3cede89fce1f5dba"
           },
           {
-            "index": 14,
+            "index": 16,
             "name": "Test coverage evidence semantics",
             "id": "",
             "uses": "",
@@ -6050,7 +6074,7 @@
             "runDigest": "b870b844a6e610de"
           },
           {
-            "index": 15,
+            "index": 17,
             "name": "Test sanitizer pipeline exit propagation",
             "id": "",
             "uses": "",
@@ -6062,7 +6086,7 @@
             "runDigest": "e9e9310a91486157"
           },
           {
-            "index": 16,
+            "index": 18,
             "name": "Test workflow failure-propagation contract",
             "id": "",
             "uses": "",
@@ -6074,7 +6098,7 @@
             "runDigest": "f7233b3f14c1a94a"
           },
           {
-            "index": 17,
+            "index": 19,
             "name": "Test granular SparkTests wrapper failure recovery",
             "id": "",
             "uses": "",
@@ -6086,7 +6110,7 @@
             "runDigest": "326ef3bd02bde17a"
           },
           {
-            "index": 18,
+            "index": 20,
             "name": "Test Spark CLI",
             "id": "",
             "uses": "",
@@ -6098,7 +6122,7 @@
             "runDigest": "409c9f97b4a909ab"
           },
           {
-            "index": 19,
+            "index": 21,
             "name": "Test ThirdParty manifest-sync gate",
             "id": "",
             "uses": "",
@@ -6110,7 +6134,7 @@
             "runDigest": "20b1682609fdd8b9"
           },
           {
-            "index": 20,
+            "index": 22,
             "name": "Platform certification validator",
             "id": "",
             "uses": "",
@@ -6122,7 +6146,7 @@
             "runDigest": "6b643bc930292a59"
           },
           {
-            "index": 21,
+            "index": 23,
             "name": "Validate certification matrix",
             "id": "",
             "uses": "",
@@ -6134,7 +6158,7 @@
             "runDigest": "edbea8f70422546c"
           },
           {
-            "index": 22,
+            "index": 24,
             "name": "Verify every test source is registered",
             "id": "",
             "uses": "",
@@ -6146,7 +6170,7 @@
             "runDigest": "4033bf80ea364bbe"
           },
           {
-            "index": 23,
+            "index": 25,
             "name": "Test asset integrity verifier",
             "id": "",
             "uses": "",
@@ -6158,7 +6182,7 @@
             "runDigest": "b1c686bd5499a5fd"
           },
           {
-            "index": 24,
+            "index": 26,
             "name": "Verify repository asset integrity baseline",
             "id": "",
             "uses": "",
@@ -6170,7 +6194,7 @@
             "runDigest": "24c6f12eaf03dec2"
           },
           {
-            "index": 25,
+            "index": 27,
             "name": "Validate module evidence manifest (declarative layer)",
             "id": "",
             "uses": "",
@@ -6182,7 +6206,7 @@
             "runDigest": "3207d199801cc28d"
           },
           {
-            "index": 26,
+            "index": 28,
             "name": "Run module evidence adversarial tests",
             "id": "",
             "uses": "",
@@ -6194,7 +6218,7 @@
             "runDigest": "1593673681e72374"
           },
           {
-            "index": 27,
+            "index": 29,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -6206,7 +6230,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 28,
+            "index": 30,
             "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
@@ -6218,7 +6242,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 29,
+            "index": 31,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -6230,7 +6254,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 30,
+            "index": 32,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -6242,7 +6266,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 31,
+            "index": 33,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6254,7 +6278,7 @@
             "runDigest": ""
           },
           {
-            "index": 32,
+            "index": 34,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -6266,7 +6290,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 33,
+            "index": 35,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -6281,7 +6305,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 34,
+            "index": 36,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -14655,7 +14679,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 29,
+        "stepIndex": 31,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -14683,7 +14707,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 30,
+        "stepIndex": 32,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",

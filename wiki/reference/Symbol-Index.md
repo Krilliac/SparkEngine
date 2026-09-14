@@ -16142,7 +16142,7 @@
 | `GetTestedCount` | function | SparkEngine | [OcclusionCulling.h:L161](../../SparkEngine/Source/Graphics/OcclusionCulling.h#L161) | Get the number of objects tested this frame. |
 | `GetTestListHead` | function | Tests | [TestFramework.h:L39](../../Tests/TestFramework.h#L39) |  |
 | `GetTestRegistry` | function | Tests | [TestFramework.h:L47](../../Tests/TestFramework.h#L47) |  |
-| `GetTestWarningReason` | function | Tests | [TestWarnings.h:L66](../../Tests/TestWarnings.h#L66) |  |
+| `GetTestWarningReason` | function | Tests | [TestWarnings.h:L69](../../Tests/TestWarnings.h#L69) |  |
 | `GetText` | function | SparkEngine | [SceneGraph2D.h:L313](../../SparkEngine/Source/Engine/2D/SceneGraph2D.h#L313) |  |
 | `GetText` | function | SparkEngine | [UISystem.h:L199](../../SparkEngine/Source/Engine/UI/UISystem.h#L199) | Text label widget. |
 | `GetTexture` | function | SparkEngine | [FoliageImpostorBaker.h:L290](../../SparkEngine/Source/Graphics/FoliageImpostorBaker.h#L290) |  |
@@ -41202,7 +41202,7 @@
 | `TestValidationRule` | class | Tests | [TestAssetValidator.cpp:L30](../../Tests/TestAssetValidator.cpp#L30) |  |
 | `TestVisibility` | function | SparkEngine | [OcclusionCulling.h:L149](../../SparkEngine/Source/Graphics/OcclusionCulling.h#L149) | Test an AABB against the depth buffer for visibility. |
 | `TestVisibility` | function | Tests | [TestOcclusionCulling.cpp:L59](../../Tests/TestOcclusionCulling.cpp#L59) |  |
-| `TestWarningPattern` | struct | Tests | [TestWarnings.h:L30](../../Tests/TestWarnings.h#L30) |  |
+| `TestWarningPattern` | struct | Tests | [TestWarnings.h:L33](../../Tests/TestWarnings.h#L33) |  |
 | `TestWindowsOrPosixLaunchAndDurableReplay` | function | SparkDaemon | [ServiceTests.cpp:L526](../../SparkDaemon/tests/ServiceTests.cpp#L526) |  |
 | `TestWorld` | class | Tests | [TestECSIntegration.cpp:L96](../../Tests/TestECSIntegration.cpp#L96) |  |
 | `TestWriterRoundTrip` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L126](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L126) |  |

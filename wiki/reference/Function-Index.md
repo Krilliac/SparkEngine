@@ -13826,7 +13826,7 @@
 | `GetTestedCount` | function | SparkEngine | [OcclusionCulling.h:L161](../../SparkEngine/Source/Graphics/OcclusionCulling.h#L161) | Get the number of objects tested this frame. |
 | `GetTestListHead` | function | Tests | [TestFramework.h:L39](../../Tests/TestFramework.h#L39) |  |
 | `GetTestRegistry` | function | Tests | [TestFramework.h:L47](../../Tests/TestFramework.h#L47) |  |
-| `GetTestWarningReason` | function | Tests | [TestWarnings.h:L66](../../Tests/TestWarnings.h#L66) |  |
+| `GetTestWarningReason` | function | Tests | [TestWarnings.h:L69](../../Tests/TestWarnings.h#L69) |  |
 | `GetText` | function | SparkEngine | [SceneGraph2D.h:L313](../../SparkEngine/Source/Engine/2D/SceneGraph2D.h#L313) |  |
 | `GetText` | function | SparkEngine | [UISystem.h:L199](../../SparkEngine/Source/Engine/UI/UISystem.h#L199) | Text label widget. |
 | `GetTexture` | function | SparkEngine | [FoliageImpostorBaker.h:L290](../../SparkEngine/Source/Graphics/FoliageImpostorBaker.h#L290) |  |
