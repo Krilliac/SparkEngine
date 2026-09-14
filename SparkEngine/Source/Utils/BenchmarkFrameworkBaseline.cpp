@@ -153,6 +153,11 @@ namespace Spark
 
             if (!baseline)
             {
+                BenchmarkComparison comparison;
+                comparison.scenarioName = result.scenarioName;
+                comparison.passed = false;
+                comparison.failureReason = "No matching baseline for benchmark scenario";
+                comparisons.push_back(std::move(comparison));
                 continue;
             }
 
@@ -199,8 +204,8 @@ namespace Spark
 
     bool BenchmarkFramework::HasRegressions(const std::vector<BenchmarkComparison>& comparisons) const
     {
-        return std::any_of(comparisons.begin(), comparisons.end(),
-                           [](const BenchmarkComparison& c) { return !c.passed; });
+        return comparisons.empty() || std::any_of(comparisons.begin(), comparisons.end(),
+                                                  [](const BenchmarkComparison& c) { return !c.passed; });
     }
 
     std::string BenchmarkFramework::EscapeJson(const std::string& str)
