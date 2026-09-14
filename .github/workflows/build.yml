@@ -3316,7 +3316,8 @@ jobs:
           echo "Found $count TODO/FIXME/HACK/XXX comments"
           echo "count=$count" >> "$GITHUB_OUTPUT"
           if [ "$count" -gt 20 ]; then
-            echo "::warning::TODO/FIXME count ($count) exceeds threshold of 20"
+            echo "::error::TODO/FIXME count ($count) exceeds threshold of 20"
+            exit 1
           fi
       - name: Upload todo-count summary artifact
         if: always()

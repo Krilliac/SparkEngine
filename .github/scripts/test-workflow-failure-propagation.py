@@ -1098,6 +1098,19 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
 
+    def test_todo_count_threshold_failure_is_fail_closed(self) -> None:
+        job = yaml_section(self.build, "todo-count", indent=2)
+        step = named_step(job, "Count TODO/FIXME/HACK comments")
+        threshold_start = step.index('if [ "$count" -gt 20 ]; then')
+        threshold_end = step.index("\n          fi", threshold_start)
+        threshold = step[threshold_start:threshold_end]
+
+        self.assertIn(
+            'echo "::error::TODO/FIXME count ($count) exceeds threshold of 20"',
+            threshold,
+        )
+        self.assertRegex(threshold, r"(?m)^\s+exit 1$")
+
     def test_clang_tidy_inventory_covers_all_shipped_source_roots(self) -> None:
         block = self.build[self.build.index("\n  clang-tidy:\n"):]
         block = block[:block.index("\n  # ===========================================================================", 1)]

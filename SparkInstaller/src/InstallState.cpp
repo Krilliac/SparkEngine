@@ -207,6 +207,10 @@ namespace SparkInstaller
 
     bool InstallState::Save(const std::string& destination) const
     {
+        if (destination.empty() || schema != 1 || ref.empty() || commit.empty() || generator.empty() ||
+            buildType.empty() || installerVersion.empty())
+            return false;
+
         fs::path path = fs::path(destination) / FileName();
         fs::path temporaryPath = path;
         temporaryPath += ".tmp";

@@ -1759,6 +1759,14 @@ if(Python3_Interpreter_FOUND)
         LABELS "persistence;durability;static;python"
         TIMEOUT 30)
 
+    add_test(
+        NAME SparkNetworkSecurityCsprngContract
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_network_security_csprng.py)
+    set_tests_properties(SparkNetworkSecurityCsprngContract PROPERTIES
+        LABELS "network-security;security;static;python"
+        TIMEOUT 30)
+
     if(TARGET SparkShaderCompiler AND TARGET SparkCooker AND
        TARGET SparkAutomation AND TARGET SparkCrashReporter)
         add_test(

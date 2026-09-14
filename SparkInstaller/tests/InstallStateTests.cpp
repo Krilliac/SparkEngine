@@ -67,6 +67,34 @@ namespace
         return failures;
     }
 
+    int RunInvalidStateCannotReplaceValidMarkerTest()
+    {
+        const auto root = MakeTestRoot();
+        std::error_code error;
+        std::filesystem::create_directories(root, error);
+        int failures = Check(!error, "could not create invalid-state test root");
+        if (failures != 0)
+            return failures;
+
+        const auto validState = StateWithCommit("old-commit");
+        failures += Check(validState.Save(root.string()), "could not create the valid install marker");
+
+        const auto invalidState = StateWithCommit("");
+        failures += Check(!invalidState.Save(root.string()), "invalid install state was accepted for persistence");
+
+        SparkInstaller::InstallState loaded;
+        failures += Check(SparkInstaller::InstallState::Load(root.string(), loaded),
+                          "rejecting invalid install state discarded the valid marker");
+        failures += Check(loaded.commit == "old-commit", "invalid install state replaced the previously valid marker");
+
+        const auto temporaryMarker = root / (SparkInstaller::InstallState::FileName() + ".tmp");
+        failures += Check(!std::filesystem::exists(temporaryMarker),
+                          "rejecting invalid install state left a temporary marker behind");
+
+        std::filesystem::remove_all(root, error);
+        return failures;
+    }
+
     int RunMalformedMarkerFailClosedTest()
     {
         const auto root = MakeTestRoot();
@@ -121,9 +149,10 @@ namespace
 int main()
 {
     const int atomicReplacement = RunAtomicReplacementTest();
+    const int invalidState = RunInvalidStateCannotReplaceValidMarkerTest();
     const int malformedMarker = RunMalformedMarkerFailClosedTest();
     const int oversizedMarker = RunOversizedMarkerRejectedBeforeParsingTest();
-    if (atomicReplacement == 0 && malformedMarker == 0 && oversizedMarker == 0)
+    if (atomicReplacement == 0 && invalidState == 0 && malformedMarker == 0 && oversizedMarker == 0)
         std::cout << "SparkInstaller install-state recovery tests passed\n";
-    return atomicReplacement == 0 && malformedMarker == 0 && oversizedMarker == 0 ? 0 : 1;
+    return atomicReplacement == 0 && invalidState == 0 && malformedMarker == 0 && oversizedMarker == 0 ? 0 : 1;
 }
