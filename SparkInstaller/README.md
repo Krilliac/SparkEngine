@@ -24,9 +24,11 @@ taste, and builds the engine on your machine.
 **Update mode** (destination contains an existing install):
 
 1. Read the prior `.sparkengine-install.json` to recover ref + options.
-2. `git fetch` + `git checkout <ref>` + `git submodule update --init --recursive`.
-3. Re-run configure + build with the stored options.
-4. Update `.sparkengine-install.json` with the new commit + timestamp.
+2. Verify the existing checkout has no tracked or untracked changes; refuse the
+   update when local changes could make rollback ambiguous.
+3. `git fetch` + `git checkout <ref>` + `git submodule update --init --recursive`.
+4. Re-run configure + build with the stored options.
+5. Update `.sparkengine-install.json` with the new commit + timestamp.
 
 The same binary handles both modes — it picks automatically based on what's
 in the destination.

@@ -136,6 +136,30 @@ namespace SparkInstaller
         return Run("fetch --all --tags --prune", destination, log) == 0;
     }
 
+    bool GitRunner::WorkingTreeClean(const std::string& destination, const LogSink& log) const
+    {
+        const std::string args = "status --porcelain --untracked-files=all";
+        SparkBuild::ProcessRunner runner;
+        std::string command = EncodeProcessRunnerArgument(m_gitExe) + " " + args;
+        if (log)
+            log("$ git " + args);
+
+        std::string output;
+        if (runner.RunSync(command, destination, output) != 0)
+        {
+            if (log)
+                log("error: could not inspect the existing install working tree");
+            return false;
+        }
+        if (!output.empty())
+        {
+            if (log)
+                log("error: existing install has local changes");
+            return false;
+        }
+        return true;
+    }
+
     bool GitRunner::CheckoutRef(const std::string& ref, const std::string& destination, const LogSink& log) const
     {
         if (!IsSafeRef(ref))

@@ -16,6 +16,9 @@ namespace SparkInstaller
                    const LogSink& log) const;
 
         bool Fetch(const std::string& destination, const LogSink& log) const;
+        // Refuse an update when tracked or untracked local changes could make
+        // rollback ambiguous or cause checkout to replace user data.
+        bool WorkingTreeClean(const std::string& destination, const LogSink& log) const;
         bool CheckoutRef(const std::string& ref, const std::string& destination, const LogSink& log) const;
         // Restore an exact previously observed commit without forcing away
         // local changes. A failure is reported to the caller so update

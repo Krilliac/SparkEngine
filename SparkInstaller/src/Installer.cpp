@@ -129,6 +129,11 @@ namespace SparkInstaller
         else
         {
             Emit(ctx.log, "Updating existing install at " + ctx.destination);
+            if (!git.WorkingTreeClean(ctx.destination, ctx.log))
+            {
+                Emit(ctx.log, "error: existing install has local changes; refusing update");
+                return 5;
+            }
             if (!git.Fetch(ctx.destination, ctx.log) || !git.CheckoutRef(ctx.ref, ctx.destination, ctx.log))
             {
                 Emit(ctx.log, "error: git fetch/checkout failed");
