@@ -1805,6 +1805,36 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             self.build,
         )
 
+    def test_workflow_dispatch_reaches_required_gate_without_event_skips(self) -> None:
+        document = parse_workflow_yaml(self.build)
+        triggers = document.get("on")
+        self.assertIsInstance(triggers, dict)
+        assert isinstance(triggers, dict)
+        self.assertIn("workflow_dispatch", triggers)
+
+        jobs = document["jobs"]
+        gate = jobs.get("required-ci-gate")
+        self.assertIsInstance(gate, dict)
+        assert isinstance(gate, dict)
+        self.assertEqual(gate.get("if"), "always()")
+        self.assertEqual(gate.get("needs"), list(REQUIRED_CI_JOBS))
+
+        for job_id in REQUIRED_CI_JOBS:
+            with self.subTest(job_id=job_id):
+                job = jobs.get(job_id)
+                self.assertIsInstance(job, dict)
+                assert isinstance(job, dict)
+                if job_id == "aggregate-test-stats":
+                    self.assertEqual(job.get("if"), "always()")
+                else:
+                    self.assertNotIn("if", job)
+                self.assertNotIn("continue-on-error", job)
+
+        concurrency = document.get("concurrency")
+        self.assertIsInstance(concurrency, dict)
+        assert isinstance(concurrency, dict)
+        self.assertEqual(concurrency.get("cancel-in-progress"), "${{ github.event_name == 'pull_request' }}")
+
     def test_generated_documentation_runs_for_direct_pushes(self) -> None:
         block = named_step(self.build, "Verify all generated documentation and statistics")
         self.assertNotRegex(block, r"(?m)^\s+if:")
