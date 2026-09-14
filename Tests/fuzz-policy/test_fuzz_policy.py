@@ -751,6 +751,16 @@ class TestCMakeTokenizer(unittest.TestCase):
         with self.assertRaisesRegex(policy_common.PolicyError, "unresolvable CMake variable"):
             build_binding._literal("${MYSTERY}", "f")
 
+    def test_fuzz_project_root_variable_resolves_to_repository_root(self) -> None:
+        self.assertEqual(
+            build_binding._resolve_path(
+                "Tests/Fuzz",
+                "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/JsonUtils.h",
+                "f",
+            ),
+            "SparkEngine/Source/Utils/JsonUtils.h",
+        )
+
 
 # =========================================================================
 # Harness shape
@@ -1372,6 +1382,32 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertGreater(report["inventory"]["parser_count"], 100)
         self.assertGreater(report["inventory"]["scanned_file_count"], 1000)
 
+    def test_json_utils_has_a_production_fuzz_binding(self) -> None:
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        parser = next(item for item in inventory.parsers if item.parser_id == "json-utils")
+        self.assertEqual(parser.status, "fuzzed")
+        self.assertIsNotNone(parser.target)
+        assert parser.target is not None
+        self.assertEqual(parser.target["harness"], "Tests/Fuzz/FuzzJsonUtils.cpp")
+        self.assertEqual(parser.target["cmake_file"], "Tests/Fuzz/CMakeLists.txt")
+        self.assertEqual(parser.target["cmake_target"], "SparkFuzzJsonUtils")
+        self.assertEqual(parser.target["test_selector"], "FuzzJsonUtilsSmoke")
+        self.assertEqual(parser.target["corpus_id"], "json-utils-corpus")
+        self.assertEqual(parser.target["entry_symbol"], "Spark::Json::ParseBounded")
+
+        corpora = corpus_manifest.load_corpora(REPO_ROOT, inventory)
+        self.assertEqual(len(corpora), 1)
+        corpus = corpora[0]
+        self.assertEqual(corpus.parser_id, "json-utils")
+        self.assertEqual(corpus.corpus_dir, "Tests/fuzz-corpora/json-utils")
+        self.assertEqual(corpus.budget.max_input_bytes, 4096)
+        self.assertEqual(corpus.budget.max_parse_time_ms, 1000)
+        self.assertEqual(corpus.budget.max_memory_mb, 128)
+        self.assertEqual(corpus.budget.max_depth, 32)
+        self.assertEqual(corpus.budget.max_corpus_entries, 8)
+        self.assertEqual(corpus.budget.max_corpus_bytes, 4096)
+        self.assertEqual(corpus.budget.smoke_seconds, 5)
+
     def test_named_verified_misses_are_inventoried(self) -> None:
         inventory = parser_inventory.load_inventory(REPO_ROOT)
         owned = {source for parser in inventory.parsers for source in parser.source_files}
@@ -1411,11 +1447,8 @@ class TestRepositoryIntegration(unittest.TestCase):
         gate = check_fuzz_policy._job_block(workflow, "required-ci-gate")
         self.assertTrue(any(line.strip() == "- fuzz-policy" for line in gate))
 
-    def test_fuzz_targets_would_require_a_smoke_run(self) -> None:
-        # No fuzz target exists yet, so the smoke command is intentionally absent.
-        # Declaring one without wiring the run must fail.
-        with self.assertRaisesRegex(policy_common.PolicyError, "never runs"):
-            check_fuzz_policy.validate_ci_and_cmake_binding(REPO_ROOT, fuzz_target_count=1)
+    def test_fuzz_targets_are_wired_to_a_smoke_run(self) -> None:
+        check_fuzz_policy.validate_ci_and_cmake_binding(REPO_ROOT, fuzz_target_count=1)
 
     def test_ctest_entries_run_from_the_source_root(self) -> None:
         module = (REPO_ROOT / "cmake" / "SparkFuzzPolicy.cmake").read_text(encoding="utf-8")

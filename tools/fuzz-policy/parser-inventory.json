@@ -684,10 +684,14 @@
       "formats": [
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No direct production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "Tests/Fuzz/FuzzJsonUtils.cpp",
+        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "cmake_target": "SparkFuzzJsonUtils",
+        "test_selector": "FuzzJsonUtilsSmoke",
+        "corpus_id": "json-utils-corpus",
+        "entry_symbol": "Spark::Json::ParseBounded"
       }
     },
     {

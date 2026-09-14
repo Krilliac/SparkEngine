@@ -2008,3 +2008,7 @@ endif()
 
 # Actual FPS mutation adapters and engine event publication, without module rendering dependencies.
 add_subdirectory(FPSGameplayEvents)
+
+if(SPARK_ENABLE_FUZZ_TARGETS)
+    add_subdirectory(Fuzz)
+endif()

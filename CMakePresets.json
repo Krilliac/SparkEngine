@@ -136,6 +136,39 @@
             }
         },
         {
+            "name": "linux-fuzz",
+            "displayName": "Linux Clang libFuzzer (SEC-120)",
+            "inherits": "linux-clang-debug",
+            "cacheVariables": {
+                "SPARK_ENABLE_FUZZ_TARGETS": "ON",
+                "BUILD_GAME_MODULES": "OFF",
+                "ENABLE_GRAPHICS": "OFF",
+                "ENABLE_NETWORKING": "OFF",
+                "ENABLE_SERVER_PROCESSES": "OFF",
+                "ENABLE_DXR": "OFF",
+                "ENABLE_HYBRID_RT": "OFF",
+                "ENABLE_NEURAL_RENDERING": "OFF",
+                "ENABLE_ANGELSCRIPT": "OFF",
+                "ENABLE_RECAST": "OFF",
+                "ENABLE_VR": "OFF",
+                "ENABLE_MOBILE": "OFF",
+                "ENABLE_SDL2": "OFF",
+                "ENABLE_VULKAN": "OFF",
+                "ENABLE_OPENGL": "OFF",
+                "ENABLE_LAUNCHER": "OFF",
+                "ENABLE_SPARKBUILD": "OFF",
+                "ENABLE_INSTALLER": "OFF",
+                "ENABLE_ASSET_PIPELINE_TOOLS": "OFF",
+                "ENABLE_AUTOMATION_HOST": "OFF",
+                "SPARK_STRICT_DEPS": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
             "name": "windows-shipping",
             "displayName": "Windows stable-v1 Shipping product set",
             "inherits": "default",
@@ -393,6 +426,10 @@
         {
             "name": "ci-linux-tsan",
             "configurePreset": "ci-linux-tsan"
+        },
+        {
+            "name": "linux-fuzz",
+            "configurePreset": "linux-fuzz"
         },
         {
             "name": "windows-shipping",

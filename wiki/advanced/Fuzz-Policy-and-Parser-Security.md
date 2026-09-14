@@ -6,14 +6,16 @@
 
 ## Current Status
 
-SEC-120 remains open and release-blocking. The repository has a blocking structural
-policy gate, but it does not yet have a production fuzz target, seed corpus, sanitizer
-fuzz smoke, scheduled campaign, coverage result, or crash-free-duration result.
+SEC-120 remains open and release-blocking. The repository now has one structurally
+validated production fuzz target and bounded seed corpus for `json-utils`, but its
+exact-SHA sanitizer smoke has not yet run; scheduled campaigns, coverage, and
+crash-free-duration evidence also remain absent.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **105 explicitly inventoried parsers, all
-blocked**, **151 detected candidates deferred with an owner and expiry**, and **1979
-source files scanned across 17 first-party roots**. Those counts are not fuzz coverage.
+For the recorded source-tree state it reports **105 explicitly inventoried parsers, 1
+fuzzed and 104 blocked**, **1 bound corpus with 7 seeds**, **151 detected candidates
+deferred with an owner and expiry**, and **1979 source files scanned across 17
+first-party roots**. Those counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.
 
@@ -96,9 +98,11 @@ python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --emit-json \
 python3 -m unittest discover -s Tests/fuzz-policy -p "test_*.py" -v
 bash tools/check-fuzz-policy.sh          # also runs via tools/validate-all.sh
 
-cmake -S tools/fuzz-policy -B build/fuzz-policy
+CXX=clang++ cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
+cmake --build build/fuzz-policy --target SparkFuzzJsonUtils
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
+ctest --test-dir build/fuzz-policy --output-on-failure -L fuzz --no-tests=error -C Release
 ```
 
 `-C Release` is required by multi-config generators (Visual Studio) and ignored by
@@ -129,14 +133,15 @@ change *is* the review record.
 ## Remaining Closure Work
 
 - classify the 151-file deferred backlog before it expires on 2027-02-24;
-- implement production-entry-point fuzz targets for the inventoried parsers, starting
+- retain the json-utils target's exact-SHA sanitizer smoke and implement production
+  entry-point fuzz targets for the remaining 104 inventoried parsers, starting
   with the highest-risk binary readers (`neural-weights-nnw`, `terrain-sparkterrain`,
   `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
   `fps-terrain-heightmap-bmp`, `asset-media-windows`);
 - commit bounded seed corpora under `Tests/fuzz-corpora/` and minimized regressions;
-- add blocking ASan/UBSan smoke and scheduled campaigns with retained coverage and
-  crash-free-duration evidence, and wire the `-L fuzz` smoke run into the CI job (the
-  gate already requires it as soon as any parser is marked `fuzzed`);
+- retain the blocking ASan/UBSan smoke now wired for json-utils and add scheduled
+  campaigns with retained coverage and crash-free-duration evidence (the `-L fuzz`
+  CI run is now required whenever a parser is marked `fuzzed`);
 - independently review that each harness reaches production parsing code and that
   allocation, depth, path, integer, and time bounds are enforced by that code;
 - extend the detector so the 27 known blind spots shrink.
@@ -145,5 +150,6 @@ change *is* the review record.
 
 Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocking
 `fuzz-policy` job in `.github/workflows/build.yml`, and the closure step in
-`.github/workflows/release.yml`. Status checked 2026-08-28 against base commit
-`006c2ed32f751d3c363e76c3595c78a95069c4bc`; rerun the CI command for current counts.
+`.github/workflows/release.yml`. Status and the first production target were
+re-verified 2026-09-14 on the release worktree; rerun the CI command for current
+counts and exact-SHA runtime evidence.

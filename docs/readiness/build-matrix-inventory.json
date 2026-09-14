@@ -315,6 +315,11 @@
         "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
         "applicability": "shared",
         "reason": "Large-world double-precision physics is shared engine breadth, not a requirement of the first stable FPS slice."
+      },
+      {
+        "name": "SPARK_ENABLE_FUZZ_TARGETS",
+        "applicability": "outside",
+        "reason": "Linux/Clang libFuzzer targets are release-validation tooling and are outside the Windows stable-v1 product profile."
       }
     ]
   },
@@ -589,6 +594,15 @@
       "definitionScope": []
     },
     {
+      "name": "SPARK_ENABLE_FUZZ_TARGETS",
+      "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 2536,
+      "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
       "name": "SPARK_HEADLESS_SUPPORT",
       "description": "Enable headless/dedicated server mode support",
       "default": "ON",
@@ -611,10 +625,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3371,
+      "line": 3372,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3367",
+          "id": "CMakeLists.txt:3368",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -967,6 +981,18 @@
     {
       "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
       "description": "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds",
+      "default": false,
+      "status": "active",
+      "declarationCount": 1,
+      "activeDeclarationCount": 1,
+      "indeterminateDeclarationCount": 0,
+      "declaredIn": [
+        "CMakeLists.txt"
+      ]
+    },
+    {
+      "name": "SPARK_ENABLE_FUZZ_TARGETS",
+      "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": false,
       "status": "active",
       "declarationCount": 1,
@@ -1356,6 +1382,15 @@
       "definitionScope": []
     },
     {
+      "name": "SPARK_ENABLE_FUZZ_TARGETS",
+      "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 2536,
+      "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
       "name": "SPARK_ENABLE_INSTALLED_SDK_TESTS",
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
@@ -1411,10 +1446,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3371,
+      "line": 3372,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3367",
+          "id": "CMakeLists.txt:3368",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1614,6 +1649,42 @@
           "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
           "CMAKE_C_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread"
+        }
+      },
+      {
+        "name": "linux-fuzz",
+        "hidden": false,
+        "displayName": "Linux Clang libFuzzer (SEC-120)",
+        "inherits": [
+          "linux-clang-debug"
+        ],
+        "condition": {
+          "type": "equals",
+          "lhs": "${hostSystemName}",
+          "rhs": "Linux"
+        },
+        "cacheVariables": {
+          "BUILD_GAME_MODULES": "OFF",
+          "ENABLE_ANGELSCRIPT": "OFF",
+          "ENABLE_ASSET_PIPELINE_TOOLS": "OFF",
+          "ENABLE_AUTOMATION_HOST": "OFF",
+          "ENABLE_DXR": "OFF",
+          "ENABLE_GRAPHICS": "OFF",
+          "ENABLE_HYBRID_RT": "OFF",
+          "ENABLE_INSTALLER": "OFF",
+          "ENABLE_LAUNCHER": "OFF",
+          "ENABLE_MOBILE": "OFF",
+          "ENABLE_NETWORKING": "OFF",
+          "ENABLE_NEURAL_RENDERING": "OFF",
+          "ENABLE_OPENGL": "OFF",
+          "ENABLE_RECAST": "OFF",
+          "ENABLE_SDL2": "OFF",
+          "ENABLE_SERVER_PROCESSES": "OFF",
+          "ENABLE_SPARKBUILD": "OFF",
+          "ENABLE_VR": "OFF",
+          "ENABLE_VULKAN": "OFF",
+          "SPARK_ENABLE_FUZZ_TARGETS": "ON",
+          "SPARK_STRICT_DEPS": "OFF"
         }
       },
       {
@@ -1914,6 +1985,11 @@
       {
         "name": "ci-linux-tsan",
         "configurePreset": "ci-linux-tsan",
+        "hidden": false
+      },
+      {
+        "name": "linux-fuzz",
+        "configurePreset": "linux-fuzz",
         "hidden": false
       },
       {
@@ -5790,7 +5866,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 4,
+        "stepCount": 6,
         "steps": [
           {
             "index": 0,
@@ -5830,6 +5906,18 @@
           },
           {
             "index": 3,
+            "name": "Build production fuzz smoke target",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "c0fad0249e6b10c6"
+          },
+          {
+            "index": 4,
             "name": "Run adversarial policy tests",
             "id": "",
             "uses": "",
@@ -5839,9 +5927,24 @@
             "hasRun": true,
             "env": [],
             "runDigest": "02f0d4615a6259d9"
+          },
+          {
+            "index": 5,
+            "name": "Run production fuzz smoke",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "360d035f14f5eede"
           }
         ],
-        "envNames": [],
+        "envNames": [
+          "CC",
+          "CXX"
+        ],
         "gating": "blocking"
       },
       {
@@ -10580,8 +10683,35 @@
       },
       {
         "job": "fuzz-policy",
-        "step": "Run adversarial policy tests",
+        "step": "Build production fuzz smoke target",
         "stepIndex": 3,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils",
+        "commandProvenance": "literal",
+        "targets": [
+          "SparkFuzzJsonUtils"
+        ],
+        "configuration": "",
+        "buildDir": "build/fuzz-policy",
+        "preset": "",
+        "parallel": "",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
+        "job": "fuzz-policy",
+        "step": "Run adversarial policy tests",
+        "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -10594,6 +10724,29 @@
         "tool": "ctest",
         "kind": "test",
         "command": "ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build/fuzz-policy",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "fuzz-policy",
+        "step": "Run production fuzz smoke",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build/fuzz-policy --output-on-failure -L fuzz --no-tests=error -C Release",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build/fuzz-policy",
@@ -13509,6 +13662,33 @@
         "commandIndex": 0
       },
       {
+        "job": "fuzz-policy",
+        "step": "Build production fuzz smoke target",
+        "stepIndex": 3,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils",
+        "commandProvenance": "literal",
+        "targets": [
+          "SparkFuzzJsonUtils"
+        ],
+        "configuration": "",
+        "buildDir": "build/fuzz-policy",
+        "preset": "",
+        "parallel": "",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
         "job": "build-linux-asan",
         "step": "Build",
         "stepIndex": 6,
@@ -14246,7 +14426,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run adversarial policy tests",
-        "stepIndex": 3,
+        "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -14259,6 +14439,29 @@
         "tool": "ctest",
         "kind": "test",
         "command": "ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build/fuzz-policy",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "fuzz-policy",
+        "step": "Run production fuzz smoke",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build/fuzz-policy --output-on-failure -L fuzz --no-tests=error -C Release",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build/fuzz-policy",
@@ -14910,8 +15113,8 @@
       "matrixLegCount": 39,
       "pathFilteredEventCount": 0,
       "configureCount": 26,
-      "buildCount": 26,
-      "testCount": 17,
+      "buildCount": 27,
+      "testCount": 18,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,

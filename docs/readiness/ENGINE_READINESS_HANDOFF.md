@@ -132,6 +132,7 @@ Configuration-surface exceptions (every omitted option remains required):
 - `ENABLE_SERVER_PROCESSES` — **outside**: Dedicated services and production multiplayer are outside the service-free single-player profile.
 - `ENABLE_VR` — **outside**: VR hosts are explicitly unsupported by stable-v1.
 - `SPARK_DOUBLE_PRECISION_PHYSICS` — **shared**: Large-world double-precision physics is shared engine breadth, not a requirement of the first stable FPS slice.
+- `SPARK_ENABLE_FUZZ_TARGETS` — **outside**: Linux/Clang libFuzzer targets are release-validation tooling and are outside the Windows stable-v1 product profile.
 
 ### Profile gates
 
@@ -1433,7 +1434,7 @@ osv-scanner --lockfile ThirdParty/dependencies.lock
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross stable-v1 trust boundaries without a unified fuzz/bounds gate; packet and script campaigns belong to the excluded networking and scripting surfaces. 2026-09-05 progress (partial hardening, no fuzz harness): Json::ParseBounded/JsonLimits budgets on every default parse entry point; mod.json and mod config capped at 64 KB / depth 16 / 4096 nodes and parsed strictly; scene manifests capped at 8 MB / 100,000 entries with path containment; .spk decompression ratio bounded at Open; .skel/.sanim name-length and parentIndex validation; Spark::IsVirtualPathSafe. Tests/TestSecurityParsersReal.cpp now executes the shipped parsers (the packet-validator evidence is tracked under NET-100). 2026-09-12 progress: SparkPak now rejects unsafe traversal entry names while opening the archive, with a production regression fixture. 2026-09-13 additional progress: installer state manifests now reject inputs above 64 KiB and detect shrink/growth races while reading, with focused native install-state coverage. Do not promote a JSON-fuzz claim: only bounded regressions were added; the required fuzz-smoke and scheduled campaigns remain open.
+Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross stable-v1 trust boundaries without a unified fuzz/bounds gate; packet and script campaigns belong to the excluded networking and scripting surfaces. 2026-09-05 progress (partial hardening, no fuzz harness): Json::ParseBounded/JsonLimits budgets on every default parse entry point; mod.json and mod config capped at 64 KB / depth 16 / 4096 nodes and parsed strictly; scene manifests capped at 8 MB / 100,000 entries with path containment; .spk decompression ratio bounded at Open; .skel/.sanim name-length and parentIndex validation; Spark::IsVirtualPathSafe. Tests/TestSecurityParsersReal.cpp now executes the shipped parsers (the packet-validator evidence is tracked under NET-100). 2026-09-12 progress: SparkPak now rejects unsafe traversal entry names while opening the archive, with a production regression fixture. 2026-09-13 additional progress: installer state manifests now reject inputs above 64 KiB and detect shrink/growth races while reading, with focused native install-state coverage. 2026-09-14 progress: the first production-entry-point Clang/libFuzzer target now exercises Spark::Json::ParseBounded with a bounded seven-seed corpus, explicit 4 KiB/32-level/128 MiB/1-second limits, and a 4-second smoke budget. The structural policy gate passes with 1 fuzzed parser and 1 corpus; the exact-SHA sanitizer smoke, 104 remaining parser targets, deferred-candidate classification, and scheduled campaigns remain open. Do not promote SEC-120 or JSON-fuzz coverage from this structural slice alone.
 
 **Dependency contract**
 
@@ -1443,6 +1444,9 @@ Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross st
 **Source context**
 
 - `SparkEngine/Source/Utils/Serializer.h`
+- `SparkEngine/Source/Utils/JsonUtils.h`
+- `Tests/Fuzz`
+- `tools/fuzz-policy`
 - `SparkEngine/Source/Graphics`
 - `SparkShaderCompiler`
 - `SparkInstaller`
@@ -1452,6 +1456,7 @@ Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross st
 
 - `Tests/Fuzz`
 - `CMakeLists.txt`
+- `CMakePresets.json`
 
 **Implementation scope**
 
@@ -1487,6 +1492,7 @@ ctest --test-dir build/linux-fuzz -L fuzz-smoke --output-on-failure --no-tests=e
 - Documentation:
   - `SECURITY.md`
   - `wiki/advanced/Testing.md`
+  - `wiki/advanced/Fuzz-Policy-and-Parser-Security.md`
 - Readiness contract:
   - G07
 - Website impact:

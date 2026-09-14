@@ -59,6 +59,9 @@ jobs:
   fuzz-policy:
     name: "Fuzz policy"
     runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
     permissions:
       contents: read
     steps:
@@ -71,10 +74,16 @@ jobs:
     - name: Run blocking fuzz-policy target
       run: cmake --build build/fuzz-policy --target check-fuzz-policy
 
+    - name: Build production fuzz smoke target
+      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils
+
     - name: Run adversarial policy tests
       # -C is required by multi-config generators and ignored by single-config
       # ones, so the same command works for CI and for local Windows runs.
       run: ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
+
+    - name: Run production fuzz smoke
+      run: ctest --test-dir build/fuzz-policy --output-on-failure -L fuzz --no-tests=error -C Release
 
   # ===========================================================================
   # CI Tooling — prove report parsers and generated repository statistics
