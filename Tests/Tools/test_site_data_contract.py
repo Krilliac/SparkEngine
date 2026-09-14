@@ -1226,6 +1226,18 @@ class PublicClaimInvariantTests(ContractTestCase):
         self.assertIn("There is no network RCON listener", quick_start)
         self.assertNotIn('config.rconPassword = "admin123";', quick_start)
 
+    def test_memory_integrity_docs_keep_admin_boundary_local_only(self) -> None:
+        surfaces = (
+            REPO_ROOT / "wiki" / "subsystems" / "Memory-Integrity.md",
+            REPO_ROOT / "wiki" / "advanced" / "Memory-Integrity-System.md",
+        )
+        for surface in surfaces:
+            with self.subTest(surface=surface):
+                text = surface.read_text(encoding="utf-8", errors="replace")
+                self.assertIn("local administration", text.lower())
+                self.assertNotIn("Chat-to-RCON command gate", text)
+                self.assertNotIn("RCON command gate", text)
+
     def test_negative_tests_have_no_tracked_file_mutation_calls(self) -> None:
         tree = ast.parse(TEST_PATH.read_text(encoding="utf-8"))
         forbidden: list[str] = []
