@@ -29,6 +29,7 @@ TRUSTED_CI_AGGREGATE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "trusted-c
 README = REPO_ROOT / "README.md"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
 CMAKE_ROOT = REPO_ROOT / "CMakeLists.txt"
+BUILD_IMGUI_CMAKE = REPO_ROOT / "cmake" / "BuildImGui.cmake"
 TEMPLATE_VERIFIER = REPO_ROOT / "cmake" / "VerifyInstalledTemplates.cmake"
 TEMPLATE_RUNTIME_HEADER = REPO_ROOT / "SparkEngine" / "Source" / "Game" / "TemplateRuntime.h"
 FPS_TEMPLATE_HEADER = REPO_ROOT / "Templates" / "FPSStarter" / "Source" / "GameModule.h"
@@ -44,6 +45,7 @@ REQUIRED_CI_JOBS = (
     "validate-ops100",
     "check-thirdparty-manifest",
     "check-supply-chain",
+    "license-compliance",
     "build-linux-asan",
     "build-linux-tsan",
     "telemetry-integration",
@@ -61,6 +63,23 @@ REQUIRED_CI_JOBS = (
     "module-evidence",
 )
 REQUIRED_CI_JOBS_JSON = json.dumps(REQUIRED_CI_JOBS, separators=(",", ":"))
+
+CLANG_TIDY_SOURCE_ROOTS = (
+    "SparkEngine/Source",
+    "SparkEditor/Source",
+    "SparkConsole/src",
+    "SparkDaemon/src",
+    "SparkGateway/src",
+    "SparkLauncher/src",
+    "SparkServer/src",
+    "SparkWorker/src",
+    "SparkCooker/src",
+    "SparkAutomation/src",
+    "SparkBuild/src",
+    "SparkInstaller/src",
+    "SparkShaderCompiler/src",
+    "GameModules",
+)
 
 sys.path.insert(0, str(REPO_ROOT / "Tools"))
 
@@ -436,6 +455,7 @@ def release_acceptance_gate_errors(workflow: str) -> list[str]:
     """Require both final publication paths to use the fail-closed acceptance gate."""
 
     errors: list[str] = []
+    stable_publish_step: str | None = None
     for step_name in (
         "Publish complete stable versioned release",
         "Publish complete nightly rolling release",
@@ -445,6 +465,8 @@ def release_acceptance_gate_errors(workflow: str) -> list[str]:
         except AssertionError as error:
             errors.append(str(error))
             continue
+        if step_name == "Publish complete stable versioned release":
+            stable_publish_step = step
         for fragment in (
             "GITHUB_REPOSITORY: ${{ github.repository }}",
             "IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}",
@@ -459,6 +481,17 @@ def release_acceptance_gate_errors(workflow: str) -> list[str]:
                 errors.append(f"{step_name} is missing required acceptance-gate fragment: {fragment}")
         if "gh api --method PATCH" in step:
             errors.append(f"{step_name} must not publish through a bare gh API PATCH")
+    if stable_publish_step is not None:
+        readiness_check = 'python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-ready'
+        acceptance_command = 'python3 -I "$GITHUB_WORKSPACE/.github/scripts/release-acceptance-gate.py"'
+        if readiness_check not in stable_publish_step:
+            errors.append("stable publication must revalidate readiness immediately before acceptance")
+        elif (
+            acceptance_command in stable_publish_step
+            and stable_publish_step.index(readiness_check)
+            > stable_publish_step.index(acceptance_command)
+        ):
+            errors.append("stable publication readiness recheck must precede acceptance PATCH")
     return errors
 
 
@@ -1055,6 +1088,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         cls.site_data_publish = SITE_DATA_PUBLISH_WORKFLOW.read_text(encoding="utf-8")
         cls.readme = README.read_text(encoding="utf-8")
         cls.cmake = CMAKE_ROOT.read_text(encoding="utf-8")
+        cls.build_imgui = BUILD_IMGUI_CMAKE.read_text(encoding="utf-8")
         cls.template_verifier = TEMPLATE_VERIFIER.read_text(encoding="utf-8")
         cls.template_runtime = TEMPLATE_RUNTIME_HEADER.read_text(encoding="utf-8")
         cls.fps_template = FPS_TEMPLATE_HEADER.read_text(encoding="utf-8")
@@ -1063,6 +1097,29 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
+
+    def test_todo_count_threshold_failure_is_fail_closed(self) -> None:
+        job = yaml_section(self.build, "todo-count", indent=2)
+        step = named_step(job, "Count TODO/FIXME/HACK comments")
+        threshold_start = step.index('if [ "$count" -gt 20 ]; then')
+        threshold_end = step.index("\n          fi", threshold_start)
+        threshold = step[threshold_start:threshold_end]
+
+        self.assertIn(
+            'echo "::error::TODO/FIXME count ($count) exceeds threshold of 20"',
+            threshold,
+        )
+        self.assertRegex(threshold, r"(?m)^\s+exit 1$")
+
+    def test_clang_tidy_inventory_covers_all_shipped_source_roots(self) -> None:
+        block = self.build[self.build.index("\n  clang-tidy:\n"):]
+        block = block[:block.index("\n  # ===========================================================================", 1)]
+        self.assertNotIn("head -z", block)
+        self.assertIn("file_count=$(tr -cd '\\0' < clang-tidy-files.list | wc -c)", block)
+        self.assertIn('if [ "$file_count" -eq 0 ]; then', block)
+        self.assertIn('if [ ! -d "$root" ]; then', block)
+        for root in CLANG_TIDY_SOURCE_ROOTS:
+            self.assertIn(f"            {root}\n", block)
 
     def test_required_ci_verifier_covers_every_declared_job(self) -> None:
         document = parse_workflow_yaml(self.build)
@@ -1075,6 +1132,36 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         )
         enforced_jobs = json.loads(verifier["env"]["EXPECTED_REQUIRED_JOBS_JSON"])
         self.assertEqual(enforced_jobs, declared_jobs)
+
+    def test_license_compliance_job_is_required_and_fail_closed(self) -> None:
+        document = parse_workflow_yaml(self.build)
+        job = document["jobs"].get("license-compliance")
+        self.assertIsInstance(job, dict)
+        assert isinstance(job, dict)
+        report = document["jobs"]["report-ci-errors"]
+        self.assertIn("license-compliance", report["needs"])
+        self.assertEqual(job.get("runs-on"), "ubuntu-24.04")
+        self.assertEqual(job.get("permissions"), {"contents": "read"})
+        self.assertNotIn("if", job)
+        self.assertNotIn("continue-on-error", job)
+
+        steps = job.get("steps")
+        self.assertIsInstance(steps, list)
+        assert isinstance(steps, list)
+        legal_steps = [
+            step
+            for step in steps
+            if isinstance(step, dict) and step.get("name") == "Run legal contract validator"
+        ]
+        self.assertEqual(len(legal_steps), 1)
+        legal_step = legal_steps[0]
+        self.assertNotIn("if", legal_step)
+        self.assertNotIn("continue-on-error", legal_step)
+        self.assertEqual(
+            str(legal_step.get("run", "")).strip(),
+            "set -euo pipefail\ntimeout 3m python3 tools/site-data/validate.py --legal",
+        )
+        self.assertNotIn("|| true", str(legal_step.get("run", "")))
 
     def test_release_workflow_is_yaml_parseable(self) -> None:
         document = yaml.safe_load(self.release)
@@ -1591,6 +1678,14 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 unsafe = installer.replace("          set -o pipefail\n", "", 1)
                 self.assertEqual(unprotected_tee_steps(unsafe), ["Launch staged executable"])
 
+    def test_installer_builds_every_registered_contract_test(self) -> None:
+        build_step = named_step(self.build, "Build SparkInstaller and registered contract tests")
+        self.assertIn("SparkInstallerGitTests", build_step)
+        self.assertIn("SparkInstallerInstallStateTests", build_step)
+        self.assertIn("SparkInstallerTransactionTests", build_step)
+        self.assertIn("SparkBuildProcessRunnerTests", build_step)
+        self.assertIn("SparkBuildDownloaderTests", build_step)
+
     def test_generated_documentation_requires_the_captured_status_to_exit(self) -> None:
         generated_docs = named_step(
             self.build,
@@ -1624,6 +1719,25 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         msan_block = named_step(self.build, "Run Tests under MSan")
         self.assertIn("--runtime-env MSAN_OPTIONS", msan_block)
         self.assertIn("--sanitizer msan", msan_block)
+
+        # The hosted MSan lane cannot make the distro FreeType shared library
+        # instrumented.  If the optional ImGui backend is enabled, editor font
+        # tests enter that uninstrumented library and produce an incomplete
+        # sanitizer run before JUnit can be written.  Keep MSan strict by
+        # making the build select ImGui's instrumented-free stb path instead.
+        self.assertIn("-DSPARK_IMGUI_ENABLE_FREETYPE=OFF", self.build)
+        self.assertIn(
+            'option(SPARK_IMGUI_ENABLE_FREETYPE "Enable optional FreeType rasterizer" ON)',
+            self.build_imgui,
+        )
+        self.assertIn(
+            "if(SPARK_IMGUI_ENABLE_FREETYPE)\n            find_package(Freetype QUIET)",
+            self.build_imgui,
+        )
+        self.assertIn(
+            "else()\n            set(Freetype_FOUND FALSE)",
+            self.build_imgui,
+        )
 
     def test_asan_tsan_are_required_msan_is_optional(self) -> None:
         gate_section = self.build[self.build.index("required-ci-gate:"):]
@@ -1690,6 +1804,75 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
             self.build,
         )
+
+    def test_workflow_dispatch_reaches_required_gate_without_event_skips(self) -> None:
+        document = parse_workflow_yaml(self.build)
+        triggers = document.get("on")
+        self.assertIsInstance(triggers, dict)
+        assert isinstance(triggers, dict)
+        self.assertIn("workflow_dispatch", triggers)
+
+        jobs = document["jobs"]
+        gate = jobs.get("required-ci-gate")
+        self.assertIsInstance(gate, dict)
+        assert isinstance(gate, dict)
+        self.assertEqual(gate.get("if"), "always()")
+        self.assertEqual(gate.get("needs"), list(REQUIRED_CI_JOBS))
+
+        for job_id in REQUIRED_CI_JOBS:
+            with self.subTest(job_id=job_id):
+                job = jobs.get(job_id)
+                self.assertIsInstance(job, dict)
+                assert isinstance(job, dict)
+                if job_id == "aggregate-test-stats":
+                    self.assertEqual(job.get("if"), "always()")
+                else:
+                    self.assertNotIn("if", job)
+                self.assertNotIn("continue-on-error", job)
+
+        concurrency = document.get("concurrency")
+        self.assertIsInstance(concurrency, dict)
+        assert isinstance(concurrency, dict)
+        self.assertEqual(concurrency.get("cancel-in-progress"), "${{ github.event_name == 'pull_request' }}")
+
+    def test_manual_required_failure_probe_is_explicit_and_default_off(self) -> None:
+        document = parse_workflow_yaml(self.build)
+        triggers = document.get("on")
+        self.assertIsInstance(triggers, dict)
+        assert isinstance(triggers, dict)
+        dispatch = triggers.get("workflow_dispatch")
+        self.assertIsInstance(dispatch, dict)
+        assert isinstance(dispatch, dict)
+
+        inputs = dispatch.get("inputs")
+        self.assertIsInstance(inputs, dict)
+        assert isinstance(inputs, dict)
+        probe = inputs.get("simulate_required_job_failure")
+        self.assertIsInstance(probe, dict)
+        assert isinstance(probe, dict)
+        self.assertEqual(probe.get("type"), "boolean")
+        self.assertEqual(probe.get("default"), False)
+        self.assertEqual(probe.get("required"), False)
+
+        jobs = document["jobs"]
+        tooling = jobs.get("validate-ci-tools")
+        self.assertIsInstance(tooling, dict)
+        assert isinstance(tooling, dict)
+        steps = tooling.get("steps")
+        self.assertIsInstance(steps, list)
+        assert isinstance(steps, list)
+        step = next(
+            (candidate for candidate in steps if candidate.get("name") == "Controlled required-job failure probe"),
+            None,
+        )
+        self.assertIsNotNone(step)
+        assert isinstance(step, dict)
+        self.assertEqual(
+            step.get("if"),
+            "github.event_name == 'workflow_dispatch' && inputs.simulate_required_job_failure == true",
+        )
+        self.assertIn("exit 1", step.get("run", ""))
+        self.assertNotIn("continue-on-error", tooling)
 
     def test_generated_documentation_runs_for_direct_pushes(self) -> None:
         block = named_step(self.build, "Verify all generated documentation and statistics")
@@ -1991,6 +2174,15 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertNotIn("continue-on-error", publish_step)
         self.assertNotIn("|| true", publish_step)
 
+        proof = named_step(self.site_data_publish, "Repeat the complete repository proof")
+        first_site_generation = proof.index("python3 tools/site-data/generate.py")
+        docs_validation = proof.index("python3 tools/site-data/validate.py --docs")
+        self.assertGreater(
+            docs_validation,
+            first_site_generation,
+            "clean-checkout docs validation must follow API generation",
+        )
+
     def test_release_controller_cannot_run_from_a_caller_selected_ref(self) -> None:
         header = self.release[: self.release.index("permissions:")]
         self.assertIn("repository_dispatch:", header)
@@ -2000,6 +2192,14 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn('EVENT_REF" != "refs/heads/Working', controller)
         self.assertIn('LOCAL_SHA" != "$WORKFLOW_SHA', controller)
         self.assertIn('LOCAL_SHA" != "$REMOTE_SHA', controller)
+
+    def test_release_prepare_runs_supply_chain_policy_before_metadata(self) -> None:
+        policy = named_step(self.release, "Supply-chain policy check")
+        metadata = named_step(self.release, "Compute release metadata")
+        self.assertIn("python3 tools/check-supply-chain.py --ci", policy)
+        self.assertNotIn("continue-on-error", policy)
+        self.assertNotIn("|| true", policy)
+        self.assertLess(self.release.index(policy), self.release.index(metadata))
 
     def test_release_metadata_requires_one_source_version_and_changelog_entry(self) -> None:
         block = named_step(self.release, "Compute release metadata")

@@ -366,9 +366,14 @@ void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
 
     if (LoadGameModulesLinux(*GetEngineRuntime().moduleManager, argc, argv))
     {
-        GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
+        const bool moduleInitializationSucceeded =
+            GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
         const size_t initializedModules = GetEngineRuntime().moduleManager->GetInitializedModuleCount();
-        console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
+        if (moduleInitializationSucceeded)
+            console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
+        else
+            console.LogError("Module initialization failed; " + std::to_string(initializedModules) +
+                             " module(s) initialized");
         if (initializedModules > 0)
         {
             SPARK_LOG_INFO(Spark::LogCategory::Core, "SPARK_MODULE_READY count=%zu", initializedModules);

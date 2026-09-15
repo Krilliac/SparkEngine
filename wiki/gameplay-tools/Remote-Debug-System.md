@@ -110,6 +110,11 @@ Custom handlers must name the least privilege capability they need. A handler
 without an explicit capability defaults to console-execution authority and is
 therefore denied to public loopback.
 
+Built-in command names (`console_cmd`, `property_get`, `property_set`,
+`profile_data`, and `heartbeat`) are reserved and cannot be rebound through
+the public registration API. This keeps a custom handler from weakening a
+built-in command's authority requirement.
+
 ```cpp
 auto* server = debug.GetServer();
 server->RegisterCommandHandler("local_inspect", Spark::RemoteDebug::RemoteDebugCapability::Inspect,

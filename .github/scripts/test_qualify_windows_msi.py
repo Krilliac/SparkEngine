@@ -431,7 +431,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertFalse((logs / "result.json").exists())
 
     def test_lifecycle_failures_preserve_original_error_and_attempt_uninstall(self):
-        for case in ("success", "install", "validate", "fps", "d3d11", "d3d11_bad_marker", "d3d11_duplicate", "d3d11_logger_copy", "nullrhi_bad_lifecycle", "uninstall", "residue", "install_and_uninstall",
+        for case in ("success", "install", "validate", "fps", "d3d11", "d3d11_bad_marker", "d3d11_duplicate", "d3d11_logger_copy", "nullrhi_bad_lifecycle", "nullrhi_d3d11_logger_copy", "uninstall", "residue", "install_and_uninstall",
                      "reboot", "changed_msi", "wrong_identity", "wrong_version", "invalid_identity", "preexisting", "wrong_root", "timeout", "registration_remains", "no_marker", "zero_marker", "older_related_product", "unregistered_install", "absent_install", "advertised_install", "broken_install"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
@@ -495,7 +495,12 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                         if "-headless" in argv:
                             self.assertEqual(env["SPARK_RHI_BACKEND"], "null")
                             self.assertEqual(argv[argv.index("-test-frames") + 1], "5")
-                            log.write_text("no readiness marker" if case == "no_marker" else
+                            log.write_text("[INFO] SPARK_D3D11_DEVICE driver=warp certification=software-only\n"
+                                           "SPARK_MODULE_READY count=1\n"
+                                           "SPARK_HEADLESS_RHI backend=null initialized=1 frames=5 shutdown=1\n"
+                                           "SPARK_HEADLESS_LIFECYCLE initialized=1 updated=5 fixed=4 rendered=0 unloaded=1 faults=0\n"
+                                           if case == "nullrhi_d3d11_logger_copy" else
+                                           "no readiness marker" if case == "no_marker" else
                                            "SPARK_MODULE_READY count=0\n" if case == "zero_marker" else
                                            "SPARK_MODULE_READY count=1\n"
                                            "SPARK_HEADLESS_RHI backend=null initialized=1 frames=5 shutdown=1\n"

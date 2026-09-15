@@ -8,6 +8,7 @@
 #include <cctype>
 #include <cerrno>
 #include <charconv>
+#include <cmath>
 #include <cstdlib>
 #include <string>
 #include <type_traits>
@@ -29,15 +30,16 @@ namespace Spark
                 // libc++ (Clang on Linux and macOS) still has no floating-point
                 // std::from_chars -- the overload is deleted -- so parse through
                 // strtod with the same strictness: the entire string, no leading
-                // whitespace (strtod would skip it), and no range error. The
-                // writer uses std::to_string, which formats under the same C
-                // locale strtod reads, so the decimal separator agrees.
+                // whitespace (strtod would skip it), no range error, and no
+                // non-finite result. The writer uses std::to_string, which
+                // formats under the same C locale strtod reads, so the decimal
+                // separator agrees.
                 if (text.empty() || std::isspace(static_cast<unsigned char>(text.front())) != 0)
                     return false;
                 errno = 0;
                 char* end = nullptr;
                 const double value = std::strtod(text.c_str(), &end);
-                if (end != text.c_str() + text.size() || errno == ERANGE)
+                if (end != text.c_str() + text.size() || errno == ERANGE || !std::isfinite(value))
                     return false;
                 outValue = static_cast<T>(value);
                 return true;

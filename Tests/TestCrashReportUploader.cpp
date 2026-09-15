@@ -9,6 +9,24 @@
 #include <chrono>
 #include <atomic>
 
+TEST(CrashUploadEndpointLogRedaction_RemovesCredentialsAndCapabilities)
+{
+    const std::string endpoint = "https://user:secret@example.invalid/private/upload?token=query-secret#fragment";
+    const std::string redacted = RedactCrashEndpointForLog(endpoint);
+
+    EXPECT_EQ(redacted, "https://example.invalid");
+    EXPECT_TRUE(redacted.find("secret") == std::string::npos);
+    EXPECT_TRUE(redacted.find("query-secret") == std::string::npos);
+    EXPECT_TRUE(redacted.find("private") == std::string::npos);
+}
+
+TEST(CrashUploadEndpointLogRedaction_PreservesOnlySchemeAndHost)
+{
+    EXPECT_EQ(RedactCrashEndpointForLog("dbx://shared-capability"), "dbx://<redacted>");
+    EXPECT_EQ(RedactCrashEndpointForLog("ftp://example.invalid/reports/"), "ftp://example.invalid");
+    EXPECT_EQ(RedactCrashEndpointForLog("not-a-url"), "<redacted>");
+}
+
 // ============================================================================
 // ComputeStackHash is exercised through the real CrashReportUploader.cpp
 // implementation. This file used to carry an inline copy of that logic, which

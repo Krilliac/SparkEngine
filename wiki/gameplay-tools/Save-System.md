@@ -150,7 +150,9 @@ migration entry point. It is transactional and idempotent:
 
 - v1 -> v2 sets `screenshotPath` to the defined empty value and updates the
   format version;
-- v2 -> v2 is a no-op;
+- v2 -> v3 adds `Transform.parent = -1` for every serialized transform and
+  updates the format version;
+- v3 -> v3 is a no-op;
 - versions below 1 or above 3 are rejected without changing the input.
 
 The v1 reader uses the v1 metadata layout before applying the migration. This
@@ -176,6 +178,14 @@ it on demand. `DeleteSave()` removes both the slot file and its `.bak`.
 `Load()` falls back to `<slot>.spark_save.bak` with a logged warning when the slot
 file is unreadable. There is no trailing payload checksum yet (tracked under
 `SAVE-230`).
+
+The file-based `AsyncDatabase` fallback uses the same safe publication shape for
+its KV revision: it writes a sibling `.tmp`, explicitly flushes that complete
+revision (`FlushFileBuffers` on Windows, `fsync` on POSIX), and only then swaps
+the destination name. This prevents an interrupted write from truncating the
+last readable store. It does not supply schema migrations, concurrent MMO
+ownership, backup/restore rehearsal, or disaster recovery; those remain tracked
+by `DATA-120`.
 
 `SaveMetadata::slotName` is never written to disk; `GetSaveSlots()` and
 `GetSaveMetadata()` populate it from the file name so callers can address the
@@ -277,11 +287,17 @@ The immutable v1 source fixture is:
 
 `Tests/Fixtures/Compatibility/SaveSystem/v1-screenshotless.spark_save.hex`
 
+The immutable v2 source fixture is:
+
+`Tests/Fixtures/Compatibility/SaveSystem/v2-screenshot-without-hierarchy.spark_save.hex`
+
 The fixture was emitted through the pre-v2 writer path with a non-default
 `Transform`; the test asserts every serialized metadata/Transform field and
-byte-for-byte immutability of both the source fixture and copied slot. Focused
-compatibility tests use the `SaveMigration_` selector and are registered with
-CTest labels `compatibility;save;unit`:
+byte-for-byte immutability of both source fixtures and copied slots. The v2
+fixture carries a screenshot path but omits the v3 hierarchy property, proving
+the on-disk v2-to-v3 root migration. Focused compatibility tests use the
+`SaveMigration_` selector and are registered with CTest labels
+`compatibility;save;unit`:
 
 ```bash
 ctest --test-dir build -C Release -L compatibility --output-on-failure --no-tests=error
@@ -292,6 +308,7 @@ The compatibility-labeled coverage includes:
 - v2 writer/header and screenshot-path round trip;
 - exact, idempotent v1-to-v2 in-memory migration;
 - immutable v1 read compatibility without source or slot rewrite;
+- immutable v2 read compatibility with screenshot preservation and hierarchy-root migration;
 - future/retired version rejection;
 - successful lifecycle commit with registry-observer retention and stale
   entity-subscription removal, plus explicit incoming reactive rebinds;

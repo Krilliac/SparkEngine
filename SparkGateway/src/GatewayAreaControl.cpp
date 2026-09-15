@@ -916,7 +916,7 @@ namespace Spark::Gateway
                     {
                         std::lock_guard lock(m_mutex);
                         std::erase_if(m_seenNonces, [&](const auto& item) { return item.second < now - 60000; });
-                        if (!m_seenNonces.contains(request.nonce))
+                        if (!m_seenNonces.contains(request.nonce) && m_seenNonces.size() < GatewayMaximumReplayEntries)
                         {
                             m_seenNonces.emplace(request.nonce, request.timestamp);
                             result = Apply(request.command.sessionId, request.command.epoch, request.phase);
@@ -990,7 +990,7 @@ namespace Spark::Gateway
                 {
                     std::lock_guard lock(m_mutex);
                     std::erase_if(m_seenNonces, [&](const auto& item) { return item.second < now - 60000; });
-                    if (!m_seenNonces.contains(request.nonce))
+                    if (!m_seenNonces.contains(request.nonce) && m_seenNonces.size() < GatewayMaximumReplayEntries)
                     {
                         m_seenNonces.emplace(request.nonce, request.timestamp);
                         result = Apply(request.command.sessionId, request.command.epoch, request.phase);

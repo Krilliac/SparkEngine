@@ -741,9 +741,25 @@ class TestCMakeTokenizer(unittest.TestCase):
         with self.assertRaisesRegex(policy_common.PolicyError, "unterminated argument list"):
             build_binding.parse_cmake("add_executable(Ghost\n", "f")
 
+    def test_parenthesis_nesting_is_bounded(self) -> None:
+        nesting = build_binding.MAX_REACHABILITY_DEPTH + 1
+        source = f"message({'(' * nesting}value{')' * nesting})\n"
+        with self.assertRaisesRegex(policy_common.PolicyError, "exceeds nesting depth"):
+            build_binding.parse_cmake(source, "f")
+
     def test_unresolvable_variable_is_refused(self) -> None:
         with self.assertRaisesRegex(policy_common.PolicyError, "unresolvable CMake variable"):
             build_binding._literal("${MYSTERY}", "f")
+
+    def test_fuzz_project_root_variable_resolves_to_repository_root(self) -> None:
+        self.assertEqual(
+            build_binding._resolve_path(
+                "Tests/Fuzz",
+                "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/JsonUtils.h",
+                "f",
+            ),
+            "SparkEngine/Source/Utils/JsonUtils.h",
+        )
 
 
 # =========================================================================
@@ -782,6 +798,37 @@ class TestCorpusBinding(FixtureTestCase):
         self.assertEqual(len(corpora), 1)
         self.assertEqual(corpora[0].seed_count, len(SEEDS))
         self.assertEqual(corpora[0].seed_bytes, sum(len(payload) for payload in SEEDS.values()))
+
+    def test_c_abi_harness_can_bind_through_a_production_adapter(self) -> None:
+        self.fixture.make_fuzzed()
+        adapter_header = self.root / "Tests" / "Fuzz" / "ProductionAdapter.h"
+        adapter_header.write_text(
+            "#pragma once\n"
+            "#include <cstddef>\n"
+            "#include <cstdint>\n"
+            'extern "C" int CallProduction(const uint8_t*, size_t, uint32_t);\n',
+            encoding="utf-8",
+        )
+        adapter = self.root / "Tests" / "Fuzz" / "ProductionAdapter.cpp"
+        adapter.write_text(
+            '#include "ProductionAdapter.h"\n'
+            '#include "../../src/ExampleParser.h"\n'
+            '#include <cstddef>\n'
+            '#include <cstdint>\n'
+            'extern "C" int CallProduction(const uint8_t* data, size_t size, uint32_t maxDepth)\n'
+            "{\n"
+            "    return ParseExampleDocument(data, size, static_cast<int>(maxDepth)) ? 1 : 0;\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        self.fixture.inventory["parsers"][0]["target"]["harness_entry_symbol"] = "CallProduction"
+        self.fixture.inventory["parsers"][0]["target"]["binding_source"] = "Tests/Fuzz/ProductionAdapter.cpp"
+        self.fixture.rewrite_harness(
+            HARNESS.replace('#include "../../src/ExampleParser.h"', '#include "ProductionAdapter.h"')
+            .replace("ParseExampleDocument(data, size, SPARK_FUZZ_MAX_DEPTH);", "CallProduction(data, size, SPARK_FUZZ_MAX_DEPTH);")
+        )
+        self.fixture.write_inventory()
+        self.assertEqual(len(self.fixture.load_corpora()), 1)
 
     # -- the checker must validate a build, not prose ----------------------
     def test_comment_only_cmake_is_rejected(self) -> None:
@@ -939,6 +986,31 @@ class TestCorpusBinding(FixtureTestCase):
             HARNESS.replace("if (size > SPARK_FUZZ_MAX_INPUT_BYTES)", "if (SPARK_FUZZ_MAX_INPUT_BYTES == 0)")
         )
         with self.assertPolicyError("never compares its input size against SPARK_FUZZ_MAX_INPUT_BYTES"):
+            self.fixture.load_corpora()
+
+    def test_harness_must_reject_oversized_input_before_parser_call(self) -> None:
+        self.fixture.make_fuzzed()
+        self.fixture.rewrite_harness(
+            HARNESS.replace(
+                "return 0;\n    }\n    ParseExampleDocument",
+                "(void)size;\n    }\n    ParseExampleDocument",
+                1,
+            )
+        )
+        with self.assertPolicyError("does not reject oversized input before calling the parser"):
+            self.fixture.load_corpora()
+
+    def test_harness_must_guard_before_every_parser_call(self) -> None:
+        self.fixture.make_fuzzed()
+        self.fixture.rewrite_harness(
+            HARNESS.replace(
+                "    if (size > SPARK_FUZZ_MAX_INPUT_BYTES)",
+                "    ParseExampleDocument(data, size, SPARK_FUZZ_MAX_DEPTH);\n"
+                "    if (size > SPARK_FUZZ_MAX_INPUT_BYTES)",
+                1,
+            )
+        )
+        with self.assertPolicyError("does not reject oversized input before calling the parser"):
             self.fixture.load_corpora()
 
     def test_harness_must_call_the_declared_entry_symbol(self) -> None:
@@ -1341,6 +1413,57 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertGreater(report["inventory"]["parser_count"], 100)
         self.assertGreater(report["inventory"]["scanned_file_count"], 1000)
 
+    def test_json_utils_has_a_production_fuzz_binding(self) -> None:
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        parser = next(item for item in inventory.parsers if item.parser_id == "json-utils")
+        self.assertEqual(parser.status, "fuzzed")
+        self.assertIsNotNone(parser.target)
+        assert parser.target is not None
+        self.assertEqual(parser.target["harness"], "Tests/Fuzz/FuzzJsonUtils.cpp")
+        self.assertEqual(parser.target["cmake_file"], "Tests/Fuzz/CMakeLists.txt")
+        self.assertEqual(parser.target["cmake_target"], "SparkFuzzJsonUtils")
+        self.assertEqual(parser.target["test_selector"], "FuzzJsonUtilsSmoke")
+        self.assertEqual(parser.target["corpus_id"], "json-utils-corpus")
+        self.assertEqual(parser.target["entry_symbol"], "Spark::Json::ParseBounded")
+        self.assertEqual(parser.target["binding_source"], "Tests/Fuzz/FuzzJsonUtilsProduction.cpp")
+        self.assertEqual(parser.target["harness_entry_symbol"], "SparkFuzzParseJson")
+
+        corpora = corpus_manifest.load_corpora(REPO_ROOT, inventory)
+        self.assertEqual(len(corpora), 1)
+        corpus = corpora[0]
+        self.assertEqual(corpus.parser_id, "json-utils")
+        self.assertEqual(corpus.corpus_dir, "Tests/fuzz-corpora/json-utils")
+        self.assertEqual(corpus.budget.max_input_bytes, 4096)
+        self.assertEqual(corpus.budget.max_parse_time_ms, 1000)
+        self.assertEqual(corpus.budget.max_memory_mb, 256)
+        self.assertEqual(corpus.budget.max_depth, 32)
+        self.assertEqual(corpus.budget.max_corpus_entries, 8)
+        self.assertEqual(corpus.budget.max_corpus_bytes, 4096)
+        self.assertEqual(corpus.budget.smoke_seconds, 10)
+
+    def test_json_utils_fuzzer_link_keeps_compiler_runtimes_abi_compatible(self) -> None:
+        cmake = (REPO_ROOT / "Tests" / "Fuzz" / "CMakeLists.txt").read_text(encoding="utf-8")
+        production = (REPO_ROOT / "Tests" / "Fuzz" / "FuzzJsonUtilsProduction.cpp").read_text(encoding="utf-8")
+        self.assertIn("FuzzJsonUtilsProduction.cpp", cmake)
+        self.assertIn("set_source_files_properties", cmake)
+        self.assertIn('PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"', cmake)
+        self.assertIn("-fsanitize=fuzzer,address,undefined", cmake)
+        self.assertNotIn("-fsanitize=fuzzer-no-link,address,undefined", cmake)
+        self.assertIn("Threads::Threads c++ c++abi", cmake)
+        self.assertIn('#include "Utils/JsonUtils.h"', production)
+        self.assertIn('extern "C" int SparkFuzzParseJson', production)
+
+    def test_fuzz_job_keeps_libfuzzer_and_harness_on_libstdcxx(self) -> None:
+        workflow = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        block = check_fuzz_policy._job_block(workflow, check_fuzz_policy.FUZZ_JOB)
+        block_text = "\n".join(block)
+        self.assertIn('CXXFLAGS: "-stdlib=libstdc++"', block_text)
+        self.assertIn('LDFLAGS: "-stdlib=libstdc++"', block_text)
+        self.assertIn(
+            "ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release",
+            check_fuzz_policy._run_commands(block),
+        )
+
     def test_named_verified_misses_are_inventoried(self) -> None:
         inventory = parser_inventory.load_inventory(REPO_ROOT)
         owned = {source for parser in inventory.parsers for source in parser.source_files}
@@ -1380,11 +1503,8 @@ class TestRepositoryIntegration(unittest.TestCase):
         gate = check_fuzz_policy._job_block(workflow, "required-ci-gate")
         self.assertTrue(any(line.strip() == "- fuzz-policy" for line in gate))
 
-    def test_fuzz_targets_would_require_a_smoke_run(self) -> None:
-        # No fuzz target exists yet, so the smoke command is intentionally absent.
-        # Declaring one without wiring the run must fail.
-        with self.assertRaisesRegex(policy_common.PolicyError, "never runs"):
-            check_fuzz_policy.validate_ci_and_cmake_binding(REPO_ROOT, fuzz_target_count=1)
+    def test_fuzz_targets_are_wired_to_a_smoke_run(self) -> None:
+        check_fuzz_policy.validate_ci_and_cmake_binding(REPO_ROOT, fuzz_target_count=1)
 
     def test_ctest_entries_run_from_the_source_root(self) -> None:
         module = (REPO_ROOT / "cmake" / "SparkFuzzPolicy.cmake").read_text(encoding="utf-8")

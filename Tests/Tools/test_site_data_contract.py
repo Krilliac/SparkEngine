@@ -95,6 +95,8 @@ class ContractTestCase(unittest.TestCase):
         for item in contract["workItems"]:
             if item["id"] in declared:
                 item["status"] = "done"
+                if item["id"] == "GOV-400":
+                    contract["content"]["legal"]["policyGaps"] = []
         contract["readiness"]["execution"]["firstUnblockedWorkItemId"] = None
         contract["readiness"]["globalRelease"]["state"] = "ready"
 
@@ -378,6 +380,72 @@ class WorkItemApplicabilityTests(ContractTestCase):
                     smuggled,
                     "executable CTest commands must include --no-tests=error",
                 )
+
+
+class LegalContractConsistencyTests(ContractTestCase):
+    """GOV-400 legal data stays explicit while its policy work is open."""
+
+    @staticmethod
+    def license_of(contract: dict[str, Any]) -> dict[str, Any]:
+        return contract["content"]["legal"]["license"]
+
+    def test_current_license_declaration_cannot_be_relabelled(self) -> None:
+        mutations = (
+            ("name", "MIT", "content.legal.license.name"),
+            ("kind", "OSI-approved open-source license", "content.legal.license.kind"),
+            ("osiApproved", True, "content.legal.license.osiApproved"),
+        )
+        for field, value, location in mutations:
+            with self.subTest(field=field):
+                mutated = copy.deepcopy(self.contract)
+                self.license_of(mutated)[field] = value
+                self.assert_rejected(mutated, location)
+
+    def test_open_gov_400_requires_non_empty_unique_string_policy_gaps(self) -> None:
+        for policy_gaps in ([], ["same gap", "same gap"], ["valid gap", 7], [""]):
+            with self.subTest(policy_gaps=policy_gaps):
+                mutated = copy.deepcopy(self.contract)
+                mutated["content"]["legal"]["policyGaps"] = policy_gaps
+                self.assert_rejected(mutated, "content.legal.policyGaps")
+
+        missing = copy.deepcopy(self.contract)
+        missing["content"]["legal"].pop("policyGaps")
+        self.assert_rejected(missing, "content.legal.policyGaps")
+
+    def test_done_gov_400_rejects_remaining_policy_gaps(self) -> None:
+        mutated = copy.deepcopy(self.contract)
+        self.items_of(mutated)["GOV-400"]["status"] = "done"
+        self.assert_rejected(mutated, "GOV-400 cannot be done while policyGaps remain")
+
+
+class LegalPublicWordingTests(ContractTestCase):
+    """Public legal wording cannot outrun the reviewed license declaration."""
+
+    def test_non_osi_license_accepts_reviewed_source_available_project_wording(self) -> None:
+        validator = site_data_validate.Validator(copy.deepcopy(self.contract))
+        validator.validate(legal=True)
+
+        errors = site_data_validate.legal_public_wording_errors(
+            self.contract["content"]["legal"]["license"],
+            {"README.md": "A C++23 open-source game engine."},
+        )
+        self.assertEqual(1, len(errors))
+        self.assertIn("unreviewed open-source wording", errors[0])
+        self.assertIn("README.md", errors[0])
+
+    def test_negated_wording_is_allowed_for_explaining_the_distinction(self) -> None:
+        errors = site_data_validate.legal_public_wording_errors(
+            {"osiApproved": False},
+            {"legal.md": "This project is not open-source under an OSI-approved license."},
+        )
+        self.assertEqual([], errors)
+
+    def test_osi_approved_declaration_does_not_apply_the_custom_license_guard(self) -> None:
+        errors = site_data_validate.legal_public_wording_errors(
+            {"osiApproved": True},
+            {"README.md": "A C++23 open-source game engine."},
+        )
+        self.assertEqual([], errors)
 
 
 class TransitiveDependencyTests(ContractTestCase):
@@ -1148,6 +1216,27 @@ class PublicClaimInvariantTests(ContractTestCase):
                     site_data_validate.validate_public_claim_text(profile, surface, text),
                     [],
                 )
+
+    def test_multiplayer_quick_start_keeps_rcon_local_only(self) -> None:
+        quick_start = (REPO_ROOT / "wiki" / "subsystems" / "Multiplayer-Quick-Start.md").read_text(
+            encoding="utf-8", errors="replace"
+        )
+        self.assertIn("trusted local administration", quick_start)
+        self.assertIn("remote RCON is unavailable", quick_start)
+        self.assertIn("There is no network RCON listener", quick_start)
+        self.assertNotIn('config.rconPassword = "admin123";', quick_start)
+
+    def test_memory_integrity_docs_keep_admin_boundary_local_only(self) -> None:
+        surfaces = (
+            REPO_ROOT / "wiki" / "subsystems" / "Memory-Integrity.md",
+            REPO_ROOT / "wiki" / "advanced" / "Memory-Integrity-System.md",
+        )
+        for surface in surfaces:
+            with self.subTest(surface=surface):
+                text = surface.read_text(encoding="utf-8", errors="replace")
+                self.assertIn("local administration", text.lower())
+                self.assertNotIn("Chat-to-RCON command gate", text)
+                self.assertNotIn("RCON command gate", text)
 
     def test_negative_tests_have_no_tracked_file_mutation_calls(self) -> None:
         tree = ast.parse(TEST_PATH.read_text(encoding="utf-8"))

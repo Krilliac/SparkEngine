@@ -111,6 +111,13 @@ All macros use `do { ... } while(0)` for safe use in if/else blocks. Failed asse
   assertions to failures in both ctest lanes; it stays OFF because
   `Tests/TestWarnings.h` still carries waivers whose comments document real
   non-determinism.
+- Every whole-test waiver is cross-checked by the blocking CI-110 command
+  `python Tools/validate_test_warnings.py` against
+  `Tests/test-warning-waivers.json`. The metadata must have exact pattern
+  parity, a named owner, and a future `YYYY-MM-DD` expiry; missing, duplicate,
+  unowned, or expired entries fail the workflow. Prefer `EXPECT_WARN_ONLY` for
+  a single environment-sensitive assertion so unrelated assertions remain
+  strict.
 
 ### Production-source census
 
@@ -512,13 +519,11 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job (individual diagnostics advisory) |
 | `todo-count` | ubuntu-24.04 | -- | -- | warn-only above 20 |
 
-**Enforcement truth (verified 2026-09-05):** no branch protection or ruleset is
-active on `Working` (`branches/Working/protection` is 404 and all five rulesets
-are `enforcement=disabled`), so a PR or direct push must pass zero checks today.
-`required-ci-gate`, the Build Matrix Verifier, and CodeQL are **post-hoc
-publication gates** consumed by `release.yml`, `site-data-publish.yml`, and
-`trusted-ci-aggregate.yml`, not merge gates, until the account owner activates
-the ruleset (`CI-100`). The exact-source gate accepts a failed Build job only if
+**Enforcement truth (verified 2026-09-12):** legacy branch protection is not
+configured on `Working` (`branches/Working/protection` is 404), but repository
+ruleset `21968740` (`Working integrity`) is active. It protects against deletion
+and non-fast-forward updates and requires the GitHub Actions `Required CI Gate`
+check with no bypass actors. The exact-source gate accepts a failed Build job only if
 `build.yml` at that exact commit declares the job `continue-on-error`; the
 required set is cross-checked between `required-ci-gate.needs` and
 `EXPECTED_REQUIRED_JOBS_JSON`, and a required job marked `continue-on-error` is
@@ -529,6 +534,14 @@ then returns it as the run's API name, which the exact gate compares to the
 workflow name). Sanitizer classification gained `incomplete-run`
 (suite died before writing JUnit, or no terminal Results marker), which outranks
 `sanitizer-finding`; job logs carry a bounded excerpt of the runtime report.
+
+The CI-100 fail-closed control is available only through an explicit manual
+dispatch input. Run `gh workflow run build.yml --ref Working -f simulate_required_job_failure=true` against the commit under test. A valid
+control result has `validate-ci-tools` fail at the
+`Controlled required-job failure probe` step and `Required CI Gate` fail after
+observing that required dependency; this red run is proof of failure propagation,
+not release evidence. The input defaults to false, and push/PR runs cannot enable
+the probe.
 
 ### Code Coverage
 
@@ -676,7 +689,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*604 test-bearing `.cpp`/`.mm` files, 7328 source-level test definitions*
+*604 test-bearing `.cpp`/`.mm` files, 7362 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -714,7 +727,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAssertSuppression` | 9 |
 | `TestAssertSuppressionReal` | 8 |
 | `TestAssetDependencyGraph` | 19 |
-| `TestAssetMigration` | 21 |
+| `TestAssetMigration` | 23 |
 | `TestAssetMigrationPhaseEE` | 10 |
 | `TestAssetPipelineCache` | 22 |
 | `TestAssetPipelineIntegration` | 16 |
@@ -736,7 +749,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAutoLODPerformance` | 2 |
 | `TestBVHAccelerator` | 10 |
 | `TestBehaviorTreeNodes` | 22 |
-| `TestBenchmarkFramework` | 16 |
+| `TestBenchmarkFramework` | 17 |
 | `TestBitFlags` | 14 |
 | `TestBitFlagsReal` | 4 |
 | `TestBitUtils` | 10 |
@@ -787,14 +800,14 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCoverSystemReal` | 5 |
 | `TestCoverageAI` | 9 |
 | `TestCoverageCamera` | 4 |
-| `TestCoverageScripting` | 5 |
+| `TestCoverageScripting` | 6 |
 | `TestCpuDebuggerPhaseGG` | 8 |
 | `TestCpuNeuralInference` | 14 |
 | `TestCpuNeuralTraining` | 13 |
 | `TestCrashHandlerGatingReal` | 11 |
-| `TestCrashReportUploader` | 8 |
+| `TestCrashReportUploader` | 10 |
 | `TestCrossSystemIntegration` | 4 |
-| `TestD3D11DeviceContractsReal` | 12 |
+| `TestD3D11DeviceContractsReal` | 14 |
 | `TestDXRSupport` | 13 |
 | `TestDaemonCodexFixes` | 4 |
 | `TestDaemonConcurrent` | 6 |
@@ -850,7 +863,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorLayoutManager` | 13 |
 | `TestEditorPanelsRealBackends` | 12 |
 | `TestEditorProjectMaterializationReal` | 5 |
-| `TestEditorRecovery` | 16 |
+| `TestEditorRecovery` | 18 |
 | `TestEditorSubsystems` | 134 |
 | `TestEditorSubsystemsReal` | 16 |
 | `TestEditorUndoHierarchyReal` | 6 |
@@ -903,7 +916,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFrustumCulling` | 11 |
 | `TestFullEngineDiagnostics` | 9 |
 | `TestGLSLPipelineIntegration` | 19 |
-| `TestGLTFStaticMeshLoader` | 9 |
+| `TestGLTFStaticMeshLoader` | 10 |
 | `TestGPUClusterCulling` | 11 |
 | `TestGPUDrivenRenderer` | 14 |
 | `TestGPUDrivenRendererD3D11` | 2 |
@@ -923,7 +936,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameModuleRTS` | 39 |
 | `TestGameModuleRacing` | 28 |
 | `TestGameObjectTransforms` | 24 |
-| `TestGamePackager` | 10 |
+| `TestGamePackager` | 11 |
 | `TestGameViewPanel` | 3 |
 | `TestGamepadInputProcessing` | 23 |
 | `TestGameplayDebugger` | 11 |
@@ -932,10 +945,10 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplaySystemExtension` | 6 |
 | `TestGameplayTags` | 14 |
 | `TestGameplayTagsReal` | 7 |
-| `TestGatewayAreaControl` | 12 |
-| `TestGatewaySecurity` | 13 |
+| `TestGatewayAreaControl` | 13 |
+| `TestGatewaySecurity` | 14 |
 | `TestGizmoMath` | 3 |
-| `TestGoldenImageTest` | 14 |
+| `TestGoldenImageTest` | 17 |
 | `TestGraphicsEngine` | 14 |
 | `TestGraphicsInitFallback` | 5 |
 | `TestGraphicsIntegration` | 33 |
@@ -1001,11 +1014,11 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMetalRayTracing` | 16 |
 | `TestMetalRayTracingLive` | 10 |
 | `TestModSystem` | 9 |
-| `TestModuleABI` | 23 |
+| `TestModuleABI` | 26 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
-| `TestModuleLifecycleReal` | 7 |
+| `TestModuleLifecycleReal` | 11 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
 | `TestMultiISADispatch` | 7 |
@@ -1022,7 +1035,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkInterpolation` | 12 |
 | `TestNetworkMMOIntegration` | 11 |
 | `TestNetworkManagerEdgeCases` | 37 |
-| `TestNetworkManagerIntegration` | 34 |
+| `TestNetworkManagerIntegration` | 35 |
 | `TestNetworkManagerOrchestration` | 27 |
 | `TestNetworkManagerReal` | 23 |
 | `TestNetworkReplicationIntegration` | 13 |
@@ -1081,14 +1094,14 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestRTHandleSystem` | 15 |
 | `TestRandomEngine` | 11 |
 | `TestRecastIntegration` | 6 |
-| `TestReflectedScene` | 9 |
+| `TestReflectedScene` | 10 |
 | `TestReflectedSceneEmissiveHierarchy` | 6 |
 | `TestReflection` | 18 |
 | `TestReflectionProbeCache` | 16 |
 | `TestReflectionReal` | 22 |
 | `TestRegionMapDataSource` | 7 |
 | `TestReliableChannel` | 22 |
-| `TestRemoteDebugSystem` | 18 |
+| `TestRemoteDebugSystem` | 20 |
 | `TestRenderCommandRing` | 8 |
 | `TestRenderECSIntegration` | 8 |
 | `TestRenderGraph` | 36 |
@@ -1161,7 +1174,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkGameRTS` | 5 |
 | `TestSparkGameRacing` | 5 |
 | `TestSparkGatewayCoordinator` | 7 |
-| `TestSparkPak` | 18 |
+| `TestSparkPak` | 19 |
 | `TestSparkServerApplication` | 23 |
 | `TestSpatialGrid` | 16 |
 | `TestSpatialGridReal` | 7 |
@@ -1227,7 +1240,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestUISystemPhaseR` | 7 |
 | `TestUUID` | 12 |
 | `TestUndoRedoManager` | 7 |
-| `TestUndoRedoManagerProduction` | 2 |
+| `TestUndoRedoManagerProduction` | 3 |
 | `TestUpscalingSystem` | 10 |
 | `TestUserDataPathsReal` | 7 |
 | `TestUtilsStress` | 13 |
@@ -1273,10 +1286,10 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `Test_lifecycle_ecs_phase_wiring` | 4 |
 | `Test_net-world_migration` | 2 |
 | `Test_persistence_AsyncDatabaseParams` | 2 |
-| `Test_persistence_AsyncDatabasePool` | 3 |
+| `Test_persistence_AsyncDatabasePool` | 4 |
 | `Test_persistence_ModSystem` | 2 |
 | `Test_persistence_ReplaySystem` | 3 |
-| `Test_persistence_SaveSystem` | 31 |
+| `Test_persistence_SaveSystem` | 34 |
 | `Test_scripting_hardening` | 8 |
 | `Test_tests_ecsystemordering_real` | 5 |
 | `Test_tests_enginecontext_real` | 8 |

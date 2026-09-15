@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(SparkCrashReporter)
+if(NOT DEFINED SPARK_ENGINE_VERSION OR SPARK_ENGINE_VERSION STREQUAL "")
+    include("${CMAKE_CURRENT_LIST_DIR}/../cmake/SparkWindowsVersionInfo.cmake")
+    spark_resolve_engine_version(SPARK_ENGINE_VERSION)
+endif()
+project(SparkCrashReporter VERSION ${SPARK_ENGINE_VERSION})
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,6 +35,7 @@ if(REPORTER_SOURCES)
 
     target_compile_definitions(SparkCrashReporter PRIVATE
         _CRT_SECURE_NO_WARNINGS
+        SPARK_CRASH_REPORTER_VERSION=\"${PROJECT_VERSION}\"
     )
     if(WIN32)
         target_compile_definitions(SparkCrashReporter PRIVATE

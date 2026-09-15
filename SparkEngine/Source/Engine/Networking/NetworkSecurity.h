@@ -15,12 +15,12 @@
 
 #pragma once
 #include "../../Core/Platform.h"
+#include "../../Utils/SecureRandom.h"
 
 #include <array>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
-#include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -111,7 +111,8 @@ namespace Spark::Net
         Token GenerateConnectionToken()
         {
             Token token{};
-            FillRandom(token.data(), CONNECTION_TOKEN_SIZE);
+            if (!FillRandom(token.data(), CONNECTION_TOKEN_SIZE))
+                return token;
 
             TokenEntry entry;
             entry.token = token;
@@ -162,8 +163,15 @@ namespace Spark::Net
         /// @brief Set the prototype XOR key material.
         void SetEncryptionKey(const Key& key) { m_encryptionKey = key; }
 
-        /// @brief Generate non-cryptographic prototype key material.
-        static void GenerateKey(Key& outKey) { FillRandom(outKey.data(), SECURITY_KEY_SIZE); }
+        /// @brief Generate prototype key material from the operating-system CSPRNG.
+        ///
+        /// The key is cleared before generation so an OS entropy failure cannot
+        /// leave stale key material in the caller's buffer.
+        static void GenerateKey(Key& outKey)
+        {
+            outKey.fill(0);
+            (void)FillRandom(outKey.data(), SECURITY_KEY_SIZE);
+        }
 
         /// @brief Read the legacy toggle for prototype XOR obfuscation.
         bool IsEncryptionEnabled() const { return m_obfuscationEnabled; }
@@ -182,15 +190,9 @@ namespace Spark::Net
             std::chrono::steady_clock::time_point creationTime;
         };
 
-        static void FillRandom(uint8_t* buffer, size_t size)
+        static bool FillRandom(uint8_t* buffer, size_t size) noexcept
         {
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<uint16_t> dist(0, 255);
-            for (size_t i = 0; i < size; ++i)
-            {
-                buffer[i] = static_cast<uint8_t>(dist(gen));
-            }
+            return Spark::SecureRandom::Fill(buffer, size);
         }
 
         static std::string TokenToString(const Token& token)

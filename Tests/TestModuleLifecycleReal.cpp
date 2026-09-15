@@ -9,12 +9,16 @@
 
 #include "TestFramework.h"
 
+#include "Core/ModuleHotReload.h"
 #include "Core/ModuleManager.h"
+#include "Utils/SparkConsole.h"
 #include <Spark/Version.h>
 
 #include <cstdlib>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -282,6 +286,202 @@ TEST(ModuleLifecycle_RecordsFailedNewStyleModuleInitialization)
     EXPECT_EQ(record->destroyModule, 1u);
 
     manager.UnloadAll();
+}
+
+TEST(ModuleLifecycle_InitializeAllReturnsFailureWhenOnLoadFails)
+{
+    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+
+    EXPECT_FALSE(manager.InitializeAll(&context));
+    EXPECT_FALSE(manager.HasInitializedModules());
+
+    manager.UnloadAll();
+}
+
+TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
+{
+    const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadRetry");
+    const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+    std::filesystem::path modulePath = directory / "RetryableModule";
+    modulePath += source.extension();
+    ASSERT_TRUE(CopyFixtureImage(modulePath));
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    manager.InitializeAll(&context);
+    ASSERT_TRUE(manager.HasInitializedModules());
+    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const bool consoleWasInitialized = console.IsInitialized();
+    ASSERT_TRUE(console.Initialize());
+
+    Spark::ModuleHotReloadManager hotReload;
+    hotReload.Initialize(&manager, &context);
+    hotReload.SetDebounceMs(0);
+    hotReload.WatchModule("Spark Compatible ABI Fixture", PathToUtf8(modulePath));
+    hotReload.Start();
+
+    size_t callbackCount = 0;
+    bool lastReloadSucceeded = true;
+    hotReload.SetReloadCallback(
+        [&](const std::string&, bool success)
+        {
+            ++callbackCount;
+            lastReloadSucceeded = success;
+        });
+
+    // Keep the image present but make the real module reject OnLoad. Advance
+    // the timestamp instead of rewriting a loaded DLL, which is not writable
+    // on every Windows loader configuration.
+    std::error_code changeError;
+    const auto previousTime = std::filesystem::last_write_time(modulePath, changeError);
+    ASSERT_FALSE(changeError);
+    std::filesystem::last_write_time(modulePath, previousTime + std::chrono::seconds(2), changeError);
+    ASSERT_FALSE(changeError);
+
+    EXPECT_EQ(hotReload.PollChanges(), 0);
+    EXPECT_EQ(callbackCount, size_t{1});
+    EXPECT_FALSE(lastReloadSucceeded);
+
+    // The same failed disk change remains actionable and must be retried on a
+    // later poll; otherwise a transient compiler-side failure requires another
+    // unrelated file edit before hot-reload can recover.
+    EXPECT_EQ(hotReload.PollChanges(), 0);
+    EXPECT_EQ(callbackCount, size_t{2});
+    EXPECT_FALSE(lastReloadSucceeded);
+
+    hotReload.Stop();
+    ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    if (!consoleWasInitialized)
+        console.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(directory, ec);
+}
+
+TEST(ModuleHotReload_PollChangesContainsNonStandardCallbackExceptions)
+{
+    const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadPollCallbackException");
+    const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+    std::filesystem::path modulePath = directory / "PollCallbackExceptionModule";
+    modulePath += source.extension();
+    ASSERT_TRUE(CopyFixtureImage(modulePath));
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const bool consoleWasInitialized = console.IsInitialized();
+    ASSERT_TRUE(console.Initialize());
+
+    Spark::ModuleHotReloadManager hotReload;
+    hotReload.Initialize(&manager, &context);
+    hotReload.SetDebounceMs(0);
+    hotReload.WatchModule("Spark Compatible ABI Fixture", PathToUtf8(modulePath));
+    hotReload.Start();
+
+    bool callbackRan = false;
+    hotReload.SetReloadCallback(
+        [&](const std::string&, bool success)
+        {
+            callbackRan = true;
+            EXPECT_TRUE(success);
+            throw 42;
+        });
+
+    std::error_code changeError;
+    const auto previousTime = std::filesystem::last_write_time(modulePath, changeError);
+    ASSERT_FALSE(changeError);
+    std::filesystem::last_write_time(modulePath, previousTime + std::chrono::seconds(2), changeError);
+    ASSERT_FALSE(changeError);
+
+    bool callbackEscaped = false;
+    int reloadedCount = -1;
+    try
+    {
+        reloadedCount = hotReload.PollChanges();
+    }
+    catch (...)
+    {
+        callbackEscaped = true;
+    }
+
+    EXPECT_TRUE(callbackRan);
+    EXPECT_FALSE(callbackEscaped);
+    EXPECT_EQ(reloadedCount, 1);
+    EXPECT_EQ(hotReload.GetReloadCount(), 1);
+
+    hotReload.Stop();
+    EXPECT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    if (!consoleWasInitialized)
+        console.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(directory, ec);
+}
+
+TEST(ModuleHotReload_ForceReloadContainsStandardCallbackExceptions)
+{
+    const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadForceCallbackException");
+    const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
+    std::filesystem::path modulePath = directory / "ForceCallbackExceptionModule";
+    modulePath += source.extension();
+    ASSERT_TRUE(CopyFixtureImage(modulePath));
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const bool consoleWasInitialized = console.IsInitialized();
+    ASSERT_TRUE(console.Initialize());
+
+    Spark::ModuleHotReloadManager hotReload;
+    hotReload.Initialize(&manager, &context);
+
+    bool callbackRan = false;
+    hotReload.SetReloadCallback(
+        [&](const std::string&, bool success)
+        {
+            callbackRan = true;
+            EXPECT_TRUE(success);
+            throw std::runtime_error("reload callback failure");
+        });
+
+    bool callbackEscaped = false;
+    bool reloadSucceeded = false;
+    try
+    {
+        reloadSucceeded = hotReload.ForceReload("Spark Compatible ABI Fixture");
+    }
+    catch (...)
+    {
+        callbackEscaped = true;
+    }
+
+    EXPECT_TRUE(callbackRan);
+    EXPECT_FALSE(callbackEscaped);
+    EXPECT_TRUE(reloadSucceeded);
+    EXPECT_EQ(hotReload.GetReloadCount(), 1);
+
+    EXPECT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    if (!consoleWasInitialized)
+        console.Shutdown();
+
+    std::error_code ec;
+    std::filesystem::remove_all(directory, ec);
 }
 
 TEST(ModuleLegacyAdapter_SuccessCreatesNoLifecycleRecord)

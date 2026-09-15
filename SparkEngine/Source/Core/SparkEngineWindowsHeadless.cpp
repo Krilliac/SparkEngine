@@ -208,9 +208,14 @@ static size_t LoadHeadlessModules(LPWSTR lpCmdLine)
 
     if (LoadGameModules(*GetEngineRuntime().moduleManager, lpCmdLine))
     {
-        GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
+        const bool moduleInitializationSucceeded =
+            GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
         const size_t initializedModules = GetEngineRuntime().moduleManager->GetInitializedModuleCount();
-        console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
+        if (moduleInitializationSucceeded)
+            console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
+        else
+            console.LogError("Module initialization failed; " + std::to_string(initializedModules) +
+                             " module(s) initialized");
         if (initializedModules > 0)
         {
             SPARK_LOG_INFO(Spark::LogCategory::Core, "SPARK_MODULE_READY count=%zu", initializedModules);

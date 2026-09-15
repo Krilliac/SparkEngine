@@ -31,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import hashlib
 import json
 import os
@@ -53,6 +54,11 @@ WORKFLOWS_DIR = ".github/workflows"
 LOCKFILE_VERSION = 2
 AUTHORITATIVE_ROOT = "ThirdParty"
 AUTHORITATIVE_ROOTS = frozenset({AUTHORITATIVE_ROOT})
+APPROVED_ROOT_FILES = frozenset({
+    "ThirdParty/POLICY.md",
+    "ThirdParty/dependencies.lock",
+    "ThirdParty/supply-chain.lock",
+})
 
 # ── Resource bounds ───────────────────────────────────────────────────
 # Every one of these is an order of magnitude above the real repository.  They
@@ -77,6 +83,7 @@ MAX_WALK_DEPTH = 24
 MAX_WORKFLOW_FILES = 512
 MAX_ACTION_PIN_KEYS = 512
 MAX_ACTION_PIN_SHAS = 32
+MAX_EXCEPTIONS = 256
 MAX_VIOLATIONS = 500
 
 MIN_LICENSE_SIZE = 200
@@ -120,6 +127,10 @@ MANIFEST_FIELD_COUNT = 10
 ) = range(MANIFEST_FIELD_COUNT)
 
 VALID_SEVERITIES = frozenset({"ERROR", "WARN"})
+EXCEPTION_FIELDS = frozenset({"id", "scope", "owner", "justification", "expires"})
+EXCEPTION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
+EXCEPTION_SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{1,127}$")
+EXCEPTION_PLACEHOLDER_OWNERS = frozenset({"", "none", "n/a", "tbd", "todo", "unknown", "unassigned"})
 
 
 def _fatal(msg: str) -> None:
@@ -607,6 +618,67 @@ def validate_lockfile_schema(data: dict[str, Any]) -> None:
             if not isinstance(sha, str) or not SHA40_HEX_RE.match(sha):
                 _fatal(f"action_pins[{repo!r}]: invalid SHA: {sha!r}")
 
+    exceptions = data.get("exceptions")
+    if not isinstance(exceptions, list):
+        _fatal("lockfile missing or invalid list field: exceptions")
+    if len(exceptions) > MAX_EXCEPTIONS:
+        _fatal(f"exception count exceeds MAX_EXCEPTIONS ({MAX_EXCEPTIONS})")
+
+    seen_ids: set[str] = set()
+    for index, exception in enumerate(exceptions):
+        label = f"exceptions[{index}]"
+        if not isinstance(exception, dict):
+            _fatal(f"{label}: entry must be an object")
+        missing = sorted(EXCEPTION_FIELDS - exception.keys())
+        unknown = sorted(exception.keys() - EXCEPTION_FIELDS)
+        if missing or unknown:
+            _fatal(f"{label}: invalid fields; missing={missing}, unknown={unknown}")
+
+        exception_id = exception["id"]
+        if not isinstance(exception_id, str) or not EXCEPTION_ID_RE.fullmatch(exception_id):
+            _fatal(f"{label}.id: invalid exception id: {exception_id!r}")
+        normalized_id = exception_id.casefold()
+        if normalized_id in seen_ids:
+            _fatal(f"{label}: duplicate exception id: {exception_id!r}")
+        seen_ids.add(normalized_id)
+
+        scope = exception["scope"]
+        if not isinstance(scope, str) or not EXCEPTION_SCOPE_RE.fullmatch(scope):
+            _fatal(f"{label}.scope: invalid exception scope: {scope!r}")
+
+        owner = exception["owner"]
+        if (not isinstance(owner, str) or not owner.strip() or
+                owner.strip().casefold() in EXCEPTION_PLACEHOLDER_OWNERS):
+            _fatal(f"{label}.owner: exception must be owned by a named maintainer")
+        if len(owner.strip()) > 128:
+            _fatal(f"{label}.owner: owner is too long")
+
+        justification = exception["justification"]
+        if not isinstance(justification, str) or len(justification.strip()) < 16:
+            _fatal(f"{label}.justification: justification must contain at least 16 characters")
+        if len(justification) > 2048:
+            _fatal(f"{label}.justification: justification is too long")
+
+        expires = exception["expires"]
+        if not isinstance(expires, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", expires):
+            _fatal(f"{label}.expires: expected an ISO date YYYY-MM-DD")
+        try:
+            date.fromisoformat(expires)
+        except ValueError:
+            _fatal(f"{label}.expires: invalid ISO date: {expires!r}")
+
+
+def check_exception_expiry(lockfile: dict[str, Any], result: CheckResult) -> None:
+    today = date.today()
+    for index, exception in enumerate(lockfile["exceptions"]):
+        expiry = date.fromisoformat(exception["expires"])
+        if expiry < today:
+            result.error(
+                "exception",
+                f"{LOCKFILE_REL}:exceptions[{index}]",
+                f"exception {exception['id']!r} expired on {exception['expires']}",
+            )
+
 
 # ── Container model ───────────────────────────────────────────────────
 
@@ -665,6 +737,31 @@ def check_container_model(lockfile: dict[str, Any], result: CheckResult) -> None
                 "aliases verify on case-insensitive filesystems only",
             )
         lowered.setdefault(key, path)
+
+
+def check_allowed_root_files(lockfile: dict[str, Any], result: CheckResult) -> None:
+    """Keep the payload-coverage exception limited to governance metadata."""
+    allowed = lockfile["allowed_root_files"]
+    listed = set(allowed)
+    unexpected = sorted(listed - APPROVED_ROOT_FILES)
+    missing = sorted(APPROVED_ROOT_FILES - listed)
+    duplicate_count = len(allowed) - len(listed)
+    if not unexpected and not missing and duplicate_count == 0:
+        return
+
+    details: list[str] = []
+    if unexpected:
+        details.append(f"unexpected={unexpected}")
+    if missing:
+        details.append(f"missing={missing}")
+    if duplicate_count:
+        details.append(f"duplicate_entries={duplicate_count}")
+    result.error(
+        "inventory",
+        LOCKFILE_REL,
+        "allowed_root_files must exactly match the approved governance files "
+        f"({'; '.join(details)})",
+    )
 
 
 # ── Check: complete tracked inventory and tree digests ────────────────
@@ -1289,7 +1386,7 @@ def check_gitmodules_consistency(
 
 # ── Check: dependencies.lock reconciliation ───────────────────────────
 
-def export_manifest_entries(root: Path) -> list[list[str]]:
+def export_manifest_entries(root: Path, root_resolved: Path) -> list[list[str]]:
     """Read the manifest through CMake, the parser that actually evaluates it.
 
     A text scrape sees neither `list(APPEND ...)` after the closing paren, nor
@@ -1305,8 +1402,9 @@ def export_manifest_entries(root: Path) -> list[list[str]]:
         )
 
     manifest = root / MANIFEST_REL
-    if not manifest.is_file():
-        _fatal(f"{MANIFEST_REL} not found")
+    file_err = assert_regular_file_no_escape(manifest, root_resolved)
+    if file_err:
+        _fatal(f"{MANIFEST_REL}: {file_err}")
     _bounded_size(manifest, MAX_MANIFEST_BYTES, "dependency manifest")
 
     handle, out_path = tempfile.mkstemp(prefix="spark-tp-entries-", suffix=".txt")
@@ -1659,7 +1757,9 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
         digest, count = _tree_digest(assigned[container])
         digests[container] = {"digest": digest, "file_count": count}
 
-    sentinel_paths = _discover_sentinel_paths(root, existing, containers)
+    sentinel_paths = _discover_sentinel_paths(
+        root, root_resolved, existing, containers
+    )
     sentinels = _build_sentinels(root, root_resolved, sentinel_paths, quiet=quiet)
     action_pins = _discover_action_pins(root, root_resolved)
 
@@ -1671,6 +1771,7 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
             "tools/check-supply-chain.py on every CI run. Update with: "
             "python tools/check-supply-chain.py --update",
         ),
+        "exceptions": existing["exceptions"],
         "submodule_gitlinks": dict(sorted(gitlinks.items())),
         "managed_vendored_dirs": managed,
         "project_owned_dirs": owned,
@@ -1685,11 +1786,14 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
 
 
 def _discover_sentinel_paths(
-    root: Path, existing: dict[str, Any], containers: dict[str, str]
+    root: Path,
+    root_resolved: Path,
+    existing: dict[str, Any],
+    containers: dict[str, str],
 ) -> list[str]:
     """Sentinels come from the manifest, not from the file being replaced."""
     paths: set[str] = set()
-    for fields in export_manifest_entries(root):
+    for fields in export_manifest_entries(root, root_resolved):
         if len(fields) != MANIFEST_FIELD_COUNT:
             continue
         local_path = fields[F_LOCAL_PATH].strip()
@@ -1815,7 +1919,9 @@ def run_all_checks(root: Path, root_resolved: Path) -> tuple[CheckResult, dict[s
     lockfile = load_lockfile(root, root_resolved)
     result = CheckResult()
 
+    check_exception_expiry(lockfile, result)
     check_container_model(lockfile, result)
+    check_allowed_root_files(lockfile, result)
     check_link_hygiene(root, result)
     tracked = git_tracked_thirdparty(root)
     assigned = check_tracked_inventory(root, lockfile, tracked, result)
@@ -1824,7 +1930,7 @@ def run_all_checks(root: Path, root_resolved: Path) -> tuple[CheckResult, dict[s
     check_action_pins(root, root_resolved, lockfile, result)
     modules = _parse_gitmodules(root, root_resolved)
     check_gitmodules_consistency(modules, lockfile, result)
-    entries = export_manifest_entries(root)
+    entries = export_manifest_entries(root, root_resolved)
     check_manifest_reconciliation(root, lockfile, entries, modules, result)
     return result, lockfile
 

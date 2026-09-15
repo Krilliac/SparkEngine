@@ -21,12 +21,16 @@ set(_SPARK_MODULE_ABI_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 # fallback here is unsafe: changing IModule can otherwise leave every module
 # advertising the previous ABI until somebody manually reconfigures CMake.
 set(_spark_sdk_version_header "")
-set(_spark_sdk_version_candidates
-    "${CMAKE_SOURCE_DIR}/SparkSDK/Include/Spark/Version.h"
-    "${_SPARK_MODULE_ABI_CMAKE_DIR}/../SparkSDK/Include/Spark/Version.h")
 if(DEFINED SPARK_ENGINE_INCLUDE_DIR)
-    list(PREPEND _spark_sdk_version_candidates
+    # The package config sets this to its installed include root. Do not fall
+    # back to the consumer's source tree: a local/stale SparkSDK header must
+    # not make an incomplete installed package configure successfully.
+    set(_spark_sdk_version_candidates
         "${SPARK_ENGINE_INCLUDE_DIR}/Spark/Version.h")
+else()
+    set(_spark_sdk_version_candidates
+        "${CMAKE_SOURCE_DIR}/SparkSDK/Include/Spark/Version.h"
+        "${_SPARK_MODULE_ABI_CMAKE_DIR}/../SparkSDK/Include/Spark/Version.h")
 endif()
 foreach(_candidate IN LISTS _spark_sdk_version_candidates)
     if(EXISTS "${_candidate}")
@@ -40,12 +44,15 @@ if(NOT _spark_sdk_version_header)
 endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${_spark_sdk_version_header}")
-file(STRINGS "${_spark_sdk_version_header}" _spark_sdk_version_line
+file(STRINGS "${_spark_sdk_version_header}" _spark_sdk_version_lines
     REGEX "^#[ \t]*define[ \t]+SPARK_SDK_VERSION[ \t]+[0-9]+")
-if(NOT _spark_sdk_version_line MATCHES
+list(LENGTH _spark_sdk_version_lines _spark_sdk_version_line_count)
+if(NOT _spark_sdk_version_line_count EQUAL 1 OR
+   NOT _spark_sdk_version_lines MATCHES
    "SPARK_SDK_VERSION[ \t]+([0-9]+)")
     message(FATAL_ERROR
-        "SparkGameModule: could not parse SPARK_SDK_VERSION from ${_spark_sdk_version_header}")
+        "SparkGameModule: ${_spark_sdk_version_header} must contain exactly one "
+        "SPARK_SDK_VERSION definition")
 endif()
 set_property(GLOBAL PROPERTY SPARK_MODULE_CURRENT_SDK_VERSION "${CMAKE_MATCH_1}")
 

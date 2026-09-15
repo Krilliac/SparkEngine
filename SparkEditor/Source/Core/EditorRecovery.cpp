@@ -53,6 +53,8 @@ namespace SparkEditor
         {
             if (value.empty())
                 return true;
+            if (value.find('\0') != std::string::npos)
+                return false;
 
             const fs::path path(value);
             if (path.is_absolute() || path.has_root_path() || path.has_root_name())
@@ -181,6 +183,22 @@ namespace SparkEditor
             if (!world.IsObject())
             {
                 error = "recovery world root is not an object";
+                return false;
+            }
+
+            try
+            {
+                ::World restoredWorld;
+                if (!Spark::DeserializeInto(restoredWorld, snapshot.serializedWorld,
+                                            Spark::SceneDeserializeMode::StrictRecovery))
+                {
+                    error = "recovery world does not satisfy the strict scene schema";
+                    return false;
+                }
+            }
+            catch (const std::exception& exception)
+            {
+                error = "recovery world could not be deserialized: " + std::string(exception.what());
                 return false;
             }
             return true;

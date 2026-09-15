@@ -143,7 +143,47 @@ if(SPARKINSTALLER_BUILD_TESTS)
         target_compile_options(SparkInstallerGitTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkInstallerGitTests COMMAND SparkInstallerGitTests)
-    set_tests_properties(SparkInstallerGitTests PROPERTIES TIMEOUT 15)
+    set_tests_properties(SparkInstallerGitTests PROPERTIES TIMEOUT 15 LABELS installer)
+
+    add_executable(SparkInstallerInstallStateTests
+        tests/InstallStateTests.cpp
+        src/InstallState.cpp
+    )
+    target_include_directories(SparkInstallerInstallStateTests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    if(MSVC)
+        target_compile_definitions(SparkInstallerInstallStateTests PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(SparkInstallerInstallStateTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME SparkInstallerInstallStateTests COMMAND SparkInstallerInstallStateTests)
+    set_tests_properties(SparkInstallerInstallStateTests PROPERTIES TIMEOUT 10 LABELS installer)
+
+    add_executable(SparkInstallerTransactionTests
+        tests/InstallerTransactionTests.cpp
+        src/Installer.cpp
+        src/InstallState.cpp
+        src/GitRunner.cpp
+        src/GitBootstrap.cpp
+    )
+    target_include_directories(SparkInstallerTransactionTests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(SparkInstallerTransactionTests PRIVATE SparkBuildCore)
+    target_compile_definitions(SparkInstallerTransactionTests PRIVATE
+        SPARK_INSTALLER_VERSION="${PROJECT_VERSION}"
+    )
+    if(MSVC)
+        target_compile_definitions(SparkInstallerTransactionTests PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(SparkInstallerTransactionTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME SparkInstallerTransactionTests COMMAND SparkInstallerTransactionTests)
+    set_tests_properties(SparkInstallerTransactionTests PROPERTIES TIMEOUT 15 LABELS installer)
+
     if(WIN32)
         set(_sparkinstaller_platform "Windows")
     elseif(APPLE)
@@ -184,7 +224,7 @@ endif()
             "-DSPARK_VERSION_EXECUTABLE=$<TARGET_FILE:SparkInstaller>"
             "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkInstaller ${PROJECT_VERSION} (${_sparkinstaller_platform})"
             -P "${_sparkinstaller_version_test_script}")
-    set_tests_properties(SparkInstallerVersion PROPERTIES TIMEOUT 15)
+    set_tests_properties(SparkInstallerVersion PROPERTIES TIMEOUT 15 LABELS installer)
     unset(_sparkinstaller_version_test_script)
     unset(_sparkinstaller_platform)
 endif()

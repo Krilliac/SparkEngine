@@ -1,11 +1,14 @@
 // Test_persistence_SaveSystem.cpp
-// Regression for two SaveSystem findings:
+// Regression for three SaveSystem findings:
 //   P1: Load/ReadFromFile never validated the save-format version. A file written by a
 //       newer, incompatible format is now rejected instead of silently misinterpreted.
 //   P2: GetSaveMetadata now uses a metadata-only read path; this test also confirms it
 //       still parses the metadata header correctly.
-// Both are exercised through the public GetSaveMetadata() (which needs no World/ECS),
-// by hand-crafting .spark_save files with the real on-disk binary layout.
+//   P3: DeleteSave must evict primary and retained-copy entries from LocalFileCache so
+//       a deleted slot cannot be resurrected from stale cached bytes.
+// P1 and P2 are exercised through the public GetSaveMetadata() (which needs no World/ECS),
+// by hand-crafting .spark_save files with the real on-disk binary layout. P3 uses the
+// production-linked Save/Load/Delete path with an attached LocalFileCache.
 
 #include "TestFramework.h"
 #include "Core/Reflection.h"
@@ -760,6 +763,98 @@ TEST(SaveSystem_Save_ReplacesExistingSlotAtomically)
     EXPECT_TRUE(ss.Load("same-slot", loadedWorld));
     EXPECT_EQ(loadedWorld.GetEntityCount(), 2u);
 
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_SaveAbortsWhenPreviousRevisionCannotBeRetained)
+{
+    const std::string dir = MakeTempSaveDir("backup_retention_failure");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    World firstWorld;
+    const EntityID firstEntity = firstWorld.CreateEntity("first-revision");
+    firstWorld.AddComponent<Transform>(firstEntity);
+    SaveMetadata firstMetadata;
+    firstMetadata.saveName = "First revision";
+    EXPECT_TRUE(ss.Save("retention-failure", firstWorld, firstMetadata));
+
+    const auto primaryPath = std::filesystem::path(dir) / "retention-failure.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "retention-failure.spark_save.bak";
+    ASSERT_TRUE(std::filesystem::create_directory(backupPath));
+
+    World secondWorld;
+    const EntityID secondEntity = secondWorld.CreateEntity("second-revision");
+    secondWorld.AddComponent<Transform>(secondEntity);
+    SaveMetadata secondMetadata;
+    secondMetadata.saveName = "Second revision";
+
+    // Retaining the previous revision is part of the save transaction. If that
+    // boundary fails, replacing the primary would silently discard the only
+    // recoverable copy of the first revision.
+    EXPECT_FALSE(ss.Save("retention-failure", secondWorld, secondMetadata));
+    EXPECT_TRUE(std::filesystem::exists(primaryPath));
+    EXPECT_TRUE(std::filesystem::is_directory(backupPath));
+
+    SaveMetadata retainedMetadata;
+    EXPECT_TRUE(ss.GetSaveMetadata("retention-failure", retainedMetadata));
+    EXPECT_EQ(retainedMetadata.saveName, std::string("First revision"));
+
+    World retainedWorld;
+    EXPECT_TRUE(ss.Load("retention-failure", retainedWorld));
+    EXPECT_TRUE(WorldContainsNamedEntity(retainedWorld, "first-revision"));
+    EXPECT_FALSE(WorldContainsNamedEntity(retainedWorld, "second-revision"));
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_DeleteSave_EvictsCachedPrimaryAndBackup)
+{
+    const std::string dir = MakeTempSaveDir("delete_cached_revisions");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    ss.SetFileCache(nullptr);
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    LocalFileCache cache;
+    ss.SetFileCache(&cache);
+
+    World firstWorld;
+    const EntityID firstEntity = firstWorld.CreateEntity("cached-first-revision");
+    firstWorld.AddComponent<Transform>(firstEntity);
+    SaveMetadata firstMetadata;
+    firstMetadata.saveName = "Cached first revision";
+    EXPECT_TRUE(ss.Save("cached-delete", firstWorld, firstMetadata));
+
+    World secondWorld;
+    const EntityID secondEntity = secondWorld.CreateEntity("cached-second-revision");
+    secondWorld.AddComponent<Transform>(secondEntity);
+    SaveMetadata secondMetadata;
+    secondMetadata.saveName = "Cached second revision";
+    EXPECT_TRUE(ss.Save("cached-delete", secondWorld, secondMetadata));
+
+    const auto primaryPath = std::filesystem::path(dir) / "cached-delete.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "cached-delete.spark_save.bak";
+    EXPECT_TRUE(std::filesystem::exists(primaryPath));
+    EXPECT_TRUE(std::filesystem::exists(backupPath));
+
+    World cachedPrimary;
+    EXPECT_TRUE(ss.Load("cached-delete", cachedPrimary));
+    EXPECT_TRUE(cache.Contains(primaryPath.string()));
+
+    const auto cachedBackup = cache.ReadBinary(backupPath.string());
+    EXPECT_TRUE(cachedBackup.IsOk());
+    EXPECT_TRUE(cache.Contains(backupPath.string()));
+
+    EXPECT_TRUE(ss.DeleteSave("cached-delete"));
+    EXPECT_FALSE(std::filesystem::exists(primaryPath));
+    EXPECT_FALSE(std::filesystem::exists(backupPath));
+    EXPECT_FALSE(cache.Contains(primaryPath.string()));
+    EXPECT_FALSE(cache.Contains(backupPath.string()));
+
+    World afterDelete;
+    EXPECT_FALSE(ss.Load("cached-delete", afterDelete));
+
+    ss.SetFileCache(nullptr);
     std::filesystem::remove_all(dir);
 }
 
@@ -1968,6 +2063,51 @@ TEST(SaveMigration_ImmutableV1FixtureLoadsWithoutRewritingSourceOrSlot)
     // Migration is in memory only: neither the checked-in fixture nor the copied
     // N-1 slot is rewritten as a side effect of reading it.
     EXPECT_EQ(ReadHeaderVersion(slotPath), kOldestSupportedSaveVersion);
+    EXPECT_TRUE(ReadBytes(slotPath) == legacyBytes);
+    EXPECT_EQ(ReadTextFile(fixturePath), fixtureBefore);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_ImmutableV2FixtureLoadsAndAddsHierarchyRoots)
+{
+    const auto fixturePath = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests" / "Fixtures" / "Compatibility" /
+                             "SaveSystem" / "v2-screenshot-without-hierarchy.spark_save.hex";
+    const std::string fixtureBefore = ReadTextFile(fixturePath);
+    const std::vector<char> legacyBytes = DecodeHexFixture(fixtureBefore);
+    ASSERT_EQ(legacyBytes.size(), static_cast<size_t>(307));
+
+    const std::string dir = MakeTempSaveDir("v2_fixture");
+    const auto slotPath = std::filesystem::path(dir) / "legacy-v2.spark_save";
+    ASSERT_TRUE(WriteBytes(slotPath, legacyBytes));
+
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+    EXPECT_EQ(ReadHeaderVersion(slotPath), 2u);
+
+    SaveMetadata metadata;
+    EXPECT_TRUE(saveSystem.GetSaveMetadata("legacy-v2", metadata));
+    EXPECT_EQ(metadata.version, kCurrentSaveVersion);
+    EXPECT_EQ(metadata.saveName, std::string("Legacy screenshotless save"));
+    EXPECT_EQ(metadata.screenshotPath, std::string("Screenshots/legacy.png"));
+
+    World loadedWorld;
+    loadedWorld.CreateEntity("must-be-replaced-only-on-success");
+    std::unordered_map<std::string, std::string> customState = {{"sentinel", "replace-on-success"}};
+    EXPECT_TRUE(saveSystem.Load("legacy-v2", loadedWorld, customState));
+    EXPECT_EQ(loadedWorld.GetEntityCount(), 1u);
+
+    const EntityID legacyPlayer = FindNamedEntity(loadedWorld, "legacy-player");
+    ASSERT_TRUE(legacyPlayer != entt::null);
+    const Transform* transform = loadedWorld.GetComponent<Transform>(legacyPlayer);
+    ASSERT_TRUE(transform != nullptr);
+    EXPECT_TRUE(transform->parent == entt::null);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("legacy.key"), std::string("legacy-value"));
+
+    // Migration is in memory only: neither the checked-in fixture nor the copied
+    // N-1 slot is rewritten as a side effect of reading it.
+    EXPECT_EQ(ReadHeaderVersion(slotPath), 2u);
     EXPECT_TRUE(ReadBytes(slotPath) == legacyBytes);
     EXPECT_EQ(ReadTextFile(fixturePath), fixtureBefore);
 

@@ -707,6 +707,8 @@ add_library(SparkMismatchedModuleFixture SHARED
     Fixtures/ModuleABI/MismatchedModule.cpp)
 add_library(SparkCompatibleModuleFixture SHARED
     Fixtures/ModuleABI/CompatibleModule.cpp)
+add_library(SparkRegistryLifecycleModuleFixture SHARED
+    Fixtures/ModuleABI/RegistryLifecycleModule.cpp)
 add_library(SparkLegacyModuleFixture SHARED
     Fixtures/ModuleABI/LegacyModule.cpp)
 add_library(SparkModuleSiblingDependency SHARED
@@ -725,6 +727,22 @@ foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkCompatibleMod
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
 endforeach()
+
+target_compile_features(SparkRegistryLifecycleModuleFixture PRIVATE cxx_std_23)
+target_compile_definitions(SparkRegistryLifecycleModuleFixture PRIVATE SPARK_MODULE_DLL)
+target_include_directories(SparkRegistryLifecycleModuleFixture PRIVATE
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+    "${CMAKE_SOURCE_DIR}/SparkSDK/Include"
+    "${SPARK_GENERATED_INCLUDE_DIR}")
+if(WIN32)
+    target_link_libraries(SparkRegistryLifecycleModuleFixture PRIVATE SparkEngineLib)
+elseif(TARGET SparkEngineInterface)
+    target_link_libraries(SparkRegistryLifecycleModuleFixture PRIVATE SparkEngineInterface)
+endif()
+if(MSVC)
+    set_property(TARGET SparkRegistryLifecycleModuleFixture PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 
 target_include_directories(SparkLegacyModuleFixture PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
@@ -760,14 +778,17 @@ math(EXPR SPARK_TEST_MISMATCHED_SDK_VERSION
 spark_configure_module_abi(SparkMismatchedModuleFixture
     SDK_VERSION "${SPARK_TEST_MISMATCHED_SDK_VERSION}")
 spark_configure_module_abi(SparkCompatibleModuleFixture)
+spark_configure_module_abi(SparkRegistryLifecycleModuleFixture)
 spark_configure_module_abi(SparkLegacyModuleFixture)
 spark_configure_module_abi(SparkSiblingDependentModuleFixture)
 
-add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture SparkLegacyModuleFixture
+add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture
+    SparkRegistryLifecycleModuleFixture SparkLegacyModuleFixture
     SparkSiblingDependentModuleFixture)
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_MISMATCHED_MODULE_PATH="$<TARGET_FILE:SparkMismatchedModuleFixture>"
     SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>"
+    SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH="$<TARGET_FILE:SparkRegistryLifecycleModuleFixture>"
     SPARK_TEST_LEGACY_MODULE_PATH="$<TARGET_FILE:SparkLegacyModuleFixture>"
     SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH="$<TARGET_FILE:SparkSiblingDependentModuleFixture>")
 
@@ -1371,9 +1392,11 @@ set_tests_properties(LifecyclePartialInit PROPERTIES
 
 foreach(_remote_admin_selector IN ITEMS
         RemoteAdmin_AnonymousDenied
+        RemoteAdmin_MalformedTimestampDenied
         RemoteAdmin_RoleMatrix
         RemoteAdmin_ReplayDenied
-        RemoteAdmin_RateLimited)
+        RemoteAdmin_RateLimited
+        RemoteAdmin_ReservedCommandsCannotBeRebound)
     add_test(NAME ${_remote_admin_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(${_remote_admin_selector} PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=${_remote_admin_selector};SPARK_TEST_EXPECT_COUNT=1"
@@ -1445,6 +1468,56 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             "for the stable-v1 module-profile lifecycle gate")
     endif()
 
+    # Keep nested MSVC consumer try-compiles below the Windows path-length
+    # pressure that makes FileTracker fail before the consumer can configure.
+    # The build-directory hash keeps separate worktrees/configurations isolated.
+    string(MD5 _spark_mod310_build_id "${CMAKE_BINARY_DIR}")
+    string(SUBSTRING "${_spark_mod310_build_id}" 0 8 _spark_mod310_build_id)
+    set(_spark_mod310_test_root "$ENV{TEMP}/m310-${_spark_mod310_build_id}")
+
+    # The nested package project also runs CMake try-compiles. Prefer the
+    # bundled Ninja binary over a nested Visual Studio project so those probes
+    # do not inherit FileTracker's long-path failure mode.
+    set(_spark_mod310_consumer_generator "${CMAKE_GENERATOR}")
+    set(_spark_mod310_consumer_platform "${CMAKE_GENERATOR_PLATFORM}")
+    set(_spark_mod310_consumer_toolset "${CMAKE_GENERATOR_TOOLSET}")
+    set(_spark_mod310_consumer_make_program "${CMAKE_MAKE_PROGRAM}")
+    set(_spark_mod310_ninja "")
+    if(CMAKE_GENERATOR MATCHES "Ninja" AND
+       DEFINED CMAKE_MAKE_PROGRAM AND
+       EXISTS "${CMAKE_MAKE_PROGRAM}" AND
+       NOT IS_DIRECTORY "${CMAKE_MAKE_PROGRAM}")
+        # Preserve the outer generator's known-good make program. A nested
+        # CMake configure must not replace it with a stale PATH/cache result.
+        set(_spark_mod310_ninja "${CMAKE_MAKE_PROGRAM}")
+    else()
+        get_filename_component(_spark_mod310_cmake_bin "${CMAKE_COMMAND}" DIRECTORY)
+        get_filename_component(_spark_mod310_cmake_dist "${_spark_mod310_cmake_bin}" DIRECTORY)
+        get_filename_component(_spark_mod310_cmake_bundle "${_spark_mod310_cmake_dist}" DIRECTORY)
+        set(_spark_mod310_bundled_ninja "${_spark_mod310_cmake_bundle}/Ninja/ninja.exe")
+        if(EXISTS "${_spark_mod310_bundled_ninja}" AND
+           NOT IS_DIRECTORY "${_spark_mod310_bundled_ninja}")
+            set(_spark_mod310_ninja "${_spark_mod310_bundled_ninja}")
+        else()
+            find_program(_spark_mod310_ninja NAMES ninja ninja.exe NO_CACHE)
+            if(_spark_mod310_ninja AND
+               (NOT EXISTS "${_spark_mod310_ninja}" OR
+                IS_DIRECTORY "${_spark_mod310_ninja}"))
+                set(_spark_mod310_ninja "")
+            endif()
+        endif()
+    endif()
+    if(_spark_mod310_ninja)
+        set(_spark_mod310_consumer_generator "Ninja Multi-Config")
+        set(_spark_mod310_consumer_platform "")
+        set(_spark_mod310_consumer_toolset "")
+        set(_spark_mod310_consumer_make_program "${_spark_mod310_ninja}")
+    elseif(CMAKE_GENERATOR MATCHES "Ninja")
+        message(FATAL_ERROR
+            "The profile package consumer requires a runnable Ninja make program; "
+            "the outer Ninja generator did not provide one")
+    endif()
+
     # Exercise the stable-v1 first-party slice through the production host and
     # real module DLL. Generator expressions keep every path correct for the
     # selected Visual Studio/Ninja Multi-Config configuration.
@@ -1480,6 +1553,53 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         LABELS "nullrhi-headless;stable-v1;integration;source-tree"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+
+    # MOD-310 selector contracts. Each entry invokes a real production-source
+    # or installed-package test; these are bounded evidence slices, not a
+    # declaration that the full FPS module is public-SDK compliant or released.
+    add_test(
+        NAME FPSSinglePlayerSlice_RespawnProductionSource
+        COMMAND $<TARGET_FILE:SparkTests> --quiet --warn-is-error)
+    set_tests_properties(FPSSinglePlayerSlice_RespawnProductionSource PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=FPSRespawn_;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "module;stable-v1;fps;production-source"
+        RUN_SERIAL TRUE
+        TIMEOUT 30)
+
+    if(SPARK_GAME_MODULES STREQUAL "SparkGameFPS")
+        add_test(
+            NAME FPSPackage_InstalledRuntime
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/p/$<CONFIG>"
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
+        set_tests_properties(FPSPackage_InstalledRuntime PROPERTIES
+            LABELS "module;stable-v1;fps;package;integration"
+            RUN_SERIAL TRUE
+            TIMEOUT 300)
+
+        add_test(
+            NAME FPSPublicSDK_InstalledConsumers
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/s/$<CONFIG>"
+                "-DSPARK_CONSUMER_GENERATOR=${_spark_mod310_consumer_generator}"
+                "-DSPARK_CONSUMER_PLATFORM=${_spark_mod310_consumer_platform}"
+                "-DSPARK_CONSUMER_TOOLSET=${_spark_mod310_consumer_toolset}"
+                "-DSPARK_CONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+                "-DSPARK_CONSUMER_MAKE_PROGRAM=${_spark_mod310_consumer_make_program}"
+                "-DSPARK_CONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+                "-DSPARK_CONSUMER_CTEST=${CMAKE_CTEST_COMMAND}"
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPublicSDK.cmake)
+        set_tests_properties(FPSPublicSDK_InstalledConsumers PROPERTIES
+            LABELS "module;stable-v1;fps;sdk;package;integration"
+            RUN_SERIAL TRUE
+            TIMEOUT 600)
+    endif()
 endif()
 
 add_test(
@@ -1525,6 +1645,69 @@ set_tests_properties(SparkPackageModuleSidecarValidatorTests PROPERTIES
     LABELS "package;unit"
     TIMEOUT 30)
 
+add_test(
+    NAME SparkSDKRejectsAmbiguousVersionHeader
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_GAME_MODULE_CMAKE=${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/sdk-version-header-ambiguity/$<CONFIG>"
+        "-DCONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCONSUMER_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCONSUMER_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCONSUMER_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/FPSProgression/TestSparkGameModuleVersion.cmake)
+set_tests_properties(SparkSDKRejectsAmbiguousVersionHeader PROPERTIES
+    LABELS "sdk;module;unit"
+    TIMEOUT 30)
+
+add_test(
+    NAME SparkInstalledPackageRejectsMissingVersionDiagnostics
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/incomplete-sdk-package/$<CONFIG>"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestSparkEnginePackageCompleteness.cmake)
+set_tests_properties(SparkInstalledPackageRejectsMissingVersionDiagnostics PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 30)
+
+add_test(
+    NAME SparkInstalledPackageRejectsMissingPublicSDKHeader
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/incomplete-sdk-public-header/$<CONFIG>"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestSparkEnginePackageRequiresPublicHeader.cmake)
+set_tests_properties(SparkInstalledPackageRejectsMissingPublicSDKHeader PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 30)
+
+add_test(
+    NAME SparkSDKRequiresInstalledVersionHeader
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_GAME_MODULE_CMAKE=${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/sdk-version-header-missing/$<CONFIG>"
+        "-DCONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCONSUMER_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCONSUMER_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCONSUMER_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestInstalledPackageRequiresVersionHeader.cmake)
+set_tests_properties(SparkSDKRequiresInstalledVersionHeader PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 30)
+
+add_test(
+    NAME SparkSDKComponentCompleteness
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+        "-DSPARK_CONFIG=$<CONFIG>"
+        "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/sdk-component-completeness/$<CONFIG>"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestSparkSDKComponentCompleteness.cmake)
+set_tests_properties(SparkSDKComponentCompleteness PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 660)
+
 # ----------------------------------------------------------------------------
 # Installed-SDK template gate (opt-in)
 # ----------------------------------------------------------------------------
@@ -1568,6 +1751,34 @@ endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME AsyncDatabaseDurabilityContract
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_async_database_durability.py)
+    set_tests_properties(AsyncDatabaseDurabilityContract PROPERTIES
+        LABELS "persistence;durability;static;python"
+        TIMEOUT 30)
+
+    add_test(
+        NAME SparkNetworkSecurityCsprngContract
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_network_security_csprng.py)
+    set_tests_properties(SparkNetworkSecurityCsprngContract PROPERTIES
+        LABELS "network-security;security;static;python"
+        TIMEOUT 30)
+
+    if(TARGET SparkShaderCompiler AND TARGET SparkCooker AND
+       TARGET SparkAutomation AND TARGET SparkCrashReporter)
+        add_test(
+            NAME SparkStableProductVersions
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_rel100_product_versions.py
+                --bin-dir $<TARGET_FILE_DIR:SparkShaderCompiler>)
+        set_tests_properties(SparkStableProductVersions PROPERTIES
+            LABELS "release;version;integration"
+            TIMEOUT 60)
+    endif()
+
     add_test(
         NAME BlenderMMOAssetSourceContract
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/blender/validate_mmo_props.py
@@ -1797,3 +2008,7 @@ endif()
 
 # Actual FPS mutation adapters and engine event publication, without module rendering dependencies.
 add_subdirectory(FPSGameplayEvents)
+
+if(SPARK_ENABLE_FUZZ_TARGETS)
+    add_subdirectory(Fuzz)
+endif()

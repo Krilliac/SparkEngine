@@ -19,6 +19,10 @@
 #include <iostream>
 #include <string>
 
+#ifndef SPARK_CRASH_REPORTER_VERSION
+#error "SPARK_CRASH_REPORTER_VERSION must be supplied by the build system"
+#endif
+
 static void PrintUsage(const char* argv0)
 {
     std::cerr << "SparkCrashReporter — Out-of-process crash report handler\n\n";
@@ -33,6 +37,12 @@ static void PrintUsage(const char* argv0)
 
 int main(int argc, char* argv[])
 {
+    if (argc == 2 && (std::string(argv[1]) == "--version" || std::string(argv[1]) == "-version"))
+    {
+        std::cout << "SparkCrashReporter " SPARK_CRASH_REPORTER_VERSION "\n";
+        return 0;
+    }
+
     if (argc < 2)
     {
         PrintUsage(argv[0]);

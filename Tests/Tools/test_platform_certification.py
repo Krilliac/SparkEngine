@@ -33,12 +33,14 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CERT_DIR = REPO_ROOT / "Tools" / "platform-cert"
 sys.path.insert(0, str(CERT_DIR))
 
 import bundle_verify  # noqa: E402
+import collect_evidence as collector  # noqa: E402
 import dependency_authority as da  # noqa: E402
 import safe_fs  # noqa: E402
 import validate_certification as vc  # noqa: E402
@@ -374,6 +376,22 @@ class BundleTestCase(unittest.TestCase):
 class TestCertifiablePath(BundleTestCase):
     def test_measured_bundle_certifies(self) -> None:
         self.assertCertified(self.bundle.validate())
+
+    def test_complete_bundle_without_trusted_context_cannot_certify(self) -> None:
+        result = self.bundle.validate(trusted=None)
+        self.assertRejected(result, "trusted context")
+
+    def test_cross_validation_without_trusted_context_is_inspection_only(self) -> None:
+        result = vc.cross_validate(
+            self.bundle.matrix,
+            self.bundle.records,
+            now=NOW,
+            artifact_root=self.bundle.artifact_root,
+            authority=AUTHORITY,
+        )
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.rows_certified, 2)
+        self.assertFalse(result.fully_certified)
 
     def test_both_canonical_rows_are_certified(self) -> None:
         result = self.bundle.validate()
@@ -1293,6 +1311,11 @@ class TestCanonicalProfileFreeze(BundleTestCase):
             vc.validate_matrix(matrix, now=NOW, allow_unknown_profile=True), []
         )
 
+    def test_unknown_profile_cannot_certify_through_full_validation(self) -> None:
+        self.bundle.matrix["profile"] = "totally-made-up"
+        result = self.bundle.validate(allow_unknown_profile=True)
+        self.assertRejected(result, "has no canonical definition")
+
     def test_dropping_a_canonical_row_is_rejected(self) -> None:
         self.rejectMatrix(
             lambda m: m.__setitem__("rows", m["rows"][:1]), "missing required row"
@@ -2047,7 +2070,7 @@ class TestLedgerConsistency(BundleTestCase):
         self.assertIn("certification did not pass", errors[0])
 
     def test_a_completed_item_with_certification_is_accepted(self) -> None:
-        result = vc.ValidationResult()
+        result = vc.ValidationResult(trusted_context=trusted())
         result.rows_checked = 2
         result.rows_certified = 2
         self.assertEqual(vc.check_ledger_claim(self._ledger("complete"), result), [])
@@ -2079,6 +2102,18 @@ class TestValidationResult(unittest.TestCase):
         result = vc.ValidationResult()
         result.error("boom")
         self.assertIn("boom", result.summary())
+
+
+class TestCollectorHostMeasurement(unittest.TestCase):
+    def test_msvc_without_toolset_identity_is_refused(self) -> None:
+        banner = "Microsoft (R) C/C++ Optimizing Compiler Version 19.42.34435 for x64"
+        command = [sys.executable, "-c", f"print({banner!r})"]
+
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(collector.CollectionError) as raised:
+                collector.measure_compiler(command, repo_root=REPO_ROOT)
+
+        self.assertIn("VCToolsVersion", str(raised.exception))
 
 
 # ═══════════════════════════════════════════════════════════════════════════

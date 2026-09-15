@@ -146,7 +146,10 @@ def _read_terminal_lines(log):
 
 def _validate_nullrhi_log(log):
     lines = _read_terminal_lines(log)
-    if any(line.startswith("SPARK_D3D11_DEVICE") for line in lines):
+    # The engine may route device diagnostics through its logger, so the
+    # forbidden marker is not required to start at column zero.  Reject any
+    # standalone marker token before accepting the NullRHI terminal records.
+    if any(re.search(r"(?:^|\s)SPARK_D3D11_DEVICE(?:\s|$)", line) for line in lines):
         raise ValueError("installed FPS NullRHI smoke emitted a D3D11 device record")
     ready = _exact_record(lines, _READY_RE, "installed FPS NullRHI module-ready")
     rhi = _exact_record(lines, _NULLRHI_RE, "installed FPS NullRHI backend")

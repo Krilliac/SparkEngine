@@ -73,7 +73,7 @@ runnable-package layout containing:
 - a generated `spark.modules.json` that preserves root and per-module metadata while rewriting module paths
   to their packaged filenames;
 - runtime `Shaders`, optional `Resources`, and engine branding assets;
-- project `Assets`, `Scenes`, `Config`, and the active project descriptor;
+- project `Assets`, `Scenes`, `Config`, `Data` archives, and the active project descriptor;
 - `Startup.sparkscene` plus an isolated scene-preview host when a startup scene exists;
 - native game/scene launchers, package guidance, and a `manifest.json` whose entrypoint is the game launcher
   with `workingDirectory` set to the package root.

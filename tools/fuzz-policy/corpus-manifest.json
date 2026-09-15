@@ -1,4 +1,21 @@
 {
   "schema_version": 1,
-  "corpora": []
+  "corpora": [
+    {
+      "id": "json-utils-corpus",
+      "parser_id": "json-utils",
+      "corpus_dir": "Tests/fuzz-corpora/json-utils",
+      "last_verified": "2026-09-14",
+      "content_digest": "413ded4742cd7b405637dd80d83de7e8e9196c1ec23238b7f79467fdf4510052",
+      "budget": {
+        "max_input_bytes": 4096,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      }
+    }
+  ]
 }

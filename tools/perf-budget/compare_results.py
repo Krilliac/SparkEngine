@@ -188,7 +188,20 @@ def compare(budget_dir: Path, result_data: Any, *,
         expected_sha=expected_sha,
     ))
     if result_errors:
-        return _empty_report(result_errors, result_data)
+        empty_measurement_only = (
+            isinstance(result_data, dict)
+            and isinstance(result_data.get("measurements"), list)
+            and not result_data["measurements"]
+            and result_errors == [
+                "result: measurements must contain at least one measurement"
+            ]
+        )
+        if not empty_measurement_only:
+            return _empty_report(result_errors, result_data)
+        # Keep the validator's evidence-integrity error in the report while
+        # continuing far enough to add the comparator's more specific
+        # pending/suspended/active-metric diagnostic below.
+        errors.extend(result_errors)
     assert isinstance(result_data, dict)
 
     result_hardware = result_data["hardwareRowId"]
@@ -222,6 +235,13 @@ def compare(budget_dir: Path, result_data: Any, *,
             )
             continue
 
+        if measurement["unit"] != metric["unit"]:
+            errors.append(
+                f"unit mismatch for {metric_id}: result={measurement['unit']!r}, "
+                f"budget={metric['unit']!r}"
+            )
+            continue
+
         status = metric["status"]
         if status != "active":
             reason_by_status = {
@@ -232,13 +252,6 @@ def compare(budget_dir: Path, result_data: Any, *,
             reason = reason_by_status[status]
             skipped_metrics.append(SkippedMetric(metric_id, status, reason))
             skipped_by_status[status] = skipped_by_status.get(status, 0) + 1
-            continue
-
-        if measurement["unit"] != metric["unit"]:
-            errors.append(
-                f"unit mismatch for {metric_id}: result={measurement['unit']!r}, "
-                f"budget={metric['unit']!r}"
-            )
             continue
 
         budget_value = metric["budget"]
@@ -267,6 +280,23 @@ def compare(budget_dir: Path, result_data: Any, *,
         and (metric["hardwareRowId"] is None
              or metric["hardwareRowId"] == result_hardware)
     }
+    pending_ids_for_current_hardware = {
+        metric["id"] for metric in budget_data["metrics"]
+        if metric["status"] == "pending_measurement"
+        and (metric["hardwareRowId"] is None
+             or metric["hardwareRowId"] == result_hardware)
+    }
+    if not active_ids_for_current_hardware and pending_ids_for_current_hardware:
+        errors.append(
+            f"no active metrics apply to result hardware {result_hardware!r}; "
+            "pending metrics cannot produce a passing budget result"
+        )
+    elif not active_ids_for_current_hardware and not result_data["measurements"]:
+        errors.append(
+            f"no performance measurement is available for result hardware "
+            f"{result_hardware!r}; no active budget metric can establish a "
+            "passing result"
+        )
     for unmeasured in sorted(active_ids_for_current_hardware - measured_metric_ids):
         errors.append(
             f"unmeasured active metric {unmeasured!r} for hardware "
@@ -371,8 +401,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(rendered)
     else:
-        qualifier = "" if report.authoritative else " (ADVISORY)"
-        status = "PASS" if report.passed else "FAIL"
+        qualifier = "" if report.authoritative else " (NON-AUTHORITATIVE)"
+        status = "PASS" if report.passed and report.authoritative else "FAIL"
         print(
             f"{status}{qualifier}: {report.passed_count} passed, "
             f"{report.failed_count} failed, "
@@ -397,7 +427,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [ADVISORY] {advisory}")
         for error in report.errors:
             print(f"  [ERROR] {error}")
-    return 0 if report.passed else 1
+    # A clean comparison on uncertified hardware remains useful as an
+    # advisory library result, but the command is a release-evidence boundary.
+    # Never let a shell/CI caller mistake that advisory result for a certified
+    # pass just because the measured values are within budget.
+    return 0 if report.passed and report.authoritative else 1
 
 
 if __name__ == "__main__":

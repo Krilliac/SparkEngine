@@ -42,7 +42,7 @@ REQUIRED_JOB_COMMANDS = (
     "ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release",
 )
 # Only meaningful once a fuzz target exists; asserted conditionally below.
-FUZZ_SMOKE_COMMAND = "ctest --test-dir build/fuzz-policy --output-on-failure -L fuzz -C Release"
+FUZZ_SMOKE_COMMAND = "ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release"
 
 
 def _decode(root: Path, path: str, field: str, maximum: int = 2 * 1024 * 1024) -> str:

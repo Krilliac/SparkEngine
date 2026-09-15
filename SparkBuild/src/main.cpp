@@ -3,6 +3,10 @@
 #include <iostream>
 #include <string>
 
+#ifndef SPARK_BUILD_VERSION
+#error "SPARK_BUILD_VERSION must be supplied by the build system"
+#endif
+
 #ifdef SPARK_PLATFORM_WINDOWS
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -24,7 +28,7 @@ int main(int argc, char* argv[])
         std::string arg = argv[1];
         if (arg == "--help" || arg == "-h")
         {
-            std::cout << "SparkBuild - SparkEngine Build Tool v2.1\n\n";
+            std::cout << "SparkBuild - SparkEngine Build Tool v" SPARK_BUILD_VERSION "\n\n";
             std::cout << "Usage:\n";
             std::cout << "  sparkbuild              Run interactive TUI\n";
             std::cout << "  sparkbuild --help       Show this help\n";
@@ -34,7 +38,7 @@ int main(int argc, char* argv[])
         }
         if (arg == "--version" || arg == "-v")
         {
-            std::cout << "SparkBuild v2.1.0 (" SPARK_PLATFORM_NAME ")\n";
+            std::cout << "SparkBuild v" SPARK_BUILD_VERSION " (" SPARK_PLATFORM_NAME ")\n";
             return 0;
         }
     }

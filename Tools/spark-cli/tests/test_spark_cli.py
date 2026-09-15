@@ -348,6 +348,30 @@ class SparkRunTests(unittest.TestCase):
         self.assertIn("Multiple project descriptors", output.getvalue())
 
 
+class SparkValidateTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_validate_rejects_malformed_sparkscene(self):
+        scene = self.root / "Scenes" / "Broken.sparkscene"
+        scene.parent.mkdir(parents=True)
+        scene.write_text('{"entities": [', encoding="utf-8")
+        output = io.StringIO()
+
+        with working_directory(self.root), contextlib.redirect_stdout(output):
+            result = spark_cli.cmd_validate(
+                SimpleNamespace(path=".", strict=False, format="text")
+            )
+
+        self.assertEqual(result, 1)
+        self.assertIn("Broken.sparkscene", output.getvalue())
+        self.assertIn("Could not parse scene file", output.getvalue())
+
+
 class SparkPackageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -369,6 +393,7 @@ class SparkPackageTests(unittest.TestCase):
         touch(self.module.with_suffix(".pdb"))
 
         touch(self.root / "Assets" / "project.asset")
+        touch(self.root / "Data" / "base.spk")
         touch(self.root / "Scenes" / "Default.sparkscene")
         touch(self.root / "Config" / "Game.ini")
 
@@ -438,6 +463,10 @@ class SparkPackageTests(unittest.TestCase):
         self.assertTrue((package / "Resources" / "Config" / "Runtime.ini").is_file())
         self.assertTrue((package / "Assets" / "Engine" / "Branding" / "splash.wav").is_file())
         self.assertTrue((package / "Assets" / "project.asset").is_file())
+        self.assertEqual(
+            (package / "Data" / "base.spk").read_bytes(),
+            (self.root / "Data" / "base.spk").read_bytes(),
+        )
         self.assertTrue((package / "Scenes" / "Default.sparkscene").is_file())
         self.assertTrue((package / "Config" / "Game.ini").is_file())
         self.assertTrue((package / "Startup.sparkscene").is_file())
@@ -485,6 +514,19 @@ class SparkPackageTests(unittest.TestCase):
             spark_cli, "cmd_build"
         ) as build:
             result = spark_cli.cmd_package(self.args(output="Assets"))
+
+        self.assertEqual(result, 1)
+        self.assertIn("cannot replace or contain the project root", output.getvalue())
+        build.assert_not_called()
+
+    def test_package_rejects_output_inside_project_data_before_build(self):
+        output = io.StringIO()
+        with working_directory(self.root), contextlib.redirect_stdout(output), mock.patch.object(
+            spark_cli, "cmd_build"
+        ) as build, mock.patch.object(
+            spark_cli, "find_runtime_host", return_value=self.host.resolve()
+        ):
+            result = spark_cli.cmd_package(self.args(output="Data"))
 
         self.assertEqual(result, 1)
         self.assertIn("cannot replace or contain the project root", output.getvalue())

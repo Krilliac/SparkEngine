@@ -151,7 +151,7 @@ All macros use compile-time FNV-1a hashing of the name string, so there is zero 
 |--------|------|-----------------|---------------|
 | **Packet Validator** | `PacketValidator.cpp` | Payload size, auth, direction checks | Buffer overflow, privilege escalation |
 | **Packet Gateway** | `NetworkConnection.cpp` | Validation pipeline entry point | Malicious packets reach game logic |
-| **RCON Gate** | `DedicatedServer.cpp` | Chat-to-RCON command gate | Any player runs admin commands |
+| **Local Admin Boundary** | `DedicatedServer.cpp` | Trusted local administration command boundary; network chat is never an admin transport | Untrusted network input reaches admin commands |
 | **Console RBAC** | `SparkConsole.cpp` | Permission level check | Players run developer commands |
 | **Script Sandbox** | `ScriptSandbox.cpp` | Instruction/timeout/memory limits | DoS, sandbox escape |
 | **Ability Cooldowns** | `AbilitySystem.cpp` | Cooldown check, damage validation, death/kill check, health cap | Ability spam, god mode, infinite health |

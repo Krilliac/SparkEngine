@@ -490,10 +490,17 @@ class PhysicsSystem
     }
 
     /** @brief Get the Jolt physics system (for internal use by PhysicsBody). */
+#if SPARK_JOLT_PHYSICS_AVAILABLE
     JPH::PhysicsSystem* GetJoltSystem() const { return m_joltSystem.get(); }
 
     /** @brief Get the temp allocator (used by CharacterController). */
     JPH::TempAllocator* GetTempAllocator() const { return m_tempAllocator.get(); }
+#else
+    JPH::PhysicsSystem* GetJoltSystem() const { return nullptr; }
+
+    /** @brief Get the temp allocator (used by CharacterController). */
+    JPH::TempAllocator* GetTempAllocator() const { return nullptr; }
+#endif
 
     // =========================================================================
     // Character controller
@@ -671,6 +678,7 @@ class PhysicsSystem
     // Jolt Physics world objects
     // =========================================================================
 
+#if SPARK_JOLT_PHYSICS_AVAILABLE
     std::unique_ptr<JPH::PhysicsSystem> m_joltSystem;
     std::unique_ptr<JPH::TempAllocator> m_tempAllocator;
     std::unique_ptr<JPH::JobSystem> m_jobSystem;
@@ -679,6 +687,7 @@ class PhysicsSystem
     std::unique_ptr<JPH::ObjectLayerPairFilter> m_objectLayerPairFilter;
     std::unique_ptr<JPH::ContactListener> m_contactListener;
     std::unique_ptr<JPH::BodyActivationListener> m_bodyActivationListener;
+#endif
 
     // =========================================================================
     // Body and constraint registries

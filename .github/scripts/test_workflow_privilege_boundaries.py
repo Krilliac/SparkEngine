@@ -159,6 +159,30 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
         )
         self.assertNotIn("actions: write", release)
 
+    def test_release_publisher_verifies_published_asset_attestation(self) -> None:
+        text = RELEASE.read_text(encoding="utf-8")
+        release = _block(text, "release", 2)
+        step_name = "    - name: Verify published release attestation as a consumer\n"
+
+        self.assertEqual(
+            release.count(step_name),
+            1,
+            "release publication must include exactly one consumer attestation check",
+        )
+        self.assertIn(
+            'gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"',
+            release,
+        )
+        verify_index = release.index(step_name)
+        self.assertLess(
+            release.index("    - name: Verify release tag immediately after publication\n"),
+            verify_index,
+        )
+        self.assertLess(
+            verify_index,
+            release.index("    - name: Complete published release and download counters\n"),
+        )
+
     def test_codeql_source_workflow_executes_no_repository_code(self) -> None:
         text = CODEQL.read_text(encoding="utf-8")
         analyze = _block(text, "analyze", 2)

@@ -22,23 +22,23 @@
     "Exclusions require an approved ticket, its approved owner, an expiry inside 365 days, and an exact count of the candidates they hide; overlapping, whole-root, case-aliased, expired, stale, and newly-absorbing exclusions are rejected. Single-file exclusions additionally pin a sha256 of the reviewed content.",
     "Deferrals are per-file and carry a reason, the SEC-120 owner, and an expiry; a deferral that no longer matches a detected candidate is rejected as stale.",
     "A fuzzed parser must bind a CMake target declared by add_executable, reachable from the root listfile via add_subdirectory, instrumented with -fsanitize=fuzzer, registered as a CTest entry point that invokes that target, passing the corpus directory and exact -max_len/-timeout/-rss_limit_mb values, with a matching CTest TIMEOUT and a fuzz label. CMake and C++ are tokenized, so comments and string literals cannot satisfy any of it.",
-    "A harness must define LLVMFuzzerTestOneInput(const uint8_t*, size_t) with a body, include a header, define and use SPARK_FUZZ_MAX_DEPTH and SPARK_FUZZ_MAX_INPUT_BYTES at the declared budget values, compare its input size against the input bound, and call an entry symbol that exists in the parser's own inventoried sources.",
+    "A harness must define LLVMFuzzerTestOneInput(const uint8_t*, size_t) with a body, include a header, define and use SPARK_FUZZ_MAX_DEPTH and SPARK_FUZZ_MAX_INPUT_BYTES at the declared budget values, compare its input size against the input bound, and call its declared harness entry. A C-ABI adapter may be declared separately; in that case the adapter source must also call the production entry symbol in the parser's own inventoried sources.",
     "Corpus seeds are opened and read, not merely stat-ed, and a corpus content digest pins last_verified to exact seed bytes.",
+    "The standalone policy project configures the Linux/Clang production fuzz smoke target, and the blocking fuzz-policy job builds and runs its fuzz-labelled CTest entries.",
     "The gate's passed field is computed from the closure blockers, and the narrative ledger cannot claim closure or a non-blocking status while blockers remain."
   ],
   "what_this_gate_does_not_prove": [
     "It is a structural contract check. It is not runtime parser safety, fuzz coverage, or crash-freedom evidence.",
-    "No production parser has a libFuzzer/AFL harness: fuzzed_count is 0 and 105 inventoried parsers are blocked.",
-    "No seed corpus or runtime resource budget is bound to a production fuzz target: corpus_count is 0.",
-    "No ASan/UBSan fuzz smoke run and no scheduled campaign have been executed.",
+    "Only the json-utils production parser has a libFuzzer harness: fuzzed_count is 1 and 104 of the 105 inventoried parsers remain blocked.",
+    "One bounded seed corpus and runtime resource budget are structurally bound to json-utils: corpus_count is 1; this is not runtime fuzz evidence.",
+    "The json-utils target is structurally wired for an ASan/UBSan fuzz smoke run, but no exact-SHA hosted smoke result or scheduled campaign has been recorded yet.",
     "151 detected candidates are deferred with owner sec-120-parser-triage and expiry 2027-02-24; they are recorded, not classified.",
     "27 inventoried source files are not matched by any detector pattern (detector_blind_spots in the snapshot): human review found them, the regexes would not have.",
     "Production entry-point behaviour has not been proven safe for malformed input."
   ],
   "closure_blockers": [
-    "105 inventoried parsers have no fuzz target",
-    "151 detected candidates await classification",
-    "no corpus/resource budget is bound to a runnable fuzz target"
+    "104 inventoried parsers have no fuzz target",
+    "151 detected candidates await classification"
   ],
   "scope_boundaries": {
     "network": "NET-100 behind G12",
@@ -49,8 +49,8 @@
     "GameModules/SparkGameVisualScript (ENG-200) hid zero parser candidates on 2026-08-28 and was removed as stale breadth."
   ],
   "not_completed": [
-    "No production parser has a libFuzzer/AFL harness.",
-    "No seed corpus or runtime resource budget is bound to a production fuzz target.",
+    "104 inventoried parsers still have no libFuzzer/AFL harness.",
+    "The json-utils corpus is structurally bound, but its exact-SHA sanitizer smoke has not yet run.",
     "The 151-file detected candidate backlog still requires manual classification.",
     "ASan/UBSan fuzz smoke and scheduled campaigns are not implemented.",
     "Production entry-point behaviour has not been proven safe for malformed input."

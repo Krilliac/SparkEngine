@@ -136,6 +136,17 @@ namespace Spark
         s_injectedConsole.store(instance, std::memory_order_release);
     }
 
+    SimpleConsole::ScopedRegistrationOwner::ScopedRegistrationOwner(SimpleConsole& console, std::string ownerId)
+        : m_console(console), m_lock(console.m_lifecycleMutex), m_previousOwner(std::move(console.m_registrationOwner))
+    {
+        console.m_registrationOwner = std::move(ownerId);
+    }
+
+    SimpleConsole::ScopedRegistrationOwner::~ScopedRegistrationOwner()
+    {
+        m_console.m_registrationOwner = std::move(m_previousOwner);
+    }
+
     namespace Detail
     {
         void InjectConsoleInstance(SimpleConsole* instance)
@@ -336,20 +347,28 @@ namespace Spark
         if (!m_initialized.load(std::memory_order_acquire))
             return false;
 
+        const std::string effectiveOwner = ownerId.empty() ? m_registrationOwner : ownerId;
         CommandPermission effectivePermission = permission;
         if (auto existing = m_commands.find(name); existing != m_commands.end())
         {
-            if (existing->second.ownerId != ownerId)
+            if (existing->second.ownerId != effectiveOwner)
             {
-                // Modules share the host console. Letting a second registrant
-                // take a live name would silently replace the handler — and with
-                // the default permission, downgrade an Admin command to Player.
-                SPARK_LOG_WARN(Spark::LogCategory::Core,
-                               "Console command '%s' is already owned by '%s'; registration from '%s' refused",
-                               name.c_str(),
-                               existing->second.ownerId.empty() ? "engine" : existing->second.ownerId.c_str(),
-                               ownerId.empty() ? "engine" : ownerId.c_str());
-                return false;
+                if (!effectiveOwner.empty() && !existing->second.ownerId.empty())
+                {
+                    m_shadowedCommands[name].push_back(existing->second);
+                }
+                else
+                {
+                    // Modules share the host console. Letting a second registrant
+                    // take a live name would silently replace the handler — and with
+                    // the default permission, downgrade an Admin command to Player.
+                    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                                   "Console command '%s' is already owned by '%s'; registration from '%s' refused",
+                                   name.c_str(),
+                                   existing->second.ownerId.empty() ? "engine" : existing->second.ownerId.c_str(),
+                                   effectiveOwner.empty() ? "engine" : effectiveOwner.c_str());
+                    return false;
+                }
             }
             if (effectivePermission < existing->second.requiredPermission)
             {
@@ -370,7 +389,7 @@ namespace Spark
         info.usage = usage;
         info.nameHash = FNV1a64(name);
         info.requiredPermission = effectivePermission;
-        info.ownerId = ownerId;
+        info.ownerId = effectiveOwner;
         m_commands[name] = std::move(info);
         m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
         return true;
@@ -413,7 +432,27 @@ namespace Spark
         if (!m_initialized.load(std::memory_order_acquire))
             return false;
         std::lock_guard<std::mutex> lock(m_commandMutex);
-        bool removed = m_commands.erase(name) > 0;
+        auto command = m_commands.find(name);
+        if (command == m_commands.end())
+            return false;
+        if (!m_registrationOwner.empty() && command->second.ownerId != m_registrationOwner)
+            return false;
+        const std::string commandName = command->first;
+        auto shadowed = m_shadowedCommands.find(commandName);
+        if (!m_registrationOwner.empty() && shadowed != m_shadowedCommands.end() && !shadowed->second.empty())
+        {
+            command->second = std::move(shadowed->second.back());
+            shadowed->second.pop_back();
+            if (shadowed->second.empty())
+                m_shadowedCommands.erase(shadowed);
+        }
+        else
+        {
+            m_commands.erase(command);
+            if (m_registrationOwner.empty())
+                m_shadowedCommands.erase(commandName);
+        }
+        const bool removed = true;
         m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
         return removed;
     }
@@ -436,8 +475,40 @@ namespace Spark
         if (!m_initialized.load(std::memory_order_acquire))
             return 0;
         std::lock_guard<std::mutex> lock(m_commandMutex);
-        const size_t removed =
-            std::erase_if(m_commands, [&ownerId](const auto& entry) { return entry.second.ownerId == ownerId; });
+        size_t removed = 0;
+        for (auto command = m_commands.begin(); command != m_commands.end();)
+        {
+            if (command->second.ownerId != ownerId)
+            {
+                ++command;
+                continue;
+            }
+
+            auto shadowed = m_shadowedCommands.find(command->first);
+            if (shadowed != m_shadowedCommands.end() && !shadowed->second.empty())
+            {
+                command->second = std::move(shadowed->second.back());
+                shadowed->second.pop_back();
+                if (shadowed->second.empty())
+                    m_shadowedCommands.erase(shadowed);
+                ++command;
+            }
+            else
+            {
+                command = m_commands.erase(command);
+            }
+            ++removed;
+        }
+
+        for (auto shadowed = m_shadowedCommands.begin(); shadowed != m_shadowedCommands.end();)
+        {
+            std::erase_if(shadowed->second,
+                          [&ownerId](const CommandInfo& command) { return command.ownerId == ownerId; });
+            if (shadowed->second.empty())
+                shadowed = m_shadowedCommands.erase(shadowed);
+            else
+                ++shadowed;
+        }
         m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
         return removed;
     }

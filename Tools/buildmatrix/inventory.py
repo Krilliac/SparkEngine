@@ -1425,6 +1425,21 @@ def extract_workflow_presets(path: Path | None = None) -> list[str]:
 # Cache variables worth binding evidence to. Bounded on purpose: the reply's
 # cache is attacker-sized input, and an unbounded copy would bloat the artifact.
 _BOUND_CACHE_PREFIXES = ("SPARK_", "ENABLE_", "BUILD_")
+_MSVC_TOOLCHAIN_CACHE_NAMES = (
+    "CMAKE_GENERATOR_INSTANCE",
+    "CMAKE_AR",
+    "CMAKE_LINKER",
+)
+# Root Visual Studio profiles publish these values from CMake's measured
+# compiler variables. They are deliberately separate from the path identity
+# names above because installed SDK consumers do not configure the engine root.
+_MSVC_COMPILER_PROVENANCE_CACHE_NAMES = (
+    "SPARK_TOOLCHAIN_CXX_COMPILER",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_ID",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_VERSION",
+    "SPARK_TOOLCHAIN_CXX_ARCHITECTURE",
+    "SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION",
+)
 _BOUND_CACHE_NAMES = {
     "CMAKE_BUILD_TYPE",
     "CMAKE_GENERATOR",
@@ -1433,6 +1448,7 @@ _BOUND_CACHE_NAMES = {
     "CMAKE_HOME_DIRECTORY",
     "CMAKE_SYSTEM_NAME",
     "CMAKE_SIZEOF_VOID_P",
+    *_MSVC_TOOLCHAIN_CACHE_NAMES,
 }
 _MAX_CACHE_ENTRIES = 4096
 _MAX_REPLY_FILES = 8192
@@ -3212,6 +3228,16 @@ def _capture_material_errors(evidence: dict[str, Any], profile: str) -> list[str
         for name in preset.get("cacheVariables", {}):
             if not isinstance(cache, dict) or name not in cache:
                 errors.append(f"cacheVariables.{name}")
+    if (
+        str(evidence.get("generator", "")).casefold().startswith("visual studio")
+        or str(evidence.get("toolset", "")).casefold().startswith("v14")
+    ):
+        required_toolchain_names = list(_MSVC_TOOLCHAIN_CACHE_NAMES)
+        if config and config.get("preset"):
+            required_toolchain_names.extend(_MSVC_COMPILER_PROVENANCE_CACHE_NAMES)
+        for name in required_toolchain_names:
+            if not isinstance(cache, dict) or not cache.get(name):
+                errors.append(f"cacheVariables.{name}")
     return sorted(set(errors))
 
 
@@ -3573,7 +3599,7 @@ def _capture_plan(
         if not binary:
             raise InventoryError(f"capture preset {preset_name!r} has no binaryDir")
         expected_build = _absolute_directory(Path(binary.replace("${sourceDir}", str(source_dir))))
-        argv = [str(cmake_executable), "--preset", preset_name]
+        argv = [str(cmake_executable), "--fresh", "--preset", preset_name]
     else:
         source_dir = _absolute_directory(REPO_ROOT / str(config.get("sourceDirectory", "")))
         expected_build = _absolute_directory(REPO_ROOT / str(config.get("buildDirectory", "")))

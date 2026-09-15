@@ -3,7 +3,24 @@
 #include "Utils/GoldenImageTest.h"
 
 #include <cstdint>
+#include <filesystem>
+#include <limits>
+#include <memory>
 #include <vector>
+
+namespace
+{
+    class FixedCapture final : public Spark::IGoldenImageCapture
+    {
+      public:
+        explicit FixedCapture(const std::vector<uint8_t>& pixels) : m_pixels(pixels) {}
+
+        [[nodiscard]] std::vector<uint8_t> CaptureFramebuffer(uint32_t, uint32_t) override { return m_pixels; }
+
+      private:
+        std::vector<uint8_t> m_pixels;
+    };
+} // namespace
 
 // ============================================================================
 // CompareImages — identical images
@@ -112,6 +129,67 @@ TEST(GoldenImageTest_CompareImages_ExceedsTolerance)
     EXPECT_EQ(result.differentPixels, 1u);
 }
 
+TEST(GoldenImageTest_CompareImages_NonFiniteThresholdFailsClosed)
+{
+    constexpr uint32_t w = 1;
+    constexpr uint32_t h = 1;
+    const std::vector<uint8_t> golden = {0, 0, 0, 255};
+    const std::vector<uint8_t> actual = {255, 0, 0, 255};
+
+    const auto nanResult = Spark::GoldenImageTestRunner::CompareImages(golden.data(), actual.data(), w, h,
+                                                                       std::numeric_limits<float>::quiet_NaN());
+    const auto infiniteResult = Spark::GoldenImageTestRunner::CompareImages(golden.data(), actual.data(), w, h,
+                                                                            std::numeric_limits<float>::infinity());
+
+    EXPECT_FALSE(nanResult.matched);
+    EXPECT_FALSE(infiniteResult.matched);
+}
+
+TEST(GoldenImageTest_CompareWithGolden_NonFiniteConfigFailsClosed)
+{
+    const std::filesystem::path goldenDirectory =
+        std::filesystem::temp_directory_path() / "sparkengine-golden-image-test-nonfinite-config";
+    std::error_code ec;
+    std::filesystem::remove_all(goldenDirectory, ec);
+    std::filesystem::create_directories(goldenDirectory, ec);
+    if (ec)
+    {
+        EXPECT_TRUE(false);
+        return;
+    }
+
+    const std::vector<uint8_t> golden = {0, 0, 0, 255};
+    const std::vector<uint8_t> actual = {255, 0, 0, 255};
+    const auto goldenPath = goldenDirectory / "scene.png";
+    if (!Spark::GoldenImageTestRunner::SavePNG(goldenPath.string(), golden.data(), 1, 1))
+    {
+        EXPECT_TRUE(false);
+        std::filesystem::remove_all(goldenDirectory, ec);
+        return;
+    }
+
+    auto& runner = Spark::GoldenImageTestRunner::GetInstance();
+    Spark::GoldenImageConfig config;
+    config.goldenImageDir = goldenDirectory.string();
+    config.outputDir = (goldenDirectory / "output").string();
+
+    config.perPixelThreshold = std::numeric_limits<float>::quiet_NaN();
+    runner.Initialize(config);
+    runner.SetCapture(std::make_unique<FixedCapture>(actual));
+    const auto nanThresholdResult = runner.CompareWithGolden("scene");
+    EXPECT_FALSE(nanThresholdResult.matched);
+
+    config.perPixelThreshold = 0.0f;
+    config.tolerancePercent = std::numeric_limits<float>::infinity();
+    runner.Initialize(config);
+    runner.SetCapture(std::make_unique<FixedCapture>(actual));
+    const auto infiniteToleranceResult = runner.CompareWithGolden("scene");
+    EXPECT_FALSE(infiniteToleranceResult.matched);
+
+    runner.Shutdown();
+    std::filesystem::remove_all(goldenDirectory, ec);
+}
+
 // ============================================================================
 // CompareImages — null/zero inputs
 // ============================================================================
@@ -161,10 +239,37 @@ TEST(GoldenImageTest_HasRegressions_OneFailure)
     EXPECT_TRUE(Spark::GoldenImageTestRunner::HasRegressions(results));
 }
 
-TEST(GoldenImageTest_HasRegressions_EmptyResults)
+TEST(GoldenImageTest_HasRegressions_EmptyResultsFailClosed)
 {
     std::vector<Spark::ImageComparisonResult> results;
-    EXPECT_FALSE(Spark::GoldenImageTestRunner::HasRegressions(results));
+    EXPECT_TRUE(Spark::GoldenImageTestRunner::HasRegressions(results));
+}
+
+TEST(GoldenImageTest_RunAllComparisons_EmptyDirectoryFailsClosed)
+{
+    const std::filesystem::path goldenDirectory =
+        std::filesystem::temp_directory_path() / "sparkengine-golden-image-test-empty";
+    std::error_code ec;
+    std::filesystem::remove_all(goldenDirectory, ec);
+    std::filesystem::create_directories(goldenDirectory, ec);
+
+    Spark::GoldenImageConfig config;
+    config.goldenImageDir = goldenDirectory.string();
+    config.outputDir = (goldenDirectory / "output").string();
+
+    auto& runner = Spark::GoldenImageTestRunner::GetInstance();
+    runner.Initialize(config);
+    const auto results = runner.RunAllComparisons();
+
+    EXPECT_EQ(results.size(), 1u);
+    EXPECT_TRUE(Spark::GoldenImageTestRunner::HasRegressions(results));
+    if (!results.empty())
+    {
+        EXPECT_FALSE(results.front().matched);
+    }
+
+    runner.Shutdown();
+    std::filesystem::remove_all(goldenDirectory, ec);
 }
 
 // ============================================================================

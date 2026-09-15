@@ -95,6 +95,7 @@ CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 LOCK_SKELETON = {
     "version": 2,
     "description": "fixture lockfile",
+    "exceptions": [],
     "submodule_gitlinks": {},
     "managed_vendored_dirs": ["ThirdParty/Utils/demo"],
     "project_owned_dirs": {
@@ -335,6 +336,14 @@ class TestTrackedInventory(FakeRepoCase):
         self.write("ThirdParty/EVIL.md", "payload at the root\n")
         self.commit()
         self.assert_violation("tracked file is in no declared container")
+
+    def test_allowlist_cannot_exempt_an_unlisted_root_payload(self) -> None:
+        data = self.lock()
+        data["allowed_root_files"].append("ThirdParty/EVIL.md")
+        self.set_lock(data)
+        self.write("ThirdParty/EVIL.md", "forged dependency payload\n")
+        self.commit()
+        self.assert_violation("allowed_root_files")
 
     def test_untracked_payload_is_detected(self) -> None:
         self.write("ThirdParty/Utils/demo/untracked.h", "/* payload */\n")
@@ -944,6 +953,89 @@ class TestGitmodulesReconciliation(FakeRepoCase):
         self.assert_violation("declares no path")
 
 
+class TestExceptionSchema(FakeRepoCase):
+
+    @staticmethod
+    def _exception(**overrides: str) -> dict[str, str]:
+        record = {
+            "id": "SEC-110-EX-001",
+            "scope": "dependency-policy",
+            "owner": "supply-chain-maintainer",
+            "justification": "Temporary scanner exception is tracked for review.",
+            "expires": "2099-12-31",
+        }
+        record.update(overrides)
+        return record
+
+    def test_expired_exception_is_a_policy_violation(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(expires="2000-01-01")]
+        self.set_lock(data)
+        self.assert_violation("expired", "SEC-110-EX-001")
+
+    def test_missing_exception_owner_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        record = self._exception()
+        del record["owner"]
+        data["exceptions"] = [record]
+        self.set_lock(data)
+        self.assert_fatal("owner")
+
+    def test_placeholder_exception_owner_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(owner="unassigned")]
+        self.set_lock(data)
+        self.assert_fatal("owned")
+
+    def test_malformed_exception_expiry_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(expires="2099-02-29")]
+        self.set_lock(data)
+        self.assert_fatal("expires")
+
+    def test_duplicate_exception_ids_are_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(), self._exception(scope="other")]
+        self.set_lock(data)
+        self.assert_fatal("duplicate")
+
+    def test_unknown_exception_fields_are_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(severity="high")]
+        self.set_lock(data)
+        self.assert_fatal("fields")
+
+    def test_exception_collection_is_required(self) -> None:
+        data = self.lock()
+        data.pop("exceptions", None)
+        self.set_lock(data)
+        self.assert_fatal("exceptions")
+
+    def test_short_exception_justification_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(justification="temporary")]
+        self.set_lock(data)
+        self.assert_fatal("justification")
+
+    def test_case_variant_exception_ids_are_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [
+            self._exception(),
+            self._exception(id="sec-110-ex-001", scope="other"),
+        ]
+        self.set_lock(data)
+        self.assert_fatal("duplicate")
+
+    def test_exception_collection_is_bounded(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [
+            self._exception(id=f"SEC-110-EX-{index:03d}")
+            for index in range(257)
+        ]
+        self.set_lock(data)
+        self.assert_fatal("MAX_EXCEPTIONS")
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Sentinel integrity
 # ═══════════════════════════════════════════════════════════════════════
@@ -1142,6 +1234,7 @@ class TestSchemaValidation(unittest.TestCase):
         base = {
             "version": 2,
             "description": "test",
+            "exceptions": [],
             "submodule_gitlinks": {},
             "managed_vendored_dirs": [],
             "project_owned_dirs": {},
@@ -1340,6 +1433,19 @@ class TestFailClosed(FakeRepoCase):
     def test_missing_manifest_exits_two(self) -> None:
         (self.repo / "ThirdParty/dependencies.lock").unlink()
         self.assert_fatal("")
+
+    def test_hardlinked_manifest_is_rejected(self) -> None:
+        manifest = self.repo / "ThirdParty/dependencies.lock"
+        outside = Path(self._tmp.name) / "dependencies.lock"
+        outside.write_bytes(manifest.read_bytes())
+        manifest.unlink()
+        try:
+            os.link(str(outside), str(manifest))
+        except (OSError, NotImplementedError, AttributeError) as exc:
+            if IN_CI:
+                self.fail(f"hardlink creation must work in CI: {exc}")
+            self.skipTest(f"hardlink creation unavailable: {exc}")
+        self.assert_fatal("hardlinked file rejected")
 
     def test_missing_gitmodules_exits_two(self) -> None:
         (self.repo / ".gitmodules").unlink()

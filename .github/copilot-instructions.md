@@ -2,7 +2,7 @@
 
 ## Identity
 
-SparkEngine is a C++23 open-source 3D game engine. Originally built for first-person shooters, it is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It uses DirectX 11 for rendering (with experimental D3D12/Vulkan/OpenGL/Metal backends via RHI abstraction), Jolt Physics for simulation, XAudio2 for spatial audio, EnTT for ECS, AngelScript for scripting, and Dear ImGui for the editor. The `stable-v1` profile targets Windows 11 x64 with MSVC v143 and is currently blocked and uncertified. Other Windows versions and Linux/macOS paths remain outside that profile and uncertified.
+SparkEngine is a C++23 source-available 3D game engine. Originally built for first-person shooters, it is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It uses DirectX 11 for rendering (with experimental D3D12/Vulkan/OpenGL/Metal backends via RHI abstraction), Jolt Physics for simulation, XAudio2 for spatial audio, EnTT for ECS, AngelScript for scripting, and Dear ImGui for the editor. The `stable-v1` profile targets Windows 11 x64 with MSVC v143 and is currently blocked and uncertified. Other Windows versions and Linux/macOS paths remain outside that profile and uncertified.
 
 ## Architecture
 
@@ -40,7 +40,7 @@ SparkConsole/        ← External debug console app (named pipe communication)
 
 Shaders/HLSL/        ← DirectX shaders (PBR, post-processing, compute)
 Shaders/GLSL/        ← OpenGL shaders (experimental)
-Tests/               ← 7,329 test definitions across 605 files, CTest integration
+Tests/               ← 7,363 test definitions across 605 files, CTest integration
 Templates/           ← Game module templates
 Assets/              ← Demo scenes, models, scripts
 ```

@@ -320,6 +320,16 @@ namespace
     }
 } // namespace
 
+TEST(NetworkManager_DeserializeMessage_RejectsTrailingWireBytes)
+{
+    auto& nm = NetworkManager::GetInstance();
+    auto packet = BuildWireMessage(MessageType::Heartbeat, ChannelType::Unreliable, INVALID_CLIENT, {0x42});
+    packet.push_back(0xA5); // The header length still claims a one-byte payload.
+
+    NetworkMessage parsed;
+    EXPECT_FALSE(NetworkManagerClientIdTestAccess::DeserializeMessageForTest(nm, packet, parsed));
+}
+
 TEST(NetworkManager_GeneratedClientIdsWrapBeforeReservedSentinels)
 {
     auto& nm = NetworkManager::GetInstance();

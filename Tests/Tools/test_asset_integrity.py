@@ -353,6 +353,40 @@ class TemplateCompletenessTests(unittest.TestCase):
             self._fixture(root)
             self.assertEqual(vai.verify_template_manifests(root), [])
 
+    def test_unexpected_template_root_file_is_not_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._fixture(root)
+            unexpected = root / "Templates" / "unexpected.bin"
+            unexpected.write_bytes(b"concealed payload")
+            errors = vai.verify_template_manifests(root)
+        self.assertTrue(any(
+            error.category == "undeclared" and error.path == "Templates/unexpected.bin"
+            for error in errors
+        ), errors)
+
+    def test_empty_template_manifest_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assets, manifest, lock = self._fixture(root)
+            (assets / "asset.bin").unlink()
+            manifest.write_text(json.dumps({
+                "manifestVersion": 1,
+                "package": "Starter",
+                "assets": [],
+            }), encoding="utf-8")
+            lock.write_text(json.dumps({
+                "version": 1,
+                "algorithm": "sha256",
+                "assets": {},
+            }), encoding="utf-8")
+            errors = vai.verify_template_manifests(root)
+        self.assertTrue(any(
+            error.category == "manifest-load"
+            and error.path == "Templates/Starter/Assets/manifest.json"
+            for error in errors
+        ), errors)
+
     def test_undeclared_disk_file_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

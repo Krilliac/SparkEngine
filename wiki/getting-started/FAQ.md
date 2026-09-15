@@ -16,7 +16,7 @@ Common questions about SparkEngine — what it is, who it's for, and how to get 
 
 ### What is SparkEngine?
 
-SparkEngine is a free, open-source 3D game engine written in C++23. It started as an FPS engine and is evolving into a general-purpose engine with source implementations and prototypes for FPS, RPG, MMO, open-world, racing, platformer, and RTS genres. The repository includes DirectX 11 rendering, Jolt Physics, XAudio2 spatial audio, an EnTT ECS, an ImGui-based editor, and experimental AngelScript tooling outside `stable-v1`.
+SparkEngine is a free, source-available 3D game engine written in C++23. It started as an FPS engine and is evolving into a general-purpose engine with source implementations and prototypes for FPS, RPG, MMO, open-world, racing, platformer, and RTS genres. The repository includes DirectX 11 rendering, Jolt Physics, XAudio2 spatial audio, an EnTT ECS, an ImGui-based editor, and experimental AngelScript tooling outside `stable-v1`.
 
 ### Is SparkEngine free?
 
@@ -41,7 +41,7 @@ The repository contains example and prototype game modules for FPS, platformer, 
 
 SparkEngine is smaller and earlier in development than those engines. Key differences:
 
-- **Open-source C++23** — You have full source access and can modify anything. No black-box runtime.
+- **Source-available C++23** — You have full source access and can modify anything. No black-box runtime.
 - **No editor lock-in** — Game logic lives in C++ modules or AngelScript scripts, not in a proprietary project format.
 - **MMO-oriented experimental architecture** — Area-server, world-streaming, and collaborative-editing implementations exist, but they are outside `stable-v1` and are not authenticated-transport or deployment evidence.
 - **Source-oriented** — The repository builds locally from source; current release evidence does not establish a portable download-size or build-time budget.
@@ -291,9 +291,9 @@ The VS2026 and macOS jobs are job-level advisory. MinGW is a manual
 `workflow_dispatch` development lane rather than a required push gate. The
 `clang-tidy` job is a dependency of `required-ci-gate` (even though individual
 diagnostics may be advisory), so its job/configuration outcome is blocking. Note
-that no branch protection or ruleset is active on `Working` today, so
-`required-ci-gate` is a post-hoc publication gate rather than a merge gate
-(`CI-100`). See
+that the active `Working integrity` ruleset (21968740) requires the
+`Required CI Gate` check; exact-SHA evidence and controlled-failure behavior are
+still release gates (`CI-100`). See
 [Contributing](../advanced/Contributing.md) for the full CI overview.
 
 ### Where do I get help?

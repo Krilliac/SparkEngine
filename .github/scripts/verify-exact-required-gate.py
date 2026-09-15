@@ -1035,18 +1035,24 @@ def _verify_source_jobs(
     if gate.get("status") != "completed" or gate.get("conclusion") != "success":
         raise ValueError("Required CI Gate did not succeed in the exact Build attempt")
     # A lane that build.yml declares continue-on-error at this exact commit is
-    # allowed to fail; every other job must still finish successfully. Proving
-    # the declaration from the verified source is stricter than an allowlist.
+    # allowed to fail or skip; every other job must still finish successfully.
+    # Proving the declaration from the verified source is stricter than an
+    # allowlist.
     workflow = _verify_source_workflow(fetch_json, repository, source_sha)
     for job in jobs:
         job_name = str(job.get("name", "<unknown>"))
         if job.get("status") != "completed":
             raise ValueError(f"unexpected non-success Build job: {job_name}")
-        if job.get("conclusion") in {"success", "skipped"}:
+        conclusion = job.get("conclusion")
+        if conclusion == "success":
             continue
         advisory_key = _workflow_job_key(workflow, job_name)
-        if advisory_key is None or advisory_key not in workflow.advisory:
-            raise ValueError(f"unexpected non-success Build job: {job_name}")
+        if (
+            advisory_key in workflow.advisory
+            and conclusion in {"failure", "skipped"}
+        ):
+            continue
+        raise ValueError(f"unexpected non-success Build job: {job_name}")
     for name in SOURCE_REQUIRED_STEPS:
         _exact_step(source_job, name, "success")
     _exact_step(source_job, SOURCE_FINAL_STEP, "success")

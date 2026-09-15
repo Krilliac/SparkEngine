@@ -353,6 +353,26 @@ TEST(GatewaySecurity_RejectsNumericFieldsWithTrailingData)
     EXPECT_EQ(nonceResult.reason, std::string("Malformed gateway credential"));
 }
 
+TEST(GatewaySecurity_RejectsNewCredentialsWhenReplayLedgerIsFull)
+{
+    KeyFileAuthenticator authenticator(std::vector<uint8_t>(32, 0x5a));
+    AdmissionRequest request = Request();
+    const int64_t now = NowMilliseconds();
+    size_t accepted = 0;
+    for (uint64_t nonce = 1; nonce <= 4096; ++nonce)
+    {
+        request.credential = authenticator.CreateCredential(request, now, nonce);
+        if (authenticator.Authenticate(request).accepted)
+            ++accepted;
+    }
+    EXPECT_EQ(accepted, static_cast<size_t>(4096));
+
+    request.credential = authenticator.CreateCredential(request, now, 4097);
+    const AuthenticationResult exhausted = authenticator.Authenticate(request);
+    EXPECT_FALSE(exhausted.accepted);
+    EXPECT_EQ(exhausted.reason, std::string("Gateway replay ledger is full"));
+}
+
 TEST(GatewaySecurity_AcceptsOwnerOnlyGeneratedKeyFile)
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path() / Spark::SecureRandom::HexToken(12);

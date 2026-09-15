@@ -7,6 +7,8 @@
  * the Jolt SDK.
  */
 
+#if !defined(SPARK_JOLT_PHYSICS_AVAILABLE) || !SPARK_JOLT_PHYSICS_AVAILABLE
+
 #include "Core/Platform.h"
 #include "PhysicsSystem.h"
 #include "Utils/LogMacros.h"
@@ -869,3 +871,5 @@ size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc) const
     Spark::CombineHash(hash, std::hash<float>{}(desc.height));
     return hash;
 }
+
+#endif // !defined(SPARK_JOLT_PHYSICS_AVAILABLE) || !SPARK_JOLT_PHYSICS_AVAILABLE

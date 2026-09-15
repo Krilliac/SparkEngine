@@ -2,6 +2,8 @@
 #include "TestFramework.h"
 #include "Core/AssetMigration.h"
 
+#include <cstring>
+
 // ============================================================================
 // AssetVersion comparison operators
 // ============================================================================
@@ -244,4 +246,47 @@ TEST(AssetMigration_ComputeCRC32_Deterministic)
     uint32_t crc1 = Spark::ComputeCRC32(data, sizeof(data));
     uint32_t crc2 = Spark::ComputeCRC32(data, sizeof(data));
     EXPECT_EQ(crc1, crc2);
+}
+
+TEST(AssetMigration_MigrateAsset_RejectsExpectedTypeMismatch)
+{
+    Spark::AssetFileHeader header{};
+    std::memset(&header, 0, sizeof(header));
+    header.assetType = Spark::AssetType::Scene;
+    header.headerSize = sizeof(Spark::AssetFileHeader);
+    header.dataSize = 0;
+    header.checksum = 0;
+
+    std::vector<uint8_t> data(sizeof(Spark::AssetFileHeader));
+    std::memcpy(data.data(), &header, sizeof(header));
+
+    auto& registry = Spark::AssetMigrationRegistry::GetInstance();
+    registry.Initialize();
+
+    EXPECT_FALSE(registry.MigrateAsset(data, Spark::AssetType::Material));
+
+    registry.Shutdown();
+}
+
+TEST(AssetMigration_MigrateAsset_RejectsFutureVersionWithoutMutation)
+{
+    Spark::AssetFileHeader header{};
+    std::memset(&header, 0, sizeof(header));
+    header.assetType = Spark::AssetType::Scene;
+    header.version = {2, 0, 0};
+    header.headerSize = sizeof(Spark::AssetFileHeader);
+    header.dataSize = 0;
+    header.checksum = 0;
+
+    std::vector<uint8_t> data(sizeof(Spark::AssetFileHeader));
+    std::memcpy(data.data(), &header, sizeof(header));
+    const std::vector<uint8_t> original = data;
+
+    auto& registry = Spark::AssetMigrationRegistry::GetInstance();
+    registry.Initialize();
+
+    EXPECT_FALSE(registry.MigrateAsset(data, Spark::AssetType::Scene));
+    EXPECT_TRUE(data == original);
+
+    registry.Shutdown();
 }

@@ -217,6 +217,12 @@ namespace Spark
             ImageComparisonResult result;
             result.sceneName = std::string(sceneName);
 
+            if (!std::isfinite(m_config.tolerancePercent) || !std::isfinite(m_config.perPixelThreshold))
+            {
+                result.matched = false;
+                return result;
+            }
+
             std::string goldenPath = GoldenPath(sceneName);
             uint32_t goldenW = 0, goldenH = 0;
             auto goldenPixels = LoadPNG(goldenPath, goldenW, goldenH);
@@ -268,12 +274,22 @@ namespace Spark
 
         /**
          * @brief Run comparison for every golden image in the golden directory.
-         * @return Vector of comparison results (one per golden image found).
+         * @return Vector of comparison results (one per golden image found, or
+         *         one failed result when no golden images are available).
          */
         [[nodiscard]] std::vector<ImageComparisonResult> RunAllComparisons()
         {
             std::vector<ImageComparisonResult> results;
             auto names = GetGoldenImageNames();
+            if (names.empty())
+            {
+                ImageComparisonResult noEvidence;
+                noEvidence.sceneName = "<no-golden-images>";
+                noEvidence.matched = false;
+                results.push_back(noEvidence);
+                return results;
+            }
+
             results.reserve(names.size());
             for (const auto& name : names)
             {
@@ -283,14 +299,14 @@ namespace Spark
         }
 
         /**
-         * @brief Check if any results contain regressions.
+         * @brief Check if comparisons are missing or any result contains a regression.
          * @param results Comparison results to inspect.
-         * @return True if at least one result did not match.
+         * @return True when no comparisons ran or at least one result did not match.
          */
         [[nodiscard]] static bool HasRegressions(const std::vector<ImageComparisonResult>& results)
         {
-            return std::any_of(results.begin(), results.end(),
-                               [](const ImageComparisonResult& r) { return !r.matched; });
+            return results.empty() || std::any_of(results.begin(), results.end(),
+                                                  [](const ImageComparisonResult& r) { return !r.matched; });
         }
 
         /**
@@ -342,7 +358,7 @@ namespace Spark
             ImageComparisonResult result;
             result.totalPixels = w * h;
 
-            if (!golden || !actual || w == 0 || h == 0)
+            if (!std::isfinite(tolerance) || !golden || !actual || w == 0 || h == 0)
             {
                 result.matched = false;
                 return result;

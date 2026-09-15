@@ -10,7 +10,7 @@
       "wave": 2,
       "area": "installer",
       "owner": "unassigned",
-      "rationale": "The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. Local process fixtures verify orchestration; hosted native results are pending. This does not close signing, Windows 11, NSIS, upgrade, rollback, repair, or user-data retention requirements.",
+      "rationale": "The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. 2026-09-12 progress: InstallState now flushes to a same-directory temporary marker before replacement, loads into a temporary object with required-field validation, and treats malformed state as invalid; focused round-trip/replacement/recovery tests pass. The installer CI job now explicitly builds SparkInstallerInstallStateTests before invoking CTest, closing a hosted registration/build omission found on the prior exact-SHA run. 2026-09-13 progress: final installed-commit verification now fails closed and invokes rollback when the recorded commit cannot be verified; installer transaction selectors are explicitly labeled and the native selector suite is green. Local process fixtures verify orchestration; hosted native results are pending. 2026-09-13 additional progress: updates now refuse to fetch or replace an existing checkout when tracked or untracked local changes are present, or when the status query itself fails; focused GitRunner regression coverage passes. 2026-09-13 further progress: InstallState::Save now rejects invalid state before creating or replacing its temporary marker; the valid-marker preservation regression passes in a fresh MSVC build. This does not close signing, Windows 11, NSIS, upgrade, rollback, repair, or user-data retention requirements.",
       "dependencies": [
         "ASSET-220",
         "REL-100",
@@ -112,7 +112,7 @@
       "wave": 6,
       "area": "governance",
       "owner": "unassigned",
-      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag.",
+      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, the audited public surfaces now use source-available terminology, and build.yml now runs the legal validator in a required license-compliance job. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.",
       "dependencies": [
         "RDY-000",
         "SEC-110",
@@ -194,7 +194,6 @@
         "stable-v1": "shared"
       },
       "plannedCiJobs": [
-        "license-compliance"
       ],
       "plannedTestSelectors": [
         "LicenseInventory_*",
@@ -205,12 +204,12 @@
       "id": "DOC-410",
       "title": "Repair and enforce deterministic repository documentation generation",
       "priority": "P0",
-      "status": "open",
+      "status": "done",
       "blocking": true,
       "wave": 0,
       "area": "documentation",
       "owner": "unassigned",
-      "rationale": "A hostile audit found timestamp-only false greens, incomplete first-party source coverage, contradictory health evidence, fabricated mixed-case macro rows, and link-validation bypasses. The repair remains open until the exact final commit completes the blocking docs-health and site-data CI jobs.",
+      "rationale": "A hostile audit found timestamp-only false greens, incomplete first-party source coverage, contradictory health evidence, fabricated mixed-case macro rows, and link-validation bypasses. Deterministic generation, hostile documentation checks, link validation, and exact-commit docs-health and site-data CI evidence now pass; future documentation changes remain covered by the same blocking jobs.",
       "dependencies": [
         "RDY-000"
       ],

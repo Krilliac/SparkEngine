@@ -132,6 +132,19 @@ def _as_bool(value: Any) -> bool | None:
     return None
 
 
+def _cache_values_match(expected: Any, observed: Any) -> bool:
+    """Compare CMake cache values using CMake's Boolean spellings when possible."""
+    if isinstance(expected, dict) and "value" in expected:
+        expected = expected["value"]
+    if isinstance(observed, dict) and "value" in observed:
+        observed = observed["value"]
+    expected_bool = _as_bool(expected)
+    observed_bool = _as_bool(observed)
+    if expected_bool is not None and observed_bool is not None:
+        return expected_bool == observed_bool
+    return str(expected).strip().casefold() == str(observed).strip().casefold()
+
+
 def check_sparkbuild_vs_cmake(
     cmake_options: list[dict[str, Any]],
     sparkbuild_options: list[dict[str, Any]],
@@ -372,6 +385,7 @@ def check_shipping_preset_options(
     for name, expected, detail in (
         ("SPARK_STRICT_DEPS", "ON", "Stable-v1 must fail on a missing critical dependency."),
         ("SPARK_NATIVE_ARCH", "OFF", "Distributed binaries cannot inherit the build host CPU."),
+        ("STRIP_DEBUG_SYMBOLS", "ON", "Shipping binaries must not emit debug symbols or PDB paths."),
     ):
         if str(cache.get(name, "")).upper() != expected:
             findings.append(
@@ -399,6 +413,31 @@ def check_profile_presets(data: dict[str, Any]) -> list[Finding]:
                     "profile-preset-invalid",
                     "error",
                     f"Canonical build profile '{config['id']}' cannot resolve preset '{preset_name}'",
+                    str(error),
+                )
+            )
+        if config.get("purpose") not in {"shipping", "validation"}:
+            continue
+        try:
+            build = inventory_tool.resolve_dependent_preset(
+                data["cmakePresets"], "buildPresets", str(preset_name)
+            )
+            if build.get("configurePreset") != preset_name:
+                raise inventory_tool.InventoryError(
+                    f"resolves to configure preset {build.get('configurePreset')!r}"
+                )
+            expected_configuration = config.get("configuration")
+            if build.get("configuration") != expected_configuration:
+                raise inventory_tool.InventoryError(
+                    f"declares configuration {build.get('configuration')!r}, "
+                    f"expected {expected_configuration!r}"
+                )
+        except inventory_tool.InventoryError as error:
+            findings.append(
+                Finding(
+                    "profile-build-preset-invalid",
+                    "error",
+                    f"Canonical build profile '{config['id']}' cannot resolve matching build preset '{preset_name}'",
                     str(error),
                 )
             )
@@ -1075,6 +1114,37 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
                 )
             )
         ]
+        if preset:
+            try:
+                resolved_preset = inventory_tool.resolve_configure_preset(presets, preset)
+            except inventory_tool.InventoryError:
+                resolved_preset = None
+            expected_cache = (
+                resolved_preset.get("cacheVariables", {})
+                if isinstance(resolved_preset, dict)
+                else {}
+            )
+            if isinstance(expected_cache, dict):
+                for entry in matching:
+                    options = entry.get("options", {})
+                    if not isinstance(options, dict):
+                        continue
+                    for name, observed in options.items():
+                        if name not in expected_cache:
+                            continue
+                        expected = expected_cache[name]
+                        if _cache_values_match(expected, observed):
+                            continue
+                        findings.append(
+                            Finding(
+                                "workflow-preset-overridden",
+                                severity,
+                                f"CI configure for canonical preset '{preset}' overrides "
+                                f"{name}={expected!r} with {observed!r}",
+                                f"{entry.get('job')}/{entry.get('step')}: explicit cache values must "
+                                "not change the reviewed preset that defines the stable-v1 product set.",
+                            )
+                        )
         blocking = [entry for entry in matching if mandatory(entry)]
         if preset and matching and not blocking:
             findings.append(
@@ -1150,6 +1220,150 @@ def check_workflow_semantics(data: dict[str, Any]) -> list[Finding]:
                 )
             )
     return findings
+
+
+_MSVC_TOOLSET_PATH_RE = re.compile(r"/VC/Tools/MSVC/([^/]+)/", re.IGNORECASE)
+_MSVC_TOOLSET_VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\Z")
+_MSVC_COMPILER_PATH_RE = re.compile(
+    r"(?:[A-Za-z]:/|//).+?/VC/Tools/MSVC/([^/]+)/bin/Hostx64/x64/cl\.exe\Z",
+    re.IGNORECASE,
+)
+_MSVC_COMPILER_VERSION_RE = re.compile(r"19\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\Z")
+_WINDOWS_SDK_VERSION_RE = re.compile(r"10\.0\.[0-9]{5}\.[0-9]\Z")
+
+
+def _check_msvc_toolchain_identity(
+    identifier: str,
+    expected_toolchain: tuple[str, str, str],
+    cache: dict[str, Any],
+    *,
+    require_compiler_provenance: bool = False,
+) -> list[Finding]:
+    """Require CMake to expose the exact installed MSVC toolchain identity.
+
+    ``CMAKE_GENERATOR_TOOLSET=v143`` identifies only a toolset family.  The
+    generator instance and its archiver/linker paths are the concrete
+    installation identity CMake actually used, including the minor toolset
+    version. Root Visual Studio profiles additionally publish the compiler
+    path, compiler version, target architecture, and selected Windows SDK.
+    Keep this check limited to Visual Studio profiles so Linux and non-MSVC
+    profiles do not inherit Windows-only assumptions.
+    """
+    expected_generator, expected_architecture, expected_toolset = expected_toolchain
+    if not (
+        expected_generator.casefold().startswith("visual studio")
+        or expected_toolset.casefold().startswith("v14")
+    ):
+        return []
+
+    required = list(inventory_tool._MSVC_TOOLCHAIN_CACHE_NAMES)
+    if require_compiler_provenance:
+        required.extend(inventory_tool._MSVC_COMPILER_PROVENANCE_CACHE_NAMES)
+    missing = [name for name in required if not isinstance(cache.get(name), str) or not cache[name].strip()]
+    if missing:
+        return [
+            Finding(
+                "codemodel-toolchain-incomplete",
+                "error",
+                f"Profile '{identifier}' omits exact MSVC toolchain identity: {', '.join(missing)}",
+                "The v143 family label does not prove which Visual Studio installation and minor toolset built the targets.",
+            )
+        ]
+
+    normalized_paths = {
+        name: str(cache[name]).replace("\\", "/")
+        for name in ("CMAKE_AR", "CMAKE_LINKER")
+    }
+    if require_compiler_provenance:
+        compiler_path = str(cache["SPARK_TOOLCHAIN_CXX_COMPILER"]).replace(
+            "\\", "/"
+        )
+        compiler_match = _MSVC_COMPILER_PATH_RE.fullmatch(compiler_path)
+        if compiler_match is None:
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' C++ compiler does not identify a concrete x64 MSVC toolset path",
+                    f"Observed SPARK_TOOLCHAIN_CXX_COMPILER={cache['SPARK_TOOLCHAIN_CXX_COMPILER']!r}.",
+                )
+            ]
+        normalized_paths["SPARK_TOOLCHAIN_CXX_COMPILER"] = compiler_path
+
+    versions: dict[str, str] = {}
+    for name, value in normalized_paths.items():
+        match = _MSVC_TOOLSET_PATH_RE.search(value)
+        if match is None or _MSVC_TOOLSET_VERSION_RE.fullmatch(match.group(1)) is None:
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' {name} does not identify a concrete MSVC toolset path",
+                    f"Observed {name}={cache[name]!r}.",
+                )
+            ]
+        versions[name] = match.group(1)
+
+    if versions["CMAKE_AR"] != versions["CMAKE_LINKER"]:
+        return [
+            Finding(
+                "codemodel-toolchain-mismatch",
+                "error",
+                f"Profile '{identifier}' MSVC archiver and linker use different toolset versions",
+                f"CMAKE_AR={versions['CMAKE_AR']}, CMAKE_LINKER={versions['CMAKE_LINKER']}.",
+            )
+        ]
+
+    if require_compiler_provenance:
+        compiler_id = str(cache["SPARK_TOOLCHAIN_CXX_COMPILER_ID"]).strip()
+        compiler_version = str(cache["SPARK_TOOLCHAIN_CXX_COMPILER_VERSION"]).strip()
+        compiler_architecture = str(cache["SPARK_TOOLCHAIN_CXX_ARCHITECTURE"]).strip()
+        windows_sdk = str(cache["SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION"]).strip()
+        version_match = _MSVC_COMPILER_VERSION_RE.fullmatch(compiler_version)
+        if compiler_id.upper() != "MSVC":
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' C++ compiler identity is not MSVC",
+                    f"Observed SPARK_TOOLCHAIN_CXX_COMPILER_ID={compiler_id!r}.",
+                )
+            ]
+        if version_match is None or not _WINDOWS_SDK_VERSION_RE.fullmatch(
+            windows_sdk
+        ):
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' C++ compiler or Windows SDK version is malformed",
+                    f"Observed compiler={compiler_version!r}, SDK={windows_sdk!r}.",
+                )
+            ]
+        if (
+            expected_architecture
+            and compiler_architecture.casefold() != expected_architecture.casefold()
+        ):
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' C++ compiler architecture differs from the requested target",
+                    f"Observed {compiler_architecture!r}, expected {expected_architecture!r}.",
+                )
+            ]
+        if version_match.group(0).split(".")[1] != versions[
+            "SPARK_TOOLCHAIN_CXX_COMPILER"
+        ].split(".")[1]:
+            return [
+                Finding(
+                    "codemodel-toolchain-mismatch",
+                    "error",
+                    f"Profile '{identifier}' C++ compiler and MSVC toolset versions disagree",
+                    f"Compiler={compiler_version}, toolset={versions['SPARK_TOOLCHAIN_CXX_COMPILER']}.",
+                )
+            ]
+    return []
 
 
 def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
@@ -1539,6 +1753,15 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                         f"requires {expected_value!r}",
                     )
                 )
+
+        findings.extend(
+            _check_msvc_toolchain_identity(
+                identifier,
+                expected_toolchain,
+                observed_cache,
+                require_compiler_provenance=preset is not None,
+            )
+        )
 
         for entry in evidence.get("targets", []):
             name = str(entry.get("target"))

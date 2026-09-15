@@ -24,6 +24,16 @@ The audit runs during CMake configure and checks:
 
 The CI guard `tools/check-thirdparty-manifest-sync.sh` fails if dependency paths/URLs/version wiring change without a matching `ThirdParty/dependencies.lock` update. The only exception is a verified, same-repository Dependabot pull request whose complete diff consists solely of existing `ThirdParty/` gitlinks advancing from one mode-160000 commit to another; the new gitlink is already the canonical lock value.
 
+### Reviewed exceptions
+
+`ThirdParty/supply-chain.lock` carries an `exceptions` list for explicitly
+reviewed, temporary risks. The list is normally empty and each record must have
+exactly `id`, `scope`, `owner`, `justification`, and `expires` fields. IDs are
+case-insensitively unique, the owner must name a maintainer, and the expiry must
+be a valid ISO date. Malformed records fail the checker itself; expired records
+are policy violations. These records document review only and never suppress
+inventory, hash, license, action-pin, or manifest checks.
+
 ---
 
 ## Manifest Format (authoritative)
@@ -77,6 +87,8 @@ Each entry pins its source/version, SPDX-compatible license, local path, require
 
 - `CMakeLists.txt` invokes the audit early during configure.
 - `.github/workflows/build.yml` runs a `check-thirdparty-manifest` job.
+- `.github/workflows/build.yml` also runs the required `license-compliance` job,
+  which executes the legal contract validator.
 - `tools/validate-all.sh` includes the manifest-sync check for local validation.
 - Dependabot runs weekly for GitHub Actions and git submodules. Pointer-only submodule PRs pass only after event identity, same-repository origin, raw gitlink modes, `.gitmodules` membership, and manifest membership are all verified.
 
@@ -94,12 +106,14 @@ Each entry pins its source/version, SPDX-compatible license, local path, require
 ## Source & Freshness
 
 - **Original audit:** `.claude/knowledge/thirdparty-dependencies-audit.md`, last updated 2026-04-09.
-- **Re-measured against codebase 2026-08-26.**
+- **Re-measured against codebase 2026-09-13.**
 - OLD → NEW notes:
   - Confirmed `ThirdParty/dependencies.lock`, `cmake/SparkThirdPartyAudit.cmake`, and `tools/check-thirdparty-manifest-sync.sh` all still exist.
   - Added the concrete per-dependency table (16 entries) read directly from the current lock file — the original audit listed dependencies in prose only.
   - Repository gitlinks are now canonical for the six submodule revisions, eliminating duplicate SHA drift in Dependabot PRs while preserving the manifest guard for every other dependency change.
   - Submodule vs. vendored split re-verified as unchanged.
+  - Added the fail-closed reviewed-exception schema and required legal-compliance
+    CI coverage.
 - Findings now resolved/changed since the original audit: submodule pointer updates no longer require Dependabot to edit a second SHA copy, and the CI guard now verifies the bot/event/diff shape before allowing that narrow path.
 
 ## Related Pages

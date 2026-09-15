@@ -1021,8 +1021,9 @@ namespace SparkCrashReporter
                 RemoveOpenedArtifact(root, claimedName, handle.Get(), identity);
         }
 
-        bool ClaimNextManifest(PinnedDirectory& root, CrashManifest& output)
+        bool ClaimNextManifest(PinnedDirectory& root, CrashManifest& output, bool& rejectedManifest)
         {
+            rejectedManifest = false;
             for (const std::filesystem::path& readyName : ListReadyManifests(root))
             {
                 std::filesystem::path claimedName;
@@ -1030,6 +1031,7 @@ namespace SparkCrashReporter
                     continue;
                 if (LoadManifestFromPinnedDirectory(root, claimedName, output, true))
                     return true;
+                rejectedManifest = true;
                 RemoveClaimedManifest(root, claimedName);
             }
             return false;
@@ -1302,7 +1304,14 @@ namespace SparkCrashReporter
         while (true)
         {
             CrashManifest manifest;
-            if (ClaimNextManifest(manifestRoot, manifest))
+            bool rejectedManifest = false;
+            const bool manifestLoaded = ClaimNextManifest(manifestRoot, manifest, rejectedManifest);
+            if (rejectedManifest)
+            {
+                std::cerr << "[CrashReporter] Crash manifest rejected.\n";
+                result = 2;
+            }
+            if (manifestLoaded)
             {
                 std::cerr << "[CrashReporter] Crash manifest detected!\n";
                 const int reportResult = RunCrashReporter(manifest);

@@ -29,6 +29,19 @@ import check_parity  # noqa: E402
 import inventory  # noqa: E402
 
 
+MSVC_TOOLCHAIN_PROVENANCE_CACHE_NAMES = (
+    "SPARK_TOOLCHAIN_CXX_COMPILER",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_ID",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_VERSION",
+    "SPARK_TOOLCHAIN_CXX_ARCHITECTURE",
+    "SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION",
+)
+MSVC_CXX_COMPILER_PATH = (
+    "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+    "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe"
+)
+
+
 def synthetic_ci_context(commit: str = "0" * 40) -> dict[str, str]:
     return {
         "provider": "github-actions",
@@ -99,7 +112,7 @@ def synthetic_capture_contract(build_directory: Path, profile: str = "windows-sh
         preset = str(config.get("preset", ""))
         if not preset:
             raise inventory.InventoryError("synthetic helper currently requires a preset-backed profile")
-        return config, source, expected_build, [str(executable), "--preset", preset]
+        return config, source, expected_build, [str(executable), "--fresh", "--preset", preset]
 
     with mock.patch.object(inventory, "_capture_plan", side_effect=plan):
         yield
@@ -460,10 +473,31 @@ class WorkflowParserTests(unittest.TestCase):
 
 
 class PresetAndCodemodelTests(unittest.TestCase):
+    def test_preset_capture_configure_is_fresh(self) -> None:
+        executable = Path("C:/cmake.exe")
+
+        _, _, _, argv = inventory._capture_plan(
+            (REPO_ROOT / "build" / "windows-shipping").resolve(),
+            "windows-shipping",
+            executable,
+        )
+
+        self.assertEqual(
+            argv,
+            [str(executable), "--fresh", "--preset", "windows-shipping"],
+        )
+
     def test_inherited_shipping_values_are_resolved(self) -> None:
         presets = {
             "configurePresets": [
-                {"name": "base", "hidden": True, "cacheVariables": {"SPARK_STRICT_DEPS": "ON"}},
+                {
+                    "name": "base",
+                    "hidden": True,
+                    "cacheVariables": {
+                        "SPARK_STRICT_DEPS": "ON",
+                        "STRIP_DEBUG_SYMBOLS": "ON",
+                    },
+                },
                 {
                     "name": "windows-shipping",
                     "inherits": "base",
@@ -476,7 +510,11 @@ class PresetAndCodemodelTests(unittest.TestCase):
         resolved = inventory.resolve_configure_preset(presets, "windows-shipping")
         self.assertEqual(
             resolved["cacheVariables"],
-            {"SPARK_STRICT_DEPS": "ON", "SPARK_NATIVE_ARCH": "OFF"},
+            {
+                "SPARK_STRICT_DEPS": "ON",
+                "SPARK_NATIVE_ARCH": "OFF",
+                "STRIP_DEBUG_SYMBOLS": "ON",
+            },
         )
         self.assertEqual(check_parity.check_shipping_preset_options(presets), [])
 
@@ -486,6 +524,19 @@ class PresetAndCodemodelTests(unittest.TestCase):
         )
         self.assertEqual(finding_categories(findings), {"missing-shipping-preset"})
         self.assertEqual(findings[0].severity, "error")
+
+    def test_shipping_preset_requires_debug_symbol_stripping(self) -> None:
+        presets = inventory.extract_cmake_presets()
+        shipping = next(
+            entry for entry in presets["configurePresets"] if entry["name"] == "windows-shipping"
+        )
+        shipping["cacheVariables"]["STRIP_DEBUG_SYMBOLS"] = "OFF"
+
+        findings = check_parity.check_shipping_preset_options(presets)
+
+        self.assertEqual(finding_categories(findings), {"shipping-preset-option"})
+        self.assertEqual(findings[0].severity, "error")
+        self.assertIn("STRIP_DEBUG_SYMBOLS=ON", findings[0].message)
 
     def test_every_canonical_preset_must_resolve(self) -> None:
         data = inventory.build_inventory()
@@ -497,6 +548,20 @@ class PresetAndCodemodelTests(unittest.TestCase):
         ]
         findings = check_parity.check_profile_presets(mutated)
         self.assertTrue(any("windows-validation" in finding.message for finding in findings))
+
+    def test_every_source_tree_configuration_must_bind_to_a_matching_build_preset(self) -> None:
+        data = inventory.build_inventory()
+        mutated = copy.deepcopy(data)
+        mutated["cmakePresets"]["buildPresets"] = [
+            preset
+            for preset in mutated["cmakePresets"]["buildPresets"]
+            if preset["name"] != "windows-shipping"
+        ]
+
+        findings = check_parity.check_profile_presets(mutated)
+
+        self.assertTrue(any("windows-shipping" in finding.message for finding in findings))
+        self.assertTrue(any(finding.category == "profile-build-preset-invalid" for finding in findings))
 
     def test_build_matrix_profile_ids_are_not_misclassified_as_preset_names(self) -> None:
         data = inventory.build_inventory()
@@ -1421,6 +1486,13 @@ class WorkflowEnforcementTests(unittest.TestCase):
         self.assertEqual(item["status"], "in-progress")
         self.assertTrue(item["blocking"])
 
+    def test_build_matrix_producer_budget_covers_owned_rebuilds(self) -> None:
+        record = workflow_record(LIVE_WORKFLOW)
+        shipping = next(
+            job for job in record["jobs"] if job["id"] == "build-windows-shipping"
+        )
+        self.assertEqual(shipping["timeoutMinutes"], 240)
+
     def test_fps_lifecycle_is_forced_into_windows_release_evidence(self) -> None:
         workflow_path = REPO_ROOT / ".github" / "workflows" / "build.yml"
         workflow_text = workflow_path.read_text(encoding="utf-8")
@@ -1545,6 +1617,46 @@ class WorkflowWeakeningTests(unittest.TestCase):
             workflow_record(LIVE_WORKFLOW)["summary"]["buildAllTargetCount"],
         )
 
+    def test_canonical_preset_override_cannot_satisfy_a_profile(self) -> None:
+        mutated = LIVE_WORKFLOW.replace(
+            "cmake --preset windows-shipping",
+            "cmake --preset windows-shipping -DBUILD_GAME_MODULES=OFF",
+            1,
+        )
+        record = self.assert_weakening_is_visible(mutated, "canonical preset override")
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"] = record
+
+        findings = check_parity.check_workflow_semantics(data)
+
+        overrides = [
+            item for item in findings if item.category == "workflow-preset-overridden"
+        ]
+        self.assertEqual(len(overrides), 1)
+        self.assertIn("windows-shipping", overrides[0].message)
+
+    def test_equals_target_form_cannot_disguise_single_target_build(self) -> None:
+        mutated = LIVE_WORKFLOW.replace(
+            "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1",
+            "cmake --build --preset windows-shipping --config MinSizeRel --target=SparkEngine --parallel 1",
+            1,
+        )
+        record = self.assert_weakening_is_visible(mutated, "equals-form single-target build")
+        shipping_builds = [
+            entry
+            for entry in record["buildInvocations"]
+            if entry.get("job") == "build-windows-shipping"
+            and entry.get("preset") == "windows-shipping"
+        ]
+        self.assertEqual(len(shipping_builds), 1)
+        self.assertEqual(shipping_builds[0]["targets"], ["SparkEngine"])
+        self.assertFalse(shipping_builds[0]["buildsAllTargets"])
+
+        data = copy.deepcopy(inventory.build_inventory())
+        data["workflow"] = record
+        categories = finding_categories(check_parity.check_workflow_semantics(data))
+        self.assertIn("workflow-products-not-built", categories)
+
     def test_default_build_records_all_targets_explicitly(self) -> None:
         record = workflow_record(
             workflow_document(
@@ -1596,7 +1708,7 @@ jobs:
             "  build-windows-shipping:\n"
             "    name: \"Windows Shipping build matrix\"\n"
             "    runs-on: windows-2022\n"
-            "    timeout-minutes: 120\n"
+            "    timeout-minutes: 240\n"
             "    permissions:\n"
             "      contents: read\n"
         )
@@ -1678,6 +1790,44 @@ jobs:
 """,
             "probe.yml",
         )
+        categories = finding_categories(check_parity.check_workflow_semantics(data))
+        self.assertIn("workflow-matrix-unresolved", categories)
+        self.assertIn("workflow-configuration-not-built", categories)
+
+    def test_empty_matrix_axis_cannot_satisfy_a_profile(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data["profile"]["buildConfigurations"] = [
+            entry
+            for entry in data["profile"]["buildConfigurations"]
+            if entry["id"] == "windows-shipping"
+        ]
+        data["profile"]["buildProducts"] = [
+            entry
+            for entry in data["profile"]["buildProducts"]
+            if entry["buildProfile"] == "windows-shipping"
+        ]
+        data["workflow"] = inventory.workflow_tool.build_workflow_record(
+            """name: probe
+on:
+  push:
+    branches: [Working]
+jobs:
+  ship:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        config: []
+    steps:
+      - name: Configure
+        run: cmake --preset windows-shipping
+      - name: Build
+        run: cmake --build build/windows-shipping --config MinSizeRel
+""",
+            "probe.yml",
+        )
+
+        job = data["workflow"]["jobs"][0]
+        self.assertFalse(job["matrixResolved"])
         categories = finding_categories(check_parity.check_workflow_semantics(data))
         self.assertIn("workflow-matrix-unresolved", categories)
         self.assertIn("workflow-configuration-not-built", categories)
@@ -1871,6 +2021,20 @@ def write_codemodel_reply(
         "CMAKE_GENERATOR_PLATFORM": architecture,
         "CMAKE_GENERATOR_TOOLSET": toolset,
         "CMAKE_HOME_DIRECTORY": source_dir,
+        "CMAKE_GENERATOR_INSTANCE": "C:/Program Files/Microsoft Visual Studio/2022/Community",
+        "CMAKE_AR": (
+            "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+            "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/lib.exe"
+        ),
+        "CMAKE_LINKER": (
+            "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+            "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/link.exe"
+        ),
+        "SPARK_TOOLCHAIN_CXX_COMPILER": MSVC_CXX_COMPILER_PATH,
+        "SPARK_TOOLCHAIN_CXX_COMPILER_ID": "MSVC",
+        "SPARK_TOOLCHAIN_CXX_COMPILER_VERSION": "19.44.35228.0",
+        "SPARK_TOOLCHAIN_CXX_ARCHITECTURE": "x64",
+        "SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION": "10.0.26100.0",
     }
     entries.update(cache or {})
     write_json(
@@ -1958,7 +2122,7 @@ def write_synthetic_transaction_provenance(
                 "executable": executable,
                 "executableIdentity": inventory._executable_identity(Path(executable)),
                 "version": evidence["cmakeProducer"]["version"],
-                "argv": [executable, "--preset", profile],
+                "argv": [executable, "--fresh", "--preset", profile],
                 "cwd": repository_root,
                 "exitCode": 0,
             },
@@ -2043,6 +2207,47 @@ class CodemodelProvenanceTests(unittest.TestCase):
             mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False),
         ):
             return inventory.extract_codemodel_targets(directory, "windows-shipping", "0" * 40)
+
+    def test_root_cmake_exports_actual_msvc_toolchain_metadata(self) -> None:
+        cmake = (Path(REPO_ROOT) / "CMakeLists.txt").read_text(encoding="utf-8")
+        for name in MSVC_TOOLCHAIN_PROVENANCE_CACHE_NAMES:
+            self.assertIn(f"set({name}", cmake)
+
+    def test_msvc_compiler_provenance_is_required(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+
+        for name in MSVC_TOOLCHAIN_PROVENANCE_CACHE_NAMES:
+            evidence["cacheVariables"].pop(name, None)
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-toolchain-incomplete", categories)
+
+    def test_valid_absolute_msvc_compiler_path_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+
+        categories = self.categories(self.bound_data(evidence))
+        self.assertNotIn("codemodel-toolchain-mismatch", categories)
+
+    def test_msvc_compiler_path_must_agree_with_linker_toolset(self) -> None:
+        cache = dict(self.shipping_cache)
+        cache["SPARK_TOOLCHAIN_CXX_COMPILER"] = MSVC_CXX_COMPILER_PATH.replace(
+            "14.44.35207", "14.43.35207"
+        )
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), cache=cache)
+
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-toolchain-mismatch", categories)
+
+    def test_msvc_compiler_metadata_must_identify_msvc(self) -> None:
+        cache = dict(self.shipping_cache)
+        cache["SPARK_TOOLCHAIN_CXX_COMPILER_ID"] = "GNU"
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), cache=cache)
+
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-toolchain-mismatch", categories)
 
     def categories(self, data: dict[str, Any]) -> set[str]:
         return {item.category for item in check_parity.check_codemodel_provenance(data)}
@@ -2167,7 +2372,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                         config,
                         source,
                         build,
-                        [executable.as_posix(), "--preset", "windows-shipping"],
+                        [executable.as_posix(), "--fresh", "--preset", "windows-shipping"],
                     ),
                 ),
                 mock.patch.object(inventory, "_repository_provenance", return_value=repository),
@@ -2183,7 +2388,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
             self.assertTrue(record_path.is_file())
             self.assertEqual(
                 configure_calls,
-                [[executable.as_posix(), "--preset", "windows-shipping"]],
+                [[executable.as_posix(), "--fresh", "--preset", "windows-shipping"]],
             )
             self.assertEqual(
                 build_calls,
@@ -2675,7 +2880,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                         config,
                         source,
                         build,
-                        [executable.as_posix(), "--preset", "windows-shipping"],
+                        [executable.as_posix(), "--fresh", "--preset", "windows-shipping"],
                     ),
                 ),
                 mock.patch.object(inventory, "_repository_provenance", return_value=repository),
@@ -2740,7 +2945,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                         config,
                         source,
                         build,
-                        [executable.as_posix(), "--preset", "windows-shipping"],
+                        [executable.as_posix(), "--fresh", "--preset", "windows-shipping"],
                     ),
                 ),
                 mock.patch.object(inventory, "_repository_provenance", return_value=repository),
@@ -2765,7 +2970,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                             "",
                         ),
                         subprocess.CompletedProcess(
-                            [executable.as_posix(), "--preset", "windows-shipping"], 0, "", ""
+                            [executable.as_posix(), "--fresh", "--preset", "windows-shipping"], 0, "", ""
                         ),
                     ],
                 ),
@@ -2817,7 +3022,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
                         config,
                         source,
                         build,
-                        [executable.as_posix(), "--preset", "windows-shipping"],
+                        [executable.as_posix(), "--fresh", "--preset", "windows-shipping"],
                     ),
                 ),
                 mock.patch.object(inventory, "_repository_provenance", return_value=repository),
@@ -2858,6 +3063,36 @@ class CodemodelProvenanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             evidence = self.shipping_evidence(Path(raw), generator="Ninja")
         self.assertIn("codemodel-generator-mismatch", self.categories(self.bound_data(evidence)))
+
+    def test_msvc_toolchain_identity_is_required(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+
+        for name in inventory._MSVC_TOOLCHAIN_CACHE_NAMES:
+            evidence["cacheVariables"].pop(name, None)
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-toolchain-incomplete", categories)
+
+    def test_msvc_toolchain_installations_must_agree(self) -> None:
+        cache = dict(self.shipping_cache)
+        cache.update(
+            {
+                "CMAKE_GENERATOR_INSTANCE": "C:/Program Files/Microsoft Visual Studio/2022/Community",
+                "CMAKE_AR": (
+                    "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+                    "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/lib.exe"
+                ),
+                "CMAKE_LINKER": (
+                    "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+                    "VC/Tools/MSVC/14.45.40000/bin/Hostx64/x64/link.exe"
+                ),
+            }
+        )
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw), cache=cache)
+
+        categories = self.categories(self.bound_data(evidence))
+        self.assertIn("codemodel-toolchain-mismatch", categories)
 
     def test_cache_that_contradicts_the_preset_is_rejected(self) -> None:
         cache = dict(self.shipping_cache)

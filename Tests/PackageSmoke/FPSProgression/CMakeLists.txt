@@ -1,4 +1,12 @@
 cmake_minimum_required(VERSION 3.25)
+
+# Match the engine's MSVC/sccache contract for the nested consumer projects.
+# The multi-config generator performs a Debug try-compile during project(),
+# and /Zi leaves sccache looking for a PDB that the probe does not produce.
+# This also keeps nested consumer try-compiles deterministic.
+cmake_policy(SET CMP0141 NEW)
+set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
+
 project(SparkFPSProgressionConsumer LANGUAGES CXX)
 
 if(NOT DEFINED SPARK_ENGINE_INCLUDE_DIR)
@@ -7,9 +15,12 @@ endif()
 
 # The installed include root also contains SparkEngine internals. Stage only
 # the canonical SDK so even a SparkEngine/... include fails in this consumer.
-if(NOT EXISTS "${SPARK_ENGINE_INCLUDE_DIR}/Spark/IModule.h")
-    message(FATAL_ERROR "The canonical Spark SDK headers are missing")
-endif()
+foreach(_required_sdk_header IN ITEMS SparkSDK.h IModule.h Version.h)
+    if(NOT EXISTS "${SPARK_ENGINE_INCLUDE_DIR}/Spark/${_required_sdk_header}")
+        message(FATAL_ERROR
+            "The canonical Spark SDK is incomplete: missing Spark/${_required_sdk_header}")
+    endif()
+endforeach()
 set(_public_sdk "${CMAKE_CURRENT_BINARY_DIR}/public-sdk")
 # A removed installed header must not survive from an earlier configure.
 file(REMOVE_RECURSE "${_public_sdk}")

@@ -315,6 +315,13 @@ class TestSecondAuditReproductions(unittest.TestCase):
             errors = validate_suite(root)
         self.assertTrue(any("id must be a string" in error for error in errors))
 
+    def test_13b_unhashable_metric_hardware_id_returns_errors(self) -> None:
+        metric = _metric(hardware_id=[])
+        errors = validate_baselines(
+            _baselines(), {metric["id"]: metric}, HARDWARE_IDS,
+        )
+        self.assertTrue(any("hardwareRowId" in error for error in errors))
+
     def test_14_zero_budget_margin_is_null_with_reason(self) -> None:
         budget = _budget([_metric(budget=0.0)])
         result = _result()
@@ -385,6 +392,22 @@ class TestSecondAuditReproductions(unittest.TestCase):
         self.assertTrue(report.passed, report.errors)
         self.assertEqual(report.skipped_by_status, {"suspended": 1})
         self.assertEqual(report.verdicts, [])
+
+    def test_19b_pending_metric_unit_mismatch_is_rejected_before_skip(self) -> None:
+        budget = _budget([_metric(status="pending_measurement", budget=None)])
+        measurement = copy.deepcopy(_result()["measurements"][0])
+        measurement["unit"] = "bytes"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget)
+            report = compare(
+                root,
+                _result([measurement]),
+                expected_sha=RESULT_SHA,
+            )
+        self.assertFalse(report.passed)
+        self.assertTrue(any("unit mismatch" in error for error in report.errors))
+        self.assertEqual(report.skipped_metrics, [])
 
     def test_20_uncertified_hardware_is_advisory_not_failed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -476,6 +499,42 @@ class TestAdditionalGovernanceClosure(unittest.TestCase):
 class TestFinalAuditClosure(unittest.TestCase):
     """Hostile cases from the final independent PERF-100 audit."""
 
+    def test_empty_result_fails_when_all_metrics_are_pending(self) -> None:
+        budget = _budget([_metric(status="pending_measurement", budget=None)])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget)
+            report = compare(root, _result([]), expected_sha=RESULT_SHA)
+        self.assertFalse(report.passed)
+        self.assertTrue(any("at least one measurement" in error
+                            for error in report.errors))
+
+    def test_empty_measurements_with_only_suspended_budget_fail_closed(self) -> None:
+        budget = _budget([_metric(status="suspended", budget=16.0)])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget)
+            report = compare(root, _result([]), expected_sha=RESULT_SHA)
+        self.assertFalse(
+            report.passed,
+            "An empty result must not be green when no active metric was measured",
+        )
+        self.assertTrue(any("performance measurement" in error
+                            for error in report.errors))
+
+    def test_no_active_metrics_cannot_produce_passing_comparison(self) -> None:
+        budget = _budget([_metric(status="pending_measurement", budget=None)])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, budget=budget)
+            report = compare(root, _result([]), expected_sha=RESULT_SHA)
+        self.assertFalse(
+            report.passed,
+            "A result with no enforced active metrics must not be a green budget result",
+        )
+        self.assertTrue(any("pending metrics cannot produce" in error
+                            for error in report.errors))
+
     def test_active_metric_requires_reviewed_baseline(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -513,6 +572,39 @@ class TestFinalAuditClosure(unittest.TestCase):
         self.assertFalse(report.passed)
         self.assertTrue(any("selfApprovalAllowed=true is forbidden" in error
                             for error in report.errors))
+
+    def test_cli_rejects_non_authoritative_hardware_as_release_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root, hardware=_hardware(certified=False))
+            result_path = root / "results.json"
+            result_path.write_text(
+                json.dumps(_result()),
+                encoding="utf-8",
+            )
+
+            for extra_args in ([], ["--json"]):
+                with self.subTest(extra_args=extra_args):
+                    completed = subprocess.run(
+                        [
+                            sys.executable,
+                            str(TOOL_DIR / "compare_results.py"),
+                            str(root),
+                            str(result_path),
+                            "--expected-sha",
+                            RESULT_SHA,
+                            *extra_args,
+                        ],
+                        cwd=TOOL_DIR,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertNotEqual(
+                        completed.returncode,
+                        0,
+                        completed.stdout + completed.stderr,
+                    )
 
     def test_seven_and_eight_character_prefix_aliases_are_rejected(self) -> None:
         metric = _metric()

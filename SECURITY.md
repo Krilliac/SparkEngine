@@ -23,11 +23,12 @@ This ensures your report is private and only visible to the maintainers until a 
 
 **Please do NOT open a public issue for security vulnerabilities.**
 
-## Response Timeline
+## Response Expectations
 
-- **Acknowledgment**: Within 48 hours of report submission
-- **Triage**: Within 7 days — we will confirm whether the issue is valid and assess severity
-- **Fix**: Within 30 days for critical issues, 90 days for lower severity
+SparkEngine does not currently promise an acknowledgment, triage, or fix
+timeline. Any response is best-effort and depends on maintainer availability,
+severity, reproducibility, and whether a supported release exists. These
+expectations will be revisited as part of the release-governance review.
 
 ## Scope
 

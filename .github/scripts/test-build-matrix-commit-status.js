@@ -574,6 +574,14 @@ async function main() {
         assert.strictEqual(pending.runtime.observed.listRunRequests[0].event, undefined,
             'same-SHA suppression must span push and workflow_dispatch events');
 
+        const queuedSource = fixture('in_progress');
+        queuedSource.run.status = 'queued';
+        const queuedPending = await runMode(queuedSource, 'pending');
+        assert.strictEqual(queuedPending.runtime.observed.failed.length, 0,
+            'an in-progress event may race the API while the source run is still queued');
+        assert.strictEqual(queuedPending.runtime.observed.statuses.length, 2,
+            'a queued source run must still publish the pending exact-source statuses');
+
         for (const [shape, useDirectListFallback] of [['normalized', false], ['direct', true]]) {
             for (const mode of ['pending', 'final']) {
                 const truncatedData = fixture(mode === 'final' ? 'completed' : 'in_progress');

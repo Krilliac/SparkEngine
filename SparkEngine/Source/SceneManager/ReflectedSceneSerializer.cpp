@@ -10,6 +10,7 @@
 #include <system_error>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -642,16 +643,36 @@ namespace Spark
         std::filesystem::path backup = primary;
         backup += ".bak";
 
-        std::string text;
-        if (ReadTextFile(primary, text) && DeserializeInto(world, text))
+        const auto loadCandidate = [&](const std::filesystem::path& candidatePath) -> bool
+        {
+            std::string text;
+            if (!ReadTextFile(candidatePath, text))
+                return false;
+
+            // Deserialize into an isolated world first. A malformed document
+            // can fail after creating entities or components; applying that
+            // attempt directly to the caller would contaminate a later backup
+            // recovery (and could leave a live editor document partially read).
+            World staged;
+            if (!DeserializeInto(staged, text))
+                return false;
+
+            // The editor and runtime replace the loaded document. Install only
+            // a candidate that completed successfully, so a failed primary or
+            // backup leaves the caller's existing world untouched.
+            world.GetRegistry() = std::move(staged.GetRegistry());
+            return true;
+        };
+
+        if (loadCandidate(primary))
             return true;
 
-        if (!ReadTextFile(backup, text))
+        if (!loadCandidate(backup))
             return false;
 
         SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] recovering %s from previous-good backup",
                        path.c_str());
-        return DeserializeInto(world, text);
+        return true;
     }
 
 } // namespace Spark

@@ -397,6 +397,40 @@ set(_spark_module_prefix "")
 set(_spark_module_suffix ".dll")
 set(_spark_runtime_modules "SparkGameFPS")
 get_filename_component(_spark_validator_directory "${SPARK_VALIDATOR}" DIRECTORY)
+
+# Runtime-layout fixtures use text stand-ins for PE files so this contract can
+# run on every validation host.  The native package smoke itself must therefore
+# stay in the runtime validator; a file-only fixture must not silently become
+# the only proof that the staged executable can load the staged FPS module.
+file(READ "${SPARK_VALIDATOR}" _spark_validator_source)
+string(REPLACE "\r\n" "\n" _spark_validator_source_normalized
+    "${_spark_validator_source}")
+foreach(_spark_required_runtime_smoke_token IN ITEMS
+        "SPARK_PACKAGE_LAYOUT STREQUAL \"runtime\""
+        "RunSparkHeadlessNullRHILifecycle.cmake"
+        "-DSPARK_RHI_BACKEND=null"
+        "-DSPARK_WORKING_DIRECTORY=\${SPARK_PACKAGE_ROOT}/bin")
+    string(FIND "${_spark_validator_source_normalized}" "${_spark_required_runtime_smoke_token}"
+        _spark_runtime_smoke_token_position)
+    if(_spark_runtime_smoke_token_position EQUAL -1)
+        message(FATAL_ERROR
+            "Runtime layout validator is missing packaged NullRHI execution contract: "
+            "${_spark_required_runtime_smoke_token}")
+    endif()
+endforeach()
+string(FIND "${_spark_validator_source_normalized}"
+    "if(_spark_validate_modules_only)\n    message(STATUS\n        \"Validated sidecar schema"
+    _spark_modules_only_return_position)
+string(FIND "${_spark_validator_source_normalized}"
+    "if(SPARK_PACKAGE_LAYOUT STREQUAL \"runtime\" AND _spark_validate_modules_only)\n    _spark_run_staged_nullrhi_smoke()\nendif()"
+    _spark_runtime_smoke_position)
+if(_spark_modules_only_return_position EQUAL -1 OR
+   _spark_runtime_smoke_position EQUAL -1 OR
+   _spark_runtime_smoke_position GREATER _spark_modules_only_return_position)
+    message(FATAL_ERROR
+        "Runtime NullRHI smoke must execute before the modules-only validator return")
+endif()
+
 file(STRINGS "${_spark_validator_directory}/../SparkSDK/Include/Spark/Version.h"
     _spark_runtime_sdk_line REGEX "^#define SPARK_SDK_VERSION [0-9]+$")
 string(REGEX MATCH "[0-9]+$" _spark_runtime_sdk_version "${_spark_runtime_sdk_line}")
@@ -406,9 +440,19 @@ file(WRITE "${_spark_runtime_reference}"
 foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sidecar unlisted_sample_source hash_mismatch sdk_mismatch
         missing_sidecar unknown_layout untrusted_inventory missing_reference wrong_profile
         missing_executable missing_runtime full_valid full_smoke_failure)
-    # POSIX script stand-ins exercise orchestration only, not native PE execution.
-    # Windows runs the real executable smoke in the release workflow.
-    if(CMAKE_HOST_WIN32 AND _spark_case MATCHES "^full_")
+    # Module-only fixtures intentionally contain no staged executable. The
+    # runtime validator now executes the staged smoke before its module-only
+    # return, so these text-only sidecar cases cannot run on any host. The
+    # installed-package test supplies the real executable smoke; the source
+    # contract assertion above still proves this gate cannot return early
+    # before the smoke call.
+    if(NOT _spark_case STREQUAL "missing_runtime" AND
+       NOT _spark_case MATCHES "^full_")
+        continue()
+    endif()
+    # Full fixtures use shell-script stand-ins and are valid orchestration
+    # tests on POSIX, but cannot be executed as PE files on Windows.
+    if(CMAKE_HOST_WIN32)
         continue()
     endif()
     set(_spark_root "${_spark_resolved_test_root}/runtime_${_spark_case}")
@@ -479,8 +523,20 @@ foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sideca
             foreach(_spark_executable IN ITEMS SparkEngine SparkConsole SparkEditor SparkLauncher SparkCooker
                     SparkAutomation SparkBuild SparkInstaller SparkShaderCompiler SparkCrashReporter)
                 set(_spark_tool "${_spark_root}/bin/${_spark_executable}.exe")
-                file(WRITE "${_spark_tool}"
-                    "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'SparkEngine 1.0.0'; fi\nexit 0\n")
+                if(_spark_executable STREQUAL "SparkEngine")
+                    file(WRITE "${_spark_tool}"
+                        "#!/bin/sh\n"
+                        "if [ \"$1\" = --version ]; then echo 'SparkEngine 1.0.0'; exit 0; fi\n"
+                        "if [ \"$1\" = -headless ]; then\n"
+                        "  echo 'SPARK_MODULE_READY count=1'\n"
+                        "  echo 'SPARK_HEADLESS_RHI backend=null initialized=1 frames=8 shutdown=1'\n"
+                        "  echo 'SPARK_HEADLESS_LIFECYCLE initialized=1 updated=8 fixed=7 rendered=0 unloaded=1 faults=0'\n"
+                        "fi\n"
+                        "exit 0\n")
+                else()
+                    file(WRITE "${_spark_tool}"
+                        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'SparkEngine 1.0.0'; fi\nexit 0\n")
+                endif()
                 file(CHMOD "${_spark_tool}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
             endforeach()
             foreach(_spark_file IN ITEMS LICENSE.txt THIRD_PARTY_NOTICES.txt bin/Shaders/BasicVS.hlsl

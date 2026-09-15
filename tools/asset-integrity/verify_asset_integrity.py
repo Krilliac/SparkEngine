@@ -48,6 +48,7 @@ HASH_CHUNK_BYTES = 1024 * 1024
 KNOWN_MANIFESTS = (("Assets/assets.integrity.json", "Assets"),)
 ROOT_IGNORES = frozenset({MANIFEST_FILENAME})
 TEMPLATE_ROOT_METADATA = frozenset({"README.md", "manifest.json"})
+TEMPLATE_COLLECTION_METADATA = frozenset({"README.md", "assets.lock.json"})
 INVALID_WINDOWS_CHARS = frozenset('<>:"|?*')
 RESERVED_WINDOWS_NAMES = frozenset(
     {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"}
@@ -601,8 +602,8 @@ def _validate_template_manifest(path: Path, template_name: str) -> dict[str, str
         raise ManifestFormatError(
             f"package {data.get('package')!r} does not exactly match {template_name!r}")
     assets = data.get("assets")
-    if not isinstance(assets, list):
-        raise ManifestFormatError("template manifest assets must be an array")
+    if not isinstance(assets, list) or not assets:
+        raise ManifestFormatError("template manifest assets must be a non-empty array")
     if len(assets) > MAX_ENTRY_COUNT:
         raise ManifestFormatError(f"template manifest exceeds {MAX_ENTRY_COUNT} entries")
     result: dict[str, str] = {}
@@ -660,7 +661,22 @@ def verify_template_manifests(repo_root: Path) -> list[IntegrityError]:
         except OSError as exc:
             errors.append(IntegrityError(f"Templates/{child.name}", "io-error", str(exc)))
             continue
+        relative = f"Templates/{child.name}"
+        if child.name in TEMPLATE_COLLECTION_METADATA:
+            if _stat_is_reparse(info) or not stat.S_ISREG(info.st_mode):
+                errors.append(IntegrityError(
+                    relative,
+                    "concealed-payload",
+                    "template collection metadata is not a regular file",
+                ))
+            continue
+        if _stat_is_reparse(info):
+            errors.append(IntegrityError(
+                relative, "reparse", "template directory is a reparse point"))
+            continue
         if not stat.S_ISDIR(info.st_mode):
+            errors.append(IntegrityError(
+                relative, "undeclared", "template root entry is not a template directory"))
             continue
         template_name, problem = _canonical_relative_path(child.name)
         if problem is not None or template_name is None:

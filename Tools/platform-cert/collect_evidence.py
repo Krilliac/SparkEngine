@@ -439,8 +439,13 @@ def measure_compiler(command: list[str], *, repo_root: Path) -> dict[str, str]:
     lowered = banner.lower()
     if "microsoft" in lowered and "c/c++" in lowered:
         match = _MSVC_VERSION_RE.search(banner)
-        compiler_id, toolset = "msvc", os.environ.get("VCToolsVersion", "")
-        toolset = "v143" if toolset.startswith("14.4") or not toolset else toolset
+        compiler_id = "msvc"
+        raw_toolset = os.environ.get("VCToolsVersion", "").strip()
+        if not raw_toolset:
+            raise CollectionError(
+                "cannot measure the MSVC toolset: VCToolsVersion is not set"
+            )
+        toolset = "v143" if raw_toolset.startswith("14.4") else raw_toolset
     elif "clang" in lowered:
         match = _VERSION_RE.search(banner)
         compiler_id = "apple-clang" if "apple" in lowered else "clang"

@@ -2533,6 +2533,7 @@ endif()
 # ---------------------------------------------------------------------
 # 16) Test suite
 # ---------------------------------------------------------------------
+option(SPARK_ENABLE_FUZZ_TARGETS "Build production-entry-point libFuzzer targets (Linux Clang only)" OFF)
 include("${CMAKE_SOURCE_DIR}/cmake/SparkFuzzPolicy.cmake")
 spark_enable_fuzz_policy("${CMAKE_SOURCE_DIR}")
 
@@ -2627,6 +2628,37 @@ spark_install_tracked_directory(
 install(FILES "${SPARK_GENERATED_INCLUDE_DIR}/Spark/GeneratedVersion.h"
     DESTINATION include/Spark
     COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+)
+
+# Keep the public SDK component self-contained. Consumers selecting only this
+# component need the legal materials, SDK documentation, and one buildable
+# example alongside the headers and exported targets; the runtime component's
+# root copies below are retained for executable-package validation.
+spark_install_tracked_directory(
+    SOURCE SparkSDK
+    DESTINATION share/SparkEngine/sdk
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+    INCLUDE_REGEXES "/README[.]md$"
+)
+install(FILES "${CMAKE_BINARY_DIR}/SparkEngineLicense.txt"
+    DESTINATION share/SparkEngine/sdk
+    RENAME LICENSE.txt
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+)
+install(FILES "${SPARK_THIRD_PARTY_NOTICES_FILE}"
+    DESTINATION share/SparkEngine/sdk
+    RENAME THIRD_PARTY_NOTICES.txt
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+)
+spark_install_tracked_directory(
+    SOURCE Templates/EmptyProject
+    DESTINATION share/SparkEngine/sdk/examples/EmptyProject
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+    EXCLUDE_REGEXES
+        "/(build[^/]*|dist|Binaries|Intermediate|Saved|Saves|Logs|Screenshots|TestScreenshots|Temp|[.]vs|[.]cache|CMakeFiles|__pycache__|[.]pytest_cache)(/|$)"
+        "/(CMakeCache[.]txt|cmake_install[.]cmake|CTestTestfile[.]cmake|compile_commands[.]json|install_manifest[.]txt|[.]ninja_deps|[.]ninja_log|exec_audit[.]log|spark_trace[.]json|mmo_data[.]db)$"
+        "[.]py[co]$"
+        "[.]user$"
 )
 
 if(TARGET SparkAssetPipelineCore)
@@ -2875,6 +2907,12 @@ foreach(_spark_runtime_asset_dir Models Textures Audio Materials Scenes Scripts 
         )
     endif()
 endforeach()
+if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/assets.integrity.json")
+    install(FILES "${CMAKE_SOURCE_DIR}/Assets/assets.integrity.json"
+        DESTINATION bin/Assets
+        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+    )
+endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Resources/Config")
     spark_install_tracked_directory(
         SOURCE SparkEngine/Resources/Config
@@ -3487,3 +3525,21 @@ endif()
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_SOURCE_DIR}/cmake/SparkCPackOptions.cmake")
 
 include(CPack)
+
+# Preserve the toolchain CMake actually selected in the File API cache. The
+# generator/toolset labels identify only the requested family; these measured
+# values bind root Windows profiles to the compiler, target architecture, and
+# SDK that configured the build. Empty SDK values remain visible so the
+# build-matrix capture can fail closed instead of accepting an unmeasured SDK.
+if(MSVC AND CMAKE_GENERATOR MATCHES "Visual Studio")
+    set(SPARK_TOOLCHAIN_CXX_COMPILER "${CMAKE_CXX_COMPILER}" CACHE INTERNAL
+        "Measured C++ compiler path for build provenance" FORCE)
+    set(SPARK_TOOLCHAIN_CXX_COMPILER_ID "${CMAKE_CXX_COMPILER_ID}" CACHE INTERNAL
+        "Measured C++ compiler identity for build provenance" FORCE)
+    set(SPARK_TOOLCHAIN_CXX_COMPILER_VERSION "${CMAKE_CXX_COMPILER_VERSION}" CACHE INTERNAL
+        "Measured C++ compiler version for build provenance" FORCE)
+    set(SPARK_TOOLCHAIN_CXX_ARCHITECTURE "${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}" CACHE INTERNAL
+        "Measured C++ compiler target architecture for build provenance" FORCE)
+    set(SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION "${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}" CACHE INTERNAL
+        "Measured Visual Studio Windows SDK version for build provenance" FORCE)
+endif()

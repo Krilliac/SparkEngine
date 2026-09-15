@@ -79,7 +79,8 @@ TEST(EditorRecovery_QuotedWorldSnapshotRoundTripsThroughPrimary)
     snapshot.projectIdentity = "C:/Projects/Recovery Test";
     snapshot.projectRelativeScene = "Scenes/Main.scene";
     snapshot.sceneDisplayName = "Main \"Scene\"";
-    snapshot.serializedWorld = R"({"entities":[{"name":"Quoted \"Entity\""}]})";
+    snapshot.serializedWorld =
+        R"json({"version":1,"entities":[{"id":1,"name":"Quoted \"Entity\"","parent":-1,"components":[]}]})json";
     snapshot.layoutIniPath = "Layouts/author.ini";
     snapshot.recentOperations = {"Rename \"Entity\""};
     snapshot.dirtySequence = 42;
@@ -105,7 +106,7 @@ TEST(EditorRecovery_InvalidWorldDoesNotReplaceExistingPrimary)
     valid.projectIdentity = "C:/Projects/Recovery Test";
     valid.projectRelativeScene = "Scenes/Main.scene";
     valid.sceneDisplayName = "Main";
-    valid.serializedWorld = R"({"entities":[]})";
+    valid.serializedWorld = R"({"version":1,"entities":[]})";
 
     std::string error;
     ASSERT_TRUE(store.Save(valid, error));
@@ -122,6 +123,32 @@ TEST(EditorRecovery_InvalidWorldDoesNotReplaceExistingPrimary)
     EXPECT_EQ(ReadAll(primary), before);
 }
 
+TEST(EditorRecovery_StructurallyInvalidWorldDoesNotReplaceExistingPrimary)
+{
+    ScopedRecoveryDirectory scratch;
+    SparkEditor::EditorRecoveryStore store(scratch.Path());
+
+    SparkEditor::EditorRecoverySnapshot valid;
+    valid.projectIdentity = "C:/Projects/Recovery Test";
+    valid.projectRelativeScene = "Scenes/Main.scene";
+    valid.sceneDisplayName = "Main";
+    valid.serializedWorld = R"({"version":1,"entities":[]})";
+
+    std::string error;
+    ASSERT_TRUE(store.Save(valid, error));
+    const std::filesystem::path primary =
+        FindRecoveryFileForProject(scratch.Path(), valid.projectIdentity, "recovery-v1.json");
+    ASSERT_FALSE(primary.empty());
+    const std::string before = ReadAll(primary);
+
+    SparkEditor::EditorRecoverySnapshot invalid = valid;
+    invalid.serializedWorld =
+        R"json({"version":1,"entities":[{"id":1,"name":"Recovered","parent":-1,"components":{}}]})json";
+    EXPECT_FALSE(store.Save(invalid, error));
+    EXPECT_FALSE(error.empty());
+    EXPECT_EQ(ReadAll(primary), before);
+}
+
 TEST(EditorRecovery_UsesBackupWhenPrimaryIsDamaged)
 {
     ScopedRecoveryDirectory scratch;
@@ -131,12 +158,12 @@ TEST(EditorRecovery_UsesBackupWhenPrimaryIsDamaged)
     older.projectIdentity = "C:/Projects/Recovery Test";
     older.projectRelativeScene = "Scenes/Main.scene";
     older.sceneDisplayName = "Older";
-    older.serializedWorld = R"({"entities":[]})";
+    older.serializedWorld = R"({"version":1,"entities":[]})";
     older.dirtySequence = 1;
 
     SparkEditor::EditorRecoverySnapshot newer = older;
     newer.sceneDisplayName = "Newer";
-    newer.serializedWorld = R"({"entities":[{"name":"Newer"}]})";
+    newer.serializedWorld = R"json({"version":1,"entities":[{"id":1,"name":"Newer","parent":-1,"components":[]}]})json";
     newer.dirtySequence = 2;
 
     std::string error;
@@ -167,7 +194,7 @@ TEST(EditorRecovery_ClearRemovesPrimaryAndBackup)
     snapshot.projectIdentity = "C:/Projects/Recovery Test";
     snapshot.projectRelativeScene = "Scenes/Main.scene";
     snapshot.sceneDisplayName = "Main";
-    snapshot.serializedWorld = R"({"entities":[]})";
+    snapshot.serializedWorld = R"({"version":1,"entities":[]})";
 
     std::string error;
     ASSERT_TRUE(store.Save(snapshot, error));
@@ -194,7 +221,7 @@ TEST(EditorRecovery_UnsafeSnapshotsDoNotReplacePrimary)
     valid.projectIdentity = "C:/Projects/Recovery Test";
     valid.projectRelativeScene = "Scenes/Main.scene";
     valid.sceneDisplayName = "Main";
-    valid.serializedWorld = R"({"entities":[]})";
+    valid.serializedWorld = R"({"version":1,"entities":[]})";
 
     std::string error;
     ASSERT_TRUE(store.Save(valid, error));
@@ -219,7 +246,7 @@ TEST(EditorRecovery_EmptyDirectoryIsRejectedWithoutTouchingWorkingDirectory)
     SparkEditor::EditorRecoverySnapshot snapshot;
     snapshot.projectIdentity = "C:/Projects/Recovery Test";
     snapshot.sceneDisplayName = "Main";
-    snapshot.serializedWorld = R"({"entities":[]})";
+    snapshot.serializedWorld = R"({"version":1,"entities":[]})";
 
     std::string error;
     EXPECT_FALSE(store.Save(snapshot, error));
@@ -261,7 +288,7 @@ TEST(EditorRecovery_ProjectMismatchIsNotOffered)
     snapshot.projectIdentity = "C:/Projects/project-a";
     snapshot.projectRelativeScene = "Scenes/Main.sparkscene";
     snapshot.sceneDisplayName = "Main";
-    snapshot.serializedWorld = R"({"entities":[]})";
+    snapshot.serializedWorld = R"({"version":1,"entities":[]})";
 
     std::string error;
     ASSERT_TRUE(store.Save(snapshot, error));
@@ -346,7 +373,7 @@ TEST(EditorRecovery_ExplicitDiscardClearsOnlyAfterUserAction)
     snapshot.projectIdentity = "project-a";
     snapshot.projectRelativeScene = "Scenes/Main.sparkscene";
     snapshot.sceneDisplayName = "Main";
-    snapshot.serializedWorld = R"({"entities":[]})";
+    snapshot.serializedWorld = R"({"version":1,"entities":[]})";
 
     SparkEditor::EditorRecoveryController controller;
     controller.Offer(snapshot);
@@ -396,7 +423,7 @@ TEST(EditorRecovery_ClearForProjectPreservesForeignRecovery)
     projectA.projectIdentity = "project-a";
     projectA.projectRelativeScene = "Scenes/A.sparkscene";
     projectA.sceneDisplayName = "A";
-    projectA.serializedWorld = R"({"entities":[]})";
+    projectA.serializedWorld = R"({"version":1,"entities":[]})";
 
     SparkEditor::EditorRecoverySnapshot projectB = projectA;
     projectB.projectIdentity = "project-b";
@@ -433,7 +460,7 @@ TEST(EditorRecovery_ClearForProjectRemovesReadableMalformedRecords)
     snapshot.projectIdentity = "project-a";
     snapshot.projectRelativeScene = "Scenes/Main.sparkscene";
     snapshot.sceneDisplayName = "Main";
-    snapshot.serializedWorld = R"({"entities":[]})";
+    snapshot.serializedWorld = R"({"version":1,"entities":[]})";
 
     std::string error;
     ASSERT_TRUE(store.Save(snapshot, error));
@@ -469,7 +496,7 @@ TEST(EditorRecovery_ProjectSnapshotsSurviveOtherProjectRecapture)
     projectA.projectIdentity = "project-a";
     projectA.projectRelativeScene = "Scenes/A.sparkscene";
     projectA.sceneDisplayName = "A";
-    projectA.serializedWorld = R"({"entities":[]})";
+    projectA.serializedWorld = R"({"version":1,"entities":[]})";
     projectA.dirtySequence = 1;
 
     SparkEditor::EditorRecoverySnapshot projectB = projectA;
@@ -519,4 +546,20 @@ TEST(EditorRecovery_ProjectPathResolutionRejectsEscapes)
         EXPECT_FALSE(SparkEditor::ResolvePathInsideProject(projectRoot, fs::path("Scenes/linked/escaped.sparkscene"),
                                                            resolved, error));
     }
+}
+
+TEST(EditorRecovery_EmbeddedNulInRelativePathIsRejected)
+{
+    ScopedRecoveryDirectory scratch;
+    SparkEditor::EditorRecoveryStore store(scratch.Path());
+
+    SparkEditor::EditorRecoverySnapshot snapshot;
+    snapshot.projectIdentity = "project-a";
+    snapshot.projectRelativeScene = std::string("Scenes/Main") + std::string("\0", 1) + ".sparkscene";
+    snapshot.sceneDisplayName = "Main";
+    snapshot.serializedWorld = R"({"version":1,"entities":[]})";
+
+    std::string error;
+    EXPECT_FALSE(store.Save(snapshot, error));
+    EXPECT_FALSE(error.empty());
 }

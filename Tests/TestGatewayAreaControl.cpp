@@ -8,18 +8,31 @@
 #include <unistd.h>
 #endif
 
-#include "TestFramework.h"
-#include "GatewayApplication.h"
-#include "GatewayAreaControl.h"
-
-#include <chrono>
-#include <cstring>
 #include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <future>
 #include <memory>
+#include <mutex>
+#include <string>
+#include <string_view>
 #include <thread>
+#include <unordered_map>
+#include <vector>
+
+#include "TestFramework.h"
+#include "GatewayApplication.h"
+#include "GatewaySecurity.h"
+// Keep the private-member access limited to this test translation unit; the
+// production header never exposes a test friend or macro-controlled authority.
+// clang-format off
+#define private public
+#include "GatewayAreaControl.h"
+#undef private
+// clang-format on
 
 using namespace Spark::Gateway;
 
@@ -103,6 +116,37 @@ TEST(GatewayAreaControl_LiveLoopbackIsIdempotentAndPersistsEpochFence)
     HandoffCommand next{"session-live", 5, 7, 7};
     EXPECT_TRUE(client.Prepare(next) == HandoffOperationResult::Applied);
     restarted.Stop();
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RejectsNewNoncesWhenReplayLedgerIsFull)
+{
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-replay-limit") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x43);
+    const uint16_t controlPort = UniquePort(6);
+    const std::string endpoint = "spark-area-control-" + std::to_string(controlPort);
+
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    const int64_t now =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
+    for (uint64_t nonce = 1; nonce <= GatewayMaximumReplayEntries; ++nonce)
+        service.m_seenNonces.emplace(nonce, now);
+    EXPECT_EQ(service.m_seenNonces.size(), GatewayMaximumReplayEntries);
+
+    AreaEndpoint area;
+    area.host = "127.0.0.1";
+    area.area.interServerPort = controlPort;
+    LocalAreaControlPlane client(key);
+    client.RegisterEndpoint(7, area);
+
+    EXPECT_FALSE(client.IsEndpointReady(7));
+
+    service.Stop();
     std::filesystem::remove(state, error);
 }
 

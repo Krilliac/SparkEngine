@@ -695,7 +695,7 @@ bool UploadCrashToProxy(const CrashConfig& cfg, const std::string& logContent, c
         return false;
 
     SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashReportUploader: Uploading crash report to proxy: %s",
-                   cfg.proxyURL.c_str());
+                   RedactCrashEndpointForLog(cfg.proxyURL).c_str());
 
     // Build title from crash log
     std::string title = "Crash Report";
@@ -929,7 +929,7 @@ bool UploadCrashToFTP(const CrashConfig& cfg, const std::string& zipPath)
         return false;
 
     SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashReportUploader: Uploading crash dump via FTP to %s",
-                   cfg.uploadURL.c_str());
+                   RedactCrashEndpointForLog(cfg.uploadURL).c_str());
 
     std::string filename = std::filesystem::path(zipPath).filename().string();
     std::string ftpUrl = cfg.uploadURL;

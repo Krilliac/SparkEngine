@@ -185,7 +185,7 @@
 | `CraftingDiscipline` | enum | GameModules | [MMOEnums.h:L73](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L73) | Crafting skill disciplines |
 | `CraftingStation` | enum | GameModules | [MMOEnums.h:L59](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L59) | Crafting station types required for recipes |
 | `CraftState` | enum | SparkEngine | [LootAndCraftingSystem.h:L266](../../SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h#L266) | State of an in-progress craft |
-| `CrashReportDelivery` | enum | SparkEngine | [CrashHandler.cpp:L580](../../SparkEngine/Source/Utils/CrashHandler.cpp#L580) |  |
+| `CrashReportDelivery` | enum | SparkEngine | [CrashHandler.cpp:L497](../../SparkEngine/Source/Utils/CrashHandler.cpp#L497) |  |
 | `CrosshairStyle` | enum | GameModules | [HUDSystem.h:L33](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L33) | Crosshair style options |
 | `CSGOperation` | enum | SparkEngine | [CSGSystem.h:L80](../../SparkEngine/Source/Engine/LevelDesign/CSGSystem.h#L80) | Boolean operation types |
 | `CullMode` | enum | SparkEditor | [RenderingEnums.h:L84](../../SparkEditor/Source/Enums/RenderingEnums.h#L84) | Cull modes |
@@ -541,7 +541,7 @@
 | `PanelCategory` | enum | SparkEditor | [EditorPanel.h:L25](../../SparkEditor/Source/Core/EditorPanel.h#L25) | Category classification for editor panels. |
 | `PanelType` | enum | SparkEditor | [CoreEditorEnums.h:L33](../../SparkEditor/Source/Enums/CoreEditorEnums.h#L33) | Editor panel types |
 | `ParamType` | enum | SparkEngine | [MaterialDefinition.h:L70](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L70) | Parameter types supported in material definitions |
-| `ParseResult` | enum | SparkShaderCompiler | [main.cpp:L444](../../SparkShaderCompiler/src/main.cpp#L444) |  |
+| `ParseResult` | enum | SparkShaderCompiler | [main.cpp:L449](../../SparkShaderCompiler/src/main.cpp#L449) |  |
 | `ParticleBlendMode` | enum | SparkEngine | [GPUParticleTypes.h:L34](../../SparkEngine/Source/Graphics/GPUParticleTypes.h#L34) | Blend modes for particle rendering |
 | `ParticleBlendMode` | enum | SparkEngine | [ParticleSystem.h:L43](../../SparkEngine/Source/Graphics/ParticleSystem.h#L43) | Blend modes for particle rendering |
 | `ParticleSpace` | enum | SparkEngine | [GPUParticleTypes.h:L45](../../SparkEngine/Source/Graphics/GPUParticleTypes.h#L45) | Space in which particles simulate |
@@ -626,9 +626,9 @@
 | `ReadStatus` | enum | GameModules | [TFWorldSave.h:L22](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h#L22) |  |
 | `ReflAttrMetadataFixture` | enum | Tests | [TestReflectionReal.cpp:L40](../../Tests/TestReflectionReal.cpp#L40) |  |
 | `ReloadResult` | enum | SparkEngine | [ModuleHotReload.h:L44](../../SparkEngine/Source/Engine/HotReload/ModuleHotReload.h#L44) | Result of a module reload attempt |
-| `RemoteDebugAuditDecision` | enum | SparkEngine | [RemoteDebugAccessControl.h:L73](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L73) | Secret-safe outcome for one attempted dispatch. |
-| `RemoteDebugCapability` | enum | SparkEngine | [RemoteDebugAccessControl.h:L36](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L36) | Per-command capabilities; a command handler must declare one. |
-| `RemoteDebugRole` | enum | SparkEngine | [RemoteDebugAccessControl.h:L28](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L28) | Fixed least-privilege role policy for trusted local loopback. |
+| `RemoteDebugAuditDecision` | enum | SparkEngine | [RemoteDebugAccessControl.h:L72](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L72) | Secret-safe outcome for one attempted dispatch. |
+| `RemoteDebugCapability` | enum | SparkEngine | [RemoteDebugAccessControl.h:L37](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L37) | Per-command capabilities; a command handler must declare one. |
+| `RemoteDebugRole` | enum | SparkEngine | [RemoteDebugAccessControl.h:L29](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugAccessControl.h#L29) | Fixed least-privilege role policy for trusted local loopback. |
 | `RenderCommandType` | enum | SparkEngine | [RenderCommandRing.h:L28](../../SparkEngine/Source/Graphics/RenderCommandRing.h#L28) | Command types that can be posted to the render thread. |
 | `RenderGraphPassType` | enum | SparkEngine | [RenderGraphTypes.h:L197](../../SparkEngine/Source/Graphics/RenderGraphTypes.h#L197) | Classifies a render pass for scheduling purposes. |
 | `RenderGraphResourceLifetime` | enum | SparkEngine | [RenderGraphTypes.h:L175](../../SparkEngine/Source/Graphics/RenderGraphTypes.h#L175) | Indicates whether a resource is graph-managed (transient) or |
@@ -649,7 +649,7 @@
 | `ResourceState` | enum | SparkEngine | [GraphicsEnums.h:L65](../../SparkEngine/Source/Enums/GraphicsEnums.h#L65) | Resource states |
 | `ResourceState` | enum | SparkEngine | [RHIValidationLayer.h:L32](../../SparkEngine/Source/Graphics/RHI/RHIValidationLayer.h#L32) | Lifecycle state of a tracked RHI resource. |
 | `ResourceType` | enum | GameModules | [OpenWorldEnums.h:L74](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L74) | Harvestable resource categories |
-| `ResponseEpochTransition` | enum | Tests | [TestRemoteDebugSystem.cpp:L404](../../Tests/TestRemoteDebugSystem.cpp#L404) |  |
+| `ResponseEpochTransition` | enum | Tests | [TestRemoteDebugSystem.cpp:L470](../../Tests/TestRemoteDebugSystem.cpp#L470) |  |
 | `ResState` | enum | Tests | [TestExtendedSystems.cpp:L670](../../Tests/TestExtendedSystems.cpp#L670) |  |
 | `RestartPolicy` | enum | SparkDaemon | [OrchestrationProtocol.h:L48](../../SparkDaemon/src/OrchestrationProtocol.h#L48) |  |
 | `ReverbPreset` | enum | SparkEngine | [AudioMixer.h:L72](../../SparkEngine/Source/Audio/AudioMixer.h#L72) | Predefined reverb environment settings. |

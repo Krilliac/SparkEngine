@@ -150,6 +150,14 @@ namespace Spark::Build
                 m_lastResult = result;
                 return result;
             }
+            if (config.projectName.find_first_of("/\\") != std::string::npos || config.projectName == "." ||
+                config.projectName == "..")
+            {
+                result.errorMessage = "Project name must be a single safe path component";
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
+                m_lastResult = result;
+                return result;
+            }
 
             // Build the manifest
             std::vector<ManifestEntry> manifest;
@@ -246,6 +254,9 @@ namespace Spark::Build
 
             if (config.projectName.empty())
                 errors.push_back("Project name is empty");
+            else if (config.projectName.find_first_of("/\\") != std::string::npos || config.projectName == "." ||
+                     config.projectName == "..")
+                errors.push_back("Project name must be a single safe path component");
             if (config.executablePath.empty())
                 errors.push_back("Executable path is empty");
             else if (!std::filesystem::exists(config.executablePath, ec))

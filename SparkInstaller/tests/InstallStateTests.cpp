@@ -1,0 +1,158 @@
+#include "InstallState.h"
+
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <string>
+
+namespace
+{
+    std::filesystem::path MakeTestRoot()
+    {
+        const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+        return std::filesystem::temp_directory_path() / ("SparkInstallerInstallStateTests_" + std::to_string(stamp));
+    }
+
+    int Check(bool condition, const std::string& message)
+    {
+        if (condition)
+            return 0;
+        std::cerr << "FAIL: " << message << '\n';
+        return 1;
+    }
+
+    SparkInstaller::InstallState StateWithCommit(const std::string& commit)
+    {
+        SparkInstaller::InstallState state;
+        state.ref = "Working";
+        state.commit = commit;
+        state.generator = "Ninja";
+        state.buildType = "Release";
+        state.installerVersion = "1.0.0";
+        state.options["BUILD_TESTS"] = true;
+        return state;
+    }
+
+    int RunAtomicReplacementTest()
+    {
+        const auto root = MakeTestRoot();
+        std::error_code error;
+        std::filesystem::create_directories(root, error);
+        int failures = Check(!error, "could not create install-state test root");
+        if (failures != 0)
+            return failures;
+
+        const auto marker = root / SparkInstaller::InstallState::FileName();
+        const auto temporaryMarker = marker.string() + ".tmp";
+        const auto first = StateWithCommit("old-commit");
+        failures += Check(first.Save(root.string()), "initial install state save failed");
+
+        {
+            std::ofstream stale(temporaryMarker, std::ios::binary | std::ios::trunc);
+            stale << "partial state from an interrupted save";
+        }
+
+        const auto replacement = StateWithCommit("new-commit");
+        failures += Check(replacement.Save(root.string()), "replacement install state save failed");
+
+        SparkInstaller::InstallState loaded;
+        failures += Check(SparkInstaller::InstallState::Load(root.string(), loaded),
+                          "replacement install state could not be loaded");
+        failures += Check(loaded.commit == "new-commit", "replacement did not become the active state");
+        failures +=
+            Check(!std::filesystem::exists(temporaryMarker), "interrupted-save temporary marker was left behind");
+
+        std::filesystem::remove_all(root, error);
+        return failures;
+    }
+
+    int RunInvalidStateCannotReplaceValidMarkerTest()
+    {
+        const auto root = MakeTestRoot();
+        std::error_code error;
+        std::filesystem::create_directories(root, error);
+        int failures = Check(!error, "could not create invalid-state test root");
+        if (failures != 0)
+            return failures;
+
+        const auto validState = StateWithCommit("old-commit");
+        failures += Check(validState.Save(root.string()), "could not create the valid install marker");
+
+        const auto invalidState = StateWithCommit("");
+        failures += Check(!invalidState.Save(root.string()), "invalid install state was accepted for persistence");
+
+        SparkInstaller::InstallState loaded;
+        failures += Check(SparkInstaller::InstallState::Load(root.string(), loaded),
+                          "rejecting invalid install state discarded the valid marker");
+        failures += Check(loaded.commit == "old-commit", "invalid install state replaced the previously valid marker");
+
+        const auto temporaryMarker = root / (SparkInstaller::InstallState::FileName() + ".tmp");
+        failures += Check(!std::filesystem::exists(temporaryMarker),
+                          "rejecting invalid install state left a temporary marker behind");
+
+        std::filesystem::remove_all(root, error);
+        return failures;
+    }
+
+    int RunMalformedMarkerFailClosedTest()
+    {
+        const auto root = MakeTestRoot();
+        std::error_code error;
+        std::filesystem::create_directories(root, error);
+        int failures = Check(!error, "could not create malformed-marker test root");
+        if (failures != 0)
+            return failures;
+
+        std::ofstream marker(root / SparkInstaller::InstallState::FileName(), std::ios::binary | std::ios::trunc);
+        marker << "{\n  \"schema\": 1,\n  \"commit\": \"partial";
+        marker.close();
+
+        SparkInstaller::InstallState loaded;
+        failures +=
+            Check(!SparkInstaller::InstallState::Load(root.string(), loaded), "malformed install state was accepted");
+        failures += Check(!SparkInstaller::InstallState::Exists(root.string()),
+                          "malformed install state was treated as an existing install");
+
+        std::filesystem::remove_all(root, error);
+        return failures;
+    }
+
+    int RunOversizedMarkerRejectedBeforeParsingTest()
+    {
+        const auto root = MakeTestRoot();
+        std::error_code error;
+        std::filesystem::create_directories(root, error);
+        int failures = Check(!error, "could not create oversized-marker test root");
+        if (failures != 0)
+            return failures;
+
+        std::ofstream marker(root / SparkInstaller::InstallState::FileName(), std::ios::binary | std::ios::trunc);
+        marker << '{'
+               << "\"schema\":1,\"ref\":\"stable-v1\",\"commit\":\"0123456789abcdef\","
+               << "\"destination\":\"C:/SparkEngine\",\"generator\":\"Ninja\","
+               << "\"build_type\":\"Release\",\"built_at\":\"2026-09-13T00:00:00Z\","
+               << "\"installer_version\":\"1.0.0\",\"payload\":\"" << std::string(64 * 1024, 'x') << "\"}";
+        marker.close();
+
+        SparkInstaller::InstallState loaded;
+        failures += Check(!SparkInstaller::InstallState::Load(root.string(), loaded),
+                          "oversized install state was accepted");
+        failures += Check(!SparkInstaller::InstallState::Exists(root.string()),
+                          "oversized install state was treated as an existing install");
+
+        std::filesystem::remove_all(root, error);
+        return failures;
+    }
+} // namespace
+
+int main()
+{
+    const int atomicReplacement = RunAtomicReplacementTest();
+    const int invalidState = RunInvalidStateCannotReplaceValidMarkerTest();
+    const int malformedMarker = RunMalformedMarkerFailClosedTest();
+    const int oversizedMarker = RunOversizedMarkerRejectedBeforeParsingTest();
+    if (atomicReplacement == 0 && invalidState == 0 && malformedMarker == 0 && oversizedMarker == 0)
+        std::cout << "SparkInstaller install-state recovery tests passed\n";
+    return atomicReplacement == 0 && invalidState == 0 && malformedMarker == 0 && oversizedMarker == 0 ? 0 : 1;
+}

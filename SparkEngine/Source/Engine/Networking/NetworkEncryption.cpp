@@ -4,12 +4,12 @@
  */
 
 #include "NetworkEncryption.h"
+#include "../../Utils/SecureRandom.h"
 #include "../../Utils/Validate.h"
 #include "../../Utils/Logger.h"
 
 #include <algorithm>
 #include <cstring>
-#include <random>
 
 namespace Spark::Net
 {
@@ -18,30 +18,26 @@ namespace Spark::Net
     // Key / Token Generation
     // ============================================================================
 
-    static std::mt19937_64& GetRNG()
-    {
-        static std::mt19937_64 rng(std::random_device{}());
-        return rng;
-    }
-
     SessionKey GenerateSessionKey()
     {
-        SessionKey key;
-        auto& rng = GetRNG();
-        std::uniform_int_distribution<unsigned int> dist(0, 255);
-        for (auto& byte : key)
-            byte = static_cast<uint8_t>(dist(rng));
+        SessionKey key{};
+        if (!Spark::SecureRandom::Fill(key.data(), key.size()))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Unable to generate secure prototype session state");
+            return key;
+        }
         SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Generated XOR prototype state (%zu bytes)", key.size());
         return key;
     }
 
     ConnectionToken GenerateConnectionToken()
     {
-        ConnectionToken token;
-        auto& rng = GetRNG();
-        std::uniform_int_distribution<unsigned int> dist(0, 255);
-        for (auto& byte : token)
-            byte = static_cast<uint8_t>(dist(rng));
+        ConnectionToken token{};
+        if (!Spark::SecureRandom::Fill(token.data(), token.size()))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Unable to generate secure prototype connection token");
+            return token;
+        }
         SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Generated prototype token bytes (%zu bytes)", token.size());
         return token;
     }
