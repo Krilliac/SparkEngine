@@ -5858,7 +5858,10 @@
       {
         "event": "workflow_dispatch",
         "filters": {},
-        "pathFiltered": false
+        "pathFiltered": false,
+        "inputs": [
+          "simulate_required_job_failure"
+        ]
       }
     ],
     "pathFilteredEvents": [],
@@ -6016,7 +6019,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 37,
+        "stepCount": 38,
         "steps": [
           {
             "index": 0,
@@ -6464,6 +6467,18 @@
             "hasRun": false,
             "env": [],
             "runDigest": ""
+          },
+          {
+            "index": 37,
+            "name": "Controlled required-job failure probe",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "github.event_name == 'workflow_dispatch' && inputs.simulate_required_job_failure == true",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "26559591213a2c72"
           }
         ],
         "envNames": [],
