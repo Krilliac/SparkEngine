@@ -1486,6 +1486,13 @@ class WorkflowEnforcementTests(unittest.TestCase):
         self.assertEqual(item["status"], "in-progress")
         self.assertTrue(item["blocking"])
 
+    def test_build_matrix_producer_budget_covers_owned_rebuilds(self) -> None:
+        record = workflow_record(LIVE_WORKFLOW)
+        shipping = next(
+            job for job in record["jobs"] if job["id"] == "build-windows-shipping"
+        )
+        self.assertEqual(shipping["timeoutMinutes"], 240)
+
     def test_fps_lifecycle_is_forced_into_windows_release_evidence(self) -> None:
         workflow_path = REPO_ROOT / ".github" / "workflows" / "build.yml"
         workflow_text = workflow_path.read_text(encoding="utf-8")
@@ -1701,7 +1708,7 @@ jobs:
             "  build-windows-shipping:\n"
             "    name: \"Windows Shipping build matrix\"\n"
             "    runs-on: windows-2022\n"
-            "    timeout-minutes: 120\n"
+            "    timeout-minutes: 240\n"
             "    permissions:\n"
             "      contents: read\n"
         )

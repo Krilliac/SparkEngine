@@ -1562,9 +1562,14 @@ jobs:
   build-windows-shipping:
     name: "Windows Shipping build matrix"
     runs-on: windows-2022
-    timeout-minutes: 120
+    timeout-minutes: 240
     permissions:
       contents: read
+    # This producer intentionally performs the visible required lane builds and
+    # separate owned File API capture/build transactions.  The full stable-v1
+    # matrix exceeded the old two-hour ceiling during its second Windows
+    # validation transaction, so retain the complete evidence contract with
+    # enough bounded time for a clean hosted run and its final artifacts.
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
