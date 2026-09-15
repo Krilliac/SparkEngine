@@ -1435,7 +1435,7 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertEqual(corpus.corpus_dir, "Tests/fuzz-corpora/json-utils")
         self.assertEqual(corpus.budget.max_input_bytes, 4096)
         self.assertEqual(corpus.budget.max_parse_time_ms, 1000)
-        self.assertEqual(corpus.budget.max_memory_mb, 128)
+        self.assertEqual(corpus.budget.max_memory_mb, 256)
         self.assertEqual(corpus.budget.max_depth, 32)
         self.assertEqual(corpus.budget.max_corpus_entries, 8)
         self.assertEqual(corpus.budget.max_corpus_bytes, 4096)

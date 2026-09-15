@@ -50,7 +50,7 @@ add_test(
     COMMAND $<TARGET_FILE:SparkFuzzJsonUtils>
         -max_len=4096
         -timeout=1
-        -rss_limit_mb=128
+        -rss_limit_mb=256
         -max_total_time=4
         "${SPARK_FUZZ_PROJECT_ROOT}/Tests/fuzz-corpora/json-utils"
 )

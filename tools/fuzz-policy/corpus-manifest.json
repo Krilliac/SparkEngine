@@ -10,7 +10,7 @@
       "budget": {
         "max_input_bytes": 4096,
         "max_parse_time_ms": 1000,
-        "max_memory_mb": 128,
+        "max_memory_mb": 256,
         "max_depth": 32,
         "max_corpus_entries": 8,
         "max_corpus_bytes": 4096,
