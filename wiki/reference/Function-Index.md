@@ -5742,8 +5742,8 @@
 | `data` | function | Tests | [TestSubsystemIntegrationScenarios.cpp:L128](../../Tests/Integration/TestSubsystemIntegrationScenarios.cpp#L128) |  |
 | `data` | function | Tests | [TestAlignedHeapArray.cpp:L45](../../Tests/TestAlignedHeapArray.cpp#L45) |  |
 | `data` | function | Tests | [TestAlignedHeapArray.cpp:L97](../../Tests/TestAlignedHeapArray.cpp#L97) |  |
-| `data` | function | Tests | [TestAssetMigration.cpp:L257](../../Tests/TestAssetMigration.cpp#L257) |  |
-| `data` | function | Tests | [TestAssetMigration.cpp:L277](../../Tests/TestAssetMigration.cpp#L277) |  |
+| `data` | function | Tests | [TestAssetMigration.cpp:L260](../../Tests/TestAssetMigration.cpp#L260) |  |
+| `data` | function | Tests | [TestAssetMigration.cpp:L281](../../Tests/TestAssetMigration.cpp#L281) |  |
 | `data` | function | Tests | [TestFBXImporter.cpp:L117](../../Tests/TestFBXImporter.cpp#L117) |  |
 | `data` | function | Tests | [TestFBXImporter.cpp:L131](../../Tests/TestFBXImporter.cpp#L131) |  |
 | `data` | function | Tests | [TestFBXImporter.cpp:L261](../../Tests/TestFBXImporter.cpp#L261) |  |
@@ -11034,7 +11034,7 @@
 | `GetDescription` | function | SparkEngine | [AssetMigration.h:L135](../../SparkEngine/Source/Core/AssetMigration.h#L135) | Human-readable description of what this step changes. |
 | `GetDescription` | function | SparkEngine | [ConsoleVariable.h:L111](../../SparkEngine/Source/Utils/ConsoleVariable.h#L111) |  |
 | `GetDescription` | function | SparkEngine | [ConsoleVariable.h:L312](../../SparkEngine/Source/Utils/ConsoleVariable.h#L312) | Register a callback invoked whenever the value changes |
-| `GetDescription` | function | Tests | [TestAssetMigration.cpp:L150](../../Tests/TestAssetMigration.cpp#L150) |  |
+| `GetDescription` | function | Tests | [TestAssetMigration.cpp:L152](../../Tests/TestAssetMigration.cpp#L152) |  |
 | `GetDescription` | function | Tests | [TestCommandHistory.cpp:L25](../../Tests/TestCommandHistory.cpp#L25) |  |
 | `GetDescription` | function | Tests | [TestCommandHistory.cpp:L100](../../Tests/TestCommandHistory.cpp#L100) |  |
 | `GetDescription` | function | Tests | [TestCommandHistory.cpp:L115](../../Tests/TestCommandHistory.cpp#L115) |  |
@@ -13536,7 +13536,7 @@
 | `GetSoundCount` | function | Tests | [TestAudioEngine.cpp:L116](../../Tests/TestAudioEngine.cpp#L116) |  |
 | `GetSourcePath` | function | SparkEngine | [DataTableSystem.h:L385](../../SparkEngine/Source/Engine/DataTable/DataTableSystem.h#L385) |  |
 | `GetSourceVersion` | function | SparkEngine | [AssetMigration.h:L121](../../SparkEngine/Source/Core/AssetMigration.h#L121) | Version this step reads from. |
-| `GetSourceVersion` | function | Tests | [TestAssetMigration.cpp:L147](../../Tests/TestAssetMigration.cpp#L147) |  |
+| `GetSourceVersion` | function | Tests | [TestAssetMigration.cpp:L149](../../Tests/TestAssetMigration.cpp#L149) |  |
 | `GetSparkSRShaderSource` | function | SparkEngine | [UpscalingSystem.cpp:L256](../../SparkEngine/Source/Graphics/UpscalingSystem.cpp#L256) | Get the SparkSR temporal upscaling compute shader HLSL source |
 | `GetSpatialEntityCount` | function | SparkEngine | [ParallelPerception.h:L187](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L187) | Get the number of entities in the spatial index. |
 | `GetSpawnPoints` | function | GameModules | [GameMechanics.h:L170](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L170) |  |
@@ -13793,7 +13793,7 @@
 | `GetTargetStateName` | function | Tests | [TestAnimationSystem.cpp:L356](../../Tests/TestAnimationSystem.cpp#L356) |  |
 | `GetTargetTime` | function | SparkEngine | [AnimationSystem.h:L173](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L173) | Get the playback time within the target state's clip during a crossfade. |
 | `GetTargetVersion` | function | SparkEngine | [AssetMigration.h:L124](../../SparkEngine/Source/Core/AssetMigration.h#L124) | Version this step produces. |
-| `GetTargetVersion` | function | Tests | [TestAssetMigration.cpp:L148](../../Tests/TestAssetMigration.cpp#L148) |  |
+| `GetTargetVersion` | function | Tests | [TestAssetMigration.cpp:L150](../../Tests/TestAssetMigration.cpp#L150) |  |
 | `GetTeamScore` | function | GameModules | [GameMode.h:L116](../../GameModules/SparkGameFPS/Source/Game/GameMode.h#L116) |  |
 | `GetTeamScoreboard` | function | GameModules | [GameMode.h:L115](../../GameModules/SparkGameFPS/Source/Game/GameMode.h#L115) |  |
 | `GetTelemetryService` | function | SparkEngine | [EngineContext.h:L206](../../SparkEngine/Source/Core/EngineContext.h#L206) |  |
@@ -20894,7 +20894,7 @@
 | `metricsLock` | function | SparkEngine | [TextureSystemWindows.cpp:L194](../../SparkEngine/Source/Graphics/TextureSystemWindows.cpp#L194) |  |
 | `mid` | function | GameModules | [TFMinimap.cpp:L82](../../GameModules/SparkGameMMOFPS/Source/UI/TFMinimap.cpp#L82) |  |
 | `Migrate` | function | SparkEngine | [AssetMigration.h:L132](../../SparkEngine/Source/Core/AssetMigration.h#L132) | Transform payload data from source version to target version. |
-| `Migrate` | function | Tests | [TestAssetMigration.cpp:L149](../../Tests/TestAssetMigration.cpp#L149) |  |
+| `Migrate` | function | Tests | [TestAssetMigration.cpp:L151](../../Tests/TestAssetMigration.cpp#L151) |  |
 | `MigrateAsset` | function | SparkEngine | [AssetMigration.h:L369](../../SparkEngine/Source/Core/AssetMigration.h#L369) | Migrate an in-memory asset buffer to the current version. |
 | `MigrateEntityOut` | function | SparkEngine | [AreaServer.h:L141](../../SparkEngine/Source/Engine/Networking/AreaServer.h#L141) | Migrate an entity out to another area server |
 | `MigrateToCurrentVersion` | function | SparkEngine | [SaveSystem.h:L667](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L667) |  |

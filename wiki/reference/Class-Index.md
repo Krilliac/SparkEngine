@@ -4110,7 +4110,7 @@
 | `StringPool` | class | Tests | [TestStringPool.cpp:L32](../../Tests/TestStringPool.cpp#L32) |  |
 | `StringTable` | class | SparkEngine | [LocalizationSystem.h:L49](../../SparkEngine/Source/Engine/Localization/LocalizationSystem.h#L49) | String table mapping key → localized text for one language. |
 | `StubBenchmarkScenario` | class | Tests | [TestBenchmarkFramework.cpp:L24](../../Tests/TestBenchmarkFramework.cpp#L24) |  |
-| `StubMigrationStep` | class | Tests | [TestAssetMigration.cpp:L142](../../Tests/TestAssetMigration.cpp#L142) |  |
+| `StubMigrationStep` | class | Tests | [TestAssetMigration.cpp:L144](../../Tests/TestAssetMigration.cpp#L144) |  |
 | `StubSystemA` | class | Tests | [TestECSystemsReal.cpp:L36](../../Tests/TestECSystemsReal.cpp#L36) |  |
 | `StubSystemB` | class | Tests | [TestECSystemsReal.cpp:L51](../../Tests/TestECSystemsReal.cpp#L51) |  |
 | `StubSystemC` | class | Tests | [TestECSystemsReal.cpp:L66](../../Tests/TestECSystemsReal.cpp#L66) |  |
