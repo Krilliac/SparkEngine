@@ -2,6 +2,8 @@
 #include "TestFramework.h"
 #include "Core/AssetMigration.h"
 
+#include <cstring>
+
 // ============================================================================
 // AssetVersion comparison operators
 // ============================================================================
@@ -249,6 +251,7 @@ TEST(AssetMigration_ComputeCRC32_Deterministic)
 TEST(AssetMigration_MigrateAsset_RejectsExpectedTypeMismatch)
 {
     Spark::AssetFileHeader header{};
+    std::memset(&header, 0, sizeof(header));
     header.assetType = Spark::AssetType::Scene;
     header.headerSize = sizeof(Spark::AssetFileHeader);
     header.dataSize = 0;
@@ -268,6 +271,7 @@ TEST(AssetMigration_MigrateAsset_RejectsExpectedTypeMismatch)
 TEST(AssetMigration_MigrateAsset_RejectsFutureVersionWithoutMutation)
 {
     Spark::AssetFileHeader header{};
+    std::memset(&header, 0, sizeof(header));
     header.assetType = Spark::AssetType::Scene;
     header.version = {2, 0, 0};
     header.headerSize = sizeof(Spark::AssetFileHeader);
