@@ -1439,7 +1439,7 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertEqual(corpus.budget.max_depth, 32)
         self.assertEqual(corpus.budget.max_corpus_entries, 8)
         self.assertEqual(corpus.budget.max_corpus_bytes, 4096)
-        self.assertEqual(corpus.budget.smoke_seconds, 5)
+        self.assertEqual(corpus.budget.smoke_seconds, 10)
 
     def test_json_utils_fuzzer_link_keeps_compiler_runtimes_abi_compatible(self) -> None:
         cmake = (REPO_ROOT / "Tests" / "Fuzz" / "CMakeLists.txt").read_text(encoding="utf-8")

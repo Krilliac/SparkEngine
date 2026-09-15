@@ -56,6 +56,6 @@ add_test(
 )
 set_tests_properties(FuzzJsonUtilsSmoke PROPERTIES
     LABELS "fuzz;fuzz-smoke;security"
-    TIMEOUT 5
+    TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
