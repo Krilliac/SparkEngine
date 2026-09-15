@@ -13,7 +13,7 @@
 
 namespace
 {
-constexpr std::size_t SPARK_FUZZ_MAX_INPUT_BYTES = 4096;
+    constexpr std::size_t SPARK_FUZZ_MAX_INPUT_BYTES = 4096;
 }
 
 // This C ABI is the only boundary between the libstdc++ libFuzzer executable
