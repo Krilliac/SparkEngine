@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-14.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-15.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
@@ -15,17 +15,17 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 | **GameModules** | 142616 |
 | **External services** | 11283 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 184302 |
+| **Tests** | 184331 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~780479** |
+| **Total C++ (excl. ThirdParty)** | **~780508** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1059 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1584 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1060 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1585 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
