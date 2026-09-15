@@ -1835,6 +1835,45 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         assert isinstance(concurrency, dict)
         self.assertEqual(concurrency.get("cancel-in-progress"), "${{ github.event_name == 'pull_request' }}")
 
+    def test_manual_required_failure_probe_is_explicit_and_default_off(self) -> None:
+        document = parse_workflow_yaml(self.build)
+        triggers = document.get("on")
+        self.assertIsInstance(triggers, dict)
+        assert isinstance(triggers, dict)
+        dispatch = triggers.get("workflow_dispatch")
+        self.assertIsInstance(dispatch, dict)
+        assert isinstance(dispatch, dict)
+
+        inputs = dispatch.get("inputs")
+        self.assertIsInstance(inputs, dict)
+        assert isinstance(inputs, dict)
+        probe = inputs.get("simulate_required_job_failure")
+        self.assertIsInstance(probe, dict)
+        assert isinstance(probe, dict)
+        self.assertEqual(probe.get("type"), "boolean")
+        self.assertEqual(probe.get("default"), False)
+        self.assertEqual(probe.get("required"), False)
+
+        jobs = document["jobs"]
+        tooling = jobs.get("validate-ci-tools")
+        self.assertIsInstance(tooling, dict)
+        assert isinstance(tooling, dict)
+        steps = tooling.get("steps")
+        self.assertIsInstance(steps, list)
+        assert isinstance(steps, list)
+        step = next(
+            (candidate for candidate in steps if candidate.get("name") == "Controlled required-job failure probe"),
+            None,
+        )
+        self.assertIsNotNone(step)
+        assert isinstance(step, dict)
+        self.assertEqual(
+            step.get("if"),
+            "github.event_name == 'workflow_dispatch' && inputs.simulate_required_job_failure == true",
+        )
+        self.assertIn("exit 1", step.get("run", ""))
+        self.assertNotIn("continue-on-error", tooling)
+
     def test_generated_documentation_runs_for_direct_pushes(self) -> None:
         block = named_step(self.build, "Verify all generated documentation and statistics")
         self.assertNotRegex(block, r"(?m)^\s+if:")

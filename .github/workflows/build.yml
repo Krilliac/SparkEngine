@@ -10,6 +10,12 @@ on:
   pull_request:
     branches: [ main, develop, Working ]
   workflow_dispatch:
+    inputs:
+      simulate_required_job_failure:
+        description: "Fail the required CI-tooling job to verify Required CI Gate propagation"
+        required: false
+        default: false
+        type: boolean
 
 # Supersede stale pull-request runs, but preserve every pushed SHA so the
 # required gate and its evidence can reach a terminal state for Working.
@@ -286,6 +292,12 @@ jobs:
         path: generated-docs-check.log
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: error
+
+    - name: Controlled required-job failure probe
+      if: github.event_name == 'workflow_dispatch' && inputs.simulate_required_job_failure == true
+      run: |
+        echo "::error::CI-100 controlled required-job failure probe requested"
+        exit 1
 
   # ===========================================================================
   # Code Quality — clang-format enforcement

@@ -535,6 +535,14 @@ workflow name). Sanitizer classification gained `incomplete-run`
 (suite died before writing JUnit, or no terminal Results marker), which outranks
 `sanitizer-finding`; job logs carry a bounded excerpt of the runtime report.
 
+The CI-100 fail-closed control is available only through an explicit manual
+dispatch input. Run `gh workflow run build.yml --ref Working -f simulate_required_job_failure=true` against the commit under test. A valid
+control result has `validate-ci-tools` fail at the
+`Controlled required-job failure probe` step and `Required CI Gate` fail after
+observing that required dependency; this red run is proof of failure propagation,
+not release evidence. The input defaults to false, and push/PR runs cannot enable
+the probe.
+
 ### Code Coverage
 
 The `coverage` CI job produces lcov reports showing line and branch coverage. To generate coverage locally:

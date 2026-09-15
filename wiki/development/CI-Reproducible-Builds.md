@@ -195,10 +195,16 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
 
 - `check-thirdparty-manifest` — `./tools/check-thirdparty-manifest-sync.sh`
 - `coverage` — GCC Debug with `--coverage` + lcov, per-subsystem thresholds
-- `clang-tidy` (`continue-on-error`) — Clang Debug static analysis
+- `clang-tidy` — Clang Debug static analysis; the job is blocking, while
+  individual diagnostics are advisory
 - `todo-count` — fails if TODO count exceeds threshold (20)
 - `build-installer` — builds the `SparkInstaller` target
 - `report-ci-errors` — aggregates `ci-errors-*` artifacts from failed jobs; findings from advisory lanes (job-level `continue-on-error`, e.g. `build-linux-msan`) are listed but do not fail the report. The reporter is loaded from the trusted `Working` checkout, so a change to it takes effect only after it lands there
+
+To verify CI-100's required-job failure propagation on the `Working` ref, run
+`gh workflow run build.yml --ref Working -f simulate_required_job_failure=true`. The manual-only input deliberately fails
+the required `validate-ci-tools` job; `Required CI Gate` must then fail as well.
+This is a red control run and cannot qualify a release commit.
 
 ## Notes
 

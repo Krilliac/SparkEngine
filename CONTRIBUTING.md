@@ -60,7 +60,10 @@ See `.clang-format` for the full style configuration.
    from deletion and non-fast-forward updates and requires the `Required CI Gate`
    check. A green check list is not release proof until the exact-SHA evidence
    and controlled-failure behavior are verified (`CI-100`). See
-   `wiki/advanced/Testing.md`
+   `wiki/advanced/Testing.md`. The controlled proof is a deliberate manual
+   dispatch: `gh workflow run build.yml --ref Working -f simulate_required_job_failure=true`; it must produce a failed
+   `validate-ci-tools` job and a failed `Required CI Gate`, and must never be
+   treated as release evidence.
 5. **Keep PRs focused** — one feature or fix per PR
 6. **Write clear commit messages** explaining the "why"
 
