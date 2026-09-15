@@ -1459,6 +1459,10 @@ class TestRepositoryIntegration(unittest.TestCase):
         block_text = "\n".join(block)
         self.assertIn('CXXFLAGS: "-stdlib=libstdc++"', block_text)
         self.assertIn('LDFLAGS: "-stdlib=libstdc++"', block_text)
+        self.assertIn(
+            "ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release",
+            check_fuzz_policy._run_commands(block),
+        )
 
     def test_named_verified_misses_are_inventoried(self) -> None:
         inventory = parser_inventory.load_inventory(REPO_ROOT)

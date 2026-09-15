@@ -110,7 +110,7 @@ CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
 cmake --build build/fuzz-policy --target check-fuzz-policy
 cmake --build build/fuzz-policy --target SparkFuzzJsonUtils
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
-ctest --test-dir build/fuzz-policy --output-on-failure -L fuzz --no-tests=error -C Release
+ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
 
 `-C Release` is required by multi-config generators (Visual Studio) and ignored by
@@ -161,5 +161,5 @@ change *is* the review record.
 Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocking
 `fuzz-policy` job in `.github/workflows/build.yml`, and the closure step in
 `.github/workflows/release.yml`. Status and the first production target were
-re-verified 2026-09-14 on the release worktree; rerun the CI command for current
+re-verified 2026-09-15 on the release worktree; rerun the CI command for current
 counts and exact-SHA runtime evidence.

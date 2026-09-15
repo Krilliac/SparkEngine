@@ -91,7 +91,7 @@ jobs:
       run: ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 
     - name: Run production fuzz smoke
-      run: ctest --test-dir build/fuzz-policy --output-on-failure -L fuzz --no-tests=error -C Release
+      run: ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 
   # ===========================================================================
   # CI Tooling — prove report parsers and generated repository statistics
