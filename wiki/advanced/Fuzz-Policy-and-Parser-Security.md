@@ -98,12 +98,14 @@ python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --emit-json \
 python3 -m unittest discover -s Tests/fuzz-policy -p "test_*.py" -v
 bash tools/check-fuzz-policy.sh          # also runs via tools/validate-all.sh
 
-# Ubuntu/Debian needs libc++ for the production C++23 headers. The distro
-# libFuzzer archive is built with libstdc++; the target links that runtime ABI
-# after libc++ without crossing C++ types through the fuzzer callback.
+# Ubuntu/Debian's compiler-rt libFuzzer archive uses libstdc++. The fuzzer
+# executable and callback stay on that ABI, while the production adapter and
+# logger compile with libc++ for the C++23 headers. They communicate only via
+# an extern "C" byte-buffer entry point, so no C++ standard-library object
+# crosses the boundary.
 sudo apt-get install -y clang cmake libc++-dev libc++abi-dev
-CXX=clang++ CXXFLAGS="-stdlib=libc++" \
-  LDFLAGS="-stdlib=libc++ -lc++abi" \
+CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
+  LDFLAGS="-stdlib=libstdc++" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
 cmake --build build/fuzz-policy --target SparkFuzzJsonUtils
@@ -122,7 +124,9 @@ freshly computed report.
 1. Add its production implementation files to
    `tools/fuzz-policy/parser-inventory.json` using canonical repository-relative paths.
 2. Mark it `blocked` with a substantive SEC-120 reason, or `fuzzed` with a harness,
-   CMake listfile, target, CTest selector, corpus id, and `entry_symbol`.
+   CMake listfile, target, CTest selector, corpus id, and `entry_symbol`. If the
+   harness crosses a C ABI adapter, also declare its `binding_source` and
+   `harness_entry_symbol`; the adapter must call the production `entry_symbol`.
 3. Remove any corresponding entry from `deferred_candidates`.
 4. For a fuzzed parser, add exactly one entry to `corpus-manifest.json`. The seed tree
    lives under `Tests/fuzz-corpora/`, must be non-empty, fresh, confined, link-free,

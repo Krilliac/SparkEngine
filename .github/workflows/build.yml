@@ -75,8 +75,8 @@ jobs:
 
     - name: Configure fuzz-policy checks
       env:
-        CXXFLAGS: "-stdlib=libc++"
-        LDFLAGS: "-stdlib=libc++ -lc++abi"
+        CXXFLAGS: "-stdlib=libstdc++"
+        LDFLAGS: "-stdlib=libstdc++"
       run: cmake -S tools/fuzz-policy -B build/fuzz-policy
 
     - name: Run blocking fuzz-policy target

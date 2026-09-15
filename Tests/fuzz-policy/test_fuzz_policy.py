@@ -799,6 +799,37 @@ class TestCorpusBinding(FixtureTestCase):
         self.assertEqual(corpora[0].seed_count, len(SEEDS))
         self.assertEqual(corpora[0].seed_bytes, sum(len(payload) for payload in SEEDS.values()))
 
+    def test_c_abi_harness_can_bind_through_a_production_adapter(self) -> None:
+        self.fixture.make_fuzzed()
+        adapter_header = self.root / "Tests" / "Fuzz" / "ProductionAdapter.h"
+        adapter_header.write_text(
+            "#pragma once\n"
+            "#include <cstddef>\n"
+            "#include <cstdint>\n"
+            'extern "C" int CallProduction(const uint8_t*, size_t, uint32_t);\n',
+            encoding="utf-8",
+        )
+        adapter = self.root / "Tests" / "Fuzz" / "ProductionAdapter.cpp"
+        adapter.write_text(
+            '#include "ProductionAdapter.h"\n'
+            '#include "../../src/ExampleParser.h"\n'
+            '#include <cstddef>\n'
+            '#include <cstdint>\n'
+            'extern "C" int CallProduction(const uint8_t* data, size_t size, uint32_t maxDepth)\n'
+            "{\n"
+            "    return ParseExampleDocument(data, size, static_cast<int>(maxDepth)) ? 1 : 0;\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        self.fixture.inventory["parsers"][0]["target"]["harness_entry_symbol"] = "CallProduction"
+        self.fixture.inventory["parsers"][0]["target"]["binding_source"] = "Tests/Fuzz/ProductionAdapter.cpp"
+        self.fixture.rewrite_harness(
+            HARNESS.replace('#include "../../src/ExampleParser.h"', '#include "ProductionAdapter.h"')
+            .replace("ParseExampleDocument(data, size, SPARK_FUZZ_MAX_DEPTH);", "CallProduction(data, size, SPARK_FUZZ_MAX_DEPTH);")
+        )
+        self.fixture.write_inventory()
+        self.assertEqual(len(self.fixture.load_corpora()), 1)
+
     # -- the checker must validate a build, not prose ----------------------
     def test_comment_only_cmake_is_rejected(self) -> None:
         self.fixture.make_fuzzed()
@@ -1394,6 +1425,8 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertEqual(parser.target["test_selector"], "FuzzJsonUtilsSmoke")
         self.assertEqual(parser.target["corpus_id"], "json-utils-corpus")
         self.assertEqual(parser.target["entry_symbol"], "Spark::Json::ParseBounded")
+        self.assertEqual(parser.target["binding_source"], "Tests/Fuzz/FuzzJsonUtilsProduction.cpp")
+        self.assertEqual(parser.target["harness_entry_symbol"], "SparkFuzzParseJson")
 
         corpora = corpus_manifest.load_corpora(REPO_ROOT, inventory)
         self.assertEqual(len(corpora), 1)
@@ -1410,11 +1443,22 @@ class TestRepositoryIntegration(unittest.TestCase):
 
     def test_json_utils_fuzzer_link_keeps_compiler_runtimes_abi_compatible(self) -> None:
         cmake = (REPO_ROOT / "Tests" / "Fuzz" / "CMakeLists.txt").read_text(encoding="utf-8")
-        self.assertIn("-fsanitize=fuzzer-no-link,address,undefined", cmake)
-        self.assertNotIn("-fsanitize=fuzzer,address,undefined", cmake)
-        self.assertIn('"-print-file-name=${SPARK_LIBFUZZER_RUNTIME_NAME}"', cmake)
-        self.assertIn("-Wl,--whole-archive,${SPARK_LIBFUZZER_RUNTIME},--no-whole-archive", cmake)
-        self.assertIn("stdc++", cmake)
+        production = (REPO_ROOT / "Tests" / "Fuzz" / "FuzzJsonUtilsProduction.cpp").read_text(encoding="utf-8")
+        self.assertIn("FuzzJsonUtilsProduction.cpp", cmake)
+        self.assertIn("set_source_files_properties", cmake)
+        self.assertIn('PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"', cmake)
+        self.assertIn("-fsanitize=fuzzer,address,undefined", cmake)
+        self.assertNotIn("-fsanitize=fuzzer-no-link,address,undefined", cmake)
+        self.assertIn("Threads::Threads c++ c++abi", cmake)
+        self.assertIn('#include "Utils/JsonUtils.h"', production)
+        self.assertIn('extern "C" int SparkFuzzParseJson', production)
+
+    def test_fuzz_job_keeps_libfuzzer_and_harness_on_libstdcxx(self) -> None:
+        workflow = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        block = check_fuzz_policy._job_block(workflow, check_fuzz_policy.FUZZ_JOB)
+        block_text = "\n".join(block)
+        self.assertIn('CXXFLAGS: "-stdlib=libstdc++"', block_text)
+        self.assertIn('LDFLAGS: "-stdlib=libstdc++"', block_text)
 
     def test_named_verified_misses_are_inventoried(self) -> None:
         inventory = parser_inventory.load_inventory(REPO_ROOT)

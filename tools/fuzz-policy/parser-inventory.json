@@ -691,7 +691,9 @@
         "cmake_target": "SparkFuzzJsonUtils",
         "test_selector": "FuzzJsonUtilsSmoke",
         "corpus_id": "json-utils-corpus",
-        "entry_symbol": "Spark::Json::ParseBounded"
+        "entry_symbol": "Spark::Json::ParseBounded",
+        "binding_source": "Tests/Fuzz/FuzzJsonUtilsProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseJson"
       }
     },
     {

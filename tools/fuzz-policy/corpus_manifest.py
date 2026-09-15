@@ -243,6 +243,12 @@ def _require_artifact_shapes(parser: ParserRecord, owned_sources: set[str]) -> N
     for role, path in (("harness", harness), ("cmake_file", cmake_file)):
         if path in owned_sources:
             raise PolicyError(f"{field}.{role} is also an inventoried parser source: {path}")
+    binding_source = parser.target.get("binding_source")
+    if binding_source is not None:
+        if PurePosixPath(binding_source).suffix.lower() not in HARNESS_SUFFIXES:
+            raise PolicyError(f"{field}.binding_source is not a C/C++ source file: {binding_source}")
+        if binding_source in owned_sources:
+            raise PolicyError(f"{field}.binding_source is also an inventoried parser source: {binding_source}")
 
 
 def _validate_target_binding(root: Path, parser: ParserRecord, corpus: CorpusRecord, owned_sources: set[str]) -> None:
@@ -267,12 +273,19 @@ def _validate_target_binding(root: Path, parser: ParserRecord, corpus: CorpusRec
     verify_harness(
         root,
         harness=target["harness"],
-        entry_symbol=target["entry_symbol"],
+        entry_symbol=target["harness_entry_symbol"],
         max_depth=budget.max_depth,
         max_input_bytes=budget.max_input_bytes,
         field=field,
     )
     assert_entry_symbol_in_sources(root, parser.source_files, target["entry_symbol"], field)
+    if target["binding_source"] is not None:
+        assert_entry_symbol_in_sources(
+            root,
+            (target["binding_source"],),
+            target["entry_symbol"],
+            f"{field}.target.binding_source",
+        )
 
 
 def load_corpora(
