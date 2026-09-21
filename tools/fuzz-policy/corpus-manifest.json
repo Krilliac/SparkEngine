@@ -32,6 +32,22 @@
         "max_corpus_bytes": 4096,
         "smoke_seconds": 10
       }
+    },
+    {
+      "id": "crash-manifest-corpus",
+      "parser_id": "crash-manifest-parser",
+      "corpus_dir": "Tests/fuzz-corpora/crash-manifest",
+      "last_verified": "2026-09-21",
+      "content_digest": "8c678f11cdbfa934dcaec5e5bafd9e1006e10a9965d7482e4e22c72d66a2d074",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 16,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      }
     }
   ]
 }

@@ -886,6 +886,22 @@ namespace SparkCrashReporter
             return OpenArtifact(root, name, handle, actualIdentity) && SameIdentity(expectedIdentity, actualIdentity);
         }
 
+        bool ParseManifestJsonPayload(std::string_view json, CrashManifest& output)
+        {
+            if (json.empty() || json.size() > kMaxManifestBytes)
+                return false;
+
+            CrashManifest parsed;
+            ScopedManifestCredentialWiper wipeParsedCredentials(parsed);
+            ManifestJsonReader reader(json);
+            if (!reader.Parse(parsed))
+                return false;
+
+            SecureWipeTransportConfiguration(output);
+            output = std::move(parsed);
+            return true;
+        }
+
         bool LoadManifestFromPinnedDirectory(PinnedDirectory& root, const std::filesystem::path& manifestName,
                                              CrashManifest& output, bool consume = false)
         {
@@ -907,9 +923,8 @@ namespace SparkCrashReporter
                 return false;
 
             CrashManifest parsed;
-            ScopedManifestCredentialWiper wipeParsedCredentials(parsed);
-            ManifestJsonReader reader(json);
-            if (!reader.Parse(parsed) || parsed.logFile.empty() || !NormalizeManifestArtifacts(parsed, root))
+            if (!ParseManifestJsonPayload(json, parsed) || parsed.logFile.empty() ||
+                !NormalizeManifestArtifacts(parsed, root))
                 return false;
 
             if (consume && !RemoveOpenedArtifact(root, manifestName, manifestHandle.Get(), manifestIdentity))
@@ -1037,6 +1052,11 @@ namespace SparkCrashReporter
             return false;
         }
     } // namespace
+
+    bool ParseManifestJson(std::string_view json, CrashManifest& out)
+    {
+        return ParseManifestJsonPayload(json, out);
+    }
 
     static std::string JsonEscape(const std::string& s)
     {

@@ -23,6 +23,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace SparkCrashReporter
 {
@@ -70,6 +71,10 @@ namespace SparkCrashReporter
 
     /// Parse a crash manifest from a JSON file
     bool LoadManifest(const std::string& path, CrashManifest& out);
+
+    /// Parse bounded manifest JSON without touching the filesystem or artifacts.
+    /// The file/path trust boundary remains enforced by LoadManifest.
+    bool ParseManifestJson(std::string_view json, CrashManifest& out);
 
     /// Write a crash manifest to a JSON file
     bool WriteManifest(const std::string& path, const CrashManifest& manifest);

@@ -99,3 +99,41 @@ set_tests_properties(FuzzNeuralWeightsSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+add_executable(SparkFuzzCrashManifest
+    FuzzCrashManifest.cpp
+    FuzzCrashManifestProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkCrashReporter/src/CrashReporterApp.cpp"
+)
+target_include_directories(SparkFuzzCrashManifest PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkCrashReporter/src"
+)
+target_compile_features(SparkFuzzCrashManifest PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzCrashManifest PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+)
+target_link_options(SparkFuzzCrashManifest PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+)
+target_link_libraries(SparkFuzzCrashManifest PRIVATE Threads::Threads)
+
+add_test(
+    NAME FuzzCrashManifestSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzCrashManifest>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=6
+        "${SPARK_FUZZ_PROJECT_ROOT}/Tests/fuzz-corpora/crash-manifest"
+)
+set_tests_properties(FuzzCrashManifestSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

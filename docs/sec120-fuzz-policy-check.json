@@ -1,22 +1,22 @@
 {
   "closure_blockers": [
-    "103 inventoried parsers have no fuzz target",
+    "102 inventoried parsers have no fuzz target",
     "151 detected candidates await classification"
   ],
   "corpus": {
-    "bound_target_count": 2,
-    "corpus_count": 2,
+    "bound_target_count": 3,
+    "corpus_count": 3,
     "max_staleness_days": 90,
-    "seed_bytes": 595,
-    "seed_count": 15
+    "seed_bytes": 1226,
+    "seed_count": 21
   },
   "coverage_claim": false,
   "inputs": {
-    "corpus_manifest": "5cdce98faa5f3a638018a223c7b170a2f430e9bacb0d5a1b338dad9d805d6aa9",
-    "inventory": "6f51d1a0ab8f385f57011fb6ce7d9adbe0c4bd5779eb7a40c37214f020679cd5"
+    "corpus_manifest": "9e21d917a76ca5a0081f6103cd6bbc261bd2d043616d0caeb46717cedead8e1a",
+    "inventory": "fc3ccc73aaf8ac838c8928ffe0f8d81b8872e04e5825f98e740ce75c97545e19"
   },
   "inventory": {
-    "blocked_count": 103,
+    "blocked_count": 102,
     "candidate_count": 272,
     "deferred_candidate_count": 151,
     "excluded_files": [],
@@ -36,7 +36,7 @@
         "ticket": "ENG-200"
       }
     ],
-    "fuzzed_count": 2,
+    "fuzzed_count": 3,
     "parser_count": 105,
     "scan_roots": [
       "SparkEngine/Source",

@@ -29,15 +29,15 @@
   ],
   "what_this_gate_does_not_prove": [
     "It is a structural contract check. It is not runtime parser safety, fuzz coverage, or crash-freedom evidence.",
-    "Only json-utils and neural-weights-nnw have production-bound libFuzzer harnesses: fuzzed_count is 2 and 103 of the 105 inventoried parsers remain blocked.",
-    "Two bounded seed corpora and runtime resource budgets are structurally bound to those parsers: corpus_count is 2; this is not runtime fuzz evidence.",
-    "json-utils is structurally wired for an active ASan/UBSan smoke and neural-weights-nnw for bounded reviewed-seed replay; no exact-SHA hosted result or scheduled mutation campaign has been recorded yet.",
+    "json-utils, neural-weights-nnw, and crash-manifest-parser have production-bound libFuzzer harnesses: fuzzed_count is 3 and 102 of the 105 inventoried parsers remain blocked.",
+    "Three bounded seed corpora and runtime resource budgets are structurally bound to those parsers: corpus_count is 3; this is not runtime fuzz evidence.",
+    "json-utils is structurally wired for an active ASan/UBSan smoke, neural-weights-nnw for bounded reviewed-seed replay, and crash-manifest-parser for bounded reviewed-seed replay; no exact-SHA hosted result or scheduled mutation campaign has been recorded yet.",
     "151 detected candidates are deferred with owner sec-120-parser-triage and expiry 2027-02-24; they are recorded, not classified.",
     "The full inventory report records 27 inventoried source files not matched by any detector pattern: human review found them, the regexes would not have.",
     "Production entry-point behaviour has not been proven safe for malformed input across the remaining parser inventory."
   ],
   "closure_blockers": [
-    "103 inventoried parsers have no fuzz target",
+    "102 inventoried parsers have no fuzz target",
     "151 detected candidates await classification"
   ],
   "scope_boundaries": {
@@ -49,8 +49,8 @@
     "GameModules/SparkGameVisualScript (ENG-200) hid zero parser candidates on 2026-08-28 and was removed as stale breadth."
   ],
   "not_completed": [
-    "103 inventoried parsers still have no libFuzzer/AFL harness.",
-    "The json-utils and neural-weights-nnw corpora are structurally bound, but their exact-SHA hosted sanitizer smoke has not yet run.",
+    "102 inventoried parsers still have no libFuzzer/AFL harness.",
+    "The json-utils, neural-weights-nnw, and crash-manifest-parser corpora are structurally bound, but their exact-SHA hosted sanitizer smoke has not yet run.",
     "The 151-file detected candidate backlog still requires manual classification.",
     "Exact-SHA ASan/UBSan smoke evidence and scheduled campaigns have not been recorded.",
     "Production entry-point behaviour has not been proven safe for malformed input across the remaining parser inventory."
