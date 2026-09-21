@@ -339,11 +339,26 @@ jobs:
           --report "${{ github.workspace }}/signature-verification/result.json"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    - name: Qualify Windows stable MSI install and uninstall
+    - name: Qualify Windows stable MSI install upgrade rollback repair and uninstall
       if: needs.prepare.outputs.is_versioned == 'true'
       shell: pwsh
-      # Hosted Windows Server evidence is not Windows 11 or upgrade certification.
+      # Hosted Windows Server evidence is not Windows 11 certification. Stable
+      # publication also requires an exact previous MSI+manifest pair; the
+      # repository currently has no safe artifact source for that pair, so the
+      # explicit inputs below fail closed until release provisioning supplies it.
+      env:
+        SPARK_PREVIOUS_WINDOWS_VERSION: ${{ vars.SPARK_PREVIOUS_WINDOWS_VERSION }}
+        SPARK_PREVIOUS_WINDOWS_PACKAGE_DIR: ${{ vars.SPARK_PREVIOUS_WINDOWS_PACKAGE_DIR }}
+        SPARK_PREVIOUS_WINDOWS_PACKAGE_MANIFEST: ${{ vars.SPARK_PREVIOUS_WINDOWS_PACKAGE_MANIFEST }}
       run: |
+        $previousVersion = $env:SPARK_PREVIOUS_WINDOWS_VERSION
+        $previousPackages = $env:SPARK_PREVIOUS_WINDOWS_PACKAGE_DIR
+        $previousManifest = $env:SPARK_PREVIOUS_WINDOWS_PACKAGE_MANIFEST
+        if ([string]::IsNullOrWhiteSpace($previousVersion) -or
+            [string]::IsNullOrWhiteSpace($previousPackages) -or
+            [string]::IsNullOrWhiteSpace($previousManifest)) {
+          throw "Stable MSI upgrade qualification requires SPARK_PREVIOUS_WINDOWS_VERSION, SPARK_PREVIOUS_WINDOWS_PACKAGE_DIR, and SPARK_PREVIOUS_WINDOWS_PACKAGE_MANIFEST repository variables; no safe previous-artifact source is provisioned."
+        }
         $packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"
         python .github/scripts/write-shipping-package-manifest.py `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
@@ -355,6 +370,9 @@ jobs:
           --version "${{ needs.prepare.outputs.cmake_version }}" `
           --manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake" `
           --package-manifest $packageManifest `
+          --previous-packages $previousPackages `
+          --previous-version $previousVersion `
+          --previous-package-manifest $previousManifest `
           --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `
           --source-sha "${{ github.sha }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

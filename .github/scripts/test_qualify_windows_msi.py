@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -21,20 +22,455 @@ SPEC.loader.exec_module(MODULE)
 SOURCE_SHA = "0123456789abcdef0123456789abcdef01234567"
 
 
-def write_shipping_package_manifest(path, msi, *, source_sha=SOURCE_SHA):
+def write_shipping_package_manifest(path, msi, *, source_sha=SOURCE_SHA, version="1.2.3"):
     path.write_text(json.dumps({
         "schemaVersion": "spark-shipping-package-v1",
         "commitSHA": source_sha,
         "profile": "stable-v1",
         "configuration": "MinSizeRel",
-        "version": "1.2.3",
+        "version": version,
         "msi": msi.name,
         "sha256": hashlib.sha256(msi.read_bytes()).hexdigest(),
     }), encoding="utf-8")
 
 
-@unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
 class WindowsMSILifecycleTests(unittest.TestCase):
+    def _transaction_fixture(self, root):
+        """Create the two immutable package identities used by the transaction contract."""
+        old_packages = root / "old-packages"
+        new_packages = root / "new-packages"
+        old_packages.mkdir()
+        new_packages.mkdir()
+        old_msi = old_packages / "SparkEngine-1.2.2-Windows-AMD64-MinSizeRel-Runtime.msi"
+        new_msi = new_packages / "SparkEngine-1.2.3-Windows-AMD64-MinSizeRel-Runtime.msi"
+        old_msi.write_bytes(b"old fixture MSI")
+        new_msi.write_bytes(b"new fixture MSI")
+        old_manifest = root / "old-shipping-package-manifest.json"
+        new_manifest = root / "new-shipping-package-manifest.json"
+        write_shipping_package_manifest(old_manifest, old_msi, version="1.2.2")
+        write_shipping_package_manifest(new_manifest, new_msi, version="1.2.3")
+        module_manifest = root / "SparkEngineGameModules.cmake"
+        module_manifest.write_text("fixture manifest", encoding="utf-8")
+        return old_packages, new_packages, old_manifest, new_manifest, module_manifest
+
+    def _run_transaction_contract(self, *, root, old_packages, new_packages,
+                                  old_manifest, new_manifest, module_manifest,
+                                  logs, runner):
+        """Call the frozen old->new qualification API.
+
+        The current implementation intentionally lacks these keyword arguments;
+        converting that missing API into an assertion failure keeps the red
+        contract diagnostic instead of producing an incidental TypeError.
+        """
+        try:
+            with mock.patch.object(MODULE.os, "name", "nt"):
+                return MODULE.qualify(
+                new_packages,
+                "1.2.3",
+                module_manifest,
+                root,
+                logs,
+                runner=runner,
+                msiexec="msiexec.exe",
+                powershell="powershell.exe",
+                cmake="cmake",
+                source_sha=SOURCE_SHA,
+                package_manifest=new_manifest,
+                previous_packages=old_packages,
+                previous_version="1.2.2",
+                previous_package_manifest=old_manifest,
+                )
+        except TypeError as exc:
+            if "unexpected keyword argument" in str(exc):
+                self.fail(
+                    "transaction contract is not implemented: qualify() must accept "
+                    "previous_packages, previous_version, and previous_package_manifest"
+                )
+            raise
+
+    def _identity_runner(self, calls, state, *, fail_new_runtime=False,
+                         mismatch_upgrade_code=False, same_product_code=False,
+                         fail_upgrade_command=False, foreign_related_product=False,
+                         fail_previous_install_command=False):
+        """Deterministic native fixture for the frozen transaction semantics."""
+        def runner(argv, log, *, timeout, env=None, cwd=None):
+            calls.append(list(argv))
+            if "-EncodedCommand" in argv:
+                selected_name = Path(env["SPARK_MSI_PATH"]).name
+                version_match = re.search(r"SparkEngine-([0-9]+\.[0-9]+\.[0-9]+)-Windows-", selected_name)
+                self.assertIsNotNone(version_match, selected_name)
+                version = version_match.group(1)
+                registered = state["installed"] and state["version"] == version
+                product_code = ("{12345678-1234-1234-1234-123456789ABC}"
+                                if (version == "1.2.3" and not same_product_code)
+                                else "{87654321-4321-4321-4321-CBA987654321}")
+                upgrade_code = ("{BADF00D0-0000-0000-0000-000000000001}"
+                                if mismatch_upgrade_code and version == "1.2.3"
+                                else "{ABCDEF01-1234-1234-1234-123456789ABC}")
+                log.write_text(json.dumps({
+                    "ProductName": "SparkEngine",
+                    "ProductVersion": version,
+                    "ProductCode": product_code,
+                    "UpgradeCode": upgrade_code,
+                    "RelatedProducts": (["{00000000-0000-0000-0000-000000000001}"]
+                                         if foreign_related_product and version == "1.2.2"
+                                         else (["{87654321-4321-4321-4321-CBA987654321}"]
+                                               if version == "1.2.2" and registered else [])),
+                    "ProductState": 5 if registered else -1,
+                    "InstallRoot": "INSTALL_ROOT",
+                }), encoding="utf-8")
+                if "identity-rollback" in log.name:
+                    sentinel = (Path(state["install_root"]).parent / "localappdata" / "SparkEngine"
+                                / "release-qualification-sentinel.sav")
+                    state["rollback_restore_observed"] = registered and sentinel.is_file() and (
+                        sentinel.read_bytes() == b"SparkEngine stable-v1 external user data\n"
+                    )
+                return 0
+            if "/i" in argv:
+                if fail_upgrade_command and "1.2.3" in " ".join(map(str, argv)):
+                    if state.get("old_absent_on_upgrade_failure"):
+                        state["installed"] = False
+                        state["version"] = None
+                    return 9
+                state["installed"] = True
+                version_match = re.search(r"SparkEngine-([0-9]+\.[0-9]+\.[0-9]+)-Windows-", " ".join(map(str, argv)))
+                self.assertIsNotNone(version_match)
+                state["version"] = version_match.group(1)
+                install_root = next(arg.split("=", 1)[1] for arg in argv if arg.startswith("INSTALL_ROOT="))
+                state["install_root"] = install_root
+                if fail_previous_install_command and state["version"] == "1.2.2":
+                    if state.get("partial_previous_install"):
+                        state["installed"] = True
+                        Path(install_root).mkdir(parents=True, exist_ok=True)
+                    elif state.get("residue_without_registration"):
+                        state["installed"] = False
+                        Path(install_root).mkdir(parents=True, exist_ok=True)
+                    return 9
+                Path(install_root).mkdir(parents=True, exist_ok=True)
+                return 0
+            if any(arg.lower().startswith("/f") for arg in argv):
+                state["repaired"] = True
+                return 0
+            if "/x" in argv:
+                state["installed"] = False
+                state["version"] = None
+                install_root = Path(state["install_root"])
+                if install_root.exists():
+                    shutil.rmtree(install_root)
+                return 0
+            if argv and argv[0].endswith("SparkEngine.exe"):
+                user_data_root = Path(env["LOCALAPPDATA"]) / "SparkEngine"
+                state["user_data_path"] = user_data_root / "release-qualification-sentinel.sav"
+                state["user_data_preserved"] = (
+                    state["user_data_path"].is_file()
+                    and state["user_data_path"].read_bytes() == b"SparkEngine stable-v1 external user data\n"
+                )
+                if fail_new_runtime and state["version"] == "1.2.3":
+                    log.write_text("post-upgrade validation failure", encoding="utf-8")
+                    return 9
+                if env.get("SPARK_RHI_BACKEND") == "null":
+                    log.write_text(
+                        "SPARK_MODULE_READY count=1\n"
+                        "SPARK_HEADLESS_RHI backend=null initialized=1 frames=5 shutdown=1\n"
+                        "SPARK_HEADLESS_LIFECYCLE initialized=1 updated=5 fixed=4 rendered=0 unloaded=1 faults=0\n",
+                        encoding="utf-8",
+                    )
+                    return 0
+                log.write_text(
+                    "SPARK_D3D11_DEVICE driver=warp certification=software-only\n"
+                    "SPARK_MODULE_LIFECYCLE module=SparkGameFPS create=1 load=1 update=5 fixed=4 "
+                    "render=5 unload=1 destroy=1 faults=0\n",
+                    encoding="utf-8",
+                )
+                return 0
+            return 0
+
+        return runner
+
+    def test_two_version_upgrade_installs_new_product_and_uninstalls_cleanly(self):
+        """The qualification contract must exercise an old->new upgrade, not only fresh install."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            logs = root / "upgrade-logs"
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "install_root": str(root / "install")}
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state),
+            )
+            self.assertEqual(result, 0)
+            self.assertIsNone(state["version"])
+            self.assertFalse(state["installed"])
+            self.assertTrue(any("1.2.3" in " ".join(call) and "/i" in call for call in calls))
+            self.assertTrue(any("/x" in call for call in calls))
+            self.assertFalse(Path(state["install_root"]).exists())
+
+    def test_post_upgrade_validation_failure_rolls_back_to_old_product(self):
+        """A failed new runtime must restore the old MSI/product and preserve data."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            logs = root / "rollback-logs"
+            calls = []
+            install_root = root / "install"
+            state = {"installed": False, "version": None, "repaired": False,
+                     "preserve_user_data_on_uninstall": True, "install_root": str(install_root)}
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state, fail_new_runtime=True),
+            )
+            self.assertNotEqual(result, 0)
+            self.assertIsNone(state["version"])
+            self.assertTrue(state.get("user_data_preserved"))
+            self.assertTrue(state.get("rollback_restore_observed"))
+            self.assertTrue(state["user_data_path"].is_file())
+            self.assertEqual(state["user_data_path"].read_bytes(), b"SparkEngine stable-v1 external user data\n")
+            rollback_install = [index for index, call in enumerate(calls)
+                                if "/i" in call and "1.2.2" in " ".join(call)]
+            self.assertTrue(rollback_install)
+            self.assertTrue(any(index > rollback_install[0] and "/x" in call
+                                for index, call in enumerate(calls)))
+
+    def test_rejects_upgrade_code_mismatch_before_upgrading_owned_old_product(self):
+        """A package from another product family cannot trigger upgrade or cleanup."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "install_root": str(root / "install")}
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=root / "upgrade-code-mismatch-logs",
+                runner=self._identity_runner(calls, state, mismatch_upgrade_code=True),
+            )
+            self.assertNotEqual(result, 0)
+            self.assertTrue(any("UpgradeCode" in error for error in json.loads(
+                (root / "upgrade-code-mismatch-logs" / "result.json").read_text(encoding="utf-8")
+            )["errors"]))
+            self.assertTrue(any("/i" in call and "1.2.2" in " ".join(call) for call in calls))
+            self.assertTrue(any("/x" in call for call in calls))
+            self.assertFalse(state["installed"])
+            self.assertIsNone(state["version"])
+
+    def test_rejects_same_product_code_transition_before_upgrading_owned_old_product(self):
+        """A same ProductCode cannot masquerade as an old->new transition."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "install_root": str(root / "install")}
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=root / "product-code-mismatch-logs",
+                runner=self._identity_runner(calls, state, same_product_code=True),
+            )
+            self.assertNotEqual(result, 0)
+            self.assertTrue(any("ProductCode" in error for error in json.loads(
+                (root / "product-code-mismatch-logs" / "result.json").read_text(encoding="utf-8")
+            )["errors"]))
+            self.assertTrue(any("/i" in call and "1.2.2" in " ".join(call) for call in calls))
+            self.assertTrue(any("/x" in call for call in calls))
+            self.assertFalse(state["installed"])
+            self.assertIsNone(state["version"])
+
+    def test_failed_upgrade_command_inspects_state_before_destructive_rollback(self):
+        """A no-mutation upgrade failure preserves the old install and original error."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "install_root": str(root / "install")}
+            logs = root / "upgrade-command-failure-logs"
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state, fail_upgrade_command=True),
+            )
+            self.assertNotEqual(result, 0)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertIn("upgrade failed with exit 9", " ".join(report["errors"]))
+            self.assertFalse(any("rollback-uninstall" in " ".join(call) for call in calls))
+            self.assertTrue(any("/i" in call and "1.2.2" in " ".join(call) for call in calls))
+            self.assertTrue(any("/x" in call for call in calls))
+            self.assertFalse(state["installed"])
+            self.assertIsNone(state["version"])
+
+    def test_rejects_foreign_old_related_product_without_cleanup(self):
+        """Only the old MSI's own ProductCode may appear in RelatedProducts."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "install_root": str(root / "install")}
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=root / "foreign-related-logs",
+                runner=self._identity_runner(calls, state, foreign_related_product=True),
+            )
+            self.assertNotEqual(result, 0)
+            self.assertFalse(any("/i" in call for call in calls))
+            self.assertFalse(any("/x" in call for call in calls))
+
+    def test_rejects_preexisting_old_install_without_mutation_or_cleanup(self):
+        """Qualification must own the old install; an existing registration is rejected untouched."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            calls = []
+            state = {"installed": True, "version": "1.2.2", "repaired": False,
+                     "install_root": str(root / "install")}
+            logs = root / "preexisting-old-logs"
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state),
+            )
+            self.assertNotEqual(result, 0)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertTrue(any("already registered" in error for error in report["errors"]))
+            self.assertFalse(any("/i" in call for call in calls))
+            self.assertFalse(any("/x" in call for call in calls))
+            self.assertTrue(state["installed"])
+            self.assertEqual(state["version"], "1.2.2")
+
+    def test_partial_previous_install_failure_is_inspected_and_cleaned(self):
+        """A failed old-package install cannot leave a registered staged product."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "partial_previous_install": True, "install_root": str(root / "install")}
+            logs = root / "partial-previous-install-logs"
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state, fail_previous_install_command=True),
+            )
+            self.assertNotEqual(result, 0)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertIn("install-previous failed with exit 9", " ".join(report["errors"]))
+            self.assertTrue(any("cleanup-partial-previous" in " ".join(call) for call in calls))
+            self.assertFalse(state["installed"])
+            self.assertIsNone(state["version"])
+
+    def test_failed_upgrade_with_old_absent_restores_old_before_cleanup(self):
+        """A no-new-product failure restores an absent old registration before uninstall."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "old_absent_on_upgrade_failure": True, "install_root": str(root / "install")}
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=root / "old-absent-rollback-logs",
+                runner=self._identity_runner(calls, state, fail_upgrade_command=True),
+            )
+            self.assertNotEqual(result, 0)
+            self.assertTrue(state.get("rollback_restore_observed"))
+            old_restore = [index for index, call in enumerate(calls)
+                           if "/i" in call and "1.2.2" in " ".join(call)]
+            final_uninstall = [index for index, call in enumerate(calls)
+                               if "/x" in call and any(str(arg).endswith("msi-uninstall.log") for arg in call)]
+            self.assertTrue(old_restore)
+            self.assertTrue(final_uninstall, calls)
+            self.assertLess(old_restore[-1], final_uninstall[-1])
+
+    def test_previous_install_absent_registration_with_residue_is_reported(self):
+        """Filesystem residue remains an independent failure even when registration is absent."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "residue_without_registration": True, "install_root": str(root / "install")}
+            logs = root / "residue-previous-install-logs"
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state, fail_previous_install_command=True),
+            )
+            self.assertNotEqual(result, 0)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertTrue(any("Uninstall residue remains" in error for error in report["errors"]))
+            self.assertTrue(Path(state["install_root"]).exists())
+
+    def test_main_requires_all_previous_artifact_arguments_together(self):
+        """CLI transaction inputs are an all-or-none contract."""
+        argv = [
+            "qualify-windows-msi.py", "--packages", "packages", "--version", "1.2.3",
+            "--manifest", "modules.cmake", "--package-manifest", "package.json",
+            "--runner-temp", "runner-temp", "--logs", "logs", "--source-sha", SOURCE_SHA,
+            "--previous-version", "1.2.2",
+        ]
+        with mock.patch.object(sys, "argv", argv), \
+                mock.patch.object(MODULE.os, "name", "nt"), \
+                mock.patch.dict(os.environ, {"SystemRoot": str(Path.cwd())}):
+            with self.assertRaises(SystemExit) as raised:
+                MODULE.main()
+        self.assertEqual(raised.exception.code, 2)
+
+    def test_repair_preserves_user_data_after_upgrade(self):
+        """Repair must restore product files without deleting user-owned data."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            logs = root / "repair-logs"
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "install_root": str(root / "install")}
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state),
+            )
+            self.assertEqual(result, 0)
+            self.assertTrue(state["repaired"])
+            self.assertTrue(state.get("user_data_preserved"))
+            self.assertTrue(state["user_data_path"].is_file())
+
+    def test_final_uninstall_removes_registration_and_all_owned_residue(self):
+        """A successful transaction must finish with no registered product or owned residue."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            logs = root / "uninstall-logs"
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "install_root": str(root / "install")}
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state),
+            )
+            self.assertEqual(result, 0)
+            self.assertFalse(state["installed"])
+            self.assertFalse(Path(state["install_root"]).exists())
+            self.assertTrue(state["user_data_path"].is_file())
+            self.assertEqual(state["user_data_path"].read_bytes(), b"SparkEngine stable-v1 external user data\n")
+            self.assertTrue(any("/x" in call for call in calls))
+
     @unittest.skipUnless(os.name == "nt", "Windows CLI alias preservation")
     def test_main_preserves_raw_package_and_manifest_aliases_for_no_follow_validation(self):
         """CLI parsing must not resolve away a symlink before qualification rejects it."""
@@ -69,6 +505,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertEqual(positional[0], packages_alias)
             self.assertEqual(qualify.call_args.kwargs["package_manifest"], manifest_alias)
 
+    @unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
     def test_success_runs_both_installed_backends_and_writes_canonical_log(self):
         """One clean install proves NullRHI and D3D11/WARP before package success."""
         with tempfile.TemporaryDirectory() as raw:
@@ -152,6 +589,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 "[package-smoke] PASS\n"
             ))
 
+    @unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
     def test_rejects_mismatched_shipping_manifest_before_native_execution(self):
         """The separate package identity document must bind the MSI before install."""
         with tempfile.TemporaryDirectory() as raw:
@@ -193,6 +631,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertFalse((root / "logs" / "package-smoke.log").exists())
 
     @unittest.skipUnless(os.name == "nt", "Windows private-MSI identity lock")
+    @unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
     def test_installs_a_locked_private_verified_copy_not_the_mutable_artifact_path(self):
         """A private-copy replacement at install time cannot change the MSI Installer reads."""
         with tempfile.TemporaryDirectory() as raw:
@@ -285,6 +724,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertFalse(private_copy_swapped, "private MSI was replaceable during Installer launch")
             self.assertTrue((logs / "package-smoke.log").is_file())
 
+    @unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
     def test_refuses_a_stale_log_directory_before_native_execution(self):
         """A previous success log cannot be reused by a failed new qualification."""
         with tempfile.TemporaryDirectory() as raw:
@@ -313,6 +753,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 )
             self.assertEqual(stale.read_text(encoding="utf-8"), "old success")
 
+    @unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
     def test_rejects_duplicate_shipping_manifest_keys_before_native_execution(self):
         """Last-wins JSON parsing cannot smuggle a second package identity into CI."""
         with tempfile.TemporaryDirectory() as raw:
@@ -353,6 +794,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertIn("duplicate", " ".join(report["errors"]).lower())
             self.assertFalse((root / "logs" / "package-smoke.log").exists())
 
+    @unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
     def test_racing_package_smoke_destination_is_never_overwritten(self):
         """Qualification log publication loses cleanly if a destination appears late."""
         with tempfile.TemporaryDirectory() as raw:
@@ -368,6 +810,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
             self.assertEqual(output.read_text(encoding="utf-8"), "attacker")
 
+    @unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
     def test_success_does_not_publish_a_secondary_result_after_smoke(self):
         """The smoke leaf is final, leaving no later result publication to fail it."""
         with tempfile.TemporaryDirectory() as raw:
@@ -430,6 +873,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertTrue((logs / "package-smoke.log").exists())
             self.assertFalse((logs / "result.json").exists())
 
+    @unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
     def test_lifecycle_failures_preserve_original_error_and_attempt_uninstall(self):
         for case in ("success", "install", "validate", "fps", "d3d11", "d3d11_bad_marker", "d3d11_duplicate", "d3d11_logger_copy", "nullrhi_bad_lifecycle", "nullrhi_d3d11_logger_copy", "uninstall", "residue", "install_and_uninstall",
                      "reboot", "changed_msi", "wrong_identity", "wrong_version", "invalid_identity", "preexisting", "wrong_root", "timeout", "registration_remains", "no_marker", "zero_marker", "older_related_product", "unregistered_install", "absent_install", "advertised_install", "broken_install"):
@@ -570,6 +1014,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 if case == "residue":
                     self.assertTrue(any("residue" in error for error in report["errors"]))
 
+    @unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
     def test_native_runner_retains_output_exit_status_and_working_directory(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -581,6 +1026,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertIn(str(root), log.read_text())
             self.assertIn("native stderr", log.read_text())
 
+    @unittest.skipUnless(os.name == "nt", "Windows native MSI qualification")
     def test_rejects_wrong_or_duplicate_package_before_native_execution(self):
         for names in ([], ["wrong.msi"], ["SparkEngine-1.2.3-Windows-AMD64-MinSizeRel-Runtime.msi", "second.msi"]):
             with self.subTest(names=names), tempfile.TemporaryDirectory() as raw:
