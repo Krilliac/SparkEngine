@@ -17,3 +17,10 @@ if(CPACK_GENERATOR STREQUAL "NSIS" OR CPACK_GENERATOR STREQUAL "WIX")
         string(APPEND CPACK_PACKAGE_FILE_NAME "-Runtime")
     endif()
 endif()
+
+if(CPACK_GENERATOR STREQUAL "WIX")
+    # Project-owned identity for the Windows Runtime installer family. Keep it
+    # across versions so a separately built predecessor can be upgraded. Leave
+    # CPACK_WIX_PRODUCT_GUID unset: each MSI needs its own ProductCode.
+    set(CPACK_WIX_UPGRADE_GUID "74E90DE5-B7E2-442C-9696-8CA63782F55A")
+endif()

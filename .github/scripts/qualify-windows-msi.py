@@ -4,6 +4,11 @@
 The caller must treat the successful package-smoke log as a process-exit
 handoff: upload it immediately from the same job-owned workspace with no
 repository-controlled command in between.
+
+An old-to-new transaction requires --previous-signer-thumbprint from the
+caller's protected trust configuration. The private predecessor copy must
+have a valid timestamped Authenticode signature from that publisher before
+any Windows Installer command. This does not authorize bootstrap admission.
 """
 from __future__ import annotations
 
@@ -13,6 +18,7 @@ from contextlib import contextmanager
 import ctypes
 from ctypes import wintypes
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -26,6 +32,12 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "module-evidence"))
 import strict_json  # noqa: E402
 import package_evidence_io  # noqa: E402
+
+_SIGNATURE_SPEC = importlib.util.spec_from_file_location(
+    "spark_windows_package_signatures", Path(__file__).with_name("verify-windows-package-signatures.py"),
+)
+package_signatures = importlib.util.module_from_spec(_SIGNATURE_SPEC)
+_SIGNATURE_SPEC.loader.exec_module(package_signatures)
 
 if os.name == "nt":
     _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -251,14 +263,16 @@ def _validate_shipping_package_manifest(path, source_sha, version, msi_name, msi
 
 def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_command,
                   msiexec, powershell, cmake, source_sha=None, package_manifest=None,
-                  previous_packages=None, previous_version=None, previous_package_manifest=None):
+                  previous_packages=None, previous_version=None, previous_package_manifest=None,
+                  previous_signer_thumbprint=None):
     logs = Path(logs)
     if os.path.lexists(logs):
         raise ValueError("package-evidence log directory must be fresh")
     logs.mkdir(parents=True, exist_ok=False)
     errors = []
     transaction = any(value is not None for value in
-                      (previous_packages, previous_version, previous_package_manifest))
+                      (previous_packages, previous_version, previous_package_manifest,
+                       previous_signer_thumbprint))
     report = {"scope": ("hosted-windows-msi-upgrade-repair-rollback-uninstall"
                          if transaction else "hosted-windows-msi-install-uninstall"),
               "source_sha": source_sha,
@@ -311,6 +325,25 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                        for key in ("ProductCode", "UpgradeCode"))):
             raise ValueError(f"{label} MSI database identity or install directory does not match the expected package")
 
+    def verify_previous_signature(selected_package, expected_digest):
+        """Use the shared native signature policy while the private MSI is locked."""
+        command = base64.b64encode(package_signatures.SIGNATURE_SCRIPT.encode("utf-16-le")).decode("ascii")
+        execute("signature-previous", [powershell, "-NoLogo", "-NoProfile", "-NonInteractive",
+                                       "-EncodedCommand", command],
+                env={**os.environ, "SPARK_SIGNATURE_PATH": str(selected_package)}, timeout=120)
+        if package_digest(selected_package) != expected_digest:
+            raise ValueError("private previous MSI changed during signature verification")
+        evidence = json.loads((logs / "signature-previous.log").read_text(encoding="utf-8-sig"),
+                              object_pairs_hook=_reject_duplicate_json_keys)
+        package_signatures._validate_signature_evidence(
+            evidence, previous_signer_thumbprint, selected_package.name,
+        )
+        _write_result_report(logs / "previous-signature.json", {
+            "scope": "previous-windows-msi-authenticode", "msi": selected_package.name,
+            "sha256": expected_digest, "publisher_thumbprint": previous_signer_thumbprint.upper(),
+            "signature": evidence, "passed": True,
+        })
+
     try:
         if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
             raise ValueError("Invalid MSI release version")
@@ -342,10 +375,15 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
         report["shipping_package_manifest"] = str(package_manifest)
         old_package = old_digest = None
         if transaction:
-            if previous_packages is None or previous_version is None or previous_package_manifest is None:
+            if any(value is None for value in (previous_packages, previous_version,
+                                              previous_package_manifest, previous_signer_thumbprint)):
                 raise ValueError(
-                    "previous_packages, previous_version, and previous_package_manifest must be supplied together"
+                    "previous_packages, previous_version, previous_package_manifest, and "
+                    "previous_signer_thumbprint must be supplied together"
                 )
+            if (not isinstance(previous_signer_thumbprint, str)
+                    or not re.fullmatch(r"[0-9a-fA-F]{40}", previous_signer_thumbprint)):
+                raise ValueError("previous_signer_thumbprint must be the trusted publisher's 40-hex thumbprint")
             if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", previous_version):
                 raise ValueError("Invalid previous MSI release version")
             previous_packages = Path(previous_packages)
@@ -394,19 +432,22 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                 if package_digest(old_package) != old_digest:
                     raise ValueError("private previous MSI changed during identity validation")
                 with _hold_private_msi_identity(old_package):
+                    if package_digest(old_package) != old_digest:
+                        raise ValueError("private previous MSI changed before signature verification")
+                    verify_previous_signature(old_package, old_digest)
                     old_info = identity("identity-previous-before", old_package)
-                validate_identity(old_info, previous_version, "previous")
-                old_product_code = old_info["ProductCode"]
-                old_upgrade_code = old_info["UpgradeCode"]
-                if old_info.get("ProductState") != -1:
-                    raise ValueError("previous MSI product is already registered; qualification requires an owned fresh install")
-                if old_info["RelatedProducts"]:
-                    raise ValueError("previous MSI related-product registration exists before owned install")
-                if old_info.get("ProductState") == -1:
-                    previous_install_attempted = True
-                    execute("install-previous", [msiexec, "/i", str(old_package), "/qn", "/norestart", "/L*V",
-                                                   str(logs / "msi-install-previous.log"), f"INSTALL_ROOT={install_root}"])
-                    attempted = True
+                    validate_identity(old_info, previous_version, "previous")
+                    old_product_code = old_info["ProductCode"]
+                    old_upgrade_code = old_info["UpgradeCode"]
+                    if old_info.get("ProductState") != -1:
+                        raise ValueError("previous MSI product is already registered; qualification requires an owned fresh install")
+                    if old_info["RelatedProducts"]:
+                        raise ValueError("previous MSI related-product registration exists before owned install")
+                    if old_info.get("ProductState") == -1:
+                        previous_install_attempted = True
+                        execute("install-previous", [msiexec, "/i", str(old_package), "/qn", "/norestart", "/L*V",
+                                                       str(logs / "msi-install-previous.log"), f"INSTALL_ROOT={install_root}"])
+                        attempted = True
                 cleanup_package, cleanup_digest = old_package, old_digest
             else:
                 cleanup_package, cleanup_digest = package, digest
@@ -584,7 +625,8 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
 
 def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_command,
             msiexec, powershell, cmake, source_sha=None, package_manifest=None,
-            previous_packages=None, previous_version=None, previous_package_manifest=None):
+            previous_packages=None, previous_version=None, previous_package_manifest=None,
+            previous_signer_thumbprint=None):
     """Run native MSI qualification on Windows.
 
     The platform-independent transaction state machine lives in the private
@@ -599,6 +641,7 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         source_sha=source_sha, package_manifest=package_manifest,
         previous_packages=previous_packages, previous_version=previous_version,
         previous_package_manifest=previous_package_manifest,
+        previous_signer_thumbprint=previous_signer_thumbprint,
     )
 
 
@@ -614,10 +657,13 @@ def main():
     parser.add_argument("--previous-packages", type=Path)
     parser.add_argument("--previous-version")
     parser.add_argument("--previous-package-manifest", type=Path)
+    parser.add_argument("--previous-signer-thumbprint", help="Trusted Authenticode publisher for the predecessor MSI")
     args = parser.parse_args()
-    previous_values = (args.previous_packages, args.previous_version, args.previous_package_manifest)
+    previous_values = (args.previous_packages, args.previous_version, args.previous_package_manifest,
+                       args.previous_signer_thumbprint)
     if any(value is not None for value in previous_values) and not all(value is not None for value in previous_values):
-        parser.error("--previous-packages, --previous-version, and --previous-package-manifest must be supplied together")
+        parser.error("--previous-packages, --previous-version, --previous-package-manifest, and "
+                     "--previous-signer-thumbprint must be supplied together")
     if os.name != "nt" or not re.fullmatch(r"[0-9a-f]{40}", args.source_sha):
         parser.error("Native Windows and an exact source commit are required")
     system = Path(os.environ["SystemRoot"]) / "System32"
@@ -626,7 +672,8 @@ def main():
                    powershell=str(system / "WindowsPowerShell/v1.0/powershell.exe"), cmake="cmake",
                    source_sha=args.source_sha, package_manifest=args.package_manifest,
                    previous_packages=args.previous_packages, previous_version=args.previous_version,
-                   previous_package_manifest=args.previous_package_manifest)
+                   previous_package_manifest=args.previous_package_manifest,
+                   previous_signer_thumbprint=args.previous_signer_thumbprint)
 
 
 if __name__ == "__main__":

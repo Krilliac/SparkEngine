@@ -15,6 +15,8 @@ import tempfile
 
 SIGNATURE_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
+# Module-loading progress is CLIXML on stderr, not part of the JSON evidence.
+$ProgressPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 # This verifier launches the Windows PowerShell binary by absolute path. Pin
 # its built-in security module as well: an inherited PSModulePath can otherwise

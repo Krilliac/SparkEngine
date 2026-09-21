@@ -20,6 +20,7 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 SOURCE_SHA = "0123456789abcdef0123456789abcdef01234567"
+PREVIOUS_SIGNER_THUMBPRINT = "A" * 40
 
 
 def write_shipping_package_manifest(path, msi, *, source_sha=SOURCE_SHA, version="1.2.3"):
@@ -55,13 +56,9 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
     def _run_transaction_contract(self, *, root, old_packages, new_packages,
                                   old_manifest, new_manifest, module_manifest,
-                                  logs, runner):
-        """Call the frozen old->new qualification API.
-
-        The current implementation intentionally lacks these keyword arguments;
-        converting that missing API into an assertion failure keeps the red
-        contract diagnostic instead of producing an incidental TypeError.
-        """
+                                  logs, runner, previous_signer_thumbprint=PREVIOUS_SIGNER_THUMBPRINT,
+                                  powershell="powershell.exe"):
+        """Exercise the old->new contract with generated native-process fixtures."""
         def copy_private_verified_file(source, private_directory, destination_name):
             destination = private_directory / destination_name
             with source.open("rb") as source_stream, destination.open("xb") as destination_stream:
@@ -91,13 +88,14 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                     logs,
                     runner=runner,
                     msiexec="msiexec.exe",
-                    powershell="powershell.exe",
+                    powershell=powershell,
                     cmake="cmake",
                     source_sha=SOURCE_SHA,
                     package_manifest=new_manifest,
                     previous_packages=old_packages,
                     previous_version="1.2.2",
                     previous_package_manifest=old_manifest,
+                    previous_signer_thumbprint=previous_signer_thumbprint,
                 )
         except TypeError as exc:
             if "unexpected keyword argument" in str(exc):
@@ -110,10 +108,25 @@ class WindowsMSILifecycleTests(unittest.TestCase):
     def _identity_runner(self, calls, state, *, fail_new_runtime=False,
                          mismatch_upgrade_code=False, same_product_code=False,
                          fail_upgrade_command=False, foreign_related_product=False,
-                         fail_previous_install_command=False):
+                         fail_previous_install_command=False, signature_changes=None):
         """Deterministic native fixture for the frozen transaction semantics."""
         def runner(argv, log, *, timeout, env=None, cwd=None):
             calls.append(list(argv))
+            if env and "SPARK_SIGNATURE_PATH" in env:
+                selected = Path(env["SPARK_SIGNATURE_PATH"])
+                self.assertEqual(selected.parent.name, ".private-previous-package")
+                self.assertEqual(selected.read_bytes(), b"old fixture MSI")
+                evidence = {
+                    "Status": "Valid", "SignatureType": "Authenticode",
+                    "SignerThumbprint": PREVIOUS_SIGNER_THUMBPRINT,
+                    "SignerSubject": "CN=Generated Fixture",
+                    "TimestampThumbprint": "C" * 40, "TimestampSubject": "CN=Timestamp Fixture",
+                }
+                evidence.update(signature_changes or {})
+                log.write_text(json.dumps(evidence), encoding="utf-8")
+                state["signature_verified_before_install"] = not state["installed"]
+                state["signature_call_index"] = len(calls) - 1
+                return 0
             if "-EncodedCommand" in argv:
                 selected_name = Path(env["SPARK_MSI_PATH"]).name
                 version_match = re.search(r"SparkEngine-([0-9]+\.[0-9]+\.[0-9]+)-Windows-", selected_name)
@@ -206,6 +219,121 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
         return runner
 
+    def test_unacceptable_predecessor_signature_prevents_every_msiexec(self):
+        for changes in (
+            {"Status": "NotSigned"},
+            {"SignerThumbprint": "D" * 40},
+            {"TimestampThumbprint": None},
+            {"SignatureType": "Catalog"},
+        ):
+            with self.subTest(changes=changes), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                logs = root / "rejected-signature"
+                calls = []
+                state = {"installed": False, "version": None, "repaired": False}
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=logs,
+                    runner=self._identity_runner(calls, state, signature_changes=changes),
+                )
+                self.assertNotEqual(result, 0)
+                self.assertFalse(any(call[0] == "msiexec.exe" for call in calls), calls)
+                self.assertFalse(state["installed"])
+                self.assertFalse((logs / "package-smoke.log").exists())
+
+    def test_predecessor_requires_explicit_valid_publisher_before_native_commands(self):
+        for thumbprint in (None, "", "invalid", "A" * 39):
+            with self.subTest(thumbprint=thumbprint), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                calls = []
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=root / "missing-publisher",
+                    runner=self._identity_runner(calls, {"installed": False}),
+                    previous_signer_thumbprint=thumbprint,
+                )
+                self.assertNotEqual(result, 0)
+                self.assertEqual(calls, [])
+
+    def test_malformed_predecessor_signature_response_prevents_installer_execution(self):
+        for payload in ('{"Status":"Valid","Status":"NotSigned"}', 'not JSON'):
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                calls = []
+
+                def signature_only_runner(argv, log, **kwargs):
+                    self.assertIn("SPARK_SIGNATURE_PATH", kwargs.get("env", {}))
+                    calls.append(argv)
+                    log.write_text(payload, encoding="utf-8")
+                    return 0
+
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=root / "malformed-signature",
+                    runner=signature_only_runner,
+                )
+                self.assertNotEqual(result, 0)
+                self.assertEqual(len(calls), 1)
+
+    @unittest.skipUnless(os.name == "nt", "Requires native Windows Authenticode")
+    def test_native_unsigned_predecessor_is_rejected_before_installer_execution(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            calls = []
+
+            def signature_only_runner(argv, log, **kwargs):
+                self.assertIn("SPARK_SIGNATURE_PATH", kwargs.get("env", {}),
+                              "Unsigned input must stop before MSI identity or installation")
+                calls.append(argv)
+                return MODULE.run_command(argv, log, **kwargs)
+
+            logs = root / "unsigned-native"
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs, runner=signature_only_runner,
+                powershell=MODULE.package_signatures.trusted_powershell(),
+            )
+            self.assertNotEqual(result, 0)
+            self.assertEqual(len(calls), 1)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertIn("signature status", " ".join(report["errors"]))
+            self.assertFalse((logs / "package-smoke.log").exists())
+
+    def test_cpack_preserves_runtime_upgrade_family_without_fixed_product_code(self):
+        cmake = shutil.which("cmake")
+        self.assertIsNotNone(cmake, "CMake is required for the installer configuration regression")
+        options = Path(__file__).resolve().parents[2] / "cmake" / "SparkCPackOptions.cmake"
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            script = root / "identity.cmake"
+            output = root / "identity.txt"
+            script.write_text(
+                'set(CPACK_GENERATOR "WIX")\n'
+                'set(CPACK_BUILD_CONFIG "MinSizeRel")\n'
+                'set(CPACK_PACKAGE_FILE_NAME "SparkEngine-${CPACK_PACKAGE_VERSION}-Windows-AMD64")\n'
+                f'include("{options.as_posix()}")\n'
+                'if(DEFINED CPACK_WIX_PRODUCT_GUID)\n'
+                '  message(FATAL_ERROR "ProductCode must remain generated per package, never the family GUID")\n'
+                'endif()\n'
+                f'file(WRITE "{output.as_posix()}" "${{CPACK_WIX_UPGRADE_GUID}}\\n")\n',
+                encoding="utf-8",
+            )
+            families = []
+            for version in ("1.0.0", "1.0.1", "1.0.1"):
+                result = subprocess.run([cmake, f"-DCPACK_PACKAGE_VERSION={version}", "-P", str(script)],
+                                        capture_output=True, text=True, timeout=30, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                families.append(output.read_text(encoding="utf-8").strip())
+            self.assertEqual(families, ["74E90DE5-B7E2-442C-9696-8CA63782F55A"] * 3)
+
     def test_two_version_upgrade_installs_new_product_and_uninstalls_cleanly(self):
         """The qualification contract must exercise an old->new upgrade, not only fresh install."""
         with tempfile.TemporaryDirectory() as raw:
@@ -222,6 +350,13 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 runner=self._identity_runner(calls, state),
             )
             self.assertEqual(result, 0)
+            self.assertTrue(state["signature_verified_before_install"])
+            signature_report = json.loads((logs / "previous-signature.json").read_text(encoding="utf-8"))
+            self.assertTrue(signature_report["passed"])
+            self.assertEqual(signature_report["sha256"], hashlib.sha256(b"old fixture MSI").hexdigest())
+            self.assertEqual(signature_report["publisher_thumbprint"], PREVIOUS_SIGNER_THUMBPRINT)
+            first_install = next(index for index, call in enumerate(calls) if call[0] == "msiexec.exe")
+            self.assertLess(state["signature_call_index"], first_install)
             self.assertIsNone(state["version"])
             self.assertFalse(state["installed"])
             self.assertTrue(any("1.2.3" in " ".join(call) and "/i" in call for call in calls))
@@ -445,6 +580,23 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as raised:
                 MODULE.main()
         self.assertEqual(raised.exception.code, 2)
+
+    def test_main_requires_publisher_even_when_ambient_signing_config_exists(self):
+        argv = [
+            "qualify-windows-msi.py", "--packages", "packages", "--version", "1.2.3",
+            "--manifest", "modules.cmake", "--package-manifest", "package.json",
+            "--runner-temp", "runner-temp", "--logs", "logs", "--source-sha", SOURCE_SHA,
+            "--previous-packages", "previous", "--previous-version", "1.2.2",
+            "--previous-package-manifest", "previous.json",
+        ]
+        with mock.patch.object(sys, "argv", argv), \
+                mock.patch.dict(os.environ, {"SPARK_RELEASE_SIGNER_THUMBPRINT": PREVIOUS_SIGNER_THUMBPRINT}), \
+                mock.patch.object(MODULE, "qualify") as qualify, \
+                contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                MODULE.main()
+        self.assertEqual(raised.exception.code, 2)
+        qualify.assert_not_called()
 
     def test_repair_preserves_user_data_after_upgrade(self):
         """Repair must restore product files without deleting user-owned data."""
