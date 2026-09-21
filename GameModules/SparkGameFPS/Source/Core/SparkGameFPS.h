@@ -17,6 +17,12 @@
 
 #include <string>
 #include <vector>
+#include <memory>
+
+namespace SparkGameFPS
+{
+    class EngineWeatherAdapter;
+}
 
 // Forward declarations
 class Game;
@@ -54,6 +60,7 @@ class SparkGameModule : public Spark::IModule
     void RegisterGameConsoleCommands();
 
     Spark::IEngineContext* m_context{nullptr};
+    std::unique_ptr<SparkGameFPS::EngineWeatherAdapter> m_weatherAdapter;
     std::vector<std::string> m_registeredConsoleCommands;
     bool m_initialized{false};
 };

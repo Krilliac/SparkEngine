@@ -11,6 +11,7 @@
  */
 
 #include "SparkGameFPS.h"
+#include "Core/EngineWeatherAdapter.h"
 #include "Game/Game.h"
 #include "Game/GameMode.h"
 #include "Game/InventorySystem.h"
@@ -25,7 +26,6 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "Audio/MusicManager.h"
-#include "Graphics/WeatherSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
@@ -218,6 +218,8 @@ bool SparkGameModule::InitializeFromContext()
     }
 
     // Register game-specific console commands
+    m_weatherAdapter = std::make_unique<SparkGameFPS::EngineWeatherAdapter>(m_context->GetWeather());
+    g_game->SetWeatherPort(m_weatherAdapter.get());
     RegisterGameConsoleCommands();
 
     // Register FPS-specific state validation rules on the HOST's detector.
@@ -300,10 +302,12 @@ void SparkGameModule::Shutdown()
 
     if (g_game)
     {
+        g_game->ClearWeatherPort();
         g_game->Shutdown();
         delete g_game;
         g_game = nullptr;
     }
+    m_weatherAdapter.reset();
     m_context = nullptr;
     m_initialized = false;
 
@@ -724,23 +728,23 @@ void SparkGameModule::RegisterGameConsoleCommands()
 
     console.RegisterCommand(
         "weather",
-        [context](const std::vector<std::string>& args) -> std::string
+        [game](const std::vector<std::string>& args) -> std::string
         {
             if (args.empty())
                 return "Usage: weather <clear|rain|snow|fog|storm>";
-            auto* weather = context ? context->GetWeather() : nullptr;
-            if (!weather)
+            if (!game)
                 return "WeatherSystem not available";
-            Spark::WeatherType type = Spark::WeatherType::Clear;
+            SparkGameFPS::WeatherPreset type = SparkGameFPS::WeatherPreset::Clear;
             if (args[0] == "rain")
-                type = Spark::WeatherType::Rain;
+                type = SparkGameFPS::WeatherPreset::Rain;
             else if (args[0] == "snow")
-                type = Spark::WeatherType::Snow;
+                type = SparkGameFPS::WeatherPreset::Snow;
             else if (args[0] == "fog")
-                type = Spark::WeatherType::Fog;
+                type = SparkGameFPS::WeatherPreset::Fog;
             else if (args[0] == "storm")
-                type = Spark::WeatherType::Storm;
-            weather->SetWeather(type, 0.8f, 3.0f);
+                type = SparkGameFPS::WeatherPreset::Storm;
+            if (!game->SetWeatherPreset(type, 0.8f, 3.0f))
+                return "WeatherSystem not available";
             return "Weather set to " + args[0];
         },
         "Set weather (weather <clear|rain|snow|fog|storm>)");

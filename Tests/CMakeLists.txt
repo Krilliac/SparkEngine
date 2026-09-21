@@ -625,6 +625,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSLocalProfile.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/ProgressionSystem.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Core/EngineWeatherAdapter.cpp"
     # Editor core sources (no ImGui dependency)
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
@@ -1013,6 +1014,7 @@ target_sources(SparkTests PRIVATE
     TestShadowPassReal.cpp
     TestSparkGameFPSLoopReal.cpp
     TestSparkGameFPSMirrorCompanionsReal.cpp
+    TestFPSWeatherPort.cpp
     TestTemplateRuntimeReal.cpp
     TestUserDataPathsReal.cpp
     TestWeaponMechanicsReal.cpp

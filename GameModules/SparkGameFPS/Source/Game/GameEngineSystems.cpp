@@ -26,7 +26,6 @@
 // Engine systems
 #include "Audio/AudioEngine.h"
 #include "Audio/MusicManager.h"
-#include "Graphics/WeatherSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
@@ -101,11 +100,17 @@ void Game::InitializeEngineSystems()
     }
 
     // ---- Weather ------------------------------------------------------
-    if (auto* weather = m_engineContext->GetWeather())
+    if (m_weatherIntegration.Initialize())
     {
-        weather->SetWeather(Spark::WeatherType::Clear, 1.0f, 0.0f);
         m_weatherActive = true;
-        LOG_TO_CONSOLE_IMMEDIATE(L"Weather: clear skies set for arena", L"SUCCESS");
+        LOG_TO_CONSOLE_IMMEDIATE(m_weatherActive ? L"Weather: clear skies set for arena"
+                                                 : L"Weather: optional capability unavailable",
+                                 m_weatherActive ? L"SUCCESS" : L"WARNING");
+    }
+    else
+    {
+        m_weatherActive = false;
+        LOG_TO_CONSOLE_IMMEDIATE(L"Weather: optional capability unavailable", L"WARNING");
     }
 
     // ---- Destruction --------------------------------------------------

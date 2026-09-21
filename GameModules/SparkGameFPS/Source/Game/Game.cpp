@@ -36,7 +36,6 @@
 #include "Console/AdvancedConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
 #include "Audio/MusicManager.h"
-#include "Graphics/WeatherSystem.h"
 #include <filesystem>
 
 // Centralized logging macros (previously defined locally with inconsistent rate limits)
@@ -254,6 +253,7 @@ void Game::Shutdown()
     m_camera.reset();
     m_sceneManager.reset();
     m_eventBus = nullptr;
+    m_weatherIntegration.Clear();
     m_engineContext = nullptr;
     m_engineSystemsInitialized = false;
 
@@ -484,17 +484,17 @@ void Game::Update(float dt)
         if (m_weatherTransitionTimer > 120.0f) // Every 2 minutes
         {
             m_weatherTransitionTimer = 0.0f;
-            if (auto* weather = m_engineContext->GetWeather())
+            if (m_weatherIntegration.IsActive())
             {
                 // Cycle: Clear → Rain → Fog → Storm → Clear
                 static int weatherCycle = 0;
-                constexpr Spark::WeatherType cycle[] = {
-                    Spark::WeatherType::Rain,
-                    Spark::WeatherType::Fog,
-                    Spark::WeatherType::Storm,
-                    Spark::WeatherType::Clear,
+                constexpr SparkGameFPS::WeatherPreset cycle[] = {
+                    SparkGameFPS::WeatherPreset::Rain,
+                    SparkGameFPS::WeatherPreset::Fog,
+                    SparkGameFPS::WeatherPreset::Storm,
+                    SparkGameFPS::WeatherPreset::Clear,
                 };
-                weather->SetWeather(cycle[weatherCycle % 4], 0.8f, 5.0f);
+                m_weatherIntegration.SetWeather(cycle[weatherCycle % 4], 0.8f, 5.0f);
                 weatherCycle++;
             }
         }
