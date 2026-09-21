@@ -1,15 +1,14 @@
 """Bounded, atomic no-replace publication for portable consumer receipts.
 
-The caller supplies an existing real directory. POSIX operations stay anchored
-to its directory descriptor; Windows retains the package writer's native file
-handle guarantees while directory handles prevent ancestor replacement.
+The caller supplies an existing real directory. Linux uses an anonymous inode
+anchored to its directory descriptor; Windows retains the package writer's
+native file handle guarantees while directory handles prevent ancestor replacement.
 """
 from contextlib import contextmanager
-import errno
 import os
 from pathlib import Path
-import secrets
 import stat
+import sys
 
 MAX_RECEIPT_BYTES = 1024 * 1024
 _REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
@@ -37,31 +36,17 @@ def _real_directories(parent):
 
 
 def _sync_directory(descriptor):
-    try:
-        os.fsync(descriptor)
-    except OSError as error:
-        # Some POSIX filesystems do not implement directory fsync. Real I/O,
-        # permission, and descriptor failures remain fatal.
-        if error.errno not in {errno.EINVAL, errno.ENOTSUP, errno.EOPNOTSUPP}:
-            raise
-
-
-def _unlink_owned(parent_fd, name, identity):
-    try:
-        info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
-        if _identity(info) == identity:
-            os.unlink(name, dir_fd=parent_fd)
-    except FileNotFoundError:
-        pass
+    # Unsupported durability is a failure too; never silently weaken the receipt.
+    os.fsync(descriptor)
 
 
 def _publish_posix(destination, payload):
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    if sys.platform != "linux" or not hasattr(os, "O_TMPFILE"):
+        raise ReceiptPublicationError("POSIX receipt publication requires Linux O_TMPFILE support")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
     parent_fd = os.open(destination.anchor, flags)
     descriptor = None
-    temporary = None
     published = False
-    owned_identity = None
     try:
         for component in destination.parent.parts[1:]:
             next_fd = os.open(component, flags, dir_fd=parent_fd)
@@ -74,8 +59,10 @@ def _publish_posix(destination, payload):
             pass
         else:
             raise ReceiptPublicationError("receipt destination already exists")
-        temporary = f".{destination.name}.{secrets.token_hex(16)}.tmp"
-        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        _sync_directory(parent_fd)
+        # No staging pathname exists to be swapped or accidentally unlinked.
+        # O_EXCL must not be used with O_TMPFILE: it would prohibit linking.
+        descriptor = os.open(".", os.O_RDWR | os.O_TMPFILE | os.O_CLOEXEC,
                              0o600, dir_fd=parent_fd)
         owned_identity = _identity(os.fstat(descriptor))
         offset = 0
@@ -86,32 +73,33 @@ def _publish_posix(destination, payload):
                 raise OSError("receipt write made invalid progress")
             offset += written
         os.fsync(descriptor)
-        staged = os.stat(temporary, dir_fd=parent_fd, follow_symlinks=False)
-        if (_link_like(staged) or not stat.S_ISREG(staged.st_mode)
-                or staged.st_nlink != 1 or _identity(staged) != owned_identity):
-            raise ReceiptPublicationError("receipt staging identity changed")
+        # Linux open(2) documents this unprivileged O_TMPFILE publication path.
+        # dst_dir_fd selects linkat; follow_symlinks=True supplies AT_SYMLINK_FOLLOW
+        # for the kernel-owned proc fd link, never for the destination pathname.
+        source = f"/proc/self/fd/{descriptor}"
+        staged = os.stat(source)
+        if (not stat.S_ISREG(staged.st_mode) or staged.st_nlink != 0
+                or _identity(staged) != owned_identity):
+            raise ReceiptPublicationError("anonymous receipt staging identity changed")
         _real_directories(destination.parent)
         if _identity(destination.parent.lstat()) != parent_identity:
             raise ReceiptPublicationError("receipt parent identity changed")
-        os.link(temporary, destination.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd,
-                follow_symlinks=False)
+        os.link(source, destination.name, dst_dir_fd=parent_fd, follow_symlinks=True)
         published = True
+        _sync_directory(parent_fd)
         linked = os.stat(destination.name, dir_fd=parent_fd, follow_symlinks=False)
         if _link_like(linked) or not stat.S_ISREG(linked.st_mode) or _identity(linked) != owned_identity:
             raise ReceiptPublicationError("published receipt identity changed")
         _real_directories(destination.parent)
         if _identity(destination.parent.lstat()) != parent_identity:
             raise ReceiptPublicationError("receipt parent changed during publication")
-        os.unlink(temporary, dir_fd=parent_fd)
-        temporary = None
-        _sync_directory(parent_fd)
-    except BaseException:
-        # Never remove a competing destination that won the no-replace race.
-        if published and owned_identity is not None:
-            _unlink_owned(parent_fd, destination.name, owned_identity)
-        if temporary is not None and owned_identity is not None:
-            _unlink_owned(parent_fd, temporary, owned_identity)
-        _sync_directory(parent_fd)
+    except Exception as error:
+        if published:
+            # There is no atomic identity-conditional unlink. Leave all visible
+            # names alone, including a competing replacement, and fail closed.
+            raise ReceiptPublicationError(
+                f"receipt may already be visible; publication/durability is unconfirmed: {error}"
+            ) from error
         raise
     finally:
         if descriptor is not None:

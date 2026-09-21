@@ -131,15 +131,24 @@ Only success produces the immutable Actions artifact
 receipt says `publication-verified`, carries the candidate SHA, release and asset
 IDs/digests, and verifier run identity. Preserve that artifact and its GitHub
 artifact digest/producer identity in the release evidence archive before expiry;
-an unverified local JSON copy is not authority. Failure produces no success
-receipt, and final readiness remains blocked pending investigation and recovery.
+an unverified local JSON copy is not authority. A failed verifier run produces no
+success artifact, even if a late local publication error leaves a visible JSON
+file. Final readiness remains blocked pending investigation and recovery.
 
 The receipt writer accepts at most 1 MiB and requires an existing real parent
-directory. It rejects existing names, symlink/reparse traversal, and replacement
-races. POSIX publication anchors staging and linking to a directory descriptor,
-syncs the completed file, and syncs the directory where supported; Windows
-retains the native package writer under locked parent directories. Publication
-never overwrites a receipt, and failure cleanup removes only owned file identities.
+directory. It rejects existing names and symlink/reparse traversal. Linux
+publication anchors an anonymous `O_TMPFILE` inode to a directory descriptor,
+syncs the completed file, atomically links the owned fd without replacement, and
+syncs the directory before verifying the visible file and parent identities.
+The [Linux-documented proc fd link mechanism](https://man7.org/linux/man-pages/man2/open.2.html)
+needs no elevated capability. Missing `O_TMPFILE`, proc fd access, or directory
+sync support fails closed; other POSIX platforms have no named-temp fallback.
+Pre-link failure closes the anonymous inode, leaving no staging name to clean
+up. Post-link failure never deletes a visible name: it reports that publication
+or durability is unconfirmed, preserves any competing replacement, and requires
+investigation rather than issuing a successful receipt result. Windows retains
+the unchanged native package writer under locked parent directories. Neither
+backend overwrites an existing receipt.
 
 The release owner must then reconcile this independent evidence, actual
 deployment approval, all supported-host/rehearsal results, and live-site

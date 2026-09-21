@@ -252,22 +252,211 @@ class ReceiptPublicationTests(unittest.TestCase):
             publish_receipt_no_replace(self.receipt, self.payload)
         self.assert_clean()
 
-    def test_directory_sync_only_tolerates_explicitly_unsupported_filesystems(self):
-        for code in (errno.EINVAL, errno.ENOTSUP):
-            with patch.object(os, "fsync", side_effect=OSError(code, "unsupported")):
-                receipt_publication._sync_directory(0)
-        with patch.object(os, "fsync", side_effect=OSError(errno.EIO, "I/O failure")), self.assertRaises(OSError):
-            receipt_publication._sync_directory(0)
+    def test_directory_sync_fails_closed_on_unsupported_filesystems_or_io_errors(self):
+        for code in (errno.EINVAL, errno.ENOTSUP, errno.EIO):
+            with self.subTest(code=code), patch.object(os, "fsync", side_effect=OSError(code, "sync failure")):
+                with self.assertRaises(OSError):
+                    receipt_publication._sync_directory(0)
 
     @unittest.skipUnless(os.name == "posix", "directory fsync is exercised by the POSIX publisher")
-    def test_directory_sync_failure_rolls_back_its_own_receipt(self):
+    def test_directory_sync_preflight_failure_never_publishes(self):
         sync = os.fsync
         def fail(descriptor):
             if stat.S_ISDIR(os.fstat(descriptor).st_mode):
                 raise OSError(errno.EIO, "injected directory sync failure")
             return sync(descriptor)
-        with patch.object(os, "fsync", side_effect=fail), self.assertRaises(ReceiptPublicationError):
+        with patch.object(os, "fsync", side_effect=fail), patch.object(os, "link") as link:
+            with self.assertRaises(ReceiptPublicationError):
+                publish_receipt_no_replace(self.receipt, self.payload)
+            link.assert_not_called()
+        self.assert_clean()
+
+    @unittest.skipUnless(os.name == "posix", "Linux directory durability boundary")
+    def test_post_link_sync_failure_preserves_visible_file_and_reports_uncertainty(self):
+        real_link, real_sync = os.link, os.fsync
+        linked = False
+        def link(*args, **kwargs):
+            nonlocal linked
+            real_link(*args, **kwargs)
+            linked = True
+        def sync(descriptor):
+            if linked and stat.S_ISDIR(os.fstat(descriptor).st_mode):
+                raise OSError(errno.EIO, "injected post-link sync failure")
+            return real_sync(descriptor)
+        with patch.object(os, "link", side_effect=link), patch.object(os, "fsync", side_effect=sync):
+            with patch.object(os, "unlink", side_effect=AssertionError("must not unlink visible names")):
+                with self.assertRaisesRegex(ReceiptPublicationError, "may already be visible"):
+                    publish_receipt_no_replace(self.receipt, self.payload)
+        self.assertEqual(self.receipt.read_bytes(), self.payload)
+        self.assert_clean(["receipt.json"])
+
+    @unittest.skipUnless(os.name == "posix", "Linux post-sync identity validation")
+    def test_competitor_swapped_during_directory_sync_is_not_deleted(self):
+        real_link, real_sync = os.link, os.fsync
+        linked = False
+        def link(*args, **kwargs):
+            nonlocal linked
+            real_link(*args, **kwargs)
+            linked = True
+        def sync(descriptor):
+            result = real_sync(descriptor)
+            if linked and stat.S_ISDIR(os.fstat(descriptor).st_mode):
+                self.receipt.unlink()
+                self.receipt.write_bytes(b"competing receipt")
+            return result
+        with patch.object(os, "link", side_effect=link), patch.object(os, "fsync", side_effect=sync):
+            with self.assertRaisesRegex(ReceiptPublicationError, "may already be visible"):
+                publish_receipt_no_replace(self.receipt, self.payload)
+        self.assertEqual(self.receipt.read_bytes(), b"competing receipt")
+        self.assert_clean(["receipt.json"])
+
+    @unittest.skipUnless(os.name == "posix", "Linux anonymous inode publication")
+    def test_anonymous_inode_is_synced_before_link_then_directory_is_synced(self):
+        real_link, real_sync = os.link, os.fsync
+        events, descriptors = [], []
+        def sync(descriptor):
+            events.append("directory-sync" if stat.S_ISDIR(os.fstat(descriptor).st_mode) else "file-sync")
+            return real_sync(descriptor)
+        def link(source, target, **kwargs):
+            self.assertTrue(str(source).startswith("/proc/self/fd/"))
+            descriptor = int(str(source).rsplit("/", 1)[1])
+            descriptors.append(descriptor)
+            self.assertEqual(os.fstat(descriptor).st_nlink, 0)
+            self.assertEqual(stat.S_IMODE(os.fstat(descriptor).st_mode), 0o600)
+            self.assertEqual(os.read(descriptor, 1), b"")
+            self.assertEqual(list(self.root.iterdir()), [])
+            self.assertTrue(kwargs["follow_symlinks"])
+            events.append("link")
+            result = real_link(source, target, **kwargs)
+            self.assertEqual(os.fstat(descriptor).st_nlink, 1)
+            return result
+        with patch.object(os, "fsync", side_effect=sync), patch.object(os, "link", side_effect=link):
+            with patch.object(os, "unlink", side_effect=AssertionError("anonymous staging has no cleanup name")):
+                publish_receipt_no_replace(self.receipt, self.payload)
+        self.assertEqual(events, ["directory-sync", "file-sync", "link", "directory-sync"])
+        with self.assertRaises(OSError):
+            os.fstat(descriptors[0])
+
+    @unittest.skipUnless(os.name == "posix", "Linux anonymous staging cleanup")
+    def test_failed_link_closes_the_unnamed_inode_without_unlink(self):
+        descriptors = []
+        def fail(source, target, **kwargs):
+            self.assertEqual(list(self.root.iterdir()), [])
+            descriptor = int(str(source).rsplit("/", 1)[1])
+            descriptors.append(descriptor)
+            self.assertEqual(os.fstat(descriptor).st_nlink, 0)
+            raise OSError(errno.EIO, "injected link failure")
+        with patch.object(os, "link", side_effect=fail):
+            with patch.object(os, "unlink", side_effect=AssertionError("anonymous staging has no cleanup name")):
+                with self.assertRaises(ReceiptPublicationError):
+                    publish_receipt_no_replace(self.receipt, self.payload)
+        with self.assertRaises(OSError):
+            os.fstat(descriptors[0])
+        self.assert_clean()
+
+    @unittest.skipUnless(os.name == "posix", "Linux ownership race regression")
+    def test_success_cleanup_cannot_delete_a_replaced_legacy_temp_name(self):
+        # The old writer unlinked its staging pathname after linking. Swap that
+        # name after the link: its unconditional success cleanup deleted the rival.
+        real_link = os.link
+        competitors = []
+        def swap(source, target, **kwargs):
+            result = real_link(source, target, **kwargs)
+            source_path = Path(source)
+            legacy_named_stage = not source_path.is_absolute()
+            rival = self.root / (source_path.name if legacy_named_stage else ".receipt.json.rival.tmp")
+            if legacy_named_stage:
+                rival.unlink()
+            rival.write_bytes(b"competing temporary")
+            competitors.append(rival)
+            return result
+        with patch.object(os, "link", side_effect=swap):
             publish_receipt_no_replace(self.receipt, self.payload)
+        self.assertEqual(competitors[0].read_bytes(), b"competing temporary")
+        self.assertEqual(self.receipt.read_bytes(), self.payload)
+        self.assert_clean(["receipt.json", competitors[0].name])
+
+    @unittest.skipUnless(os.name == "posix", "Linux ownership race regression")
+    def test_failure_cleanup_cannot_delete_a_temp_swapped_after_its_stat(self):
+        # Reproduce the former _unlink_owned stat-then-unlink race precisely.
+        # Anonymous staging has no such stat/cleanup window, even when a rival
+        # independently creates an old-style temp name during the failed link.
+        real_stat = os.stat
+        failed, legacy_name = False, None
+        rival = self.root / ".receipt.json.rival.tmp"
+        def fail(source, target, **kwargs):
+            nonlocal failed, legacy_name, rival
+            failed = True
+            if not Path(source).is_absolute():
+                legacy_name = str(source)
+                rival = self.root / legacy_name
+            else:
+                rival.write_bytes(b"competing temporary")
+            raise OSError(errno.EIO, "injected link failure")
+        def swap_after_stat(path, *args, **kwargs):
+            information = real_stat(path, *args, **kwargs)
+            if failed and legacy_name is not None and str(path) == legacy_name:
+                rival.unlink()
+                rival.write_bytes(b"competing temporary")
+            return information
+        with patch.object(os, "link", side_effect=fail), patch.object(os, "stat", side_effect=swap_after_stat):
+            with self.assertRaises(ReceiptPublicationError):
+                publish_receipt_no_replace(self.receipt, self.payload)
+        self.assertEqual(rival.read_bytes(), b"competing temporary")
+        self.assert_clean([rival.name])
+
+    @unittest.skipUnless(os.name == "posix", "Linux post-link ownership boundary")
+    def test_replaced_published_name_is_preserved_on_verification_failure(self):
+        real_link = os.link
+        def swap(source, target, **kwargs):
+            result = real_link(source, target, **kwargs)
+            self.receipt.unlink()
+            self.receipt.write_bytes(b"competing receipt")
+            return result
+        with patch.object(os, "link", side_effect=swap), self.assertRaises(ReceiptPublicationError):
+            publish_receipt_no_replace(self.receipt, self.payload)
+        self.assertEqual(self.receipt.read_bytes(), b"competing receipt")
+        self.assert_clean(["receipt.json"])
+
+    @unittest.skipUnless(os.name == "posix", "Linux O_TMPFILE capability boundary")
+    def test_unsupported_anonymous_staging_fails_without_named_fallback(self):
+        real_open = os.open
+        def unsupported(path, flags, *args, **kwargs):
+            if flags & os.O_TMPFILE == os.O_TMPFILE:
+                raise OSError(errno.EOPNOTSUPP, "anonymous staging unavailable")
+            return real_open(path, flags, *args, **kwargs)
+        with patch.object(os, "open", side_effect=unsupported), patch.object(os, "link") as link:
+            with self.assertRaises(ReceiptPublicationError):
+                publish_receipt_no_replace(self.receipt, self.payload)
+            link.assert_not_called()
+        self.assert_clean()
+
+    @unittest.skipUnless(os.name == "posix", "Linux proc fd source validation")
+    def test_missing_or_mismatched_proc_fd_source_fails_before_link(self):
+        real_stat = os.stat
+        for kind in ("missing", "identity", "linked", "nonregular"):
+            def invalid(path, *args, **kwargs):
+                information = real_stat(path, *args, **kwargs)
+                if str(path).startswith("/proc/self/fd/"):
+                    if kind == "missing":
+                        raise FileNotFoundError(errno.ENOENT, "proc fd source unavailable")
+                    return SimpleNamespace(st_dev=information.st_dev,
+                                           st_ino=information.st_ino + (kind == "identity"),
+                                           st_nlink=1 if kind == "linked" else 0,
+                                           st_mode=stat.S_IFDIR if kind == "nonregular" else information.st_mode)
+                return information
+            with self.subTest(kind=kind), patch.object(os, "stat", side_effect=invalid):
+                with patch.object(os, "link") as link, self.assertRaises(ReceiptPublicationError):
+                    publish_receipt_no_replace(self.receipt, self.payload)
+                link.assert_not_called()
+            self.assert_clean()
+
+    @unittest.skipUnless(os.name == "posix", "Only the Linux POSIX backend is supported")
+    def test_non_linux_posix_fails_closed(self):
+        with patch("sys.platform", "darwin"), patch.object(os, "link") as link:
+            with self.assertRaisesRegex(ReceiptPublicationError, "Linux"):
+                publish_receipt_no_replace(self.receipt, self.payload)
+            link.assert_not_called()
         self.assert_clean()
 
     @unittest.skipUnless(os.name == "posix", "POSIX partial-write handling")
@@ -294,7 +483,8 @@ class ReceiptPublicationTests(unittest.TestCase):
         with patch.object(os, "link", side_effect=swap), self.assertRaises(ReceiptPublicationError):
             publish_receipt_no_replace(parent / "receipt.json", self.payload)
         self.assertEqual(list(outside.iterdir()), [])
-        self.assertEqual(list(moved.iterdir()), [])
+        self.assertEqual((moved / "receipt.json").read_bytes(), self.payload)
+        self.assertEqual({path.name for path in moved.iterdir()}, {"receipt.json"})
 
 
 if __name__ == "__main__":
