@@ -225,7 +225,16 @@ def _validate_inventory(inventory_document: dict[str, Any]) -> tuple[str, list[d
             identities = _require_list(
                 target.get("artifactIdentities"), f"{identifier} target artifact identities", 32
             )
-            if not identities and str(target.get("kind", "")).lower() != "utility":
+            # Utility, object, and interface libraries do not produce a
+            # standalone file artifact.  CMake's File API reports their
+            # target identity, but capture_provenance correctly has no path
+            # to hash.  Executables and linkable libraries still require one
+            # identity for every post-build artifact.
+            if not identities and str(target.get("kind", "")).lower() not in {
+                "utility",
+                "object_library",
+                "interface_library",
+            }:
                 raise PendingAuthorityError(
                     f"{identifier}: target {target_name!r} has no artifact identities"
                 )

@@ -14,8 +14,20 @@ endif()
 
 file(REMOVE_RECURSE "${SPARK_COOKER_WORK_DIR}")
 file(MAKE_DIRECTORY "${SPARK_COOKER_WORK_DIR}/source/nested")
-file(WRITE "${SPARK_COOKER_WORK_DIR}/source/alpha.txt" "alpha release smoke\n")
-file(WRITE "${SPARK_COOKER_WORK_DIR}/source/nested/beta.txt" "nested cooker payload\n")
+# CMake's file(WRITE) uses the host's native text newline on Windows, which
+# made this executable smoke's aggregate digest differ between Windows and
+# Unix runners.  Pin the owned fixture bytes so one golden digest covers every
+# supported producer platform.
+file(CONFIGURE
+    OUTPUT "${SPARK_COOKER_WORK_DIR}/source/alpha.txt"
+    CONTENT "alpha release smoke\n"
+    @ONLY
+    NEWLINE_STYLE LF)
+file(CONFIGURE
+    OUTPUT "${SPARK_COOKER_WORK_DIR}/source/nested/beta.txt"
+    CONTENT "nested cooker payload\n"
+    @ONLY
+    NEWLINE_STYLE LF)
 set(_source "${SPARK_COOKER_WORK_DIR}/source")
 set(_output "${SPARK_COOKER_WORK_DIR}/output")
 set(_manifest "${_output}/spark-cook-manifest.json")
@@ -85,7 +97,7 @@ endif()
 # recorded SHA-256 of AssetCooker's NUL-delimited HashRecords stream for those
 # exact two records; binding both the manifest and CLI summary prevents a field
 # that is merely present (but unrelated to the records) from passing.
-set(_aggregate_sha "5ca548929390991a7c6bf65d953f7a50a648fc4cd933dfa368eb7402942683f1")
+set(_aggregate_sha "0df03578a02c8a21b9000ae547878d72962eae846cf90d76808989f0cc340c98")
 string(REGEX MATCHALL "\"manifestSha256\"" _manifest_digest_fields "${_manifest_text}")
 list(LENGTH _manifest_digest_fields _manifest_digest_count)
 string(FIND "${_manifest_text}" "\"manifestSha256\": \"${_aggregate_sha}\"" _manifest_digest)

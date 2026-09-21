@@ -322,6 +322,21 @@ class PendingAuthorityTests(unittest.TestCase):
         receipt = self.receipt(inventory_document, report)
         self.assertEqual(receipt["state"], "pending-external-attestation")
 
+    def test_non_artifact_library_targets_with_empty_artifact_identities_are_accepted(self) -> None:
+        inventory_document, report = valid_documents()
+        for kind in ("object_library", "interface_library"):
+            for evidence in inventory_document["configuredTargetEvidence"]:
+                evidence["targets"].append(
+                    {
+                        "target": f"NoArtifact{kind}",
+                        "kind": kind,
+                        "artifactState": "locally-observed-post-build",
+                        "artifactIdentities": [],
+                    }
+                )
+        receipt = self.receipt(inventory_document, report)
+        self.assertEqual(receipt["state"], "pending-external-attestation")
+
     def test_non_utility_target_with_empty_artifact_identities_is_rejected(self) -> None:
         inventory_document, report = valid_documents()
         inventory_document["configuredTargetEvidence"][0]["targets"].append(
