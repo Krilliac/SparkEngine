@@ -1247,6 +1247,24 @@ jobs:
         python3 tools/site-data/exact_evidence.py verify \
           --manifest "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json"
 
+    # Stable publication consumes a signature bundle produced by the protected
+    # external signing boundary. This intentionally fails closed: no in-workflow
+    # key, placeholder signature, or unsigned draft may proceed.
+    - name: Verify complete stable release bundle before draft publication
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        SOURCE_COMMIT: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        python3 -I "$GITHUB_WORKSPACE/.github/scripts/verify_release_bundle.py" \
+          --bundle-directory "$GITHUB_WORKSPACE" \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --sha256sums "$GITHUB_WORKSPACE/SHA256SUMS" \
+          --sbom "$GITHUB_WORKSPACE/SparkEngine-SBOM.spdx.json" \
+          --provenance-manifest "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json" \
+          --signature-manifest "$GITHUB_WORKSPACE/release-signatures.json" \
+          --source-commit "$SOURCE_COMMIT"
+
     - name: Prepare durable pending download-counter state
       id: badge-prepare
       env:
@@ -2166,6 +2184,21 @@ jobs:
           --release-tag "$RELEASE_TAG" \
           --is-versioned "$IS_VERSIONED" \
           --expected-draft true
+
+    - name: Reverify signed stable release bundle immediately before promotion
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        SOURCE_COMMIT: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        python3 -I "$GITHUB_WORKSPACE/.github/scripts/verify_release_bundle.py" \
+          --bundle-directory "$GITHUB_WORKSPACE" \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --sha256sums "$GITHUB_WORKSPACE/SHA256SUMS" \
+          --sbom "$GITHUB_WORKSPACE/SparkEngine-SBOM.spdx.json" \
+          --provenance-manifest "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json" \
+          --signature-manifest "$GITHUB_WORKSPACE/release-signatures.json" \
+          --source-commit "$SOURCE_COMMIT"
 
     - name: Publish complete stable versioned release
       if: needs.prepare.outputs.is_versioned == 'true' && (steps.release-freeze.outputs.target_exists != 'true' || steps.release-freeze.outputs.target_is_draft == 'true')
