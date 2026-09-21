@@ -21,9 +21,9 @@ namespace Spark
     inline constexpr uint32_t kOldestSupportedSaveVersion = 1;
 
     /// Save format emitted by every writer in this build.
-    /// v3 persists the Transform hierarchy as the `parent` property of each
-    /// serialized Transform (saved-entity index, or "-1" for a root).
-    inline constexpr uint32_t kCurrentSaveVersion = 3;
+    /// v4 retains the v3 semantic payload and appends a standard CRC-32 trailer
+    /// over every preceding byte for accidental-corruption detection.
+    inline constexpr uint32_t kCurrentSaveVersion = 4;
 
     /// Property key that carries a Transform's parent as a saved-entity index.
     inline constexpr const char* kTransformParentProperty = "parent";

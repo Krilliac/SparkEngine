@@ -7,8 +7,10 @@
 #include "../../Core/Reflection.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/EventBus.h"
+#include "../../Utils/CRC32.h"
 #include "../../Utils/Validate.h"
 #include "Utils/LocalFileCache.h"
+#include <array>
 #include <cstring>
 #include <charconv>
 #include <cmath>
@@ -146,9 +148,177 @@ namespace Spark
         /// Suffix of the retained last-good copy written next to each slot file.
         constexpr const char* kSaveBackupSuffix = ".bak";
 
+        constexpr uint32_t kChecksummedSaveVersion = 4;
+        constexpr size_t kSaveChecksumBytes = sizeof(uint32_t);
+
+        void LogUnsupportedSaveVersion(const std::string& filepath, uint32_t version, const char* operation);
+
+        uint16_t DecodeLittleEndian16(const uint8_t* bytes) noexcept
+        {
+            return static_cast<uint16_t>(bytes[0]) | (static_cast<uint16_t>(bytes[1]) << 8u);
+        }
+
+        uint32_t DecodeLittleEndian32(const uint8_t* bytes) noexcept
+        {
+            return static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8u) |
+                   (static_cast<uint32_t>(bytes[2]) << 16u) | (static_cast<uint32_t>(bytes[3]) << 24u);
+        }
+
+        std::array<uint8_t, 2> EncodeLittleEndian16(uint16_t value) noexcept
+        {
+            return {static_cast<uint8_t>(value & 0xFFu), static_cast<uint8_t>((value >> 8u) & 0xFFu)};
+        }
+
+        std::array<uint8_t, 4> EncodeLittleEndian32(uint32_t value) noexcept
+        {
+            return {static_cast<uint8_t>(value & 0xFFu), static_cast<uint8_t>((value >> 8u) & 0xFFu),
+                    static_cast<uint8_t>((value >> 16u) & 0xFFu), static_cast<uint8_t>((value >> 24u) & 0xFFu)};
+        }
+
         bool IsSupportedSaveVersion(uint32_t version)
         {
             return version >= kOldestSupportedSaveVersion && version <= kCurrentSaveVersion;
+        }
+
+        bool ReadSaveFileSnapshot(const std::string& filepath, LocalFileCache* fileCache, const char* operation,
+                                  std::vector<uint8_t>& outBytes)
+        {
+            std::error_code sizeError;
+            const uintmax_t onDiskSize = std::filesystem::file_size(filepath, sizeError);
+            if (!sizeError && onDiskSize > static_cast<uintmax_t>(SaveRepresentationLimits::maxWireBytes))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file too large: %llu bytes",
+                               static_cast<unsigned long long>(onDiskSize));
+                return false;
+            }
+
+            bool fromCache = false;
+            if (fileCache)
+            {
+                // Save files are externally mutable user data. Force a fresh immutable
+                // snapshot into the cache so a prior valid entry cannot hide corruption
+                // or replacement that happened outside SaveSystem.
+                fileCache->Invalidate(filepath);
+                auto result = fileCache->ReadBinary(filepath);
+                if (result.IsOk())
+                {
+                    outBytes = result.Value();
+                    fromCache = true;
+                }
+            }
+
+            if (!fromCache)
+            {
+                std::ifstream file(filepath, std::ios::binary);
+                if (!file.is_open())
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: failed to open save file '%s' (errno=%d)", operation,
+                                   filepath.c_str(), errno);
+                    return false;
+                }
+
+                file.seekg(0, std::ios::end);
+                const auto size = file.tellg();
+                if (size < 0)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: tellg() returned negative for '%s' (file unreadable)",
+                                   operation, filepath.c_str());
+                    return false;
+                }
+                file.seekg(0, std::ios::beg);
+
+                if (!SaveRepresentationLimits::SupportsWireBytes(static_cast<size_t>(size)))
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file too large: %lld bytes",
+                                   static_cast<long long>(size));
+                    return false;
+                }
+
+                outBytes.resize(static_cast<size_t>(size));
+                file.read(reinterpret_cast<char*>(outBytes.data()), size);
+                if (!file)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file read incomplete: expected %lld bytes",
+                                   static_cast<long long>(size));
+                    return false;
+                }
+            }
+
+            if (!SaveRepresentationLimits::SupportsWireBytes(outBytes.size()))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Cached save file too large: %zu bytes", outBytes.size());
+                return false;
+            }
+            return true;
+        }
+
+        bool ValidateSaveEnvelope(const std::vector<uint8_t>& fileData, const std::string& filepath,
+                                  const char* operation, uint32_t& outVersion, size_t& outPayloadEnd)
+        {
+            if (fileData.size() < 8u)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: save file '%s' too small (%zu bytes, need at least 8)",
+                               operation, filepath.c_str(), fileData.size());
+                return false;
+            }
+            if (std::memcmp(fileData.data(), "SPRK", 4) != 0)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: invalid magic in '%s' (expected 'SPRK')", operation,
+                               filepath.c_str());
+                return false;
+            }
+
+            const uint32_t version = DecodeLittleEndian32(fileData.data() + 4);
+            if (!IsSupportedSaveVersion(version))
+            {
+                LogUnsupportedSaveVersion(filepath, version, operation);
+                return false;
+            }
+
+            size_t payloadEnd = fileData.size();
+            if (version >= kChecksummedSaveVersion)
+            {
+                if (fileData.size() < 8u + kSaveChecksumBytes)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: version %u save '%s' has no CRC32 trailer", operation,
+                                   version, filepath.c_str());
+                    return false;
+                }
+                payloadEnd -= kSaveChecksumBytes;
+                const uint32_t expected = DecodeLittleEndian32(fileData.data() + payloadEnd);
+                const uint32_t actual = ComputeCRC32(fileData.data(), payloadEnd);
+                if (expected != actual)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: CRC32 mismatch in '%s' (expected %08x, actual %08x)",
+                                   operation, filepath.c_str(), static_cast<unsigned>(expected),
+                                   static_cast<unsigned>(actual));
+                    return false;
+                }
+            }
+            else if (fileData.size() >= 8u + kSaveChecksumBytes)
+            {
+                // A damaged v4 version field must not downgrade into the legacy
+                // metadata-only path and bypass integrity verification. Reconstruct
+                // the v4 header and recognize its still-present checksum trailer.
+                const size_t candidatePayloadEnd = fileData.size() - kSaveChecksumBytes;
+                CRC32 candidate;
+                candidate.Update(fileData.data(), 4u);
+                const auto encodedV4 = EncodeLittleEndian32(kChecksummedSaveVersion);
+                candidate.Update(encodedV4.data(), encodedV4.size());
+                if (candidatePayloadEnd > 8u)
+                    candidate.Update(fileData.data() + 8u, candidatePayloadEnd - 8u);
+                const uint32_t trailer = DecodeLittleEndian32(fileData.data() + candidatePayloadEnd);
+                if (candidate.Finalize() == trailer)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: save '%s' has a corrupted v4 version field",
+                                   operation, filepath.c_str());
+                    return false;
+                }
+            }
+
+            outVersion = version;
+            outPayloadEnd = payloadEnd;
+            return true;
         }
 
         /// @brief Locate the single Transform record of a serialized entity, if any.
@@ -320,8 +490,9 @@ namespace Spark
             }
 
             SaveRepresentationBudget budget;
-            constexpr size_t fixedHeaderBytes =
-                4u + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+            const size_t fixedHeaderBytes =
+                4u + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) +
+                (data.metadata.version >= kChecksummedSaveVersion ? kSaveChecksumBytes : 0u);
             if (!budget.AddWireBytes(fixedHeaderBytes) || !budget.AddWireBytes(metadataWireBytes) ||
                 !budget.AddCustomStateEntries(data.customState.size()))
             {
@@ -1424,6 +1595,11 @@ namespace Spark
                 }
                 migrated.metadata.version = 3;
                 break;
+            case 3:
+                // v4 changes only the disk integrity envelope. The in-memory
+                // semantic payload is identical to v3.
+                migrated.metadata.version = 4;
+                break;
             default:
                 return false;
             }
@@ -1765,72 +1941,97 @@ namespace Spark
                 return false;
             }
 
+            CRC32 checksum;
+            auto writeChecksummed = [&](const void* bytes, size_t count)
+            {
+                file.write(static_cast<const char*>(bytes), static_cast<std::streamsize>(count));
+                if (file)
+                    checksum.Update(bytes, count);
+            };
+            auto writeUint16 = [&](uint16_t value)
+            {
+                const auto encoded = EncodeLittleEndian16(value);
+                writeChecksummed(encoded.data(), encoded.size());
+            };
+            auto writeUint32 = [&](uint32_t value)
+            {
+                const auto encoded = EncodeLittleEndian32(value);
+                writeChecksummed(encoded.data(), encoded.size());
+            };
+
             // Write header
             const char magic[] = "SPRK";
-            file.write(magic, 4);
+            writeChecksummed(magic, 4);
             const uint32_t version = kCurrentSaveVersion;
-            file.write(reinterpret_cast<const char*>(&version), sizeof(version));
+            writeUint32(version);
 
             // Write the metadata block already validated against the shared
             // disk/in-memory representation budget.
             const uint32_t metaSize = static_cast<uint32_t>(metaStr.size());
-            file.write(reinterpret_cast<const char*>(&metaSize), sizeof(metaSize));
-            file.write(metaStr.c_str(), metaSize);
+            writeUint32(metaSize);
+            writeChecksummed(metaStr.data(), metaStr.size());
 
             // Write entity count
             uint32_t entityCount = static_cast<uint32_t>(data.entities.size());
-            file.write(reinterpret_cast<const char*>(&entityCount), sizeof(entityCount));
+            writeUint32(entityCount);
 
             // Write each entity
             for (const auto& entity : data.entities)
             {
                 // Entity name
                 uint16_t nameLen = static_cast<uint16_t>(entity.name.size());
-                file.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
-                file.write(entity.name.c_str(), nameLen);
+                writeUint16(nameLen);
+                writeChecksummed(entity.name.data(), entity.name.size());
 
                 // Component count
                 uint16_t compCount = static_cast<uint16_t>(entity.components.size());
-                file.write(reinterpret_cast<const char*>(&compCount), sizeof(compCount));
+                writeUint16(compCount);
 
                 for (const auto& comp : entity.components)
                 {
                     // Type name
                     uint16_t typeLen = static_cast<uint16_t>(comp.typeName.size());
-                    file.write(reinterpret_cast<const char*>(&typeLen), sizeof(typeLen));
-                    file.write(comp.typeName.c_str(), typeLen);
+                    writeUint16(typeLen);
+                    writeChecksummed(comp.typeName.data(), comp.typeName.size());
 
                     // Properties
                     uint16_t propCount = static_cast<uint16_t>(comp.properties.size());
-                    file.write(reinterpret_cast<const char*>(&propCount), sizeof(propCount));
+                    writeUint16(propCount);
 
                     for (const auto& [key, value] : comp.properties)
                     {
                         uint16_t keyLen = static_cast<uint16_t>(key.size());
-                        file.write(reinterpret_cast<const char*>(&keyLen), sizeof(keyLen));
-                        file.write(key.c_str(), keyLen);
+                        writeUint16(keyLen);
+                        writeChecksummed(key.data(), key.size());
 
                         uint16_t valLen = static_cast<uint16_t>(value.size());
-                        file.write(reinterpret_cast<const char*>(&valLen), sizeof(valLen));
-                        file.write(value.c_str(), valLen);
+                        writeUint16(valLen);
+                        writeChecksummed(value.data(), value.size());
                     }
                 }
             }
 
             // Write custom state key-value pairs
             uint32_t customStateCount = static_cast<uint32_t>(data.customState.size());
-            file.write(reinterpret_cast<const char*>(&customStateCount), sizeof(customStateCount));
+            writeUint32(customStateCount);
 
             for (const auto& [key, value] : data.customState)
             {
                 uint16_t keyLen = static_cast<uint16_t>(key.size());
-                file.write(reinterpret_cast<const char*>(&keyLen), sizeof(keyLen));
-                file.write(key.c_str(), keyLen);
+                writeUint16(keyLen);
+                writeChecksummed(key.data(), key.size());
 
                 uint16_t valLen = static_cast<uint16_t>(value.size());
-                file.write(reinterpret_cast<const char*>(&valLen), sizeof(valLen));
-                file.write(value.c_str(), valLen);
+                writeUint16(valLen);
+                writeChecksummed(value.data(), value.size());
             }
+
+            // v4 appends a fixed little-endian CRC32 over every preceding byte,
+            // including the magic and version. This detects accidental corruption;
+            // it is not an authenticity or anti-tamper mechanism.
+            const auto encodedChecksum = EncodeLittleEndian32(checksum.Finalize());
+            file.write(reinterpret_cast<const char*>(encodedChecksum.data()),
+                       static_cast<std::streamsize>(encodedChecksum.size()));
 
             file.close();
             if (file.fail())
@@ -1873,19 +2074,32 @@ namespace Spark
             }
             if (destinationExists)
             {
-                std::error_code rotateError;
-                const bool retained =
-                    std::filesystem::copy_file(filepath, filepath + kSaveBackupSuffix,
-                                               std::filesystem::copy_options::overwrite_existing, rotateError);
-                if (!retained || rotateError)
+                SaveData previousRevision;
+                if (ReadFromFile(filepath, previousRevision))
                 {
+                    std::error_code rotateError;
+                    const bool retained =
+                        std::filesystem::copy_file(filepath, filepath + kSaveBackupSuffix,
+                                                   std::filesystem::copy_options::overwrite_existing, rotateError);
+                    if (!retained || rotateError)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                       "WriteToFile: could not retain the last-good copy of '%s': %s; aborting replace",
+                                       filepath.c_str(),
+                                       rotateError ? rotateError.message().c_str() : "copy not performed");
+                        std::error_code removeError;
+                        std::filesystem::remove(tmpPath, removeError);
+                        return false;
+                    }
+                }
+                else
+                {
+                    // Never overwrite a valid retained copy with bytes that failed
+                    // structural/integrity validation. The new temp file can still
+                    // replace the unreadable primary atomically.
                     SPARK_LOG_WARN(Spark::LogCategory::Save,
-                                   "WriteToFile: could not retain the last-good copy of '%s': %s; aborting replace",
-                                   filepath.c_str(),
-                                   rotateError ? rotateError.message().c_str() : "copy not performed");
-                    std::error_code removeError;
-                    std::filesystem::remove(tmpPath, removeError);
-                    return false;
+                                   "WriteToFile: existing save '%s' is unreadable; preserving any retained copy",
+                                   filepath.c_str());
                 }
             }
 
@@ -1936,134 +2150,51 @@ namespace Spark
             // with a partially populated SaveData object.
             SaveData parsedData;
 
-            // Enforce the same cap before consulting LocalFileCache. Otherwise a
-            // cached read can materialize an oversized file and bypass the direct
-            // stream branch's limit entirely.
-            std::error_code sizeError;
-            const uintmax_t onDiskSize = std::filesystem::file_size(filepath, sizeError);
-            if (!sizeError && onDiskSize > static_cast<uintmax_t>(SaveRepresentationLimits::maxWireBytes))
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file too large: %llu bytes",
-                               static_cast<unsigned long long>(onDiskSize));
-                return false;
-            }
-
-            // Try reading via file cache for binary data
             std::vector<uint8_t> fileData;
-            bool fromCache = false;
-
-            if (m_fileCache)
-            {
-                auto result = m_fileCache->ReadBinary(filepath);
-                if (result.IsOk())
-                {
-                    fileData = result.Value();
-                    fromCache = true;
-                }
-            }
-
-            if (!fromCache)
-            {
-                std::ifstream file(filepath, std::ios::binary);
-                if (!file.is_open())
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Save, "ReadFromFile: failed to open save file '%s' (errno=%d)",
-                                   filepath.c_str(), errno);
-                    return false;
-                }
-
-                file.seekg(0, std::ios::end);
-                auto size = file.tellg();
-                if (size < 0)
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Save,
-                                   "ReadFromFile: tellg() returned negative for '%s' (file unreadable)",
-                                   filepath.c_str());
-                    return false;
-                }
-                file.seekg(0, std::ios::beg);
-
-                // Sanity cap: reject unreasonably large save files (512 MB)
-                if (!SaveRepresentationLimits::SupportsWireBytes(static_cast<size_t>(size)))
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file too large: %lld bytes",
-                                   static_cast<long long>(size));
-                    return false;
-                }
-
-                fileData.resize(static_cast<size_t>(size));
-                file.read(reinterpret_cast<char*>(fileData.data()), size);
-                if (!file)
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core, "Save file read incomplete: expected %lld bytes",
-                                   static_cast<long long>(size));
-                    return false;
-                }
-            }
-
-            // A cache entry may outlive an external file replacement. Keep the
-            // parser cap authoritative even when the on-disk preflight raced or
-            // the value came from an existing cache entry.
-            if (!SaveRepresentationLimits::SupportsWireBytes(fileData.size()))
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "Cached save file too large: %zu bytes", fileData.size());
+            if (!ReadSaveFileSnapshot(filepath, m_fileCache, "ReadFromFile", fileData))
                 return false;
-            }
 
-            if (fileData.size() < 8)
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Save,
-                               "ReadFromFile: save file '%s' too small (%zu bytes, need at least 8)", filepath.c_str(),
-                               fileData.size());
+            uint32_t version = 0;
+            size_t payloadEnd = 0;
+            if (!ValidateSaveEnvelope(fileData, filepath, "ReadFromFile", version, payloadEnd))
                 return false;
-            }
 
             // Parse from the byte buffer using an offset cursor
-            size_t offset = 0;
+            size_t offset = 8u;
             SaveRepresentationBudget parsedBudget;
 
             auto readBytes = [&](void* dest, size_t count) -> bool
             {
-                if (offset > fileData.size() || count > fileData.size() - offset)
+                if (offset > payloadEnd || count > payloadEnd - offset)
                     return false;
                 std::memcpy(dest, fileData.data() + offset, count);
                 offset += count;
                 return true;
             };
-
-            // Read and verify header
-            char magic[4];
-            if (!readBytes(magic, 4))
+            auto readUint16 = [&](uint16_t& value) -> bool
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Save, "ReadFromFile: truncated magic header in '%s'",
-                               filepath.c_str());
-                return false;
-            }
-            if (std::string(magic, 4) != "SPRK")
+                std::array<uint8_t, 2> encoded{};
+                if (!readBytes(encoded.data(), encoded.size()))
+                    return false;
+                value = DecodeLittleEndian16(encoded.data());
+                return true;
+            };
+            auto readUint32 = [&](uint32_t& value) -> bool
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Save,
-                               "ReadFromFile: invalid magic '%c%c%c%c' in '%s' (expected 'SPRK')", magic[0], magic[1],
-                               magic[2], magic[3], filepath.c_str());
-                return false;
-            }
-
-            uint32_t version;
-            if (!readBytes(&version, sizeof(version)))
-                return false;
+                std::array<uint8_t, 4> encoded{};
+                if (!readBytes(encoded.data(), encoded.size()))
+                    return false;
+                value = DecodeLittleEndian32(encoded.data());
+                return true;
+            };
             parsedData.metadata.version = version;
-
-            if (!IsSupportedSaveVersion(version))
-            {
-                LogUnsupportedSaveVersion(filepath, version, "ReadFromFile");
-                return false;
-            }
 
             // Read metadata
             uint32_t metaSize;
-            if (!readBytes(&metaSize, sizeof(metaSize)))
+            if (!readUint32(metaSize))
                 return false;
-            if (!SaveRepresentationLimits::SupportsMetadataBytes(metaSize) || offset > fileData.size() ||
-                metaSize > fileData.size() - offset)
+            if (!SaveRepresentationLimits::SupportsMetadataBytes(metaSize) || offset > payloadEnd ||
+                metaSize > payloadEnd - offset)
                 return false;
             std::string metaStr(reinterpret_cast<const char*>(fileData.data() + offset), metaSize);
             offset += metaSize;
@@ -2077,7 +2208,7 @@ namespace Spark
 
             // Read entities
             uint32_t entityCount;
-            if (!readBytes(&entityCount, sizeof(entityCount)))
+            if (!readUint32(entityCount))
                 return false;
 
             // Sanity cap: prevent malformed files from causing huge allocations.
@@ -2093,7 +2224,7 @@ namespace Spark
                 SerializedEntity entity;
 
                 uint16_t nameLen;
-                if (!readBytes(&nameLen, sizeof(nameLen)))
+                if (!readUint16(nameLen))
                     return false;
                 // No tighter local cap: the uint16 prefix is the shared representation
                 // boundary, so disk and in-memory inputs accept the same maximum name.
@@ -2102,7 +2233,7 @@ namespace Spark
                     return false;
 
                 uint16_t compCount;
-                if (!readBytes(&compCount, sizeof(compCount)))
+                if (!readUint16(compCount))
                     return false;
                 if (!parsedBudget.AddComponents(compCount))
                 {
@@ -2120,7 +2251,7 @@ namespace Spark
                     SerializedComponent comp;
 
                     uint16_t typeLen;
-                    if (!readBytes(&typeLen, sizeof(typeLen)))
+                    if (!readUint16(typeLen))
                         return false;
                     comp.typeName.resize(typeLen);
                     if (!readBytes(comp.typeName.data(), typeLen))
@@ -2140,7 +2271,7 @@ namespace Spark
                     }
 
                     uint16_t propCount;
-                    if (!readBytes(&propCount, sizeof(propCount)))
+                    if (!readUint16(propCount))
                         return false;
                     if (!parsedBudget.AddProperties(propCount))
                     {
@@ -2153,14 +2284,14 @@ namespace Spark
                     for (uint16_t p = 0; p < propCount; ++p)
                     {
                         uint16_t keyLen;
-                        if (!readBytes(&keyLen, sizeof(keyLen)))
+                        if (!readUint16(keyLen))
                             return false;
                         std::string key(keyLen, '\0');
                         if (!readBytes(key.data(), keyLen))
                             return false;
 
                         uint16_t valLen;
-                        if (!readBytes(&valLen, sizeof(valLen)))
+                        if (!readUint16(valLen))
                             return false;
                         std::string val(valLen, '\0');
                         if (!readBytes(val.data(), valLen))
@@ -2183,7 +2314,7 @@ namespace Spark
 
             // Version 1 always ends with a custom-state count, even when zero.
             uint32_t customStateCount = 0;
-            if (!readBytes(&customStateCount, sizeof(customStateCount)))
+            if (!readUint32(customStateCount))
                 return false;
 
             if (!SaveRepresentationLimits::SupportsCustomStateCount(customStateCount) ||
@@ -2192,14 +2323,14 @@ namespace Spark
             for (uint32_t i = 0; i < customStateCount; ++i)
             {
                 uint16_t keyLen;
-                if (!readBytes(&keyLen, sizeof(keyLen)))
+                if (!readUint16(keyLen))
                     return false;
                 std::string key(keyLen, '\0');
                 if (!readBytes(key.data(), keyLen))
                     return false;
 
                 uint16_t valLen;
-                if (!readBytes(&valLen, sizeof(valLen)))
+                if (!readUint16(valLen))
                     return false;
                 std::string val(valLen, '\0');
                 if (!readBytes(val.data(), valLen))
@@ -2213,7 +2344,7 @@ namespace Spark
                 }
             }
 
-            if (offset != fileData.size())
+            if (offset != payloadEnd)
                 return false;
 
             if (!ValidateSaveRepresentation(parsedData, metaStr.size(), "ReadFromFile") ||
@@ -2249,44 +2380,29 @@ namespace Spark
     {
         try
         {
-            std::ifstream file(filepath, std::ios::binary);
-            if (!file.is_open())
-                return false;
-
-            // Header: 4-byte magic + uint32 version.
-            char magic[4];
-            file.read(magic, 4);
-            if (!file || std::string(magic, 4) != "SPRK")
+            std::vector<uint8_t> fileData;
+            if (!ReadSaveFileSnapshot(filepath, m_fileCache, "ReadMetadataOnly", fileData))
                 return false;
 
             uint32_t version = 0;
-            file.read(reinterpret_cast<char*>(&version), sizeof(version));
-            if (!file)
+            size_t payloadEnd = 0;
+            if (!ValidateSaveEnvelope(fileData, filepath, "ReadMetadataOnly", version, payloadEnd))
                 return false;
-            if (!IsSupportedSaveVersion(version))
-            {
-                LogUnsupportedSaveVersion(filepath, version, "ReadMetadataOnly");
-                return false;
-            }
 
             SaveMetadata parsedMetadata;
 
             // Metadata is a length-prefixed text block immediately after the header.
-            uint32_t metaSize = 0;
-            file.read(reinterpret_cast<char*>(&metaSize), sizeof(metaSize));
-            if (!file)
+            size_t offset = 8u;
+            if (offset > payloadEnd || sizeof(uint32_t) > payloadEnd - offset)
                 return false;
+            const uint32_t metaSize = DecodeLittleEndian32(fileData.data() + offset);
+            offset += sizeof(uint32_t);
             // Guard against a corrupt/oversized length before allocating.
-            if (!SaveRepresentationLimits::SupportsMetadataBytes(metaSize))
+            if (!SaveRepresentationLimits::SupportsMetadataBytes(metaSize) || offset > payloadEnd ||
+                metaSize > payloadEnd - offset)
                 return false;
 
-            std::string metaStr(metaSize, '\0');
-            if (metaSize > 0)
-            {
-                file.read(metaStr.data(), metaSize);
-                if (!file)
-                    return false;
-            }
+            const std::string metaStr(reinterpret_cast<const char*>(fileData.data() + offset), metaSize);
 
             if (!ParseMetadataBlock(version, metaStr, parsedMetadata))
                 return false;

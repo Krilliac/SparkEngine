@@ -94,9 +94,10 @@ its screenshot path is empty.
 
 ## Binary format
 
-Save files are uncompressed binary data. Multi-byte integers use the platform's
-current native representation, so the certified v1/v2 compatibility fixture is
-for the supported Windows x64 release profile.
+Save files are uncompressed binary data. Legacy v1-v3 multi-byte integers use
+the emitting platform's native representation; the immutable fixtures are from
+the supported Windows x64 profile. The v4 writer emits fixed-width integers in
+little-endian order.
 
 ```text
 4 bytes   magic: "SPRK"
@@ -117,7 +118,15 @@ u32       custom-state count
 repeat custom state:
   u16 + bytes  key
   u16 + bytes  value
+v4 only:
+  u32       standard CRC-32 over every preceding byte
 ```
+
+The v4 CRC uses polynomial `0xEDB88320` with the standard initial/final XOR.
+Readers bound the payload at the trailer, verify the complete immutable byte
+snapshot before parsing or returning metadata, and reject missing, extended, or
+mismatched trailers. CRC-32 detects accidental corruption; it is not keyed and
+does not authenticate a save against a malicious editor.
 
 ### Metadata layouts
 
@@ -127,8 +136,8 @@ v1 and v2 share the same outer binary layout. Their metadata blocks differ:
 v1: saveName, sceneName, playerClass, timestamp, playTime, health,
     armor, position, kills, deaths
 
-v2: saveName, sceneName, playerClass, screenshotPath, timestamp, playTime,
-    health, armor, position, kills, deaths
+v2-v4: saveName, sceneName, playerClass, screenshotPath, timestamp, playTime,
+       health, armor, position, kills, deaths
 ```
 
 Each listed field is newline-delimited except the three position coordinates,
@@ -152,8 +161,10 @@ migration entry point. It is transactional and idempotent:
   format version;
 - v2 -> v3 adds `Transform.parent = -1` for every serialized transform and
   updates the format version;
-- v3 -> v3 is a no-op;
-- versions below 1 or above 3 are rejected without changing the input.
+- v3 -> v4 retains the same semantic payload and moves it into the checksummed
+  v4 disk envelope;
+- v4 -> v4 is a no-op;
+- versions below 1 or above 4 are rejected without changing the input.
 
 The v1 reader uses the v1 metadata layout before applying the migration. This
 ordering matters: treating a v1 timestamp line as a v2 screenshot line would
@@ -168,16 +179,20 @@ separate migration change and fixture.
 
 ### Saving
 
-`Save()` writes `<slot>.spark_save.tmp`, closes and durably flushes it, retains
-the previous revision as `<slot>.spark_save.bak`, then atomically replaces the
-destination. A failed write removes the temporary file and leaves the previous
-slot in place. The local file cache is invalidated only after the replacement
-succeeds. `SetSaveDirectory()` records the directory and the next `Save()` creates
-it on demand. `DeleteSave()` removes both the slot file and its `.bak`.
+`Save()` writes `<slot>.spark_save.tmp`, closes and durably flushes it, validates
+the previous revision before retaining it as `<slot>.spark_save.bak`, then
+atomically replaces the destination. An unreadable primary never overwrites an
+existing last-good copy. A failed write removes the temporary file and leaves
+the previous slot in place. The local file cache is invalidated only after the
+replacement succeeds. `SetSaveDirectory()` records the directory and the next
+`Save()` creates it on demand. `DeleteSave()` removes both the slot file and its
+`.bak`.
 
-`Load()` falls back to `<slot>.spark_save.bak` with a logged warning when the slot
-file is unreadable. There is no trailing payload checksum yet (tracked under
-`SAVE-230`).
+`Load()` verifies v4 CRC-32 before parsing and falls back to
+`<slot>.spark_save.bak` with a logged warning when the primary is unreadable or
+checksum-invalid. Save reads invalidate any prior `LocalFileCache` entry before
+capturing bytes, so an externally replaced file cannot be hidden by a stale,
+previously valid snapshot.
 
 The file-based `AsyncDatabase` fallback uses the same safe publication shape for
 its KV revision: it writes a sibling `.tmp`, explicitly flushes that complete
@@ -309,6 +324,12 @@ The compatibility-labeled coverage includes:
 - exact, idempotent v1-to-v2 in-memory migration;
 - immutable v1 read compatibility without source or slot rewrite;
 - immutable v2 read compatibility with screenshot preservation and hierarchy-root migration;
+- immutable production-generated v3 FPS-profile compatibility without source or
+  slot rewrite;
+- v4 writer/trailer round-trip and exact CRC verification;
+- payload, trailer, and version-field corruption rejection before metadata or
+  world mutation, including cache-fresh external replacement;
+- checksum-invalid primary recovery through a valid retained copy;
 - future/retired version rejection;
 - successful lifecycle commit with registry-observer retention and stale
   entity-subscription removal, plus explicit incoming reactive rebinds;
@@ -336,12 +357,14 @@ The compatibility-labeled coverage includes:
 The same production-linked SaveSystem test file also retains the malformed-tail,
 oversize-file, custom-state, and atomic slot-replacement regressions.
 
-SAVE-230 remains broader than this save-format slice. A local staged MinSizeRel
-FPS smoke now demonstrates same-version progression XP persistence across two
-fresh D3D11 WARP processes and verifies that reading does not change the save
-bytes. It does not cover the rest of `FPSLocalProfile`, N-1 migration, checksum,
-rollback/backup/corruption/interruption recovery, scene/prefab/asset/editor-state
-migration, clean-machine installation, or hosted exact-SHA evidence. The ordinary
+SAVE-230 remains broader than this save-format slice. Local production-linked
+tests now cover the v4 CRC envelope, immutable v1-v3 save migration, transactional
+corruption rejection, cache freshness, and primary-to-backup recovery. The staged
+MinSizeRel FPS smoke separately demonstrates same-version progression XP
+persistence across two fresh D3D11 WARP processes. Still open: the rest of
+`FPSLocalProfile`, forced process-interruption rehearsal, scene/prefab/asset/editor
+migrations, per-module schema declarations, clean-machine installation, and
+hosted exact-SHA evidence. CRC-32 is not an authenticity control. The ordinary
 build workflows run compatibility tests serially with the rest of the suite; no
 dedicated compatibility CI job is claimed.
 
@@ -361,6 +384,7 @@ public API rather than invoking background I/O against singleton state.
 
 ## Source & Freshness
 
-Updated against the SAVE-230 save-format and installed FPS persistence slices on 2026-09-20. The constants and
-implementation named above are authoritative; this page must change in the same
-commit as any save-format or compatibility-window change.
+Updated against the SAVE-230 v4 integrity/migration and installed FPS persistence
+slices on 2026-09-21. The constants and implementation named above are
+authoritative; this page must change in the same commit as any save-format or
+compatibility-window change.
