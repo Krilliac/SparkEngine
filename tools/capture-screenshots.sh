@@ -20,6 +20,7 @@ chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
 # be running on the same host.
 owned_pids=()
 owned_start_times=()
+owned_pgids=()
 display_lock=""
 
 read_start_time() {
@@ -29,6 +30,10 @@ read_start_time() {
     fi
 }
 
+read_process_group() {
+    ps -o pgid= -p "$1" 2>/dev/null | tr -d '[:space:]'
+}
+
 launch_owned() {
     local log_file="$1"
     shift
@@ -36,12 +41,15 @@ launch_owned() {
     local pid=$!
     owned_pids+=("$pid")
     owned_start_times+=("$(read_start_time "$pid")")
+    local pgid="$(read_process_group "$pid")"
+    owned_pgids+=("${pgid:-$pid}")
     owned_pid="$pid"
 }
 
 owned_pid_is_same() {
     local index="$1"
     local pid="${owned_pids[$index]}"
+    local pgid="${owned_pgids[$index]}"
     local expected="${owned_start_times[$index]}"
     kill -0 "$pid" 2>/dev/null || return 1
     if [ -n "$expected" ]; then
@@ -58,10 +66,10 @@ stop_owned_index() {
         return
     fi
 
-    # setsid --wait remains the session leader, so its PID is also the
-    # process-group ID.  Validate identity before every signal to avoid PID
-    # reuse terminating an unrelated process.
-    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    # Validate identity before every signal to avoid PID reuse terminating an
+    # unrelated process.  The group ID is captured at launch rather than
+    # assuming it equals the PID in every shell/job-control configuration.
+    kill -TERM -- "-$pgid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
     for _ in {1..50}; do
         if ! owned_pid_is_same "$index"; then
             wait "$pid" 2>/dev/null || true
@@ -70,7 +78,7 @@ stop_owned_index() {
         sleep 0.1
     done
     if owned_pid_is_same "$index"; then
-        kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+        kill -KILL -- "-$pgid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
     fi
     wait "$pid" 2>/dev/null || true
 }
