@@ -249,11 +249,9 @@ def _validate_shipping_package_manifest(path, source_sha, version, msi_name, msi
             )
 
 
-def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_command,
-            msiexec, powershell, cmake, source_sha=None, package_manifest=None,
-            previous_packages=None, previous_version=None, previous_package_manifest=None):
-    if os.name != "nt":
-        raise ValueError("Windows is required for native MSI qualification")
+def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_command,
+                  msiexec, powershell, cmake, source_sha=None, package_manifest=None,
+                  previous_packages=None, previous_version=None, previous_package_manifest=None):
     logs = Path(logs)
     if os.path.lexists(logs):
         raise ValueError("package-evidence log directory must be fresh")
@@ -584,6 +582,26 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
     return int(not report["passed"])
 
 
+def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_command,
+            msiexec, powershell, cmake, source_sha=None, package_manifest=None,
+            previous_packages=None, previous_version=None, previous_package_manifest=None):
+    """Run native MSI qualification on Windows.
+
+    The platform-independent transaction state machine lives in the private
+    implementation so injected unit fixtures can exercise it without mutating
+    Python's process-global ``os.name`` value.
+    """
+    if os.name != "nt":
+        raise ValueError("Windows is required for native MSI qualification")
+    return _qualify_impl(
+        packages, version, manifest, runner_temp, logs,
+        runner=runner, msiexec=msiexec, powershell=powershell, cmake=cmake,
+        source_sha=source_sha, package_manifest=package_manifest,
+        previous_packages=previous_packages, previous_version=previous_version,
+        previous_package_manifest=previous_package_manifest,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--packages", type=Path, required=True)
@@ -597,11 +615,11 @@ def main():
     parser.add_argument("--previous-version")
     parser.add_argument("--previous-package-manifest", type=Path)
     args = parser.parse_args()
-    if os.name != "nt" or not re.fullmatch(r"[0-9a-f]{40}", args.source_sha):
-        parser.error("Native Windows and an exact source commit are required")
     previous_values = (args.previous_packages, args.previous_version, args.previous_package_manifest)
     if any(value is not None for value in previous_values) and not all(value is not None for value in previous_values):
         parser.error("--previous-packages, --previous-version, and --previous-package-manifest must be supplied together")
+    if os.name != "nt" or not re.fullmatch(r"[0-9a-f]{40}", args.source_sha):
+        parser.error("Native Windows and an exact source commit are required")
     system = Path(os.environ["SystemRoot"]) / "System32"
     return qualify(args.packages, args.version, args.manifest, args.runner_temp,
                    args.logs, msiexec=str(system / "msiexec.exe"),

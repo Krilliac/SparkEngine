@@ -62,23 +62,42 @@ class WindowsMSILifecycleTests(unittest.TestCase):
         converting that missing API into an assertion failure keeps the red
         contract diagnostic instead of producing an incidental TypeError.
         """
+        def copy_private_verified_file(source, private_directory, destination_name):
+            destination = private_directory / destination_name
+            with source.open("rb") as source_stream, destination.open("xb") as destination_stream:
+                shutil.copyfileobj(source_stream, destination_stream)
+            return destination, hashlib.sha256(destination.read_bytes()).hexdigest()
+
+        def publish_bytes_no_replace(destination, payload):
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("xb") as stream:
+                stream.write(payload)
+
         try:
-            with mock.patch.object(MODULE.os, "name", "nt"):
-                return MODULE.qualify(
-                new_packages,
-                "1.2.3",
-                module_manifest,
-                root,
-                logs,
-                runner=runner,
-                msiexec="msiexec.exe",
-                powershell="powershell.exe",
-                cmake="cmake",
-                source_sha=SOURCE_SHA,
-                package_manifest=new_manifest,
-                previous_packages=old_packages,
-                previous_version="1.2.2",
-                previous_package_manifest=old_manifest,
+            with mock.patch.object(
+                MODULE.package_evidence_io,
+                "copy_private_verified_file",
+                side_effect=copy_private_verified_file,
+            ), mock.patch.object(
+                MODULE.package_evidence_io,
+                "publish_bytes_no_replace",
+                side_effect=publish_bytes_no_replace,
+            ):
+                return MODULE._qualify_impl(
+                    new_packages,
+                    "1.2.3",
+                    module_manifest,
+                    root,
+                    logs,
+                    runner=runner,
+                    msiexec="msiexec.exe",
+                    powershell="powershell.exe",
+                    cmake="cmake",
+                    source_sha=SOURCE_SHA,
+                    package_manifest=new_manifest,
+                    previous_packages=old_packages,
+                    previous_version="1.2.2",
+                    previous_package_manifest=old_manifest,
                 )
         except TypeError as exc:
             if "unexpected keyword argument" in str(exc):
@@ -422,9 +441,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             "--runner-temp", "runner-temp", "--logs", "logs", "--source-sha", SOURCE_SHA,
             "--previous-version", "1.2.2",
         ]
-        with mock.patch.object(sys, "argv", argv), \
-                mock.patch.object(MODULE.os, "name", "nt"), \
-                mock.patch.dict(os.environ, {"SystemRoot": str(Path.cwd())}):
+        with mock.patch.object(sys, "argv", argv):
             with self.assertRaises(SystemExit) as raised:
                 MODULE.main()
         self.assertEqual(raised.exception.code, 2)
