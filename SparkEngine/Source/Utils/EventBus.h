@@ -149,6 +149,11 @@ namespace Spark
       public:
         EventBus() = default;
 
+        // Handles may outlive a bus (notably during static destruction).  The
+        // token lets their callbacks become no-ops before the bus members are
+        // torn down instead of dereferencing a destroyed EventBus.
+        ~EventBus() { m_lifetime.reset(); }
+
         EventBus(const EventBus&) = delete;
         EventBus& operator=(const EventBus&) = delete;
         EventBus(EventBus&&) = delete;
@@ -179,7 +184,14 @@ namespace Spark
             uint64_t id = ++m_nextId;
             ch.entries.push_back({id, std::move(handler)});
 
-            return SubscriptionHandle([this](uint64_t subId) { DoUnsubscribe<E>(subId); }, id);
+            std::weak_ptr<LifetimeToken> lifetime = m_lifetime;
+            return SubscriptionHandle(
+                [this, lifetime = std::move(lifetime)](uint64_t subId)
+                {
+                    if (lifetime.lock())
+                        DoUnsubscribe<E>(subId);
+                },
+                id);
         }
 
         /**
@@ -270,6 +282,10 @@ namespace Spark
         }
 
       private:
+        struct LifetimeToken
+        {
+        };
+
         // Type-erased base so we can store channels in a single map
         struct IChannel
         {
@@ -332,6 +348,7 @@ namespace Spark
         mutable std::mutex m_channelsMutex;
         std::unordered_map<std::type_index, std::unique_ptr<IChannel>> m_channels;
         std::atomic<uint64_t> m_nextId{0};
+        std::shared_ptr<LifetimeToken> m_lifetime = std::make_shared<LifetimeToken>();
     };
 
 } // namespace Spark
