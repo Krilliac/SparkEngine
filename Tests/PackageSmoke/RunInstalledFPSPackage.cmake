@@ -92,6 +92,12 @@ _run_checked("Install configured FPS module component" 90
     "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
     --config "${SPARK_CONFIG}" --prefix "${_install_root}" --component samples)
 
+_run_checked("Validate installed FPS asset manifest and payload" 120
+    "${CMAKE_COMMAND}"
+    "-DSPARK_ASSETS_ROOT=${_install_root}/bin/Assets"
+    "-DSPARK_ASSET_VERIFIER=${SPARK_SOURCE_ROOT}/tools/asset-integrity/verify_asset_integrity.py"
+    -P "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/ValidateInstalledFPSAssets.cmake")
+
 if(NOT EXISTS "${_expected_manifest}" OR IS_DIRECTORY "${_expected_manifest}")
     message(FATAL_ERROR
         "Configured build is missing its generated game-module manifest: ${_expected_manifest}")

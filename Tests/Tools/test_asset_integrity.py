@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -212,6 +213,7 @@ class SnapshotSafetyTests(unittest.TestCase):
             with mock.patch.object(vai, "MAX_ENTRY_COUNT", 1):
                 _, errors = vai.scan_directory(root)
                 self.assertTrue(any(e.category == "resource-limit" for e in errors))
+
             with mock.patch.object(vai, "MAX_FILE_BYTES", 1):
                 _, errors = vai.scan_directory(root)
                 self.assertTrue(any(e.category == "resource-limit" for e in errors))
@@ -221,6 +223,118 @@ class SnapshotSafetyTests(unittest.TestCase):
             with mock.patch.object(vai, "MAX_DIRECTORY_ENTRY_COUNT", 1):
                 _, errors = vai.scan_directory(root)
                 self.assertTrue(any(e.category == "resource-limit" for e in errors))
+
+
+class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
+    """Exercise the installed-package CMake asset-integrity helper contract."""
+
+    HELPER = REPO_ROOT / "Tests" / "PackageSmoke" / "ValidateInstalledFPSAssets.cmake"
+
+    def _fixture(self, temporary: str | os.PathLike[str]) -> Path:
+        assets = Path(temporary) / "Assets"
+        assets.mkdir(parents=True)
+        payload = b"installed FPS package fixture\n"
+        (assets / "payload.bin").write_bytes(payload)
+        write_manifest(
+            assets,
+            [{"path": "payload.bin", "sha256": digest(payload), "size": len(payload)}],
+        )
+        return assets
+
+    def _run_helper(self, assets: Path) -> subprocess.CompletedProcess[str]:
+        cmake = shutil.which("cmake")
+        self.assertIsNotNone(cmake, "cmake is required for installed-package helper tests")
+        return subprocess.run(
+            [
+                cmake,
+                f"-DSPARK_ASSETS_ROOT={assets}",
+                f"-DSPARK_ASSET_VERIFIER={SCRIPT}",
+                "-P",
+                str(self.HELPER),
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+
+    def test_installed_package_asset_helper_accepts_matching_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            result = self._run_helper(self._fixture(temporary))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_installed_package_asset_helper_rejects_missing_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / vai.MANIFEST_FILENAME).unlink()
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)manifest")
+
+    def test_installed_package_asset_helper_rejects_missing_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / "payload.bin").unlink()
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)missing.*payload\.bin")
+
+    def test_installed_package_asset_helper_rejects_tampered_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / "payload.bin").write_bytes(b"tampered package payload\n")
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)(hash|size).*payload\.bin")
+
+    def test_installed_package_asset_helper_rejects_case_mismatched_manifest_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            manifest = assets / vai.MANIFEST_FILENAME
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data["entries"][0]["path"] = "Payload.bin"
+            manifest.write_bytes(vai.manifest_bytes(data))
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)(missing|undeclared).*payload\.bin")
+
+    def test_installed_package_asset_helper_rejects_undeclared_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / "undeclared.bin").write_bytes(b"undeclared package payload\n")
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)undeclared.*undeclared\.bin")
+
+    def test_installed_package_asset_helper_rejects_link_like_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            assets = self._fixture(temporary)
+            outside = root / "outside"
+            outside.mkdir()
+            (outside / "payload.bin").write_bytes(b"external package payload\n")
+            linked = assets / "linked"
+            create_reparse(linked, outside)
+            try:
+                result = self._run_helper(assets)
+            finally:
+                remove_reparse(linked)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)(reparse|symlink|junction).*linked")
+
+    def test_installed_fps_package_wires_asset_helper_before_module_validation(self) -> None:
+        package_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSPackage.cmake"
+        text = package_script.read_text(encoding="utf-8")
+        helper_position = text.find("ValidateInstalledFPSAssets.cmake")
+        module_position = text.find("ValidateStagedPackageExecutables.cmake")
+        self.assertGreaterEqual(helper_position, 0, "installed FPS package must invoke asset helper")
+        self.assertGreaterEqual(module_position, 0, "installed FPS package must invoke module validator")
+        self.assertLess(
+            helper_position,
+            module_position,
+            "asset integrity must be validated before module validation",
+        )
 
 
 class ManifestValidationTests(unittest.TestCase):
