@@ -313,7 +313,7 @@
       "wave": 6,
       "area": "website",
       "owner": "unassigned",
-      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. site-runtime-contract and the runtime-side selectors remain planned.",
+      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. 2026-09-21 exact-SHA evidence: Repository Site Data succeeded for 37a4bec5, while live runtime consumption, stale-fallback presentation, and the owner-only site deployment remain unproven. site-runtime-contract and the runtime-side selectors remain planned.",
       "dependencies": [
         "RDY-000"
       ],
