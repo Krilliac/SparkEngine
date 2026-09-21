@@ -719,7 +719,7 @@
 | `NOMINMAX` | macro | SparkEngine | [GameImGuiLayer.h:L31](../../SparkEngine/Source/Core/GameImGuiLayer.h#L31) |  |
 | `NOMINMAX` | macro | SparkEngine | [AsyncDatabase.cpp:L23](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L23) |  |
 | `NOMINMAX` | macro | SparkEngine | [SaveSystem.cpp:L26](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L26) |  |
-| `NOMINMAX` | macro | SparkEngine | [ReflectedSceneSerializer.cpp:L17](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L17) |  |
+| `NOMINMAX` | macro | SparkEngine | [ReflectedScenePersistence.cpp:L13](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L13) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashArtifactDirectory.h:L18](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L18) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashHandlerSupport.h:L29](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L29) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashRedactionContext.h:L23](../../SparkEngine/Source/Utils/CrashRedactionContext.h#L23) |  |

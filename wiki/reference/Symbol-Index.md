@@ -3539,7 +3539,7 @@
 | `CaptureProgress` | function | GameModules | [TFRegionSystem.h:L88](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionSystem.h#L88) |  |
 | `CaptureRaw` | function | SparkEngine | [StackTrace.h:L224](../../SparkEngine/Source/Utils/StackTrace.h#L224) |  |
 | `CaptureRecoveryIfDue` | function | SparkEditor | [EditorUI.h:L469](../../SparkEditor/Source/Core/EditorUI.h#L469) |  |
-| `CaptureRecoverySnapshotOnCallingThread` | function | SparkEditor | [EditorRecovery.cpp:L475](../../SparkEditor/Source/Core/EditorRecovery.cpp#L475) |  |
+| `CaptureRecoverySnapshotOnCallingThread` | function | SparkEditor | [EditorRecovery.cpp:L34](../../SparkEditor/Source/Core/EditorRecovery.cpp#L34) |  |
 | `CaptureRecoverySnapshotOnCallingThread` | function | SparkEditor | [EditorRecovery.h:L44](../../SparkEditor/Source/Core/EditorRecovery.h#L44) | Serialize a recovery value while the caller owns the World. |
 | `CaptureReplayFrame` | function | SparkEngine | [GameplayLifecycleShared.cpp:L1119](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp#L1119) |  |
 | `CaptureResult` | struct | SparkEngine | [ScreenCapture.h:L51](../../SparkEngine/Source/Graphics/ScreenCapture.h#L51) | Result of a capture operation |
@@ -7666,7 +7666,7 @@
 | `DeserializeFromBinary` | function | SparkEngine | [ReflectionSerializer.h:L148](../../SparkEngine/Source/Core/ReflectionSerializer.h#L148) |  |
 | `DeserializeFromProperties` | function | SparkEngine | [ReflectionSerializer.h:L63](../../SparkEngine/Source/Core/ReflectionSerializer.h#L63) |  |
 | `DeserializeFunc` | alias | SparkEngine | [SaveSystem.h:L183](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L183) | Function signature for component deserialization. |
-| `DeserializeInto` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L401](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L401) |  |
+| `DeserializeInto` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L281](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L281) |  |
 | `DeserializeInto` | function | SparkEngine | [ReflectedSceneSerializer.h:L31](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h#L31) |  |
 | `DeserializeLight` | function | SparkEngine | [CoreComponentSerializers.cpp:L208](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp#L208) |  |
 | `DeserializeMeshRenderer` | function | SparkEngine | [CoreComponentSerializers.cpp:L311](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp#L311) |  |
@@ -7676,7 +7676,7 @@
 | `DeserializeMessageForTest` | function | Tests | [TestNetworkManagerIntegration.cpp:L86](../../Tests/TestNetworkManagerIntegration.cpp#L86) |  |
 | `DeserializeName` | function | SparkEngine | [CoreComponentSerializers.cpp:L62](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp#L62) |  |
 | `DeserializePacket` | function | Tests | [TestSubsystemIntegrationScenarios.cpp:L133](../../Tests/Integration/TestSubsystemIntegrationScenarios.cpp#L133) |  |
-| `DeserializeRecoverySnapshotIntoFreshWorld` | function | SparkEditor | [EditorRecovery.cpp:L520](../../SparkEditor/Source/Core/EditorRecovery.cpp#L520) |  |
+| `DeserializeRecoverySnapshotIntoFreshWorld` | function | SparkEditor | [EditorRecovery.cpp:L79](../../SparkEditor/Source/Core/EditorRecovery.cpp#L79) |  |
 | `DeserializeRecoverySnapshotIntoFreshWorld` | function | SparkEditor | [EditorRecovery.h:L55](../../SparkEditor/Source/Core/EditorRecovery.h#L55) | Deserialize a recovery document into a new World without touching |
 | `DeserializeRigidBody` | function | SparkEngine | [CoreComponentSerializersPhysicsAudio.cpp:L121](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializersPhysicsAudio.cpp#L121) |  |
 | `DeserializeSnapshot` | function | GameModules | [OWEngineSystems.h:L57](../../GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.h#L57) | Deterministic text codec used by disk persistence and regression tests. |
@@ -8795,21 +8795,21 @@
 | `EditorProcessStopResult` | enum | SparkEditor | [EditorProcessLaunch.h:L81](../../SparkEditor/Source/Utils/EditorProcessLaunch.h#L81) | Force-terminate a process launched via LaunchEditorProcess (used by |
 | `EditorRecoveryCaptureGate` | class | SparkEditor | [EditorRecovery.h:L125](../../SparkEditor/Source/Core/EditorRecovery.h#L125) | Keeps an explicit document discard from being re-captured during |
 | `EditorRecoveryController` | class | SparkEditor | [EditorRecovery.h:L97](../../SparkEditor/Source/Core/EditorRecovery.h#L97) | State-only recovery decision controller for the EditorUI modal. |
-| `EditorRecoveryController::DismissAfterDiscard` | method | SparkEditor | [EditorRecovery.cpp:L575](../../SparkEditor/Source/Core/EditorRecovery.cpp#L575) |  |
-| `EditorRecoveryController::DismissAfterRestore` | method | SparkEditor | [EditorRecovery.cpp:L567](../../SparkEditor/Source/Core/EditorRecovery.cpp#L567) |  |
-| `EditorRecoveryController::Offer` | method | SparkEditor | [EditorRecovery.cpp:L551](../../SparkEditor/Source/Core/EditorRecovery.cpp#L551) |  |
-| `EditorRecoveryController::SetRestoreFailure` | method | SparkEditor | [EditorRecovery.cpp:L559](../../SparkEditor/Source/Core/EditorRecovery.cpp#L559) |  |
-| `EditorRecoveryController::Snapshot` | method | SparkEditor | [EditorRecovery.cpp:L583](../../SparkEditor/Source/Core/EditorRecovery.cpp#L583) |  |
+| `EditorRecoveryController::DismissAfterDiscard` | method | SparkEditor | [EditorRecovery.cpp:L134](../../SparkEditor/Source/Core/EditorRecovery.cpp#L134) |  |
+| `EditorRecoveryController::DismissAfterRestore` | method | SparkEditor | [EditorRecovery.cpp:L126](../../SparkEditor/Source/Core/EditorRecovery.cpp#L126) |  |
+| `EditorRecoveryController::Offer` | method | SparkEditor | [EditorRecovery.cpp:L110](../../SparkEditor/Source/Core/EditorRecovery.cpp#L110) |  |
+| `EditorRecoveryController::SetRestoreFailure` | method | SparkEditor | [EditorRecovery.cpp:L118](../../SparkEditor/Source/Core/EditorRecovery.cpp#L118) |  |
+| `EditorRecoveryController::Snapshot` | method | SparkEditor | [EditorRecovery.cpp:L142](../../SparkEditor/Source/Core/EditorRecovery.cpp#L142) |  |
 | `EditorRecoveryDialogState` | enum | SparkEditor | [EditorRecovery.h:L83](../../SparkEditor/Source/Core/EditorRecovery.h#L83) |  |
 | `EditorRecoveryLoadResult` | struct | SparkEditor | [EditorRecovery.h:L76](../../SparkEditor/Source/Core/EditorRecovery.h#L76) |  |
 | `EditorRecoveryLoadState` | enum | SparkEditor | [EditorRecovery.h:L68](../../SparkEditor/Source/Core/EditorRecovery.h#L68) |  |
 | `EditorRecoverySnapshot` | struct | SparkEditor | [EditorRecovery.h:L24](../../SparkEditor/Source/Core/EditorRecovery.h#L24) |  |
 | `EditorRecoveryStore` | class | SparkEditor | [EditorRecovery.h:L138](../../SparkEditor/Source/Core/EditorRecovery.h#L138) |  |
 | `EditorRecoveryStore` | function | SparkEditor | [EditorRecovery.h:L141](../../SparkEditor/Source/Core/EditorRecovery.h#L141) |  |
-| `EditorRecoveryStore::Clear` | method | SparkEditor | [EditorRecovery.cpp:L639](../../SparkEditor/Source/Core/EditorRecovery.cpp#L639) |  |
-| `EditorRecoveryStore::ClearForProject` | method | SparkEditor | [EditorRecovery.cpp:L657](../../SparkEditor/Source/Core/EditorRecovery.cpp#L657) |  |
-| `EditorRecoveryStore::LoadForProject` | method | SparkEditor | [EditorRecovery.cpp:L721](../../SparkEditor/Source/Core/EditorRecovery.cpp#L721) |  |
-| `EditorRecoveryStore::Save` | method | SparkEditor | [EditorRecovery.cpp:L588](../../SparkEditor/Source/Core/EditorRecovery.cpp#L588) |  |
+| `EditorRecoveryStore::Clear` | method | SparkEditor | [EditorRecovery.cpp:L198](../../SparkEditor/Source/Core/EditorRecovery.cpp#L198) |  |
+| `EditorRecoveryStore::ClearForProject` | method | SparkEditor | [EditorRecovery.cpp:L216](../../SparkEditor/Source/Core/EditorRecovery.cpp#L216) |  |
+| `EditorRecoveryStore::LoadForProject` | method | SparkEditor | [EditorRecovery.cpp:L280](../../SparkEditor/Source/Core/EditorRecovery.cpp#L280) |  |
+| `EditorRecoveryStore::Save` | method | SparkEditor | [EditorRecovery.cpp:L147](../../SparkEditor/Source/Core/EditorRecovery.cpp#L147) |  |
 | `EditorSceneData` | struct | SparkEditor | [IntegrationTypes.h:L87](../../SparkEditor/Source/Integration/IntegrationTypes.h#L87) | Scene data for editor/engine synchronization |
 | `EditorSceneData` | struct | SparkEditor | [SparkEngineIntegration.h:L97](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L97) | Scene data for editor/engine synchronization |
 | `EditorSettings` | struct | SparkEngine | [EngineSettings.h:L438](../../SparkEngine/Source/Core/EngineSettings.h#L438) |  |
@@ -9053,7 +9053,7 @@
 | `EncodeProcessMutation` | function | SparkDaemon | [OrchestrationProtocol.h:L121](../../SparkDaemon/src/OrchestrationProtocol.h#L121) |  |
 | `EncodeProcessRunnerArgument` | function | SparkInstaller | [GitRunner.h:L37](../../SparkInstaller/src/GitRunner.h#L37) |  |
 | `EncodeProcessStatuses` | function | SparkDaemon | [OrchestrationProtocol.h:L203](../../SparkDaemon/src/OrchestrationProtocol.h#L203) |  |
-| `EncodeProjectIdentityForPath` | function | SparkEditor | [EditorRecovery.cpp:L71](../../SparkEditor/Source/Core/EditorRecovery.cpp#L71) |  |
+| `EncodeProjectIdentityForPath` | function | SparkEditor | [EditorRecoveryFiles.h:L24](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L24) |  |
 | `EncodeRequest` | function | SparkGateway | [GatewayAreaControl.cpp:L560](../../SparkGateway/src/GatewayAreaControl.cpp#L560) |  |
 | `EncodeRoute` | function | SparkGateway | [GatewayAreaControl.cpp:L1206](../../SparkGateway/src/GatewayAreaControl.cpp#L1206) |  |
 | `EncodeSceneComponentPayload` | function | SparkEditor | [SceneComponentCodec.cpp:L786](../../SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp#L786) |  |
@@ -10818,7 +10818,7 @@
 | `FindEntry` | function | SparkEngine | [EngineBootstrap.h:L188](../../SparkEngine/Source/Core/EngineBootstrap.h#L188) | Find a SubsystemEntry by name |
 | `FindField` | function | SparkEngine | [Reflection.h:L122](../../SparkEngine/Source/Core/Reflection.h#L122) | Find a field by C++ member name. Returns nullptr if not found. |
 | `FindField` | function | Tests | [TestReflection.cpp:L68](../../Tests/TestReflection.cpp#L68) |  |
-| `FindFieldBySerializedName` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L232](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L232) |  |
+| `FindFieldBySerializedName` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L112](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L112) |  |
 | `FindFirstReflectedScene` | function | SparkEditor | [BuildPipeline.cpp:L456](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L456) |  |
 | `FindGLSLDir` | function | Tests | [TestGLSLPipelineIntegration.cpp:L291](../../Tests/TestGLSLPipelineIntegration.cpp#L291) |  |
 | `FindGroupForEntity` | function | SparkEngine | [GroupAI.h:L222](../../SparkEngine/Source/Engine/AI/GroupAI.h#L222) | Find which group an entity belongs to. |
@@ -10833,7 +10833,7 @@
 | `FindLauncherTemplatesDirectory` | function | SparkLauncher | [LauncherPaths.cpp:L51](../../SparkLauncher/src/LauncherPaths.cpp#L51) |  |
 | `FindLauncherTemplatesDirectory` | function | SparkLauncher | [LauncherPaths.h:L16](../../SparkLauncher/src/LauncherPaths.h#L16) | Locate project templates for development and installed layouts. |
 | `FindLayer` | function | SparkEngine | [LightLayers.h:L103](../../SparkEngine/Source/Graphics/LightLayers.h#L103) | Find layer index by name, -1 if not found |
-| `FindLegacyField` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L198](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L198) |  |
+| `FindLegacyField` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L78](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L78) |  |
 | `FindLink` | function | SparkEngine | [NavMeshLink.h:L92](../../SparkEngine/Source/Engine/AI/NavMeshLink.h#L92) |  |
 | `FindLinksNear` | function | SparkEngine | [NavMeshLink.h:L101](../../SparkEngine/Source/Engine/AI/NavMeshLink.h#L101) | Find all enabled links within radius of a position. |
 | `FindMainEcsCamera` | function | SparkEngine | [SubsystemConsoleCommands.cpp:L39](../../SparkEngine/Source/Core/SubsystemConsoleCommands.cpp#L39) |  |
@@ -11142,8 +11142,8 @@
 | `FlushDirtyRows` | function | GameModules | [TFMedalSystem.h:L255](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystem.h#L255) |  |
 | `FlushEvents` | function | SparkEngine | [Telemetry.h:L543](../../SparkEngine/Source/Utils/Telemetry.h#L543) | Flush all queued events to the registered backend. |
 | `FlushFileDurably` | function | SparkEngine | [SaveSystem.cpp:L67](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L67) |  |
-| `FlushFileDurably` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L44](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L44) |  |
-| `FlushFileDurably` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L132](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L132) |  |
+| `FlushFileDurably` | function | SparkEngine | [ReflectedScenePersistence.cpp:L35](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L35) |  |
+| `FlushFileDurably` | function | SparkEngine | [ReflectedScenePersistence.cpp:L123](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L123) |  |
 | `FlushOutgoingQueue` | function | SparkEngine | [NetworkManager.h:L690](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L690) |  |
 | `FlushProgressionThenCloseDatabase` | function | GameModules | [TFShutdownOrder.h:L20](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFShutdownOrder.h#L20) |  |
 | `FlushScene` | function | SparkEngine | [HybridRTManager.h:L102](../../SparkEngine/Source/Graphics/HybridRT/HybridRTManager.h#L102) | Submit mesh SDF data for the current frame |
@@ -19323,9 +19323,9 @@
 | `input` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L408](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L408) |  |
 | `input` | function | SparkDaemon | [OrchestrationJournal.cpp:L92](../../SparkDaemon/src/OrchestrationJournal.cpp#L92) |  |
 | `input` | function | SparkDaemon | [OrchestrationJournal.cpp:L112](../../SparkDaemon/src/OrchestrationJournal.cpp#L112) |  |
-| `input` | function | SparkEditor | [EditorRecovery.cpp:L326](../../SparkEditor/Source/Core/EditorRecovery.cpp#L326) |  |
+| `input` | function | SparkEditor | [EditorRecoveryFiles.h:L64](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L64) |  |
 | `input` | function | SparkEditor | [RegionMapDataSource.cpp:L46](../../SparkEditor/Source/Panels/RegionMapDataSource.cpp#L46) |  |
-| `input` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L37](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L37) |  |
+| `input` | function | SparkEngine | [ReflectedScenePersistence.cpp:L28](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L28) |  |
 | `input` | function | SparkGateway | [GatewayAreaControl.cpp:L1073](../../SparkGateway/src/GatewayAreaControl.cpp#L1073) |  |
 | `input` | function | SparkGateway | [GatewayAreaControl.cpp:L1193](../../SparkGateway/src/GatewayAreaControl.cpp#L1193) |  |
 | `input` | function | SparkGateway | [GatewayAreaControl.cpp:L1220](../../SparkGateway/src/GatewayAreaControl.cpp#L1220) |  |
@@ -20161,7 +20161,7 @@
 | `IsEngineConnected` | function | SparkEditor | [EditorUI.h:L238](../../SparkEditor/Source/Core/EditorUI.h#L238) |  |
 | `IsEnteredWorld` | function | GameModules | [TFServerSim.h:L88](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h#L88) |  |
 | `IsEntityInScope` | function | SparkEngine | [ConnectionScopeFilter.h:L116](../../SparkEngine/Source/Engine/Networking/ConnectionScopeFilter.h#L116) |  |
-| `IsEntityLevel` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L142](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L142) |  |
+| `IsEntityLevel` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L22](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L22) |  |
 | `IsEntityRegistered` | function | SparkEngine | [EntityReplicator.h:L110](../../SparkEngine/Source/Engine/Networking/EntityReplicator.h#L110) | Check if an entity is registered |
 | `IsErr` | function | SparkEngine | [Result.h:L69](../../SparkEngine/Source/Utils/Result.h#L69) |  |
 | `IsErr` | function | SparkEngine | [Result.h:L114](../../SparkEngine/Source/Utils/Result.h#L114) |  |
@@ -20521,7 +20521,7 @@
 | `IsReservedDeviceName` | function | SparkEngine | [VirtualFileSystem.cpp:L27](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp#L27) |  |
 | `IsRespawnReady` | function | GameModules | [GameMechanics.h:L214](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L214) | Check if respawn is ready |
 | `IsRHIAvailable` | function | SparkEngine | [GraphicsEngine.h:L391](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L391) | Check if an RHI device is available |
-| `IsRoundTrippableField` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L211](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L211) |  |
+| `IsRoundTrippableField` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L91](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L91) |  |
 | `IsRunning` | function | SparkBuild | [ProcessRunner.h:L37](../../SparkBuild/src/ProcessRunner.h#L37) |  |
 | `IsRunning` | function | SparkEditor | [EditorApplication.h:L83](../../SparkEditor/Source/Core/EditorApplication.h#L83) | Absolute path of the persisted window layout |
 | `IsRunning` | function | SparkEditor | [BuildPipeline.h:L79](../../SparkEditor/Source/Panels/BuildPipeline.h#L79) | True while a build subprocess is active. |
@@ -20564,7 +20564,7 @@
 | `IsSafeRegionMapFileName` | function | SparkEditor | [RegionMapDataSource.h:L26](../../SparkEditor/Source/Panels/RegionMapDataSource.h#L26) |  |
 | `IsSafeRegularFile` | function | SparkEngine | [TelemetrySpoolIO.cpp:L41](../../SparkEngine/Source/Utils/TelemetrySpoolIO.cpp#L41) |  |
 | `IsSafeRegularFile` | function | SparkEngine | [TelemetrySpoolIO.cpp:L304](../../SparkEngine/Source/Utils/TelemetrySpoolIO.cpp#L304) |  |
-| `IsSafeRelativePath` | function | SparkEditor | [EditorRecovery.cpp:L52](../../SparkEditor/Source/Core/EditorRecovery.cpp#L52) |  |
+| `IsSafeRelativePath` | function | SparkEditor | [EditorRecoveryJson.h:L41](../../SparkEditor/Source/Core/EditorRecoveryJson.h#L41) |  |
 | `IsSafeRepoUrl` | function | SparkInstaller | [GitRunner.cpp:L39](../../SparkInstaller/src/GitRunner.cpp#L39) |  |
 | `IsSafeText` | function | SparkGateway | [GatewayCoordinator.cpp:L15](../../SparkGateway/src/GatewayCoordinator.cpp#L15) |  |
 | `IsSameEndpoint` | function | SparkEngine | [NetworkConnection.cpp:L38](../../SparkEngine/Source/Engine/Networking/NetworkConnection.cpp#L38) |  |
@@ -20881,7 +20881,7 @@
 | `JsonEscape` | function | SparkCrashReporter | [CrashReporterApp.cpp:L1112](../../SparkCrashReporter/src/CrashReporterApp.cpp#L1112) |  |
 | `JsonEscape` | function | SparkEngine | [CrashReportUploader.cpp:L171](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L171) |  |
 | `JsonEscape` | function | SparkEngine | [CrashReportUploader.cpp:L438](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L438) |  |
-| `JsonFieldValueToString` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L180](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L180) |  |
+| `JsonFieldValueToString` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L60](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L60) |  |
 | `JsonHexValue` | function | SparkEditor | [ProjectManager.cpp:L119](../../SparkEditor/Source/Core/ProjectManager.cpp#L119) |  |
 | `jsonInput` | function | Tests | [TestSceneSerializerReal.cpp:L565](../../Tests/TestSceneSerializerReal.cpp#L565) |  |
 | `JsonLimits` | struct | SparkEngine | [JsonUtils.h:L68](../../SparkEngine/Source/Utils/JsonUtils.h#L68) |  |
@@ -21808,7 +21808,7 @@
 | `LoadWeights` | function | SparkEngine | [NeuralWeights.h:L117](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.h#L117) | Load a trained network from a .nnw file. |
 | `LoadWorld` | function | GameModules | [MMOPersistenceSystem.h:L212](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L212) |  |
 | `LoadWorld` | function | SparkEditor | [LevelStreamingSystem.h:L103](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L103) | Load world composition from file |
-| `LoadWorld` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L640](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L640) |  |
+| `LoadWorld` | function | SparkEngine | [ReflectedScenePersistence.cpp:L186](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L186) |  |
 | `LoadWorld` | function | SparkEngine | [ReflectedSceneSerializer.h:L39](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h#L39) |  |
 | `LocalAllocation` | struct | SparkEngine | [SecureRandom.cpp:L54](../../SparkEngine/Source/Utils/SecureRandom.cpp#L54) |  |
 | `localAppData` | function | Tests | [TestCrashHandlerGatingReal.cpp:L155](../../Tests/TestCrashHandlerGatingReal.cpp#L155) |  |
@@ -25223,7 +25223,7 @@
 | `name` | function | GameModules | [TFServerSimOnboarding.cpp:L388](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSimOnboarding.cpp#L388) |  |
 | `name` | function | GameModules | [TFOutfitPanel.cpp:L161](../../GameModules/SparkGameMMOFPS/Source/UI/TFOutfitPanel.cpp#L161) |  |
 | `name` | function | SparkCrashReporter | [CrashReporterApp.cpp:L950](../../SparkCrashReporter/src/CrashReporterApp.cpp#L950) |  |
-| `name` | function | SparkEditor | [EditorRecovery.cpp:L227](../../SparkEditor/Source/Core/EditorRecovery.cpp#L227) |  |
+| `name` | function | SparkEditor | [EditorRecoveryJson.h:L184](../../SparkEditor/Source/Core/EditorRecoveryJson.h#L184) |  |
 | `name` | function | SparkEditor | [EventResponsePanel.cpp:L291](../../SparkEditor/Source/Panels/EventResponsePanel.cpp#L291) |  |
 | `name` | function | SparkEditor | [ProjectBrowserPanel.cpp:L408](../../SparkEditor/Source/Panels/ProjectBrowserPanel.cpp#L408) |  |
 | `Name` | function | SparkEditor | [ServiceTopologyPanel.cpp:L16](../../SparkEditor/Source/Panels/ServiceTopologyPanel.cpp#L16) |  |
@@ -25734,7 +25734,7 @@
 | `NOMINMAX` | macro | SparkEngine | [GameImGuiLayer.h:L31](../../SparkEngine/Source/Core/GameImGuiLayer.h#L31) |  |
 | `NOMINMAX` | macro | SparkEngine | [AsyncDatabase.cpp:L23](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L23) |  |
 | `NOMINMAX` | macro | SparkEngine | [SaveSystem.cpp:L26](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L26) |  |
-| `NOMINMAX` | macro | SparkEngine | [ReflectedSceneSerializer.cpp:L17](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L17) |  |
+| `NOMINMAX` | macro | SparkEngine | [ReflectedScenePersistence.cpp:L13](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L13) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashArtifactDirectory.h:L18](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L18) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashHandlerSupport.h:L29](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L29) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashRedactionContext.h:L23](../../SparkEngine/Source/Utils/CrashRedactionContext.h#L23) |  |
@@ -26688,9 +26688,9 @@
 | `output` | function | GameModules | [TFWorldSave.h:L206](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h#L206) |  |
 | `output` | function | SparkBuild | [DownloaderTests.cpp:L167](../../SparkBuild/tests/DownloaderTests.cpp#L167) |  |
 | `output` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L73](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L73) |  |
-| `output` | function | SparkEditor | [EditorRecovery.cpp:L372](../../SparkEditor/Source/Core/EditorRecovery.cpp#L372) |  |
+| `output` | function | SparkEditor | [EditorRecoveryFiles.h:L107](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L107) |  |
 | `output` | function | SparkEditor | [RegionMapDataSource.cpp:L60](../../SparkEditor/Source/Panels/RegionMapDataSource.cpp#L60) |  |
-| `output` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L125](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L125) |  |
+| `output` | function | SparkEngine | [ReflectedScenePersistence.cpp:L116](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L116) |  |
 | `output` | function | SparkEngine | [CompressionUtils.cpp:L33](../../SparkEngine/Source/Utils/CompressionUtils.cpp#L33) |  |
 | `output` | function | SparkEngine | [CompressionUtils.cpp:L49](../../SparkEngine/Source/Utils/CompressionUtils.cpp#L49) |  |
 | `output` | function | SparkEngine | [CompressionUtils.cpp:L79](../../SparkEngine/Source/Utils/CompressionUtils.cpp#L79) |  |
@@ -27168,7 +27168,7 @@
 | `ParseDiscardedString` | function | SparkCrashReporter | [CrashReporterApp.cpp:L490](../../SparkCrashReporter/src/CrashReporterApp.cpp#L490) |  |
 | `ParseDiscardedString` | function | SparkCrashReporter | [CrashReporterApp.cpp:L492](../../SparkCrashReporter/src/CrashReporterApp.cpp#L492) |  |
 | `ParseDiscardedString` | function | SparkCrashReporter | [CrashReporterApp.cpp:L509](../../SparkCrashReporter/src/CrashReporterApp.cpp#L509) |  |
-| `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecovery.cpp:L398](../../SparkEditor/Source/Core/EditorRecovery.cpp#L398) |  |
+| `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecoveryFiles.h:L133](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L133) |  |
 | `ParsedScene` | struct | SparkEditor | [SceneImportPanel.h:L85](../../SparkEditor/Source/Panels/SceneImportPanel.h#L85) | Full parse result for one .scene file. |
 | `ParseDuration` | function | SparkEngine | [StartupSplash.cpp:L143](../../SparkEngine/Source/Core/StartupSplash.cpp#L143) |  |
 | `ParseEndpoint` | function | GameModules | [TFCommands.cpp:L161](../../GameModules/SparkGameMMOFPS/Source/Console/TFCommands.cpp#L161) |  |
@@ -27234,8 +27234,8 @@
 | `parser` | function | SparkEngine | [JsonUtils.h:L1046](../../SparkEngine/Source/Utils/JsonUtils.h#L1046) |  |
 | `ParseRconCommandLine` | function | SparkEngine | [DedicatedServer.h:L352](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L352) | Parse an administration command string into name + arguments. |
 | `ParseRconCommandLine` | function | Tests | [TestDedicatedServer.cpp:L109](../../Tests/TestDedicatedServer.cpp#L109) |  |
-| `ParseRecoveryJson` | function | SparkEditor | [EditorRecovery.cpp:L47](../../SparkEditor/Source/Core/EditorRecovery.cpp#L47) |  |
-| `ParseRecoveryJson` | function | SparkEditor | [EditorRecovery.cpp:L395](../../SparkEditor/Source/Core/EditorRecovery.cpp#L395) |  |
+| `ParseRecoveryJson` | function | SparkEditor | [EditorRecoveryFiles.h:L130](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L130) |  |
+| `ParseRecoveryJson` | function | SparkEditor | [EditorRecoveryJson.h:L36](../../SparkEditor/Source/Core/EditorRecoveryJson.h#L36) |  |
 | `ParseRegions` | function | GameModules | [TFDataTablesInternal.h:L75](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesInternal.h#L75) |  |
 | `ParseRegions` | function | GameModules | [TFDataTablesParseWorld.cpp:L26](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesParseWorld.cpp#L26) |  |
 | `ParseResponse` | function | SparkEditor | [SparkEngineIntegration.h:L571](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L571) | Parse engine response |
@@ -27434,7 +27434,7 @@
 | `path` | function | SparkEditor | [AdvancedAssetPipelineUI.cpp:L772](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipelineUI.cpp#L772) |  |
 | `path` | function | SparkEditor | [AssetProcessors.cpp:L220](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L220) |  |
 | `path` | function | SparkEditor | [AssetProcessors.cpp:L722](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L722) |  |
-| `path` | function | SparkEditor | [EditorRecovery.cpp:L59](../../SparkEditor/Source/Core/EditorRecovery.cpp#L59) |  |
+| `path` | function | SparkEditor | [EditorRecoveryJson.h:L48](../../SparkEditor/Source/Core/EditorRecoveryJson.h#L48) |  |
 | `path` | function | SparkEngine | [AngelScriptEngine.cpp:L540](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp#L540) |  |
 | `Path` | function | Tests | [TestEditorCrashHandlerFilterReal.cpp:L48](../../Tests/TestEditorCrashHandlerFilterReal.cpp#L48) |  |
 | `Path` | function | Tests | [TestEditorPanelsRealBackends.cpp:L71](../../Tests/TestEditorPanelsRealBackends.cpp#L71) |  |
@@ -27610,7 +27610,7 @@
 | `PendingNotification` | struct | SparkEngine | [FileWatcher.h:L257](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h#L257) |  |
 | `PendingOp` | enum | GameModules | [TFLoginFlow.h:L179](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoginFlow.h#L179) |  |
 | `PendingOutgoingMessages` | function | Tests | [TestNetworkManagerIntegration.cpp:L47](../../Tests/TestNetworkManagerIntegration.cpp#L47) |  |
-| `PendingParent` | struct | SparkEngine | [ReflectedSceneSerializer.cpp:L473](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L473) |  |
+| `PendingParent` | struct | SparkEngine | [ReflectedSceneSerializer.cpp:L353](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L353) |  |
 | `PendingReload` | struct | SparkEngine | [ModuleHotReload.h:L124](../../SparkEngine/Source/Core/ModuleHotReload.h#L124) |  |
 | `PendingSection` | struct | SparkEngine | [CpuDebugger.h:L312](../../SparkEngine/Source/Utils/CpuDebugger.h#L312) |  |
 | `PendingSpoolPurge` | struct | SparkEngine | [Telemetry.h:L838](../../SparkEngine/Source/Utils/Telemetry.h#L838) |  |
@@ -30218,7 +30218,7 @@
 | `ReadF32` | function | SparkEngine | [TerrainAssetFormat.h:L118](../../SparkEngine/Source/Graphics/TerrainAssetFormat.h#L118) |  |
 | `ReadField` | function | GameModules | [FPSLocalProfile.cpp:L60](../../GameModules/SparkGameFPS/Source/Game/FPSLocalProfile.cpp#L60) | Parse one required field; reports the key that failed. |
 | `ReadFile` | function | SparkAssetPipelineCore | [AssetCookerTests.cpp:L21](../../SparkAssetPipelineCore/tests/AssetCookerTests.cpp#L21) |  |
-| `ReadFile` | function | SparkEditor | [EditorRecovery.cpp:L315](../../SparkEditor/Source/Core/EditorRecovery.cpp#L315) |  |
+| `ReadFile` | function | SparkEditor | [EditorRecoveryFiles.h:L53](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L53) |  |
 | `ReadFile` | function | SparkEngine | [SparkPak.h:L141](../../SparkEngine/Source/Core/SparkPak.h#L141) | Read a file's contents as a binary blob. |
 | `ReadFile` | function | SparkEngine | [ArchiveResourceProvider.h:L50](../../SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h#L50) | Whether the archive was opened successfully. |
 | `ReadFile` | function | SparkEngine | [VirtualFileSystem.h:L98](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L98) | Read the entire file as a binary blob. |
@@ -30300,7 +30300,7 @@
 | `ReadQuat48` | function | SparkEngine | [NetQuantize.h:L34](../../SparkEngine/Source/Engine/Networking/NetQuantize.h#L34) | Read a smallest-three 48-bit quaternion from @p buf (consumes 6 bytes). |
 | `ReadRaw` | function | Tests | [TestCrossSystemIntegration.cpp:L217](../../Tests/TestCrossSystemIntegration.cpp#L217) |  |
 | `ReadRaw` | function | Tests | [TestReplicationFields.cpp:L100](../../Tests/TestReplicationFields.cpp#L100) |  |
-| `ReadRecoveryFile` | function | SparkEditor | [EditorRecovery.cpp:L407](../../SparkEditor/Source/Core/EditorRecovery.cpp#L407) |  |
+| `ReadRecoveryFile` | function | SparkEditor | [EditorRecoveryFiles.h:L142](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L142) |  |
 | `ReadReflectedConfig` | function | SparkEngine | [EngineSettings.cpp:L635](../../SparkEngine/Source/Core/EngineSettings.cpp#L635) |  |
 | `ReadRequiredString` | function | SparkEngine | [DynamicPluginHost.cpp:L352](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L352) |  |
 | `ReadRequiredUInt` | function | SparkEngine | [DynamicPluginHost.cpp:L364](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L364) |  |
@@ -30314,9 +30314,9 @@
 | `ReadStateFile` | function | SparkDaemon | [OrchestratorIdentity.cpp:L90](../../SparkDaemon/src/OrchestratorIdentity.cpp#L90) |  |
 | `ReadStateFile` | function | SparkDaemon | [OrchestratorIdentity.cpp:L167](../../SparkDaemon/src/OrchestratorIdentity.cpp#L167) |  |
 | `ReadStatus` | enum | GameModules | [TFWorldSave.h:L22](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h#L22) |  |
-| `ReadStrictEntityId` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L242](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L242) |  |
+| `ReadStrictEntityId` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L122](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L122) |  |
 | `ReadStrictNetworkBool` | function | SparkServer | [ServerApplication.cpp:L159](../../SparkServer/src/ServerApplication.cpp#L159) |  |
-| `ReadStrictParentId` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L261](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L261) |  |
+| `ReadStrictParentId` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L141](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L141) |  |
 | `ReadString` | function | SparkDaemon | [BoundedWireCodec.h:L83](../../SparkDaemon/src/BoundedWireCodec.h#L83) |  |
 | `ReadString` | function | SparkEditor | [CollaborativeEditSession.cpp:L182](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L182) |  |
 | `ReadString` | function | SparkEditor | [EngineInterface.cpp:L506](../../SparkEditor/Source/Communication/EngineInterface.cpp#L506) |  |
@@ -30337,7 +30337,7 @@
 | `ReadString` | function | Tests | [TestReplicationFields.cpp:L84](../../Tests/TestReplicationFields.cpp#L84) |  |
 | `ReadString` | function | Tests | [TestSaveSystem.cpp:L55](../../Tests/TestSaveSystem.cpp#L55) |  |
 | `ReadString` | function | Tests | [TestServerMockClient.cpp:L144](../../Tests/TestServerMockClient.cpp#L144) |  |
-| `ReadStringField` | function | SparkEditor | [EditorRecovery.cpp:L225](../../SparkEditor/Source/Core/EditorRecovery.cpp#L225) |  |
+| `ReadStringField` | function | SparkEditor | [EditorRecoveryJson.h:L181](../../SparkEditor/Source/Core/EditorRecoveryJson.h#L181) |  |
 | `ReadTag` | function | GameModules | [OWPersistence.inl:L50](../../GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl#L50) |  |
 | `ReadText` | function | SparkEngine | [LocalFileCache.h:L94](../../SparkEngine/Source/Utils/LocalFileCache.h#L94) | Read a text file, returning cached content on subsequent calls |
 | `ReadText` | function | Tests | [TestRegionMapDataSource.cpp:L39](../../Tests/TestRegionMapDataSource.cpp#L39) |  |
@@ -30347,7 +30347,7 @@
 | `ReadTextFile` | function | SparkEngine | [VirtualFileSystem.h:L101](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L101) | Read the entire file as a UTF-8 string. |
 | `ReadTextFile` | function | SparkEngine | [VirtualFileSystem.h:L128](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L128) | Construct a provider rooted at the given directory. |
 | `ReadTextFile` | function | SparkEngine | [VirtualFileSystem.h:L194](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L194) | Read a file as text from the highest-priority mount that contains it. |
-| `ReadTextFile` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L35](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L35) |  |
+| `ReadTextFile` | function | SparkEngine | [ReflectedScenePersistence.cpp:L26](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L26) |  |
 | `ReadTextFile` | function | SparkEngine | [FileUtils.h:L51](../../SparkEngine/Source/Utils/FileUtils.h#L51) |  |
 | `ReadTextFile` | function | Tests | [TestEditorProjectMaterializationReal.cpp:L57](../../Tests/TestEditorProjectMaterializationReal.cpp#L57) |  |
 | `ReadTextFile` | function | Tests | [Test_persistence_SaveSystem.cpp:L106](../../Tests/harden/Test_persistence_SaveSystem.cpp#L106) |  |
@@ -30570,9 +30570,9 @@
 | `RecoverOrchestrationJournal` | function | SparkDaemon | [OrchestrationJournal.cpp:L303](../../SparkDaemon/src/OrchestrationJournal.cpp#L303) |  |
 | `RecoverRecoil` | function | Tests | [TestWeaponMechanics.cpp:L147](../../Tests/TestWeaponMechanics.cpp#L147) |  |
 | `RecoveryBackups` | function | Tests | [TestTFSocialStore.cpp:L42](../../Tests/TestTFSocialStore.cpp#L42) |  |
-| `RecoveryFiles` | struct | SparkEditor | [EditorRecovery.cpp:L84](../../SparkEditor/Source/Core/EditorRecovery.cpp#L84) |  |
-| `RecoveryFilesForProject` | function | SparkEditor | [EditorRecovery.cpp:L90](../../SparkEditor/Source/Core/EditorRecovery.cpp#L90) |  |
-| `RecoveryJsonLimits` | function | SparkEditor | [EditorRecovery.cpp:L38](../../SparkEditor/Source/Core/EditorRecovery.cpp#L38) |  |
+| `RecoveryFiles` | struct | SparkEditor | [EditorRecoveryFiles.h:L37](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L37) |  |
+| `RecoveryFilesForProject` | function | SparkEditor | [EditorRecoveryFiles.h:L43](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L43) |  |
+| `RecoveryJsonLimits` | function | SparkEditor | [EditorRecoveryJson.h:L27](../../SparkEditor/Source/Core/EditorRecoveryJson.h#L27) |  |
 | `RecoveryLatched` | function | GameModules | [TFDatabase.h:L96](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L96) |  |
 | `RecreateBackBuffer` | function | SparkEngine | [NullRHIDevice.h:L130](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L130) |  |
 | `RecreateUpscalingResources` | function | SparkEngine | [UpscalingSystem.h:L569](../../SparkEngine/Source/Graphics/UpscalingSystem.h#L569) |  |
@@ -31270,7 +31270,7 @@
 | `RemoveEntity` | function | Tests | [TestConnectionScope.cpp:L61](../../Tests/TestConnectionScope.cpp#L61) |  |
 | `RemoveEntity` | function | Tests | [TestSpatialGrid.cpp:L75](../../Tests/TestSpatialGrid.cpp#L75) |  |
 | `RemoveEntry` | function | SparkEngine | [LocalFileCache.h:L400](../../SparkEngine/Source/Utils/LocalFileCache.h#L400) |  |
-| `RemoveFileNoThrow` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L135](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L135) |  |
+| `RemoveFileNoThrow` | function | SparkEngine | [ReflectedScenePersistence.cpp:L126](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L126) |  |
 | `RemoveFn` | alias | SparkEngine | [Reflection.h:L296](../../SparkEngine/Source/Core/Reflection.h#L296) |  |
 | `RemoveFromFormation` | function | SparkEngine | [FormationSystem.h:L169](../../SparkEngine/Source/Engine/AI/FormationSystem.h#L169) | Remove an entity from a formation. |
 | `RemoveFromLayer` | function | SparkEngine | [CollisionMaskComponents.h:L65](../../SparkEngine/Source/Engine/ECS/Components/CollisionMaskComponents.h#L65) | Remove layers from the FROM mask |
@@ -32328,11 +32328,11 @@
 | `Replace` | function | SparkEngine | [StringUtils.h:L159](../../SparkEngine/Source/Utils/StringUtils.h#L159) |  |
 | `ReplaceAll` | function | SparkEngine | [StringUtils.h:L171](../../SparkEngine/Source/Utils/StringUtils.h#L171) |  |
 | `ReplaceAllIgnoringCase` | function | SparkEngine | [CrashRedaction.h:L87](../../SparkEngine/Source/Utils/CrashRedaction.h#L87) | Replace every occurrence of @p needle in @p text with @p replacement |
-| `ReplaceAtomically` | function | SparkEditor | [EditorRecovery.cpp:L349](../../SparkEditor/Source/Core/EditorRecovery.cpp#L349) |  |
+| `ReplaceAtomically` | function | SparkEditor | [EditorRecoveryFiles.h:L87](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L87) |  |
 | `ReplaceFileAtomically` | function | SparkEditor | [BasicMaterialEditorPanel.cpp:L71](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp#L71) |  |
 | `ReplaceFileAtomically` | function | SparkEditor | [JSONSceneSerializer.cpp:L158](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L158) |  |
 | `ReplaceFileAtomically` | function | SparkEngine | [SaveSystem.cpp:L107](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L107) |  |
-| `ReplaceFileAtomically` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L84](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L84) |  |
+| `ReplaceFileAtomically` | function | SparkEngine | [ReflectedScenePersistence.cpp:L75](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L75) |  |
 | `ReplaceFirstAscii` | function | Tests | [Test_persistence_SaveSystem.cpp:L148](../../Tests/harden/Test_persistence_SaveSystem.cpp#L148) |  |
 | `ReplaceLengthPrefixedString` | function | Tests | [Test_persistence_SaveSystem.cpp:L159](../../Tests/harden/Test_persistence_SaveSystem.cpp#L159) |  |
 | `replacements` | function | SparkEngine | [AsyncDatabase.cpp:L302](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L302) |  |
@@ -32821,7 +32821,7 @@
 | `ResolveOrder` | function | Tests | [TestModuleDependency.cpp:L21](../../Tests/TestModuleDependency.cpp#L21) |  |
 | `ResolvePath` | function | SparkEngine | [VirtualFileSystem.h:L135](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L135) | Resolve a virtual path to the real filesystem path, or {} if it escapes the root. |
 | `ResolvePath` | function | SparkEngine | [SceneRenderer.h:L177](../../SparkEngine/Source/Graphics/SceneRenderer.h#L177) | Resolve an AssetHandle back to its string path. |
-| `ResolvePathInsideProject` | function | SparkEditor | [EditorRecovery.cpp:L481](../../SparkEditor/Source/Core/EditorRecovery.cpp#L481) |  |
+| `ResolvePathInsideProject` | function | SparkEditor | [EditorRecovery.cpp:L40](../../SparkEditor/Source/Core/EditorRecovery.cpp#L40) |  |
 | `ResolvePathInsideProject` | function | SparkEditor | [EditorRecovery.h:L65](../../SparkEditor/Source/Core/EditorRecovery.h#L65) | Resolve a candidate scene path only when it remains inside a project. |
 | `ResolvePlayerLabel` | function | GameModules | [TFDeathRecap.h:L89](../../GameModules/SparkGameMMOFPS/Source/UI/TFDeathRecap.h#L89) |  |
 | `ResolvePlayerPosition` | function | GameModules | [TFHUD.h:L140](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUD.h#L140) |  |
@@ -33317,7 +33317,7 @@
 | `RotateFiles` | function | SparkEngine | [Logger.h:L359](../../SparkEngine/Source/Utils/Logger.h#L359) |  |
 | `RotateLogFile` | function | SparkEngine | [FileLogger.h:L255](../../SparkEngine/Source/Utils/FileLogger.h#L255) |  |
 | `RotateNext` | function | Tests | [TestDedicatedServer.cpp:L259](../../Tests/TestDedicatedServer.cpp#L259) |  |
-| `RotatePrimaryToBackup` | function | SparkEditor | [EditorRecovery.cpp:L432](../../SparkEditor/Source/Core/EditorRecovery.cpp#L432) |  |
+| `RotatePrimaryToBackup` | function | SparkEditor | [EditorRecoveryFiles.h:L167](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L167) |  |
 | `RotateRight` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L32](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L32) |  |
 | `RotateRight` | function | SparkBuild | [DownloadSecurity.cpp:L13](../../SparkBuild/src/DownloadSecurity.cpp#L13) |  |
 | `RotateRight` | function | SparkEngine | [FileIntegrity.cpp:L17](../../SparkEngine/Source/Core/FileIntegrity.cpp#L17) |  |
@@ -34121,7 +34121,7 @@
 | `SaveWeights` | function | SparkEngine | [NeuralWeights.h:L107](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.h#L107) |  |
 | `SaveWireOffsets` | struct | Tests | [Test_persistence_SaveSystem.cpp:L219](../../Tests/harden/Test_persistence_SaveSystem.cpp#L219) |  |
 | `SaveWorld` | function | SparkEditor | [LevelStreamingSystem.h:L110](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L110) | Save current world composition to file |
-| `SaveWorld` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L587](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L587) |  |
+| `SaveWorld` | function | SparkEngine | [ReflectedScenePersistence.cpp:L133](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L133) |  |
 | `SaveWorld` | function | SparkEngine | [ReflectedSceneSerializer.h:L35](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h#L35) |  |
 | `SaveWorldAsync` | function | GameModules | [MMOPersistenceSystem.h:L209](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L209) |  |
 | `sc` | function | GameModules | [TFVehicleHUD.cpp:L123](../../GameModules/SparkGameMMOFPS/Source/UI/TFVehicleHUD.cpp#L123) |  |
@@ -34974,7 +34974,7 @@
 | `SerializeCollider` | function | SparkEngine | [CoreComponentSerializersPhysicsAudio.cpp:L145](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializersPhysicsAudio.cpp#L145) |  |
 | `SerializeCommand` | function | SparkEditor | [EngineInterface.h:L385](../../SparkEditor/Source/Communication/EngineInterface.h#L385) | Serialize command to binary format |
 | `SerializeComponent` | function | SparkEditor | [SceneSerializer.h:L223](../../SparkEditor/Source/SceneSystem/SceneSerializer.h#L223) | Serialize component to binary |
-| `SerializeComponentFields` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L148](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L148) |  |
+| `SerializeComponentFields` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L28](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L28) |  |
 | `serialized` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L155](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L155) |  |
 | `SerializedComponent` | struct | SparkEditor | [PrefabAsset.h:L37](../../SparkEditor/Source/Prefabs/PrefabAsset.h#L37) | Serialized component data within a prefab |
 | `SerializedComponent` | struct | SparkEngine | [SaveSystemTypes.h:L163](../../SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h#L163) |  |
@@ -34983,7 +34983,7 @@
 | `SerializedEntity` | struct | SparkEngine | [SaveSystemTypes.h:L173](../../SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h#L173) |  |
 | `SerializedEntity` | struct | Tests | [TestSaveSystem.cpp:L80](../../Tests/TestSaveSystem.cpp#L80) |  |
 | `SerializedEntity` | struct | Tests | [TestSceneSerializer.cpp:L65](../../Tests/TestSceneSerializer.cpp#L65) |  |
-| `serializedIds` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L436](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L436) |  |
+| `serializedIds` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L316](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L316) |  |
 | `SerializeDocument` | function | SparkEditor | [DecorLayoutEditorPanel.h:L120](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h#L120) |  |
 | `SerializeDocument` | function | SparkEditor | [RegionMapEditorPanel.h:L92](../../SparkEditor/Source/Panels/RegionMapEditorPanel.h#L92) |  |
 | `SerializeEditForServer` | function | SparkEditor | [LiveEditBridge.cpp:L136](../../SparkEditor/Source/Communication/LiveEditBridge.cpp#L136) |  |
@@ -35008,7 +35008,7 @@
 | `SerializeTransform` | function | SparkEngine | [CoreComponentSerializers.cpp:L119](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp#L119) |  |
 | `SerializeValue` | function | SparkEngine | [DatablockRegistry.h:L352](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L352) |  |
 | `SerializeWorld` | function | SparkEngine | [SaveSystem.h:L651](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L651) |  |
-| `SerializeWorld` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L351](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L351) |  |
+| `SerializeWorld` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L231](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L231) |  |
 | `SerializeWorld` | function | SparkEngine | [ReflectedSceneSerializer.h:L30](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h#L30) |  |
 | `server` | function | Tests | [TestDedicatedServerRuntime.cpp:L134](../../Tests/TestDedicatedServerRuntime.cpp#L134) |  |
 | `server` | function | Tests | [TestDedicatedServerRuntime.cpp:L198](../../Tests/TestDedicatedServerRuntime.cpp#L198) |  |
@@ -37919,12 +37919,12 @@
 | `Snapshot` | struct | Tests | [TestLagCompensationIntegration.cpp:L36](../../Tests/TestLagCompensationIntegration.cpp#L36) |  |
 | `Snapshot` | struct | Tests | [TestNetworkInterpolation.cpp:L20](../../Tests/TestNetworkInterpolation.cpp#L20) |  |
 | `SnapshotFile` | function | SparkEngine | [ModuleHotReload.h:L130](../../SparkEngine/Source/Core/ModuleHotReload.h#L130) |  |
-| `SnapshotFromJson` | function | SparkEditor | [EditorRecovery.cpp:L237](../../SparkEditor/Source/Core/EditorRecovery.cpp#L237) |  |
+| `SnapshotFromJson` | function | SparkEditor | [EditorRecoveryJson.h:L194](../../SparkEditor/Source/Core/EditorRecoveryJson.h#L194) |  |
 | `SnapshotPlayerDirection` | function | SparkEngine | [SeamlessAreaManager.h:L182](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h#L182) | Build a snapshot under a single mutex lock. |
 | `SnapshotReader` | class | SparkEngine | [SceneSnapshotSerializer.h:L63](../../SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h#L63) |  |
 | `SnapshotReader` | function | SparkEngine | [SceneSnapshotSerializer.h:L66](../../SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h#L66) |  |
 | `SnapshotRecentProjects` | function | Tests | [TestEditorSubsystems.cpp:L786](../../Tests/TestEditorSubsystems.cpp#L786) |  |
-| `SnapshotToJson` | function | SparkEditor | [EditorRecovery.cpp:L207](../../SparkEditor/Source/Core/EditorRecovery.cpp#L207) |  |
+| `SnapshotToJson` | function | SparkEditor | [EditorRecoveryJson.h:L164](../../SparkEditor/Source/Core/EditorRecoveryJson.h#L164) |  |
 | `SnapshotWriter` | class | SparkEngine | [SceneSnapshotSerializer.h:L39](../../SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h#L39) |  |
 | `SnapToGrid` | function | SparkEngine | [ClipmapTerrain.h:L162](../../SparkEngine/Source/Graphics/ClipmapTerrain.h#L162) | Snap a world coordinate to a grid cell boundary |
 | `SnapToRest` | function | GameModules | [TFSecondaryMotion.h:L90](../../GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.h#L90) |  |
@@ -38046,7 +38046,7 @@
 | `Spark::Graphics::DetectBestSIMD` | method | SparkEngine | [GraphicsEngineLinuxAccessors.cpp:L33](../../SparkEngine/Source/Graphics/GraphicsEngineLinuxAccessors.cpp#L33) |  |
 | `Spark::Graphics::DetectBestSIMD` | method | SparkEngine | [GraphicsEngineWindowsAccessors.cpp:L38](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsAccessors.cpp#L38) |  |
 | `Spark::Json::Parse` | method | Tests | [TestTFDataTables.cpp:L72](../../Tests/TestTFDataTables.cpp#L72) |  |
-| `Spark::Json::ParseBounded` | method | SparkEditor | [EditorRecovery.cpp:L49](../../SparkEditor/Source/Core/EditorRecovery.cpp#L49) |  |
+| `Spark::Json::ParseBounded` | method | SparkEditor | [EditorRecoveryJson.h:L38](../../SparkEditor/Source/Core/EditorRecoveryJson.h#L38) |  |
 | `Spark::Json::ParseStrict` | method | SparkEditor | [RegionMapDataSource.cpp:L107](../../SparkEditor/Source/Panels/RegionMapDataSource.cpp#L107) |  |
 | `Spark::Json::StringifyPretty` | method | GameModules | [TFSocialSystemStore.cpp:L554](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp#L554) |  |
 | `Spark::Json::StringifyPretty` | method | GameModules | [TFDatabase.cpp:L524](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp#L524) |  |
@@ -40801,7 +40801,7 @@
 | `TemporaryReflectedScene` | class | Tests | [TestReflectedScene.cpp:L22](../../Tests/TestReflectedScene.cpp#L22) |  |
 | `TemporarySceneFile` | class | Tests | [TestSceneSerializerReal.cpp:L28](../../Tests/TestSceneSerializerReal.cpp#L28) |  |
 | `TemporarySceneFile` | function | Tests | [TestSceneSerializerReal.cpp:L31](../../Tests/TestSceneSerializerReal.cpp#L31) |  |
-| `TemporarySibling` | function | SparkEditor | [EditorRecovery.cpp:L341](../../SparkEditor/Source/Core/EditorRecovery.cpp#L341) |  |
+| `TemporarySibling` | function | SparkEditor | [EditorRecoveryFiles.h:L79](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L79) |  |
 | `TemporarySibling` | function | SparkEditor | [RegionMapDataSource.cpp:L34](../../SparkEditor/Source/Panels/RegionMapDataSource.cpp#L34) |  |
 | `TempPath` | function | Tests | [TestBenchmarkFramework.cpp:L14](../../Tests/TestBenchmarkFramework.cpp#L14) | Get a cross-platform temporary file path for tests |
 | `TempPath` | function | Tests | [TestSparkPak.cpp:L257](../../Tests/TestSparkPak.cpp#L257) |  |
@@ -45424,9 +45424,9 @@
 | `ValidateSerializedWorldStructure` | function | SparkEngine | [SaveSystem.cpp:L387](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L387) |  |
 | `ValidateSession` | function | GameModules | [MMOAccountSystem.h:L124](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L124) |  |
 | `ValidateSnapshot` | function | GameModules | [OWEngineSystems.h:L67](../../GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.h#L67) |  |
-| `ValidateSnapshot` | function | SparkEditor | [EditorRecovery.cpp:L103](../../SparkEditor/Source/Core/EditorRecovery.cpp#L103) |  |
+| `ValidateSnapshot` | function | SparkEditor | [EditorRecoveryJson.h:L60](../../SparkEditor/Source/Core/EditorRecoveryJson.h#L60) |  |
 | `ValidateStoreJsonForTesting` | function | GameModules | [TFSocialSystem.h:L126](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L126) |  |
-| `ValidateStrictRecoveryDocument` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L277](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L277) |  |
+| `ValidateStrictRecoveryDocument` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L157](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L157) |  |
 | `ValidateToken` | function | SparkEngine | [NetworkEncryption.cpp:L172](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp#L172) |  |
 | `ValidateToken` | function | SparkEngine | [NetworkEncryption.h:L109](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L109) |  |
 | `ValidateToken` | function | SparkEngine | [NetworkIntegration.h:L164](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h#L164) | Match prototype token bytes against this instance's pending set. |
@@ -45444,7 +45444,7 @@
 | `ValidationResult` | function | SparkEngine | [EnumUtils.h:L307](../../SparkEngine/Source/Enums/EnumUtils.h#L307) |  |
 | `ValidationResult` | function | SparkEngine | [EnumUtils.h:L313](../../SparkEngine/Source/Enums/EnumUtils.h#L313) |  |
 | `ValidationSeverity` | enum | SparkEngine | [AssetValidator.h:L18](../../SparkEngine/Source/Core/AssetValidator.h#L18) |  |
-| `validationWorld` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L615](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L615) |  |
+| `validationWorld` | function | SparkEngine | [ReflectedScenePersistence.cpp:L161](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L161) |  |
 | `validData` | function | Tests | [TestFBXImporter.cpp:L79](../../Tests/TestFBXImporter.cpp#L79) |  |
 | `ValidGrenadeChoiceKey` | function | GameModules | [TFProgressionSystem.h:L224](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h#L224) |  |
 | `ValidLoadoutSlotKey` | function | GameModules | [TFProgressionSystem.h:L251](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h#L251) |  |
@@ -46861,7 +46861,7 @@
 | `Write` | function | Tests | [TestVisualScriptCompiler.cpp:L665](../../Tests/TestVisualScriptCompiler.cpp#L665) |  |
 | `WriteAll` | function | Tests | [TestEditorRecovery.cpp:L48](../../Tests/TestEditorRecovery.cpp#L48) |  |
 | `WriteAllAsyncSignalSafe` | function | SparkEditor | [EditorCrashHandler.cpp:L64](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L64) |  |
-| `WriteAndVerify` | function | SparkEditor | [EditorRecovery.cpp:L370](../../SparkEditor/Source/Core/EditorRecovery.cpp#L370) |  |
+| `WriteAndVerify` | function | SparkEditor | [EditorRecoveryFiles.h:L105](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L105) |  |
 | `WriteArtifact` | function | Tests | [TestTelemetrySpool.cpp:L49](../../Tests/TestTelemetrySpool.cpp#L49) |  |
 | `WriteAt` | function | Tests | [TestFBXImporter.cpp:L20](../../Tests/TestFBXImporter.cpp#L20) |  |
 | `WriteAuth` | function | SparkDaemon | [CollaborationProtocol.h:L85](../../SparkDaemon/src/CollaborationProtocol.h#L85) |  |
@@ -46895,7 +46895,7 @@
 | `WriteDedicatedBotsCfg` | function | SparkEditor | [PlayControlPanel.h:L93](../../SparkEditor/Source/Panels/PlayControlPanel.h#L93) |  |
 | `WriteDirtyMask` | function | SparkEngine | [ReplicationFields.h:L168](../../SparkEngine/Source/Engine/Networking/ReplicationFields.h#L168) | Write the dirty bitmask into a byte buffer |
 | `WriteDisplay` | function | SparkConsole | [ConsoleApp.h:L61](../../SparkConsole/src/ConsoleApp.h#L61) | Write human-facing text to DisplayHandle(). |
-| `WriteDurableText` | function | SparkEngine | [ReflectedSceneSerializer.cpp:L123](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L123) |  |
+| `WriteDurableText` | function | SparkEngine | [ReflectedScenePersistence.cpp:L114](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L114) |  |
 | `WriteEditMessage` | function | SparkEditor | [CollaborativeEditSession.cpp:L196](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L196) |  |
 | `WriteEditorPeer` | function | SparkEditor | [CollaborativeEditSession.cpp:L224](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L224) |  |
 | `WriteEmergencySignalRecord` | function | SparkEditor | [EditorCrashHandler.cpp:L100](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L100) |  |

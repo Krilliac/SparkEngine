@@ -2747,7 +2747,7 @@
 | `ParallelPerceptionSystem` | class | SparkEngine | [ParallelPerception.h:L120](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L120) |  |
 | `ParallelSystemExecutor` | class | SparkEngine | [ParallelSystemExecutor.h:L73](../../SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.h#L73) | Executes ECS systems in parallel where safe, serial where required. |
 | `ParameterDecl` | struct | SparkEngine | [MaterialDefinition.h:L104](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L104) | Declaration of a single material parameter with metadata. |
-| `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecovery.cpp:L398](../../SparkEditor/Source/Core/EditorRecovery.cpp#L398) |  |
+| `ParsedRecoveryFile` | struct | SparkEditor | [EditorRecoveryFiles.h:L133](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L133) |  |
 | `ParsedScene` | struct | SparkEditor | [SceneImportPanel.h:L85](../../SparkEditor/Source/Panels/SceneImportPanel.h#L85) | Full parse result for one .scene file. |
 | `Parser` | class | SparkEngine | [JsonUtils.h:L409](../../SparkEngine/Source/Utils/JsonUtils.h#L409) |  |
 | `ParseResult` | struct | SparkServer | [ServerApplication.h:L53](../../SparkServer/src/ServerApplication.h#L53) |  |
@@ -2818,7 +2818,7 @@
 | `PendingKill` | struct | GameModules | [TFHUD.h:L126](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUD.h#L126) |  |
 | `PendingMessage` | struct | Tests | [TestReliableChannel.cpp:L108](../../Tests/TestReliableChannel.cpp#L108) |  |
 | `PendingNotification` | struct | SparkEngine | [FileWatcher.h:L257](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h#L257) |  |
-| `PendingParent` | struct | SparkEngine | [ReflectedSceneSerializer.cpp:L473](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L473) |  |
+| `PendingParent` | struct | SparkEngine | [ReflectedSceneSerializer.cpp:L353](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp#L353) |  |
 | `PendingReload` | struct | SparkEngine | [ModuleHotReload.h:L124](../../SparkEngine/Source/Core/ModuleHotReload.h#L124) |  |
 | `PendingSection` | struct | SparkEngine | [CpuDebugger.h:L312](../../SparkEngine/Source/Utils/CpuDebugger.h#L312) |  |
 | `PendingSpoolPurge` | struct | SparkEngine | [Telemetry.h:L838](../../SparkEngine/Source/Utils/Telemetry.h#L838) |  |
@@ -3275,7 +3275,7 @@
 | `RecordingAudioBackend` | class | Tests | [TestSequencerAudioWiring.cpp:L27](../../Tests/TestSequencerAudioWiring.cpp#L27) |  |
 | `RecordingContext` | class | Tests | [Test_gamemodules_mmochat_di.cpp:L35](../../Tests/harden/Test_gamemodules_mmochat_di.cpp#L35) | Minimal IEngineContext that records GetNetwork() resolution. |
 | `RecordingSystem` | class | Tests | [Test_tests_ecsystemordering_real.cpp:L26](../../Tests/harden/Test_tests_ecsystemordering_real.cpp#L26) |  |
-| `RecoveryFiles` | struct | SparkEditor | [EditorRecovery.cpp:L84](../../SparkEditor/Source/Core/EditorRecovery.cpp#L84) |  |
+| `RecoveryFiles` | struct | SparkEditor | [EditorRecoveryFiles.h:L37](../../SparkEditor/Source/Core/EditorRecoveryFiles.h#L37) |  |
 | `Rect` | struct | SparkEngine | [UILayoutExtensions.h:L98](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L98) |  |
 | `RecursiveEvent` | struct | Tests | [TestAdversarialEngine.cpp:L213](../../Tests/TestAdversarialEngine.cpp#L213) |  |
 | `RedeployFacts` | struct | Tests | [TestTFRedeployRules.cpp:L77](../../Tests/TestTFRedeployRules.cpp#L77) |  |

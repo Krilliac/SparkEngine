@@ -287,6 +287,7 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/SceneManager/SceneManager.cpp",
+        "SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp",
         "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp",
         "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h"
       ],
@@ -1775,6 +1776,8 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEditor/Source/Core/EditorRecovery.cpp",
+        "SparkEditor/Source/Core/EditorRecoveryFiles.h",
+        "SparkEditor/Source/Core/EditorRecoveryJson.h",
         "SparkEditor/Source/Core/EditorRecovery.h"
       ],
       "formats": [
