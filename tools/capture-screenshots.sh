@@ -15,13 +15,25 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
 mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null
 chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
 
-# Every child is launched in its own session and recorded here.  This keeps
-# cleanup is scoped to this invocation; another editor, engine, or build may
-# be running on the same host.
+# Every child is launched in its own session when the host supports it and is
+# recorded here.  On Git Bash, where setsid and ps -o are unavailable, cleanup
+# walks only the recorded leader's descendant tree.  No name-based kill is
+# ever used.
 owned_pids=()
 owned_start_times=()
 owned_pgids=()
+owned_native_pids=()
+owned_modes=()
+owned_roles=()
+owned_active=()
 display_lock=""
+
+use_process_groups=0
+if command -v setsid >/dev/null 2>&1 \
+    && setsid --wait true >/dev/null 2>&1 \
+    && ps -o pgid= -p "$$" >/dev/null 2>&1; then
+    use_process_groups=1
+fi
 
 read_start_time() {
     local pid="$1"
@@ -30,30 +42,127 @@ read_start_time() {
     fi
 }
 
+pid_is_live() {
+    local pid="$1"
+    kill -0 "$pid" 2>/dev/null || return 1
+    if [ -r "/proc/$pid/stat" ]; then
+        [ "$(awk '{print $3}' "/proc/$pid/stat" 2>/dev/null)" != Z ] || return 1
+    else
+        # Git Bash exposes Windows-backed children through its ps -W table,
+        # but does not provide a reliable /proc zombie state.
+        [ -n "$(read_windows_identity "$pid")" ] || return 1
+    fi
+    return 0
+}
+
 read_process_group() {
     ps -o pgid= -p "$1" 2>/dev/null | tr -d '[:space:]'
 }
 
+read_native_pid() {
+    ps -W -l 2>/dev/null | awk -v wanted="$1" 'NR > 1 && $1 == wanted {print $4; exit}'
+}
+
+read_windows_identity() {
+    ps -W -l 2>/dev/null | awk -v wanted="$1" 'NR > 1 && $1 == wanted {$1=$1; print; exit}'
+}
+
+read_identity() {
+    local pid="$1"
+    local start_time
+    start_time="$(read_start_time "$pid")"
+    if [ -n "$start_time" ]; then
+        printf 'start:%s\n' "$start_time"
+    else
+        read_windows_identity "$pid"
+    fi
+}
+
+direct_children() {
+    ps -l 2>/dev/null | awk -v parent="$1" 'NR > 1 && $2 == parent {print $1}'
+}
+
+terminate_tree() {
+    local pid="$1"
+    local signal="$2"
+    local child
+    for child in $(direct_children "$pid"); do
+        terminate_tree "$child" "$signal"
+    done
+    kill -"$signal" "$pid" 2>/dev/null || true
+}
+
+collect_descendants() {
+    local pid="$1"
+    local child
+    for child in $(direct_children "$pid"); do
+        printf '%s\n' "$child"
+        collect_descendants "$child"
+    done
+}
+
+process_group_is_alive() {
+    local pgid="$1"
+    ps -eo pgid= 2>/dev/null | awk -v wanted="$pgid" '$1 == wanted {found=1} END {exit !found}'
+}
+
 launch_owned() {
-    local log_file="$1"
-    shift
-    setsid --wait -- "$@" >"$log_file" 2>&1 &
+    local role="$1"
+    local log_file="$2"
+    shift 2
+    local mode="tree"
+    if [ "$use_process_groups" -eq 1 ]; then
+        mode="group"
+        setsid --wait -- "$@" >"$log_file" 2>&1 &
+    else
+        # Keep a real tracked leader in Git Bash.  A direct background exec can
+        # replace the shell before ps exposes its PID, defeating identity and
+        # descendant tracking; this wrapper remains until the child exits.
+        ("$@" >"$log_file" 2>&1 & child_pid=$!; wait "$child_pid") &
+    fi
     local pid=$!
     owned_pids+=("$pid")
-    owned_start_times+=("$(read_start_time "$pid")")
-    local pgid="$(read_process_group "$pid")"
+    local identity
+    identity=""
+    local native_pid=""
+    for _ in {1..50}; do
+        identity="$(read_identity "$pid")"
+        native_pid="$(read_native_pid "$pid")"
+        if [ -n "$identity" ] && { [ "$mode" = group ] || [ -n "$native_pid" ]; }; then
+            break
+        fi
+        sleep 0.01
+    done
+    if [ -z "$identity" ]; then
+        if ! pid_is_live "$pid"; then
+            # A short-lived helper may have completed before Git Bash exposes
+            # its process row.  It is still safe to record and reap it; there
+            # is no live PID left that could be confused with a replacement.
+            identity="dead:$pid"
+        else
+            echo "ERROR: cannot establish identity for owned child PID $pid" >&2
+            exit 1
+        fi
+    fi
+    owned_start_times+=("$identity")
+    local pgid=""
+    if [ "$mode" = group ]; then
+        pgid="$(read_process_group "$pid")"
+    fi
     owned_pgids+=("${pgid:-$pid}")
-    owned_pid="$pid"
+    owned_native_pids+=("$native_pid")
+    owned_modes+=("$mode")
+    owned_roles+=("$role")
+    owned_active+=(1)
 }
 
 owned_pid_is_same() {
     local index="$1"
     local pid="${owned_pids[$index]}"
-    local pgid="${owned_pgids[$index]}"
     local expected="${owned_start_times[$index]}"
-    kill -0 "$pid" 2>/dev/null || return 1
+    pid_is_live "$pid" || return 1
     if [ -n "$expected" ]; then
-        [ "$(read_start_time "$pid")" = "$expected" ] || return 1
+        [ "$(read_identity "$pid")" = "$expected" ] || return 1
     fi
     return 0
 }
@@ -61,28 +170,110 @@ owned_pid_is_same() {
 stop_owned_index() {
     local index="$1"
     local pid="${owned_pids[$index]}"
+    local pgid="${owned_pgids[$index]-}"
+    local mode="${owned_modes[$index]-tree}"
+    local descendants=""
+    if [ "${owned_active[$index]-0}" -eq 0 ]; then
+        return
+    fi
+    owned_active[index]=0
     if ! owned_pid_is_same "$index"; then
         wait "$pid" 2>/dev/null || true
         return
+    fi
+    if [ "$mode" = tree ]; then
+        descendants="$(collect_descendants "$pid")"
     fi
 
     # Validate identity before every signal to avoid PID reuse terminating an
     # unrelated process.  The group ID is captured at launch rather than
     # assuming it equals the PID in every shell/job-control configuration.
-    kill -TERM -- "-$pgid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    if [ "$mode" = group ] && [ -n "$pgid" ]; then
+        kill -TERM -- "-$pgid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    else
+        terminate_tree "$pid" TERM
+    fi
     for _ in {1..50}; do
-        if ! owned_pid_is_same "$index"; then
+        if [ "$mode" = group ]; then
+            if ! owned_pid_is_same "$index" && ! process_group_is_alive "$pgid"; then
+                wait "$pid" 2>/dev/null || true
+                return
+            fi
+        elif ! owned_pid_is_same "$index" && [ -z "$descendants" ]; then
             wait "$pid" 2>/dev/null || true
             return
+        elif ! owned_pid_is_same "$index"; then
+            local child_alive=0
+            local child
+            for child in $descendants; do
+                if pid_is_live "$child"; then
+                    child_alive=1
+                    break
+                fi
+            done
+            if [ "$child_alive" -eq 0 ]; then
+                wait "$pid" 2>/dev/null || true
+                return
+            fi
         fi
         sleep 0.1
     done
-    if owned_pid_is_same "$index"; then
-        kill -KILL -- "-$pgid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+    local needs_kill=0
+    if [ "$mode" = group ]; then
+        if owned_pid_is_same "$index" || process_group_is_alive "$pgid"; then
+            needs_kill=1
+        fi
+    elif owned_pid_is_same "$index"; then
+        needs_kill=1
+    else
+        local child_alive=0
+        local child
+        for child in $descendants; do
+            if pid_is_live "$child"; then
+                child_alive=1
+                break
+            fi
+        done
+        if [ "$child_alive" -eq 1 ]; then
+            needs_kill=1
+        fi
     fi
+    if [ "$needs_kill" -eq 1 ]; then
+        if [ "$mode" = group ] && [ -n "$pgid" ]; then
+            kill -KILL -- "-$pgid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+        else
+            local native_pid="${owned_native_pids[$index]-}"
+            if [ -z "$native_pid" ]; then
+                native_pid="$(read_native_pid "$pid")"
+            fi
+            if [ -n "$native_pid" ] && command -v taskkill.exe >/dev/null 2>&1; then
+                taskkill.exe /PID "$native_pid" /T /F >/dev/null 2>&1 || true
+            fi
+            terminate_tree "$pid" KILL
+        fi
+    fi
+    for _ in {1..50}; do
+        if [ "$mode" = group ]; then
+            process_group_is_alive "$pgid" || break
+        else
+            local child_alive=0
+            local child
+            for child in $descendants; do
+                if pid_is_live "$child"; then
+                    child_alive=1
+                    break
+                fi
+            done
+            if ! owned_pid_is_same "$index" && [ "$child_alive" -eq 0 ]; then
+                break
+            fi
+        fi
+        sleep 0.1
+    done
     wait "$pid" 2>/dev/null || true
 }
 
+# shellcheck disable=SC2329 # invoked indirectly by the EXIT/INT/TERM traps
 cleanup() {
     local status=$?
     trap - EXIT INT TERM HUP
@@ -116,8 +307,7 @@ if [ -z "$display_lock" ]; then
     exit 1
 fi
 
-launch_owned /tmp/xvfb.log Xvfb "$DISPLAY" -screen 0 1600x900x24 -nolisten tcp
-xvfb_pid="$owned_pid"
+launch_owned display /tmp/xvfb.log Xvfb "$DISPLAY" -screen 0 1600x900x24 -nolisten tcp
 sleep 1
 
 capture_failures=0
@@ -138,7 +328,9 @@ grab() {
 kill_editor() {
     local index
     for ((index=${#owned_pids[@]}-1; index>=0; index--)); do
-        stop_owned_index "$index"
+        if [ "${owned_roles[$index]-}" = app ]; then
+            stop_owned_index "$index"
+        fi
     done
 }
 
@@ -149,9 +341,8 @@ capture_editor_theme() {
     local img="$OUT/editor-theme-${slug}.png"
     echo ">>> Editor theme: $theme"
     kill_editor
-    launch_owned "$OUT/.editor-${slug}.log" "$BIN/SparkEditor" \
+    launch_owned app "$OUT/.editor-${slug}.log" "$BIN/SparkEditor" \
         --test-mode --test-frames 100000 --theme "$theme" --project "$ROOT" </dev/null
-    local pid="$owned_pid"
     sleep "$waitsec"
     grab "$img"
     stop_owned_index "$((${#owned_pids[@]} - 1))"
@@ -164,10 +355,9 @@ capture_xterm() {
     local waitsec="$3"
     shift 3
     kill_editor
-    launch_owned /dev/null xterm -display "$DISPLAY" -geometry 150x40 -fa DejaVuSansMono -fs 12 \
+    launch_owned app /dev/null xterm -display "$DISPLAY" -geometry 150x40 -fa DejaVuSansMono -fs 12 \
         -bg "#0d1117" -fg "#d7d7d7" -T "$title" -hold \
         -e "$@"
-    local pid="$owned_pid"
     sleep "$waitsec"
     grab "$img"
     stop_owned_index "$((${#owned_pids[@]} - 1))"
@@ -248,7 +438,7 @@ esac
 kill_editor
 echo
 echo "=== Output summary ==="
-ls -la "$OUT"/*.png 2>/dev/null | sort -k9
+find "$OUT" -maxdepth 1 -type f -name '*.png' -print 2>/dev/null | sort
 if [ "$capture_failures" -ne 0 ]; then
     echo "ERROR: $capture_failures screenshot capture(s) failed"
     exit 1

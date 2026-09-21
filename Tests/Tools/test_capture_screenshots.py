@@ -11,6 +11,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -36,7 +37,9 @@ class CaptureScreenshotsTests(unittest.TestCase):
             return f"/{drive.lower()}{tail}"
         return converted.stdout.strip()
 
-    def _run_script(self, *, produce_capture: bool) -> subprocess.CompletedProcess[str]:
+    def _run_script(
+        self, *, produce_capture: bool, long_lived_processes: bool = False
+    ) -> subprocess.CompletedProcess[str]:
         bash = shutil.which("bash")
         if bash is None:
             self.skipTest("bash is required to exercise the capture script")
@@ -51,10 +54,30 @@ class CaptureScreenshotsTests(unittest.TestCase):
 
             fake_bin = root / "fake-bin"
             fake_bin.mkdir()
+            xvfb_body = (
+                "#!/bin/sh\n"
+                "printf x >> \"$XDG_RUNTIME_DIR/xvfb.marker\"\n"
+                "while :; do printf x >> \"$XDG_RUNTIME_DIR/xvfb.marker\"; /usr/bin/sleep 0.05; done\n"
+                if long_lived_processes
+                else "#!/bin/sh\nexit 0\n"
+            )
+            xterm_body = (
+                "#!/bin/sh\n"
+                "printf x >> \"$XDG_RUNTIME_DIR/xterm.marker\"\n"
+                "trap '' TERM\n"
+                "while :; do /usr/bin/sleep 0.05; done\n"
+                if long_lived_processes
+                else "#!/bin/sh\nexit 0\n"
+            )
+            sleep_body = (
+                "#!/bin/sh\nexec /usr/bin/sleep \"$@\"\n"
+                if long_lived_processes
+                else "#!/bin/sh\nexit 0\n"
+            )
             for name, body in {
-                "Xvfb": "#!/bin/sh\nexit 0\n",
-                "sleep": "#!/bin/sh\nexit 0\n",
-                "xterm": "#!/bin/sh\nexit 0\n",
+                "Xvfb": xvfb_body,
+                "sleep": sleep_body,
+                "xterm": xterm_body,
                 "import": (
                     "#!/bin/sh\n"
                     + (
@@ -79,6 +102,42 @@ class CaptureScreenshotsTests(unittest.TestCase):
                 f"export XDG_RUNTIME_DIR={shlex.quote(runtime_bash)}; "
                 f"exec {shlex.quote(script_bash)} console"
             )
+            if long_lived_processes:
+                process = subprocess.Popen(
+                    [bash, "-c", command],
+                    cwd=REPO_ROOT,
+                    env=environment,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline and (
+                    not (root / "runtime" / "xvfb.marker").exists()
+                    or not (root / "runtime" / "xterm.marker").exists()
+                ):
+                    time.sleep(0.05)
+                self.assertIsNone(process.poll(), "capture exited before live-child check")
+                self.assertTrue((root / "runtime" / "xvfb.marker").exists())
+                self.assertTrue((root / "runtime" / "xterm.marker").exists())
+                first_size = (root / "runtime" / "xvfb.marker").stat().st_size
+                time.sleep(0.2)
+                self.assertGreater(
+                    (root / "runtime" / "xvfb.marker").stat().st_size,
+                    first_size,
+                    "owned Xvfb must remain alive while app capture is active",
+                )
+                stdout, stderr = process.communicate(timeout=20)
+                final_size = (root / "runtime" / "xvfb.marker").stat().st_size
+                time.sleep(0.2)
+                self.assertEqual(
+                    (root / "runtime" / "xvfb.marker").stat().st_size,
+                    final_size,
+                    "owned Xvfb/descendants must be reaped before script exit",
+                )
+                return subprocess.CompletedProcess(
+                    process.args, process.returncode, stdout, stderr
+                )
             return subprocess.run(
                 [bash, "-c", command],
                 # WSL's interop launcher can retain its inherited Windows
@@ -135,6 +194,13 @@ class CaptureScreenshotsTests(unittest.TestCase):
         finally:
             sentinel.terminate()
             sentinel.wait(timeout=10)
+
+    def test_long_lived_xvfb_and_descendant_are_reaped(self) -> None:
+        result = self._run_script(
+            produce_capture=True,
+            long_lived_processes=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
