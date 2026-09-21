@@ -1972,8 +1972,8 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
         auto clearContext = reinterpret_cast<InjectContextFn>(
             GetProcAddress(static_cast<HMODULE>(entry.libraryHandle), "SparkModuleInjectEngineContext"));
 #else
-        auto clearContext = reinterpret_cast<InjectContextFn>(
-            dlsym(entry.libraryHandle, "SparkModuleInjectEngineContext"));
+        auto clearContext =
+            reinterpret_cast<InjectContextFn>(dlsym(entry.libraryHandle, "SparkModuleInjectEngineContext"));
 #endif
         if (clearContext)
             clearContext(nullptr);

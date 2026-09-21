@@ -852,10 +852,7 @@ TEST(ModuleABI_OnUnloadSeesEngineServicesBeforeImageTeardown)
     SetRegistryFixtureLifecycleSentinel(sentinel);
     struct SentinelGuard final
     {
-        ~SentinelGuard()
-        {
-            ClearRegistryFixtureLifecycleSentinel();
-        }
+        ~SentinelGuard() { ClearRegistryFixtureLifecycleSentinel(); }
     } sentinelGuard;
 
     int serviceStorage = 0;

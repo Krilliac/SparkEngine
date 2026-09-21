@@ -652,9 +652,9 @@ class SPARK_GAME_API Game
     // Engine-side pointers (not owned)
     Spark::IEngineContext* m_engineContext{nullptr}; ///< SDK v2 engine context
     SparkGameFPS::FPSWeatherIntegration m_weatherIntegration;
-    bool m_engineSystemsInitialized{false};          ///< SDK-v2 services were wired after context attachment
-    GraphicsEngine* m_graphics{nullptr};             ///< Reference to graphics engine
-    InputManager* m_input{nullptr};                  ///< Reference to input manager
+    bool m_engineSystemsInitialized{false}; ///< SDK-v2 services were wired after context attachment
+    GraphicsEngine* m_graphics{nullptr};    ///< Reference to graphics engine
+    InputManager* m_input{nullptr};         ///< Reference to input manager
 
     // Sub-systems owned by Game (unified system - no separate shader management)
     std::unique_ptr<SparkEngineCamera> m_camera;       ///< First-person camera system

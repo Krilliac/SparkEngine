@@ -87,8 +87,7 @@ TEST(FPSWeatherIntegration_RejectsWrongThreadWithoutMutation)
     integration.Bind(&port);
 
     bool initializedOnWorker = true;
-    std::thread worker([&]
-                       { initializedOnWorker = integration.Initialize(); });
+    std::thread worker([&] { initializedOnWorker = integration.Initialize(); });
     worker.join();
 
     EXPECT_FALSE(initializedOnWorker);

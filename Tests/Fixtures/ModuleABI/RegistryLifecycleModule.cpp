@@ -57,7 +57,7 @@ class RegistryLifecycleModule final : public Spark::IModule
             if (FILE* sentinel = std::fopen(sentinelPath, "wb"))
             {
                 const bool servicesAlive = m_context && m_context->GetWeather() && m_context->GetUI() &&
-                                            m_context->GetDialogue() && m_context->GetModSystem();
+                                           m_context->GetDialogue() && m_context->GetModSystem();
                 std::fputs(servicesAlive ? "services_alive\n" : "services_missing\n", sentinel);
                 std::fclose(sentinel);
             }
