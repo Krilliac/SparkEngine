@@ -65,3 +65,38 @@ if(_spark_invalid_marker LESS 0)
     message(FATAL_ERROR "SparkBuild --plan did not explain the rejected option: ${_spark_invalid_error}")
 endif()
 
+function(assert_plan_rejected _expected_error)
+    execute_process(
+        COMMAND "${SPARK_PLAN_EXECUTABLE}" ${ARGN}
+        RESULT_VARIABLE _spark_rejected_result
+        OUTPUT_VARIABLE _spark_rejected_output
+        ERROR_VARIABLE _spark_rejected_error
+        TIMEOUT 5)
+    if(_spark_rejected_result EQUAL 0)
+        message(FATAL_ERROR "SparkBuild --plan unexpectedly accepted invalid input: ${ARGN}")
+    endif()
+    string(FIND "${_spark_rejected_error}" "${_expected_error}" _spark_rejected_marker)
+    if(_spark_rejected_marker LESS 0)
+        message(FATAL_ERROR
+            "SparkBuild --plan rejection omitted '${_expected_error}': ${_spark_rejected_error}")
+    endif()
+endfunction()
+
+assert_plan_rejected("Missing value for --engine-path" --plan --engine-path)
+assert_plan_rejected("Unsupported generator: NotAGenerator"
+    --plan --engine-path "${SPARK_PLAN_SOURCE}" --build-path "${SPARK_PLAN_BUILD}"
+    --generator NotAGenerator)
+assert_plan_rejected("Unsupported build type: NotABuildType"
+    --plan --engine-path "${SPARK_PLAN_SOURCE}" --build-path "${SPARK_PLAN_BUILD}"
+    --build-type NotABuildType)
+assert_plan_rejected("engine path must contain CMakeLists.txt"
+    --plan --engine-path "${SPARK_PLAN_SOURCE}/does-not-exist"
+    --build-path "${SPARK_PLAN_BUILD}")
+
+if(WIN32)
+    set(_spark_unsafe_build_path "${SPARK_PLAN_BUILD}%unsafe")
+else()
+    set(_spark_unsafe_build_path "${SPARK_PLAN_BUILD}$unsafe")
+endif()
+assert_plan_rejected("Unsafe character in SparkBuild BuildPath"
+    --plan --engine-path "${SPARK_PLAN_SOURCE}" --build-path "${_spark_unsafe_build_path}")
