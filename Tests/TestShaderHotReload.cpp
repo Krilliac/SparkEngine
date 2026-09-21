@@ -65,7 +65,8 @@ TEST(ShaderHotReload_Initialize_UnicodePath)
     const auto shader = dir / L"Basic-世界.hlsl";
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
-    std::ofstream(shader) << "float4 main(float3 position : POSITION) : SV_Position { return float4(position, 1.0f); }\n";
+    std::ofstream(shader)
+        << "float4 main(float3 position : POSITION) : SV_Position { return float4(position, 1.0f); }\n";
 
     const auto dirUtf8Value = dir.u8string();
     const std::string dirUtf8(reinterpret_cast<const char*>(dirUtf8Value.data()), dirUtf8Value.size());
@@ -93,7 +94,8 @@ TEST(ShaderHotReload_UnicodeReload_PreservesUtf8PathAndClassification)
     const auto shader = scope.dir / L"Basic-世界_VS.hlsl";
     std::error_code ec;
     std::filesystem::create_directories(scope.dir, ec);
-    std::ofstream(shader) << "float4 main(float3 position : POSITION) : SV_Position { return float4(position, 1.0f); }\n";
+    std::ofstream(shader)
+        << "float4 main(float3 position : POSITION) : SV_Position { return float4(position, 1.0f); }\n";
 
     const auto dirUtf8Value = scope.dir.u8string();
     const std::string dirUtf8(reinterpret_cast<const char*>(dirUtf8Value.data()), dirUtf8Value.size());
@@ -108,10 +110,12 @@ TEST(ShaderHotReload_UnicodeReload_PreservesUtf8PathAndClassification)
 
     std::string callbackPath;
     std::string callbackName;
-    hr.OnShaderReloaded([&](const Spark::Graphics::ShaderReloadEvent& event) {
-        callbackPath = event.shaderPath;
-        callbackName = event.shaderName;
-    });
+    hr.OnShaderReloaded(
+        [&](const Spark::Graphics::ShaderReloadEvent& event)
+        {
+            callbackPath = event.shaderPath;
+            callbackName = event.shaderName;
+        });
     hr.ForceReload(expectedName);
 
     EXPECT_EQ(callbackPath, expectedPath);

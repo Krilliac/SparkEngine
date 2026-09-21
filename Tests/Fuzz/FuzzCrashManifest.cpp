@@ -13,7 +13,7 @@ namespace
     constexpr std::size_t SPARK_FUZZ_MAX_DEPTH = 16;
     constexpr std::size_t SPARK_FUZZ_MAX_INPUT_BYTES = 65536;
     static_assert(SPARK_FUZZ_MAX_DEPTH == 16);
-}
+} // namespace
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size)
 {

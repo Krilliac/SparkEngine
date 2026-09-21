@@ -200,9 +200,8 @@ namespace Spark::Graphics
         void RemoveWatchDirectory(std::string_view dir)
         {
             const std::string targetKey = CanonicalWatchKey(dir);
-            std::erase_if(m_watchDirectories, [&](const std::string& watched) {
-                return CanonicalWatchKey(watched) == targetKey;
-            });
+            std::erase_if(m_watchDirectories,
+                          [&](const std::string& watched) { return CanonicalWatchKey(watched) == targetKey; });
             m_watchDirectorySet.erase(targetKey);
         }
 
