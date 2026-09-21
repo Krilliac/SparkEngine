@@ -4,6 +4,20 @@
 
 set -euo pipefail
 
+# CI normally selects the committed-range comparison through CI/GitHub
+# Actions environment variables.  Windows callers that launch WSL Bash from a
+# native process do not reliably forward environment additions made only for
+# the child process, so provide an explicit, portable override as well.
+FORCE_CI=false
+if [ "${1:-}" = "--ci" ]; then
+    FORCE_CI=true
+    shift
+fi
+if [ "$#" -ne 0 ]; then
+    echo "usage: $0 [--ci]" >&2
+    exit 2
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 MANIFEST="ThirdParty/dependencies.lock"
@@ -89,7 +103,9 @@ cmake \
     -DSPARK_THIRDPARTY_MANIFEST="$PROJECT_ROOT/$MANIFEST" \
     -P "$PROJECT_ROOT/cmake/SparkThirdPartyAudit.cmake"
 
-if [ "${CI:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+if [ "$FORCE_CI" = true ] \
+    || [ "${CI:-}" = "true" ] \
+    || [ "${GITHUB_ACTIONS:-}" = "true" ]; then
     if git rev-parse --verify origin/Working >/dev/null 2>&1; then
         BASE_REF="$(git merge-base HEAD origin/Working)"
     else
