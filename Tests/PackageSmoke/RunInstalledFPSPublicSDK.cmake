@@ -1,7 +1,8 @@
 # Install the configured package, then build and run the real package-smoke
-# consumers against only the installed package. The FPS consumers compile
-# production source slices with staged public SDK headers; this is not proof
-# that the complete SparkGameFPS DLL is public-SDK-only.
+# consumers against only the installed package. The FPS consumers compile the
+# production module entrypoint header plus bounded source slices with staged
+# public SDK headers; this is not proof that the complete SparkGameFPS DLL is
+# public-SDK-only.
 
 foreach(_required IN ITEMS
         SPARK_ENGINE_BUILD_DIR SPARK_SOURCE_ROOT SPARK_CONFIG SPARK_TEST_ROOT

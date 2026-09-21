@@ -25,10 +25,28 @@ set(_public_sdk "${CMAKE_CURRENT_BINARY_DIR}/public-sdk")
 # A removed installed header must not survive from an earlier configure.
 file(REMOVE_RECURSE "${_public_sdk}")
 file(COPY "${SPARK_ENGINE_INCLUDE_DIR}/Spark" DESTINATION "${_public_sdk}")
+set(_fps_source "${CMAKE_CURRENT_LIST_DIR}/../../../GameModules/SparkGameFPS/Source")
+enable_testing()
+
+# Compile the production FPS module entrypoint header against only the installed
+# Spark SDK. This is a bounded boundary proof: the complete module still has
+# additional private-engine dependencies tracked by MOD-310.
+add_executable(spark_fps_module_api_consumer module_api.cpp)
+target_compile_features(spark_fps_module_api_consumer PRIVATE cxx_std_23)
+target_include_directories(spark_fps_module_api_consumer PRIVATE "${_fps_source}" "${_public_sdk}")
+set_target_properties(spark_fps_module_api_consumer PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+add_test(NAME SparkFPSModuleAPIConsumer COMMAND spark_fps_module_api_consumer)
+
+add_test(NAME SparkFPSModuleSourceBoundary
+    COMMAND "${CMAKE_COMMAND}"
+        "-DFPS_SOURCE=${_fps_source}"
+        -P "${CMAKE_CURRENT_LIST_DIR}/TestModuleSourceBoundary.cmake"
+)
 
 # Compile the production FPS logic without linking an engine target: its
 # transitive include directories must never hide a private-header dependency.
-set(_fps_source "${CMAKE_CURRENT_LIST_DIR}/../../../GameModules/SparkGameFPS/Source")
 add_executable(spark_fps_progression_consumer
     main.cpp
     "${_fps_source}/Game/ProgressionSystem.cpp"
@@ -44,7 +62,6 @@ target_include_directories(spark_fps_progression_consumer PRIVATE
     "${_fps_source}"
     "${_public_sdk}"
 )
-enable_testing()
 add_test(NAME SparkFPSProgressionConsumer COMMAND spark_fps_progression_consumer)
 
 # Asset discovery is production FPS code too. Keep its compiler inputs just as

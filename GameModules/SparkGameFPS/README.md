@@ -48,6 +48,16 @@ Build the `SparkGameFPS` target. CPU-only regression coverage is part of `SparkT
 `FPSRespawn_`, `FPSLocalProfile_`, `FPSProgression_`, `FPSAssets_`, `FPSStateRules_`, `FPSComponentsReal_`, and
 `WeaponMechanicsReal_` when running the test executable directly (`FPSMultiplayer_` covers the experimental LAN path).
 
+## SDK module boundary
+
+The module entrypoint implements only the installed `Spark::IModule` contract and receives services through its injected
+`Spark::IEngineContext`. The retired private `IGameModule` inheritance/factories and concrete `EngineContext::Get()`
+lookups are not part of SparkGameFPS. The installed-SDK consumer compiles `Core/SparkGameFPS.h` using only staged
+`Spark/` headers and a source-boundary regression rejects either legacy dependency if it returns.
+
+This proves the entrypoint boundary, not the complete DLL. Gameplay implementation files still include private engine
+headers, the Windows module still links `SparkEngineLib`, and full public-SDK-only build/link qualification remains open.
+
 ## Installed persistence smoke
 
 `FPSPackage_InstalledRuntime` stages the MinSizeRel stable-v1 runtime, validates the real installed NullRHI module
