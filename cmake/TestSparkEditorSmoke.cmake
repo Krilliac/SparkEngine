@@ -5,21 +5,56 @@
 if(NOT DEFINED SPARK_EDITOR OR SPARK_EDITOR STREQUAL "")
     message(FATAL_ERROR "SparkEditor smoke requires SPARK_EDITOR")
 endif()
+if(NOT DEFINED SPARK_EDITOR_BUILD_DIR OR SPARK_EDITOR_BUILD_DIR STREQUAL "")
+    message(FATAL_ERROR "SparkEditor smoke requires SPARK_EDITOR_BUILD_DIR")
+endif()
 if(NOT DEFINED SPARK_EDITOR_WORK_DIR OR SPARK_EDITOR_WORK_DIR STREQUAL "")
     message(FATAL_ERROR "SparkEditor smoke requires SPARK_EDITOR_WORK_DIR")
 endif()
 if(NOT EXISTS "${SPARK_EDITOR}" OR IS_DIRECTORY "${SPARK_EDITOR}")
     message(FATAL_ERROR "SparkEditor binary is missing: ${SPARK_EDITOR}")
 endif()
+if(NOT EXISTS "${SPARK_EDITOR_BUILD_DIR}/CMakeCache.txt")
+    message(FATAL_ERROR "SparkEditor smoke build directory is not a configured CMake tree: ${SPARK_EDITOR_BUILD_DIR}")
+endif()
 
-file(REMOVE_RECURSE "${SPARK_EDITOR_WORK_DIR}")
-file(MAKE_DIRECTORY "${SPARK_EDITOR_WORK_DIR}/Assets")
-file(MAKE_DIRECTORY "${SPARK_EDITOR_WORK_DIR}/Scenes")
+set(_build_dir "${SPARK_EDITOR_BUILD_DIR}")
+set(_work_dir "${SPARK_EDITOR_WORK_DIR}")
+cmake_path(ABSOLUTE_PATH _build_dir NORMALIZE)
+cmake_path(ABSOLUTE_PATH _work_dir NORMALIZE)
+file(REAL_PATH "${_build_dir}" _canonical_build_dir)
+set(_owned_root "${_canonical_build_dir}/editor-executable-smoke")
+if(EXISTS "${_owned_root}")
+    file(REAL_PATH "${_owned_root}" _canonical_owned_root)
+else()
+    set(_canonical_owned_root "${_owned_root}")
+endif()
+if(EXISTS "${_work_dir}")
+    file(REAL_PATH "${_work_dir}" _canonical_work_dir)
+else()
+    get_filename_component(_work_parent "${_work_dir}" DIRECTORY)
+    if(NOT IS_DIRECTORY "${_work_parent}")
+        message(FATAL_ERROR "SparkEditor smoke work directory parent is not a directory: ${_work_parent}")
+    endif()
+    file(REAL_PATH "${_work_parent}" _canonical_work_parent)
+    get_filename_component(_work_leaf "${_work_dir}" NAME)
+    set(_canonical_work_dir "${_canonical_work_parent}/${_work_leaf}")
+endif()
+cmake_path(IS_PREFIX _canonical_owned_root "${_canonical_work_dir}" NORMALIZE _work_is_owned)
+if(NOT _work_is_owned OR _canonical_work_dir STREQUAL _canonical_owned_root)
+    message(FATAL_ERROR
+        "Refusing to erase SparkEditor smoke path outside the trusted build output child: ${_work_dir}\n"
+        "Canonical expected root: ${_canonical_owned_root}")
+endif()
+
+file(REMOVE_RECURSE "${_canonical_work_dir}")
+file(MAKE_DIRECTORY "${_canonical_work_dir}/Assets")
+file(MAKE_DIRECTORY "${_canonical_work_dir}/Scenes")
 
 # The editor's project loader accepts a minimal project document.  An empty
 # scene list deliberately exercises the safe new-scene fallback while keeping
 # the fixture independent of repository assets and modules.
-set(_project "${SPARK_EDITOR_WORK_DIR}/EditorSmoke.sparkproject")
+set(_project "${_canonical_work_dir}/EditorSmoke.sparkproject")
 file(WRITE "${_project}" [=[{
   "projectFileVersion": 1,
   "name": "EditorSmoke",
@@ -36,11 +71,11 @@ file(WRITE "${_project}" [=[{
 }
 ]=])
 
-set(_output "${SPARK_EDITOR_WORK_DIR}/editor-smoke-output.txt")
-set(_result_file "${SPARK_EDITOR_WORK_DIR}/editor-smoke-result.json")
+set(_output "${_canonical_work_dir}/editor-smoke-output.txt")
+set(_result_file "${_canonical_work_dir}/editor-smoke-result.json")
 execute_process(
     COMMAND "${SPARK_EDITOR}" --test-mode --test-frames 3 --project "${_project}" --smoke-result "${_result_file}"
-    WORKING_DIRECTORY "${SPARK_EDITOR_WORK_DIR}"
+    WORKING_DIRECTORY "${_canonical_work_dir}"
     TIMEOUT 30
     RESULT_VARIABLE _result
     OUTPUT_VARIABLE _stdout

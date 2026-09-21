@@ -1791,6 +1791,7 @@ if(WIN32 AND TARGET SparkEditor)
         NAME SparkEditorExecutableSmoke
         COMMAND ${CMAKE_COMMAND}
             "-DSPARK_EDITOR=$<TARGET_FILE:SparkEditor>"
+            "-DSPARK_EDITOR_BUILD_DIR=${CMAKE_BINARY_DIR}"
             "-DSPARK_EDITOR_WORK_DIR=${CMAKE_BINARY_DIR}/editor-executable-smoke/$<CONFIG>"
             -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkEditorSmoke.cmake)
     set_tests_properties(SparkEditorExecutableSmoke PROPERTIES
