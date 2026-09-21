@@ -22,7 +22,7 @@ owned_pids=()
 owned_start_times=()
 owned_pgids=()
 owned_native_pids=()
-owned_modes=()
+owned_keepers=()
 owned_roles=()
 owned_active=()
 display_lock=""
@@ -97,13 +97,18 @@ read_identity() {
 collect_group_descendants() {
     local pgid="$1"
     local leader="$2"
+    local keeper="${3:-0}"
     # Git Bash retains PGID after PPID becomes 1.  Snapshot all members of
     # our still-owned group, with children before parents, before any signal.
-    ps -l 2>/dev/null | awk -v group="$pgid" -v leader="$leader" '
-        NR > 1 && $3 == group {parents[$1]=$2}
+    if [ "$use_process_groups" -eq 1 ]; then
+        ps -eo pid=,ppid=,pgid=
+    else
+        ps -l
+    fi 2>/dev/null | awk -v group="$pgid" -v leader="$leader" -v keeper="$keeper" '
+        $3 == group {parents[$1]=$2}
         END {
             for (pid in parents) {
-                if (pid == leader) continue
+                if (pid == leader || pid == keeper) continue
                 depth=0; parent=parents[pid]
                 while (parent in parents && parent != pid) {
                     depth++; parent=parents[parent]
@@ -111,6 +116,25 @@ collect_group_descendants() {
                 print depth, pid
             }
         }' | sort -rn | awk '{print $2}'
+}
+
+snapshot_group_descendants() {
+    local child expected native
+    while read -r child; do
+        [ -n "$child" ] || continue
+        pid_is_live "$child" || continue
+        expected="$(read_identity "$child")"
+        native="$(read_native_pid "$child")"
+        if [ -z "$expected" ]; then
+            pid_is_live "$child" || continue
+            return 1
+        fi
+        # A PID from the table may have exited and been reused while its
+        # identity was read.  Only admit an identity still in this owned group.
+        [ "$(read_process_group "$child")" = "$1" ] || continue
+        snapshot_pid_is_same "$child" "$expected" || continue
+        printf '%s|%s|%s\n' "$child" "$expected" "$native"
+    done < <(collect_group_descendants "$@")
 }
 
 snapshot_pid_is_same() {
@@ -154,9 +178,9 @@ captured_descendants_are_live() {
 }
 
 process_group_is_alive() {
-    local pgid="$1"
-    ps -eo pgid=,stat= 2>/dev/null | awk -v wanted="$pgid" \
-        '$1 == wanted && $2 !~ /^Z/ {found=1} END {exit !found}'
+    local snapshot
+    snapshot="$(snapshot_group_descendants "$1" 0)" || return 0
+    [ -n "$snapshot" ]
 }
 
 launch_owned() {
@@ -165,16 +189,20 @@ launch_owned() {
     shift 2
     local mode="tree"
     local pid
+    local ownership_file
+    ownership_file="$(mktemp "$XDG_RUNTIME_DIR/spark-capture-owner.XXXXXX")" || exit 1
     if [ "$use_process_groups" -eq 1 ]; then
         mode="group"
         # Create the keeper before the app; never spawn a replacement during
         # cleanup.  It reserves the leader/group identity until signalled.
         # shellcheck disable=SC2016 # positional arguments expand in the child Bash
         setsid --wait bash -c '
+            ownership_file=$1; shift
             /usr/bin/sleep 2147483647 & keeper=$!
+            printf "%s\n" "$keeper" >"$ownership_file"
             "$@" &
             wait "$keeper" || :
-        ' bash "$@" >"$log_file" 2>&1 &
+        ' bash "$ownership_file" "$@" >"$log_file" 2>&1 &
         pid=$!
     else
         # Job control creates a dedicated group before the command can fork.
@@ -184,7 +212,8 @@ launch_owned() {
         [[ "$-" == *m* ]] || restore_monitor=1
         set -m
         (set +m; /usr/bin/sleep 2147483647 & keeper=$!
-            "$@" >"$log_file" 2>&1 & wait "$keeper" || :) &
+            printf '%s\n' "$keeper" >"$ownership_file"
+            "$@" & wait "$keeper" || :) >"$log_file" 2>&1 &
         pid=$!
         [ "$restore_monitor" -eq 0 ] || set +m
     fi
@@ -223,9 +252,24 @@ launch_owned() {
     fi
     owned_pgids+=("$pgid")
     owned_native_pids+=("$native_pid")
-    owned_modes+=("$mode")
+    local keeper_pid="" keeper_identity="" keeper_native=""
+    for _ in {1..50}; do
+        IFS= read -r keeper_pid <"$ownership_file" || true
+        if [[ "$keeper_pid" =~ ^[0-9]+$ ]]; then
+            keeper_identity="$(read_identity "$keeper_pid")"
+            keeper_native="$(read_native_pid "$keeper_pid")"
+            [ -z "$keeper_identity" ] || break
+        fi
+        /usr/bin/sleep 0.01
+    done
+    rm -f -- "$ownership_file"
+    owned_keepers+=("$keeper_pid|$keeper_identity|$keeper_native")
     owned_roles+=("$role")
     owned_active+=(1)
+    if ! snapshot_pid_is_same "$keeper_pid" "$keeper_identity"; then
+        echo "ERROR: cannot establish owned capture keeper identity" >&2
+        exit 1
+    fi
 }
 
 owned_pid_is_same() {
@@ -243,108 +287,62 @@ stop_owned_index() {
     local index="$1"
     local pid="${owned_pids[$index]}"
     local pgid="${owned_pgids[$index]-}"
-    local mode="${owned_modes[$index]-tree}"
-    local descendants=""
-    local descendant_snapshot=""
     if [ "${owned_active[$index]-0}" -eq 0 ]; then
         return
     fi
     owned_active[index]=0
-    if ! owned_pid_is_same "$index"; then
-        if ! pid_is_live "$pid"; then
-            wait "$pid" 2>/dev/null || true
-        else
-            echo "ERROR: owned capture process identity changed (PID $pid)" >&2
-            cleanup_failed=1
-            return 1
-        fi
-        return
-    fi
-    if [ "$mode" = tree ]; then
-        descendants="$(collect_group_descendants "$pgid" "$pid")"
-        local child expected native
-        while read -r child; do
-            [ -n "$child" ] || continue
-            expected="$(read_identity "$child")"
-            native="$(read_native_pid "$child")"
-            [ -n "$expected" ] || continue
-            descendant_snapshot+="$child|$expected|$native"
-            descendant_snapshot+=$'\n'
-        done <<< "$descendants"
-    fi
-
-    # Validate identity before every signal to avoid PID reuse terminating an
-    # unrelated process.  The group ID is captured at launch rather than
-    # assuming it equals the PID in every shell/job-control configuration.
-    if [ "$mode" = group ] && [ -n "$pgid" ]; then
-        kill -TERM -- "-$pgid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-    else
-        signal_captured_descendants "$descendant_snapshot" TERM 0
-        if owned_pid_is_same "$index"; then
-            kill -TERM "$pid" 2>/dev/null || true
-        fi
-    fi
-    for _ in {1..20}; do
-        if [ "$mode" = group ]; then
-            if ! pid_is_live "$pid" && ! process_group_is_alive "$pgid"; then
-                wait "$pid" 2>/dev/null || true
-                return
+    local keeper keeper_identity keeper_native
+    IFS='|' read -r keeper keeper_identity keeper_native <<< "${owned_keepers[$index]}"
+    local snapshot="" signal force deadline quiet=0
+    # Keep both ownership anchors alive while app TERM handlers may fork.
+    # Every pass discovers current group members and validates fresh identities;
+    # KILL passes catch children created after an earlier snapshot as well.
+    for signal in TERM KILL; do
+        force=0
+        [ "$signal" != KILL ] || force=1
+        deadline=$((SECONDS + 3))
+        while [ "$SECONDS" -lt "$deadline" ]; do
+            if ! owned_pid_is_same "$index" \
+                || ! snapshot_pid_is_same "$keeper" "$keeper_identity" \
+                || ! snapshot="$(snapshot_group_descendants "$pgid" "$pid" "$keeper")"; then
+                echo "ERROR: owned capture group identity could not be verified (PID $pid)" >&2
+                cleanup_failed=1
+                return 1
             fi
-        elif ! pid_is_live "$pid" && ! captured_descendants_are_live "$descendant_snapshot"; then
-            wait "$pid" 2>/dev/null || true
-            return
-        fi
-        sleep 0.1
-    done
-    local needs_kill=0
-    if [ "$mode" = group ]; then
-        if owned_pid_is_same "$index" || process_group_is_alive "$pgid"; then
-            needs_kill=1
-        fi
-    elif owned_pid_is_same "$index"; then
-        needs_kill=1
-    else
-        if captured_descendants_are_live "$descendant_snapshot"; then
-            needs_kill=1
-        fi
-    fi
-    if [ "$needs_kill" -eq 1 ]; then
-        if [ "$mode" = group ] && [ -n "$pgid" ]; then
-            kill -KILL -- "-$pgid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
-        else
-            signal_captured_descendants "$descendant_snapshot" KILL 1
-            if owned_pid_is_same "$index"; then
-                local native_pid="${owned_native_pids[$index]-}"
-                if [ -z "$native_pid" ]; then
-                    native_pid="$(read_native_pid "$pid")"
-                fi
-                if [ -n "$native_pid" ] \
-                    && [ "$(read_native_pid "$pid")" = "$native_pid" ]; then
-                    /usr/bin/kill -f -W -KILL "$native_pid" 2>/dev/null || true
-                fi
-                kill -KILL "$pid" 2>/dev/null || true
-            fi
-        fi
-    fi
-    for _ in {1..20}; do
-        if [ "$mode" = group ]; then
-            process_group_is_alive "$pgid" || break
-        else
-            if ! pid_is_live "$pid" \
-                && ! captured_descendants_are_live "$descendant_snapshot"; then
+            if [ -z "$snapshot" ]; then
+                quiet=1
                 break
             fi
-        fi
-        sleep 0.1
+            signal_captured_descendants "$snapshot" "$signal" "$force"
+            /usr/bin/sleep 0.1
+        done
+        [ "$quiet" -eq 0 ] || break
     done
-    # Never turn a bounded cleanup deadline into an unbounded shell wait.
-    if pid_is_live "$pid" || captured_descendants_are_live "$descendant_snapshot" \
-        || { [ "$mode" = group ] && process_group_is_alive "$pgid"; }; then
+    if [ "$quiet" -eq 0 ]; then
+        echo "ERROR: owned capture group did not quiesce (PID $pid)" >&2
+        cleanup_failed=1
+    fi
+
+    # The app group is settled (or cleanup has failed closed).  Stop only the
+    # verified keeper and leader last, then verify the entire group is empty.
+    snapshot="${owned_keepers[$index]}"$'\n'"$pid|${owned_start_times[$index]}|${owned_native_pids[$index]}"
+    signal_captured_descendants "$snapshot" TERM 0
+    deadline=$((SECONDS + 2))
+    while captured_descendants_are_live "$snapshot" && [ "$SECONDS" -lt "$deadline" ]; do
+        /usr/bin/sleep 0.1
+    done
+    signal_captured_descendants "$snapshot" KILL 1
+    deadline=$((SECONDS + 2))
+    while captured_descendants_are_live "$snapshot" && [ "$SECONDS" -lt "$deadline" ]; do
+        /usr/bin/sleep 0.1
+    done
+    if pid_is_live "$pid" || process_group_is_alive "$pgid"; then
         echo "ERROR: owned capture process survived cleanup (PID $pid)" >&2
         cleanup_failed=1
         return 1
     fi
     wait "$pid" 2>/dev/null || true
+    [ "$quiet" -eq 1 ]
 }
 
 # shellcheck disable=SC2329 # invoked indirectly by the EXIT/INT/TERM traps

@@ -43,6 +43,7 @@ class CaptureScreenshotsTests(unittest.TestCase):
         produce_capture: bool,
         long_lived_processes: bool = False,
         exiting_parent: bool = False,
+        shutdown_spawn: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         bash = shutil.which("bash")
         if bash is None:
@@ -78,6 +79,12 @@ class CaptureScreenshotsTests(unittest.TestCase):
                 xterm_body = xterm_body.replace(
                     "while :; do printf x >> \"$XDG_RUNTIME_DIR/xterm.marker\"; /usr/bin/sleep 0.05; done\n",
                     "exit 0\n",
+                )
+            if shutdown_spawn:
+                xterm_body = xterm_body.replace(
+                    "while :; do printf x >> \"$XDG_RUNTIME_DIR/xterm.marker\"; /usr/bin/sleep 0.05; done\n",
+                    "trap '/usr/bin/sleep 20 & printf \"%s\\n\" \"$!\" > \"$XDG_RUNTIME_DIR/shutdown-child.pid\"; exit 0' TERM\n"
+                    "while :; do /usr/bin/sleep 0.05; done\n",
                 )
             sleep_body = (
                 "#!/bin/sh\nexec /usr/bin/sleep \"$@\"\n"
@@ -159,6 +166,22 @@ class CaptureScreenshotsTests(unittest.TestCase):
                     final_child_size,
                     "captured xterm descendants must stop before script exit",
                 )
+                if shutdown_spawn:
+                    spawned_pid = (root / "runtime" / "shutdown-child.pid").read_text().strip()
+                    self.assertTrue(spawned_pid.isdecimal())
+                    # Independently inspect the actual late child.  Reap it on
+                    # failure too, so a regression does not leave a test sleeper.
+                    probe = subprocess.run(
+                        [bash, "-c", 'if kill -0 "$1" 2>/dev/null; then '
+                         'state=$(awk \'{print $3}\' "/proc/$1/stat" 2>/dev/null); '
+                         'if [ "$state" != Z ]; then kill -KILL "$1"; exit 1; fi; fi',
+                         "bash", spawned_pid],
+                        cwd=REPO_ROOT, capture_output=True, text=True, timeout=5,
+                    )
+                    self.assertEqual(
+                        probe.returncode, 0,
+                        "a child spawned by the TERM handler must be reaped before exit",
+                    )
                 return subprocess.CompletedProcess(
                     process.args, process.returncode, stdout, stderr
                 )
@@ -231,6 +254,14 @@ class CaptureScreenshotsTests(unittest.TestCase):
             produce_capture=True,
             long_lived_processes=True,
             exiting_parent=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_child_spawned_by_term_handler_is_reaped(self) -> None:
+        result = self._run_script(
+            produce_capture=True,
+            long_lived_processes=True,
+            shutdown_spawn=True,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
