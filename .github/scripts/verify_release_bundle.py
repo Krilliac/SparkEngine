@@ -70,7 +70,13 @@ def _digest(path: Path) -> str:
 def _safe_name(value: Any, label: str) -> str:
     _require(isinstance(value, str) and bool(value), f"{label} must be a non-empty string")
     _require(value == Path(value).name and value not in {".", ".."}, f"{label} is not a safe basename")
-    _require("\x00" not in value and "\\" not in value and "/" not in value, f"{label} contains a path separator")
+    _require("\x00" not in value and "\\" not in value and "/" not in value and ":" not in value,
+             f"{label} contains an ambiguous separator")
+    _require(not value.endswith((".", " ")), f"{label} has a trailing dot or space")
+    stem = value.split(".", 1)[0].casefold()
+    _require(stem not in {"con", "prn", "aux", "nul"}
+             and not (len(stem) == 4 and stem[:3] in {"com", "lpt"} and stem[3].isdigit()),
+             f"{label} uses a reserved Windows device name")
     return value
 
 
@@ -114,7 +120,7 @@ def _read_sums(path: Path, expected: set[str], root: Path, provenance_name: str)
     return sums
 
 
-def _verify_spdx(path: Path) -> None:
+def _verify_spdx(path: Path, root: Path, expected: set[str]) -> None:
     data = _load_json(path, "SPDX SBOM")
     _require(isinstance(data, dict), "SPDX SBOM must be an object")
     _require(isinstance(data.get("spdxVersion"), str) and data["spdxVersion"].startswith("SPDX-"),
@@ -127,9 +133,19 @@ def _verify_spdx(path: Path) -> None:
     packages = data.get("packages")
     _require(isinstance(files, list) and bool(files), "SPDX SBOM files inventory is empty")
     _require(isinstance(packages, list) and bool(packages), "SPDX SBOM packages inventory is empty")
+    package_assets = {name for name in expected if name.lower().endswith((".zip", ".tar.gz", ".exe", ".msi"))}
+    _require(bool(package_assets), "stable bundle has no package payload for SPDX coverage")
+    package_by_fold = {name.casefold(): name for name in package_assets}
+    covered_assets: set[str] = set()
     for index, entry in enumerate(files, 1):
         _require(isinstance(entry, dict) and isinstance(entry.get("fileName"), str)
                  and bool(entry["fileName"]), f"SPDX file entry {index} has no fileName")
+        file_name = _safe_name(Path(entry["fileName"]).name, f"SPDX file entry {index}.fileName")
+        canonical_name = package_by_fold.get(file_name.casefold())
+        _require(canonical_name is not None,
+                 f"SPDX file entry {index} does not map to a stable package payload")
+        assert canonical_name is not None
+        covered_assets.add(canonical_name)
         checksums = entry.get("checksums")
         _require(isinstance(checksums, list) and bool(checksums),
                  f"SPDX file entry {index} has no checksums")
@@ -138,6 +154,11 @@ def _verify_spdx(path: Path) -> None:
                             and isinstance(item.get("checksumValue"), str)
                             and SHA256.fullmatch(item["checksumValue"].lower())]
         _require(bool(sha256_checksums), f"SPDX file entry {index} has no valid SHA256 checksum")
+        actual = _digest(root / canonical_name)
+        _require(any(item["checksumValue"].lower() == actual for item in sha256_checksums),
+                 f"SPDX checksum does not match bundle payload {canonical_name}")
+    _require(covered_assets == package_assets,
+             "SPDX coverage does not include every stable package payload")
 
 
 def _verify_provenance(path: Path, source_commit: str, expected: set[str], root: Path) -> str:
@@ -151,7 +172,7 @@ def _verify_provenance(path: Path, source_commit: str, expected: set[str], root:
     return _digest(path)
 
 
-def _verify_signatures(path: Path, root: Path, expected: set[str], public_key: Path,
+def _verify_signatures(path: Path, root: Path, signature_root: Path, expected: set[str], public_key: Path,
                        fingerprint: str, openssl: str) -> None:
     _require(public_key.is_file() and not public_key.is_symlink(),
              "trusted public key is not provisioned; stable signing precondition is unsatisfied")
@@ -196,7 +217,7 @@ def _verify_signatures(path: Path, root: Path, expected: set[str], public_key: P
                  f"signature entry {index} has an invalid artifact digest")
         actual = _digest(root / name)
         _require(entry["artifactSha256"] == actual, f"signature binding drifted for {name}")
-        detached = root / signature
+        detached = signature_root / signature
         _require(detached.is_file() and not detached.is_symlink() and 0 < detached.stat().st_size <= MAX_SIGNATURE_BYTES,
                  f"detached signature is missing or empty for {name}")
         _require(isinstance(entry.get("signerFingerprint"), str) and bool(entry["signerFingerprint"]),
@@ -214,15 +235,19 @@ def _verify_signatures(path: Path, root: Path, expected: set[str], public_key: P
         _require(verified.returncode == 0 and verified.stdout.strip() == "Verified OK",
                  f"detached signature cryptographic verification failed for {name}")
     _require(seen == expected, "detached signature manifest does not cover every expected artifact")
-    for child in root.iterdir():
-        if child.name.endswith(".sig"):
-            _require(child.name in referenced_signatures, f"unreferenced detached signature {child.name}")
+    for child in signature_root.iterdir():
+        if child.name.casefold().endswith(".sig"):
+            _require(child.is_file() and not child.is_symlink(),
+                     f"detached signature {child.name} is not a regular file")
+            _require(child.name.casefold() in folded_signatures,
+                     f"unreferenced detached signature {child.name}")
 
 
 def verify_release_bundle(*, bundle_directory: Path, expected_assets_file: Path, sha256sums: Path,
                           sbom: Path, provenance_manifest: Path, signature_manifest: Path,
                           source_commit: str, trusted_public_key: Path,
-                          trusted_key_fingerprint: str, openssl: str = "openssl") -> None:
+                          trusted_key_fingerprint: str, signature_directory: Path | None = None,
+                          openssl: str = "openssl") -> None:
     root = bundle_directory.resolve()
     _require(root.is_dir(), "bundle directory is missing")
     expected_names = _read_expected(expected_assets_file)
@@ -242,9 +267,14 @@ def verify_release_bundle(*, bundle_directory: Path, expected_assets_file: Path,
         promotable_candidates <= expected | known_control_files,
         "bundle contains an extra promotable artifact outside the expected stable set",
     )
+    signature_root = (signature_directory or signature_manifest.parent).resolve()
+    _require(signature_root.is_dir(), "signature directory is missing")
+    _require(trusted_public_key.resolve().parent == signature_root,
+             "trusted public key must be provisioned inside the signature directory")
     _require(provenance_manifest.resolve().parent == root, "provenance manifest must be in the bundle directory")
     _require(sbom.resolve().parent == root, "SPDX SBOM must be in the bundle directory")
-    _require(signature_manifest.resolve().parent == root, "signature manifest must be in the bundle directory")
+    _require(signature_manifest.resolve().parent == signature_root,
+             "signature manifest must be in the signature directory")
     _require(provenance_manifest.name in expected, "provenance manifest is not an expected asset")
     _require(sbom.name in expected, "SPDX SBOM is not an expected asset")
     for name in expected_names:
@@ -252,12 +282,12 @@ def verify_release_bundle(*, bundle_directory: Path, expected_assets_file: Path,
         _require(asset.is_file() and not asset.is_symlink(), f"expected stable asset {name} is missing")
     provenance_digest = _verify_provenance(provenance_manifest, source_commit, expected, root)
     sums = _read_sums(sha256sums, expected, root, provenance_manifest.name)
-    _verify_spdx(sbom)
+    _verify_spdx(sbom, root, expected)
     _require(sbom.name in sums, "SPDX SBOM is not bound by SHA256SUMS")
     # Provenance is outside SHA256SUMS by design, but must still be bound by a
     # signature entry and by the exact local bytes consumed here.
     _require(provenance_digest == _digest(provenance_manifest), "provenance digest changed during verification")
-    _verify_signatures(signature_manifest, root, expected, trusted_public_key,
+    _verify_signatures(signature_manifest, root, signature_root, expected, trusted_public_key,
                        trusted_key_fingerprint, openssl)
 
 
@@ -272,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--trusted-public-key", type=Path, required=True)
     parser.add_argument("--trusted-key-fingerprint", required=True)
+    parser.add_argument("--signature-directory", type=Path)
     parser.add_argument("--openssl", default="openssl")
     args = parser.parse_args(argv)
     try:

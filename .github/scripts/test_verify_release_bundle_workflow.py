@@ -30,7 +30,7 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
             block = self.text[start:self.text.find("\n    - name:", start + 10)]
             self.assertIn("--trusted-public-key", block)
             self.assertIn("--trusted-key-fingerprint", block)
-            self.assertIn("release-signatures.json", block)
+            self.assertIn("spark-release-signature-bundle/release-signatures.json", block)
 
     def test_provisioning_requires_pinned_external_bundle_digest_and_url(self) -> None:
         start = self.text.index("- name: Provision external stable signature bundle")
@@ -38,7 +38,8 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         self.assertIn("SPARKENGINE_STABLE_SIGNATURE_BUNDLE_URL", block)
         self.assertIn("SPARKENGINE_STABLE_SIGNATURE_BUNDLE_SHA256", block)
         self.assertIn("sha256sum --check --status", block)
-        self.assertIn("unsafe archive member", block)
+        self.assertIn("extract_release_signature_bundle.py", block)
+        self.assertIn("RUNNER_TEMP/spark-release-signature-bundle", block)
 
 
 if __name__ == "__main__":

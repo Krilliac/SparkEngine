@@ -29,7 +29,8 @@ class ReleaseBundleTests(unittest.TestCase):
             "spdxVersion": "SPDX-2.3", "SPDXID": "SPDXRef-DOCUMENT",
             "documentNamespace": "https://example.invalid/spark/1.2.3",
             "files": [{"fileName": "SparkEngine-1.2.3-Windows.zip", "checksums": [
-                {"algorithm": "SHA256", "checksumValue": "a" * 64}]}],
+                {"algorithm": "SHA256", "checksumValue": hashlib.sha256(
+                    (self.root / self.names[0]).read_bytes()).hexdigest()}]}],
             "packages": [{"SPDXID": "SPDXRef-Package", "name": "SparkEngine"}],
         }), encoding="utf-8")
         (self.root / self.names[2]).write_text(json.dumps({
@@ -64,7 +65,7 @@ class ReleaseBundleTests(unittest.TestCase):
 
     def _write_inputs(self) -> None:
         self.sums.write_text(
-            "\n".join(f"{self._sha(name)}  {name}" for name in self.names[:-1]) + "\n",
+            "\n".join(f"{self._sha(name)}  {name}" for name in self.names if name != self.names[2]) + "\n",
             encoding="utf-8",
         )
         self.signature_manifest.write_text(json.dumps({
@@ -121,6 +122,11 @@ class ReleaseBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(BundleError, "unreferenced"):
             self._verify()
 
+    def test_rejects_case_insensitive_stray_signature(self) -> None:
+        (self.root / "unreferenced.SIG").write_bytes(b"stray")
+        with self.assertRaisesRegex(BundleError, "unreferenced"):
+            self._verify()
+
     def test_rejects_extra_promotable_package(self) -> None:
         (self.root / "SparkEngine-rogue.zip").write_bytes(b"rogue")
         with self.assertRaisesRegex(BundleError, "extra promotable"):
@@ -143,6 +149,25 @@ class ReleaseBundleTests(unittest.TestCase):
         sbom.write_text(json.dumps(data), encoding="utf-8")
         self._write_inputs()
         with self.assertRaisesRegex(BundleError, "files inventory is empty"):
+            self._verify()
+
+    def test_rejects_forged_spdx_checksum(self) -> None:
+        sbom = self.root / self.names[1]
+        data = json.loads(sbom.read_text(encoding="utf-8"))
+        data["files"][0]["checksums"][0]["checksumValue"] = "0" * 64
+        sbom.write_text(json.dumps(data), encoding="utf-8")
+        self._write_inputs()
+        with self.assertRaisesRegex(BundleError, "SPDX checksum does not match"):
+            self._verify()
+
+    def test_rejects_missing_package_coverage(self) -> None:
+        second = self.root / "SparkEngine-1.2.3-Windows.msi"
+        second.write_bytes(b"second package")
+        self.names.append(second.name)
+        names = self.expected.read_text(encoding="utf-8").splitlines()
+        self.expected.write_text("\n".join([*names[:-1], second.name, "SHA256SUMS"]) + "\n", encoding="utf-8")
+        self._write_inputs()
+        with self.assertRaisesRegex(BundleError, "every stable package"):
             self._verify()
 
     def test_rejects_provenance_commit_drift(self) -> None:
