@@ -15,10 +15,9 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
 mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null
 chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
 
-# Every child is launched in its own session when the host supports it and is
-# recorded here.  On Git Bash, where setsid and ps -o are unavailable, cleanup
-# walks only the recorded leader's descendant tree.  No name-based kill is
-# ever used.
+# Every capture owns a separate process group and a persistent group leader.
+# The leader stays alive until cleanup, so even descendants whose immediate
+# parent exits remain attributable without looking up process names.
 owned_pids=()
 owned_start_times=()
 owned_pgids=()
@@ -63,7 +62,11 @@ pid_is_live() {
 }
 
 read_process_group() {
-    ps -o pgid= -p "$1" 2>/dev/null | tr -d '[:space:]'
+    if [ "$use_process_groups" -eq 1 ]; then
+        ps -o pgid= -p "$1" 2>/dev/null | tr -d '[:space:]'
+    else
+        ps -l 2>/dev/null | awk -v wanted="$1" '$1 == wanted {print $3; exit}'
+    fi
 }
 
 read_native_pid() {
@@ -91,17 +94,23 @@ read_identity() {
     fi
 }
 
-direct_children() {
-    ps -l 2>/dev/null | awk -v parent="$1" 'NR > 1 && $2 == parent {print $1}'
-}
-
-collect_descendants() {
-    local pid="$1"
-    local child
-    for child in $(direct_children "$pid"); do
-        collect_descendants "$child"
-        printf '%s\n' "$child"
-    done
+collect_group_descendants() {
+    local pgid="$1"
+    local leader="$2"
+    # Git Bash retains PGID after PPID becomes 1.  Snapshot all members of
+    # our still-owned group, with children before parents, before any signal.
+    ps -l 2>/dev/null | awk -v group="$pgid" -v leader="$leader" '
+        NR > 1 && $3 == group {parents[$1]=$2}
+        END {
+            for (pid in parents) {
+                if (pid == leader) continue
+                depth=0; parent=parents[pid]
+                while (parent in parents && parent != pid) {
+                    depth++; parent=parents[parent]
+                }
+                print depth, pid
+            }
+        }' | sort -rn | awk '{print $2}'
 }
 
 snapshot_pid_is_same() {
@@ -155,16 +164,30 @@ launch_owned() {
     local log_file="$2"
     shift 2
     local mode="tree"
+    local pid
     if [ "$use_process_groups" -eq 1 ]; then
         mode="group"
-        setsid --wait -- "$@" >"$log_file" 2>&1 &
+        # Create the keeper before the app; never spawn a replacement during
+        # cleanup.  It reserves the leader/group identity until signalled.
+        # shellcheck disable=SC2016 # positional arguments expand in the child Bash
+        setsid --wait bash -c '
+            /usr/bin/sleep 2147483647 & keeper=$!
+            "$@" &
+            wait "$keeper" || :
+        ' bash "$@" >"$log_file" 2>&1 &
+        pid=$!
     else
-        # Keep a real tracked leader in Git Bash.  A direct background exec can
-        # replace the shell before ps exposes its PID, defeating identity and
-        # descendant tracking; this wrapper remains until the child exits.
-        ("$@" >"$log_file" 2>&1 & child_pid=$!; wait "$child_pid") &
+        # Job control creates a dedicated group before the command can fork.
+        # Keep its leader alive after the command exits so PGID cannot be
+        # reused and orphaned descendants can still be snapshotted safely.
+        local restore_monitor=0
+        [[ "$-" == *m* ]] || restore_monitor=1
+        set -m
+        (set +m; /usr/bin/sleep 2147483647 & keeper=$!
+            "$@" >"$log_file" 2>&1 & wait "$keeper" || :) &
+        pid=$!
+        [ "$restore_monitor" -eq 0 ] || set +m
     fi
-    local pid=$!
     owned_pids+=("$pid")
     local identity
     identity=""
@@ -192,11 +215,13 @@ launch_owned() {
         fi
     fi
     owned_start_times+=("$identity")
-    local pgid=""
-    if [ "$mode" = group ]; then
-        pgid="$(read_process_group "$pid")"
+    local pgid
+    pgid="$(read_process_group "$pid")"
+    if [ "$pgid" != "$pid" ]; then
+        echo "ERROR: owned capture group was not isolated (PID $pid, PGID $pgid)" >&2
+        exit 1
     fi
-    owned_pgids+=("${pgid:-$pid}")
+    owned_pgids+=("$pgid")
     owned_native_pids+=("$native_pid")
     owned_modes+=("$mode")
     owned_roles+=("$role")
@@ -236,7 +261,7 @@ stop_owned_index() {
         return
     fi
     if [ "$mode" = tree ]; then
-        descendants="$(collect_descendants "$pid")"
+        descendants="$(collect_group_descendants "$pgid" "$pid")"
         local child expected native
         while read -r child; do
             [ -n "$child" ] || continue

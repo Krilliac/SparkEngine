@@ -38,7 +38,11 @@ class CaptureScreenshotsTests(unittest.TestCase):
         return converted.stdout.strip()
 
     def _run_script(
-        self, *, produce_capture: bool, long_lived_processes: bool = False
+        self,
+        *,
+        produce_capture: bool,
+        long_lived_processes: bool = False,
+        exiting_parent: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         bash = shutil.which("bash")
         if bash is None:
@@ -70,6 +74,11 @@ class CaptureScreenshotsTests(unittest.TestCase):
                 if long_lived_processes
                 else "#!/bin/sh\nexit 0\n"
             )
+            if exiting_parent:
+                xterm_body = xterm_body.replace(
+                    "while :; do printf x >> \"$XDG_RUNTIME_DIR/xterm.marker\"; /usr/bin/sleep 0.05; done\n",
+                    "exit 0\n",
+                )
             sleep_body = (
                 "#!/bin/sh\nexec /usr/bin/sleep \"$@\"\n"
                 if long_lived_processes
@@ -214,6 +223,14 @@ class CaptureScreenshotsTests(unittest.TestCase):
         result = self._run_script(
             produce_capture=True,
             long_lived_processes=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_descendant_is_reaped_after_its_parent_exits(self) -> None:
+        result = self._run_script(
+            produce_capture=True,
+            long_lived_processes=True,
+            exiting_parent=True,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
