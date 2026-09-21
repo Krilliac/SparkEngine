@@ -64,6 +64,7 @@ class CaptureScreenshotsTests(unittest.TestCase):
             xterm_body = (
                 "#!/bin/sh\n"
                 "printf x >> \"$XDG_RUNTIME_DIR/xterm.marker\"\n"
+                "(while :; do printf x >> \"$XDG_RUNTIME_DIR/xterm-child.marker\"; /usr/bin/sleep 0.05; done) &\n"
                 "trap '' TERM\n"
                 "while :; do /usr/bin/sleep 0.05; done\n"
                 if long_lived_processes
@@ -115,11 +116,13 @@ class CaptureScreenshotsTests(unittest.TestCase):
                 while time.monotonic() < deadline and (
                     not (root / "runtime" / "xvfb.marker").exists()
                     or not (root / "runtime" / "xterm.marker").exists()
+                    or not (root / "runtime" / "xterm-child.marker").exists()
                 ):
                     time.sleep(0.05)
                 self.assertIsNone(process.poll(), "capture exited before live-child check")
                 self.assertTrue((root / "runtime" / "xvfb.marker").exists())
                 self.assertTrue((root / "runtime" / "xterm.marker").exists())
+                self.assertTrue((root / "runtime" / "xterm-child.marker").exists())
                 first_size = (root / "runtime" / "xvfb.marker").stat().st_size
                 time.sleep(0.2)
                 self.assertGreater(
@@ -129,11 +132,17 @@ class CaptureScreenshotsTests(unittest.TestCase):
                 )
                 stdout, stderr = process.communicate(timeout=20)
                 final_size = (root / "runtime" / "xvfb.marker").stat().st_size
+                final_child_size = (root / "runtime" / "xterm-child.marker").stat().st_size
                 time.sleep(0.2)
                 self.assertEqual(
                     (root / "runtime" / "xvfb.marker").stat().st_size,
                     final_size,
                     "owned Xvfb/descendants must be reaped before script exit",
+                )
+                self.assertEqual(
+                    (root / "runtime" / "xterm-child.marker").stat().st_size,
+                    final_child_size,
+                    "captured xterm descendants must stop before script exit",
                 )
                 return subprocess.CompletedProcess(
                     process.args, process.returncode, stdout, stderr
@@ -180,7 +189,7 @@ class CaptureScreenshotsTests(unittest.TestCase):
             [
                 sys.executable,
                 "-c",
-                "import time; time.sleep(10)  # SparkConsole unrelated sentinel",
+                "import time; time.sleep(300)  # SparkConsole unrelated sentinel",
             ],
             cwd=REPO_ROOT,
         )

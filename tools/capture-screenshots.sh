@@ -82,23 +82,50 @@ direct_children() {
     ps -l 2>/dev/null | awk -v parent="$1" 'NR > 1 && $2 == parent {print $1}'
 }
 
-terminate_tree() {
-    local pid="$1"
-    local signal="$2"
-    local child
-    for child in $(direct_children "$pid"); do
-        terminate_tree "$child" "$signal"
-    done
-    kill -"$signal" "$pid" 2>/dev/null || true
-}
-
 collect_descendants() {
     local pid="$1"
     local child
     for child in $(direct_children "$pid"); do
-        printf '%s\n' "$child"
         collect_descendants "$child"
+        printf '%s\n' "$child"
     done
+}
+
+snapshot_pid_is_same() {
+    local pid="$1"
+    local expected="$2"
+    [ -n "$expected" ] || return 1
+    pid_is_live "$pid" || return 1
+    [ "$(read_identity "$pid")" = "$expected" ]
+}
+
+signal_captured_descendants() {
+    local snapshot="$1"
+    local signal="$2"
+    local force="$3"
+    local child expected native
+    while IFS='|' read -r child expected native; do
+        [ -n "$child" ] || continue
+        if snapshot_pid_is_same "$child" "$expected"; then
+            if [ "$force" -eq 1 ] && [ -n "$native" ] \
+                && command -v taskkill.exe >/dev/null 2>&1; then
+                taskkill.exe /PID "$native" /T /F >/dev/null 2>&1 || true
+            fi
+            kill -"$signal" "$child" 2>/dev/null || true
+        fi
+    done <<< "$snapshot"
+}
+
+captured_descendants_are_live() {
+    local snapshot="$1"
+    local child expected native
+    while IFS='|' read -r child expected native; do
+        [ -n "$child" ] || continue
+        if snapshot_pid_is_same "$child" "$expected"; then
+            return 0
+        fi
+    done <<< "$snapshot"
+    return 1
 }
 
 process_group_is_alive() {
@@ -173,6 +200,7 @@ stop_owned_index() {
     local pgid="${owned_pgids[$index]-}"
     local mode="${owned_modes[$index]-tree}"
     local descendants=""
+    local descendant_snapshot=""
     if [ "${owned_active[$index]-0}" -eq 0 ]; then
         return
     fi
@@ -183,6 +211,15 @@ stop_owned_index() {
     fi
     if [ "$mode" = tree ]; then
         descendants="$(collect_descendants "$pid")"
+        local child expected native
+        while read -r child; do
+            [ -n "$child" ] || continue
+            expected="$(read_identity "$child")"
+            native="$(read_native_pid "$child")"
+            [ -n "$expected" ] || continue
+            descendant_snapshot+="$child|$expected|$native"
+            descendant_snapshot+=$'\n'
+        done <<< "$descendants"
     fi
 
     # Validate identity before every signal to avoid PID reuse terminating an
@@ -191,7 +228,10 @@ stop_owned_index() {
     if [ "$mode" = group ] && [ -n "$pgid" ]; then
         kill -TERM -- "-$pgid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
     else
-        terminate_tree "$pid" TERM
+        signal_captured_descendants "$descendant_snapshot" TERM 0
+        if owned_pid_is_same "$index"; then
+            kill -TERM "$pid" 2>/dev/null || true
+        fi
     fi
     for _ in {1..50}; do
         if [ "$mode" = group ]; then
@@ -199,7 +239,7 @@ stop_owned_index() {
                 wait "$pid" 2>/dev/null || true
                 return
             fi
-        elif ! owned_pid_is_same "$index" && [ -z "$descendants" ]; then
+        elif ! owned_pid_is_same "$index" && ! captured_descendants_are_live "$descendant_snapshot"; then
             wait "$pid" 2>/dev/null || true
             return
         elif ! owned_pid_is_same "$index"; then
@@ -226,15 +266,7 @@ stop_owned_index() {
     elif owned_pid_is_same "$index"; then
         needs_kill=1
     else
-        local child_alive=0
-        local child
-        for child in $descendants; do
-            if pid_is_live "$child"; then
-                child_alive=1
-                break
-            fi
-        done
-        if [ "$child_alive" -eq 1 ]; then
+        if captured_descendants_are_live "$descendant_snapshot"; then
             needs_kill=1
         fi
     fi
@@ -242,29 +274,25 @@ stop_owned_index() {
         if [ "$mode" = group ] && [ -n "$pgid" ]; then
             kill -KILL -- "-$pgid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
         else
-            local native_pid="${owned_native_pids[$index]-}"
-            if [ -z "$native_pid" ]; then
-                native_pid="$(read_native_pid "$pid")"
+            signal_captured_descendants "$descendant_snapshot" KILL 1
+            if owned_pid_is_same "$index"; then
+                local native_pid="${owned_native_pids[$index]-}"
+                if [ -z "$native_pid" ]; then
+                    native_pid="$(read_native_pid "$pid")"
+                fi
+                if [ -n "$native_pid" ] && command -v taskkill.exe >/dev/null 2>&1; then
+                    taskkill.exe /PID "$native_pid" /T /F >/dev/null 2>&1 || true
+                fi
+                kill -KILL "$pid" 2>/dev/null || true
             fi
-            if [ -n "$native_pid" ] && command -v taskkill.exe >/dev/null 2>&1; then
-                taskkill.exe /PID "$native_pid" /T /F >/dev/null 2>&1 || true
-            fi
-            terminate_tree "$pid" KILL
         fi
     fi
     for _ in {1..50}; do
         if [ "$mode" = group ]; then
             process_group_is_alive "$pgid" || break
         else
-            local child_alive=0
-            local child
-            for child in $descendants; do
-                if pid_is_live "$child"; then
-                    child_alive=1
-                    break
-                fi
-            done
-            if ! owned_pid_is_same "$index" && [ "$child_alive" -eq 0 ]; then
+            if ! owned_pid_is_same "$index" \
+                && ! captured_descendants_are_live "$descendant_snapshot"; then
                 break
             fi
         fi
