@@ -141,6 +141,7 @@ class ReleaseBundleTests(unittest.TestCase):
         data = json.loads(sbom.read_text(encoding="utf-8"))
         data["files"] = []
         sbom.write_text(json.dumps(data), encoding="utf-8")
+        self._write_inputs()
         with self.assertRaisesRegex(BundleError, "files inventory is empty"):
             self._verify()
 
