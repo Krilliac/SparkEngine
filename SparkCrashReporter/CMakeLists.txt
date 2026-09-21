@@ -89,6 +89,14 @@ if(REPORTER_SOURCES)
 
         add_test(NAME SparkCrashReporter.ManifestCompatibility
                  COMMAND SparkCrashReporterManifestTests)
+
+        add_test(NAME SparkCrashReporter.ExecutableSmoke
+                 COMMAND ${CMAKE_COMMAND}
+                         -DREPORTER=$<TARGET_FILE:SparkCrashReporter>
+                         -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/spark-crash-reporter-executable-smoke
+                         -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/CrashReporterExecutableSmoke.cmake)
+        set_tests_properties(SparkCrashReporter.ExecutableSmoke PROPERTIES
+                             TIMEOUT 30)
     endif()
 else()
     message(STATUS "SparkCrashReporter: no source files found, skipping")
