@@ -47,3 +47,15 @@ enemy, weapon, progression, time-scale, and engine-service state.
 Build the `SparkGameFPS` target. CPU-only regression coverage is part of `SparkTests`; filter for `FPSInteg_`,
 `FPSRespawn_`, `FPSLocalProfile_`, `FPSProgression_`, `FPSAssets_`, `FPSStateRules_`, `FPSComponentsReal_`, and
 `WeaponMechanicsReal_` when running the test executable directly (`FPSMultiplayer_` covers the experimental LAN path).
+
+## Installed persistence smoke
+
+`FPSPackage_InstalledRuntime` stages the MinSizeRel stable-v1 runtime, validates the real installed NullRHI module
+lifecycle, then launches two separate D3D11 WARP processes with isolated `LOCALAPPDATA`. The writer moves progression
+from 0 to 37 XP and writes `fps_quicksave`; the fresh reader proves an initial 0 XP state, loads the same slot, and
+restores 37 XP without changing the save bytes. The runner retains child output, semantic command audits, binary/save
+hashes, build configuration, source identity, and host metadata under its per-attempt test root.
+
+This is a bounded local progression-persistence slice, not stable-v1 certification. It does not yet prove every
+`FPSLocalProfile` field, spawn/move/kill/respawn/score acceptance, a public-SDK-only module build, NullRHI save/reload,
+clean-machine installation, recovery/soak, hardware rendering, or hosted exact-SHA qualification.

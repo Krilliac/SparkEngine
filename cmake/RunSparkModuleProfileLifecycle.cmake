@@ -103,6 +103,10 @@ function(_spark_validate_lifecycle_result child_result child_stdout child_stderr
     set(${out_reason} "${_reason}" PARENT_SCOPE)
 endfunction()
 
+if(SPARK_LIFECYCLE_PARSER_INCLUDE_ONLY)
+    return()
+endif()
+
 if(SPARK_LIFECYCLE_PARSER_SELF_TEST)
     function(_spark_expect_lifecycle_case name result stdout stderr expected_ok)
         _spark_validate_lifecycle_result("${result}" "${stdout}" "${stderr}" _actual_ok _reason)

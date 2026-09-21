@@ -1435,6 +1435,16 @@ set_tests_properties(ModuleProfileLifecycleParserContract PROPERTIES
     LABELS "module-profile;stable-v1;d3d11;unit"
     TIMEOUT 10)
 
+add_test(
+    NAME FPSPackage_SaveReloadParserContract
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+        -DSPARK_FPS_SAVE_RELOAD_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake)
+set_tests_properties(FPSPackage_SaveReloadParserContract PROPERTIES
+    LABELS "module;stable-v1;fps;package;unit"
+    TIMEOUT 10)
+
 if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND
    TARGET SparkEngine AND TARGET SparkGame)
     add_dependencies(SparkTests SparkEngine SparkGame)
@@ -1577,9 +1587,9 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
                 "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/p/$<CONFIG>"
                 -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
         set_tests_properties(FPSPackage_InstalledRuntime PROPERTIES
-            LABELS "module;stable-v1;fps;package;integration"
+            LABELS "module;stable-v1;fps;package;integration;save;d3d11"
             RUN_SERIAL TRUE
-            TIMEOUT 300)
+            TIMEOUT 600)
 
         add_test(
             NAME FPSPublicSDK_InstalledConsumers

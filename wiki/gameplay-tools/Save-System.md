@@ -336,11 +336,14 @@ The compatibility-labeled coverage includes:
 The same production-linked SaveSystem test file also retains the malformed-tail,
 oversize-file, custom-state, and atomic slot-replacement regressions.
 
-SAVE-230 remains broader than this save-format slice. Rollback/backup acceptance
-remains explicitly open, as do scene, prefab, asset, editor-state, per-module
-schema, installed-build, and exact-SHA CI evidence. The ordinary build workflows
-run this CTest serially with the rest of the suite; no dedicated compatibility
-CI job is claimed.
+SAVE-230 remains broader than this save-format slice. A local staged MinSizeRel
+FPS smoke now demonstrates same-version progression XP persistence across two
+fresh D3D11 WARP processes and verifies that reading does not change the save
+bytes. It does not cover the rest of `FPSLocalProfile`, N-1 migration, checksum,
+rollback/backup/corruption/interruption recovery, scene/prefab/asset/editor-state
+migration, clean-machine installation, or hosted exact-SHA evidence. The ordinary
+build workflows run compatibility tests serially with the rest of the suite; no
+dedicated compatibility CI job is claimed.
 
 ## Threading
 
@@ -358,6 +361,6 @@ public API rather than invoking background I/O against singleton state.
 
 ## Source & Freshness
 
-Updated against the SAVE-230 save-format slice on 2026-08-27. The constants and
+Updated against the SAVE-230 save-format and installed FPS persistence slices on 2026-09-20. The constants and
 implementation named above are authoritative; this page must change in the same
 commit as any save-format or compatibility-window change.
