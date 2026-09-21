@@ -8,7 +8,6 @@ OUT="$ROOT/docs/screenshots"
 BIN="$ROOT/build/linux-gcc-release/bin"
 mkdir -p "$OUT"
 
-export DISPLAY=:99
 export LIBGL_ALWAYS_SOFTWARE=1
 export MESA_GL_VERSION_OVERRIDE=3.3
 export SDL_VIDEODRIVER=x11
@@ -16,39 +15,108 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
 mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null
 chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
 
-# Keep ownership of the Xvfb process we started.  In particular, do not leave
-# an MSYS child unreaped: on Windows its inherited working-directory handle can
-# outlive this script and make callers' temporary-directory cleanup fail.
-xvfb_pid=""
-if ! pgrep -f "Xvfb :99" >/dev/null; then
-    Xvfb :99 -screen 0 1600x900x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
-    xvfb_pid=$!
-    sleep 1
-fi
+# Every child is launched in its own session and recorded here.  This keeps
+# cleanup is scoped to this invocation; another editor, engine, or build may
+# be running on the same host.
+owned_pids=()
+owned_start_times=()
+display_lock=""
 
-stop_owned_xvfb() {
-    if [ -z "$xvfb_pid" ]; then
+read_start_time() {
+    local pid="$1"
+    if [ -r "/proc/$pid/stat" ]; then
+        awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true
+    fi
+}
+
+launch_owned() {
+    local log_file="$1"
+    shift
+    setsid --wait -- "$@" >"$log_file" 2>&1 &
+    local pid=$!
+    owned_pids+=("$pid")
+    owned_start_times+=("$(read_start_time "$pid")")
+    owned_pid="$pid"
+}
+
+owned_pid_is_same() {
+    local index="$1"
+    local pid="${owned_pids[$index]}"
+    local expected="${owned_start_times[$index]}"
+    kill -0 "$pid" 2>/dev/null || return 1
+    if [ -n "$expected" ]; then
+        [ "$(read_start_time "$pid")" = "$expected" ] || return 1
+    fi
+    return 0
+}
+
+stop_owned_index() {
+    local index="$1"
+    local pid="${owned_pids[$index]}"
+    if ! owned_pid_is_same "$index"; then
+        wait "$pid" 2>/dev/null || true
         return
     fi
-    kill -TERM "$xvfb_pid" 2>/dev/null || true
+
+    # setsid --wait remains the session leader, so its PID is also the
+    # process-group ID.  Validate identity before every signal to avoid PID
+    # reuse terminating an unrelated process.
+    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
     for _ in {1..50}; do
-        if ! kill -0 "$xvfb_pid" 2>/dev/null; then
-            wait "$xvfb_pid" 2>/dev/null || true
+        if ! owned_pid_is_same "$index"; then
+            wait "$pid" 2>/dev/null || true
             return
         fi
         sleep 0.1
     done
-    kill -KILL "$xvfb_pid" 2>/dev/null || true
-    wait "$xvfb_pid" 2>/dev/null || true
+    if owned_pid_is_same "$index"; then
+        kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+    fi
+    wait "$pid" 2>/dev/null || true
 }
 
-trap stop_owned_xvfb EXIT
+cleanup() {
+    local status=$?
+    trap - EXIT INT TERM HUP
+    local index
+    for ((index=${#owned_pids[@]}-1; index>=0; index--)); do
+        stop_owned_index "$index"
+    done
+    if [ -n "$display_lock" ]; then
+        rmdir "$display_lock" 2>/dev/null || true
+    fi
+    exit "$status"
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+
+# Lock a display number for this run instead of racing with another capture
+# invocation or attaching to an unrelated long-lived X server.
+for display_number in $(seq 90 199); do
+    candidate_lock="$XDG_RUNTIME_DIR/spark-capture-display-$display_number.lock"
+    if [ ! -e "/tmp/.X11-unix/X$display_number" ] && mkdir "$candidate_lock" 2>/dev/null; then
+        display_lock="$candidate_lock"
+        DISPLAY=":$display_number"
+        export DISPLAY
+        break
+    fi
+done
+if [ -z "$display_lock" ]; then
+    echo "ERROR: no free display could be locked" >&2
+    exit 1
+fi
+
+launch_owned /tmp/xvfb.log Xvfb "$DISPLAY" -screen 0 1600x900x24 -nolisten tcp
+xvfb_pid="$owned_pid"
+sleep 1
 
 capture_failures=0
 
 grab() {
     local out="$1"
-    import -window root -display :99 "$out" 2>/dev/null
+    import -window root -display "$DISPLAY" "$out" 2>/dev/null
     if [ -f "$out" ] && [ "$(stat -c%s "$out")" -gt 1000 ]; then
         echo "  saved: $out ($(stat -c%s "$out") bytes)"
         return 0
@@ -60,12 +128,10 @@ grab() {
 }
 
 kill_editor() {
-    pkill -9 -f SparkEditor 2>/dev/null || true
-    pkill -9 -f SparkEngine 2>/dev/null || true
-    pkill -9 -f SparkConsole 2>/dev/null || true
-    pkill -9 -f SparkBuild 2>/dev/null || true
-    pkill -9 xterm 2>/dev/null || true
-    sleep 1
+    local index
+    for ((index=${#owned_pids[@]}-1; index>=0; index--)); do
+        stop_owned_index "$index"
+    done
 }
 
 capture_editor_theme() {
@@ -75,13 +141,12 @@ capture_editor_theme() {
     local img="$OUT/editor-theme-${slug}.png"
     echo ">>> Editor theme: $theme"
     kill_editor
-    "$BIN/SparkEditor" --test-mode --test-frames 100000 --theme "$theme" \
-        --project "$ROOT" </dev/null > "$OUT/.editor-${slug}.log" 2>&1 &
-    local pid=$!
+    launch_owned "$OUT/.editor-${slug}.log" "$BIN/SparkEditor" \
+        --test-mode --test-frames 100000 --theme "$theme" --project "$ROOT" </dev/null
+    local pid="$owned_pid"
     sleep "$waitsec"
     grab "$img"
-    kill -9 "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null
+    stop_owned_index "$((${#owned_pids[@]} - 1))"
 }
 
 # Launch xterm running $cmd, capture full display after $wait seconds.
@@ -91,14 +156,13 @@ capture_xterm() {
     local waitsec="$3"
     shift 3
     kill_editor
-    xterm -display :99 -geometry 150x40 -fa DejaVuSansMono -fs 12 \
+    launch_owned /dev/null xterm -display "$DISPLAY" -geometry 150x40 -fa DejaVuSansMono -fs 12 \
         -bg "#0d1117" -fg "#d7d7d7" -T "$title" -hold \
-        -e "$@" >/dev/null 2>&1 &
-    local pid=$!
+        -e "$@"
+    local pid="$owned_pid"
     sleep "$waitsec"
     grab "$img"
-    kill -9 "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null
+    stop_owned_index "$((${#owned_pids[@]} - 1))"
 }
 
 capture_console() {

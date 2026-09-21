@@ -9,6 +9,7 @@ import shlex
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -52,8 +53,6 @@ class CaptureScreenshotsTests(unittest.TestCase):
             fake_bin.mkdir()
             for name, body in {
                 "Xvfb": "#!/bin/sh\nexit 0\n",
-                "pgrep": "#!/bin/sh\nexit 1\n",
-                "pkill": "#!/bin/sh\nexit 0\n",
                 "sleep": "#!/bin/sh\nexit 0\n",
                 "xterm": "#!/bin/sh\nexit 0\n",
                 "import": (
@@ -109,6 +108,33 @@ class CaptureScreenshotsTests(unittest.TestCase):
         result = self._run_script(produce_capture=True)
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_repeated_runs_clean_up_on_both_evidence_paths(self) -> None:
+        for _ in range(5):
+            missing = self._run_script(produce_capture=False)
+            self.assertNotEqual(missing.returncode, 0, missing.stdout + missing.stderr)
+            success = self._run_script(produce_capture=True)
+            self.assertEqual(success.returncode, 0, success.stdout + success.stderr)
+
+    def test_unrelated_spark_process_survives_capture_cleanup(self) -> None:
+        sentinel = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "import time; time.sleep(10)  # SparkConsole unrelated sentinel",
+            ],
+            cwd=REPO_ROOT,
+        )
+        try:
+            result = self._run_script(produce_capture=False)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIsNone(
+                sentinel.poll(),
+                "capture cleanup must not terminate unrelated Spark-named processes",
+            )
+        finally:
+            sentinel.terminate()
+            sentinel.wait(timeout=10)
 
 
 if __name__ == "__main__":
