@@ -353,8 +353,20 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
         self.assertIn('"SPARK_D3D11_DRIVER=warp"', smoke_text)
         self.assertIn("_spark_validate_lifecycle_result", smoke_text)
         self.assertIn("asset_root_guard=installed-bin", smoke_text)
-        self.assertIn("source tree as its package root", smoke_text)
+        self.assertIn("installed root is the source tree", smoke_text)
         self.assertIn("-test-frames 8", smoke_text)
+
+    def test_installed_fps_d3d11_path_policy_contract(self) -> None:
+        script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSD3D11.cmake"
+        result = subprocess.run(
+            ["cmake", "-DSPARK_FPS_D3D11_PATH_POLICY_SELF_TEST=ON", "-P", str(script)],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("path policy contract passed", result.stdout)
 
 
 class ManifestValidationTests(unittest.TestCase):

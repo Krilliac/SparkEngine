@@ -5,34 +5,108 @@ cmake_minimum_required(VERSION 3.25)
 # from save/reload semantics: it proves that the staged runtime can create a
 # D3D11 device and complete rendered module frames from the package layout.
 
-foreach(_required IN ITEMS SPARK_INSTALLED_ROOT SPARK_SOURCE_ROOT SPARK_TEST_ROOT)
-    if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
-        message(FATAL_ERROR "${_required} is required for the installed FPS D3D11 smoke")
-    endif()
-endforeach()
+if(NOT SPARK_FPS_D3D11_PATH_POLICY_SELF_TEST)
+    foreach(_required IN ITEMS SPARK_INSTALLED_ROOT SPARK_SOURCE_ROOT SPARK_TEST_ROOT)
+        if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
+            message(FATAL_ERROR "${_required} is required for the installed FPS D3D11 smoke")
+        endif()
+    endforeach()
 
-foreach(_required IN ITEMS SPARK_INSTALLED_ROOT SPARK_TEST_ROOT)
-    if(NOT IS_ABSOLUTE "${${_required}}" OR "${${_required}}" MATCHES "[\r\n;]")
-        message(FATAL_ERROR "${_required} must be a safe absolute path")
+    foreach(_required IN ITEMS SPARK_INSTALLED_ROOT SPARK_TEST_ROOT)
+        if(NOT IS_ABSOLUTE "${${_required}}" OR "${${_required}}" MATCHES "[\r\n;]")
+            message(FATAL_ERROR "${_required} must be a safe absolute path")
+        endif()
+    endforeach()
+    if(NOT IS_DIRECTORY "${SPARK_TEST_ROOT}")
+        file(MAKE_DIRECTORY "${SPARK_TEST_ROOT}")
     endif()
-endforeach()
+endif()
+
+function(_spark_validate_staged_root source_root installed_root test_root out_ok out_reason)
+    set(_ok TRUE)
+    set(_reason "")
+    file(REAL_PATH "${source_root}" _source_real)
+    file(REAL_PATH "${installed_root}" _installed_real)
+    file(REAL_PATH "${test_root}" _test_real)
+    if(_source_real STREQUAL _installed_real)
+        set(_ok FALSE)
+        set(_reason "installed root is the source tree")
+    endif()
+
+    cmake_path(GET _test_real PARENT_PATH _trusted_parent)
+    cmake_path(IS_PREFIX _trusted_parent "${_installed_real}" NORMALIZE _installed_under_trusted)
+    if(_ok AND NOT _installed_under_trusted)
+        set(_ok FALSE)
+        set(_reason "installed root is outside the trusted test/build parent")
+    elseif(_ok AND _installed_real STREQUAL _trusted_parent)
+        set(_ok FALSE)
+        set(_reason "installed root is the trusted parent rather than an isolated package")
+    endif()
+
+    # A build-tree stage under the checkout is valid. Only source runtime,
+    # asset, and module locations are forbidden as the package identity.
+    set(_source_forbidden
+        "${_source_real}/bin"
+        "${_source_real}/Assets"
+        "${_source_real}/GameModules/SparkGameFPS"
+        "${_source_real}/GameModules/SparkGameFPS/Assets")
+    foreach(_forbidden IN LISTS _source_forbidden)
+        if(EXISTS "${_forbidden}")
+            file(REAL_PATH "${_forbidden}" _forbidden_real)
+            if(_installed_real STREQUAL _forbidden_real)
+                set(_ok FALSE)
+                set(_reason "installed root resolves to a source runtime/assets/module location")
+            endif()
+        endif()
+    endforeach()
+    set(${out_ok} "${_ok}" PARENT_SCOPE)
+    set(${out_reason} "${_reason}" PARENT_SCOPE)
+endfunction()
+
+if(SPARK_FPS_D3D11_PATH_POLICY_SELF_TEST)
+    set(_self_root "$ENV{TEMP}/spark-fps-d3d11-path-policy")
+    file(MAKE_DIRECTORY
+        "${_self_root}/checkout/build/stage"
+        "${_self_root}/checkout/build/test"
+        "${_self_root}/outside/stage"
+        "${_self_root}/checkout/Assets"
+        "${_self_root}/checkout/GameModules/SparkGameFPS/Assets")
+    _spark_validate_staged_root(
+        "${_self_root}/checkout"
+        "${_self_root}/checkout/build/stage"
+        "${_self_root}/checkout/build/test"
+        _allowed_ok _allowed_reason)
+    if(NOT _allowed_ok)
+        message(FATAL_ERROR "build-tree staging policy self-test failed: ${_allowed_reason}")
+    endif()
+    _spark_validate_staged_root(
+        "${_self_root}/checkout"
+        "${_self_root}/checkout"
+        "${_self_root}/checkout/build/test"
+        _source_ok _source_reason)
+    if(_source_ok)
+        message(FATAL_ERROR "source-root policy self-test unexpectedly passed")
+    endif()
+    _spark_validate_staged_root(
+        "${_self_root}/checkout"
+        "${_self_root}/outside/stage"
+        "${_self_root}/checkout/build/test"
+        _parent_ok _parent_reason)
+    if(_parent_ok)
+        message(FATAL_ERROR "wrong-parent policy self-test unexpectedly passed")
+    endif()
+    message(STATUS "Installed FPS D3D11 package path policy contract passed")
+    return()
+endif()
+
 if(NOT IS_DIRECTORY "${SPARK_INSTALLED_ROOT}")
     message(FATAL_ERROR "Installed FPS package root is missing: ${SPARK_INSTALLED_ROOT}")
 endif()
-file(REAL_PATH "${SPARK_SOURCE_ROOT}" _source_root_real)
-file(REAL_PATH "${SPARK_INSTALLED_ROOT}" _installed_root_real)
-if(_source_root_real STREQUAL _installed_root_real)
-    message(FATAL_ERROR
-        "Installed FPS D3D11 smoke refuses to run with the source tree as its package root")
-endif()
-cmake_path(IS_PREFIX _source_root_real "${_installed_root_real}" NORMALIZE _installed_under_source)
-if(_installed_under_source)
-    message(FATAL_ERROR
-        "Installed FPS D3D11 smoke refuses a package root nested under the source tree: "
-        "${_installed_root_real}")
-endif()
-if(NOT IS_DIRECTORY "${SPARK_TEST_ROOT}")
-    file(MAKE_DIRECTORY "${SPARK_TEST_ROOT}")
+_spark_validate_staged_root(
+    "${SPARK_SOURCE_ROOT}" "${SPARK_INSTALLED_ROOT}" "${SPARK_TEST_ROOT}"
+    _root_ok _root_reason)
+if(NOT _root_ok)
+    message(FATAL_ERROR "Installed FPS D3D11 package path policy rejected the run: ${_root_reason}")
 endif()
 
 set(_bin "${SPARK_INSTALLED_ROOT}/bin")
