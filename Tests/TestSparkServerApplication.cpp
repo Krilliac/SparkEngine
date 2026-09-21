@@ -219,11 +219,10 @@ TEST(SparkServerOptions_RejectsConfigCliLanBroadcastContradiction)
 
 TEST(SparkServerOptions_GatewayManagedRejectsCliLanBroadcastEnable)
 {
-    const std::array arguments = {
-        std::string_view{"--module"},           std::string_view{"Game.dll"},
-        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
-        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"},
-        std::string_view{"--lan-broadcast"}};
+    const std::array arguments = {std::string_view{"--module"},           std::string_view{"Game.dll"},
+                                  std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+                                  std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"},
+                                  std::string_view{"--lan-broadcast"}};
     const ParseResult result = ParseServerOptions(arguments);
     EXPECT_FALSE(result.options.has_value());
     EXPECT_TRUE(result.error.find("cannot enable LAN broadcast") != std::string::npos);
@@ -238,10 +237,9 @@ TEST(SparkServerOptions_GatewayManagedRejectsConfigLanBroadcastEnable)
     }
 
     const std::string configPathText = configPath.string();
-    const std::array arguments = {
-        std::string_view{"--config"},           std::string_view{configPathText},
-        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
-        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
+    const std::array arguments = {std::string_view{"--config"},           std::string_view{configPathText},
+                                  std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+                                  std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
     const ParseResult result = ParseServerOptions(arguments);
     EXPECT_FALSE(result.options.has_value());
     EXPECT_TRUE(result.error.find("cannot enable LAN broadcast") != std::string::npos);
@@ -252,11 +250,10 @@ TEST(SparkServerOptions_GatewayManagedRejectsConfigLanBroadcastEnable)
 
 TEST(SparkServerOptions_GatewayManagedAcceptsExplicitLanBroadcastDisable)
 {
-    const std::array arguments = {
-        std::string_view{"--module"},           std::string_view{"Game.dll"},
-        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
-        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"},
-        std::string_view{"--no-lan-broadcast"}};
+    const std::array arguments = {std::string_view{"--module"},           std::string_view{"Game.dll"},
+                                  std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+                                  std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"},
+                                  std::string_view{"--no-lan-broadcast"}};
     const ParseResult result = ParseServerOptions(arguments);
     ASSERT_TRUE(result.options.has_value());
     EXPECT_FALSE(result.options->server.enableLanBroadcast);
@@ -410,11 +407,10 @@ TEST(SparkServerOptions_PrivateBindRequiresCanonicalPrefix)
 
 TEST(SparkServerOptions_GatewayControlRejectsConflictingPrivateBind)
 {
-    const std::array arguments = {
-        std::string_view{"--module"},           std::string_view{"Game.dll"},
-        std::string_view{"--bind-address"},     std::string_view{"192.168.42.9/24"},
-        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
-        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
+    const std::array arguments = {std::string_view{"--module"},           std::string_view{"Game.dll"},
+                                  std::string_view{"--bind-address"},     std::string_view{"192.168.42.9/24"},
+                                  std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+                                  std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
     const ParseResult result = ParseServerOptions(arguments);
     EXPECT_FALSE(result.options.has_value());
     EXPECT_TRUE(result.error.find("cannot combine") != std::string::npos);

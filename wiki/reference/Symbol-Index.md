@@ -2620,9 +2620,9 @@
 | `BindMaterial` | function | SparkEngine | [MaterialSystem.h:L357](../../SparkEngine/Source/Graphics/MaterialSystem.h#L357) |  |
 | `BindMesh` | function | SparkEngine | [AssetPipeline.h:L432](../../SparkEngine/Source/Graphics/AssetPipeline.h#L432) |  |
 | `bindMode` | function | Tests | [TestNetworkManagerIntegration.cpp:L1112](../../Tests/TestNetworkManagerIntegration.cpp#L1112) |  |
-| `bindMode` | function | Tests | [TestSparkServerApplication.cpp:L349](../../Tests/TestSparkServerApplication.cpp#L349) |  |
-| `bindMode` | function | Tests | [TestSparkServerApplication.cpp:L365](../../Tests/TestSparkServerApplication.cpp#L365) |  |
-| `bindMode` | function | Tests | [TestSparkServerApplication.cpp:L383](../../Tests/TestSparkServerApplication.cpp#L383) |  |
+| `bindMode` | function | Tests | [TestSparkServerApplication.cpp:L346](../../Tests/TestSparkServerApplication.cpp#L346) |  |
+| `bindMode` | function | Tests | [TestSparkServerApplication.cpp:L362](../../Tests/TestSparkServerApplication.cpp#L362) |  |
+| `bindMode` | function | Tests | [TestSparkServerApplication.cpp:L380](../../Tests/TestSparkServerApplication.cpp#L380) |  |
 | `BindPS` | function | SparkEngine | [ConstantBufferRing.h:L267](../../SparkEngine/Source/Graphics/ConstantBufferRing.h#L267) | Bind a sub-range to a pixel shader constant buffer slot |
 | `BindPS` | function | SparkEngine | [GPUSceneBuffer.h:L293](../../SparkEngine/Source/Graphics/GPUSceneBuffer.h#L293) |  |
 | `BindRasterizerState` | function | SparkEngine | [PipelineStateCache.h:L170](../../SparkEngine/Source/Graphics/PipelineStateCache.h#L170) | Bind rasterizer state only if it differs from the currently bound one. |
@@ -5075,13 +5075,13 @@
 | `Config` | struct | SparkEngine | [Logger.h:L600](../../SparkEngine/Source/Utils/Logger.h#L600) | Configuration struct for loading logging settings from config files |
 | `config` | function | Tests | [TestSparkServerApplication.cpp:L190](../../Tests/TestSparkServerApplication.cpp#L190) |  |
 | `config` | function | Tests | [TestSparkServerApplication.cpp:L207](../../Tests/TestSparkServerApplication.cpp#L207) |  |
-| `config` | function | Tests | [TestSparkServerApplication.cpp:L236](../../Tests/TestSparkServerApplication.cpp#L236) |  |
-| `config` | function | Tests | [TestSparkServerApplication.cpp:L269](../../Tests/TestSparkServerApplication.cpp#L269) |  |
-| `config` | function | Tests | [TestSparkServerApplication.cpp:L287](../../Tests/TestSparkServerApplication.cpp#L287) |  |
-| `config` | function | Tests | [TestSparkServerApplication.cpp:L305](../../Tests/TestSparkServerApplication.cpp#L305) |  |
-| `config` | function | Tests | [TestSparkServerApplication.cpp:L427](../../Tests/TestSparkServerApplication.cpp#L427) |  |
-| `config` | function | Tests | [TestSparkServerApplication.cpp:L445](../../Tests/TestSparkServerApplication.cpp#L445) |  |
-| `config` | function | Tests | [TestSparkServerApplication.cpp:L463](../../Tests/TestSparkServerApplication.cpp#L463) |  |
+| `config` | function | Tests | [TestSparkServerApplication.cpp:L235](../../Tests/TestSparkServerApplication.cpp#L235) |  |
+| `config` | function | Tests | [TestSparkServerApplication.cpp:L266](../../Tests/TestSparkServerApplication.cpp#L266) |  |
+| `config` | function | Tests | [TestSparkServerApplication.cpp:L284](../../Tests/TestSparkServerApplication.cpp#L284) |  |
+| `config` | function | Tests | [TestSparkServerApplication.cpp:L302](../../Tests/TestSparkServerApplication.cpp#L302) |  |
+| `config` | function | Tests | [TestSparkServerApplication.cpp:L423](../../Tests/TestSparkServerApplication.cpp#L423) |  |
+| `config` | function | Tests | [TestSparkServerApplication.cpp:L441](../../Tests/TestSparkServerApplication.cpp#L441) |  |
+| `config` | function | Tests | [TestSparkServerApplication.cpp:L459](../../Tests/TestSparkServerApplication.cpp#L459) |  |
 | `config` | function | Tests | [TestStartupSplash.cpp:L88](../../Tests/TestStartupSplash.cpp#L88) |  |
 | `config` | function | Tests | [TestStartupSplash.cpp:L118](../../Tests/TestStartupSplash.cpp#L118) |  |
 | `ConfigManager` | class | SparkBuild | [Config.h:L84](../../SparkBuild/src/Config.h#L84) |  |
@@ -23117,8 +23117,8 @@
 | `lock` | function | SparkGateway | [GatewaySecurity.cpp:L463](../../SparkGateway/src/GatewaySecurity.cpp#L463) |  |
 | `lock` | function | SparkInstaller | [WizardGui.cpp:L47](../../SparkInstaller/src/gui/WizardGui.cpp#L47) |  |
 | `lock` | function | SparkInstaller | [WizardGui.cpp:L201](../../SparkInstaller/src/gui/WizardGui.cpp#L201) |  |
-| `lock` | function | SparkServer | [ServerApplication.cpp:L741](../../SparkServer/src/ServerApplication.cpp#L741) |  |
-| `lock` | function | SparkServer | [ServerApplication.cpp:L800](../../SparkServer/src/ServerApplication.cpp#L800) |  |
+| `lock` | function | SparkServer | [ServerApplication.cpp:L743](../../SparkServer/src/ServerApplication.cpp#L743) |  |
+| `lock` | function | SparkServer | [ServerApplication.cpp:L802](../../SparkServer/src/ServerApplication.cpp#L802) |  |
 | `lock` | function | Tests | [TestAdvancedAssetPipeline.cpp:L76](../../Tests/TestAdvancedAssetPipeline.cpp#L76) |  |
 | `lock` | function | Tests | [TestAdvancedAssetPipeline.cpp:L114](../../Tests/TestAdvancedAssetPipeline.cpp#L114) |  |
 | `lock` | function | Tests | [TestAdvancedAssetPipeline.cpp:L120](../../Tests/TestAdvancedAssetPipeline.cpp#L120) |  |
@@ -26699,7 +26699,7 @@
 | `output` | function | SparkEngine | [PasswordHash.cpp:L241](../../SparkEngine/Source/Utils/PasswordHash.cpp#L241) |  |
 | `output` | function | SparkGateway | [GatewayApplication.cpp:L463](../../SparkGateway/src/GatewayApplication.cpp#L463) |  |
 | `output` | function | SparkLauncher | [LauncherProcess.cpp:L343](../../SparkLauncher/src/LauncherProcess.cpp#L343) |  |
-| `output` | function | SparkServer | [ServerApplication.cpp:L773](../../SparkServer/src/ServerApplication.cpp#L773) |  |
+| `output` | function | SparkServer | [ServerApplication.cpp:L775](../../SparkServer/src/ServerApplication.cpp#L775) |  |
 | `output` | function | Tests | [TestCompressionUtils.cpp:L27](../../Tests/TestCompressionUtils.cpp#L27) |  |
 | `output` | function | Tests | [TestCoverageScripting.cpp:L48](../../Tests/TestCoverageScripting.cpp#L48) |  |
 | `output` | function | Tests | [TestCpuNeuralInference.cpp:L98](../../Tests/TestCpuNeuralInference.cpp#L98) |  |
@@ -35060,16 +35060,16 @@
 | `ServerAfterLeaderChange` | function | GameModules | [TFOutfitSystem.h:L213](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L213) |  |
 | `ServerApplication` | class | SparkServer | [ServerApplication.h:L77](../../SparkServer/src/ServerApplication.h#L77) |  |
 | `ServerApplication` | function | SparkServer | [ServerApplication.h:L80](../../SparkServer/src/ServerApplication.h#L80) |  |
-| `ServerApplication::DestroyModuleRuntime` | method | SparkServer | [ServerApplication.cpp:L500](../../SparkServer/src/ServerApplication.cpp#L500) |  |
-| `ServerApplication::GetHealth` | method | SparkServer | [ServerApplication.cpp:L719](../../SparkServer/src/ServerApplication.cpp#L719) |  |
-| `ServerApplication::GetHealthJson` | method | SparkServer | [ServerApplication.cpp:L746](../../SparkServer/src/ServerApplication.cpp#L746) |  |
-| `ServerApplication::LoadSelectedModules` | method | SparkServer | [ServerApplication.cpp:L479](../../SparkServer/src/ServerApplication.cpp#L479) |  |
-| `ServerApplication::PublishHealth` | method | SparkServer | [ServerApplication.cpp:L759](../../SparkServer/src/ServerApplication.cpp#L759) |  |
-| `ServerApplication::RequestStop` | method | SparkServer | [ServerApplication.cpp:L674](../../SparkServer/src/ServerApplication.cpp#L674) |  |
-| `ServerApplication::Run` | method | SparkServer | [ServerApplication.cpp:L616](../../SparkServer/src/ServerApplication.cpp#L616) |  |
-| `ServerApplication::SetError` | method | SparkServer | [ServerApplication.cpp:L798](../../SparkServer/src/ServerApplication.cpp#L798) |  |
-| `ServerApplication::Start` | method | SparkServer | [ServerApplication.cpp:L527](../../SparkServer/src/ServerApplication.cpp#L527) |  |
-| `ServerApplication::Stop` | method | SparkServer | [ServerApplication.cpp:L679](../../SparkServer/src/ServerApplication.cpp#L679) |  |
+| `ServerApplication::DestroyModuleRuntime` | method | SparkServer | [ServerApplication.cpp:L502](../../SparkServer/src/ServerApplication.cpp#L502) |  |
+| `ServerApplication::GetHealth` | method | SparkServer | [ServerApplication.cpp:L721](../../SparkServer/src/ServerApplication.cpp#L721) |  |
+| `ServerApplication::GetHealthJson` | method | SparkServer | [ServerApplication.cpp:L748](../../SparkServer/src/ServerApplication.cpp#L748) |  |
+| `ServerApplication::LoadSelectedModules` | method | SparkServer | [ServerApplication.cpp:L481](../../SparkServer/src/ServerApplication.cpp#L481) |  |
+| `ServerApplication::PublishHealth` | method | SparkServer | [ServerApplication.cpp:L761](../../SparkServer/src/ServerApplication.cpp#L761) |  |
+| `ServerApplication::RequestStop` | method | SparkServer | [ServerApplication.cpp:L676](../../SparkServer/src/ServerApplication.cpp#L676) |  |
+| `ServerApplication::Run` | method | SparkServer | [ServerApplication.cpp:L618](../../SparkServer/src/ServerApplication.cpp#L618) |  |
+| `ServerApplication::SetError` | method | SparkServer | [ServerApplication.cpp:L800](../../SparkServer/src/ServerApplication.cpp#L800) |  |
+| `ServerApplication::Start` | method | SparkServer | [ServerApplication.cpp:L529](../../SparkServer/src/ServerApplication.cpp#L529) |  |
+| `ServerApplication::Stop` | method | SparkServer | [ServerApplication.cpp:L681](../../SparkServer/src/ServerApplication.cpp#L681) |  |
 | `ServerApplyDamage` | function | GameModules | [TFDamageSystem.h:L186](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.h#L186) |  |
 | `ServerApplyFlash` | function | GameModules | [TFGrenadeSystem.h:L230](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystem.h#L230) |  |
 | `ServerApplySplash` | function | GameModules | [TFVehicleSystem.h:L103](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L103) |  |
@@ -40085,7 +40085,7 @@
 | `Stop` | function | SparkGateway | [GatewayApplication.h:L80](../../SparkGateway/src/GatewayApplication.h#L80) |  |
 | `Stop` | function | SparkGateway | [GatewayAreaControl.h:L63](../../SparkGateway/src/GatewayAreaControl.h#L63) |  |
 | `Stop` | function | SparkGateway | [GatewayAreaControl.h:L111](../../SparkGateway/src/GatewayAreaControl.h#L111) |  |
-| `Stop` | function | SparkServer | [ServerApplication.cpp:L671](../../SparkServer/src/ServerApplication.cpp#L671) |  |
+| `Stop` | function | SparkServer | [ServerApplication.cpp:L673](../../SparkServer/src/ServerApplication.cpp#L673) |  |
 | `Stop` | function | Tests | [ValidPlugin.cpp:L39](../../Tests/Fixtures/PluginABI/ValidPlugin.cpp#L39) |  |
 | `Stop` | function | Tests | [TestCoroutineScheduler.cpp:L142](../../Tests/TestCoroutineScheduler.cpp#L142) |  |
 | `Stop` | function | Tests | [TestFreezeDetector.cpp:L73](../../Tests/TestFreezeDetector.cpp#L73) |  |
@@ -46495,7 +46495,7 @@
 | `wide` | function | SparkEngine | [DaemonFraming.h:L69](../../SparkEngine/Source/Utils/DaemonFraming.h#L69) |  |
 | `wideFilePath` | function | SparkEngine | [MaterialTextureLoading.cpp:L53](../../SparkEngine/Source/Graphics/MaterialTextureLoading.cpp#L53) |  |
 | `wideName` | function | SparkEngine | [EngineSettings.cpp:L810](../../SparkEngine/Source/Core/EngineSettings.cpp#L810) |  |
-| `widenedEnvironment` | function | Tests | [TestSparkServerApplication.cpp:L375](../../Tests/TestSparkServerApplication.cpp#L375) |  |
+| `widenedEnvironment` | function | Tests | [TestSparkServerApplication.cpp:L372](../../Tests/TestSparkServerApplication.cpp#L372) |  |
 | `widePath` | function | SparkEngine | [ShaderCompilationLinux.cpp:L430](../../SparkEngine/Source/Graphics/ShaderCompilationLinux.cpp#L430) |  |
 | `WideToNarrow` | function | SparkEngine | [SparkEngineCameraInternal.h:L25](../../SparkEngine/Source/Camera/SparkEngineCameraInternal.h#L25) |  |
 | `WideToNarrow` | function | SparkEngine | [ShaderCompilationLinuxInternal.h:L49](../../SparkEngine/Source/Graphics/ShaderCompilationLinuxInternal.h#L49) |  |

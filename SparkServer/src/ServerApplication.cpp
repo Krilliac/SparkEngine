@@ -448,12 +448,14 @@ namespace Spark::Server
         if (!options.controlEndpoint.empty())
         {
             if (requestedLanBroadcast.value_or(false))
-                return {{}, "Gateway-managed servers cannot enable LAN broadcast; remove Network.lan_broadcast=true "
-                            "or --lan-broadcast"};
+                return {{},
+                        "Gateway-managed servers cannot enable LAN broadcast; remove Network.lan_broadcast=true "
+                        "or --lan-broadcast"};
             if (options.server.endpointPolicy.IsValid() &&
                 options.server.endpointPolicy.PeerScope() == Net::NetworkPeerScope::PrivateLan)
-                return {{}, "Gateway-managed servers cannot combine local control with an RFC1918 game bind; use "
-                            "Network.bind_address=loopback and disable LAN broadcast"};
+                return {{},
+                        "Gateway-managed servers cannot combine local control with an RFC1918 game bind; use "
+                        "Network.bind_address=loopback and disable LAN broadcast"};
             options.server.endpointPolicy = Net::NetworkEndpointPolicy::Loopback();
             options.server.enableLanBroadcast = false;
         }
