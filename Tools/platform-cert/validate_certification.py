@@ -765,7 +765,7 @@ def validate_evidence(
         )
 
     if trusted is not None:
-        errors.extend(_bind_to_trusted(evidence, trusted))
+        errors.extend(_validate_provenance_binding(evidence, trusted))
     return errors
 
 
@@ -907,8 +907,8 @@ def _validate_probe(
     return errors
 
 
-def _bind_to_trusted(evidence: dict[str, Any], trusted: TrustedContext) -> list[str]:
-    """Refuse a record whose identity is not the one we were told to expect."""
+def _validate_provenance_binding(evidence: dict[str, Any], trusted: TrustedContext) -> list[str]:
+    """Return mismatch diagnostics without disclosing free-form provenance."""
     errors: list[str] = []
     collector = evidence["collector"]
     provenance = collector["provenance"]
@@ -940,9 +940,10 @@ def _bind_to_trusted(evidence: dict[str, Any], trusted: TrustedContext) -> list[
         ("jobId", trusted.job_id, "jobId"),
     ):
         if provenance[field] != expected:
+            # These strings can contain accidentally supplied credentials.
+            # The field identifies the mismatch without echoing either value.
             errors.append(
-                f"collector.provenance.{label} {provenance[field]!r} is not the "
-                f"expected {expected!r}"
+                f"collector.provenance.{label} is not the expected value"
             )
     if provenance["runAttempt"] != trusted.run_attempt:
         errors.append(

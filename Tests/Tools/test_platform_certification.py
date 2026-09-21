@@ -875,6 +875,27 @@ class TestPassMeansSomething(BundleTestCase):
 
 
 class TestRevisionAndIdentityBinding(BundleTestCase):
+    def test_provenance_mismatch_diagnostics_omit_both_values(self) -> None:
+        # These are generated fixtures, never reusable credentials.
+        observed = "ghp_" + "A" * 40
+        expected = "opaque-fixture-expected"
+        for field, context_field in (("repository", "repository"),
+                                     ("workflow", "workflow"), ("jobId", "job_id")):
+            with self.subTest(field=field):
+                original = self.bundle.primary["collector"]["provenance"][field]
+                actual_value = f"fixture/{observed}" if field == "repository" else observed
+                expected_value = f"fixture/{expected}" if field == "repository" else expected
+                self.bundle.primary["collector"]["provenance"][field] = actual_value
+                try:
+                    result = self.bundle.validate(trusted=trusted(**{context_field: expected_value}))
+                    self.assertNotIn(observed, result.summary())
+                    self.assertNotIn(expected, result.summary())
+                    self.assertRejected(result, f"collector.provenance.{field} is not the expected")
+                    self.assertIn(D3D11_ID, result.summary())
+                    self.assertIn("FAIL:", result.summary())
+                finally:
+                    self.bundle.primary["collector"]["provenance"][field] = original
+
     def test_matrix_commit_must_be_the_expected_revision(self) -> None:
         self.rejectMatrix(
             lambda m: m.__setitem__("commitSha", OTHER_COMMIT),
