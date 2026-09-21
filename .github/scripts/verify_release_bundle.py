@@ -15,11 +15,13 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 from typing import Any
 
 
 SHA256 = re.compile(r"[0-9a-f]{64}")
 COMMIT = re.compile(r"[0-9a-f]{40}")
+FINGERPRINT = re.compile(r"[0-9a-f]{64}")
 MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_TEXT_BYTES = 512 * 1024
 MAX_SIGNATURE_BYTES = 4 * 1024 * 1024
@@ -80,7 +82,8 @@ def _read_expected(path: Path) -> list[str]:
         raise BundleError(f"cannot read expected asset list: {exc}") from exc
     _require(bool(values), "expected stable asset set must not be empty")
     names = [_safe_name(value, "expected asset name") for value in values]
-    _require(len(names) == len(set(names)), "expected stable asset set repeats an asset")
+    folded = [name.casefold() for name in names]
+    _require(len(names) == len(set(folded)), "expected stable asset set has a case-fold collision")
     return names
 
 
@@ -120,8 +123,21 @@ def _verify_spdx(path: Path) -> None:
              "SPDX SBOM has no valid SPDXID")
     _require(isinstance(data.get("documentNamespace"), str) and bool(data["documentNamespace"]),
              "SPDX SBOM has no documentNamespace")
-    _require(isinstance(data.get("files"), list) or isinstance(data.get("packages"), list),
-             "SPDX SBOM has no files or packages inventory")
+    files = data.get("files")
+    packages = data.get("packages")
+    _require(isinstance(files, list) and bool(files), "SPDX SBOM files inventory is empty")
+    _require(isinstance(packages, list) and bool(packages), "SPDX SBOM packages inventory is empty")
+    for index, entry in enumerate(files, 1):
+        _require(isinstance(entry, dict) and isinstance(entry.get("fileName"), str)
+                 and bool(entry["fileName"]), f"SPDX file entry {index} has no fileName")
+        checksums = entry.get("checksums")
+        _require(isinstance(checksums, list) and bool(checksums),
+                 f"SPDX file entry {index} has no checksums")
+        sha256_checksums = [item for item in checksums
+                            if isinstance(item, dict) and item.get("algorithm") == "SHA256"
+                            and isinstance(item.get("checksumValue"), str)
+                            and SHA256.fullmatch(item["checksumValue"].lower())]
+        _require(bool(sha256_checksums), f"SPDX file entry {index} has no valid SHA256 checksum")
 
 
 def _verify_provenance(path: Path, source_commit: str, expected: set[str], root: Path) -> str:
@@ -135,7 +151,21 @@ def _verify_provenance(path: Path, source_commit: str, expected: set[str], root:
     return _digest(path)
 
 
-def _verify_signatures(path: Path, root: Path, expected: set[str]) -> None:
+def _verify_signatures(path: Path, root: Path, expected: set[str], public_key: Path,
+                       fingerprint: str, openssl: str) -> None:
+    _require(public_key.is_file() and not public_key.is_symlink(),
+             "trusted public key is not provisioned; stable signing precondition is unsatisfied")
+    _require(FINGERPRINT.fullmatch(fingerprint) is not None,
+             "trusted public-key fingerprint must be a lowercase SHA-256 digest")
+    try:
+        der = subprocess.run(
+            [openssl, "pkey", "-pubin", "-in", str(public_key), "-outform", "DER"],
+            check=True, capture_output=True, timeout=10,
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise BundleError(f"cannot inspect trusted public key with {openssl!r}: {exc}") from exc
+    _require(hashlib.sha256(der).hexdigest() == fingerprint,
+             "trusted public-key fingerprint does not match provisioned key")
     data = _load_json(path, "detached signature manifest")
     _require(isinstance(data, dict), "detached signature manifest must be an object")
     _require(data.get("schemaVersion") == 1, "detached signature manifest schema must be version 1")
@@ -143,7 +173,9 @@ def _verify_signatures(path: Path, root: Path, expected: set[str]) -> None:
     entries = data.get("artifacts")
     _require(isinstance(entries, list) and bool(entries), "detached signature manifest artifacts are missing")
     seen: set[str] = set()
+    folded_assets = {name.casefold() for name in expected}
     referenced_signatures: set[str] = set()
+    folded_signatures: set[str] = set()
     for index, entry in enumerate(entries, 1):
         _require(isinstance(entry, dict), f"signature entry {index} must be an object")
         name = _safe_name(entry.get("name"), f"signature entry {index}.name")
@@ -151,8 +183,15 @@ def _verify_signatures(path: Path, root: Path, expected: set[str]) -> None:
         _require(name not in seen, f"signature manifest repeats {name}")
         seen.add(name)
         signature = _safe_name(entry.get("signature"), f"signature entry {index}.signature")
+        _require(signature.lower().endswith(".sig"), f"signature entry {index} must use the .sig suffix")
+        _require(signature.casefold() not in folded_signatures,
+                 f"signature manifest has a case-fold collision for {signature}")
+        folded_signatures.add(signature.casefold())
         _require(signature not in referenced_signatures, f"signature manifest repeats detached signature {signature}")
         referenced_signatures.add(signature)
+        _require(signature.casefold() not in folded_assets
+                 and signature.casefold() not in {path.name.casefold(), public_key.name.casefold()},
+                 f"signature entry {index} aliases a payload or control file")
         _require(SHA256.fullmatch(entry.get("artifactSha256", "")) is not None,
                  f"signature entry {index} has an invalid artifact digest")
         actual = _digest(root / name)
@@ -162,6 +201,18 @@ def _verify_signatures(path: Path, root: Path, expected: set[str]) -> None:
                  f"detached signature is missing or empty for {name}")
         _require(isinstance(entry.get("signerFingerprint"), str) and bool(entry["signerFingerprint"]),
                  f"signature entry {index} has no signer fingerprint")
+        _require(entry["signerFingerprint"] == fingerprint,
+                 f"signature entry {index} signer fingerprint is not trusted")
+        try:
+            verified = subprocess.run(
+                [openssl, "dgst", "-sha256", "-verify", str(public_key),
+                 "-signature", str(detached), str(root / name)],
+                check=False, capture_output=True, text=True, timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise BundleError(f"cannot verify detached signature for {name}: {exc}") from exc
+        _require(verified.returncode == 0 and verified.stdout.strip() == "Verified OK",
+                 f"detached signature cryptographic verification failed for {name}")
     _require(seen == expected, "detached signature manifest does not cover every expected artifact")
     for child in root.iterdir():
         if child.name.endswith(".sig"):
@@ -170,10 +221,14 @@ def _verify_signatures(path: Path, root: Path, expected: set[str]) -> None:
 
 def verify_release_bundle(*, bundle_directory: Path, expected_assets_file: Path, sha256sums: Path,
                           sbom: Path, provenance_manifest: Path, signature_manifest: Path,
-                          source_commit: str) -> None:
+                          source_commit: str, trusted_public_key: Path,
+                          trusted_key_fingerprint: str, openssl: str = "openssl") -> None:
     root = bundle_directory.resolve()
     _require(root.is_dir(), "bundle directory is missing")
     expected_names = _read_expected(expected_assets_file)
+    _require("SHA256SUMS" in expected_names,
+             "generated release inventory must include SHA256SUMS as a control file")
+    expected_names = [name for name in expected_names if name != "SHA256SUMS"]
     expected = set(expected_names)
     known_control_files = {sha256sums.name, signature_manifest.name}
     promotable_candidates = {
@@ -196,12 +251,14 @@ def verify_release_bundle(*, bundle_directory: Path, expected_assets_file: Path,
         asset = root / name
         _require(asset.is_file() and not asset.is_symlink(), f"expected stable asset {name} is missing")
     provenance_digest = _verify_provenance(provenance_manifest, source_commit, expected, root)
+    sums = _read_sums(sha256sums, expected, root, provenance_manifest.name)
     _verify_spdx(sbom)
-    _read_sums(sha256sums, expected, root, provenance_manifest.name)
+    _require(sbom.name in sums, "SPDX SBOM is not bound by SHA256SUMS")
     # Provenance is outside SHA256SUMS by design, but must still be bound by a
     # signature entry and by the exact local bytes consumed here.
     _require(provenance_digest == _digest(provenance_manifest), "provenance digest changed during verification")
-    _verify_signatures(signature_manifest, root, expected)
+    _verify_signatures(signature_manifest, root, expected, trusted_public_key,
+                       trusted_key_fingerprint, openssl)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -213,6 +270,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--provenance-manifest", type=Path, required=True)
     parser.add_argument("--signature-manifest", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--trusted-public-key", type=Path, required=True)
+    parser.add_argument("--trusted-key-fingerprint", required=True)
+    parser.add_argument("--openssl", default="openssl")
     args = parser.parse_args(argv)
     try:
         verify_release_bundle(**vars(args))
