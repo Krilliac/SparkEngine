@@ -171,6 +171,7 @@
 - [Workflow Patterns](development/Workflow-Patterns.md)
 - [Build Optimizations](development/Build-Optimizations.md)
 - [CI Reproducible Builds](development/CI-Reproducible-Builds.md)
+- [Release Publication Stages](development/Release-Publication-Stages.md)
 - [GitHub API and PR Checks](development/GitHub-API-and-PR-Checks.md)
 - [Git Rebase Conflicts](development/Git-Rebase-Conflicts.md)
 - [Clang-Format](development/Clang-Format.md)

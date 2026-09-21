@@ -398,7 +398,7 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
     """Validate the exact fail-closed gate before versioned publication."""
 
     errors: list[str] = []
-    step_name = "Verify stable-v1 is ready for versioned publication"
+    step_name = "Verify stable-v1 candidate is qualified for versioned publication"
     try:
         readiness = named_step(workflow, step_name)
     except AssertionError as error:
@@ -412,11 +412,11 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
     ):
         errors.append("stable-v1 publication gate must use the exact versioned-release condition")
     # The --allow-legacy-contract waiver was retired once the contract validated
-    # strictly: the gate now runs the plain strict validator and --require-ready
+    # strictly: the gate now runs the plain strict validator and --require-candidate-ready
     # must stay on the command. Pinning the literal is deliberate -- a mismatch
     # here is the gate telling you the command moved, and reintroducing any
     # waiver flag fails this check instead of quietly weakening publication.
-    if run_command(readiness, indent=6) != "python3 tools/site-data/validate.py --require-ready":
+    if run_command(readiness, indent=6) != "python3 tools/site-data/validate.py --require-candidate-ready":
         errors.append("stable-v1 publication gate must run the exact readiness validator")
     if not exact_field(readiness, "shell", "bash", indent=6):
         errors.append("stable-v1 publication gate must use the exact bash shell contract")
@@ -475,14 +475,18 @@ def release_acceptance_gate_errors(workflow: str) -> list[str]:
             'python3 -I "$GITHUB_WORKSPACE/.github/scripts/release-acceptance-gate.py"',
             "verify-exact-required-gate.py",
             "verify-release-publication-boundary.sh",
-            "recover_release_publication.py",
         ):
             if fragment not in step:
                 errors.append(f"{step_name} is missing required acceptance-gate fragment: {fragment}")
+        if step_name == "Publish complete stable versioned release":
+            if "recover_release_publication.py" in step or "report_failed_immutable_publication" not in step:
+                errors.append("stable publication must report immutable failure without redrafting")
+        elif "recover_release_publication.py" not in step:
+            errors.append("nightly publication must retain mutable redraft recovery")
         if "gh api --method PATCH" in step:
             errors.append(f"{step_name} must not publish through a bare gh API PATCH")
     if stable_publish_step is not None:
-        readiness_check = 'python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-ready'
+        readiness_check = 'python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-candidate-ready'
         acceptance_command = 'python3 -I "$GITHUB_WORKSPACE/.github/scripts/release-acceptance-gate.py"'
         if readiness_check not in stable_publish_step:
             errors.append("stable publication must revalidate readiness immediately before acceptance")
@@ -520,7 +524,8 @@ def release_acceptance_recovery_errors(workflow: str) -> list[str]:
             if fragment not in step:
                 errors.append(f"{step_name} is missing PATCH-attempt recovery guard: {fragment}")
         marker_setup = step.find(f"{marker}=")
-        trap_setup = step.find("trap redraft_failed_publication ERR")
+        handler = "report_failed_immutable_publication" if step_name == "Publish complete stable versioned release" else "redraft_failed_publication"
+        trap_setup = step.find(f"trap {handler} ERR")
         command_position = step.find(acceptance_command)
         attempt_position = step.find("publication_attempted=true")
         if marker_setup < 0 or trap_setup < 0 or marker_setup > trap_setup:
@@ -1616,7 +1621,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_versioned_publication_gate_rejects_hostile_mutations(self) -> None:
         readiness = named_step(
             self.release,
-            "Verify stable-v1 is ready for versioned publication",
+            "Verify stable-v1 candidate is qualified for versioned publication",
         )
         tag_binding = named_step(
             self.release, "Bind stable release tag to workflow commit"

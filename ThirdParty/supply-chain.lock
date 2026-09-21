@@ -363,9 +363,6 @@
     ],
     "microsoft/setup-msbuild": [
       "30375c66a4eea26614e0d39710365f22f8b0af57"
-    ],
-    "softprops/action-gh-release": [
-      "3d0d9888cb7fd7b750713d6e236d1fcb99157228"
     ]
   }
 }

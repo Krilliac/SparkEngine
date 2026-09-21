@@ -112,9 +112,13 @@ migration, SDK/ABI, and performance budgets on the supported Windows product.
 
 `MOD-290` and `MOD-310` prove the installed public-SDK module kit and
 SparkGameFPS release slice.  `ENG-220` proves canonical D3D11 model import.
-`DOC-400`, `GOV-400`, and `REL-200` complete public framing, legal/support
-governance, and the signed end-to-end release rehearsal.  `REL-200` is the only
-terminal gate; it stays blocked until every preceding required gate is proven.
+`DOC-400` and `GOV-400` complete public framing and legal/support governance.
+`REL-190` owns signed end-to-end rehearsal and approval before publication;
+its technical jobs and selectors cannot be deferred. `REL-200` owns only the
+terminal immutable publication, independent download verification, and live-site
+finalization. The [publication stages](../../wiki/development/Release-Publication-Stages.md)
+retain every qualification requirement and explicitly leave the first-release
+predecessor and incompatible rolling-nightly policy unresolved.
 
 ## Blender asset evidence connector
 

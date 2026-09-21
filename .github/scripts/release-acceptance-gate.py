@@ -44,7 +44,7 @@ def _fetch_json(url: str, token: str) -> Any:
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": "2022-11-28",
+            "X-GitHub-Api-Version": "2026-03-10",
             "User-Agent": "SparkEngine-release-acceptance-gate",
         },
     )
@@ -89,7 +89,7 @@ def _patch_json(
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
-            "X-GitHub-Api-Version": "2022-11-28",
+            "X-GitHub-Api-Version": "2026-03-10",
             "User-Agent": "SparkEngine-release-acceptance-gate",
         },
     )
@@ -265,6 +265,8 @@ def verify_published_release(
     expected_prerelease = not is_versioned
     if published.get("prerelease") is not expected_prerelease:
         raise GateError("publication PATCH returned the wrong release channel")
+    if published.get("immutable") is not is_versioned:
+        raise GateError("publication PATCH returned incompatible release immutability")
 
     current = _fetch_json(f"{api_url}/repos/{repository}/releases/{release_id}", token)
     if not isinstance(current, dict):
@@ -277,8 +279,8 @@ def verify_published_release(
         raise GateError("post-PATCH release GET did not prove a public release")
     if current.get("prerelease") is not expected_prerelease:
         raise GateError("post-PATCH release GET returned the wrong release channel")
-    if current.get("immutable") is not False:
-        raise GateError("post-PATCH release is immutable before publication validation completed")
+    if current.get("immutable") is not is_versioned:
+        raise GateError("post-PATCH release immutability does not match its channel")
 
     assets = _fetch_release_assets(api_url, token, repository, release_id)
     _verify_release_assets(assets, expected_names, expected_digests)
@@ -505,6 +507,24 @@ def verify_ci_gate(
 
 
 
+def verify_release_policy(api_url: str, token: str, repository: str, is_versioned: bool) -> None:
+    policy_token = os.environ.get("RELEASE_POLICY_READ_TOKEN")
+    if not policy_token:
+        raise GateError("environment RELEASE_POLICY_READ_TOKEN with Administration(read) is required")
+    policy = _fetch_json(f"{api_url}/repos/{repository}/immutable-releases", policy_token)
+    if not isinstance(policy, dict) or policy.get("enabled") is not is_versioned:
+        raise GateError("repository immutability is incompatible with the publication channel")
+    if not is_versioned and policy.get("enforced_by_owner") is not False:
+        raise GateError("rolling nightly cannot mutate under enforced or unknown immutable policy")
+
+
+def exact_mutable_stable(record: Any, release_id: int, release_tag: str, *, draft: bool) -> bool:
+    return (isinstance(record, dict) and type(record.get("id")) is int
+            and record["id"] == release_id and record.get("tag_name") == release_tag
+            and record.get("prerelease") is False and record.get("draft") is draft
+            and record.get("immutable") is False)
+
+
 def acceptance_gate(
     api_url: str,
     token: str,
@@ -545,6 +565,7 @@ def acceptance_gate(
         patch_body["make_latest"] = "false"
         patch_body["prerelease"] = True
 
+    verify_release_policy(api_url, token, repository, is_versioned)
     published = _patch_json(
         f"{api_url}/repos/{repository}/releases/{release_id}",
         token,
@@ -564,7 +585,24 @@ def acceptance_gate(
             expected_digests,
         )
     except GateError as publication_error:
+        if is_versioned:
+            # Quarantine only an exactly identified mutable stable publication.
+            # An immutable, contradictory, or missing response is never authority
+            # to send a blind compensating PATCH.
+            if exact_mutable_stable(published, release_id, release_tag, draft=False):
+                current = _fetch_json(f"{api_url}/repos/{repository}/releases/{release_id}", token)
+                if exact_mutable_stable(current, release_id, release_tag, draft=False):
+                    redrafted = _patch_json(
+                        f"{api_url}/repos/{repository}/releases/{release_id}", token,
+                        {"draft": True, "make_latest": "false"}, mark_attempt=False,
+                    )
+                    confirmed = _fetch_json(f"{api_url}/repos/{repository}/releases/{release_id}", token)
+                    if (exact_mutable_stable(redrafted, release_id, release_tag, draft=True)
+                            and exact_mutable_stable(confirmed, release_id, release_tag, draft=True)):
+                        raise GateError(f"stable publication failed ({publication_error}); proven mutable target was quarantined as draft") from publication_error
+            raise GateError(f"stable publication validation failed ({publication_error}); immutable or ambiguous target preserved for owner investigation") from publication_error
         try:
+            verify_release_policy(api_url, token, repository, False)
             redrafted = _patch_json(
                 f"{api_url}/repos/{repository}/releases/{release_id}",
                 token,

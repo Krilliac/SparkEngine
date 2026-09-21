@@ -10,7 +10,7 @@
 - Capabilities tracked: **22**
 - Ledger gates marked blocking: **18** (profile applicability determines release impact)
 - Gate states: **0 passing**, **0 at risk**, **18 blocked**, **0 not evaluated**
-- Work items: **58 total**, **48 unfinished ledger items marked blocking** (profile applicability determines release impact)
+- Work items: **59 total**, **49 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -72,6 +72,12 @@ Before ending the session, update the item status/evidence and regenerate this f
 **Stable v1 — `blocked`.** Owner: unassigned.
 
 The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as one installed first-party single-player vertical slice, SparkGameFPS, that must build through the public SDK surface alone. The complete required Windows build-product set is enumerated below and includes SparkEditor, SparkConsole, shader compiler, crash reporter, cooker, automation host, launcher, build tool, and installer; those products are in profile but remain blocked and uncertified. Constrained LAN play is optional and is not required. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface. Nothing in this profile is certified while its state is blocked.
+
+Publication follows candidate qualification, protected publication, independent verification, then final readiness. Only the typed finalization work declared in this profile may remain pending at publication; no technical gate is waived.
+
+- Publication environment: `stable-release`
+- Publication finalizers: `REL-200`
+- Procedure: `wiki/development/Release-Publication-Stages.md`
 
 | Dimension | Declared value | In-profile capabilities | Evidence |
 |---|---|---|---|
@@ -142,7 +148,7 @@ Configuration-surface exceptions (every omitted option remains required):
   - `G11` — Scripting is outside the profile: AngelScript and visual scripting are declared experimental and no profile claim depends on them.
   - `G12` — The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported.
 
-- Blocking work: `ASSET-220`, `BLD-100`, `CI-100`, `CI-110`, `CI-120`, `DOC-400`, `DOC-410`, `EDT-210`, `ENG-220`, `GOV-400`, `HEAD-220`, `INST-130`, `LIFE-200`, `MOD-290`, `MOD-310`, `OPS-100`, `PERF-100`, `PLT-200`, `RDY-000`, `RDY-010`, `RDY-020`, `REL-100`, `REL-110`, `REL-200`, `RHI-210`, `SAVE-230`, `SDK-240`, `SEC-100`, `SEC-110`, `SEC-120`
+- Blocking work: `ASSET-220`, `BLD-100`, `CI-100`, `CI-110`, `CI-120`, `DOC-400`, `DOC-410`, `EDT-210`, `ENG-220`, `GOV-400`, `HEAD-220`, `INST-130`, `LIFE-200`, `MOD-290`, `MOD-310`, `OPS-100`, `PERF-100`, `PLT-200`, `RDY-000`, `RDY-010`, `RDY-020`, `REL-100`, `REL-110`, `REL-190`, `REL-200`, `RHI-210`, `SAVE-230`, `SDK-240`, `SEC-100`, `SEC-110`, `SEC-120`
 
 ### Profile limitations
 
@@ -181,7 +187,7 @@ Configuration-surface exceptions (every omitted option remains required):
 | `G14` Performance, reliability, and operations | operations | **blocked** | yes | Representative CPU/GPU/memory budgets are versioned; Long soaks show bounded memory and tick/frame percentiles; Crashes produce symbolized actionable reports with retained symbols; Production server observability, load, backup, and incident drills stay gated by OPS-110 behind G12 with the service surfaces they serve | `PERF-100`, `OPS-100` |
 | `G15` Documentation, legal, and support truth | governance | **blocked** | yes | Docs health is current and every link resolves; License, attribution, trademark, privacy, security, support, and contribution text is reviewed for the release; Quick starts run from clean machines; Website wording is generated from the tested contract | `DOC-410`, `GOV-400`, `DOC-400` |
 | `G16` Compatibility and migration | compatibility | **blocked** | yes | Version contracts exist for SDK, modules, assets, saves, scenes, and scripts; N-1 upgrade and rollback fixtures pass; Breaking changes fail with actionable diagnostics; Release notes enumerate migrations; Network protocol version contracts stay gated by NET-100 behind G12 | `SDK-240`, `SAVE-230`, `REL-200` |
-| `G17` Release rehearsal and sign-off | release | **blocked** | yes | A release candidate tag passes every gate required by each target profile; Excluded gates may remain blocked and stay explicitly unsupported; Artifacts are installed and upgraded on clean supported hosts; Rollback and recovery drills pass; Named owners sign repository evidence before the final tag | `REL-200` |
+| `G17` Release rehearsal and sign-off | release | **blocked** | yes | A release candidate tag passes every gate required by each target profile; Excluded gates may remain blocked and stay explicitly unsupported; Artifacts are installed and upgraded on clean supported hosts; Rollback and recovery drills pass; Named owners sign repository evidence before the final tag | `REL-190`, `REL-200` |
 
 ## Capability truth ledger
 
@@ -326,7 +332,8 @@ Finish governance, publish the live bundle, rehearse every gate required by each
 |---|---|---|---|---|
 | [`GOV-400`](#gov-400--resolve-licensing-third-party-notices-trademark-contribution-security-and-support-policy) Resolve licensing, third-party notices, trademark, contribution, security, and support policy | P0 | **open** | `RDY-000`, `SEC-110`, `REL-100` | `DOC-400` |
 | [`DOC-400`](#doc-400--publish-the-repository-synchronized-site-data-bundle-and-complete-public-framing) Publish the repository-synchronized site-data bundle and complete public framing | P0 | **in-progress** | `RDY-000` | `DOC-410`, `CI-100`, `GOV-400` |
-| [`REL-200`](#rel-200--rehearse-sign-off-and-publish-the-first-fully-gated-release) Rehearse, sign off, and publish the first fully gated release | P0 | **blocked** | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400` | — |
+| [`REL-190`](#rel-190--rehearse-and-approve-the-qualified-release-candidate-before-publication) Rehearse and approve the qualified release candidate before publication | P0 | **blocked** | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
+| [`REL-200`](#rel-200--publish-and-independently-verify-the-qualified-release) Publish and independently verify the qualified release | P0 | **blocked** | `REL-190` | — |
 
 ## Game-module parity baseline
 
@@ -1139,8 +1146,9 @@ CMake, SDK generated headers, installer, and launcher consume the requested engi
 
 1. A vX.Y.Z tag embeds exactly X.Y.Z in every stable-v1 product and artifact
 2. Every stable-v1 artifact records source SHA, dependency-lock digest, exact toolchain, and configuration
-3. Stable publication is impossible while a target profile gate is open
+3. Stable publication requires every qualification gate and dependency; only explicitly typed publication-finalization work may remain pending in candidate state
 4. Nightly, stable, and experimental channels have explicit retention and support semantics
+5. Resolve the repository-wide immutable stable versus mutable rolling-nightly policy conflict before claiming both channels operational; the current incompatibility remains release-blocking
 
 **Required commands**
 
@@ -4882,16 +4890,16 @@ npm test
 - Parity/no-drift tests pass
 - Owner-only site is redeployed once with the runtime
 
-### REL-200 — Rehearse, sign off, and publish the first fully gated release
+### REL-190 — Rehearse and approve the qualified release candidate before publication
 
 **Priority:** P0 · **Status:** blocked · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-A release is ready only when every gate required by each target release profile passes at one candidate commit and the target artifacts survive clean install, migration, recovery, and rollback rehearsal. 2026-09-12 progress: stable publication now revalidates the readiness contract immediately before the final acceptance PATCH, preventing a stale earlier check from promoting a blocked profile. All required-gate, artifact, install, migration, recovery, rollback, sign-off, and hosted publication evidence remains outstanding.
+Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The real prior-stable MSI and incompatible immutable-stable/rolling-nightly channel policies remain unresolved release blockers; neither can be replaced with synthetic evidence.
 
 **Dependency contract**
 
-- Depends on: `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`
+- Depends on: `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220`
 - Safe parallel work: none declared
 
 **Source context**
@@ -4908,24 +4916,103 @@ A release is ready only when every gate required by each target release profile 
 
 **Implementation scope**
 
-- Create a release-candidate tag
-- Run every gate required by each target release profile at the same SHA
+- Freeze the exact release-candidate commit and tag
+- Run every qualification gate required by each target release profile at the same SHA
 - Install and upgrade on clean supported hosts
 - Exercise rollback, save/asset migration, crash ingestion, repair, and uninstall for the target profiles
-- Collect named owner sign-off with repository evidence
-- Publish verified artifacts and evidence
+- Collect named qualification owner sign-off and protected release approval evidence before publication
+
+**Acceptance criteria**
+
+1. Every technical qualification item, transitive dependency, and qualification requirement from requiredGateIds has passing exact-SHA evidence before publication
+2. Excluded gates may remain blocked and cannot be presented as supported
+3. Clean install, N-1 upgrade, uninstall, rollback, repair, and recovery drills pass
+4. Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance
+5. The profile-required-gates and release-approval jobs execute and block on failure; no planned rehearsal selector remains
+6. Named qualification sign-off is retained and the stable-release environment prevents self-review and administrative bypass
+
+**Required commands**
+
+```bash
+python3 tools/site-data/validate.py
+sha256sum -c SHA256SUMS
+```
+
+**Automated evidence**
+
+- Test selectors: `ReleaseProfileRehearsal_*`
+- Required CI jobs: `profile-required-gates`, `release-approval`
+- Performance / reliability budgets:
+  - Every budget required by the target profiles passes without unreviewed exception
+
+**Same-change updates**
+
+- Documentation:
+  - `CHANGELOG.md`
+  - `SECURITY.md`
+  - `wiki/development/Release-Publication-Stages.md`
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G17 qualification evidence; this item must be done before candidate publication
+- Website impact:
+  - Qualification alone preserves candidate wording; no public ready claim
+
+**Risks and boundaries**
+
+- Risks:
+  - First stable MSI bootstrap is unsupported
+  - Immutable stable and rolling-nightly policies are mutually exclusive today
+- Out of scope:
+  - Publishing artifacts or changing final readiness
+  - Protocol migration, production-service backup/restore, and incident drills owned by G12 and OPS-110
+
+**Definition of done**
+
+- All supported-host rehearsals pass at the candidate SHA
+- Qualification sign-off and protected approval evidence are retained
+- No planned qualification job or selector remains
+
+### REL-200 — Publish and independently verify the qualified release
+
+**Priority:** P0 · **Status:** blocked · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=shared
+
+Final readiness requires every profile gate at one candidate commit, supported-host rehearsal, protected publication, independent download verification, and live-site evidence. Candidate qualification now requires every technical item and transitive dependency while leaving the explicitly declared publication-finalization item in progress; publication-dependent gates remain at risk until completion. The stable-release environment and its required-reviewer/Working-branch protections are verified before building and at publication. A separate read-only consumer retains exact-SHA publication-verified evidence without changing this ledger. No evidence has been manufactured or promoted. Protected authority and signing must be provisioned externally, and the strict real prior-stable MSI requirement still makes the first release an unresolved policy blocker. All release qualification and terminal evidence remain outstanding.
+
+**Dependency contract**
+
+- Depends on: `REL-190`
+- Safe parallel work: none declared
+
+**Source context**
+
+- `.github/workflows/release.yml`
+- `docs/site/readiness.json`
+- `CHANGELOG.md`
+- `SECURITY.md`
+
+**Entry points**
+
+- `.github/workflows/release.yml`
+- `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+
+**Implementation scope**
+
+- Publish the complete preverified draft as an immutable stable release after REL-190 qualification
+- Independently download and verify the published artifact set and retain exact-SHA evidence
+- Verify live-site consumption of the released evidence before final readiness review
 
 **Acceptance criteria**
 
 1. Every gate listed in requiredGateIds for every target release profile is passing at the candidate SHA
 2. Excluded gates may remain blocked and cannot be presented as supported
-3. Clean install, N-1 upgrade, uninstall, rollback, repair, and recovery drills pass
-4. Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance
-5. Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists
+3. Published artifacts are immutable and independently verify against the exact qualified candidate
+4. Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists
 
 **Required commands**
 
 ```bash
+python3 tools/site-data/validate.py --require-candidate-ready
 python3 tools/site-data/validate.py --require-ready
 gh release view vX.Y.Z
 sha256sum -c SHA256SUMS
@@ -4933,10 +5020,9 @@ sha256sum -c SHA256SUMS
 
 **Automated evidence**
 
-- Test selectors: `ReleaseProfileRehearsal_*`
-- Required CI jobs: `profile-required-gates`, `release-approval`, `site-data-publish`
+- Test selectors: none declared
+- Required CI jobs: `verify-stable-publication`, `site-data-publish`
 - Performance / reliability budgets:
-  - Every budget required by the target profiles passes without unreviewed exception
 
 **Same-change updates**
 

@@ -795,8 +795,9 @@
       "acceptanceCriteria": [
         "A vX.Y.Z tag embeds exactly X.Y.Z in every stable-v1 product and artifact",
         "Every stable-v1 artifact records source SHA, dependency-lock digest, exact toolchain, and configuration",
-        "Stable publication is impossible while a target profile gate is open",
-        "Nightly, stable, and experimental channels have explicit retention and support semantics"
+        "Stable publication requires every qualification gate and dependency; only explicitly typed publication-finalization work may remain pending in candidate state",
+        "Nightly, stable, and experimental channels have explicit retention and support semantics",
+        "Resolve the repository-wide immutable stable versus mutable rolling-nightly policy conflict before claiming both channels operational; the current incompatibility remains release-blocking"
       ],
       "commands": [
         "git ls-remote --tags origin",
@@ -945,27 +946,66 @@
       ]
     },
     {
-      "id": "REL-200",
-      "title": "Rehearse, sign off, and publish the first fully gated release",
+      "id": "REL-190",
+      "completionPhase": "qualification",
+      "title": "Rehearse and approve the qualified release candidate before publication",
       "priority": "P0",
       "status": "blocked",
       "blocking": true,
       "wave": 6,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "A release is ready only when every gate required by each target release profile passes at one candidate commit and the target artifacts survive clean install, migration, recovery, and rollback rehearsal. 2026-09-12 progress: stable publication now revalidates the readiness contract immediately before the final acceptance PATCH, preventing a stale earlier check from promoting a blocked profile. All required-gate, artifact, install, migration, recovery, rollback, sign-off, and hosted publication evidence remains outstanding.",
+      "rationale": "Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The real prior-stable MSI and incompatible immutable-stable/rolling-nightly channel policies remain unresolved release blockers; neither can be replaced with synthetic evidence.",
       "dependencies": [
-        "REL-100",
-        "REL-110",
-        "PLT-200",
-        "RHI-210",
-        "HEAD-220",
-        "EDT-210",
-        "SDK-240",
-        "PERF-100",
-        "OPS-100",
-        "GOV-400",
-        "DOC-400"
+        "REL-100", "REL-110", "PLT-200", "RHI-210", "HEAD-220", "EDT-210",
+        "SDK-240", "PERF-100", "OPS-100", "GOV-400", "DOC-400", "INST-130",
+        "SAVE-230", "MOD-310", "ASSET-220", "LIFE-200", "ENG-220"
+      ],
+      "parallelWith": [],
+      "sourceContext": [".github/workflows/release.yml", "docs/site/readiness.json", "CHANGELOG.md", "SECURITY.md"],
+      "entryPoints": [".github/workflows/release.yml", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "implementationScope": [
+        "Freeze the exact release-candidate commit and tag",
+        "Run every qualification gate required by each target release profile at the same SHA",
+        "Install and upgrade on clean supported hosts",
+        "Exercise rollback, save/asset migration, crash ingestion, repair, and uninstall for the target profiles",
+        "Collect named qualification owner sign-off and protected release approval evidence before publication"
+      ],
+      "acceptanceCriteria": [
+        "Every technical qualification item, transitive dependency, and qualification requirement from requiredGateIds has passing exact-SHA evidence before publication",
+        "Excluded gates may remain blocked and cannot be presented as supported",
+        "Clean install, N-1 upgrade, uninstall, rollback, repair, and recovery drills pass",
+        "Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance",
+        "The profile-required-gates and release-approval jobs execute and block on failure; no planned rehearsal selector remains",
+        "Named qualification sign-off is retained and the stable-release environment prevents self-review and administrative bypass"
+      ],
+      "commands": ["python3 tools/site-data/validate.py", "sha256sum -c SHA256SUMS"],
+      "testSelectors": ["ReleaseProfileRehearsal_*"],
+      "requiredCiJobs": ["profile-required-gates", "release-approval"],
+      "performanceBudgets": ["Every budget required by the target profiles passes without unreviewed exception"],
+      "documentationUpdates": ["CHANGELOG.md", "SECURITY.md", "wiki/development/Release-Publication-Stages.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "readinessChanges": ["G17 qualification evidence; this item must be done before candidate publication"],
+      "websiteImpact": ["Qualification alone preserves candidate wording; no public ready claim"],
+      "risks": ["First stable MSI bootstrap is unsupported", "Immutable stable and rolling-nightly policies are mutually exclusive today"],
+      "outOfScope": ["Publishing artifacts or changing final readiness", "Protocol migration, production-service backup/restore, and incident drills owned by G12 and OPS-110"],
+      "definitionOfDone": ["All supported-host rehearsals pass at the candidate SHA", "Qualification sign-off and protected approval evidence are retained", "No planned qualification job or selector remains"],
+      "profileApplicability": {"stable-v1": "shared"},
+      "plannedCiJobs": ["profile-required-gates", "release-approval"],
+      "plannedTestSelectors": ["ReleaseProfileRehearsal_*"]
+    },
+    {
+      "id": "REL-200",
+      "completionPhase": "publication-finalization",
+      "title": "Publish and independently verify the qualified release",
+      "priority": "P0",
+      "status": "blocked",
+      "blocking": true,
+      "wave": 6,
+      "area": "release",
+      "owner": "unassigned",
+      "rationale": "Final readiness requires every profile gate at one candidate commit, supported-host rehearsal, protected publication, independent download verification, and live-site evidence. Candidate qualification now requires every technical item and transitive dependency while leaving the explicitly declared publication-finalization item in progress; publication-dependent gates remain at risk until completion. The stable-release environment and its required-reviewer/Working-branch protections are verified before building and at publication. A separate read-only consumer retains exact-SHA publication-verified evidence without changing this ledger. No evidence has been manufactured or promoted. Protected authority and signing must be provisioned externally, and the strict real prior-stable MSI requirement still makes the first release an unresolved policy blocker. All release qualification and terminal evidence remain outstanding.",
+      "dependencies": [
+        "REL-190"
       ],
       "parallelWith": [],
       "sourceContext": [
@@ -979,36 +1019,28 @@
         "docs/readiness/ENGINE_READINESS_HANDOFF.md"
       ],
       "implementationScope": [
-        "Create a release-candidate tag",
-        "Run every gate required by each target release profile at the same SHA",
-        "Install and upgrade on clean supported hosts",
-        "Exercise rollback, save/asset migration, crash ingestion, repair, and uninstall for the target profiles",
-        "Collect named owner sign-off with repository evidence",
-        "Publish verified artifacts and evidence"
+        "Publish the complete preverified draft as an immutable stable release after REL-190 qualification",
+        "Independently download and verify the published artifact set and retain exact-SHA evidence",
+        "Verify live-site consumption of the released evidence before final readiness review"
       ],
       "acceptanceCriteria": [
         "Every gate listed in requiredGateIds for every target release profile is passing at the candidate SHA",
         "Excluded gates may remain blocked and cannot be presented as supported",
-        "Clean install, N-1 upgrade, uninstall, rollback, repair, and recovery drills pass",
-        "Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance",
+        "Published artifacts are immutable and independently verify against the exact qualified candidate",
         "Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists"
       ],
       "commands": [
+        "python3 tools/site-data/validate.py --require-candidate-ready",
         "python3 tools/site-data/validate.py --require-ready",
         "gh release view vX.Y.Z",
         "sha256sum -c SHA256SUMS"
       ],
-      "testSelectors": [
-        "ReleaseProfileRehearsal_*"
-      ],
+      "testSelectors": [],
       "requiredCiJobs": [
-        "profile-required-gates",
-        "release-approval",
+        "verify-stable-publication",
         "site-data-publish"
       ],
-      "performanceBudgets": [
-        "Every budget required by the target profiles passes without unreviewed exception"
-      ],
+      "performanceBudgets": [],
       "documentationUpdates": [
         "CHANGELOG.md",
         "SECURITY.md",
@@ -1036,13 +1068,8 @@
       "profileApplicability": {
         "stable-v1": "shared"
       },
-      "plannedCiJobs": [
-        "profile-required-gates",
-        "release-approval"
-      ],
-      "plannedTestSelectors": [
-        "ReleaseProfileRehearsal_*"
-      ]
+      "plannedCiJobs": [],
+      "plannedTestSelectors": []
     }
   ]
 }

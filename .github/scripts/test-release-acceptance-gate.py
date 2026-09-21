@@ -128,6 +128,7 @@ def _published_release(is_versioned=False, **overrides):
         "tag_name": RELEASE_TAG,
         "draft": False,
         "prerelease": not is_versioned,
+        "immutable": is_versioned,
     }
     value.update(overrides)
     return value
@@ -153,11 +154,14 @@ class FakeApi:
         self.working_sha = working_sha
         self.published = published or _published_release()
         self.patch_should_fail = patch_should_fail
+        self.policy = {"enabled": not self.release["prerelease"], "enforced_by_owner": False}
         self.fetch_calls: list[str] = []
         self.patch_calls: list[tuple[str, dict]] = []
 
     def fetch(self, url: str, token: str) -> Any:
         self.fetch_calls.append(url)
+        if url.endswith("/immutable-releases"):
+            return self.policy
         if f"/releases/{RELEASE_ID}/assets" in url:
             return self.assets
         if f"/releases/{RELEASE_ID}" in url:
@@ -183,6 +187,9 @@ class FakeApi:
         self.release["draft"] = body.get("draft")
         if "prerelease" in body:
             self.release["prerelease"] = body["prerelease"]
+        self.release["immutable"] = self.published["immutable"]
+        if body.get("draft") is True:
+            return dict(self.release)
         return self.published
 
 
@@ -788,7 +795,7 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
     """End-to-end integration: verify + PATCH in one step."""
 
     def _run_gate(self, api, is_versioned=False, tag=RELEASE_TAG):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory() as tmpdir, patch.dict(os.environ, {"RELEASE_POLICY_READ_TOKEN": "generated-policy-read-fixture"}):
             assets_file = Path(tmpdir) / "expected-assets.txt"
             digests_file = Path(tmpdir) / "expected-digests.txt"
             _write_assets_file(assets_file)
@@ -852,6 +859,48 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
         self.assertEqual(result["prerelease"], False)
         _, body = api.patch_calls[0]
         self.assertEqual(body["make_latest"], "true")
+
+    @patch("subprocess.run")
+    def test_incompatible_repository_policy_blocks_before_patch(self, mock_run):
+        for is_versioned in (False, True):
+            tag = "v1.0.0" if is_versioned else RELEASE_TAG
+            mock_run.return_value = MagicMock(returncode=0, stdout=f"{SHA}\trefs/tags/{tag}\n")
+            api = FakeApi(release=_release(tag=tag, prerelease=not is_versioned))
+            api.policy["enabled"] = not is_versioned
+            with self.assertRaisesRegex(MODULE.GateError, "immutability"):
+                self._run_gate(api, is_versioned=is_versioned, tag=tag)
+            self.assertEqual(api.patch_calls, [])
+
+    @patch("subprocess.run")
+    def test_stable_publication_rejects_mutable_patch_or_followup_record(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout=f"{SHA}\trefs/tags/v1.0.0\n")
+        for location in ("patch", "get"):
+            api = FakeApi(release=_release(tag="v1.0.0", prerelease=False),
+                          published=_published_release(is_versioned=True, tag_name="v1.0.0"))
+            if location == "patch":
+                api.published["immutable"] = False
+            else:
+                original = api.fetch
+                def fetch(url, token):
+                    value = original(url, token)
+                    if url.endswith(f"/releases/{RELEASE_ID}") and api.patch_calls:
+                        return {**value, "immutable": False}
+                    return value
+                api.fetch = fetch
+            with self.assertRaisesRegex(MODULE.GateError, "immutability"):
+                self._run_gate(api, is_versioned=True, tag="v1.0.0")
+            self.assertEqual(len(api.patch_calls), 2 if location == "patch" else 1)
+
+    @patch("subprocess.run")
+    def test_ambiguous_stable_response_never_authorizes_blind_quarantine(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout=f"{SHA}\trefs/tags/v1.0.0\n")
+        for field in ("id", "immutable"):
+            api = FakeApi(release=_release(tag="v1.0.0", prerelease=False),
+                          published=_published_release(is_versioned=True, tag_name="v1.0.0"))
+            api.published[field] = None
+            with self.assertRaisesRegex(MODULE.GateError, "preserved"):
+                self._run_gate(api, is_versioned=True, tag="v1.0.0")
+            self.assertEqual(len(api.patch_calls), 1)
 
     @patch("subprocess.run")
     def test_blocks_versioned_publication_with_rolling_tag(self, mock_run):

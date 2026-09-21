@@ -140,6 +140,16 @@ jobs:
     - name: Test release acceptance publication gate
       run: python3 .github/scripts/test-release-acceptance-gate.py
 
+    - name: Test candidate and protected publication stages
+      run: |
+        python3 Tests/Tools/test_release_stages.py
+        python3 .github/scripts/test_verify_release_environment.py
+        python3 .github/scripts/test_verify_release_policy.py
+        python3 .github/scripts/test_guard_release_mutation.py
+        python3 .github/scripts/test_stage_release_draft.py
+        python3 .github/scripts/test_verify_published_stable_release.py
+        python3 .github/scripts/test_release_stages_workflow.py
+
     - name: Test the build-matrix exact-source status gate
       run: node .github/scripts/test-build-matrix-commit-status.js
 

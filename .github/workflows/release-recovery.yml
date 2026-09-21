@@ -11,6 +11,7 @@ jobs:
   recover:
     if: github.event.workflow_run.conclusion != 'success'
     runs-on: ubuntu-24.04
+    environment: nightly-release
     timeout-minutes: 15
     permissions:
       actions: read
@@ -107,6 +108,7 @@ jobs:
         if: steps.state.outputs.found == 'true'
         shell: bash
         env:
+          RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
           SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}

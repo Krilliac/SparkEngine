@@ -255,6 +255,7 @@ class WorkItemApplicabilityTests(ContractTestCase):
             "BLD-100": "required",
             "CI-120": "required",
             "REL-100": "required",
+            "REL-190": "shared",
             "REL-200": "shared",
             "INST-130": "required",
             "SEC-120": "required",
@@ -605,7 +606,7 @@ class ScopeNarrowingTests(ContractTestCase):
             self.assertIn(required, performance)
         self.assertNotIn("linux", performance)
 
-        rehearsal = self.item_text(items["REL-200"], "implementationScope", "acceptanceCriteria")
+        rehearsal = self.item_text(items["REL-190"], "implementationScope", "acceptanceCriteria")
         self.assertIn("requiredgateids", rehearsal)
         for excluded in ("protocol", "backup", "incident"):
             self.assertNotIn(excluded, rehearsal)

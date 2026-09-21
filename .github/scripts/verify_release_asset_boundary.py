@@ -131,7 +131,9 @@ def verify_release_asset_boundary(
     _require(release.get("tag_name") == release_tag, "release tag differs from the durable target")
     _require(release.get("draft") is expected_draft, "release draft visibility is not exact")
     _require(release.get("prerelease") is (not is_versioned), "release channel is not exact")
-    _require(release.get("immutable") is False, "release is immutable at a recoverable publication boundary")
+    expected_immutable = is_versioned and not expected_draft
+    _require(release.get("immutable") is expected_immutable,
+             "release immutability does not match the channel and publication phase")
 
     pages = _load_json(assets_json, "release asset metadata")
     _require(isinstance(pages, list) and bool(pages), "release asset pages must be a nonempty array")

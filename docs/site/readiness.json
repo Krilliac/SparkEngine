@@ -1625,6 +1625,7 @@
     },
     {
       "id": "G17",
+      "completionPhase": "publication-finalization",
       "name": "Release rehearsal and sign-off",
       "area": "release",
       "state": "blocked",
@@ -1645,6 +1646,7 @@
         }
       ],
       "blockingWorkItemIds": [
+        "REL-190",
         "REL-200"
       ]
     }
@@ -1653,6 +1655,11 @@
     {
       "id": "stable-v1",
       "name": "Stable v1",
+      "publicationFinalization": {
+        "workItemIds": ["REL-200"],
+        "gateId": "G17",
+        "environment": "stable-release"
+      },
       "state": "blocked",
       "owner": "unassigned",
       "summary": "The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as one installed first-party single-player vertical slice, SparkGameFPS, that must build through the public SDK surface alone. The complete required Windows build-product set is enumerated below and includes SparkEditor, SparkConsole, shader compiler, crash reporter, cooker, automation host, launcher, build tool, and installer; those products are in profile but remain blocked and uncertified. Constrained LAN play is optional and is not required. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface. Nothing in this profile is certified while its state is blocked.",
@@ -2267,6 +2274,7 @@
         "RDY-020",
         "REL-100",
         "REL-110",
+        "REL-190",
         "REL-200",
         "RHI-210",
         "SAVE-230",
@@ -2480,6 +2488,7 @@
         "workItemIds": [
           "GOV-400",
           "DOC-400",
+          "REL-190",
           "REL-200"
         ]
       }

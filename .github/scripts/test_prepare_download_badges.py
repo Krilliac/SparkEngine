@@ -2788,7 +2788,10 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         self.assertIn("TARGET_SHA: ${{ github.sha }}", publication_gate_step)
 
         nightly_step = text[stage:checkpoint]
-        self.assertIn("prerelease: true", nightly_step)
+        self.assertIn("RELEASE_TAG: nightly", nightly_step)
+        self.assertIn("stage_release_draft.py", nightly_step)
+        staging_source = (RELEASE_WORKFLOW.parents[1] / "scripts/stage_release_draft.py").read_text(encoding="utf-8")
+        self.assertIn('"prerelease": not is_versioned', staging_source)
         nightly_publish_step = text[publish:after_tag]
         self.assertIn("release-acceptance-gate.py", nightly_publish_step)
 
@@ -2812,8 +2815,9 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         )
 
         stage_step = text[stage:checkpoint]
-        self.assertIn("draft: true", stage_step)
-        self.assertIn("overwrite_files: true", stage_step)
+        self.assertIn("stage_release_draft.py", stage_step)
+        self.assertIn('"draft": True', staging_source)
+        self.assertIn('method="DELETE"', staging_source)
         checkpoint_step = text[checkpoint:staged_commit]
         self.assertIn('prepare-download-badges.py" stage', checkpoint_step)
         self.assertIn("--expected-assets-file", checkpoint_step)
@@ -2860,8 +2864,11 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         step = text[stage:nightly]
         self.assertIn("steps.release-freeze.outputs.target_exists != 'true'", step)
         self.assertIn("steps.release-freeze.outputs.target_is_draft == 'true'", step)
-        self.assertIn("overwrite_files: false", step)
-        self.assertIn("draft: true", step)
+        self.assertIn("stage_release_draft.py", step)
+        self.assertIn("EXPECTED_RELEASE_ID: ${{ steps.release-freeze.outputs.target_release_id }}", step)
+        staging_source = (RELEASE_WORKFLOW.parents[1] / "scripts/stage_release_draft.py").read_text(encoding="utf-8")
+        self.assertIn("stable draft assets must never be overwritten by staging", staging_source)
+        self.assertIn('"draft": True', staging_source)
         publish = text.index("    - name: Publish complete stable versioned release")
         nightly_publish = text.index("    - name: Publish complete nightly rolling release")
         publish_step = text[publish:nightly_publish]
@@ -2874,7 +2881,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             "    - name: Verify exact source commit passed Required CI Gate"
         )
         readiness = text.index(
-            "    - name: Verify stable-v1 is ready for versioned publication"
+            "    - name: Verify stable-v1 candidate is qualified for versioned publication"
         )
         freeze = text.index("    - name: Freeze durable exact CI evidence release asset")
         mutation_manifest = text.index(
@@ -3118,7 +3125,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             'EXPECTED_UPLOADER_LOGIN = "github-actions[bot]"',
             'asset.get("size")',
             'asset.get("digest")',
-            'release.get("immutable") is False',
+            'release.get("immutable") is expected_immutable',
             "live_count >= ledger_count",
         ):
             self.assertIn(required, asset_boundary)
@@ -3183,13 +3190,17 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             self.assertIn("steps.badge-staged-commit.outputs.staged_commit", publish_step)
             self.assertIn("refs/tags/generated-release-counters", publish_step)
             self.assertIn('commits/Working" --jq', publish_step)
-            self.assertIn("redraft_failed_publication", publish_step)
-            self.assertIn("recover_release_publication.py", publish_step)
-            self.assertIn("--attempts 3", publish_step)
+            if publish_step == stable_publish_step:
+                self.assertIn("report_failed_immutable_publication", publish_step)
+                self.assertNotIn("recover_release_publication.py", publish_step)
+            else:
+                self.assertIn("redraft_failed_publication", publish_step)
+                self.assertIn("recover_release_publication.py", publish_step)
+                self.assertIn("--attempts 3", publish_step)
             self.assertNotIn("continue-on-error", publish_step)
             self.assertNotIn("|| true", publish_step)
 
-        self.assertIn("--expected-prerelease false", stable_publish_step)
+        self.assertIn("quarantines only a proven mutable target", stable_publish_step)
         self.assertIn("--expected-prerelease true", nightly_publish_step)
         for required in (
             "api.get_release(release_id)",
@@ -3215,8 +3226,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             'prepare-download-badges.py" "$phase"',
             'boundary_release_id" != "$RELEASE_ID"',
             'boundary_draft" != "$expected_draft"',
-            "immutable-releases",
-            ".enabled == false",
+            "verify_release_policy.py",
             "releases/$RELEASE_ID/assets?per_page=100",
             "verify_release_asset_boundary.py",
             '--expected-draft "$expected_draft"',
@@ -3231,7 +3241,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             "    - name: Stage new or interrupted stable versioned release as draft"
         )
         nightly_stage = text.index("    - name: Stage nightly rolling release as draft")
-        self.assertIn("overwrite_files: false", text[stable_stage:nightly_stage])
+        self.assertIn("stage_release_draft.py", text[stable_stage:nightly_stage])
         for step in (
             text[replacement_preflight:delete],
             delete_step,

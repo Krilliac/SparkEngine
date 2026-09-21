@@ -29,6 +29,7 @@ from common import (
 )
 from contract_selectors import resolve_ci_job, resolve_test_selector
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
+from release_stages import candidate_readiness_errors, finalization_contract_errors
 
 
 IMPLEMENTATION_STATES = {"absent", "stub", "partial", "functional", "complete"}
@@ -2249,6 +2250,7 @@ class Validator:
         self,
         *,
         require_ready: bool = False,
+        require_candidate_ready: bool = False,
         modules: bool = False,
         assets: bool = False,
         legal: bool = False,
@@ -2260,6 +2262,11 @@ class Validator:
         item_ids = self.validate_work_items()
         capability_ids, gate_ids = self.validate_readiness(item_ids)
         profile_ids = self.validate_release_profiles(item_ids, capability_ids, gate_ids)
+        for message in finalization_contract_errors(self.contract):
+            self.error("publicationFinalization", message)
+        if require_candidate_ready:
+            for message in candidate_readiness_errors(self.contract):
+                self.error("candidate readiness", message)
         self.validate_execution(item_ids)
         self.validate_content(capability_ids, profile_ids)
         for location, message in validate_assets():
@@ -2304,6 +2311,7 @@ class Validator:
 def validate_contract(
     *,
     require_ready: bool = False,
+    require_candidate_ready: bool = False,
     modules: bool = False,
     assets: bool = False,
     legal: bool = False,
@@ -2319,6 +2327,7 @@ def validate_contract(
         max_legacy_contract=max_legacy_contract,
     ).validate(
         require_ready=require_ready,
+        require_candidate_ready=require_candidate_ready,
         modules=modules,
         assets=assets,
         legal=legal,
@@ -2494,7 +2503,9 @@ def warn_legacy_contract_flag_deprecated(command: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--require-ready", action="store_true")
+    stages = parser.add_mutually_exclusive_group()
+    stages.add_argument("--require-ready", action="store_true", help="require final global release readiness")
+    stages.add_argument("--require-candidate-ready", action="store_true", help="require all qualification gates with declared publication finalization pending")
     parser.add_argument("--modules", action="store_true")
     parser.add_argument("--assets", action="store_true")
     parser.add_argument("--legal", action="store_true")
@@ -2537,6 +2548,7 @@ def main() -> int:
     try:
         contract = validate_contract(
             require_ready=args.require_ready,
+            require_candidate_ready=args.require_candidate_ready,
             modules=args.modules,
             assets=args.assets,
             legal=args.legal,

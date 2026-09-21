@@ -19,6 +19,9 @@ jobs:
   # ===========================================================================
   prepare:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     outputs:
       version: ${{ steps.meta.outputs.version }}
       cmake_version: ${{ steps.meta.outputs.cmake_version }}
@@ -131,6 +134,13 @@ jobs:
           echo "cmake_version=$DEFAULT_VERSION" >> "$GITHUB_OUTPUT"
           echo "is_versioned=false" >> "$GITHUB_OUTPUT"
         fi
+
+    - name: Preflight stable publication authority before building
+      if: steps.meta.outputs.is_versioned == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: python3 .github/scripts/verify_release_environment.py
 
     - name: Determine build configurations
       id: matrix
@@ -826,6 +836,9 @@ jobs:
   release:
     needs: [prepare, build-windows, build-linux, build-macos, build-installer]
     runs-on: ubuntu-latest
+    environment: ${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}
+    env:
+      IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
     permissions:
       actions: read
       attestations: write
@@ -844,6 +857,21 @@ jobs:
         fetch-depth: 0
         persist-credentials: false
 
+    - name: Verify release channel policy before any publication mutation
+      env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+      run: python3 .github/scripts/verify_release_policy.py
+
+    - name: Verify stable publication environment protection
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: python3 .github/scripts/verify_release_environment.py
+
     - name: Verify exact source commit passed Required CI Gate
       id: required-ci
       env:
@@ -851,14 +879,14 @@ jobs:
         TARGET_SHA: ${{ github.sha }}
       run: python3 .github/scripts/verify-exact-required-gate.py
 
-    - name: Verify stable-v1 is ready for versioned publication
+    - name: Verify stable-v1 candidate is qualified for versioned publication
       if: needs.prepare.outputs.is_versioned == 'true'
       shell: bash
       # Strict validation, no waiver: every requiredCiJobs/testSelectors and
       # path reference in the contract must resolve. The --allow-legacy-contract
       # waiver was retired once the contract validated strictly; never
       # reintroduce it to make a versioned publication green.
-      run: python3 tools/site-data/validate.py --require-ready
+      run: python3 tools/site-data/validate.py --require-candidate-ready
 
     - name: Freeze durable exact CI evidence release asset
       env:
@@ -1325,6 +1353,7 @@ jobs:
       id: badge-pending-commit
       working-directory: badge-repository
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         STATE_REF: refs/tags/generated-release-counters
         EXPECTED_REMOTE_OBJECT: ${{ steps.badge-state.outputs.remote_object }}
@@ -1357,7 +1386,7 @@ jobs:
 
         git commit -s -m "chore: prepare download counters (lifetime: ${{ steps.badge-prepare.outputs.new_total }}, installer: ${{ steps.badge-prepare.outputs.installer_total }}, operation: ${{ steps.badge-prepare.outputs.operation_id }}) [skip ci]"
         PENDING_COMMIT="$(git rev-parse HEAD)"
-        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+        python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="${STATE_REF}:${EXPECTED_REMOTE_OBJECT}" origin \
           "HEAD:${STATE_REF}"
 
@@ -1389,6 +1418,7 @@ jobs:
     - name: Hide and verify existing nightly release
       if: needs.prepare.outputs.is_versioned == 'false' && steps.release-inspect.outputs.target_exists == 'true'
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         RELEASE_ID: ${{ steps.release-inspect.outputs.target_release_id }}
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -1432,7 +1462,7 @@ jobs:
             echo "Existing nightly visibility changed after its durable public snapshot." >&2
             exit 1
           fi
-          gh api --method PATCH \
+          python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- gh api --method PATCH \
             "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
             -F draft=true \
             -F prerelease=true \
@@ -1477,6 +1507,7 @@ jobs:
     - name: Delete only durably authorized failed stable-draft uploads
       if: steps.draft-cleanup.outputs.cleanup_required == 'true'
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         RELEASE_ID: ${{ steps.draft-cleanup.outputs.target_release_id }}
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -1553,7 +1584,7 @@ jobs:
              .upload_url == $upload_template' \
             "$RELEASE_RECORD" >/dev/null
           # These bound reads are the final operations before the exact-ID delete.
-          gh api --method DELETE \
+          python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- gh api --method DELETE \
             "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID"
         done < <(jq -c '.[]' <<< "$CLEANUP_ASSETS")
 
@@ -1580,6 +1611,7 @@ jobs:
       if: steps.draft-cleanup.outputs.cleanup_required == 'true'
       working-directory: badge-repository
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         STATE_REF: refs/tags/generated-release-counters
         EXPECTED_PENDING: ${{ steps.badge-pending-commit.outputs.pending_commit }}
@@ -1606,7 +1638,7 @@ jobs:
         fi
         git commit -s -m "chore: accept stable-draft failed-upload cleanup [skip ci]"
         ACCEPTED_COMMIT="$(git rev-parse HEAD)"
-        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+        python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="${STATE_REF}:${EXPECTED_PENDING}" origin \
           "HEAD:${STATE_REF}"
         PUBLISHED_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
@@ -1638,6 +1670,7 @@ jobs:
     - name: Delete only the durably authorized stable-draft evidence asset
       if: steps.evidence-replacement.outputs.delete_required == 'true'
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         RELEASE_ID: ${{ steps.evidence-replacement.outputs.target_release_id }}
         DELETE_EVIDENCE_ASSET_ID: ${{ steps.evidence-replacement.outputs.delete_evidence_asset_id }}
@@ -1698,12 +1731,13 @@ jobs:
         # GitHub exposes no atomic compare-and-delete primitive. These exact
         # asset and release reads deliberately make the unavoidable TOCTOU
         # window the single API call immediately preceding the bound-ID delete.
-        gh api --method DELETE \
+        python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- gh api --method DELETE \
           "repos/$GITHUB_REPOSITORY/releases/assets/$DELETE_EVIDENCE_ASSET_ID"
 
     - name: Upload only the replacement stable-draft evidence asset
       if: steps.evidence-replacement.outputs.upload_required == 'true'
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         RELEASE_ID: ${{ steps.evidence-replacement.outputs.target_release_id }}
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -1731,7 +1765,7 @@ jobs:
           "$RELEASE_RECORD" >/dev/null
         EXPECTED_SIZE="$(stat --format='%s' "$EVIDENCE_PATH")"
         EXPECTED_DIGEST="sha256:$(sha256sum "$EVIDENCE_PATH" | awk '{print $1}')"
-        gh api --method POST \
+        python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- gh api --method POST \
           -H "Content-Type: application/json" \
           --input "$EVIDENCE_PATH" \
           "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=SparkEngine-Exact-CI-Evidence.json" \
@@ -1772,6 +1806,7 @@ jobs:
       if: steps.evidence-replacement.outputs.replacement_required == 'true'
       working-directory: badge-repository
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         STATE_REF: refs/tags/generated-release-counters
         EXPECTED_PENDING: ${{ steps.badge-cleanup-commit.outputs.pending_commit || steps.badge-pending-commit.outputs.pending_commit }}
@@ -1798,7 +1833,7 @@ jobs:
         fi
         git commit -s -m "chore: accept stable-draft exact CI evidence replacement [skip ci]"
         ACCEPTED_COMMIT="$(git rev-parse HEAD)"
-        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+        python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="${STATE_REF}:${EXPECTED_PENDING}" origin \
           "HEAD:${STATE_REF}"
         PUBLISHED_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
@@ -1847,6 +1882,7 @@ jobs:
     - name: Bind stable release tag to workflow commit
       if: needs.prepare.outputs.is_versioned == 'true'
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         TARGET_SHA: ${{ github.sha }}
@@ -1867,7 +1903,7 @@ jobs:
           # A normal push fails if another writer creates it between the
           # remote lookup and this push; stable tags are never force-moved.
           git tag "$RELEASE_TAG" "$TARGET_COMMIT"
-          git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push origin \
+          python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push origin \
             "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
         fi
 
@@ -1923,53 +1959,45 @@ jobs:
     - name: Stage new or interrupted stable versioned release as draft
       id: stable-stage
       if: needs.prepare.outputs.is_versioned == 'true' && (steps.release-freeze.outputs.target_exists != 'true' || steps.release-freeze.outputs.target_is_draft == 'true')
-      uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
-      with:
-        tag_name: ${{ needs.prepare.outputs.tag }}
-        target_commitish: ${{ github.sha }}
-        name: "SparkEngine ${{ needs.prepare.outputs.version }} (Stable)${{ steps.suffix.outputs.label }}"
-        body: |
+      env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        EXPECTED_RELEASE_ID: ${{ steps.release-freeze.outputs.target_release_id }}
+        RELEASE_TITLE: "SparkEngine ${{ needs.prepare.outputs.version }} (Stable)${{ steps.suffix.outputs.label }}"
+        RELEASE_BODY: |
           ## SparkEngine ${{ needs.prepare.outputs.version }} — Stable Release${{ steps.suffix.outputs.label }}
 
           Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           Built on: ${{ steps.run-start.outputs.started_at }}
 
-          > **Stable-v1 releases** contain Windows x64 Shipping packages built with the authoritative `windows-shipping` preset and validated separately in Release. For the latest development builds, see the [nightly release](https://github.com/${{ github.repository }}/releases/tag/nightly).
+          > **Stable-v1 releases** contain Windows x64 Shipping packages built with the authoritative `windows-shipping` preset and validated separately in Release. Immutable stable and rolling-nightly publication currently require incompatible repository policies; see the documented release-stage limitations.
 
           ### Downloads
 
           ${{ steps.assets.outputs.table }}
-        prerelease: false
-        draft: true
-        make_latest: false
-        fail_on_unmatched_files: true
-        overwrite_files: false
-        files: ${{ steps.assets.outputs.files }}
+      run: python3 .github/scripts/stage_release_draft.py
 
     - name: Stage nightly rolling release as draft
       id: nightly-stage
       if: needs.prepare.outputs.is_versioned == 'false'
-      uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
-      with:
-        tag_name: nightly
-        target_commitish: ${{ github.sha }}
-        name: "Nightly Build (${{ steps.sha.outputs.short }})${{ steps.suffix.outputs.label }}"
-        body: |
+      env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: nightly
+        EXPECTED_RELEASE_ID: ${{ steps.release-freeze.outputs.target_release_id }}
+        RELEASE_TITLE: "Nightly Build (${{ steps.sha.outputs.short }})${{ steps.suffix.outputs.label }}"
+        RELEASE_BODY: |
           ## Nightly Build${{ steps.suffix.outputs.label }}
 
           Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           Built on: ${{ steps.run-start.outputs.started_at }}
           Branch: `${{ github.ref_name }}`
 
-          > **Nightly builds** are published automatically on every commit. All CI checks pass before publishing. For a stable, manually-verified release see the [latest stable release](https://github.com/${{ github.repository }}/releases/latest).
+          > **Rolling nightly builds** require mutable repository release policy. Immutable stable publication requires a separate policy decision; the two channels are not jointly operational under the current design.
 
           ${{ steps.assets.outputs.table }}
-        prerelease: true
-        draft: true
-        make_latest: false
-        fail_on_unmatched_files: true
-        overwrite_files: true
-        files: ${{ steps.assets.outputs.files }}
+      run: python3 .github/scripts/stage_release_draft.py
 
     - name: Checkpoint staged release download counters
       id: badge-stage
@@ -2007,6 +2035,7 @@ jobs:
       id: badge-staged-commit
       working-directory: badge-repository
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         STATE_REF: refs/tags/generated-release-counters
       run: |
@@ -2034,7 +2063,7 @@ jobs:
 
         git commit -s -m "chore: checkpoint staged download counters (lifetime: ${{ steps.badge-stage.outputs.new_total }}, installer: ${{ steps.badge-stage.outputs.installer_total }}) [skip ci]"
         STAGED_COMMIT="$(git rev-parse HEAD)"
-        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+        python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="${STATE_REF}:${EXPECTED_PENDING}" origin \
           "HEAD:${STATE_REF}"
 
@@ -2049,6 +2078,7 @@ jobs:
     - name: Bind nightly tag to workflow commit
       if: needs.prepare.outputs.is_versioned == 'false'
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         TARGET_SHA: ${{ github.sha }}
@@ -2064,7 +2094,7 @@ jobs:
         REMOTE_TAG_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
           ls-remote --refs origin refs/tags/nightly | awk 'NR == 1 { print $1 }')"
         git tag --force nightly "$TARGET_COMMIT"
-        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+        python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="refs/tags/nightly:${REMOTE_TAG_OBJECT}" origin \
           refs/tags/nightly:refs/tags/nightly
         git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
@@ -2235,6 +2265,7 @@ jobs:
     - name: Publish complete stable versioned release
       if: needs.prepare.outputs.is_versioned == 'true' && (steps.release-freeze.outputs.target_exists != 'true' || steps.release-freeze.outputs.target_is_draft == 'true')
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_RUN_ID: ${{ github.run_id }}
@@ -2301,29 +2332,23 @@ jobs:
           --repository "$GITHUB_REPOSITORY" \
           --source-commit "$TARGET_SHA"
         # Re-read the release contract at the final stable publication boundary.
-        # This is intentionally adjacent to the acceptance PATCH so a blocked
-        # stable-v1 profile cannot be promoted by a stale earlier check.
-        python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-ready
+        # Candidate qualification preserves every technical gate without
+        # claiming that publication and its independent verification are done.
+        python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-candidate-ready
+        python3 "$GITHUB_WORKSPACE/.github/scripts/verify_release_environment.py"
         bash "$GITHUB_WORKSPACE/.github/scripts/verify-release-publication-boundary.sh" \
           publish-preflight
         publication_attempted=false
-        redraft_failed_publication() {
+        report_failed_immutable_publication() {
           local failure_status="$?"
           trap - ERR
           if [[ "$publication_attempted" != "true" && ! -f "$RELEASE_ACCEPTANCE_PATCH_STARTED_FILE" ]]; then
             return "$failure_status"
           fi
-          if ! python3 -I "$GITHUB_WORKSPACE/.github/scripts/recover_release_publication.py" \
-              --repository "$GITHUB_REPOSITORY" \
-              --release-id "$RELEASE_ID" \
-              --release-tag "$RELEASE_TAG" \
-              --expected-prerelease false \
-              --attempts 3; then
-            echo "::error::Could not verify release ${RELEASE_ID} was returned to draft; inspect https://github.com/${GITHUB_REPOSITORY}/releases immediately." >&2
-          fi
+          echo "::error::Stable publication ${RELEASE_ID} failed or is ambiguous after dispatch. The acceptance helper quarantines only a proven mutable target; immutable or ambiguous targets are preserved for investigation at https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}." >&2
           return "$failure_status"
         }
-        trap redraft_failed_publication ERR
+        trap report_failed_immutable_publication ERR
         python3 -I "$GITHUB_WORKSPACE/.github/scripts/release-acceptance-gate.py"
         publication_attempted=true
         bash "$GITHUB_WORKSPACE/.github/scripts/verify-release-publication-boundary.sh" \
@@ -2335,6 +2360,7 @@ jobs:
     - name: Publish complete nightly rolling release
       if: needs.prepare.outputs.is_versioned == 'false'
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_RUN_ID: ${{ github.run_id }}
@@ -2447,6 +2473,7 @@ jobs:
         fi
 
     - name: Verify published release attestation as a consumer
+      if: needs.prepare.outputs.is_versioned == 'true'
       env:
         GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
@@ -2487,6 +2514,7 @@ jobs:
       id: badge-final-commit
       working-directory: badge-repository
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
         STATE_REF: refs/tags/generated-release-counters
@@ -2524,7 +2552,7 @@ jobs:
 
         git commit -s -m "chore: complete download counters (lifetime: ${{ steps.badge-complete.outputs.new_total }}, installer: ${{ steps.badge-complete.outputs.installer_total }}) [skip ci]"
         FINAL_COMMIT="$(git rev-parse HEAD)"
-        git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
+        python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="${STATE_REF}:${EXPECTED_STAGED}" origin \
           "HEAD:${STATE_REF}"
 
@@ -2566,8 +2594,9 @@ jobs:
         fi
 
     - name: Recover incomplete public release
-      if: failure()
+      if: failure() && needs.prepare.outputs.is_versioned == 'false'
       env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
@@ -2584,3 +2613,78 @@ jobs:
           --run-attempt "$GITHUB_RUN_ATTEMPT" \
           --source-sha "$GITHUB_SHA" \
           --attempts 5
+
+    - name: Report failed immutable stable publication
+      if: failure() && needs.prepare.outputs.is_versioned == 'true'
+      run: |
+        echo "::error::Stable publication failed. Preserve all evidence and any immutable or ambiguous target. Only an exactly proven mutable target may be quarantined; final readiness is blocked pending owner investigation."
+        exit 1
+
+  # A fresh runner consumes public bytes, with no permission to publish or
+  # rewrite readiness. A receipt is evidence for final review, never a ready claim.
+  verify-stable-publication:
+    needs: [prepare, release]
+    if: needs.prepare.outputs.is_versioned == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      attestations: read
+    steps:
+    - name: Checkout exact consumer source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+
+    - name: Revalidate candidate and current exact CI for the independent consumer
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TARGET_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        python3 tools/site-data/validate.py --require-candidate-ready
+        GITHUB_OUTPUT="$RUNNER_TEMP/consumer-exact-ci.out" \
+          python3 .github/scripts/verify-exact-required-gate.py
+
+    - name: Provision pinned consumer signature bundle
+      env:
+        SIGNATURE_BUNDLE_URL: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_BUNDLE_URL }}
+        SIGNATURE_BUNDLE_SHA256: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_BUNDLE_SHA256 }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$SIGNATURE_BUNDLE_URL" =~ ^https:// || ! "$SIGNATURE_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "Independent consumer requires the externally signed bundle URL and pinned digest." >&2
+          exit 1
+        fi
+        curl --fail --location --proto '=https' --tlsv1.2 "$SIGNATURE_BUNDLE_URL" \
+          --output "$RUNNER_TEMP/consumer-signatures.tar.gz"
+        printf '%s  %s\n' "$SIGNATURE_BUNDLE_SHA256" "$RUNNER_TEMP/consumer-signatures.tar.gz" \
+          | sha256sum --check --status
+        python3 -I .github/scripts/extract_release_signature_bundle.py \
+          --archive "$RUNNER_TEMP/consumer-signatures.tar.gz" \
+          --destination "$RUNNER_TEMP/consumer-signatures"
+
+    - name: Download and independently verify the published stable release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        SIGNATURE_KEY_FINGERPRINT: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_KEY_FINGERPRINT }}
+      run: |
+        set -euo pipefail
+        python3 .github/scripts/verify_published_stable_release.py \
+          --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source-commit "$GITHUB_SHA" \
+          --directory "$RUNNER_TEMP/published-stable-download" \
+          --signature-directory "$RUNNER_TEMP/consumer-signatures" \
+          --fingerprint "$SIGNATURE_KEY_FINGERPRINT" --gate-output "$RUNNER_TEMP/consumer-exact-ci.out" \
+          --receipt "$RUNNER_TEMP/stable-publication-evidence.json" \
+          --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+
+    - name: Retain immutable independent publication evidence
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: stable-publication-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/stable-publication-evidence.json
+        if-no-files-found: error
+        retention-days: 90

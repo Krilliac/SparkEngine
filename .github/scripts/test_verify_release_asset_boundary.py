@@ -115,8 +115,14 @@ class ReleaseAssetBoundaryTests(unittest.TestCase):
     def test_accepts_exact_draft_and_public_boundary(self) -> None:
         self._verify()
         self.release["draft"] = False
+        self.release["immutable"] = True
         self.assets[0]["download_count"] = 3
         self._verify(expected_draft=False)
+
+    def test_public_stable_boundary_rejects_mutable_release(self) -> None:
+        self.release["draft"] = False
+        with self.assertRaisesRegex(BoundaryError, "immutability"):
+            self._verify(expected_draft=False)
 
     def test_accepts_new_release_staged_after_absent_prepare_target(self) -> None:
         self.ledger["pending"]["targetDraftAtPrepare"] = None
