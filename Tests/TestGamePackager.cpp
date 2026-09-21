@@ -183,6 +183,26 @@ TEST(GamePackager_ConsoleGetStatus)
     pkg.Shutdown();
 }
 
+TEST(GamePackager_Package_UninitializedReportsAllConfigurationErrors)
+{
+    auto& pkg = Spark::GamePackager::GetInstance();
+    pkg.Shutdown();
+
+    Spark::PackageConfig config;
+    config.outputDir.clear();
+    config.projectName = "bad/name";
+    const auto result = pkg.Package(config);
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.errors.size(), static_cast<size_t>(3));
+    EXPECT_TRUE(std::find(result.errors.begin(), result.errors.end(),
+                          "Output directory must not be empty") != result.errors.end());
+    EXPECT_TRUE(std::find(result.errors.begin(), result.errors.end(),
+                          "Project name contains invalid filesystem characters") != result.errors.end());
+    EXPECT_TRUE(std::find(result.errors.begin(), result.errors.end(),
+                          "GamePackager has not been initialized") != result.errors.end());
+}
+
 static std::set<std::string> RelativeFiles(const std::filesystem::path& root)
 {
     std::set<std::string> files;
@@ -221,6 +241,9 @@ TEST(GamePackager_LegacyCoreFacadeMatchesCanonicalOutput)
     CreateTempFile((tmpDir / "build" / "Release").string(), "Editor.dll", "editor_dll_data");
     CreateTempFile((tmpDir / "build" / "Release").string(), "CompatGame.pdb", "debug_symbols");
     CreateTempFile((tmpDir / "build" / "Release").string(), "readme.txt", "not_a_binary");
+    CreateTempFile((tmpDir / "build" / "Debug").string(), "CompatGame.exe", "debug_exe_data");
+    CreateTempFile((tmpDir / "build" / "Debug").string(), "Renderer.dll", "debug_dll_data");
+    CreateTempFile((tmpDir / "build" / "Debug").string(), "CompatGame.pdb", "debug_symbols");
     CreateTempFile((tmpDir / "Assets").string(), "texture.png", "fake_texture");
 
     const auto originalCwd = std::filesystem::current_path();
@@ -252,11 +275,16 @@ TEST(GamePackager_LegacyCoreFacadeMatchesCanonicalOutput)
     EXPECT_TRUE(canonical.Console_GetStatus().find("Packages built: 1") != std::string::npos);
     canonical.Shutdown();
 
-    std::filesystem::current_path(originalCwd);
-
     EXPECT_TRUE(legacyResult.success);
     EXPECT_TRUE(canonicalResult.success);
     EXPECT_EQ(legacyPlatforms.size(), static_cast<size_t>(3));
+#if defined(_WIN32)
+    EXPECT_EQ(static_cast<int>(legacyPlatforms[0]), static_cast<int>(Spark::TargetPlatform::Windows));
+#elif defined(__linux__)
+    EXPECT_EQ(static_cast<int>(legacyPlatforms[0]), static_cast<int>(Spark::TargetPlatform::Linux));
+#elif defined(__APPLE__)
+    EXPECT_EQ(static_cast<int>(legacyPlatforms[0]), static_cast<int>(Spark::TargetPlatform::macOS));
+#endif
     EXPECT_TRUE(legacyStatus.find("initialized, 3 supported platform(s)") != std::string::npos);
     EXPECT_TRUE(legacyStatus.find("Assets: 1, DLLs: 2") != std::string::npos);
     EXPECT_TRUE(std::filesystem::path(legacyResult.outputPath).is_absolute());
@@ -308,14 +336,16 @@ TEST(GamePackager_LegacyCoreFacadeMatchesCanonicalOutput)
     EXPECT_TRUE(legacy.Console_GetStatus().find("Last package:") != std::string::npos);
     legacy.Shutdown();
 
+    std::filesystem::current_path(originalCwd);
     CleanupDir(tmpDir.string());
 }
 
-TEST(GamePackager_LegacyCopyFailureStopsBeforeAssetsAndManifest)
+TEST(GamePackager_LegacyCopyFailuresAggregateAndPreserveCounts)
 {
     const auto tmpDir = std::filesystem::temp_directory_path() / "spark_test_packager_copy_failure";
     CleanupDir(tmpDir.string());
     CreateTempFile((tmpDir / "build" / "Release").string(), "Blocked.dll", "binary");
+    CreateTempFile((tmpDir / "build" / "Release").string(), "BlockedAgain.dll", "binary");
     CreateTempFile((tmpDir / "Assets").string(), "must_not_copy.txt", "asset");
 
     const auto originalCwd = std::filesystem::current_path();
@@ -323,6 +353,7 @@ TEST(GamePackager_LegacyCopyFailureStopsBeforeAssetsAndManifest)
     const auto outputRoot = tmpDir / "Package" / "CopyFailure_Windows_Release";
     const auto destination = outputRoot / "Bin" / "Blocked.dll";
     std::filesystem::create_directories(destination);
+    std::filesystem::create_directories(outputRoot / "Bin" / "BlockedAgain.dll");
 
     auto& packager = Spark::GamePackager::GetInstance();
     packager.Initialize();
@@ -335,13 +366,18 @@ TEST(GamePackager_LegacyCopyFailureStopsBeforeAssetsAndManifest)
 
     EXPECT_FALSE(result.success);
     EXPECT_TRUE(result.outputPath.empty());
-    EXPECT_EQ(result.assetCount, static_cast<uint32_t>(0));
+    EXPECT_EQ(result.assetCount, static_cast<uint32_t>(1));
     EXPECT_EQ(result.dllCount, static_cast<uint32_t>(0));
     EXPECT_TRUE(result.warnings.empty());
-    EXPECT_EQ(result.errors.size(), static_cast<size_t>(1));
-    EXPECT_TRUE(result.errors[0].starts_with("Failed to copy binary 'Blocked.dll': "));
-    EXPECT_FALSE(std::filesystem::exists(outputRoot / "Assets" / "must_not_copy.txt"));
+    EXPECT_EQ(result.errors.size(), static_cast<size_t>(2));
+    EXPECT_TRUE(std::any_of(result.errors.begin(), result.errors.end(),
+                            [](const auto& error) { return error.starts_with("Failed to copy binary 'Blocked.dll': "); }));
+    EXPECT_TRUE(std::any_of(result.errors.begin(), result.errors.end(), [](const auto& error) {
+        return error.starts_with("Failed to copy binary 'BlockedAgain.dll': ");
+    }));
+    EXPECT_TRUE(std::filesystem::exists(outputRoot / "Assets" / "must_not_copy.txt"));
     EXPECT_FALSE(std::filesystem::exists(outputRoot / "manifest.txt"));
+    EXPECT_EQ(Spark::Build::GamePackager::GetInstance().GetLastResult().filesCopied, static_cast<uint32_t>(1));
 
     CleanupDir(tmpDir.string());
 }

@@ -122,30 +122,6 @@ LegacyPackageResult GamePackager::PackageLegacy(const LegacyPackageConfig& confi
         return publish(result, false);
     }
 
-    for (const auto& entry : fs::directory_iterator(binSource, ec))
-    {
-        if (!entry.is_regular_file(ec) || !IsLegacyBinary(entry.path(), config.platform, config.debugBuild))
-            continue;
-
-        const auto filename = entry.path().filename().string();
-        if (!config.includeEditor && filename.find("Editor") != std::string::npos)
-            continue;
-
-        fs::copy_file(entry.path(), binDestination / entry.path().filename(), fs::copy_options::overwrite_existing,
-                      ec);
-        if (ec)
-        {
-            result.errors.push_back(std::format("Failed to copy binary '{}': {}", filename, ec.message()));
-            result.outputPath.clear();
-            result.totalSizeMB = 0.0f;
-            result.success = false;
-            ec.clear();
-            return publish(result, false);
-        }
-        if (IsCountedLegacyBinary(entry.path(), config.platform))
-            ++result.dllCount;
-    }
-
     const fs::path assetsSource = "Assets";
     if (!fs::is_directory(assetsSource, ec))
     {
@@ -174,6 +150,42 @@ LegacyPackageResult GamePackager::PackageLegacy(const LegacyPackageConfig& confi
                 ++result.assetCount;
             }
         }
+    }
+
+    // Preserve the historical Core ordering: assets are staged before binary
+    // validation, so a binary copy failure still reports the assets copied.
+    for (const auto& entry : fs::directory_iterator(binSource, ec))
+    {
+        if (!entry.is_regular_file(ec) || !IsLegacyBinary(entry.path(), config.platform, config.debugBuild))
+            continue;
+
+        const auto filename = entry.path().filename().string();
+        if (!config.includeEditor && filename.find("Editor") != std::string::npos)
+            continue;
+
+        fs::copy_file(entry.path(), binDestination / entry.path().filename(), fs::copy_options::overwrite_existing,
+                      ec);
+        if (ec)
+        {
+            // Collect every copy failure. The legacy implementation returned
+            // the complete error vector rather than stopping at the first
+            // blocked destination.
+            result.errors.push_back(std::format("Failed to copy binary '{}': {}", filename, ec.message()));
+            ec.clear();
+            continue;
+        }
+        if (IsCountedLegacyBinary(entry.path(), config.platform))
+            ++result.dllCount;
+    }
+
+    if (!result.errors.empty())
+    {
+        // A failed legacy package has no publishable output, but retains the
+        // asset/binary counts gathered before the failure for diagnostics.
+        result.outputPath.clear();
+        result.totalSizeMB = 0.0f;
+        result.success = false;
+        return publish(result, false);
     }
 
     if (config.stripDebugSymbols && !config.debugBuild)

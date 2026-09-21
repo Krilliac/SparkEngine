@@ -17,7 +17,15 @@ void GamePackager::Initialize()
     canonical.Initialize();
     m_initialized = true;
     m_lastResult = {};
+#if defined(_WIN32)
     m_supportedPlatforms = {TargetPlatform::Windows, TargetPlatform::Linux, TargetPlatform::macOS};
+#elif defined(__linux__)
+    m_supportedPlatforms = {TargetPlatform::Linux, TargetPlatform::Windows, TargetPlatform::macOS};
+#elif defined(__APPLE__)
+    m_supportedPlatforms = {TargetPlatform::macOS, TargetPlatform::Windows, TargetPlatform::Linux};
+#else
+    m_supportedPlatforms = {TargetPlatform::Windows, TargetPlatform::Linux, TargetPlatform::macOS};
+#endif
 }
 
 void GamePackager::Shutdown()
@@ -29,9 +37,10 @@ void GamePackager::Shutdown()
 
 PackageResult GamePackager::Package(const PackageConfig& config)
 {
-    if (!m_initialized)
+    const auto validationErrors = ValidateConfig(config);
+    if (!validationErrors.empty())
     {
-        m_lastResult = {false, {}, 0.0f, {"GamePackager has not been initialized"}, {}, 0, 0};
+        m_lastResult = {false, {}, 0.0f, validationErrors, {}, 0, 0};
         return m_lastResult;
     }
 
