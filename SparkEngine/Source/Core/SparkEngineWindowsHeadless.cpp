@@ -137,13 +137,9 @@ static bool InitHeadlessEngineContext()
     // EngineRuntime gives the no-render device the same bounded startup and
     // teardown lifetime as the other core services without exposing a fake
     // GraphicsEngine to game modules.
-    runtime.headlessRhiBridge = std::make_unique<Spark::RHI::RHIBridge>();
-    if (!runtime.headlessRhiBridge->Initialize(nullptr, 1, 1, Spark::RHI::GraphicsBackend::None, false) ||
-        !runtime.headlessRhiBridge->IsHeadless() ||
-        runtime.headlessRhiBridge->GetActiveBackend() != Spark::RHI::GraphicsBackend::None)
+    if (!runtime.InitializeHeadlessRhi())
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "Windows headless startup could not establish NullRHI");
-        runtime.headlessRhiBridge.reset();
         return false;
     }
 
@@ -156,8 +152,7 @@ static bool InitHeadlessEngineContext()
     if (!ctx)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — headless init aborted");
-        runtime.headlessRhiBridge->Shutdown();
-        runtime.headlessRhiBridge.reset();
+        runtime.ShutdownHeadlessRhi();
         return false;
     }
 

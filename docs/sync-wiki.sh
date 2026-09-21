@@ -139,7 +139,7 @@ collect_inventory() {
     TEST_DEFINITION_COUNT=0
     TEST_FILES=""
     find "$PROJECT_ROOT/Tests" -type f \( -name 'Test*.cpp' -o -name 'Test*.mm' \) \
-        ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | sort > "$tmpfile"
+        ! -name 'TestFramework*' 2>/dev/null | sort > "$tmpfile"
     while IFS= read -r tfile; do
         [ -z "$tfile" ] && continue
         local tname
@@ -240,7 +240,7 @@ sync_testing_page() {
     test_content="*${TEST_FILE_COUNT} test-bearing \`.cpp\`/\`.mm\` files, ${TEST_DEFINITION_COUNT} source-level test definitions*\n\n"
     test_content+="| Test File | Test Definitions |\n|-----------|------------------|\n"
     test_content+=$(find "$PROJECT_ROOT/Tests" -type f \( -name 'Test*.cpp' -o -name 'Test*.mm' \) \
-        ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | \
+        ! -name 'TestFramework*' 2>/dev/null | \
         sort | while IFS= read -r tfile; do
             local tname
             tname=$(basename "$tfile")

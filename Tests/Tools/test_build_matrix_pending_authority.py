@@ -332,7 +332,10 @@ class PendingAuthorityTests(unittest.TestCase):
                 "artifactIdentities": [],
             }
         )
-        with self.assertRaisesRegex(pending.PendingAuthorityError, "no artifact identities"):
+        with self.assertRaisesRegex(
+            pending.PendingAuthorityError,
+            r"target 'BrokenTarget' has no artifact identities",
+        ):
             self.receipt(inventory_document, report)
 
     def test_old_job_local_verified_state_is_rejected(self) -> None:

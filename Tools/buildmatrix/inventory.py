@@ -2421,7 +2421,7 @@ def parse_codemodel_targets(
     targets: dict[tuple[str, str], dict[str, Any]] = {}
     seen_configurations: set[str] = set()
     id_bindings: dict[tuple[str, str], tuple[str, str]] = {}
-    id_semantics: dict[str, tuple[str, str, bool]] = {}
+    id_semantics: dict[str, tuple[str, str, bool, bool]] = {}
     logical_targets: set[tuple[str, str]] = set()
     artifact_owners: dict[tuple[str, str], tuple[str, str]] = {}
     profile_data = load_stable_profile()
@@ -2501,7 +2501,14 @@ def parse_codemodel_targets(
                 raise InventoryError(
                     f"{profile}: codemodel target {name!r} has an invalid isGeneratorProvided marker"
                 )
-            semantics = (name, cmake_type, generator_provided)
+            imported_marker_present = "imported" in target
+            imported_value = target.get("imported", False)
+            if imported_marker_present and not isinstance(imported_value, bool):
+                raise InventoryError(
+                    f"{profile}: codemodel target {name!r} has an invalid imported marker"
+                )
+            imported = imported_value is True
+            semantics = (name, cmake_type, generator_provided, imported)
             previous_semantics = id_semantics.setdefault(reference_id, semantics)
             if previous_semantics != semantics:
                 raise InventoryError(
@@ -2610,15 +2617,16 @@ def parse_codemodel_targets(
                 raise InventoryError(
                     f"{profile}: utility target {name!r} declares linked artifact identity"
                 )
-            if generator_provided:
-                if kind != "utility":
-                    raise InventoryError(
-                        f"{profile}: generator-provided target {name!r} is not a utility"
-                    )
+            if generator_provided and kind != "utility":
+                raise InventoryError(
+                    f"{profile}: generator-provided target {name!r} is not a utility"
+                )
+            if generator_provided or imported:
                 # Generator plumbing remains cryptographically bound in the
                 # consumed raw reply and replyDigest, but is not a configured
-                # product. Omitting it prevents directory-scoped ALL_BUILD
-                # aggregates and ZERO_CHECK from fabricating product identity.
+                # product. Omitting it prevents imported dependencies,
+                # directory-scoped ALL_BUILD aggregates, and ZERO_CHECK from
+                # fabricating product identity.
                 continue
             key = (name, config_name)
             if key in logical_targets:

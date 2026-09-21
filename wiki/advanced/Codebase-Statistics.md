@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-15.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-21.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
@@ -10,15 +10,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321694 |
+| **SparkEngine/Source** | 321721 |
 | **SparkEditor/Source** | 103612 |
 | **GameModules** | 142616 |
-| **External services** | 11283 |
+| **External services** | 11303 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 184335 |
+| **Tests** | 184411 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~780512** |
+| **Total C++ (excl. ThirdParty)** | **~780635** |
 
 ### File Counts
 
@@ -45,7 +45,7 @@ Graphics contains 121219 lines, or 37% of `SparkEngine/Source`. This is a source
 | Graphics | 121219 | 37.6% |
 | Engine (all subsystems) | 89235 | 27.7% |
 | Utils | 46075 | 14.3% |
-| Core | 31217 | 9.7% |
+| Core | 31244 | 9.7% |
 | Physics | 10812 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
@@ -110,7 +110,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 605 |
-| TEST() definitions | 7363 |
+| TEST() definitions | 7365 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics

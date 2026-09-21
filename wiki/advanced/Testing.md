@@ -689,7 +689,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*604 test-bearing `.cpp`/`.mm` files, 7362 source-level test definitions*
+*605 test-bearing `.cpp`/`.mm` files, 7365 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -996,6 +996,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMMOCredentialSecurity` | 3 |
 | `TestMSanCanary` | 2 |
 | `TestMacOSPlatform` | 6 |
+| `TestMain` | 1 |
 | `TestMaterialDefinition` | 10 |
 | `TestMaterialEffects` | 5 |
 | `TestMaterialSystemEdgeCases` | 10 |
@@ -1175,7 +1176,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkGameRacing` | 5 |
 | `TestSparkGatewayCoordinator` | 7 |
 | `TestSparkPak` | 19 |
-| `TestSparkServerApplication` | 23 |
+| `TestSparkServerApplication` | 25 |
 | `TestSpatialGrid` | 16 |
 | `TestSpatialGridReal` | 7 |
 | `TestSplineMath` | 24 |

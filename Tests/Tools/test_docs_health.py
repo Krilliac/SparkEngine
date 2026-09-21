@@ -781,6 +781,30 @@ class RepositoryEvidenceTests(unittest.TestCase):
         ids = tuple(row["id"] for row in contract["generators"])
         self.assertEqual(docs_currentness.REQUIRED_GENERATORS, ids)
 
+    def test_wiki_test_inventory_includes_all_registered_test_sources(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wiki-test-inventory-") as directory:
+            wiki = Path(directory)
+            (wiki / "advanced").mkdir(parents=True)
+            for relative in (Path("Home.md"), Path("advanced") / "Testing.md"):
+                source = REPO_ROOT / "wiki" / relative
+                destination = wiki / relative
+                destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+            git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            command = [str(git_bash if git_bash.is_file() else "bash"), "docs/sync-wiki.sh", "sync"]
+            result = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                env={**os.environ, "SPARK_WIKI_DIR": str(wiki)},
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=120,
+            )
+            self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+            published = (wiki / "advanced" / "Testing.md").read_text(encoding="utf-8")
+            self.assertIn("| `TestMain` | 1 |", published)
+
     def test_check_paths_are_content_based_and_read_only(self) -> None:
         scripts = {
             name: (REPO_ROOT / "docs" / name).read_text(encoding="utf-8")

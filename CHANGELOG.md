@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rolling Debug/Release build aliases and generated checksum/SBOM/provenance metadata for development artifacts; binaries/installers are not code-signed, and none of this is versioned stable-v1 release qualification
 
 ### Changed
+- SparkServer headless startup now owns a real NullRHI device through `EngineRuntime`, advances its frame lifecycle with module ticks, and tears it down after module rollback/shutdown instead of running with a null rendering boundary
 - Failed ModuleHotReload replacements remain pending for retry instead of consuming the watched file change
 - clang-tidy now analyzes the complete shipped-product source inventory and fails closed when its roots or translation units are missing
 - Release preparation now runs the fail-closed dependency, vendored-content, and GitHub Actions pin policy before computing release metadata
@@ -103,6 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runtime packages now include complete deterministic third-party license notices rather than dependency metadata alone
 
 ### Fixed
+- Build-matrix provenance now keeps imported CMake File API dependencies in the hashed raw reply while excluding them from configured product identities; pending-authority failures name the exact target that lacks an artifact identity
+- Wiki test inventory generation now includes the registered runner test in `TestMain.cpp`, keeping Home, Testing, README, badge, and codebase-statistics counts aligned
 - OPS-100 validators now import their bounded JSON parser under a unique module name, so combined test discovery cannot resolve the module-evidence parser in its place
 - SparkBuild documentation now names the repository's Spark Open License and `Working`/`nightly` development channel instead of stale MIT and `main`/`latest` claims
 - Telemetry local export now creates its configured directory before writing, and the OPS-100 spool validator accepts the sequence-range filenames emitted by the runtime while retaining legacy timestamp-only compatibility

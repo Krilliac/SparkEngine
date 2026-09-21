@@ -772,6 +772,87 @@ class PresetAndCodemodelTests(unittest.TestCase):
             ],
         )
 
+    def test_codemodel_imported_dependency_is_not_a_configured_product(self) -> None:
+        evidence = inventory.parse_codemodel_targets(
+            "windows-validation",
+            {
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{
+                        "name": "OpenGL::GL",
+                        "id": "OpenGL::GL::@imported",
+                        "jsonFile": "opengl.json",
+                    }],
+                }]
+            },
+            {
+                "opengl.json": {
+                    "abstract": True,
+                    "codemodelVersion": {"major": 2, "minor": 11},
+                    "name": "OpenGL::GL",
+                    "id": "OpenGL::GL::@imported",
+                    "imported": True,
+                    "local": True,
+                    "paths": {"build": ".", "source": "."},
+                    "sources": [],
+                    "type": "UNKNOWN_LIBRARY",
+                }
+            },
+            Path("C:/synthetic-build"),
+        )
+        self.assertEqual(evidence["targets"], [])
+
+    def test_codemodel_imported_marker_fails_closed(self) -> None:
+        reference = {
+            "name": "Imported::Probe",
+            "id": "Imported::Probe::@synthetic",
+            "jsonFile": "imported.json",
+        }
+        codemodel = {"configurations": [{"name": "Release", "targets": [reference]}]}
+        for marker in (None, 1, "yes"):
+            with self.subTest(marker=marker):
+                with self.assertRaisesRegex(inventory.InventoryError, "invalid imported marker"):
+                    inventory.parse_codemodel_targets(
+                        "windows-validation",
+                        codemodel,
+                        {
+                            "imported.json": {
+                                "name": "Imported::Probe",
+                                "id": "Imported::Probe::@synthetic",
+                                "type": "UNKNOWN_LIBRARY",
+                                "imported": marker,
+                            }
+                        },
+                        Path("C:/synthetic-build"),
+                    )
+
+    def test_codemodel_explicit_nonimported_marker_remains_a_configured_product(self) -> None:
+        evidence = inventory.parse_codemodel_targets(
+            "windows-validation",
+            {
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{
+                        "name": "LocalProbe",
+                        "id": "LocalProbe::@synthetic",
+                        "jsonFile": "local.json",
+                    }],
+                }]
+            },
+            {
+                "local.json": {
+                    "name": "LocalProbe",
+                    "id": "LocalProbe::@synthetic",
+                    "type": "STATIC_LIBRARY",
+                    "imported": False,
+                    "nameOnDisk": "LocalProbe.lib",
+                    "artifacts": [{"path": "lib/Release/LocalProbe.lib"}],
+                }
+            },
+            Path("C:/synthetic-build"),
+        )
+        self.assertEqual([target["target"] for target in evidence["targets"]], ["LocalProbe"])
+
     def test_multiconfig_generator_utilities_are_validated_then_omitted(self) -> None:
         build_directory = (TEST_TEMP_ROOT / "synthetic-multiconfig").resolve()
         configurations = ["Debug", "Release", "MinSizeRel", "RelWithDebInfo"]
@@ -946,6 +1027,41 @@ class PresetAndCodemodelTests(unittest.TestCase):
                 codemodel,
                 generator_documents,
                 (TEST_TEMP_ROOT / "synthetic-semantics").resolve(),
+            )
+
+        imported_codemodel = {
+            "configurations": [
+                {
+                    "name": "Release",
+                    "targets": [{"name": "Stable", "id": shared_id, "jsonFile": "local.json"}],
+                },
+                {
+                    "name": "Debug",
+                    "targets": [{"name": "Stable", "id": shared_id, "jsonFile": "imported.json"}],
+                },
+            ]
+        }
+        imported_documents = {
+            "local.json": {
+                "name": "Stable",
+                "id": shared_id,
+                "type": "UNKNOWN_LIBRARY",
+                "nameOnDisk": "Stable.lib",
+                "artifacts": [{"path": "bin/Release/Stable.lib"}],
+            },
+            "imported.json": {
+                "name": "Stable",
+                "id": shared_id,
+                "type": "UNKNOWN_LIBRARY",
+                "imported": True,
+            },
+        }
+        with self.assertRaisesRegex(inventory.InventoryError, "identifies inconsistent targets"):
+            inventory.parse_codemodel_targets(
+                "windows-validation",
+                imported_codemodel,
+                imported_documents,
+                (TEST_TEMP_ROOT / "synthetic-imported-semantics").resolve(),
             )
 
     def test_generator_marker_and_linked_identity_fields_fail_closed(self) -> None:

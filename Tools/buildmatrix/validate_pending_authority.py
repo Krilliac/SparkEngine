@@ -219,11 +219,16 @@ def _validate_inventory(inventory_document: dict[str, Any]) -> tuple[str, list[d
             target = _require_mapping(raw_target, f"{identifier} target {offset}")
             if target.get("artifactState") != "locally-observed-post-build":
                 raise PendingAuthorityError(f"{identifier}: target artifact was not observed post-build")
+            target_name = target.get("target")
+            if not isinstance(target_name, str) or not target_name:
+                raise PendingAuthorityError(f"{identifier} target {offset}: target has no name")
             identities = _require_list(
                 target.get("artifactIdentities"), f"{identifier} target artifact identities", 32
             )
             if not identities and str(target.get("kind", "")).lower() != "utility":
-                raise PendingAuthorityError(f"{identifier}: target has no artifact identities")
+                raise PendingAuthorityError(
+                    f"{identifier}: target {target_name!r} has no artifact identities"
+                )
 
         ci = {
             "provider": str(provenance.get("ciProvider", "")),
