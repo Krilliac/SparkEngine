@@ -336,6 +336,24 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
             "asset integrity must be validated before module validation",
         )
 
+    def test_installed_fps_package_wires_d3d11_smoke_after_module_validation(self) -> None:
+        package_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSPackage.cmake"
+        smoke_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSD3D11.cmake"
+        package_text = package_script.read_text(encoding="utf-8")
+        smoke_text = smoke_script.read_text(encoding="utf-8")
+        module_position = package_text.find("ValidateStagedPackageExecutables.cmake")
+        d3d11_position = package_text.find("RunInstalledFPSD3D11.cmake")
+        save_position = package_text.find("RunInstalledFPSSaveReload.cmake")
+        self.assertGreaterEqual(module_position, 0, "installed FPS package must invoke module validator")
+        self.assertGreaterEqual(d3d11_position, 0, "installed FPS package must invoke D3D11 smoke")
+        self.assertGreaterEqual(save_position, 0, "installed FPS package must retain save/reload smoke")
+        self.assertLess(module_position, d3d11_position)
+        self.assertLess(d3d11_position, save_position)
+        self.assertIn('"SPARK_RHI_BACKEND=d3d11"', smoke_text)
+        self.assertIn('"SPARK_D3D11_DRIVER=warp"', smoke_text)
+        self.assertIn("_spark_validate_lifecycle_result", smoke_text)
+        self.assertIn("-test-frames 8", smoke_text)
+
 
 class ManifestValidationTests(unittest.TestCase):
     def test_valid_manifest_hashes_each_disk_file_only_once(self) -> None:

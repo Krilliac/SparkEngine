@@ -115,6 +115,13 @@ _run_checked("Validate installed FPS runtime package" 120
     "-DSPARK_EXECUTABLE_SUFFIX=.exe"
     -P "${SPARK_SOURCE_ROOT}/cmake/ValidateStagedPackageExecutables.cmake")
 
+_run_checked("Run installed FPS D3D11/WARP executable smoke" 150
+    "${CMAKE_COMMAND}"
+    "-DSPARK_INSTALLED_ROOT=${_install_root}"
+    "-DSPARK_SOURCE_ROOT=${SPARK_SOURCE_ROOT}"
+    "-DSPARK_TEST_ROOT=${_run_root}/d3d11-smoke"
+    -P "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/RunInstalledFPSD3D11.cmake")
+
 _run_checked("Validate installed FPS save/reload persistence" 210
     "${CMAKE_COMMAND}"
     "-DSPARK_INSTALLED_ROOT=${_install_root}"
