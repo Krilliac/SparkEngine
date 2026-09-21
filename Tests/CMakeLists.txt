@@ -1801,6 +1801,26 @@ if(Python3_Interpreter_FOUND)
             TIMEOUT 30)
     endif()
 
+    # CI-110: prove the shipped automation host can launch the production
+    # engine and FPS module through the bounded Windows NullRHI lifecycle. The
+    # direct NullRHI lifecycle test remains separate; this test specifically
+    # covers SparkAutomation's process, timeout, and report contract.
+    if(WIN32 AND TARGET SparkAutomation AND TARGET SparkEngine AND TARGET SparkGameFPS)
+        add_dependencies(SparkTests SparkAutomation SparkEngine SparkGameFPS)
+        add_test(
+            NAME SparkAutomationNullRHIExecutableSmoke
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_AUTOMATION=$<TARGET_FILE:SparkAutomation>"
+                "-DSPARK_ENGINE=$<TARGET_FILE:SparkEngine>"
+                "-DSPARK_GAME=$<TARGET_FILE:SparkGameFPS>"
+                "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+                -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkAutomationNullRHISmoke.cmake)
+        set_tests_properties(SparkAutomationNullRHIExecutableSmoke PROPERTIES
+            LABELS "release;automation;nullrhi;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 135)
+    endif()
+
     add_test(
         NAME AsyncDatabaseDurabilityContract
         COMMAND ${Python3_EXECUTABLE}
