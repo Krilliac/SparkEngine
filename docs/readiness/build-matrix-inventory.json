@@ -625,10 +625,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3372,
+      "line": 3374,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3368",
+          "id": "CMakeLists.txt:3370",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1395,7 +1395,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1727,
+      "line": 1738,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1446,10 +1446,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3372,
+      "line": 3374,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3368",
+          "id": "CMakeLists.txt:3370",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1481,7 +1481,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1311,
+      "line": 1312,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2454,7 +2454,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 708,
+      "line": 709,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2575,7 +2575,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 674,
+      "line": 675,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2699,7 +2699,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 815,
+      "line": 816,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2710,6 +2710,16 @@
       "kind": "executable",
       "file": "Tests/Fuzz/CMakeLists.txt",
       "line": 10,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzNeuralWeights",
+      "kind": "executable",
+      "file": "Tests/Fuzz/CMakeLists.txt",
+      "line": 48,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2859,10 +2869,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 695,
+      "line": 696,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:694",
+          "id": "Tests/CMakeLists.txt:695",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -2990,7 +3000,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 712,
+      "line": 713,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3000,7 +3010,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 706,
+      "line": 707,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3010,7 +3020,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 714,
+      "line": 715,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3040,10 +3050,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 687,
+      "line": 688,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:686",
+          "id": "Tests/CMakeLists.txt:687",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -3080,7 +3090,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 710,
+      "line": 711,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3090,7 +3100,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 820,
+      "line": 821,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3140,7 +3150,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 716,
+      "line": 717,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3172,7 +3182,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 810,
+      "line": 811,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3182,7 +3192,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 663,
+      "line": 664,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3440,7 +3450,7 @@
       "target": "spark_fps_abilities_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 124,
+      "line": 141,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3450,7 +3460,7 @@
       "target": "spark_fps_assets_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 52,
+      "line": 69,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3470,7 +3480,17 @@
       "target": "spark_fps_inventory_quests_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 136,
+      "line": 153,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_fps_module_api_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 34,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3480,7 +3500,7 @@
       "target": "spark_fps_progression_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 32,
+      "line": 50,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3490,7 +3510,7 @@
       "target": "spark_fps_weapons_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 75,
+      "line": 92,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4050,7 +4070,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 708,
+          "line": 709,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4196,7 +4216,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 674,
+          "line": 675,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4322,7 +4342,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 815,
+          "line": 816,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4341,6 +4361,24 @@
         {
           "file": "Tests/Fuzz/CMakeLists.txt",
           "line": 10,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzNeuralWeights",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/Fuzz/CMakeLists.txt",
+          "line": 48,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4610,7 +4648,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 695,
+          "line": 696,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4746,7 +4784,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 712,
+          "line": 713,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4764,7 +4802,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 706,
+          "line": 707,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4782,7 +4820,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 714,
+          "line": 715,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4820,7 +4858,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 687,
+          "line": 688,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4876,7 +4914,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 710,
+          "line": 711,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4894,7 +4932,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 820,
+          "line": 821,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4984,7 +5022,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 716,
+          "line": 717,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5040,7 +5078,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 810,
+          "line": 811,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5058,7 +5096,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 663,
+          "line": 664,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5302,7 +5340,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 124,
+          "line": 141,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5320,7 +5358,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 52,
+          "line": 69,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5356,7 +5394,25 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 136,
+          "line": 153,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_fps_module_api_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 34,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5374,7 +5430,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 32,
+          "line": 50,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5392,7 +5448,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 75,
+          "line": 92,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5963,7 +6019,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "c0fad0249e6b10c6"
+            "runDigest": "f23daec8d3011586"
           },
           {
             "index": 5,
@@ -10757,10 +10813,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights",
         "commandProvenance": "literal",
         "targets": [
-          "SparkFuzzJsonUtils"
+          "SparkFuzzJsonUtils",
+          "SparkFuzzNeuralWeights"
         ],
         "configuration": "",
         "buildDir": "build/fuzz-policy",
@@ -13737,10 +13794,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights",
         "commandProvenance": "literal",
         "targets": [
-          "SparkFuzzJsonUtils"
+          "SparkFuzzJsonUtils",
+          "SparkFuzzNeuralWeights"
         ],
         "configuration": "",
         "buildDir": "build/fuzz-policy",
