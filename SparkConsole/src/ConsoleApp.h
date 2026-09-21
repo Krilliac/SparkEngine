@@ -122,7 +122,7 @@ class ConsoleApp
     // --- State ---
     std::atomic<bool> m_running;     ///< False signals all threads to exit.
     bool m_enginePipeRequested;      ///< True only when launched by an engine/editor IPC parent.
-    bool m_batchMode;                 ///< True when running the deterministic noninteractive CLI contract.
+    bool m_batchMode;                ///< True when running the deterministic noninteractive CLI contract.
     std::thread m_engineInputThread; ///< Background thread reading engine pipe input.
     std::mutex m_outputMutex;        ///< Serializes console output from multiple threads.
     std::mutex m_historyMutex;       ///< Guards m_commandHistory.
