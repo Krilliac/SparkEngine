@@ -2706,6 +2706,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzCrashManifest",
+      "kind": "executable",
+      "file": "Tests/Fuzz/CMakeLists.txt",
+      "line": 103,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzJsonUtils",
       "kind": "executable",
       "file": "Tests/Fuzz/CMakeLists.txt",
@@ -4345,6 +4355,24 @@
           "line": 816,
           "kind": "shared_library",
           "origin": "wrapper-call",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzCrashManifest",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/Fuzz/CMakeLists.txt",
+          "line": 103,
+          "kind": "executable",
+          "origin": "declaration",
           "definitionScope": [],
           "resolved": true
         }
