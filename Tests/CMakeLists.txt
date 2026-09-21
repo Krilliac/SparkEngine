@@ -1764,6 +1764,25 @@ endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    # CI-110: exercise the actual shipped Windows shader compiler binary. The
+    # test is intentionally Windows-only because D3DCompiler is the only
+    # integrated HLSL backend; non-Windows builds must not report a fake pass.
+    if(WIN32 AND TARGET SparkShaderCompiler)
+        if(TARGET SparkTests)
+            add_dependencies(SparkTests SparkShaderCompiler)
+        endif()
+        add_test(
+            NAME SparkShaderCompilerExecutableSmoke
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_SHADER_COMPILER=$<TARGET_FILE:SparkShaderCompiler>"
+                "-DSPARK_SHADER_FIXTURE=${CMAKE_SOURCE_DIR}/Tests/Fixtures/ShaderCompiler/BasicVS.hlsl"
+                "-DSPARK_SHADER_OUTPUT_DIR=${CMAKE_BINARY_DIR}/shader-compiler-smoke"
+                -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkShaderCompilerSmoke.cmake)
+        set_tests_properties(SparkShaderCompilerExecutableSmoke PROPERTIES
+            LABELS "release;shader;process"
+            TIMEOUT 30)
+    endif()
+
     add_test(
         NAME AsyncDatabaseDurabilityContract
         COMMAND ${Python3_EXECUTABLE}
