@@ -207,7 +207,7 @@
 | `CS` | alias | SparkEngine | [EngineSettings.cpp:L88](../../SparkEngine/Source/Core/EngineSettings.cpp#L88) |  |
 | `CustomConditionEvaluator` | alias | SparkEngine | [ConditionSystem.h:L102](../../SparkEngine/Source/Engine/Gameplay/ConditionSystem.h#L102) |  |
 | `CustomConditionEvaluator` | alias | Tests | [TestConditionSystem.cpp:L65](../../Tests/TestConditionSystem.cpp#L65) |  |
-| `CustomStateValidator` | alias | SparkEngine | [SaveSystem.h:L411](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L411) |  |
+| `CustomStateValidator` | alias | SparkEngine | [SaveSystem.h:L414](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L414) |  |
 | `DaemonStatsProvider` | alias | SparkDaemon | [ControlService.h:L23](../../SparkDaemon/src/ControlService.h#L23) | Provides the live DaemonStats reply for `StatsRequest`. |
 | `DatablockID` | alias | SparkEngine | [DatablockRegistry.h:L50](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L50) | Unique identifier for a datablock (assigned at registration time) |
 | `DatablockValue` | alias | SparkEngine | [DatablockRegistry.h:L47](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L47) | A single named value within a datablock |
@@ -255,7 +255,7 @@
 | `DecS` | alias | SparkEngine | [EngineSettings.cpp:L589](../../SparkEngine/Source/Core/EngineSettings.cpp#L589) |  |
 | `DEFINE_ENUM_UTILS` | macro | SparkEngine | [EnumUtils.h:L119](../../SparkEngine/Source/Enums/EnumUtils.h#L119) | Macro to help define enum utility specializations |
 | `DEFINE_GENERATOR` | macro | Tests | [TestMovementSystem.cpp:L46](../../Tests/TestMovementSystem.cpp#L46) |  |
-| `DeserializeFunc` | alias | SparkEngine | [SaveSystem.h:L183](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L183) | Function signature for component deserialization. |
+| `DeserializeFunc` | alias | SparkEngine | [SaveSystem.h:L186](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L186) | Function signature for component deserialization. |
 | `DestroyGameModuleFn` | alias | SparkEngine | [IGameModule.h:L92](../../SparkEngine/Source/Core/IGameModule.h#L92) | Function signature for destroying the game module |
 | `DestroyGameModuleFn` | alias | SparkEngine | [ModuleManager.h:L38](../../SparkEngine/Source/Core/ModuleManager.h#L38) |  |
 | `DestroyModuleFn` | alias | SparkSDK | [IModule.h:L186](../../SparkSDK/Include/Spark/IModule.h#L186) |  |
@@ -322,7 +322,7 @@
 | `EntityID` | alias | Tests | [TestSceneSerializer.cpp:L31](../../Tests/TestSceneSerializer.cpp#L31) |  |
 | `EntityId` | alias | Tests | [TestSelectionManager.cpp:L19](../../Tests/TestSelectionManager.cpp#L19) |  |
 | `EntityId` | alias | Tests | [TestSpatialGrid.cpp:L45](../../Tests/TestSpatialGrid.cpp#L45) |  |
-| `EntityPayloadStorage` | alias | SparkEngine | [SaveSystem.cpp:L1703](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1703) |  |
+| `EntityPayloadStorage` | alias | SparkEngine | [SaveSystem.cpp:L1879](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1879) |  |
 | `EntityTemplateCreator` | alias | SparkEditor | [ObjectPlacementPanel.h:L76](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L76) |  |
 | `EntityVisitor` | alias | SparkEngine | [SpatialGrid.h:L91](../../SparkEngine/Source/Engine/World/SpatialGrid.h#L91) |  |
 | `EntryIter` | alias | SparkDaemon | [AssetService.h:L105](../../SparkDaemon/src/AssetService.h#L105) |  |
@@ -639,7 +639,7 @@
 | `KillcamNotifyFn` | alias | GameModules | [TFDeathRecap.h:L80](../../GameModules/SparkGameMMOFPS/Source/UI/TFDeathRecap.h#L80) |  |
 | `LanBroadcastSocketFactory` | alias | SparkEngine | [DedicatedServer.h:L189](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L189) | Immutable state consumed by one LAN broadcast iteration. |
 | `LayerEvalFunc` | alias | SparkEngine | [CpuNeuralInference.cpp:L32](../../SparkEngine/Source/Graphics/Neural/CpuNeuralInference.cpp#L32) |  |
-| `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1135](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1135) |  |
+| `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1511](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1511) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L102](../../Tests/TestTypeTraits.cpp#L102) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L114](../../Tests/TestTypeTraits.cpp#L114) |  |
 | `LoadCompletionCallback` | alias | SparkEngine | [DirectStorageLoader.h:L66](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L66) | Callback invoked when a load completes |
@@ -718,7 +718,7 @@
 | `NOMINMAX` | macro | SparkEngine | [DynamicPluginHost.cpp:L32](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L32) |  |
 | `NOMINMAX` | macro | SparkEngine | [GameImGuiLayer.h:L31](../../SparkEngine/Source/Core/GameImGuiLayer.h#L31) |  |
 | `NOMINMAX` | macro | SparkEngine | [AsyncDatabase.cpp:L23](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L23) |  |
-| `NOMINMAX` | macro | SparkEngine | [SaveSystem.cpp:L26](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L26) |  |
+| `NOMINMAX` | macro | SparkEngine | [SaveSystem.cpp:L28](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L28) |  |
 | `NOMINMAX` | macro | SparkEngine | [ReflectedScenePersistence.cpp:L13](../../SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp#L13) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashArtifactDirectory.h:L18](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L18) |  |
 | `NOMINMAX` | macro | SparkEngine | [CrashHandlerSupport.h:L29](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L29) |  |
@@ -758,7 +758,7 @@
 | `PasswordBuffer` | alias | Tests | [TestMMOCredentialSecurity.cpp:L13](../../Tests/TestMMOCredentialSecurity.cpp#L13) |  |
 | `PawnInfo` | alias | GameModules | [TFPlayerSystem.h:L42](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystem.h#L42) |  |
 | `PayloadStorage` | alias | SparkEngine | [ComponentReflection.cpp:L304](../../SparkEngine/Source/Core/ComponentReflection.cpp#L304) |  |
-| `PayloadStorage` | alias | Tests | [Test_persistence_SaveSystem.cpp:L418](../../Tests/harden/Test_persistence_SaveSystem.cpp#L418) |  |
+| `PayloadStorage` | alias | Tests | [Test_persistence_SaveSystem.cpp:L486](../../Tests/harden/Test_persistence_SaveSystem.cpp#L486) |  |
 | `pclose` | macro | SparkEditor | [VersionControlRender.cpp:L16](../../SparkEditor/Source/VersionControl/VersionControlRender.cpp#L16) |  |
 | `PeerConnectedCallback` | alias | SparkEditor | [CollaborativeEditSession.h:L159](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L159) |  |
 | `PeerDisconnectedCallback` | alias | SparkEditor | [CollaborativeEditSession.h:L160](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L160) |  |
@@ -822,7 +822,7 @@
 | `RecompileCallback` | alias | Tests | [TestScriptHotReload.cpp:L44](../../Tests/TestScriptHotReload.cpp#L44) |  |
 | `REFIID` | alias | SparkEngine | [PlatformD3DStubs.h:L31](../../SparkEngine/Source/Core/PlatformD3DStubs.h#L31) |  |
 | `RegionId` | alias | GameModules | [TFTypes.h:L65](../../GameModules/SparkGameMMOFPS/Source/Core/TFTypes.h#L65) |  |
-| `RegistrationMap` | alias | SparkEngine | [SaveSystem.h:L192](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L192) |  |
+| `RegistrationMap` | alias | SparkEngine | [SaveSystem.h:L195](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L195) |  |
 | `ReloadCallback` | alias | SparkEngine | [ModuleHotReload.h:L85](../../SparkEngine/Source/Engine/HotReload/ModuleHotReload.h#L85) | Callback signature for module lifecycle during hot-reload |
 | `RemoveFn` | alias | SparkEngine | [Reflection.h:L296](../../SparkEngine/Source/Core/Reflection.h#L296) |  |
 | `RENDER_REFLECTED_COMPONENT` | macro | SparkEditor | [InspectorComponentRenderers_ReflectedInternal.h:L40](../../SparkEditor/Source/Panels/InspectorComponentRenderers_ReflectedInternal.h#L40) |  |
@@ -870,7 +870,7 @@
 | `SequenceNumber` | alias | SparkEngine | [NetworkManager.h:L90](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L90) |  |
 | `SequenceNumber` | alias | Tests | [TestNetworkManagerOrchestration.cpp:L27](../../Tests/TestNetworkManagerOrchestration.cpp#L27) |  |
 | `SequenceNumber` | alias | Tests | [TestReliableChannel.cpp:L18](../../Tests/TestReliableChannel.cpp#L18) |  |
-| `SerializeFunc` | alias | SparkEngine | [SaveSystem.h:L174](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L174) | Function signature for component serialization. |
+| `SerializeFunc` | alias | SparkEngine | [SaveSystem.h:L177](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L177) | Function signature for component serialization. |
 | `SessionKey` | alias | SparkEngine | [NetworkEncryption.h:L47](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L47) |  |
 | `SessionKey` | alias | Tests | [TestNetworkEncryption.cpp:L27](../../Tests/TestNetworkEncryption.cpp#L27) |  |
 | `SettingsChangedCallback` | alias | SparkEngine | [EngineSettings.h:L1072](../../SparkEngine/Source/Core/EngineSettings.h#L1072) |  |

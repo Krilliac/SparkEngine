@@ -10,22 +10,22 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321824 |
+| **SparkEngine/Source** | 321975 |
 | **SparkEditor/Source** | 103641 |
-| **GameModules** | 142616 |
+| **GameModules** | 142529 |
 | **External services** | 11305 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 184740 |
+| **Tests** | 185181 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~781098** |
+| **Total C++ (excl. ThirdParty)** | **~781603** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1062 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1588 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1063 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1589 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
@@ -43,9 +43,9 @@ Graphics contains 121310 lines, or 37% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 121310 | 37.6% |
-| Engine (all subsystems) | 89235 | 27.7% |
-| Utils | 46075 | 14.3% |
-| Core | 31244 | 9.7% |
+| Engine (all subsystems) | 89357 | 27.7% |
+| Utils | 46127 | 14.3% |
+| Core | 31221 | 9.6% |
 | Physics | 10812 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
@@ -64,7 +64,7 @@ Graphics contains 121310 lines, or 37% of `SparkEngine/Source`. This is a source
 | Gameplay | 7925 |
 | Animation | 6876 |
 | Scripting | 5096 |
-| SaveSystem | 3733 |
+| SaveSystem | 3855 |
 | UI | 2522 |
 | Streaming | 2123 |
 | Editor | 1737 |
@@ -110,7 +110,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 606 |
-| TEST() definitions | 7371 |
+| TEST() definitions | 7380 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -156,7 +156,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `SaveSystem.cpp` | 2369 |
+| `SaveSystem.cpp` | 2485 |
 | `OpenGLDevice.cpp` | 2160 |
 | `ModuleManager.cpp` | 2089 |
 | `CrashHandler.cpp` | 2018 |
@@ -178,7 +178,7 @@ inventory is implementation evidence, not support certification.
 | `EngineSettings.h` | 1152 |
 | `NetworkManager.h` | 943 |
 | `RemoteDebugSystem.h` | 874 |
-| `SaveSystem.h` | 860 |
+| `SaveSystem.h` | 866 |
 | `ECSystems.h` | 846 |
 | `PhysicsTypes.h` | 828 |
 

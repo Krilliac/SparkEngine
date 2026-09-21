@@ -59,7 +59,7 @@
 | `AssetLoadType` | enum | Tests | [TestAssetStallDetector.cpp:L20](../../Tests/TestAssetStallDetector.cpp#L20) |  |
 | `AssetMessage` | enum | SparkEngine | [AssetServiceProtocol.h:L34](../../SparkEngine/Source/Utils/AssetServiceProtocol.h#L34) |  |
 | `AssetType` | enum | SparkEditor | [AssetPipelineTypes.h:L25](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L25) | Asset types supported by the pipeline |
-| `AssetType` | enum | SparkEngine | [AssetMigration.h:L60](../../SparkEngine/Source/Core/AssetMigration.h#L60) | Discriminator for the kind of asset stored in a binary file. |
+| `AssetType` | enum | SparkEngine | [AssetMigration.h:L61](../../SparkEngine/Source/Core/AssetMigration.h#L61) | Discriminator for the kind of asset stored in a binary file. |
 | `AssetType` | enum | SparkEngine | [AssetPipeline.h:L49](../../SparkEngine/Source/Graphics/AssetPipeline.h#L49) | Asset types supported by the pipeline |
 | `AssetType` | enum | Tests | [TestAssetPipelineCache.cpp:L26](../../Tests/TestAssetPipelineCache.cpp#L26) |  |
 | `AuctionDuration` | enum | GameModules | [MMOEnums.h:L130](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L130) | Auction house listing duration |

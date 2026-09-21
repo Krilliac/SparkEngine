@@ -696,7 +696,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*606 test-bearing `.cpp`/`.mm` files, 7371 source-level test definitions*
+*606 test-bearing `.cpp`/`.mm` files, 7380 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1298,7 +1298,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `Test_persistence_AsyncDatabasePool` | 4 |
 | `Test_persistence_ModSystem` | 2 |
 | `Test_persistence_ReplaySystem` | 3 |
-| `Test_persistence_SaveSystem` | 34 |
+| `Test_persistence_SaveSystem` | 43 |
 | `Test_scripting_hardening` | 8 |
 | `Test_tests_ecsystemordering_real` | 5 |
 | `Test_tests_enginecontext_real` | 8 |
