@@ -30,7 +30,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
 | Test-bearing implementation files (.cpp/.mm) | 607 |
-| Wiki pages (.md) | 201 |
+| Wiki pages (.md) | 202 |
 
 ### Largest Top-Level Source Section
 
