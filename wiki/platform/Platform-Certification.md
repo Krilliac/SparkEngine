@@ -149,14 +149,20 @@ an old-to-new transaction, `.github/scripts/qualify-windows-msi.py` requires
 together with all three predecessor artifact arguments. It verifies a valid,
 timestamped Authenticode signature from that publisher on the private MSI copy
 before any Windows Installer command, and keeps that copy locked through its
-initial installation. `previous-signature.json` binds the checked publisher
+initial installation. The current MSI is locked and its digest rechecked before
+the `/fvomus` repair command; the lock remains held until that command exits.
+`previous-signature.json` binds the checked publisher
 and native signature result to the predecessor bytes; it is signature evidence,
 not proof that the installation or upgrade passed.
 
 This foundation does not admit a bootstrap release, provision signing authority,
-or certify Windows 11. The release controller must explicitly supply the trusted
-predecessor thumbprint; hosted signed-artifact and supported-host execution remain
-required evidence.
+or certify Windows 11. The release controller supplies the externally provisioned
+`SPARK_PREVIOUS_RELEASE_SIGNER_THUMBPRINT` repository/environment variable explicitly
+to the qualifier. The release owner must set it to the authorized predecessor
+publisher's 40-hex Authenticode certificate thumbprint; it is not inferred from
+the downloaded MSI or the current release's signer. An absent, malformed, or
+mismatched value blocks qualification. Hosted signed-artifact and supported-host
+execution remain required evidence.
 
 ## Related Pages
 

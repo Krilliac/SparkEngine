@@ -41,6 +41,15 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         self.assertIn("extract_release_signature_bundle.py", block)
         self.assertIn("RUNNER_TEMP/spark-release-signature-bundle", block)
 
+    def test_msi_qualification_supplies_explicit_external_predecessor_publisher(self) -> None:
+        start = self.text.index("- name: Qualify Windows stable MSI install upgrade rollback repair and uninstall")
+        block = self.text[start:self.text.index("\n    - name:", start + 10)]
+        invocation = block[block.index("python .github/scripts/qualify-windows-msi.py"):]
+        self.assertEqual(invocation.count("--previous-signer-thumbprint"), 1)
+        self.assertIn('--previous-signer-thumbprint "${{ vars.SPARK_PREVIOUS_RELEASE_SIGNER_THUMBPRINT }}" `',
+                      invocation)
+        self.assertIn("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }", invocation)
+
 
 if __name__ == "__main__":
     unittest.main()

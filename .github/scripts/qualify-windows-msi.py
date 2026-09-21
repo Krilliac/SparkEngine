@@ -488,8 +488,11 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
             with _hold_private_msi_identity(old_package):
                 if package_digest(old_package) != old_digest:
                     raise ValueError("private previous MSI changed before upgraded identity validation")
-            execute("repair", [msiexec, "/fvomus", str(package), "/qn", "/norestart", "/L*V",
-                                str(logs / "msi-repair.log"), f"INSTALL_ROOT={install_root}"])
+            with _hold_private_msi_identity(package):
+                if package_digest(package) != digest:
+                    raise ValueError("private MSI changed before repair")
+                execute("repair", [msiexec, "/fvomus", str(package), "/qn", "/norestart", "/L*V",
+                                    str(logs / "msi-repair.log"), f"INSTALL_ROOT={install_root}"])
             verify_user_data("upgrade+repair")
         with _hold_private_msi_identity(package):
             if package_digest(package) != digest:

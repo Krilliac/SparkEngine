@@ -618,6 +618,96 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertTrue(state.get("user_data_preserved"))
             self.assertTrue(state["user_data_path"].is_file())
 
+    @unittest.skipUnless(os.name == "nt", "Windows sharing-mode mutation protection")
+    def test_repair_keeps_verified_msi_locked_against_write_replace_and_parent_rename(self):
+        for operation in ("write", "replace", "parent-rename"):
+            with self.subTest(operation=operation), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                calls = []
+                state = {"installed": False, "version": None, "repaired": False}
+                native_fixture = self._identity_runner(calls, state)
+                boundary = {}
+
+                def attempt_replacement(argv, log, **kwargs):
+                    if "/fvomus" in argv:
+                        selected = Path(argv[argv.index("/fvomus") + 1])
+                        replacement = root / "replacement.msi"
+                        replacement.write_bytes(b"unverified repair payload")
+                        relocated = selected.parent.with_name(selected.parent.name + "-relocated")
+                        try:
+                            if operation == "write":
+                                selected.write_bytes(replacement.read_bytes())
+                            elif operation == "replace":
+                                os.replace(replacement, selected)
+                            else:
+                                selected.parent.rename(relocated)
+                                selected.parent.mkdir()
+                                selected.write_bytes(replacement.read_bytes())
+                        except OSError:
+                            boundary["blocked"] = True
+                        else:
+                            boundary["blocked"] = False
+                        boundary["bytes"] = selected.read_bytes()
+                        # Restore only this test's private fixture if the old
+                        # implementation let the adversarial mutation succeed.
+                        if not boundary["blocked"]:
+                            if operation == "parent-rename":
+                                selected.unlink()
+                                selected.parent.rmdir()
+                                relocated.rename(selected.parent)
+                            else:
+                                selected.write_bytes(b"new fixture MSI")
+                    return native_fixture(argv, log, **kwargs)
+
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=root / "repair-mutation",
+                    runner=attempt_replacement,
+                )
+                self.assertEqual(result, 0)
+                self.assertTrue(boundary["blocked"], f"{operation} reached the repair boundary")
+                self.assertEqual(boundary["bytes"], b"new fixture MSI")
+
+    def test_repair_rechecks_digest_after_reacquiring_identity_lock(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False}
+            native_fixture = self._identity_runner(calls, state)
+            original_hold = MODULE._hold_private_msi_identity
+            replace_after_check = False
+
+            @contextlib.contextmanager
+            def replace_between_checks(path):
+                nonlocal replace_after_check
+                with original_hold(path):
+                    yield
+                if replace_after_check and "1.2.3" in path.name:
+                    replace_after_check = False
+                    path.write_bytes(b"unverified repair payload")
+
+            def arm_replacement(argv, log, **kwargs):
+                nonlocal replace_after_check
+                result = native_fixture(argv, log, **kwargs)
+                if log.name == "identity-upgraded.log":
+                    replace_after_check = True
+                return result
+
+            logs = root / "repair-revalidation"
+            with mock.patch.object(MODULE, "_hold_private_msi_identity", replace_between_checks):
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=logs, runner=arm_replacement,
+                )
+            self.assertNotEqual(result, 0)
+            self.assertFalse(any("/fvomus" in call for call in calls), "Unverified repair was dispatched")
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertIn("private MSI changed before repair", report["errors"])
+
     def test_final_uninstall_removes_registration_and_all_owned_residue(self):
         """A successful transaction must finish with no registered product or owned residue."""
         with tempfile.TemporaryDirectory() as raw:

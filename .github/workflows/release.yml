@@ -380,6 +380,7 @@ jobs:
           --previous-packages $previousPackages `
           --previous-version $previousVersion `
           --previous-package-manifest $previousManifest `
+          --previous-signer-thumbprint "${{ vars.SPARK_PREVIOUS_RELEASE_SIGNER_THUMBPRINT }}" `
           --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `
           --source-sha "${{ github.sha }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
