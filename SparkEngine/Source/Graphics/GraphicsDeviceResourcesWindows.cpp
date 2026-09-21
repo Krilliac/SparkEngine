@@ -28,6 +28,7 @@
 
 #include <string>
 #include <cstdint>
+#include <cstdio>
 #include <cwchar>
 #include <cstring>
 #include <utility>
@@ -77,8 +78,7 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     if (useWarp)
     {
         SPARK_LOG_INFO("Graphics",
-                       "SPARK_D3D11_DEVICE driver=warp certification=software-only; "
-                       "creating explicit WARP D3D11 device (flags=0x%X)",
+                       "Creating explicit WARP D3D11 device (flags=0x%X)",
                        createDeviceFlags);
     }
     else
@@ -97,6 +97,15 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
                         useWarp ? " The software-only lifecycle smoke cannot continue."
                                 : " Check GPU driver installation and DirectX 11 support.");
         return hr;
+    }
+
+    // Emit one fixed, logger-free wire record after successful creation. The
+    // release smoke parser treats any prefixed or malformed token as invalid,
+    // so this marker cannot be supplied by a logger decoration or lookalike.
+    if (useWarp)
+    {
+        std::fputs("SPARK_D3D11_DEVICE driver=warp certification=software-only\n", stdout);
+        std::fflush(stdout);
     }
 
     // Log the feature level we got

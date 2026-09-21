@@ -352,6 +352,8 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
         self.assertIn('"SPARK_RHI_BACKEND=d3d11"', smoke_text)
         self.assertIn('"SPARK_D3D11_DRIVER=warp"', smoke_text)
         self.assertIn("_spark_validate_lifecycle_result", smoke_text)
+        self.assertIn("asset_root_guard=installed-bin", smoke_text)
+        self.assertIn("source tree as its package root", smoke_text)
         self.assertIn("-test-frames 8", smoke_text)
 
 

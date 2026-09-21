@@ -15,21 +15,32 @@ function(_spark_validate_lifecycle_result child_result child_stdout child_stderr
         string(REPLACE "\r\n" "\n" _stderr "${_stderr}")
         string(REPLACE "\r" "\n" _stderr "${_stderr}")
 
-        # Require exactly one standalone record. Logger-prefixed copies are
-        # deliberately excluded: only the post-teardown wWinMain write is
-        # admissible evidence.
+        # Require exactly one standalone record with the fixed wire shape.
+        # Every line carrying the token is a candidate first; validating only
+        # already-matching records would let logger-prefixed, malformed, or
+        # duplicated device claims coexist with a false-green result.
         set(_combined "${_stdout}\n${_stderr}")
-        string(REGEX MATCHALL
-            "SPARK_D3D11_DEVICE driver=warp certification=software-only"
-            _device_records "${_combined}")
-        list(LENGTH _device_records _device_record_count)
+        string(REPLACE ";" "\\;" _combined "${_combined}")
+        string(REPLACE "\n" ";" _lines "${_combined}")
+        set(_device_candidates)
+        foreach(_line IN LISTS _lines)
+            if(_line MATCHES "SPARK_D3D11_DEVICE")
+                list(APPEND _device_candidates "${_line}")
+            endif()
+        endforeach()
+        list(LENGTH _device_candidates _device_record_count)
         if(NOT _device_record_count EQUAL 1)
             set(_ok FALSE)
             set(_reason
                 "found ${_device_record_count} explicit WARP D3D11 device records, expected exactly 1")
+        else()
+            list(GET _device_candidates 0 _device_marker)
+            if(NOT _device_marker STREQUAL
+               "SPARK_D3D11_DEVICE driver=warp certification=software-only")
+                set(_ok FALSE)
+                set(_reason "the device marker is not an exact standalone WARP record")
+            endif()
         endif()
-        string(REPLACE ";" "\\;" _combined "${_combined}")
-        string(REPLACE "\n" ";" _lines "${_combined}")
         # Count every line carrying the lifecycle token before validating its
         # shape.  Filtering to already-valid records would let a real host
         # record coexist with a malformed or logger-prefixed copy and still
@@ -117,7 +128,7 @@ if(SPARK_LIFECYCLE_PARSER_SELF_TEST)
         endif()
     endfunction()
 
-    set(_device "[info] SPARK_D3D11_DEVICE driver=warp certification=software-only\n")
+    set(_device "SPARK_D3D11_DEVICE driver=warp certification=software-only\n")
     set(_marker
         "SPARK_MODULE_LIFECYCLE module=SparkGameFPS create=1 load=1 update=4 fixed=2 render=4 unload=1 destroy=1 faults=0\n")
     _spark_expect_lifecycle_case(valid 0 "${_device}${_marker}" "" TRUE)
@@ -126,6 +137,14 @@ if(SPARK_LIFECYCLE_PARSER_SELF_TEST)
         "" FALSE)
     _spark_expect_lifecycle_case(nonzero-exit 2 "${_device}${_marker}" "" FALSE)
     _spark_expect_lifecycle_case(missing-warp-record 0 "${_marker}" "" FALSE)
+    _spark_expect_lifecycle_case(prefixed-device 0
+        "[info] SPARK_D3D11_DEVICE driver=warp certification=software-only\n${_marker}" "" FALSE)
+    _spark_expect_lifecycle_case(malformed-device 0
+        "SPARK_D3D11_DEVICE driver=warp certification=hardware\n${_marker}" "" FALSE)
+    _spark_expect_lifecycle_case(partial-device 0
+        "SPARK_D3D11_DEVICE driver=warp\n${_marker}" "" FALSE)
+    _spark_expect_lifecycle_case(duplicate-device 0
+        "${_device}${_device}${_marker}" "" FALSE)
     _spark_expect_lifecycle_case(logger-copy 0 "${_device}[info] ${_marker}" "" FALSE)
     _spark_expect_lifecycle_case(duplicate 0 "${_device}${_marker}${_marker}" "" FALSE)
     _spark_expect_lifecycle_case(unknown-module 0

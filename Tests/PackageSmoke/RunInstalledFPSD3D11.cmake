@@ -19,6 +19,18 @@ endforeach()
 if(NOT IS_DIRECTORY "${SPARK_INSTALLED_ROOT}")
     message(FATAL_ERROR "Installed FPS package root is missing: ${SPARK_INSTALLED_ROOT}")
 endif()
+file(REAL_PATH "${SPARK_SOURCE_ROOT}" _source_root_real)
+file(REAL_PATH "${SPARK_INSTALLED_ROOT}" _installed_root_real)
+if(_source_root_real STREQUAL _installed_root_real)
+    message(FATAL_ERROR
+        "Installed FPS D3D11 smoke refuses to run with the source tree as its package root")
+endif()
+cmake_path(IS_PREFIX _source_root_real "${_installed_root_real}" NORMALIZE _installed_under_source)
+if(_installed_under_source)
+    message(FATAL_ERROR
+        "Installed FPS D3D11 smoke refuses a package root nested under the source tree: "
+        "${_installed_root_real}")
+endif()
 if(NOT IS_DIRECTORY "${SPARK_TEST_ROOT}")
     file(MAKE_DIRECTORY "${SPARK_TEST_ROOT}")
 endif()
@@ -91,6 +103,7 @@ file(WRITE "${_run_root}/evidence.txt"
     "engine_sha256=${_engine_sha256}\n"
     "module_sha256=${_module_sha256}\n"
     "backend=d3d11-warp\n"
+    "asset_root_guard=installed-bin\n"
     "frames=8\n"
     "result=pass\n")
 message(STATUS
