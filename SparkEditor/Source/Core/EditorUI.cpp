@@ -224,7 +224,12 @@ namespace SparkEditor
 
             // Honour --project before deciding whether the browser is needed.
             // This value was previously parsed and then ignored.
-            if (!config.testMode && m_projectManager && !config.projectPath.empty() && config.projectPath != ".")
+            // Bounded CI launches use testMode to suppress interactive browser
+            // UI, but an explicit project path must still exercise the real
+            // project-open path.  Keeping the browser guard below testMode
+            // preserves unattended startup while making --project meaningful
+            // for executable smoke tests.
+            if (m_projectManager && !config.projectPath.empty() && config.projectPath != ".")
             {
                 if (!m_projectManager->OpenProject(config.projectPath))
                     console.LogWarning("Could not open startup project: " + config.projectPath);

@@ -1781,6 +1781,23 @@ if(TARGET SparkCooker)
         TIMEOUT 30)
 endif()
 
+# CI-110: execute the shipped editor against an isolated project.  This is a
+# Windows-only gate because the stable-v1 editor backend is Win32/D3D11; Linux
+# editor builds require an X11/GL display and are covered by the live-editor
+# lane instead of reporting a misleading headless pass.
+if(WIN32 AND TARGET SparkEditor)
+    add_dependencies(SparkTests SparkEditor)
+    add_test(
+        NAME SparkEditorExecutableSmoke
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_EDITOR=$<TARGET_FILE:SparkEditor>"
+            "-DSPARK_EDITOR_WORK_DIR=${CMAKE_BINARY_DIR}/editor-executable-smoke/$<CONFIG>"
+            -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkEditorSmoke.cmake)
+    set_tests_properties(SparkEditorExecutableSmoke PROPERTIES
+        LABELS "release;editor;process"
+        TIMEOUT 45)
+endif()
+
 if(Python3_Interpreter_FOUND)
     # CI-110: exercise the actual shipped Windows shader compiler binary. The
     # test is intentionally Windows-only because D3DCompiler is the only

@@ -13,6 +13,7 @@
 #include "Utils/LogMacros.h"
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -63,6 +64,19 @@ static bool IsDebuggerAttached()
     }
     return false;
 #endif
+}
+
+static bool WriteSmokeResult(const std::string& path, const char* status, bool projectLoaded, int runResult)
+{
+    if (path.empty())
+        return true;
+    std::ofstream result{std::filesystem::path(path)};
+    if (!result.is_open())
+        return false;
+    result << "{\n  \"schema\": 1,\n  \"status\": \"" << status
+           << "\",\n  \"projectLoaded\": " << (projectLoaded ? "true" : "false")
+           << ",\n  \"runResult\": " << runResult << "\n}\n";
+    return result.good();
 }
 
 #ifndef _WIN32
@@ -150,6 +164,7 @@ int main(int argc, char* argv[])
     std::string startupPanel;
     std::string saveScenePath; // --save-scene <path>: save seeded World then exit (D2 acceptance)
     std::string openScenePath; // --open-scene <path>: boot directly into a scene, skipping the project browser
+    std::string smokeResultPath; // --smoke-result <path>: structured CI executable-smoke result
     std::vector<std::string> editorPluginDirectories;
 
     // Check command line arguments
@@ -208,6 +223,10 @@ int main(int argc, char* argv[])
         else if (strcmp(argv[i], "--open-scene") == 0 && i + 1 < argc)
         {
             openScenePath = argv[++i];
+        }
+        else if (strcmp(argv[i], "--smoke-result") == 0 && i + 1 < argc)
+        {
+            smokeResultPath = argv[++i];
         }
     }
 
@@ -322,6 +341,7 @@ int main(int argc, char* argv[])
             {
                 std::cerr << "Failed to initialize SparkEditor" << std::endl;
             }
+            WriteSmokeResult(smokeResultPath, "initialize-failed", false, -1);
             if (waitForConsoleOnExit)
             {
                 std::cout << "Press Enter to exit..." << std::endl;
@@ -331,6 +351,17 @@ int main(int argc, char* argv[])
         }
 
         console.LogSuccess("SparkEditor application initialized successfully");
+
+        const bool smokeProjectLoaded =
+            app->GetUI() && app->GetUI()->GetProjectManager() && app->GetUI()->GetProjectManager()->HasOpenProject();
+        if (!smokeResultPath.empty() && !smokeProjectLoaded)
+        {
+            console.LogError("SparkEditor smoke requested a project, but no project is open");
+            app->Shutdown();
+            WriteSmokeResult(smokeResultPath, "project-load-failed", false, -1);
+            console.Shutdown();
+            return -1;
+        }
 
         if (!startupPanel.empty())
         {
@@ -443,6 +474,7 @@ int main(int argc, char* argv[])
         app->Shutdown();
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor shutdown complete");
         console.LogSuccess("SparkEditor application shutdown complete");
+        WriteSmokeResult(smokeResultPath, result == 0 ? "passed" : "run-failed", smokeProjectLoaded, result);
 
         if (showDebugConsole)
         {
