@@ -82,7 +82,12 @@ class CaptureScreenshotsTests(unittest.TestCase):
             )
             return subprocess.run(
                 [bash, "-c", command],
-                cwd=root,
+                # WSL's interop launcher can retain its inherited Windows
+                # working-directory handle briefly after the child exits.  A
+                # disposable cwd therefore makes cleanup flaky on Windows;
+                # the script resolves all paths from its own location, so use
+                # the stable checkout as the process cwd instead.
+                cwd=REPO_ROOT,
                 env=environment,
                 capture_output=True,
                 text=True,

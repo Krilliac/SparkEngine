@@ -16,8 +16,33 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
 mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null
 chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
 
-pgrep -f "Xvfb :99" >/dev/null || (Xvfb :99 -screen 0 1600x900x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &)
-sleep 1
+# Keep ownership of the Xvfb process we started.  In particular, do not leave
+# an MSYS child unreaped: on Windows its inherited working-directory handle can
+# outlive this script and make callers' temporary-directory cleanup fail.
+xvfb_pid=""
+if ! pgrep -f "Xvfb :99" >/dev/null; then
+    Xvfb :99 -screen 0 1600x900x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
+    xvfb_pid=$!
+    sleep 1
+fi
+
+stop_owned_xvfb() {
+    if [ -z "$xvfb_pid" ]; then
+        return
+    fi
+    kill -TERM "$xvfb_pid" 2>/dev/null || true
+    for _ in {1..50}; do
+        if ! kill -0 "$xvfb_pid" 2>/dev/null; then
+            wait "$xvfb_pid" 2>/dev/null || true
+            return
+        fi
+        sleep 0.1
+    done
+    kill -KILL "$xvfb_pid" 2>/dev/null || true
+    wait "$xvfb_pid" 2>/dev/null || true
+}
+
+trap stop_owned_xvfb EXIT
 
 capture_failures=0
 
