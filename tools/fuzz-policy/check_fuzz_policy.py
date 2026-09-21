@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import json
 import re
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -43,6 +44,7 @@ REQUIRED_JOB_COMMANDS = (
 )
 # Only meaningful once a fuzz target exists; asserted conditionally below.
 FUZZ_SMOKE_COMMAND = "ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release"
+FUZZ_BUILD_PREFIX = "cmake --build build/fuzz-policy --target"
 
 
 def _decode(root: Path, path: str, field: str, maximum: int = 2 * 1024 * 1024) -> str:
@@ -89,13 +91,13 @@ def _job_block(workflow: str, job_name: str) -> list[str]:
     return lines[start:end]
 
 
-def _run_commands(block: list[str]) -> set[str]:
+def _run_commands_in_order(block: list[str]) -> list[str]:
     """Collect the shell commands a job actually executes.
 
     A literal that appears in a comment, a job name or an ``echo`` is not a
     command; only ``run:`` scalars and ``run: |`` block bodies count.
     """
-    commands: set[str] = set()
+    commands: list[str] = []
     index = 0
     while index < len(block):
         line = _strip_yaml_comment(block[index])
@@ -105,7 +107,7 @@ def _run_commands(block: list[str]) -> set[str]:
             continue
         inline = match.group(2).strip()
         if inline and inline not in ("|", ">", "|-", ">-"):
-            commands.add(inline)
+            commands.append(inline)
             index += 1
             continue
         # A block scalar's body is every line indented at least as far as its
@@ -123,9 +125,14 @@ def _run_commands(block: list[str]) -> set[str]:
                 body_indent = leading
             elif not leading.startswith(body_indent):
                 break
-            commands.add(body.strip())
+            commands.append(body.strip())
             index += 1
     return commands
+
+
+def _run_commands(block: list[str]) -> set[str]:
+    """Return executable job commands as a set for membership checks."""
+    return set(_run_commands_in_order(block))
 
 
 def _assert_job_is_live(block: list[str], job_name: str) -> None:
@@ -143,16 +150,75 @@ def _assert_job_is_live(block: list[str], job_name: str) -> None:
             raise PolicyError(f"{job_name} job must not set continue-on-error: {value}")
 
 
-def validate_ci_and_cmake_binding(root: Path, *, fuzz_target_count: int) -> None:
+def _cmake_build_targets(commands: set[str]) -> set[str]:
+    """Return targets from actual standalone CMake build commands.
+
+    This deliberately rejects comments, ``echo`` output, shell composition,
+    options, redirections, and arbitrary strings. ``_run_commands`` has already
+    isolated executable ``run:`` lines, and this parser then requires the
+    command's first tokens to be the CMake build invocation and every remaining
+    token to be a target name. A command with any non-target suffix is ignored
+    as unsafe rather than partially credited.
+    """
+    targets: set[str] = set()
+    for command in commands:
+        try:
+            tokens = shlex.split(command, posix=True)
+        except ValueError:
+            continue
+        if len(tokens) < 4 or tokens[:4] != ["cmake", "--build", "build/fuzz-policy", "--target"]:
+            continue
+        command_targets = tokens[4:]
+        if not command_targets or any(
+            re.fullmatch(r"[A-Za-z][A-Za-z0-9_.+-]{2,63}", token) is None for token in command_targets
+        ):
+            continue
+        targets.update(command_targets)
+    return targets
+
+
+def validate_ci_and_cmake_binding(
+    root: Path, *, fuzz_target_count: int, fuzz_targets: tuple[str, ...] = ()
+) -> None:
     workflow = _decode(root, WORKFLOW, "build workflow")
     fuzz_job = _job_block(workflow, FUZZ_JOB)
     _assert_job_is_live(fuzz_job, FUZZ_JOB)
     if "    runs-on: ubuntu-24.04" not in [_strip_yaml_comment(line).rstrip() for line in fuzz_job]:
         raise PolicyError(f"{FUZZ_JOB} job must run on ubuntu-24.04")
-    commands = _run_commands(fuzz_job)
+    ordered_commands = _run_commands_in_order(fuzz_job)
+    commands = set(ordered_commands)
     for literal in REQUIRED_JOB_COMMANDS:
         if literal not in commands:
             raise PolicyError(f"{FUZZ_JOB} CI job does not run {literal!r}")
+    if fuzz_targets:
+        built_targets = _cmake_build_targets(commands)
+        missing = sorted(set(fuzz_targets) - built_targets)
+        if missing:
+            raise PolicyError(
+                f"{FUZZ_JOB} CI job does not build every inventoried fuzz target; missing: {', '.join(missing)}"
+            )
+        expected_targets = set(fuzz_targets)
+        build_indexes = [
+            index
+            for index, command in enumerate(ordered_commands)
+            if _cmake_build_targets({command}) >= expected_targets
+        ]
+        if not build_indexes:
+            raise PolicyError(f"{FUZZ_JOB} CI job has no complete fuzz-target build command")
+        build_index = min(build_indexes)
+        for ctest_command in (
+            "ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release",
+            FUZZ_SMOKE_COMMAND,
+        ):
+            ctest_indexes = [
+                index for index, command in enumerate(ordered_commands) if command == ctest_command
+            ]
+            if not ctest_indexes:
+                raise PolicyError(f"{FUZZ_JOB} CI job does not run {ctest_command!r}")
+            if build_index >= min(ctest_indexes):
+                raise PolicyError(
+                    f"{FUZZ_JOB} CI job must build all fuzz targets before {ctest_command!r}"
+                )
     if fuzz_target_count and FUZZ_SMOKE_COMMAND not in commands:
         raise PolicyError(
             f"{fuzz_target_count} fuzz targets are declared but the CI job never runs {FUZZ_SMOKE_COMMAND!r}"
@@ -313,7 +379,17 @@ def main(argv: list[str] | None = None) -> int:
     try:
         report = build_check_report(root, args.inventory, args.corpus, as_of=as_of)
         if args.ci:
-            validate_ci_and_cmake_binding(root, fuzz_target_count=report["inventory"]["fuzzed_count"])
+            inventory = load_inventory(root, args.inventory, as_of=as_of)
+            fuzz_targets = tuple(
+                parser.target["cmake_target"]
+                for parser in inventory.parsers
+                if parser.status == "fuzzed" and parser.target is not None
+            )
+            validate_ci_and_cmake_binding(
+                root,
+                fuzz_target_count=report["inventory"]["fuzzed_count"],
+                fuzz_targets=fuzz_targets,
+            )
             validate_evidence(root, report, args.evidence)
             validate_ledger(root, report, args.ledger)
     except (OSError, PolicyError) as exc:
