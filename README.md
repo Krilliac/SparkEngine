@@ -191,7 +191,7 @@ Scene hierarchy, Inspector, Asset browser, Game viewport, Gizmos (translate/rota
 
 ### Game Module Templates
 
-Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine templates are outside `stable-v1`. Separately, `GameModules/SparkGameFPS` is the blocked in-profile slice and does not yet build independently against the installed SDK:
+Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine templates are outside `stable-v1`. Separately, `GameModules/SparkGameFPS` is the blocked in-profile slice. Its installed public entrypoint consumer and source-boundary contract now pass, but the complete production DLL still uses private engine headers and links `SparkEngineLib`; clean-machine and exact-SHA hosted SDK-only proof remain open:
 
 | Template | Highlights |
 |---|---|

@@ -1013,10 +1013,10 @@
       "verification": "unit-tested",
       "support": "supported",
       "release": "blocked",
-      "summary": "SparkGameFPS is the declared first-party single-player vertical slice of the stable-v1 release profile. It is in scope and intended to be supported; it is not certified. Its release state is blocked and it holds the whole profile at blocked until its gates pass. Multiplayer is outside the profile and its existing multiplayer path is fake, so it is not release evidence for anything.",
+      "summary": "SparkGameFPS is the declared first-party single-player vertical slice of the stable-v1 release profile. It is in scope and intended to be supported; it is not certified. Its release state is blocked and it holds the whole profile at blocked until its gates pass. Multiplayer is outside the profile and its existing multiplayer path is fake, so it is not release evidence for anything. The installed public entrypoint consumer and source-boundary contract now pass, but the complete FPS DLL still uses private engine headers and SparkEngineLib.",
       "limitations": [
         "Not certified: no same-commit author-cook-package-install-run evidence for the slice",
-        "Builds against SparkEngineLib with the engine source tree on its include path rather than the public SDK surface alone, so the public-API-only requirement is unmet",
+        "The production DLL still builds against SparkEngineLib and private engine-source include paths; the installed entrypoint consumer and source-boundary contract pass, but the complete public-API-only requirement is unmet",
         "Fake/in-memory multiplayer state",
         "No production two-client authoritative loop",
         "Content gaps remain; quicksave/quickload now persist the declared local profile (slot fps_quicksave) through the engine context's SaveSystem, and the single-player death -> respawn -> score loop is complete (Tests/TestSparkGameFPSLoopReal.cpp), but installed-package smoke has no hosted exact-SHA proof and the module still initializes gameplay only (GPU work skipped) without a D3D11 device"
@@ -1030,7 +1030,7 @@
         {
           "type": "source",
           "path": "GameModules/SparkGameFPS/CMakeLists.txt",
-          "label": "Links SparkEngineLib and the engine source include path, not the public SDK alone"
+          "label": "Production DLL still links SparkEngineLib and private engine-source headers; entrypoint consumer is public-SDK-only"
         }
       ],
       "requiredGateIds": [
@@ -1335,7 +1335,7 @@
       "area": "security",
       "state": "blocked",
       "blocking": true,
-      "summary": "Stable-v1 remote-administration and file/package parser paths are unclosed. Packet transport and script-language campaigns remain with the excluded networking and scripting surfaces.",
+      "summary": "Stable-v1 remote-administration and file/package parser paths are unclosed. The structural policy inventory records 3 production-bound fuzzed parsers, 3 corpora, 102 blocked parser targets, and 151 deferred candidates; exact-SHA hosted sanitizer evidence and runtime coverage remain open. Packet transport and script-language campaigns remain with the excluded networking and scripting surfaces.",
       "acceptanceCriteria": [
         "Threat model and security ownership are current",
         "Shipped remote administration is disabled by default and cannot expose credentials",
@@ -2279,7 +2279,7 @@
         "Windows 11 client-host certification does not exist; the build-windows-vs2022 lane runs on the hosted windows-2022 image, so host certification remains PLT-200 work rather than published evidence.",
         "No Shipping-configuration artifact is signed, checksummed, attested, installed, upgraded, or rollback-tested at a single commit.",
         "The first-party slice SparkGameFPS is in the profile but uncertified: its release state is blocked and it holds this profile at blocked (MOD-310).",
-        "SparkGameFPS builds against SparkEngineLib with the engine source tree on its include path, so the public-API-only requirement is unmet (SDK-240, MOD-310).",
+        "The installed SparkGameFPS entrypoint consumer and source-boundary contract pass, but the complete production DLL still builds against SparkEngineLib and private engine-source headers, so the public-API-only requirement remains unmet (SDK-240, MOD-310).",
         "No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200).",
         "The Windows Shipping producer records its File API capture as structural evidence and reports producer authority unavailable by design: a same-job GitHub OIDC audience proves only the mutable job identity, not CMake execution. The protected Build Matrix Verifier attests that evidence from the Working checkout, and no attested receipt exists yet for a Working commit (CI-120).",
         "The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.",

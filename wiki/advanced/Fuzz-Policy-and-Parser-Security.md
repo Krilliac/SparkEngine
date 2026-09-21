@@ -6,22 +6,23 @@
 
 ## Current Status
 
-SEC-120 remains open and release-blocking. The repository now has two structurally
-validated production fuzz targets and bounded seed corpora for `json-utils` and
-`neural-weights-nnw`, but exact-SHA hosted sanitizer evidence, scheduled campaigns,
-coverage, and crash-free-duration evidence remain absent.
+SEC-120 remains open and release-blocking. The repository now has three structurally
+validated production fuzz targets and bounded seed corpora for `json-utils`,
+`neural-weights-nnw`, and `crash-manifest-parser`, but exact-SHA hosted sanitizer
+evidence, scheduled campaigns, coverage, and crash-free-duration evidence remain absent.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **105 explicitly inventoried parsers, 2
-fuzzed and 103 blocked**, **2 bound corpora with 15 seeds**, **151 detected candidates
-deferred with an owner and expiry**, and **1982 source files scanned across 17
+For the recorded source-tree state it reports **105 explicitly inventoried parsers, 3
+fuzzed and 102 blocked**, **3 bound corpora with 21 seeds (1226 bytes)**, **151 detected candidates
+deferred with an owner and expiry**, and **1983 source files scanned across 17
 first-party roots**. Those counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.
 
-The neural CTest uses `-runs=8` to replay all eight reviewed seeds under ASan/UBSan
-without mutating the tracked corpus. It is seed-smoke evidence, not a mutation campaign;
-scheduled campaigns must use a disposable writable corpus and retain their results.
+The neural CTest uses `-runs=8` to replay all eight reviewed seeds, and the crash-manifest
+CTest replays its six reviewed seeds, under ASan/UBSan without mutating the tracked
+corpus. These are seed-smoke checks, not mutation campaigns; scheduled campaigns must
+use a disposable writable corpus and retain their results.
 
 Two gates, deliberately separate:
 
@@ -112,7 +113,7 @@ CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
   LDFLAGS="-stdlib=libstdc++" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
-cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights
+cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights SparkFuzzCrashManifest
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
@@ -147,9 +148,9 @@ change *is* the review record.
 ## Remaining Closure Work
 
 - classify the 151-file deferred backlog before it expires on 2027-02-24;
-- retain exact-SHA sanitizer smoke for json-utils and reviewed-seed replay for
-  neural-weights-nnw, then implement production
-  entry-point fuzz targets for the remaining 103 inventoried parsers, starting
+- retain exact-SHA sanitizer smoke for json-utils, neural-weights-nnw, and
+  crash-manifest-parser, then implement production entry-point fuzz targets for
+  the remaining 102 blocked parsers, starting
   with the highest-risk binary readers (`terrain-sparkterrain`,
   `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
   `fps-terrain-heightmap-bmp`, `asset-media-windows`);
