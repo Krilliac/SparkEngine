@@ -126,8 +126,9 @@ class CrashSecurityTests(unittest.TestCase):
 
     def test_manifest_hardlink_is_rejected_before_json_read(self) -> None:
         outside = self.root.parent / f"manifest-outside-{self.root.name}.json"
-        secret = "ghp_" + "A" * 40
-        outside.write_text(json.dumps({"logFile": secret}), encoding="utf-8")
+        # Deliberately generated token-shaped test data, never a credential.
+        token_shaped_fixture = "ghp_" + "A" * 40
+        outside.write_text(json.dumps({"logFile": token_shaped_fixture}), encoding="utf-8")
         try:
             os.link(outside, self.root / READY)
             validator = crash.CrashPackageValidator()
