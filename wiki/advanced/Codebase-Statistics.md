@@ -10,31 +10,31 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321986 |
-| **SparkEditor/Source** | 103641 |
-| **GameModules** | 142529 |
+| **SparkEngine/Source** | 322012 |
+| **SparkEditor/Source** | 103736 |
+| **GameModules** | 142702 |
 | **External services** | 11305 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 185334 |
-| **SparkConsole/src** | 1711 |
+| **Tests** | 185759 |
+| **SparkConsole/src** | 1770 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~781792** |
+| **Total C++ (excl. ThirdParty)** | **~782725** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1064 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1591 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1067 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1594 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 606 |
+| Test-bearing implementation files (.cpp/.mm) | 607 |
 | Wiki pages (.md) | 201 |
 
 ### Largest Top-Level Source Section
 
-Graphics contains 121321 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 121327 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,10 +42,10 @@ Graphics contains 121321 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121321 | 37.6% |
-| Engine (all subsystems) | 89357 | 27.7% |
-| Utils | 46127 | 14.3% |
-| Core | 31221 | 9.6% |
+| Graphics | 121327 | 37.6% |
+| Engine (all subsystems) | 89657 | 27.8% |
+| Utils | 46144 | 14.3% |
+| Core | 30924 | 9.6% |
 | Physics | 10812 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
@@ -103,14 +103,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 103641 |
+| Total editor lines | 103736 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 606 |
-| TEST() definitions | 7383 |
+| Test files | 607 |
+| TEST() definitions | 7394 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -158,7 +158,7 @@ inventory is implementation evidence, not support certification.
 |------|------:|
 | `SaveSystem.cpp` | 2485 |
 | `OpenGLDevice.cpp` | 2160 |
-| `ModuleManager.cpp` | 2089 |
+| `ModuleManager.cpp` | 2107 |
 | `CrashHandler.cpp` | 2018 |
 | `VulkanDevice.cpp` | 1991 |
 | `D3D11Device.cpp` | 1991 |
@@ -186,7 +186,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `EditorUI.cpp` | 2867 |
+| `EditorUI.cpp` | 2872 |
 | `ProjectManager.cpp` | 2589 |
 | `JSONSceneSerializer.cpp` | 2010 |
 | `VisualScriptPanel.cpp` | 1773 |

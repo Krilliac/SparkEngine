@@ -696,7 +696,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*606 test-bearing `.cpp`/`.mm` files, 7383 source-level test definitions*
+*607 test-bearing `.cpp`/`.mm` files, 7394 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -893,7 +893,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEntityPresetManagerPhaseEE` | 7 |
 | `TestEnvironmentQuery` | 12 |
 | `TestEventBus` | 15 |
-| `TestEventBusReal` | 7 |
+| `TestEventBusReal` | 8 |
 | `TestEventResponseSystem` | 15 |
 | `TestEventResponseSystemPhaseEE` | 8 |
 | `TestEventSystem` | 10 |
@@ -904,6 +904,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFPSComponentsReal` | 11 |
 | `TestFPSGameplayIntegration` | 17 |
 | `TestFPSMultiplayer` | 11 |
+| `TestFPSWeatherPort` | 6 |
 | `TestFastNoise2SIMD` | 32 |
 | `TestFaultIsolation` | 14 |
 | `TestFaultIsolationReal` | 8 |
@@ -943,7 +944,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameModuleRTS` | 39 |
 | `TestGameModuleRacing` | 28 |
 | `TestGameObjectTransforms` | 24 |
-| `TestGamePackager` | 11 |
+| `TestGamePackager` | 14 |
 | `TestGameViewPanel` | 3 |
 | `TestGamepadInputProcessing` | 23 |
 | `TestGameplayDebugger` | 11 |
@@ -1022,7 +1023,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMetalRayTracing` | 16 |
 | `TestMetalRayTracingLive` | 10 |
 | `TestModSystem` | 9 |
-| `TestModuleABI` | 26 |
+| `TestModuleABI` | 27 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 12 |
