@@ -96,7 +96,23 @@ function(_spark_validate_staged_root source_root installed_root test_root out_ok
 endfunction()
 
 if(SPARK_FPS_D3D11_PATH_POLICY_SELF_TEST)
-    set(_self_root "$ENV{TEMP}/spark-fps-d3d11-path-policy")
+    # Windows exposes TEMP, while hosted Linux runners conventionally expose
+    # RUNNER_TEMP or TMPDIR. Keep the contract self-test writable on either
+    # host instead of silently resolving an empty variable to /spark-... .
+    set(_self_temp "$ENV{RUNNER_TEMP}")
+    if(NOT _self_temp)
+        set(_self_temp "$ENV{TMPDIR}")
+    endif()
+    if(NOT _self_temp)
+        set(_self_temp "$ENV{TEMP}")
+    endif()
+    if(NOT _self_temp)
+        set(_self_temp "$ENV{TMP}")
+    endif()
+    if(NOT _self_temp)
+        set(_self_temp "/tmp")
+    endif()
+    set(_self_root "${_self_temp}/spark-fps-d3d11-path-policy")
     file(MAKE_DIRECTORY
         "${_self_root}/checkout/build/stage"
         "${_self_root}/checkout/build/test"
