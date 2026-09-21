@@ -6047,7 +6047,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "f23daec8d3011586"
+            "runDigest": "1ad01b7477c30790"
           },
           {
             "index": 5,
@@ -7904,7 +7904,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "e1e15decca8c008d"
+            "runDigest": "8ce18cbe77ef8f82"
           },
           {
             "index": 9,
@@ -10841,9 +10841,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights",
         "commandProvenance": "literal",
         "targets": [
+          "SparkFuzzCrashManifest",
           "SparkFuzzJsonUtils",
           "SparkFuzzNeuralWeights"
         ],
@@ -13822,9 +13823,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights",
         "commandProvenance": "literal",
         "targets": [
+          "SparkFuzzCrashManifest",
           "SparkFuzzJsonUtils",
           "SparkFuzzNeuralWeights"
         ],
