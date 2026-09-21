@@ -610,7 +610,9 @@ class ExtractedPackageWorkflowWiringTests(unittest.TestCase):
         self.assertEqual(workflow.count("validate-extracted-package.py"), 6)
         self.assertEqual(workflow.count("--preflight-archive"), 3)
         self.assertEqual(workflow.count("--stage-root"), 3)
-        self.assertEqual(workflow.count("--archive"), 3)
+        # The release workflow now has a fourth intentional archive consumer:
+        # the externally provisioned signature bundle extractor.
+        self.assertEqual(workflow.count("--archive"), 4)
         self.assertEqual(workflow.count("package-template-smoke-build"), 3)
         self.assertIn(
             'SPARK_TEMPLATE_ROOT="$packageRoot/share/SparkEngine/templates"', workflow

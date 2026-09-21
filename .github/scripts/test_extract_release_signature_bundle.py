@@ -37,18 +37,26 @@ class SignatureArchiveTests(unittest.TestCase):
         return member
 
     def test_extracts_only_regular_files(self) -> None:
-        temporary, archive = self._archive([self._member("public.pem")])
+        temporary, archive = self._archive([
+            self._member("release-signatures.json"),
+            self._member("spark-release-public-key.pem"),
+            self._member("artifact.sig"),
+        ])
         try:
             destination = Path(temporary.name) / "out"
             extract_archive(archive, destination)
-            self.assertEqual((destination / "public.pem").read_bytes(), b"payload")
+            self.assertEqual((destination / "artifact.sig").read_bytes(), b"payload")
         finally:
             temporary.cleanup()
 
     def test_rejects_nonregular_members(self) -> None:
         for kind in ("symlink", "hardlink", "fifo", "device"):
             with self.subTest(kind=kind):
-                temporary, archive = self._archive([self._member("public.pem", kind)])
+                temporary, archive = self._archive([
+                    self._member("release-signatures.json"),
+                    self._member("spark-release-public-key.pem"),
+                    self._member("artifact.sig", kind),
+                ])
                 try:
                     with self.assertRaisesRegex(ArchiveError, "not a regular file"):
                         extract_archive(archive, Path(temporary.name) / "out")
@@ -56,7 +64,9 @@ class SignatureArchiveTests(unittest.TestCase):
                     temporary.cleanup()
 
     def test_rejects_traversal_absolute_and_ambiguous_names(self) -> None:
-        for name in ("../escape", "/absolute", "dir\\escape", "public.pem "):
+        for name in ("../escape", "/absolute", "dir\\escape", "foo:bar.sig", "public.pem ",
+                     "CON.sig", "PRN.sig", "AUX.sig", "NUL.sig", "COM1.sig", "LPT9.sig",
+                     "nested/file.sig"):
             with self.subTest(name=name):
                 temporary, archive = self._archive([self._member(name)])
                 try:
@@ -65,8 +75,21 @@ class SignatureArchiveTests(unittest.TestCase):
                 finally:
                     temporary.cleanup()
 
+    def test_rejects_unapproved_flat_file(self) -> None:
+        temporary, archive = self._archive([self._member("release-signatures.json"), self._member("spark-release-public-key.pem"), self._member("notes.txt")])
+        try:
+            with self.assertRaisesRegex(ArchiveError, "approved signature control"):
+                extract_archive(archive, Path(temporary.name) / "out")
+        finally:
+            temporary.cleanup()
+
     def test_rejects_casefold_duplicate_members(self) -> None:
-        temporary, archive = self._archive([self._member("public.pem"), self._member("PUBLIC.PEM")])
+        temporary, archive = self._archive([
+            self._member("release-signatures.json"),
+            self._member("spark-release-public-key.pem"),
+            self._member("artifact.sig"),
+            self._member("ARTIFACT.SIG"),
+        ])
         try:
             with self.assertRaisesRegex(ArchiveError, "case-fold duplicate"):
                 extract_archive(archive, Path(temporary.name) / "out")
