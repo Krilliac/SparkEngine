@@ -161,6 +161,17 @@ endif()
     set_tests_properties(SparkBuildVersion PROPERTIES TIMEOUT 10)
     unset(_sparkbuild_version_test_script)
     unset(_sparkbuild_platform)
+
+    # Exercise the shipped executable through its noninteractive plan contract.
+    # This must remain a process-level test: library-only ConfigManager coverage
+    # cannot prove argument parsing, exit status, or that the TUI is bypassed.
+    add_test(NAME SparkBuildPlan
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSPARK_PLAN_EXECUTABLE=$<TARGET_FILE:SparkBuild>"
+            "-DSPARK_PLAN_SOURCE=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_PLAN_BUILD=${CMAKE_CURRENT_BINARY_DIR}/sparkbuild-plan-smoke"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/VerifySparkBuildPlan.cmake")
+    set_tests_properties(SparkBuildPlan PROPERTIES TIMEOUT 10)
 endif()
 
 # Standalone consumers retain the historical flat output. The SparkEngine
