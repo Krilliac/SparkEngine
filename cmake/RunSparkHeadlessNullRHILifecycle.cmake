@@ -26,17 +26,23 @@ function(_spark_validate_headless_nullrhi_result child_result child_stdout child
         set(_module_ready_records)
         set(_rhi_records)
         set(_lifecycle_records)
+        set(_marker_order)
         foreach(_line IN LISTS _lines)
             if(_line MATCHES "^SPARK_MODULE_READY count=[0-9]+$")
                 list(APPEND _module_ready_records "${_line}")
+                list(APPEND _marker_order "1")
             elseif(_line MATCHES
                    "^SPARK_HEADLESS_RHI backend=null initialized=[0-9]+ frames=[0-9]+ shutdown=[0-9]+$")
                 list(APPEND _rhi_records "${_line}")
+                list(APPEND _marker_order "2")
             elseif(_line MATCHES
                    "^SPARK_HEADLESS_LIFECYCLE initialized=[0-9]+ updated=[0-9]+ fixed=[0-9]+ rendered=[0-9]+ unloaded=[0-9]+ faults=[0-9]+$")
                 list(APPEND _lifecycle_records "${_line}")
+                list(APPEND _marker_order "3")
             endif()
         endforeach()
+
+        string(REPLACE ";" "" _marker_order_text "${_marker_order}")
 
         list(LENGTH _module_ready_records _module_ready_count)
         list(LENGTH _rhi_records _rhi_record_count)
@@ -77,7 +83,10 @@ function(_spark_validate_headless_nullrhi_result child_result child_stdout child
             string(REGEX MATCH "faults=([0-9]+)" _unused "${_lifecycle}")
             set(_faults "${CMAKE_MATCH_1}")
 
-            if(NOT "${_module_count}" STREQUAL "1")
+            if(NOT "${_marker_order_text}" STREQUAL "123")
+                set(_ok FALSE)
+                set(_reason "headless lifecycle markers were not emitted once in ready/rhi/lifecycle order")
+            elseif(NOT "${_module_count}" STREQUAL "1")
                 set(_ok FALSE)
                 set(_reason "initialized module count was ${_module_count}, expected exactly 1")
             elseif(NOT "${_rhi_initialized}" STREQUAL "1")
@@ -115,6 +124,13 @@ function(_spark_validate_headless_nullrhi_result child_result child_stdout child
     set(${out_reason} "${_reason}" PARENT_SCOPE)
 endfunction()
 
+# Allow other executable-level smoke tests to reuse the exact standalone
+# marker parser without re-launching the production host or duplicating its
+# acceptance semantics.
+if(SPARK_HEADLESS_NULLRHI_PARSER_ONLY)
+    return()
+endif()
+
 if(SPARK_HEADLESS_NULLRHI_PARSER_SELF_TEST)
     function(_spark_expect_headless_case name result stdout stderr expected_ok)
         _spark_validate_headless_nullrhi_result("${result}" "${stdout}" "${stderr}" _actual_ok _reason)
@@ -149,6 +165,7 @@ if(SPARK_HEADLESS_NULLRHI_PARSER_SELF_TEST)
         "${_ready}SPARK_HEADLESS_RHI backend=null initialized=1 frames=8 shutdown=0\n${_lifecycle}" "" FALSE)
     _spark_expect_headless_case(missing-lifecycle 0 "${_ready}${_rhi}" "" FALSE)
     _spark_expect_headless_case(duplicate-lifecycle 0 "${_valid}${_lifecycle}" "" FALSE)
+    _spark_expect_headless_case(out-of-order-markers 0 "${_ready}${_lifecycle}${_rhi}" "" FALSE)
     _spark_expect_headless_case(wrong-initialized 0
         "${_ready}${_rhi}SPARK_HEADLESS_LIFECYCLE initialized=2 updated=8 fixed=7 rendered=0 unloaded=1 faults=0\n"
         "" FALSE)
