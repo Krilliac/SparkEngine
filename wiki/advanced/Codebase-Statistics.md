@@ -10,22 +10,22 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321975 |
+| **SparkEngine/Source** | 321986 |
 | **SparkEditor/Source** | 103641 |
 | **GameModules** | 142529 |
 | **External services** | 11305 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 185181 |
+| **Tests** | 185334 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~781603** |
+| **Total C++ (excl. ThirdParty)** | **~781792** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1063 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1589 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1064 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1591 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
@@ -34,7 +34,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 121310 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 121321 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,7 +42,7 @@ Graphics contains 121310 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121310 | 37.6% |
+| Graphics | 121321 | 37.6% |
 | Engine (all subsystems) | 89357 | 27.7% |
 | Utils | 46127 | 14.3% |
 | Core | 31221 | 9.6% |
@@ -110,7 +110,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 606 |
-| TEST() definitions | 7380 |
+| TEST() definitions | 7383 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics

@@ -696,7 +696,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*606 test-bearing `.cpp`/`.mm` files, 7380 source-level test definitions*
+*606 test-bearing `.cpp`/`.mm` files, 7383 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1162,7 +1162,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestShaderDiskCacheDaemon` | 8 |
 | `TestShaderDiskCachePhaseV` | 16 |
 | `TestShaderGraphCompiler` | 8 |
-| `TestShaderHotReload` | 8 |
+| `TestShaderHotReload` | 11 |
 | `TestShaderHotReloadCompilation` | 11 |
 | `TestShaderHotReloadPhaseU` | 9 |
 | `TestShaderServiceClient` | 11 |
