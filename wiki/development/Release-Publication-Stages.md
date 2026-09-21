@@ -134,6 +134,13 @@ artifact digest/producer identity in the release evidence archive before expiry;
 an unverified local JSON copy is not authority. Failure produces no success
 receipt, and final readiness remains blocked pending investigation and recovery.
 
+The receipt writer accepts at most 1 MiB and requires an existing real parent
+directory. It rejects existing names, symlink/reparse traversal, and replacement
+races. POSIX publication anchors staging and linking to a directory descriptor,
+syncs the completed file, and syncs the directory where supported; Windows
+retains the native package writer under locked parent directories. Publication
+never overwrites a receipt, and failure cleanup removes only owned file identities.
+
 The release owner must then reconcile this independent evidence, actual
 deployment approval, all supported-host/rehearsal results, and live-site
 consumption at the same released SHA. Only that completed review may close the

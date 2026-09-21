@@ -14,7 +14,7 @@ import re
 import subprocess
 import sys
 
-from package_evidence_io import publish_bytes_no_replace
+from receipt_publication import publish_receipt_no_replace
 from verify_release_bundle import verify_release_bundle
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -162,7 +162,7 @@ def verify(*, repository, tag, source_commit, directory, signature_directory, fi
                    "exact-ci", "github-release-attestation", "immutable-tag"],
         "limitations": ["Does not promote readiness or prove live-site consumption, owner sign-off, or Windows certification."],
     }
-    publish_bytes_no_replace(receipt, (json.dumps(result, indent=2, sort_keys=True) + "\n").encode("utf-8"))
+    publish_receipt_no_replace(receipt, (json.dumps(result, indent=2, sort_keys=True) + "\n").encode("utf-8"))
     return result
 
 
