@@ -22,9 +22,40 @@ if(NOT SPARK_FPS_D3D11_PATH_POLICY_SELF_TEST)
     endif()
 endif()
 
+function(_spark_root_has_reparse path description out_bad out_reason)
+    set(_bad FALSE)
+    set(_reason "")
+    if(EXISTS "${path}" AND IS_SYMLINK "${path}")
+        set(_bad TRUE)
+        set(_reason "${description} is a symlink")
+    elseif(CMAKE_HOST_WIN32 AND EXISTS "${path}")
+        set(_powershell "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe")
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}" -E env "SPARK_D3D11_ROOT=${path}"
+                "${_powershell}" -NoLogo -NoProfile -NonInteractive -Command
+                "$a=[IO.File]::GetAttributes([IO.Path]::GetFullPath($env:SPARK_D3D11_ROOT)); if(($a -band [IO.FileAttributes]::ReparsePoint) -ne 0){exit 1}"
+            RESULT_VARIABLE _probe_result)
+        if(NOT _probe_result EQUAL 0)
+            set(_bad TRUE)
+            set(_reason "${description} is a Windows reparse point")
+        endif()
+    endif()
+    set(${out_bad} "${_bad}" PARENT_SCOPE)
+    set(${out_reason} "${_reason}" PARENT_SCOPE)
+endfunction()
+
 function(_spark_validate_staged_root source_root installed_root test_root out_ok out_reason)
     set(_ok TRUE)
     set(_reason "")
+    _spark_root_has_reparse("${installed_root}" "installed root" _installed_reparse _installed_reparse_reason)
+    _spark_root_has_reparse("${test_root}" "test root" _test_reparse _test_reparse_reason)
+    if(_installed_reparse)
+        set(_ok FALSE)
+        set(_reason "${_installed_reparse_reason}")
+    elseif(_test_reparse)
+        set(_ok FALSE)
+        set(_reason "${_test_reparse_reason}")
+    endif()
     file(REAL_PATH "${source_root}" _source_real)
     file(REAL_PATH "${installed_root}" _installed_real)
     file(REAL_PATH "${test_root}" _test_real)
@@ -53,9 +84,10 @@ function(_spark_validate_staged_root source_root installed_root test_root out_ok
     foreach(_forbidden IN LISTS _source_forbidden)
         if(EXISTS "${_forbidden}")
             file(REAL_PATH "${_forbidden}" _forbidden_real)
-            if(_installed_real STREQUAL _forbidden_real)
+            cmake_path(IS_PREFIX _forbidden_real "${_installed_real}" NORMALIZE _inside_forbidden)
+            if(_inside_forbidden)
                 set(_ok FALSE)
-                set(_reason "installed root resolves to a source runtime/assets/module location")
+                set(_reason "installed root resolves to a source runtime/assets/module subtree")
             endif()
         endif()
     endforeach()
@@ -69,8 +101,9 @@ if(SPARK_FPS_D3D11_PATH_POLICY_SELF_TEST)
         "${_self_root}/checkout/build/stage"
         "${_self_root}/checkout/build/test"
         "${_self_root}/outside/stage"
-        "${_self_root}/checkout/Assets"
-        "${_self_root}/checkout/GameModules/SparkGameFPS/Assets")
+        "${_self_root}/checkout/Assets/stage"
+        "${_self_root}/checkout/bin/stage"
+        "${_self_root}/checkout/GameModules/SparkGameFPS/Assets/stage")
     _spark_validate_staged_root(
         "${_self_root}/checkout"
         "${_self_root}/checkout/build/stage"
@@ -94,6 +127,65 @@ if(SPARK_FPS_D3D11_PATH_POLICY_SELF_TEST)
         _parent_ok _parent_reason)
     if(_parent_ok)
         message(FATAL_ERROR "wrong-parent policy self-test unexpectedly passed")
+    endif()
+    _spark_validate_staged_root(
+        "${_self_root}/checkout"
+        "${_self_root}/checkout/Assets/stage"
+        "${_self_root}/checkout/build/test"
+        _asset_descendant_ok _asset_descendant_reason)
+    if(_asset_descendant_ok)
+        message(FATAL_ERROR "source-assets descendant policy self-test unexpectedly passed")
+    endif()
+    _spark_validate_staged_root(
+        "${_self_root}/checkout"
+        "${_self_root}/checkout/bin/stage"
+        "${_self_root}/checkout/build/test"
+        _bin_descendant_ok _bin_descendant_reason)
+    if(_bin_descendant_ok)
+        message(FATAL_ERROR "source-bin descendant policy self-test unexpectedly passed")
+    endif()
+    _spark_validate_staged_root(
+        "${_self_root}/checkout"
+        "${_self_root}/checkout/GameModules/SparkGameFPS/Assets/stage"
+        "${_self_root}/checkout/build/test"
+        _module_descendant_ok _module_descendant_reason)
+    if(_module_descendant_ok)
+        message(FATAL_ERROR "source-module descendant policy self-test unexpectedly passed")
+    endif()
+    if(UNIX)
+        execute_process(COMMAND "${CMAKE_COMMAND}" -E create_symlink
+            "${_self_root}/checkout/build/stage" "${_self_root}/checkout/build/link"
+            RESULT_VARIABLE _symlink_result)
+        if(_symlink_result EQUAL 0)
+            _spark_validate_staged_root(
+                "${_self_root}/checkout"
+                "${_self_root}/checkout/build/link"
+                "${_self_root}/checkout/build/test"
+                _symlink_ok _symlink_reason)
+            if(_symlink_ok)
+                message(FATAL_ERROR "symlink policy self-test unexpectedly passed")
+            endif()
+        endif()
+    elseif(WIN32)
+        execute_process(COMMAND cmd /c mklink /J
+            "${_self_root}/checkout/build/link"
+            "${_self_root}/checkout/build/stage"
+            RESULT_VARIABLE _junction_result
+            OUTPUT_QUIET ERROR_QUIET)
+        if(_junction_result EQUAL 0)
+            _spark_validate_staged_root(
+                "${_self_root}/checkout"
+                "${_self_root}/checkout/build/link"
+                "${_self_root}/checkout/build/test"
+                _junction_ok _junction_reason)
+            execute_process(COMMAND cmd /c rmdir
+                "${_self_root}/checkout/build/link"
+                RESULT_VARIABLE _junction_remove_result
+                OUTPUT_QUIET ERROR_QUIET)
+            if(_junction_ok)
+                message(FATAL_ERROR "junction policy self-test unexpectedly passed")
+            endif()
+        endif()
     endif()
     message(STATUS "Installed FPS D3D11 package path policy contract passed")
     return()

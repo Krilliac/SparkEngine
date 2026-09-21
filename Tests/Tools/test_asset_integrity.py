@@ -354,6 +354,8 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
         self.assertIn("_spark_validate_lifecycle_result", smoke_text)
         self.assertIn("asset_root_guard=installed-bin", smoke_text)
         self.assertIn("installed root is the source tree", smoke_text)
+        self.assertIn("ReparsePoint", smoke_text)
+        self.assertIn("IS_SYMLINK", smoke_text)
         self.assertIn("-test-frames 8", smoke_text)
 
     def test_installed_fps_d3d11_path_policy_contract(self) -> None:
