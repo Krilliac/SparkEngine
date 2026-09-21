@@ -188,20 +188,27 @@ per-config timeout is measured on the runner.
 
 The blocking `fuzz-policy` Linux job runs the standalone policy CMake project.
 Its structural gate and Python adversarial tests do not substitute for production
-fuzz-harness execution, so SEC-120 remains release-blocking until the documented
-entry-point targets, bounded corpora, sanitizer smoke, and scheduled campaigns
-exist. See [Fuzz Policy and Parser Security](Fuzz-Policy-and-Parser-Security.md).
+fuzz-harness execution. The job also runs the bounded `json-utils` sanitizer smoke and
+the `neural-weights-nnw` ASan/UBSan reviewed-seed replay (`-runs=8`), but SEC-120 remains
+release-blocking while 103 inventoried parsers, 151 deferred candidates, and scheduled
+mutation-campaign evidence remain.
+See [Fuzz Policy and Parser Security](Fuzz-Policy-and-Parser-Security.md).
 
 ```bash
-cmake -S tools/fuzz-policy -B build/fuzz-policy
+CC=clang CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
+  LDFLAGS="-stdlib=libstdc++" \
+  cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
+cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights
 # -C is required by multi-config generators (Visual Studio) and ignored by
 # single-config ones; without it CTest reports "Not Run" on Windows.
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
+ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
 
-The registered checks are `FuzzPolicy` (the structural gate) and
-`FuzzPolicyAdversarial` (the hostile regression suite). They register only when
+The registered checks are `FuzzPolicy` (the structural gate),
+`FuzzPolicyAdversarial` (the hostile regression suite), and the two production fuzz
+smokes. The policy checks register only when
 `SPARK_ENABLE_FUZZ_POLICY_CHECKS` is on, which defaults to `BUILD_TESTS`, so an
 engine-only configure does not require Python. Release publication additionally runs
 `check_fuzz_policy.py --require-closure`, which fails today by design.
@@ -689,7 +696,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*605 test-bearing `.cpp`/`.mm` files, 7365 source-level test definitions*
+*606 test-bearing `.cpp`/`.mm` files, 7371 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1048,6 +1055,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNeuralPostProcessing` | 9 |
 | `TestNeuralRadianceCache` | 7 |
 | `TestNeuralTextureCompressor` | 10 |
+| `TestNeuralWeightsValidation` | 6 |
 | `TestNoiseGenerator` | 7 |
 | `TestNullRHIDevice` | 7 |
 | `TestNullRHIDevicePhaseY` | 22 |

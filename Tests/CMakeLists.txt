@@ -400,6 +400,7 @@ add_executable(SparkTests
     TestFBXImportValidation.cpp
     TestTextureCompressor.cpp
     TestNeuralInference.cpp
+    TestNeuralWeightsValidation.cpp
     TestCpuNeuralInference.cpp
     TestCpuNeuralTraining.cpp
     TestNeuralTextureCompressor.cpp

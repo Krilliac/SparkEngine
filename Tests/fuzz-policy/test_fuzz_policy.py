@@ -1429,14 +1429,37 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertEqual(parser.target["harness_entry_symbol"], "SparkFuzzParseJson")
 
         corpora = corpus_manifest.load_corpora(REPO_ROOT, inventory)
-        self.assertEqual(len(corpora), 1)
-        corpus = corpora[0]
+        corpus = next(item for item in corpora if item.parser_id == "json-utils")
         self.assertEqual(corpus.parser_id, "json-utils")
         self.assertEqual(corpus.corpus_dir, "Tests/fuzz-corpora/json-utils")
         self.assertEqual(corpus.budget.max_input_bytes, 4096)
         self.assertEqual(corpus.budget.max_parse_time_ms, 1000)
         self.assertEqual(corpus.budget.max_memory_mb, 256)
         self.assertEqual(corpus.budget.max_depth, 32)
+        self.assertEqual(corpus.budget.max_corpus_entries, 8)
+        self.assertEqual(corpus.budget.max_corpus_bytes, 4096)
+        self.assertEqual(corpus.budget.smoke_seconds, 10)
+
+    def test_neural_weights_has_a_production_fuzz_binding(self) -> None:
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        parser = next(item for item in inventory.parsers if item.parser_id == "neural-weights-nnw")
+        self.assertEqual(parser.status, "fuzzed")
+        self.assertIsNotNone(parser.target)
+        assert parser.target is not None
+        self.assertEqual(parser.target["harness"], "Tests/Fuzz/FuzzNeuralWeights.cpp")
+        self.assertEqual(parser.target["cmake_target"], "SparkFuzzNeuralWeights")
+        self.assertEqual(parser.target["test_selector"], "FuzzNeuralWeightsSmoke")
+        self.assertEqual(parser.target["corpus_id"], "neural-weights-nnw-corpus")
+        self.assertEqual(parser.target["entry_symbol"], "Spark::Graphics::Neural::LoadWeights")
+        self.assertIsNone(parser.target["binding_source"])
+
+        corpora = corpus_manifest.load_corpora(REPO_ROOT, inventory)
+        corpus = next(item for item in corpora if item.parser_id == "neural-weights-nnw")
+        self.assertEqual(corpus.corpus_dir, "Tests/fuzz-corpora/neural-weights-nnw")
+        self.assertEqual(corpus.budget.max_input_bytes, 4096)
+        self.assertEqual(corpus.budget.max_parse_time_ms, 1000)
+        self.assertEqual(corpus.budget.max_memory_mb, 256)
+        self.assertEqual(corpus.budget.max_depth, 8)
         self.assertEqual(corpus.budget.max_corpus_entries, 8)
         self.assertEqual(corpus.budget.max_corpus_bytes, 4096)
         self.assertEqual(corpus.budget.smoke_seconds, 10)
@@ -1459,9 +1482,13 @@ class TestRepositoryIntegration(unittest.TestCase):
         block_text = "\n".join(block)
         self.assertIn('CXXFLAGS: "-stdlib=libstdc++"', block_text)
         self.assertIn('LDFLAGS: "-stdlib=libstdc++"', block_text)
+        build_commands = check_fuzz_policy._run_commands(block)
+        self.assertIn(
+            "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights", build_commands
+        )
         self.assertIn(
             "ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release",
-            check_fuzz_policy._run_commands(block),
+            build_commands,
         )
 
     def test_named_verified_misses_are_inventoried(self) -> None:
@@ -1504,7 +1531,7 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertTrue(any(line.strip() == "- fuzz-policy" for line in gate))
 
     def test_fuzz_targets_are_wired_to_a_smoke_run(self) -> None:
-        check_fuzz_policy.validate_ci_and_cmake_binding(REPO_ROOT, fuzz_target_count=1)
+        check_fuzz_policy.validate_ci_and_cmake_binding(REPO_ROOT, fuzz_target_count=2)
 
     def test_ctest_entries_run_from_the_source_root(self) -> None:
         module = (REPO_ROOT / "cmake" / "SparkFuzzPolicy.cmake").read_text(encoding="utf-8")

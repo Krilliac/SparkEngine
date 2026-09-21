@@ -141,6 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation claims that the code does not implement: `/W4` zero-warning builds, in-game backtick console, LAN server discovery/RCON/kick-ban in the Dedicated Server panel, atlas-backed shadow sampling, automatic DLSS/XeSS/FSR2 selection, per-bus DSP and rendered reverb, hybrid RT on D3D11, an enforced merge-time Required CI Gate
 
 ### Security
+- The `.nnw` neural-weight loader now bounds file size and architecture dimensions, uses checked parameter arithmetic, validates connectivity, flags, activations, optimizer trailers, and exact EOF before allocating weight/optimizer payloads, and shares those rules with the saver; six production-linked regressions and a direct LoadWeights libFuzzer target with an eight-seed corpus cover the new contract
 - Packet text fields are screened for real (schema-declared offsets, length-prefix validation) and the `packet.stats` string counter is no longer a permanent zero
 - JSON parse budgets on every default entry point; strict, size-capped `mod.json`/mod-config parsing; scene-manifest path containment and size caps; `.spk` decompression-ratio bound enforced at `Open`; skeleton/animation loaders reject non-finite matrices and forward `parentIndex` references
 - Virtual-path policy rejects drive-relative and NTFS alternate-data-stream names, reserved Windows device names, and symlink/junction escapes inside a mount

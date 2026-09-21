@@ -89,7 +89,7 @@ jobs:
       run: cmake --build build/fuzz-policy --target check-fuzz-policy
 
     - name: Build production fuzz smoke target
-      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils
+      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights
 
     - name: Run adversarial policy tests
       # -C is required by multi-config generators and ignored by single-config

@@ -43,11 +43,12 @@ registered CTest entry point that passes the corpus directory and exact runtime 
 and a harness that calls the production entry point — a commented-out or string-literal
 declaration proves nothing. It is not runtime parser-safety or fuzz-coverage evidence.
 SEC-120 remains release-blocking, and `release.yml` enforces that with
-`check_fuzz_policy.py --require-closure`, because no production parser fuzz target,
-bounded seed corpus, sanitizer smoke campaign, or scheduled campaign is currently
-committed: 104 inventoried parsers are blocked and 151 detected candidates are still
-deferred. See `wiki/advanced/Fuzz-Policy-and-Parser-Security.md` for the exact scope,
-the reviewed exclusions, and the closure blockers.
+`check_fuzz_policy.py --require-closure`. Two production parsers (`json-utils` and
+`neural-weights-nnw`) now have structurally bound sanitizer targets and bounded seed
+corpora, but 103 inventoried parsers remain blocked, 151 detected candidates remain
+deferred, and exact-SHA hosted smoke/campaign evidence is not yet retained. See
+`wiki/advanced/Fuzz-Policy-and-Parser-Security.md` for the exact scope, reviewed
+exclusions, and closure blockers.
 
 The following are considered security vulnerabilities:
 

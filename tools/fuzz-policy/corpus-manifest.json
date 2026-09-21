@@ -16,6 +16,22 @@
         "max_corpus_bytes": 4096,
         "smoke_seconds": 10
       }
+    },
+    {
+      "id": "neural-weights-nnw-corpus",
+      "parser_id": "neural-weights-nnw",
+      "corpus_dir": "Tests/fuzz-corpora/neural-weights-nnw",
+      "last_verified": "2026-09-20",
+      "content_digest": "215a361e8449b22d6054ec9748d49558b7ccf0ec1a47c6b6883eaf0fb0d6570e",
+      "budget": {
+        "max_input_bytes": 4096,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 8,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      }
     }
   ]
 }

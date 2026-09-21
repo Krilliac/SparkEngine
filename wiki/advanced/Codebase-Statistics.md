@@ -10,31 +10,31 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321733 |
+| **SparkEngine/Source** | 321824 |
 | **SparkEditor/Source** | 103641 |
 | **GameModules** | 142616 |
 | **External services** | 11305 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 184407 |
+| **Tests** | 184740 |
 | **SparkConsole/src** | 1711 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~780674** |
+| **Total C++ (excl. ThirdParty)** | **~781098** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hh/.hpp/.hxx/.inl) | 1062 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1586 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1588 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 605 |
+| Test-bearing implementation files (.cpp/.mm) | 606 |
 | Wiki pages (.md) | 201 |
 
 ### Largest Top-Level Source Section
 
-Graphics contains 121219 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 121310 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,7 +42,7 @@ Graphics contains 121219 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121219 | 37.6% |
+| Graphics | 121310 | 37.6% |
 | Engine (all subsystems) | 89235 | 27.7% |
 | Utils | 46075 | 14.3% |
 | Core | 31244 | 9.7% |
@@ -109,8 +109,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| Test files | 605 |
-| TEST() definitions | 7365 |
+| Test files | 606 |
+| TEST() definitions | 7371 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
