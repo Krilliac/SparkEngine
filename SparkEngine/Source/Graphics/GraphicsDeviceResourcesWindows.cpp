@@ -77,9 +77,7 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
 
     if (useWarp)
     {
-        SPARK_LOG_INFO("Graphics",
-                       "Creating explicit WARP D3D11 device (flags=0x%X)",
-                       createDeviceFlags);
+        SPARK_LOG_INFO("Graphics", "Creating explicit WARP D3D11 device (flags=0x%X)", createDeviceFlags);
     }
     else
     {
