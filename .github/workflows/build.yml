@@ -2038,7 +2038,7 @@ jobs:
   build-linux-gcc:
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         config: [Debug, Release]
 
@@ -2203,7 +2203,7 @@ jobs:
   build-linux-clang:
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         config: [Debug, Release]
 

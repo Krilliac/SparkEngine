@@ -1629,6 +1629,15 @@ class WorkflowEnforcementTests(unittest.TestCase):
         self.assertIn("ModuleProfileLifecycle_SparkGameFPS_D3D11", release_tests)
         self.assertIn("count == 1", release_tests)
 
+    def test_linux_compiler_matrices_preserve_all_configuration_evidence(self) -> None:
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "build.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        document = inventory.workflow_tool.parse_workflow_yaml(workflow_text)
+
+        for job_id in ("build-linux-gcc", "build-linux-clang"):
+            with self.subTest(job=job_id):
+                self.assertIs(document["jobs"][job_id]["strategy"]["fail-fast"], False)
+
 
 
 # ===========================================================================
