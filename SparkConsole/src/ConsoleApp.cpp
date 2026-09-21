@@ -129,10 +129,11 @@ void ConsoleApp::ClearDisplay()
 }
 #endif // SPARK_PLATFORM_WINDOWS
 
-ConsoleApp::ConsoleApp(bool enginePipeRequested)
-    : m_running(true), m_enginePipeRequested(enginePipeRequested),
+ConsoleApp::ConsoleApp(bool enginePipeRequested, bool batchMode)
+    : m_running(true), m_enginePipeRequested(enginePipeRequested), m_batchMode(batchMode),
 #ifdef SPARK_PLATFORM_WINDOWS
-      m_consoleOutput(DisplayHandle()), m_consoleInput(GetStdHandle(STD_INPUT_HANDLE))
+      m_consoleOutput(batchMode ? GetStdHandle(STD_OUTPUT_HANDLE) : DisplayHandle()),
+      m_consoleInput(GetStdHandle(STD_INPUT_HANDLE))
 #else
       m_consoleOutput(STDOUT_FILENO), m_consoleInput(STDIN_FILENO)
 #endif
@@ -145,7 +146,10 @@ ConsoleApp::ConsoleApp(bool enginePipeRequested)
         m_engineInputThread = std::thread(&ConsoleApp::ReadEngineInput, this);
     }
 
-    PrintLog(L"Console initialized with engine communication support.");
+    if (!m_batchMode)
+    {
+        PrintLog(L"Console initialized with engine communication support.");
+    }
 }
 
 ConsoleApp::~ConsoleApp()
@@ -368,6 +372,25 @@ void ConsoleApp::Run()
     PrintLog(L"Console application terminated.");
 }
 
+void ConsoleApp::RunBatch(std::istream& input)
+{
+    std::string line;
+    while (m_running && std::getline(input, line))
+    {
+        line.erase(0, line.find_first_not_of(" \t\r\n"));
+        const size_t end = line.find_last_not_of(" \t\r\n");
+        if (end == std::string::npos)
+            continue;
+        line.resize(end + 1);
+        if (line == "exit" || line == "quit")
+        {
+            m_running = false;
+            break;
+        }
+        ExecuteCommand(line);
+    }
+}
+
 void ConsoleApp::ProcessPipeMessages(const std::string& message)
 {
     for (const std::string& pipeLine : m_pipeMessageFramer.Push(message))
@@ -576,6 +599,12 @@ std::string ConsoleApp::ResolveAlias(const std::string& input)
 
 void ConsoleApp::PrintLog(const std::wstring& msg)
 {
+    if (m_batchMode)
+    {
+        std::string narrow(msg.begin(), msg.end());
+        std::cout << narrow << std::endl;
+        return;
+    }
     std::lock_guard<std::mutex> lock(m_outputMutex);
 
     // Add timestamp
@@ -698,6 +727,11 @@ void ConsoleApp::PrintResult(const std::string& result)
     if (!result.empty())
     {
 #ifdef SPARK_PLATFORM_WINDOWS
+        if (m_batchMode)
+        {
+            std::cout << result << std::endl;
+            return;
+        }
         HANDLE hConsoleOut = DisplayHandle();
 
         SetConsoleTextAttribute(hConsoleOut, FOREGROUND_GREEN | FOREGROUND_BLUE);

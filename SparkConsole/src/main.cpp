@@ -26,6 +26,7 @@ namespace
 int main(int argc, char* argv[])
 {
     bool enginePipeRequested = false;
+    bool batchMode = false;
     for (int i = 1; i < argc; ++i)
     {
         const std::string_view argument(argv[i]);
@@ -37,6 +38,25 @@ int main(int argc, char* argv[])
         if (argument == "--engine-pipe")
         {
             enginePipeRequested = true;
+        }
+        if (argument == "--batch")
+        {
+            batchMode = true;
+        }
+    }
+
+    if (batchMode)
+    {
+        try
+        {
+            ConsoleApp app(false, true);
+            app.RunBatch(std::cin);
+            return 0;
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Console batch error: " << e.what() << std::endl;
+            return 1;
         }
     }
 

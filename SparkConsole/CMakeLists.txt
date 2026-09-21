@@ -168,6 +168,48 @@ endif()
                 -P "${_sparkconsole_version_test_script}")
         set_tests_properties(SparkConsoleVersion PROPERTIES TIMEOUT 10)
         unset(_sparkconsole_version_test_script)
+
+        set(_sparkconsole_batch_test_script
+            "${CMAKE_CURRENT_BINARY_DIR}/RunSparkConsoleBatchSmoke.cmake")
+        file(GENERATE OUTPUT "${_sparkconsole_batch_test_script}" CONTENT [=[
+foreach(_spark_required IN ITEMS SPARK_CONSOLE_EXECUTABLE SPARK_EXPECTED_VERSION SPARK_WORKING_DIRECTORY)
+    if(NOT DEFINED ${_spark_required} OR "${${_spark_required}}" STREQUAL "")
+        message(FATAL_ERROR "${_spark_required} is required")
+    endif()
+endforeach()
+if(NOT EXISTS "${SPARK_CONSOLE_EXECUTABLE}")
+    message(FATAL_ERROR "SparkConsole executable is missing: ${SPARK_CONSOLE_EXECUTABLE}")
+endif()
+file(MAKE_DIRECTORY "${SPARK_WORKING_DIRECTORY}")
+set(_spark_input "${SPARK_WORKING_DIRECTORY}/commands.txt")
+file(WRITE "${_spark_input}" "version\ndiag\nexit\n")
+execute_process(
+    COMMAND "${SPARK_CONSOLE_EXECUTABLE}" --batch
+    INPUT_FILE "${_spark_input}"
+    WORKING_DIRECTORY "${SPARK_WORKING_DIRECTORY}"
+    RESULT_VARIABLE _spark_result
+    OUTPUT_VARIABLE _spark_output
+    ERROR_VARIABLE _spark_error
+    TIMEOUT 10)
+if(NOT _spark_result EQUAL 0)
+    message(FATAL_ERROR "SparkConsole batch smoke failed (${_spark_result}): ${_spark_error}\n${_spark_output}")
+endif()
+string(REPLACE "\r\n" "\n" _spark_output "${_spark_output}")
+if(NOT _spark_output MATCHES "Spark Engine Console v${SPARK_EXPECTED_VERSION}")
+    message(FATAL_ERROR "Batch smoke did not report the expected version '${SPARK_EXPECTED_VERSION}':\n${_spark_output}")
+endif()
+if(NOT _spark_output MATCHES "SparkConsole Diagnostics:")
+    message(FATAL_ERROR "Batch smoke did not execute the diagnostic command:\n${_spark_output}")
+endif()
+]=])
+        add_test(NAME SparkConsoleBatchSmoke
+            COMMAND "${CMAKE_COMMAND}"
+                "-DSPARK_CONSOLE_EXECUTABLE=$<TARGET_FILE:SparkConsole>"
+                "-DSPARK_EXPECTED_VERSION=${SPARK_ENGINE_VERSION}"
+                "-DSPARK_WORKING_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/SparkConsoleBatchSmoke"
+                -P "${_sparkconsole_batch_test_script}")
+        set_tests_properties(SparkConsoleBatchSmoke PROPERTIES TIMEOUT 15)
+        unset(_sparkconsole_batch_test_script)
     endif()
 
     message(STATUS "SparkConsole configured successfully (all configurations: Debug, Release, RelWithDebInfo, MinSizeRel)")
