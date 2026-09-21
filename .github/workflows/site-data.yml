@@ -84,7 +84,7 @@ jobs:
           fi
           tracked="$(git ls-files -- tools/site-data | wc -l)"
           test "$tracked" -ge 6
-          python3 -c "import sys; sys.path.insert(0, 'tools/site-data'); import assets, contract_selectors, common"
+          python3 -c "import sys; sys.path.insert(0, 'tools/site-data'); import assets, contract_selectors, common, module_content"
 
       - name: Validate contract and generated handoff
         run: |
@@ -112,6 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 Tests/Tools/test_site_data_contract.py -v
+          python3 Tests/Tools/test_module_content_inventory.py -v
 
       - name: Validate documentation links and routes
         run: |

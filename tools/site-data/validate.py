@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from assets import validate_assets
+from module_content import validate as validate_module_content
 from common import (
     METRIC_IDS,
     REPO_ROOT,
@@ -2148,14 +2149,6 @@ class Validator:
         self.require((REPO_ROOT / "Assets").is_dir(), "Assets", "asset root does not exist")
         self.require((REPO_ROOT / "Shaders").is_dir(), "Shaders", "shader root does not exist")
         self.require((REPO_ROOT / "SparkEngine" / "Source" / "Graphics" / "AssetPipeline.cpp").is_file(), "asset pipeline", "primary asset-pipeline source is absent")
-        for location, message in validate_assets():
-            # Every asset finding, absent manifest included, is a hard error. A
-            # missing manifest is the headline condition the asset-integrity job
-            # exists to catch (RDY-020); routing it through the legacy waiver
-            # made that job structurally incapable of failing for it, while the
-            # job still has to pass the waiver for the unrelated
-            # contract-reference debt the whole validator walks.
-            self.error(location, message)
         integrity_manifest = REPO_ROOT / "Assets" / "assets.integrity.json"
         self.require(integrity_manifest.is_file(), "Assets/assets.integrity.json", "asset integrity manifest is missing")
         tool_path = REPO_ROOT / "tools" / "asset-integrity" / "verify_asset_integrity.py"
@@ -2269,6 +2262,10 @@ class Validator:
         profile_ids = self.validate_release_profiles(item_ids, capability_ids, gate_ids)
         self.validate_execution(item_ids)
         self.validate_content(capability_ids, profile_ids)
+        for location, message in validate_assets():
+            self.error(location, message)
+        for location, message in validate_module_content(REPO_ROOT):
+            self.error(location, message)
         self.validate_docs_catalog()
         self.validate_build_matrix_evidence()
         self.validate_legal(strict_public_wording=legal)
