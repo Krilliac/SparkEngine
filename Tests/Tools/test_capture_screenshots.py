@@ -64,9 +64,9 @@ class CaptureScreenshotsTests(unittest.TestCase):
             xterm_body = (
                 "#!/bin/sh\n"
                 "printf x >> \"$XDG_RUNTIME_DIR/xterm.marker\"\n"
-                "(while :; do printf x >> \"$XDG_RUNTIME_DIR/xterm-child.marker\"; /usr/bin/sleep 0.05; done) &\n"
                 "trap '' TERM\n"
-                "while :; do /usr/bin/sleep 0.05; done\n"
+                "(while :; do printf x >> \"$XDG_RUNTIME_DIR/xterm-child.marker\"; /usr/bin/sleep 0.05; done) &\n"
+                "while :; do printf x >> \"$XDG_RUNTIME_DIR/xterm.marker\"; /usr/bin/sleep 0.05; done\n"
                 if long_lived_processes
                 else "#!/bin/sh\nexit 0\n"
             )
@@ -132,8 +132,14 @@ class CaptureScreenshotsTests(unittest.TestCase):
                 )
                 stdout, stderr = process.communicate(timeout=20)
                 final_size = (root / "runtime" / "xvfb.marker").stat().st_size
+                final_parent_size = (root / "runtime" / "xterm.marker").stat().st_size
                 final_child_size = (root / "runtime" / "xterm-child.marker").stat().st_size
                 time.sleep(0.2)
+                self.assertEqual(
+                    (root / "runtime" / "xterm.marker").stat().st_size,
+                    final_parent_size,
+                    "TERM-ignoring xterm must stop before script exit",
+                )
                 self.assertEqual(
                     (root / "runtime" / "xvfb.marker").stat().st_size,
                     final_size,
@@ -158,7 +164,7 @@ class CaptureScreenshotsTests(unittest.TestCase):
                 env=environment,
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=10,
                 check=False,
             )
 
@@ -189,7 +195,7 @@ class CaptureScreenshotsTests(unittest.TestCase):
             [
                 sys.executable,
                 "-c",
-                "import time; time.sleep(300)  # SparkConsole unrelated sentinel",
+                "import time; time.sleep(300)  # SparkConsole Xvfb unrelated sentinel",
             ],
             cwd=REPO_ROOT,
         )

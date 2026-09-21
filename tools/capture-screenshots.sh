@@ -27,6 +27,7 @@ owned_modes=()
 owned_roles=()
 owned_active=()
 display_lock=""
+cleanup_failed=0
 
 use_process_groups=0
 if command -v setsid >/dev/null 2>&1 \
@@ -37,8 +38,14 @@ fi
 
 read_start_time() {
     local pid="$1"
-    if [ -r "/proc/$pid/stat" ]; then
-        awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true
+    local process_stat
+    local fields=()
+    if { IFS= read -r process_stat <"/proc/$pid/stat"; } 2>/dev/null; then
+        # The parenthesized command can contain spaces; field 22 is the
+        # twentieth field after it.  Builtin reads also avoid a ps/awk process
+        # for every identity check on Git Bash.
+        read -r -a fields <<< "${process_stat##*) }"
+        printf '%s\n' "${fields[19]-}"
     fi
 }
 
@@ -60,11 +67,17 @@ read_process_group() {
 }
 
 read_native_pid() {
-    ps -W -l 2>/dev/null | awk -v wanted="$1" 'NR > 1 && $1 == wanted {print $4; exit}'
+    local native_pid
+    if { IFS= read -r native_pid <"/proc/$1/winpid"; } 2>/dev/null; then
+        printf '%s\n' "$native_pid"
+    fi
 }
 
 read_windows_identity() {
-    ps -W -l 2>/dev/null | awk -v wanted="$1" 'NR > 1 && $1 == wanted {$1=$1; print; exit}'
+    # PPID and process state change when a parent exits.  They must never be
+    # part of the identity used to reap an already snapshotted descendant.
+    ps -W -l 2>/dev/null | awk -v wanted="$1" \
+        'NR > 1 && $1 == wanted {print $1, $4, $6, $7; exit}'
 }
 
 read_identity() {
@@ -108,8 +121,11 @@ signal_captured_descendants() {
         [ -n "$child" ] || continue
         if snapshot_pid_is_same "$child" "$expected"; then
             if [ "$force" -eq 1 ] && [ -n "$native" ] \
-                && command -v taskkill.exe >/dev/null 2>&1; then
-                taskkill.exe /PID "$native" /T /F >/dev/null 2>&1 || true
+                && [ "$(read_native_pid "$child")" = "$native" ]; then
+                # Git Bash's builtin kill can leave a Windows-backed process
+                # alive.  Its external kill supports direct Win32 termination
+                # and works even with a PATH containing only /usr/bin:/bin.
+                /usr/bin/kill -f -W -KILL "$native" 2>/dev/null || true
             fi
             kill -"$signal" "$child" 2>/dev/null || true
         fi
@@ -130,7 +146,8 @@ captured_descendants_are_live() {
 
 process_group_is_alive() {
     local pgid="$1"
-    ps -eo pgid= 2>/dev/null | awk -v wanted="$pgid" '$1 == wanted {found=1} END {exit !found}'
+    ps -eo pgid=,stat= 2>/dev/null | awk -v wanted="$pgid" \
+        '$1 == wanted && $2 !~ /^Z/ {found=1} END {exit !found}'
 }
 
 launch_owned() {
@@ -158,6 +175,9 @@ launch_owned() {
         if [ -n "$identity" ] && { [ "$mode" = group ] || [ -n "$native_pid" ]; }; then
             break
         fi
+        # Completed helpers have no identity to discover.  Do not spend fifty
+        # Windows process-table scans waiting for an already reaped process.
+        kill -0 "$pid" 2>/dev/null || break
         sleep 0.01
     done
     if [ -z "$identity" ]; then
@@ -206,7 +226,13 @@ stop_owned_index() {
     fi
     owned_active[index]=0
     if ! owned_pid_is_same "$index"; then
-        wait "$pid" 2>/dev/null || true
+        if ! pid_is_live "$pid"; then
+            wait "$pid" 2>/dev/null || true
+        else
+            echo "ERROR: owned capture process identity changed (PID $pid)" >&2
+            cleanup_failed=1
+            return 1
+        fi
         return
     fi
     if [ "$mode" = tree ]; then
@@ -233,28 +259,15 @@ stop_owned_index() {
             kill -TERM "$pid" 2>/dev/null || true
         fi
     fi
-    for _ in {1..50}; do
+    for _ in {1..20}; do
         if [ "$mode" = group ]; then
-            if ! owned_pid_is_same "$index" && ! process_group_is_alive "$pgid"; then
+            if ! pid_is_live "$pid" && ! process_group_is_alive "$pgid"; then
                 wait "$pid" 2>/dev/null || true
                 return
             fi
-        elif ! owned_pid_is_same "$index" && ! captured_descendants_are_live "$descendant_snapshot"; then
+        elif ! pid_is_live "$pid" && ! captured_descendants_are_live "$descendant_snapshot"; then
             wait "$pid" 2>/dev/null || true
             return
-        elif ! owned_pid_is_same "$index"; then
-            local child_alive=0
-            local child
-            for child in $descendants; do
-                if pid_is_live "$child"; then
-                    child_alive=1
-                    break
-                fi
-            done
-            if [ "$child_alive" -eq 0 ]; then
-                wait "$pid" 2>/dev/null || true
-                return
-            fi
         fi
         sleep 0.1
     done
@@ -280,24 +293,32 @@ stop_owned_index() {
                 if [ -z "$native_pid" ]; then
                     native_pid="$(read_native_pid "$pid")"
                 fi
-                if [ -n "$native_pid" ] && command -v taskkill.exe >/dev/null 2>&1; then
-                    taskkill.exe /PID "$native_pid" /T /F >/dev/null 2>&1 || true
+                if [ -n "$native_pid" ] \
+                    && [ "$(read_native_pid "$pid")" = "$native_pid" ]; then
+                    /usr/bin/kill -f -W -KILL "$native_pid" 2>/dev/null || true
                 fi
                 kill -KILL "$pid" 2>/dev/null || true
             fi
         fi
     fi
-    for _ in {1..50}; do
+    for _ in {1..20}; do
         if [ "$mode" = group ]; then
             process_group_is_alive "$pgid" || break
         else
-            if ! owned_pid_is_same "$index" \
+            if ! pid_is_live "$pid" \
                 && ! captured_descendants_are_live "$descendant_snapshot"; then
                 break
             fi
         fi
         sleep 0.1
     done
+    # Never turn a bounded cleanup deadline into an unbounded shell wait.
+    if pid_is_live "$pid" || captured_descendants_are_live "$descendant_snapshot" \
+        || { [ "$mode" = group ] && process_group_is_alive "$pgid"; }; then
+        echo "ERROR: owned capture process survived cleanup (PID $pid)" >&2
+        cleanup_failed=1
+        return 1
+    fi
     wait "$pid" 2>/dev/null || true
 }
 
@@ -311,6 +332,9 @@ cleanup() {
     done
     if [ -n "$display_lock" ]; then
         rmdir "$display_lock" 2>/dev/null || true
+    fi
+    if [ "$cleanup_failed" -ne 0 ]; then
+        status=1
     fi
     exit "$status"
 }
