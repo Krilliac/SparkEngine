@@ -2,7 +2,16 @@
 
 The Game Packaging code provides a local staging pipeline that can copy engine output, game DLLs, and raw assets into a package directory. Its output is not a release artifact: `stable-v1` is blocked and has no same-commit package/install/run/signing/attestation certification. The current implementation supports target selectors, optional `.pdb` removal, and a size-only manifest; it does not cook asset formats, calculate checksums, or create SparkPak archives.
 
-**Source:** `SparkEngine/Source/Core/GamePackager.h`
+**Canonical source:** `SparkEngine/Source/Engine/Build/GamePackager.h` / `.cpp`
+**Compatibility facade:** `SparkEngine/Source/Core/GamePackager.h` / `.cpp`
+
+All packaging work is owned by the `Spark::Build::GamePackager` implementation;
+the historical `Spark::GamePackager` Core API translates into that owner. The
+canonical `PackageResult::filesCopied` count includes successfully copied
+payload files (the executable, modules, assets, data, extras, and any retained
+debug symbols) and excludes generated `manifest.txt` metadata. A failed legacy
+package reports the payload files copied before failure, while its output path
+remains empty and no manifest is published.
 
 ## Overview
 
@@ -75,6 +84,11 @@ struct PackageResult
     uint32_t dllCount = 0;             // Number of DLLs/shared libraries copied
 };
 ```
+
+The canonical build-facing result also exposes `filesCopied`, defined as the
+number of successfully copied payload files; generated manifest metadata is
+not counted. Debug packages count retained `.pdb` files, while release package
+stripping removes them before publication.
 
 ## Quick Start
 

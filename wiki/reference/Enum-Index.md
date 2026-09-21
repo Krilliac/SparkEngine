@@ -532,7 +532,7 @@
 | `OutputFormat` | enum | SparkEngine | [MovieRenderPipeline.h:L39](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L39) | Output image format for rendered frames |
 | `OverlayPosition` | enum | SparkEngine | [DebugOverlay.h:L67](../../SparkEngine/Source/Utils/DebugOverlay.h#L67) | Screen corner for overlay positioning |
 | `OverlaySection` | enum | SparkEngine | [DebugOverlay.h:L49](../../SparkEngine/Source/Utils/DebugOverlay.h#L49) | Sections that can be individually toggled in the overlay |
-| `PackageBuildConfig` | enum | SparkEngine | [GamePackager.h:L24](../../SparkEngine/Source/Core/GamePackager.h#L24) |  |
+| `PackageBuildConfig` | enum | SparkEngine | [GamePackager.h:L28](../../SparkEngine/Source/Core/GamePackager.h#L28) |  |
 | `PackageCompressionType` | enum | SparkEditor | [BuildSystemEnums.h:L106](../../SparkEditor/Source/Enums/BuildSystemEnums.h#L106) | Compression types for packaging |
 | `PackagePlatform` | enum | SparkEngine | [GamePackager.h:L46](../../SparkEngine/Source/Engine/Build/GamePackager.h#L46) | Target platform for the package |
 | `PacketViolation` | enum | SparkEngine | [PacketValidator.h:L37](../../SparkEngine/Source/Engine/Networking/PacketValidator.h#L37) | Why a packet was rejected |
@@ -789,7 +789,7 @@
 | `TacticalPointType` | enum | Tests | [TestTacticalPointSystem.cpp:L27](../../Tests/TestTacticalPointSystem.cpp#L27) |  |
 | `TalentSpec` | enum | GameModules | [MMOEnums.h:L141](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L141) | Talent tree specialization paths |
 | `TargetPlatform` | enum | SparkEditor | [BuildCookPanel.h:L35](../../SparkEditor/Source/Panels/BuildCookPanel.h#L35) |  |
-| `TargetPlatform` | enum | SparkEngine | [GamePackager.h:L17](../../SparkEngine/Source/Core/GamePackager.h#L17) |  |
+| `TargetPlatform` | enum | SparkEngine | [GamePackager.h:L21](../../SparkEngine/Source/Core/GamePackager.h#L21) |  |
 | `Team` | enum | GameModules | [GameModeTypes.h:L37](../../GameModules/SparkGameFPS/Source/Game/GameModeTypes.h#L37) | Team identifiers |
 | `TelemetryDeliveryResult` | enum | SparkEngine | [Telemetry.h:L95](../../SparkEngine/Source/Utils/Telemetry.h#L95) | Result of one backend delivery attempt. |
 | `TelemetrySpoolResult` | enum | SparkEngine | [TelemetrySpool.h:L32](../../SparkEngine/Source/Utils/TelemetrySpool.h#L32) |  |

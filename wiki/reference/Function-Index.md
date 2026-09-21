@@ -3009,7 +3009,7 @@
 | `Cleanup` | function | Tests | [TestSequencerAudioWiring.cpp:L78](../../Tests/TestSequencerAudioWiring.cpp#L78) |  |
 | `Cleanup` | function | Tests | [TestSparkPak.cpp:L264](../../Tests/TestSparkPak.cpp#L264) |  |
 | `CleanupCacheTestDir` | function | Tests | [TestLocalFileCache.cpp:L14](../../Tests/TestLocalFileCache.cpp#L14) |  |
-| `CleanupDir` | function | Tests | [TestGamePackager.cpp:L18](../../Tests/TestGamePackager.cpp#L18) |  |
+| `CleanupDir` | function | Tests | [TestGamePackager.cpp:L21](../../Tests/TestGamePackager.cpp#L21) |  |
 | `CleanupFinished` | function | GameModules | [QuestSystem.h:L381](../../GameModules/SparkGameFPS/Source/Game/QuestSystem.h#L381) | Remove completed and failed quests from the active list |
 | `CleanupInitializedSubsystemsNoexcept` | function | SparkEngine | [EngineContext.cpp:L434](../../SparkEngine/Source/Core/EngineContext.cpp#L434) |  |
 | `CleanupInitializedSubsystemsNoexcept` | function | SparkEngine | [EngineContext.h:L578](../../SparkEngine/Source/Core/EngineContext.h#L578) | Perform topological sort of subsystem entries |
@@ -3621,17 +3621,17 @@
 | `Collect` | function | Tests | [TestAssetDependencyGraph.cpp:L113](../../Tests/TestAssetDependencyGraph.cpp#L113) |  |
 | `CollectAllEntries` | function | SparkEngine | [Octree.h:L483](../../SparkEngine/Source/Utils/Octree.h#L483) |  |
 | `CollectAllPrimitives` | function | SparkEngine | [BVHAccelerator.h:L423](../../SparkEngine/Source/Graphics/BVHAccelerator.h#L423) |  |
-| `CollectAssets` | function | SparkEngine | [GamePackager.h:L397](../../SparkEngine/Source/Engine/Build/GamePackager.h#L397) |  |
+| `CollectAssets` | function | SparkEngine | [GamePackager.h:L429](../../SparkEngine/Source/Engine/Build/GamePackager.h#L429) |  |
 | `CollectCoin` | function | Templates | [GameModule.h:L142](../../Templates/PlatformerKit/Source/GameModule.h#L142) |  |
-| `CollectDataFiles` | function | SparkEngine | [GamePackager.h:L403](../../SparkEngine/Source/Engine/Build/GamePackager.h#L403) |  |
-| `CollectDirectory` | function | SparkEngine | [GamePackager.h:L409](../../SparkEngine/Source/Engine/Build/GamePackager.h#L409) |  |
+| `CollectDataFiles` | function | SparkEngine | [GamePackager.h:L435](../../SparkEngine/Source/Engine/Build/GamePackager.h#L435) |  |
+| `CollectDirectory` | function | SparkEngine | [GamePackager.h:L441](../../SparkEngine/Source/Engine/Build/GamePackager.h#L441) |  |
 | `CollectDrop` | function | GameModules | [LootSystem.h:L153](../../GameModules/SparkGameFPS/Source/Game/LootSystem.h#L153) |  |
-| `CollectExecutable` | function | SparkEngine | [GamePackager.h:L325](../../SparkEngine/Source/Engine/Build/GamePackager.h#L325) |  |
+| `CollectExecutable` | function | SparkEngine | [GamePackager.h:L357](../../SparkEngine/Source/Engine/Build/GamePackager.h#L357) |  |
 | `CollectFormatCheckFiles` | function | SparkEditor | [BuiltinWorkflows.cpp:L115](../../SparkEditor/Source/Workflow/BuiltinWorkflows.cpp#L115) |  |
 | `CollectFromFoliageManager` | function | SparkEngine | [FoliageRenderer.h:L231](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L231) |  |
 | `CollectIdentityMap` | function | Tests | [TestSubsystemIntegrationScenarios.cpp:L285](../../Tests/Integration/TestSubsystemIntegrationScenarios.cpp#L285) |  |
 | `CollectItems` | function | SparkEngine | [Octree.h:L501](../../SparkEngine/Source/Utils/Octree.h#L501) |  |
-| `CollectModules` | function | SparkEngine | [GamePackager.h:L362](../../SparkEngine/Source/Engine/Build/GamePackager.h#L362) |  |
+| `CollectModules` | function | SparkEngine | [GamePackager.h:L394](../../SparkEngine/Source/Engine/Build/GamePackager.h#L394) |  |
 | `CollectPositions` | function | Tests | [TestSubsystemIntegrationScenarios.cpp:L297](../../Tests/Integration/TestSubsystemIntegrationScenarios.cpp#L297) |  |
 | `CollectResults` | function | SparkEngine | [GPUTimestampQuery.h:L404](../../SparkEngine/Source/Graphics/GPUTimestampQuery.h#L404) | Collect results from a completed frame |
 | `CollectStats` | function | SparkEditor | [SceneStatisticsPanel.h:L66](../../SparkEditor/Source/Panels/SceneStatisticsPanel.h#L66) | Re-read every live source immediately (called on the update interval). |
@@ -4168,7 +4168,7 @@
 | `Console_GetStatus` | function | SparkEngine | [AccessibilitySystem.h:L272](../../SparkEngine/Source/Engine/Accessibility/AccessibilitySystem.h#L272) | Get accessibility system status (console integration). |
 | `Console_GetStatus` | function | SparkEngine | [AnimNotify.h:L276](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L276) | Get status string for console/debug display |
 | `Console_GetStatus` | function | SparkEngine | [RagdollSystem.h:L260](../../SparkEngine/Source/Engine/Animation/RagdollSystem.h#L260) | Get ragdoll system status (console integration). |
-| `Console_GetStatus` | function | SparkEngine | [GamePackager.h:L307](../../SparkEngine/Source/Engine/Build/GamePackager.h#L307) | Get console-friendly status string |
+| `Console_GetStatus` | function | SparkEngine | [GamePackager.h:L339](../../SparkEngine/Source/Engine/Build/GamePackager.h#L339) | Get console-friendly status string. [game thread, non-thread-safe] |
 | `Console_GetStatus` | function | SparkEngine | [VideoPlayer.h:L342](../../SparkEngine/Source/Engine/Cinematic/VideoPlayer.h#L342) | Get status string for console/debug display |
 | `Console_GetStatus` | function | SparkEngine | [DataTableSystem.h:L768](../../SparkEngine/Source/Engine/DataTable/DataTableSystem.h#L768) | Return a status string for the debug console. |
 | `Console_GetStatus` | function | SparkEngine | [DestructionSystem.h:L263](../../SparkEngine/Source/Engine/Destruction/DestructionSystem.h#L263) | Get destruction system status (console integration). |
@@ -5366,7 +5366,7 @@
 | `CreateSyncObjects` | function | SparkEngine | [VulkanDevice.h:L277](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L277) |  |
 | `CreateTarget` | function | SparkEngine | [RenderTargetPool.h:L283](../../SparkEngine/Source/Graphics/RenderTargetPool.h#L283) |  |
 | `CreateTempDir` | function | Tests | [TestFileWatcher.cpp:L11](../../Tests/TestFileWatcher.cpp#L11) |  |
-| `CreateTempFile` | function | Tests | [TestGamePackager.cpp:L9](../../Tests/TestGamePackager.cpp#L9) |  |
+| `CreateTempFile` | function | Tests | [TestGamePackager.cpp:L12](../../Tests/TestGamePackager.cpp#L12) |  |
 | `CreateTemporalTargets` | function | SparkEngine | [RenderTarget.h:L285](../../SparkEngine/Source/Graphics/RenderTarget.h#L285) |  |
 | `CreateTemporalUpscalingShader` | function | SparkEngine | [UpscalingSystemWindows.cpp:L240](../../SparkEngine/Source/Graphics/UpscalingSystemWindows.cpp#L240) | Compile and create the temporal upscaling compute shader |
 | `CreateTempShaderDir` | function | Tests | [TestShaderHotReload.cpp:L11](../../Tests/TestShaderHotReload.cpp#L11) |  |
@@ -5526,6 +5526,8 @@
 | `cvars` | function | Tests | [TestDaemonLifecycle.cpp:L395](../../Tests/TestDaemonLifecycle.cpp#L395) |  |
 | `cvars` | function | Tests | [TestDaemonLifecycle.cpp:L428](../../Tests/TestDaemonLifecycle.cpp#L428) |  |
 | `CVarTypeToString` | function | SparkEngine | [ConsoleVariable.h:L84](../../SparkEngine/Source/Utils/ConsoleVariable.h#L84) |  |
+| `cwd` | function | Tests | [TestGamePackager.cpp:L271](../../Tests/TestGamePackager.cpp#L271) |  |
+| `cwd` | function | Tests | [TestGamePackager.cpp:L373](../../Tests/TestGamePackager.cpp#L373) |  |
 | `cwd` | function | Tests | [TestTelemetrySpool.cpp:L959](../../Tests/TestTelemetrySpool.cpp#L959) |  |
 | `cwdOverride` | function | Tests | [TestUserDataPathsReal.cpp:L193](../../Tests/TestUserDataPathsReal.cpp#L193) |  |
 | `cwdOverride` | function | Tests | [TestUserDataPathsReal.cpp:L234](../../Tests/TestUserDataPathsReal.cpp#L234) |  |
@@ -7895,6 +7897,7 @@
 | `ExecElapsedSeconds` | function | SparkEngine | [SparkEngineWindowsInternal.h:L78](../../SparkEngine/Source/Core/SparkEngineWindowsInternal.h#L78) | Wall-clock since the first due-check of the main loop (lazy start). |
 | `Executable` | function | Tests | [TestLauncherProcess.cpp:L23](../../Tests/TestLauncherProcess.cpp#L23) |  |
 | `ExecutableDirectory` | function | GameModules | [FPSAssetPaths.cpp:L19](../../GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp#L19) |  |
+| `ExecutableExtension` | function | SparkEngine | [GamePackager.cpp:L42](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L42) |  |
 | `ExecutablePath` | function | SparkLauncher | [LauncherProcess.cpp:L36](../../SparkLauncher/src/LauncherProcess.cpp#L36) |  |
 | `Execute` | function | SparkEditor | [CommandHistory.h:L66](../../SparkEditor/Source/CommandHistory.h#L66) | Execute (or re-execute) the command. |
 | `Execute` | function | SparkEditor | [CommandHistory.h:L117](../../SparkEditor/Source/CommandHistory.h#L117) | Execute a command and push it onto the undo stack. |
@@ -8652,7 +8655,7 @@
 | `FillRandomBytes` | function | SparkEngine | [CrashArtifactDirectory.h:L34](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L34) |  |
 | `filter` | function | SparkEditor | [EventResponsePanel.cpp:L292](../../SparkEditor/Source/Panels/EventResponsePanel.cpp#L292) |  |
 | `FilterActions` | function | SparkEditor | [CommandPalette.h:L105](../../SparkEditor/Source/Search/CommandPalette.h#L105) |  |
-| `FilterExcludes` | function | SparkEngine | [GamePackager.h:L436](../../SparkEngine/Source/Engine/Build/GamePackager.h#L436) |  |
+| `FilterExcludes` | function | SparkEngine | [GamePackager.h:L468](../../SparkEngine/Source/Engine/Build/GamePackager.h#L468) |  |
 | `FilterLoaded` | function | Tests | [TestModuleDiscovery.cpp:L52](../../Tests/TestModuleDiscovery.cpp#L52) |  |
 | `FilterName` | function | SparkEditor | [SelectionManager.h:L543](../../SparkEditor/Source/Panels/SelectionManager.h#L543) |  |
 | `final_suspend` | function | SparkEngine | [CoroutineTypes.h:L193](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L193) |  |
@@ -9224,7 +9227,7 @@
 | `FormatRecoveryCapturedTime` | function | SparkEditor | [EditorUI.cpp:L113](../../SparkEditor/Source/Core/EditorUI.cpp#L113) |  |
 | `FormatsCompatible` | function | SparkEngine | [AudioEngine.h:L407](../../SparkEngine/Source/Audio/AudioEngine.h#L407) | Whether two wave formats can share a single XAudio2 source voice |
 | `FormatSize` | function | SparkEditor | [AssetAuditGraph.h:L475](../../SparkEditor/Source/Panels/AssetAuditGraph.h#L475) |  |
-| `FormatSize` | function | SparkEngine | [GamePackager.h:L451](../../SparkEngine/Source/Engine/Build/GamePackager.h#L451) |  |
+| `FormatSize` | function | SparkEngine | [GamePackager.h:L483](../../SparkEngine/Source/Engine/Build/GamePackager.h#L483) |  |
 | `FormatTimestamp` | function | SparkEditor | [ConsolePanel.cpp:L349](../../SparkEditor/Source/Panels/ConsolePanel.cpp#L349) |  |
 | `FormatTimestamp` | function | SparkEditor | [ConsolePanel.cpp:L357](../../SparkEditor/Source/Panels/ConsolePanel.cpp#L357) |  |
 | `FormatTimestamp` | function | SparkEditor | [ConsolePanel.cpp:L362](../../SparkEditor/Source/Panels/ConsolePanel.cpp#L362) |  |
@@ -9617,21 +9620,14 @@
 | `GameObject::Translate` | method | SparkEngine | [GameObject.cpp:L133](../../SparkEngine/Source/Game/GameObject.cpp#L133) |  |
 | `GameObject::Update` | method | SparkEngine | [GameObject.cpp:L73](../../SparkEngine/Source/Game/GameObject.cpp#L73) |  |
 | `GameObject::UpdateWorldMatrix` | method | SparkEngine | [GameObject.cpp:L254](../../SparkEngine/Source/Game/GameObject.cpp#L254) |  |
-| `GamePackager::CompressOutput` | method | SparkEngine | [GamePackager.cpp:L380](../../SparkEngine/Source/Core/GamePackager.cpp#L380) |  |
-| `GamePackager::Console_GetStatus` | method | SparkEngine | [GamePackager.cpp:L153](../../SparkEngine/Source/Core/GamePackager.cpp#L153) |  |
-| `GamePackager::CookAssets` | method | SparkEngine | [GamePackager.cpp:L217](../../SparkEngine/Source/Core/GamePackager.cpp#L217) |  |
-| `GamePackager::CopyBinaries` | method | SparkEngine | [GamePackager.cpp:L259](../../SparkEngine/Source/Core/GamePackager.cpp#L259) |  |
-| `GamePackager::CreateManifest` | method | SparkEngine | [GamePackager.cpp:L344](../../SparkEngine/Source/Core/GamePackager.cpp#L344) |  |
-| `GamePackager::GetDllExtension` | method | SparkEngine | [GamePackager.cpp:L192](../../SparkEngine/Source/Core/GamePackager.cpp#L192) |  |
-| `GamePackager::GetExeExtension` | method | SparkEngine | [GamePackager.cpp:L206](../../SparkEngine/Source/Core/GamePackager.cpp#L206) |  |
-| `GamePackager::GetInstance` | method | SparkEngine | [GamePackager.cpp:L12](../../SparkEngine/Source/Core/GamePackager.cpp#L12) |  |
-| `GamePackager::GetSupportedPlatforms` | method | SparkEngine | [GamePackager.cpp:L148](../../SparkEngine/Source/Core/GamePackager.cpp#L148) |  |
-| `GamePackager::Initialize` | method | SparkEngine | [GamePackager.cpp:L18](../../SparkEngine/Source/Core/GamePackager.cpp#L18) |  |
-| `GamePackager::Package` | method | SparkEngine | [GamePackager.cpp:L47](../../SparkEngine/Source/Core/GamePackager.cpp#L47) |  |
-| `GamePackager::PlatformToString` | method | SparkEngine | [GamePackager.cpp:L178](../../SparkEngine/Source/Core/GamePackager.cpp#L178) |  |
-| `GamePackager::Shutdown` | method | SparkEngine | [GamePackager.cpp:L41](../../SparkEngine/Source/Core/GamePackager.cpp#L41) |  |
-| `GamePackager::StripSymbols` | method | SparkEngine | [GamePackager.cpp:L316](../../SparkEngine/Source/Core/GamePackager.cpp#L316) |  |
-| `GamePackager::ValidateConfig` | method | SparkEngine | [GamePackager.cpp:L124](../../SparkEngine/Source/Core/GamePackager.cpp#L124) |  |
+| `GamePackager::Console_GetStatus` | method | SparkEngine | [GamePackager.cpp:L88](../../SparkEngine/Source/Core/GamePackager.cpp#L88) |  |
+| `GamePackager::GetInstance` | method | SparkEngine | [GamePackager.cpp:L8](../../SparkEngine/Source/Core/GamePackager.cpp#L8) |  |
+| `GamePackager::GetSupportedPlatforms` | method | SparkEngine | [GamePackager.cpp:L83](../../SparkEngine/Source/Core/GamePackager.cpp#L83) |  |
+| `GamePackager::Initialize` | method | SparkEngine | [GamePackager.cpp:L14](../../SparkEngine/Source/Core/GamePackager.cpp#L14) |  |
+| `GamePackager::Package` | method | SparkEngine | [GamePackager.cpp:L38](../../SparkEngine/Source/Core/GamePackager.cpp#L38) |  |
+| `GamePackager::PackageLegacy` | method | SparkEngine | [GamePackager.cpp:L64](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L64) |  |
+| `GamePackager::Shutdown` | method | SparkEngine | [GamePackager.cpp:L31](../../SparkEngine/Source/Core/GamePackager.cpp#L31) |  |
+| `GamePackager::ValidateConfig` | method | SparkEngine | [GamePackager.cpp:L69](../../SparkEngine/Source/Core/GamePackager.cpp#L69) |  |
 | `GamepadInput::ApplyDeadZone` | method | SparkEngine | [GamepadInput.cpp:L364](../../SparkEngine/Source/Input/GamepadInput.cpp#L364) |  |
 | `GamepadInput::BindAction` | method | SparkEngine | [GamepadInput.cpp:L262](../../SparkEngine/Source/Input/GamepadInput.cpp#L262) |  |
 | `GamepadInput::BindAction` | method | SparkEngine | [GamepadInput.cpp:L274](../../SparkEngine/Source/Input/GamepadInput.cpp#L274) |  |
@@ -11327,7 +11323,7 @@
 | `GetExecutableDirectory` | function | SparkEngine | [SparkEngineMacOS.cpp:L130](../../SparkEngine/Source/Core/SparkEngineMacOS.cpp#L130) |  |
 | `GetExecutableDirectory` | function | SparkEngine | [SparkEngineMacOS.h:L53](../../SparkEngine/Source/Core/SparkEngineMacOS.h#L53) | Resolve the directory containing the running executable via |
 | `GetExecutableDirectoryLinux` | function | SparkEngine | [SparkEngineLinuxInit.cpp:L58](../../SparkEngine/Source/Core/SparkEngineLinuxInit.cpp#L58) |  |
-| `GetExecutableExtension` | function | SparkEngine | [GamePackager.h:L295](../../SparkEngine/Source/Engine/Build/GamePackager.h#L295) | Get the platform-specific executable extension |
+| `GetExecutableExtension` | function | SparkEngine | [GamePackager.h:L327](../../SparkEngine/Source/Engine/Build/GamePackager.h#L327) | Get the platform-specific executable extension. [any thread, pure] |
 | `GetExecutablePath` | function | SparkEditor | [BuildPipeline.cpp:L66](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L66) |  |
 | `GetExecutionOrder` | function | SparkEngine | [RenderGraph.h:L379](../../SparkEngine/Source/Graphics/RenderGraph.h#L379) | Get the compiled execution order (pass indices). |
 | `GetExecutionOrder` | function | Tests | [TestAsyncComputeScheduler.cpp:L68](../../Tests/TestAsyncComputeScheduler.cpp#L68) |  |
@@ -11763,7 +11759,7 @@
 | `GetInstance` | function | SparkEngine | [EngineSettings.h:L883](../../SparkEngine/Source/Core/EngineSettings.h#L883) |  |
 | `GetInstance` | function | SparkEngine | [FaultIsolation.h:L55](../../SparkEngine/Source/Core/FaultIsolation.h#L55) |  |
 | `GetInstance` | function | SparkEngine | [FixedTimestepAccumulator.h:L36](../../SparkEngine/Source/Core/FixedTimestepAccumulator.h#L36) | Get the singleton instance |
-| `GetInstance` | function | SparkEngine | [GamePackager.h:L55](../../SparkEngine/Source/Core/GamePackager.h#L55) |  |
+| `GetInstance` | function | SparkEngine | [GamePackager.h:L65](../../SparkEngine/Source/Core/GamePackager.h#L65) | Legacy Core facade over Spark::Build::GamePackager. |
 | `GetInstance` | function | SparkEngine | [ResourceVersionTracker.h:L27](../../SparkEngine/Source/Core/ResourceVersionTracker.h#L27) | Get the singleton instance |
 | `GetInstance` | function | SparkEngine | [AIDebugRenderer.h:L79](../../SparkEngine/Source/Engine/AI/AIDebugRenderer.h#L79) | Get the singleton instance |
 | `GetInstance` | function | SparkEngine | [AIIntegration.h:L129](../../SparkEngine/Source/Engine/AI/AIIntegration.h#L129) | Process-wide singleton accessor. |
@@ -11780,7 +11776,7 @@
 | `GetInstance` | function | SparkEngine | [AnimNotify.h:L148](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L148) | Get the singleton instance |
 | `GetInstance` | function | SparkEngine | [AnimationSystem.h:L378](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L378) | Access the global singleton instance. |
 | `GetInstance` | function | SparkEngine | [BlendSpace.h:L198](../../SparkEngine/Source/Engine/Animation/BlendSpace.h#L198) | Singleton access. |
-| `GetInstance` | function | SparkEngine | [GamePackager.h:L110](../../SparkEngine/Source/Engine/Build/GamePackager.h#L110) |  |
+| `GetInstance` | function | SparkEngine | [GamePackager.h:L135](../../SparkEngine/Source/Engine/Build/GamePackager.h#L135) |  |
 | `GetInstance` | function | SparkEngine | [Sequencer.h:L337](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L337) |  |
 | `GetInstance` | function | SparkEngine | [VideoPlayer.h:L103](../../SparkEngine/Source/Engine/Cinematic/VideoPlayer.h#L103) | Get the singleton instance |
 | `GetInstance` | function | SparkEngine | [CoroutineScheduler.h:L68](../../SparkEngine/Source/Engine/Coroutine/CoroutineScheduler.h#L68) |  |
@@ -12037,7 +12033,7 @@
 | `GetLastPassTimestamps` | function | SparkEngine | [GPUPerfCounters.h:L169](../../SparkEngine/Source/Utils/GPUPerfCounters.h#L169) |  |
 | `GetLastPipelineStats` | function | SparkEngine | [GPUPerfCounters.h:L170](../../SparkEngine/Source/Utils/GPUPerfCounters.h#L170) |  |
 | `GetLastRenderStats` | function | SparkEditor | [SceneViewPanel.h:L154](../../SparkEditor/Source/Panels/SceneViewPanel.h#L154) | Counts measured by the last RenderWorldBasic() call in this viewport. |
-| `GetLastResult` | function | SparkEngine | [GamePackager.h:L273](../../SparkEngine/Source/Engine/Build/GamePackager.h#L273) | Get the result of the last packaging operation |
+| `GetLastResult` | function | SparkEngine | [GamePackager.h:L305](../../SparkEngine/Source/Engine/Build/GamePackager.h#L305) | Get the result of the last packaging operation. [game thread, non-thread-safe] |
 | `GetLastReward` | function | GameModules | [RPGDialogueSystem.h:L118](../../GameModules/SparkGameRPG/Source/Dialogue/RPGDialogueSystem.h#L118) |  |
 | `GetLastSavedPath` | function | SparkEditor | [EditorWindowManager.h:L139](../../SparkEditor/Source/Core/EditorWindowManager.h#L139) | Last file path passed to Save/LoadCurrentLayoutToFile. |
 | `GetLastState` | function | SparkEngine | [HRTFProcessor.h:L124](../../SparkEngine/Source/Audio/HRTFProcessor.h#L124) | Diagnostic snapshot from the last Process call |
@@ -12330,7 +12326,7 @@
 | `GetModule` | function | SparkEngine | [ModuleManager.h:L253](../../SparkEngine/Source/Core/ModuleManager.h#L253) | Get a module by name, or nullptr if not found |
 | `GetModule` | function | SparkEngine | [ModuleHotReload.h:L288](../../SparkEngine/Source/Engine/HotReload/ModuleHotReload.h#L288) | Get info about a specific watched module |
 | `GetModuleCount` | function | SparkEngine | [ModuleManager.h:L259](../../SparkEngine/Source/Core/ModuleManager.h#L259) | Get the number of loaded modules |
-| `GetModuleExtension` | function | SparkEngine | [GamePackager.h:L279](../../SparkEngine/Source/Engine/Build/GamePackager.h#L279) | Get the platform-specific DLL extension |
+| `GetModuleExtension` | function | SparkEngine | [GamePackager.h:L311](../../SparkEngine/Source/Engine/Build/GamePackager.h#L311) | Get the platform-specific DLL extension. [any thread, pure] |
 | `GetModuleFilePath` | function | SparkEngine | [AngelScriptEngine.h:L384](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h#L384) | Get the file path associated with a compiled module |
 | `GetModuleFilePath` | function | Tests | [TestAngelScriptEngine.cpp:L181](../../Tests/TestAngelScriptEngine.cpp#L181) |  |
 | `GetModuleHandleW` | function | Tests | [TestD3D11DeviceContractsReal.cpp:L508](../../Tests/TestD3D11DeviceContractsReal.cpp#L508) |  |
@@ -12719,7 +12715,7 @@
 | `GetP50FrameTimeMs` | function | SparkEditor | [PerformanceProfiler.h:L198](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L198) | 50th/95th/99th percentile frame time (ms) over the analysis window. |
 | `GetP95FrameTimeMs` | function | SparkEditor | [PerformanceProfiler.h:L199](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L199) | 50th/95th/99th percentile frame time (ms) over the analysis window. |
 | `GetP99FrameTimeMs` | function | SparkEditor | [PerformanceProfiler.h:L200](../../SparkEditor/Source/Profiler/PerformanceProfiler.h#L200) | 50th/95th/99th percentile frame time (ms) over the analysis window. |
-| `GetPackageCount` | function | SparkEngine | [GamePackager.h:L276](../../SparkEngine/Source/Engine/Build/GamePackager.h#L276) | Get total number of packages created |
+| `GetPackageCount` | function | SparkEngine | [GamePackager.h:L308](../../SparkEngine/Source/Engine/Build/GamePackager.h#L308) | Get total number of packages created. [game thread, non-thread-safe] |
 | `GetPacketCount` | function | SparkEngine | [NetworkEncryption.h:L154](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L154) | Get current packet count for a client |
 | `GetPacketLogSize` | function | SparkEditor | [NetworkDebugPanel.h:L259](../../SparkEditor/Source/Panels/NetworkDebugPanel.h#L259) | Get number of logged packets |
 | `GetPacketLogSize` | function | Tests | [TestNetworkDebugPanel.cpp:L134](../../Tests/TestNetworkDebugPanel.cpp#L134) |  |
@@ -16086,7 +16082,7 @@
 | `Initialize` | function | SparkEngine | [AssetValidator.h:L87](../../SparkEngine/Source/Core/AssetValidator.h#L87) |  |
 | `Initialize` | function | SparkEngine | [EngineBootstrap.h:L136](../../SparkEngine/Source/Core/EngineBootstrap.h#L136) | Topologically sort registered subsystems and initialize them |
 | `Initialize` | function | SparkEngine | [FixedTimestepAccumulator.h:L41](../../SparkEngine/Source/Core/FixedTimestepAccumulator.h#L41) | Initialize with the desired fixed timestep |
-| `Initialize` | function | SparkEngine | [GamePackager.h:L57](../../SparkEngine/Source/Core/GamePackager.h#L57) |  |
+| `Initialize` | function | SparkEngine | [GamePackager.h:L68](../../SparkEngine/Source/Core/GamePackager.h#L68) |  |
 | `Initialize` | function | SparkEngine | [IGameModule.h:L47](../../SparkEngine/Source/Core/IGameModule.h#L47) | Initialize game systems |
 | `Initialize` | function | SparkEngine | [InitDebugStage.cpp:L14](../../SparkEngine/Source/Core/Lifecycle/InitDebugStage.cpp#L14) |  |
 | `Initialize` | function | SparkEngine | [InitGameplayStage.cpp:L14](../../SparkEngine/Source/Core/Lifecycle/InitGameplayStage.cpp#L14) |  |
@@ -16118,7 +16114,7 @@
 | `Initialize` | function | SparkEngine | [AccessibilitySystem.h:L126](../../SparkEngine/Source/Engine/Accessibility/AccessibilitySystem.h#L126) | Initialize the accessibility system. |
 | `Initialize` | function | SparkEngine | [AnimNotify.h:L157](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L157) | Initialize the notify manager |
 | `Initialize` | function | SparkEngine | [RagdollSystem.h:L194](../../SparkEngine/Source/Engine/Animation/RagdollSystem.h#L194) | Initialize with reference to the physics system. |
-| `Initialize` | function | SparkEngine | [GamePackager.h:L117](../../SparkEngine/Source/Engine/Build/GamePackager.h#L117) | Initialize the packaging system |
+| `Initialize` | function | SparkEngine | [GamePackager.h:L142](../../SparkEngine/Source/Engine/Build/GamePackager.h#L142) | Initialize the packaging system. [game thread, non-thread-safe] |
 | `Initialize` | function | SparkEngine | [VideoPlayer.h:L112](../../SparkEngine/Source/Engine/Cinematic/VideoPlayer.h#L112) | Initialize the video player |
 | `Initialize` | function | SparkEngine | [LootAndCraftingSystem.h:L100](../../SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h#L100) | Initialize and seed the RNG |
 | `Initialize` | function | SparkEngine | [LootAndCraftingSystem.h:L297](../../SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h#L297) | Initialize, clearing all state |
@@ -16480,6 +16476,7 @@
 | `input` | function | Tests | [TestEditorSubsystems.cpp:L1323](../../Tests/TestEditorSubsystems.cpp#L1323) |  |
 | `input` | function | Tests | [TestEditorSubsystems.cpp:L1329](../../Tests/TestEditorSubsystems.cpp#L1329) |  |
 | `input` | function | Tests | [TestEditorSubsystems.cpp:L1352](../../Tests/TestEditorSubsystems.cpp#L1352) |  |
+| `input` | function | Tests | [TestGamePackager.cpp:L242](../../Tests/TestGamePackager.cpp#L242) |  |
 | `input` | function | Tests | [TestLauncherProcess.cpp:L73](../../Tests/TestLauncherProcess.cpp#L73) |  |
 | `input` | function | Tests | [TestModuleABI.cpp:L492](../../Tests/TestModuleABI.cpp#L492) |  |
 | `input` | function | Tests | [TestNeuralPostProcessing.cpp:L182](../../Tests/TestNeuralPostProcessing.cpp#L182) |  |
@@ -17046,6 +17043,7 @@
 | `IsContainedPath` | function | SparkEditor | [AssetBrowserPanel.cpp:L67](../../SparkEditor/Source/Panels/AssetBrowserPanel.cpp#L67) |  |
 | `IsConversationActive` | function | SparkEngine | [DialogueSystem.h:L250](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h#L250) | Check if a conversation is active. |
 | `IsCookOperation` | function | SparkEditor | [BuildPipeline.h:L94](../../SparkEditor/Source/Panels/BuildPipeline.h#L94) | Whether the current/last operation is an asset cook. |
+| `IsCountedLegacyBinary` | function | SparkEngine | [GamePackager.cpp:L56](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L56) |  |
 | `IsCrashManifestReadyName` | function | SparkEngine | [CrashHandlerSupport.h:L76](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L76) | Check a ready-manifest filename without accepting paths or alternate suffixes. |
 | `IsCrashReportId` | function | SparkEngine | [CrashHandlerSupport.h:L55](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L55) | Validate the fixed-width lowercase hexadecimal report identifier. |
 | `IsCrashUploadRateLimited` | function | SparkEngine | [CrashReportUploader.cpp:L38](../../SparkEngine/Source/Utils/CrashReportUploader.cpp#L38) |  |
@@ -17309,6 +17307,7 @@
 | `IsKinematic` | function | SparkEngine | [PhysicsBody.h:L114](../../SparkEngine/Source/Physics/PhysicsBody.h#L114) |  |
 | `IsLanBroadcastActive` | function | SparkEngine | [DedicatedServer.h:L305](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L305) | Whether the LAN broadcast worker is currently active. |
 | `IsLeader` | function | GameModules | [MMOPartySystem.h:L98](../../GameModules/SparkGameMMO/Source/Party/MMOPartySystem.h#L98) |  |
+| `IsLegacyBinary` | function | SparkEngine | [GamePackager.cpp:L47](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L47) |  |
 | `IsLevelActive` | function | GameModules | [PlatformerLevelSystem.h:L142](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L142) | Complete the active level when the player reaches its projected goal trigger. |
 | `IsLifecycleSubsystemType` | function | SparkEngine | [EngineContext.h:L584](../../SparkEngine/Source/Core/EngineContext.h#L584) |  |
 | `IsLightCullingEnabled` | function | SparkEngine | [LightingSystem.h:L354](../../SparkEngine/Source/Graphics/LightingSystem.h#L354) |  |
@@ -21326,6 +21325,7 @@
 | `ModuleClass` | function | SparkSDK | [ModuleRegistry.h:L33](../../SparkSDK/Include/Spark/ModuleRegistry.h#L33) |  |
 | `ModuleCompatibilityStatusName` | function | SparkSDK | [ModuleABI.h:L156](../../SparkSDK/Include/Spark/ModuleABI.h#L156) |  |
 | `ModuleDiscoveryDirectories` | function | SparkEditor | [EditorLaunchContext.h:L102](../../SparkEditor/Source/Utils/EditorLaunchContext.h#L102) | Ordered, bounded directories that may contain an active project's module. |
+| `ModuleExtension` | function | SparkEngine | [GamePackager.cpp:L27](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L27) |  |
 | `ModuleHotReloadManager::ForceReload` | method | SparkEngine | [ModuleHotReload.cpp:L204](../../SparkEngine/Source/Core/ModuleHotReload.cpp#L204) |  |
 | `ModuleHotReloadManager::GetReloadCount` | method | SparkEngine | [ModuleHotReload.cpp:L268](../../SparkEngine/Source/Core/ModuleHotReload.cpp#L268) |  |
 | `ModuleHotReloadManager::GetStatus` | method | SparkEngine | [ModuleHotReload.cpp:L274](../../SparkEngine/Source/Core/ModuleHotReload.cpp#L274) |  |
@@ -21958,6 +21958,7 @@
 | `Normalized` | function | Tests | [TestSkyAtmosphere.cpp:L17](../../Tests/TestSkyAtmosphere.cpp#L17) |  |
 | `Normalized` | function | Tests | [TestSteeringBehaviors.cpp:L34](../../Tests/TestSteeringBehaviors.cpp#L34) |  |
 | `NormalizeDirection` | function | SparkEngine | [SkyAtmosphere.h:L204](../../SparkEngine/Source/Graphics/SkyAtmosphere.h#L204) | Normalize a 3D direction vector in place. |
+| `NormalizedManifest` | function | Tests | [TestGamePackager.cpp:L240](../../Tests/TestGamePackager.cpp#L240) |  |
 | `NormalizedTime` | function | SparkEngine | [Sequencer.cpp:L57](../../SparkEngine/Source/Engine/Cinematic/Sequencer.cpp#L57) |  |
 | `NormalizeKey` | function | SparkEngine | [LocalFileCache.h:L345](../../SparkEngine/Source/Utils/LocalFileCache.h#L345) |  |
 | `NormalizeLocalEndpoint` | function | SparkGateway | [GatewayAreaControl.cpp:L42](../../SparkGateway/src/GatewayAreaControl.cpp#L42) |  |
@@ -22708,7 +22709,7 @@
 | `out` | function | Tests | [TestEditorPanelsRealBackends.cpp:L211](../../Tests/TestEditorPanelsRealBackends.cpp#L211) |  |
 | `out` | function | Tests | [TestEditorSubsystemsReal.cpp:L210](../../Tests/TestEditorSubsystemsReal.cpp#L210) |  |
 | `out` | function | Tests | [TestEditorSubsystemsReal.cpp:L230](../../Tests/TestEditorSubsystemsReal.cpp#L230) |  |
-| `out` | function | Tests | [TestGamePackager.cpp:L13](../../Tests/TestGamePackager.cpp#L13) |  |
+| `out` | function | Tests | [TestGamePackager.cpp:L16](../../Tests/TestGamePackager.cpp#L16) |  |
 | `out` | function | Tests | [TestHRTFProcessor.cpp:L24](../../Tests/TestHRTFProcessor.cpp#L24) |  |
 | `out` | function | Tests | [TestSecurityParsersReal.cpp:L386](../../Tests/TestSecurityParsersReal.cpp#L386) |  |
 | `out` | function | Tests | [TestSecurityParsersReal.cpp:L418](../../Tests/TestSecurityParsersReal.cpp#L418) |  |
@@ -23039,9 +23040,10 @@
 | `p4` | function | SparkEditor | [GameViewPanel.cpp:L1203](../../SparkEditor/Source/Panels/GameViewPanel.cpp#L1203) |  |
 | `P95Us` | function | Tests | [TestEngineMonitor.cpp:L130](../../Tests/TestEngineMonitor.cpp#L130) |  |
 | `P99Us` | function | Tests | [TestEngineMonitor.cpp:L142](../../Tests/TestEngineMonitor.cpp#L142) |  |
-| `Package` | function | SparkEngine | [GamePackager.h:L60](../../SparkEngine/Source/Core/GamePackager.h#L60) |  |
-| `Package` | function | SparkEngine | [GamePackager.h:L133](../../SparkEngine/Source/Engine/Build/GamePackager.h#L133) | Package a game build into a distributable directory |
+| `Package` | function | SparkEngine | [GamePackager.h:L72](../../SparkEngine/Source/Core/GamePackager.h#L72) |  |
+| `Package` | function | SparkEngine | [GamePackager.h:L159](../../SparkEngine/Source/Engine/Build/GamePackager.h#L159) | Package a game build into a distributable directory |
 | `packageContext` | function | SparkLauncher | [LauncherProcess.cpp:L306](../../SparkLauncher/src/LauncherProcess.cpp#L306) |  |
+| `PackageLegacy` | function | SparkEngine | [GamePackager.h:L279](../../SparkEngine/Source/Engine/Build/GamePackager.h#L279) | Package the legacy build-tree layout through this canonical owner. |
 | `PackageSupportsConfiguration` | function | SparkEditor | [BuildPipeline.cpp:L135](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L135) |  |
 | `packedData` | function | SparkEngine | [AdaptiveProbeVolumes.cpp:L516](../../SparkEngine/Source/Graphics/AdaptiveProbeVolumes.cpp#L516) |  |
 | `packedData` | function | SparkEngine | [DDGIProbeSystem.cpp:L430](../../SparkEngine/Source/Graphics/DDGIProbeSystem.cpp#L430) |  |
@@ -24099,6 +24101,7 @@
 | `PlatformerPlayerController::UpdateJumpBuffer` | method | GameModules | [PlatformerPlayerController.cpp:L207](../../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.cpp#L207) |  |
 | `PlatformerPlayerController::UpdatePowerUps` | method | GameModules | [PlatformerPlayerController.cpp:L393](../../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.cpp#L393) |  |
 | `PlatformerPlayerController::UpdateState` | method | GameModules | [PlatformerPlayerController.cpp:L337](../../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.cpp#L337) |  |
+| `PlatformName` | function | SparkEngine | [GamePackager.cpp:L12](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L12) |  |
 | `Play` | function | SparkEngine | [MusicManager.h:L236](../../SparkEngine/Source/Audio/MusicManager.h#L236) |  |
 | `Play` | function | SparkEngine | [Sequencer.h:L275](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L275) |  |
 | `Play` | function | SparkEngine | [VideoPlayer.h:L169](../../SparkEngine/Source/Engine/Cinematic/VideoPlayer.h#L169) | Start or resume playback |
@@ -24955,6 +24958,12 @@
 | `ptr` | function | Tests | [TestSafetyCoreUtils.cpp:L58](../../Tests/TestSafetyCoreUtils.cpp#L58) |  |
 | `ptr` | function | Tests | [TestSafetyCoreUtils.cpp:L65](../../Tests/TestSafetyCoreUtils.cpp#L65) |  |
 | `ptr` | function | Tests | [TestSafetyCoreUtils.cpp:L72](../../Tests/TestSafetyCoreUtils.cpp#L72) |  |
+| `publish` | function | SparkEngine | [GamePackager.cpp:L84](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L84) |  |
+| `publish` | function | SparkEngine | [GamePackager.cpp:L94](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L94) |  |
+| `publish` | function | SparkEngine | [GamePackager.cpp:L109](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L109) |  |
+| `publish` | function | SparkEngine | [GamePackager.cpp:L122](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L122) |  |
+| `publish` | function | SparkEngine | [GamePackager.cpp:L190](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L190) |  |
+| `publish` | function | SparkEngine | [GamePackager.cpp:L265](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L265) |  |
 | `Publish` | function | SparkEngine | [EntityEventBus.h:L162](../../SparkEngine/Source/Utils/EntityEventBus.h#L162) | Publish an event to a specific entity. |
 | `Publish` | function | SparkEngine | [EventBus.h:L194](../../SparkEngine/Source/Utils/EventBus.h#L194) | Publish an event, invoking all registered handlers synchronously. |
 | `Publish` | function | Tests | [TestCrossSystemIntegration.cpp:L140](../../Tests/TestCrossSystemIntegration.cpp#L140) |  |
@@ -26392,6 +26401,7 @@
 | `registry` | function | Tests | [TestRegionMapDataSource.cpp:L81](../../Tests/TestRegionMapDataSource.cpp#L81) |  |
 | `RegistryStorageIds` | function | Tests | [Test_persistence_SaveSystem.cpp:L570](../../Tests/harden/Test_persistence_SaveSystem.cpp#L570) |  |
 | `relative` | function | GameModules | [FPSAssetPaths.cpp:L107](../../GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp#L107) |  |
+| `RelativeFiles` | function | Tests | [TestGamePackager.cpp:L228](../../Tests/TestGamePackager.cpp#L228) |  |
 | `relativeUtf8` | function | Tests | [assets.cpp:L39](../../Tests/PackageSmoke/FPSProgression/assets.cpp#L39) |  |
 | `Release` | function | GameModules | [TFCrypto.cpp:L60](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L60) |  |
 | `Release` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L445](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L445) |  |
@@ -27677,7 +27687,7 @@
 | `RequestTileLoad` | function | SparkEditor | [LevelStreamingSystem.h:L178](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L178) | Request tile loading |
 | `RequestTileUnload` | function | SparkEditor | [LevelStreamingSystem.h:L186](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L186) | Request tile unloading |
 | `RequireBool` | function | SparkEngine | [SaveSystem.cpp:L743](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L743) |  |
-| `required` | function | SparkEngine | [GamePackager.h:L376](../../SparkEngine/Source/Engine/Build/GamePackager.h#L376) |  |
+| `required` | function | SparkEngine | [GamePackager.h:L408](../../SparkEngine/Source/Engine/Build/GamePackager.h#L408) |  |
 | `required` | function | SparkEngine | [VulkanDevice.cpp:L690](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L690) |  |
 | `RequireFloat` | function | SparkEngine | [SaveSystem.cpp:L715](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L715) |  |
 | `RequireInteger` | function | SparkEngine | [SaveSystem.cpp:L733](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L733) |  |
@@ -29228,6 +29238,7 @@
 | `ScopedClearedEnvironmentVariable` | function | Tests | [TestCrashHandlerGatingReal.cpp:L128](../../Tests/TestCrashHandlerGatingReal.cpp#L128) |  |
 | `ScopedCurrentDirectory` | function | Tests | [TestGPUDrivenRendererD3D11.cpp:L28](../../Tests/TestGPUDrivenRendererD3D11.cpp#L28) |  |
 | `ScopedCurrentPath` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L41](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L41) |  |
+| `ScopedCurrentPath` | function | Tests | [TestGamePackager.cpp:L30](../../Tests/TestGamePackager.cpp#L30) |  |
 | `ScopedCurrentPath` | function | Tests | [TestRuntimePackage.cpp:L18](../../Tests/TestRuntimePackage.cpp#L18) |  |
 | `ScopedCurrentPath` | function | Tests | [TestTemplatesCompile.cpp:L52](../../Tests/TestTemplatesCompile.cpp#L52) |  |
 | `ScopedDirectoryCleanup` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L434](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L434) |  |
@@ -31914,7 +31925,7 @@
 | `Shutdown` | function | SparkEngine | [GameImGuiLayer.cpp:L66](../../SparkEngine/Source/Core/GameImGuiLayer.cpp#L66) |  |
 | `Shutdown` | function | SparkEngine | [GameImGuiLayer.cpp:L163](../../SparkEngine/Source/Core/GameImGuiLayer.cpp#L163) |  |
 | `Shutdown` | function | SparkEngine | [GameImGuiLayer.h:L46](../../SparkEngine/Source/Core/GameImGuiLayer.h#L46) |  |
-| `Shutdown` | function | SparkEngine | [GamePackager.h:L58](../../SparkEngine/Source/Core/GamePackager.h#L58) |  |
+| `Shutdown` | function | SparkEngine | [GamePackager.h:L70](../../SparkEngine/Source/Core/GamePackager.h#L70) |  |
 | `Shutdown` | function | SparkEngine | [IGameModule.h:L50](../../SparkEngine/Source/Core/IGameModule.h#L50) | Shut down game systems and release resources |
 | `Shutdown` | function | SparkEngine | [LifecycleStage.h:L48](../../SparkEngine/Source/Core/Lifecycle/LifecycleStage.h#L48) |  |
 | `Shutdown` | function | SparkEngine | [ShutdownStage.cpp:L14](../../SparkEngine/Source/Core/Lifecycle/ShutdownStage.cpp#L14) |  |
@@ -31930,7 +31941,7 @@
 | `Shutdown` | function | SparkEngine | [TacticalPointSystem.h:L105](../../SparkEngine/Source/Engine/AI/TacticalPointSystem.h#L105) | Shut down and release all data. |
 | `Shutdown` | function | SparkEngine | [AccessibilitySystem.h:L136](../../SparkEngine/Source/Engine/Accessibility/AccessibilitySystem.h#L136) | Shut down and reset state. |
 | `Shutdown` | function | SparkEngine | [AnimNotify.h:L162](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L162) | Shut down and clear all notify tracks |
-| `Shutdown` | function | SparkEngine | [GamePackager.h:L126](../../SparkEngine/Source/Engine/Build/GamePackager.h#L126) | Shut down |
+| `Shutdown` | function | SparkEngine | [GamePackager.h:L151](../../SparkEngine/Source/Engine/Build/GamePackager.h#L151) | Shut down. [game thread, non-thread-safe] |
 | `Shutdown` | function | SparkEngine | [VideoPlayer.h:L123](../../SparkEngine/Source/Engine/Cinematic/VideoPlayer.h#L123) | Shut down and release all videos |
 | `Shutdown` | function | SparkEngine | [LootAndCraftingSystem.h:L109](../../SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h#L109) | Shut down and release all loot tables |
 | `Shutdown` | function | SparkEngine | [LootAndCraftingSystem.h:L307](../../SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h#L307) | Shut down and release all state |
@@ -33816,10 +33827,10 @@
 | `std::to_string` | method | SparkEngine | [ComponentReflection.cpp:L262](../../SparkEngine/Source/Core/ComponentReflection.cpp#L262) |  |
 | `std::to_string` | method | SparkEngine | [ComponentReflection.cpp:L271](../../SparkEngine/Source/Core/ComponentReflection.cpp#L271) |  |
 | `std::to_string` | method | SparkEngine | [ComponentReflection.cpp:L279](../../SparkEngine/Source/Core/ComponentReflection.cpp#L279) |  |
-| `std::to_string` | method | SparkEngine | [GamePackager.h:L454](../../SparkEngine/Source/Engine/Build/GamePackager.h#L454) |  |
-| `std::to_string` | method | SparkEngine | [GamePackager.h:L456](../../SparkEngine/Source/Engine/Build/GamePackager.h#L456) |  |
-| `std::to_string` | method | SparkEngine | [GamePackager.h:L458](../../SparkEngine/Source/Engine/Build/GamePackager.h#L458) |  |
-| `std::to_string` | method | SparkEngine | [GamePackager.h:L459](../../SparkEngine/Source/Engine/Build/GamePackager.h#L459) |  |
+| `std::to_string` | method | SparkEngine | [GamePackager.h:L486](../../SparkEngine/Source/Engine/Build/GamePackager.h#L486) |  |
+| `std::to_string` | method | SparkEngine | [GamePackager.h:L488](../../SparkEngine/Source/Engine/Build/GamePackager.h#L488) |  |
+| `std::to_string` | method | SparkEngine | [GamePackager.h:L490](../../SparkEngine/Source/Engine/Build/GamePackager.h#L490) |  |
+| `std::to_string` | method | SparkEngine | [GamePackager.h:L491](../../SparkEngine/Source/Engine/Build/GamePackager.h#L491) |  |
 | `std::to_string` | method | SparkEngine | [NetworkBindPolicy.h:L326](../../SparkEngine/Source/Engine/Networking/NetworkBindPolicy.h#L326) | Render a host-order IPv4 address for logs and status output. |
 | `std::to_string` | method | SparkEngine | [VisualScriptCompiler.cpp:L227](../../SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp#L227) |  |
 | `std::to_string` | method | SparkEngine | [VisualScriptCompiler.cpp:L229](../../SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp#L229) |  |
@@ -38340,7 +38351,7 @@
 | `ValidateBinding` | function | SparkEngine | [RHIValidationLayer.h:L136](../../SparkEngine/Source/Graphics/RHI/RHIValidationLayer.h#L136) | Validate that a resource can be bound to a shader slot. |
 | `ValidateBinding` | function | SparkEngine | [RHIValidationLayer.h:L203](../../SparkEngine/Source/Graphics/RHI/RHIValidationLayer.h#L203) |  |
 | `ValidateCharacterName` | function | GameModules | [TFCharacterSystem.h:L61](../../GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.h#L61) |  |
-| `ValidateConfig` | function | SparkEngine | [GamePackager.h:L250](../../SparkEngine/Source/Engine/Build/GamePackager.h#L250) | Validate a config without actually packaging |
+| `ValidateConfig` | function | SparkEngine | [GamePackager.h:L282](../../SparkEngine/Source/Engine/Build/GamePackager.h#L282) | Validate a config without actually packaging. [game thread, non-thread-safe] |
 | `ValidateConfiguration` | function | SparkEngine | [GameplaySystemLifecycle.cpp:L98](../../SparkEngine/Source/Core/GameplaySystemLifecycle.cpp#L98) |  |
 | `ValidateConnectionToken` | function | SparkEngine | [NetworkSecurity.h:L133](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L133) | Match and consume token bytes from this instance's pending set. |
 | `ValidateDescription` | function | SparkEngine | [NeuralWeights.cpp:L79](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.cpp#L79) |  |

@@ -117,6 +117,7 @@ namespace Spark::Build
         std::vector<std::string> warnings;
         uint32_t assetCount = 0;
         uint32_t dllCount = 0;
+        uint32_t filesCopied = 0; ///< Payload files copied; excludes generated manifest metadata.
     };
 
     /**

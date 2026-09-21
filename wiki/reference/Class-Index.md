@@ -1548,8 +1548,8 @@
 | `GameObject` | class | SparkEngine | [GraphicsEngine.h:L89](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L89) |  |
 | `GameObject` | class | SparkEngine | [SceneManager.h:L85](../../SparkEngine/Source/SceneManager/SceneManager.h#L85) |  |
 | `GameObject` | class | Tests | [TestGameObjectTransforms.cpp:L56](../../Tests/TestGameObjectTransforms.cpp#L56) |  |
-| `GamePackager` | class | SparkEngine | [GamePackager.h:L52](../../SparkEngine/Source/Core/GamePackager.h#L52) |  |
-| `GamePackager` | class | SparkEngine | [GamePackager.h:L107](../../SparkEngine/Source/Engine/Build/GamePackager.h#L107) | Standalone game packaging system |
+| `GamePackager` | class | SparkEngine | [GamePackager.h:L62](../../SparkEngine/Source/Core/GamePackager.h#L62) | Legacy Core facade over Spark::Build::GamePackager. |
+| `GamePackager` | class | SparkEngine | [GamePackager.h:L132](../../SparkEngine/Source/Engine/Build/GamePackager.h#L132) | Standalone game packaging system |
 | `GamepadInput` | class | SparkEngine | [GamepadInput.h:L156](../../SparkEngine/Source/Input/GamepadInput.h#L156) |  |
 | `GamepadInput` | class | Tests | [TestGamepadInputProcessing.cpp:L83](../../Tests/TestGamepadInputProcessing.cpp#L83) |  |
 | `GamepadState` | struct | SparkEngine | [GamepadInput.h:L123](../../SparkEngine/Source/Input/GamepadInput.h#L123) | Per-controller state snapshot holding raw and processed input |
@@ -2101,6 +2101,8 @@
 | `LeakEntry` | struct | SparkEngine | [MemoryDebugger.h:L84](../../SparkEngine/Source/Utils/MemoryDebugger.h#L84) | Leak report entry |
 | `LegacyModuleAdapter` | class | SparkEngine | [ModuleManager.cpp:L626](../../SparkEngine/Source/Core/ModuleManager.cpp#L626) | Wraps a legacy IGameModule implementation behind the new IModule interface |
 | `LegacyModuleFixture` | class | Tests | [LegacyModule.cpp:L8](../../Tests/Fixtures/ModuleABI/LegacyModule.cpp#L8) |  |
+| `LegacyPackageConfig` | struct | SparkEngine | [GamePackager.h:L99](../../SparkEngine/Source/Engine/Build/GamePackager.h#L99) | Compatibility request for the historical Core packaging surface. |
+| `LegacyPackageResult` | struct | SparkEngine | [GamePackager.h:L111](../../SparkEngine/Source/Engine/Build/GamePackager.h#L111) | Compatibility result retaining the historical Core fields. |
 | `LensDistortionSettings` | struct | SparkEngine | [PostProcessingTypes.h:L155](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L155) | Lens distortion settings |
 | `LensFlareSettings` | struct | SparkEngine | [PostProcessingTypes.h:L182](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L182) | Lens flare settings |
 | `LevelBonuses` | struct | GameModules | [ProgressionSystem.h:L45](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L45) | Per-level stat bonuses applied automatically |
@@ -2717,9 +2719,9 @@
 | `OWWildlifeSystem` | class | GameModules | [OWWildlifeSystem.h:L85](../../GameModules/SparkGameOpenWorld/Source/Wildlife/OWWildlifeSystem.h#L85) | Wildlife population, ecology, and taming system |
 | `OWWorldSetup` | class | GameModules | [SparkGameOpenWorld.h:L22](../../GameModules/SparkGameOpenWorld/Source/Core/SparkGameOpenWorld.h#L22) |  |
 | `OWWorldSetup` | class | GameModules | [OWWorldSetup.h:L67](../../GameModules/SparkGameOpenWorld/Source/World/OWWorldSetup.h#L67) | World region registry, terrain configuration, and streaming setup |
-| `PackageConfig` | struct | SparkEngine | [GamePackager.h:L30](../../SparkEngine/Source/Core/GamePackager.h#L30) |  |
+| `PackageConfig` | struct | SparkEngine | [GamePackager.h:L34](../../SparkEngine/Source/Core/GamePackager.h#L34) |  |
 | `PackageConfig` | struct | SparkEngine | [GamePackager.h:L55](../../SparkEngine/Source/Engine/Build/GamePackager.h#L55) | Configuration for a packaging operation |
-| `PackageResult` | struct | SparkEngine | [GamePackager.h:L41](../../SparkEngine/Source/Core/GamePackager.h#L41) |  |
+| `PackageResult` | struct | SparkEngine | [GamePackager.h:L45](../../SparkEngine/Source/Core/GamePackager.h#L45) |  |
 | `PackageResult` | struct | SparkEngine | [GamePackager.h:L87](../../SparkEngine/Source/Engine/Build/GamePackager.h#L87) | Result of a packaging operation |
 | `PackedQuat48` | struct | SparkEngine | [Quantization.h:L23](../../SparkEngine/Source/Utils/Quantization.h#L23) | Quaternion packed into 48 bits via smallest-three encoding. |
 | `PackedVec16` | struct | SparkEngine | [Quantization.h:L30](../../SparkEngine/Source/Utils/Quantization.h#L30) | 3D vector packed into 16 bits per component over an arbitrary |
@@ -3634,6 +3636,7 @@
 | `ScopedCpuSection` | class | SparkEngine | [CpuDebugger.h:L402](../../SparkEngine/Source/Utils/CpuDebugger.h#L402) | RAII scope guard for automatic CPU section timing |
 | `ScopedCurrentDirectory` | class | Tests | [TestGPUDrivenRendererD3D11.cpp:L25](../../Tests/TestGPUDrivenRendererD3D11.cpp#L25) |  |
 | `ScopedCurrentPath` | class | SparkCrashReporter | [CrashReporterManifestTests.cpp:L38](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L38) |  |
+| `ScopedCurrentPath` | class | Tests | [TestGamePackager.cpp:L27](../../Tests/TestGamePackager.cpp#L27) |  |
 | `ScopedCurrentPath` | class | Tests | [TestRuntimePackage.cpp:L15](../../Tests/TestRuntimePackage.cpp#L15) |  |
 | `ScopedCurrentPath` | class | Tests | [TestTemplatesCompile.cpp:L49](../../Tests/TestTemplatesCompile.cpp#L49) |  |
 | `ScopedDirectoryCleanup` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L431](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L431) |  |
