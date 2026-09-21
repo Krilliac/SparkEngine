@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
 import os
 import subprocess
@@ -18,11 +19,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_DIR = REPO_ROOT / "tools" / "perf-budget"
 sys.path.insert(0, str(TOOL_DIR))
 
-from compare_results import compare, report_to_dict  # noqa: E402
+from compare_results import compare, main as compare_main, report_to_dict  # noqa: E402
 from validate_budget import (  # noqa: E402
     MAX_JSON_BYTES,
     budget_definition_digest,
     load_bounded_json,
+    main as validate_main,
     validate_baselines,
     validate_budget,
     validate_hardware,
@@ -187,6 +189,37 @@ def _write_suite(root: Path, *, hardware: dict[str, Any] | None = None,
         ),
         encoding="utf-8",
     )
+
+
+class TestDirectoryDiagnostics(unittest.TestCase):
+    def test_cli_directory_errors_do_not_echo_os_error_payloads(self) -> None:
+        # Synthetic payloads exercise both token-like and unstructured text.
+        fixtures = ("ghp_" + "A" * 40, "opaque-fixture\n::error::injected")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for operation in ("lstat", "resolve"):
+                for payload in fixtures:
+                    for error_number in (13, None):
+                        for command, arguments, status, label in (
+                            (validate_main, [str(root)], 1, "budget directory"),
+                            (compare_main, [str(root), str(root / "results.json"),
+                                            "--expected-sha", RESULT_SHA],
+                             2, "results.json root"),
+                        ):
+                            with self.subTest(operation=operation, command=command.__module__,
+                                              error_number=error_number, payload=payload):
+                                output = io.StringIO()
+                                with mock.patch.object(Path, operation,
+                                                       side_effect=OSError(error_number, payload)), \
+                                     mock.patch("sys.stdout", output), \
+                                     mock.patch("sys.stderr", output):
+                                    self.assertEqual(command(arguments), status)
+                                rendered = output.getvalue()
+                                self.assertNotIn(payload, rendered)
+                                self.assertIn(label, rendered)
+                                self.assertIn(f"cannot {'inspect' if operation == 'lstat' else 'resolve'} "
+                                              "directory path", rendered)
+                                self.assertIn(f"errno={error_number}", rendered)
 
 
 class TestSecondAuditReproductions(unittest.TestCase):
