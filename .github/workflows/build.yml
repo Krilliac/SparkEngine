@@ -476,7 +476,7 @@ jobs:
         fetch-depth: 0
 
     - name: Check ThirdParty manifest sync
-      run: ./tools/check-thirdparty-manifest-sync.sh
+      run: ./tools/check-thirdparty-manifest-sync.sh --ci
 
   check-supply-chain:
     runs-on: ubuntu-24.04
