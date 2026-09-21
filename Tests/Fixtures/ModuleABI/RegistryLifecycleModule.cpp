@@ -5,6 +5,7 @@
 #include <Spark/ModuleRegistry.h>
 
 #include <cstdlib>
+#include <cstdio>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -14,6 +15,7 @@ namespace
     constexpr const char* kCommandName = "registry_fixture_status";
     constexpr const char* kRuleName = "RegistryFixture.Rule";
     constexpr const char* kRuleCategory = "RegistryFixture";
+    constexpr const char* kLifecycleSentinel = "SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL";
 } // namespace
 
 class RegistryLifecycleModule final : public Spark::IModule
@@ -29,8 +31,9 @@ class RegistryLifecycleModule final : public Spark::IModule
         return info;
     }
 
-    bool OnLoad(Spark::IEngineContext*) override
+    bool OnLoad(Spark::IEngineContext* context) override
     {
+        m_context = context;
         auto& console = Spark::SimpleConsole::GetInstance();
         console.RegisterCommand(
             kCommandName, [](const std::vector<std::string>&) { return std::string{"fixture"}; },
@@ -49,11 +52,25 @@ class RegistryLifecycleModule final : public Spark::IModule
 
     void OnUnload() override
     {
+        if (const char* sentinelPath = std::getenv(kLifecycleSentinel); sentinelPath && sentinelPath[0] != '\0')
+        {
+            if (FILE* sentinel = std::fopen(sentinelPath, "wb"))
+            {
+                const bool servicesAlive = m_context && m_context->GetWeather() && m_context->GetUI() &&
+                                            m_context->GetDialogue() && m_context->GetModSystem();
+                std::fputs(servicesAlive ? "services_alive\n" : "services_missing\n", sentinel);
+                std::fclose(sentinel);
+            }
+        }
         Spark::SimpleConsole::GetInstance().UnregisterCommand(kCommandName);
         Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory(kRuleCategory);
+        m_context = nullptr;
     }
 
     void OnUpdate(float) override {}
+
+  private:
+    Spark::IEngineContext* m_context = nullptr;
 };
 
 SPARK_IMPLEMENT_MODULE(RegistryLifecycleModule)

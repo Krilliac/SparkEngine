@@ -61,7 +61,12 @@ namespace
     class NullEngineContext final : public Spark::IEngineContext
     {
       public:
-        explicit NullEngineContext(Spark::SaveSystem* saveSystem = nullptr) : m_saveSystem(saveSystem) {}
+        explicit NullEngineContext(Spark::SaveSystem* saveSystem = nullptr, Spark::WeatherSystem* weather = nullptr,
+                                   Spark::UI::UISystem* ui = nullptr, Spark::DialogueSystem* dialogue = nullptr,
+                                   Spark::ModSystem* mods = nullptr)
+            : m_saveSystem(saveSystem), m_weather(weather), m_ui(ui), m_dialogue(dialogue), m_mods(mods)
+        {
+        }
 
         GraphicsEngine* GetGraphics() override { return nullptr; }
         const GraphicsEngine* GetGraphics() const override { return nullptr; }
@@ -77,11 +82,23 @@ namespace
         const PhysicsSystem* GetPhysics() const override { return nullptr; }
         Spark::SaveSystem* GetSaveSystem() override { return m_saveSystem; }
         const Spark::SaveSystem* GetSaveSystem() const override { return m_saveSystem; }
+        Spark::WeatherSystem* GetWeather() override { return m_weather; }
+        const Spark::WeatherSystem* GetWeather() const override { return m_weather; }
+        Spark::UI::UISystem* GetUI() override { return m_ui; }
+        const Spark::UI::UISystem* GetUI() const override { return m_ui; }
+        Spark::DialogueSystem* GetDialogue() override { return m_dialogue; }
+        const Spark::DialogueSystem* GetDialogue() const override { return m_dialogue; }
+        Spark::ModSystem* GetModSystem() override { return m_mods; }
+        const Spark::ModSystem* GetModSystem() const override { return m_mods; }
         uint32_t GetEngineVersion() const override { return SPARK_ENGINE_VERSION_PACKED; }
         uint32_t GetSDKVersion() const override { return SPARK_SDK_VERSION; }
 
       private:
         Spark::SaveSystem* m_saveSystem = nullptr;
+        Spark::WeatherSystem* m_weather = nullptr;
+        Spark::UI::UISystem* m_ui = nullptr;
+        Spark::DialogueSystem* m_dialogue = nullptr;
+        Spark::ModSystem* m_mods = nullptr;
     };
 
     std::filesystem::path CopyCompatibleFixtureToTemp(const std::filesystem::path& stem)
@@ -181,6 +198,24 @@ namespace
             setenv("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", "1", 1);
         else
             unsetenv("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD");
+#endif
+    }
+
+    void SetRegistryFixtureLifecycleSentinel(const std::filesystem::path& path)
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL", path.string().c_str());
+#else
+        setenv("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL", path.string().c_str(), 1);
+#endif
+    }
+
+    void ClearRegistryFixtureLifecycleSentinel()
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL", "");
+#else
+        unsetenv("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL");
 #endif
     }
 
@@ -806,6 +841,47 @@ TEST(ModuleABI_ReloadPreservesHostRegistryCallbacks)
     EXPECT_FALSE(console.HasCommand(commandName));
     EXPECT_EQ(detector.GetRuleCount(), initialRuleCount);
     manager.UnloadAll();
+}
+
+TEST(ModuleABI_OnUnloadSeesEngineServicesBeforeImageTeardown)
+{
+    const std::filesystem::path sentinel =
+        std::filesystem::temp_directory_path() / "SparkRegistryLifecycleServicesAlive.txt";
+    std::error_code cleanupError;
+    std::filesystem::remove(sentinel, cleanupError);
+    SetRegistryFixtureLifecycleSentinel(sentinel);
+    struct SentinelGuard final
+    {
+        ~SentinelGuard()
+        {
+            ClearRegistryFixtureLifecycleSentinel();
+        }
+    } sentinelGuard;
+
+    int serviceStorage = 0;
+    NullEngineContext context(nullptr, reinterpret_cast<Spark::WeatherSystem*>(&serviceStorage),
+                              reinterpret_cast<Spark::UI::UISystem*>(&serviceStorage),
+                              reinterpret_cast<Spark::DialogueSystem*>(&serviceStorage),
+                              reinterpret_cast<Spark::ModSystem*>(&serviceStorage));
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+    ASSERT_TRUE(manager.ShutdownAll());
+
+    std::ifstream marker(sentinel);
+    ASSERT_TRUE(marker.good());
+    std::string result;
+    std::getline(marker, result);
+    EXPECT_EQ(result, "services_alive");
+
+    // Exercise a second complete cycle on the same process. UnloadEntry must
+    // clear the image-local injected EngineContext before FreeLibrary/dlclose.
+    manager.UnloadAll();
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+    ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    std::filesystem::remove(sentinel, cleanupError);
 }
 
 TEST(ModuleABI_ThrownOnLoadCleansPartialHostRegistryState)

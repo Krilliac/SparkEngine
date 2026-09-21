@@ -420,23 +420,6 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     // path otherwise AVs in ~UIPanel (dead ImGui/graphics) and then hangs
     // inside the crash handler.
     //
-    // Deregister them from EngineContext FIRST. Module OnUnload runs later,
-    // inside ShutdownEngineAfterPreflight, and a module that unregisters what
-    // it installed in OnLoad reaches these systems through ctx->GetUI() /
-    // GetDialogue() / GetWeather() / GetModSystem(). Leaving the slots set
-    // handed that module freed memory; clearing them makes the getters return
-    // null, which the documented contract allows.
-    if (EngineContext* shutdownContext = EngineContext::Get())
-    {
-        shutdownContext->SetModSystem(nullptr);
-        shutdownContext->SetDialogue(nullptr);
-        shutdownContext->SetUI(nullptr);
-        shutdownContext->SetWeather(nullptr);
-    }
-    g_modSystem.reset();
-    g_dialogueSystem.reset();
-    g_uiSystem.reset();
-    g_weatherSystem.reset();
     console.LogInfo("Headless server shutting down...");
     ShutdownEngineAfterPreflight();
 

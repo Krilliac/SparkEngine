@@ -1961,6 +1961,24 @@ void ModuleManager::UnregisterModuleRegistrations(const LoadedModule& entry)
 
 void ModuleManager::UnloadEntry(LoadedModule& entry)
 {
+    // ModuleRuntimeInjection stores a non-owning host EngineContext pointer in
+    // each static-library image. Clear that pointer while the image is still
+    // mapped and before destroying the module object, so a module destructor
+    // or its CRT teardown can never retain a pointer to the host context.
+    if (entry.libraryHandle)
+    {
+        using InjectContextFn = void (*)(void*);
+#ifdef _WIN32
+        auto clearContext = reinterpret_cast<InjectContextFn>(
+            GetProcAddress(static_cast<HMODULE>(entry.libraryHandle), "SparkModuleInjectEngineContext"));
+#else
+        auto clearContext = reinterpret_cast<InjectContextFn>(
+            dlsym(entry.libraryHandle, "SparkModuleInjectEngineContext"));
+#endif
+        if (clearContext)
+            clearContext(nullptr);
+    }
+
     if (entry.instance && entry.destroyFn)
     {
         entry.destroyFn(entry.instance);

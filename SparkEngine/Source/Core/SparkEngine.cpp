@@ -18,6 +18,7 @@
 // (HINSTANCE, HMODULE, HWND, etc.) because it pulls in <windows.h>.
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "framework.h"
+#include "SparkEngineWindowsInternal.h"
 #endif
 
 // ============================================================================
@@ -366,6 +367,25 @@ void ShutdownEngineAfterPreflight()
         Spark::SimpleConsole::GetInstance().Shutdown();
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
     }
+
+    // Platform-owned gameplay services remain registered and alive until all
+    // module OnUnload callbacks and DLL destruction have completed. Modules
+    // may legitimately deregister callbacks through these services during
+    // OnUnload, so clear the context slots only after the module images are
+    // no longer resident.
+#ifdef _WIN32
+    if (EngineContext* shutdownContext = EngineContext::Get())
+    {
+        shutdownContext->SetModSystem(nullptr);
+        shutdownContext->SetDialogue(nullptr);
+        shutdownContext->SetUI(nullptr);
+        shutdownContext->SetWeather(nullptr);
+    }
+    g_modSystem.reset();
+    g_dialogueSystem.reset();
+    g_uiSystem.reset();
+    g_weatherSystem.reset();
+#endif
 
     // Sequencer is a non-owning audio client. Detach it before releasing the
     // EngineRuntime-owned backend/engine so queued cues cannot outlive audio.
