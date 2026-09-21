@@ -1814,6 +1814,8 @@ if(Python3_Interpreter_FOUND)
                 "-DSPARK_ENGINE=$<TARGET_FILE:SparkEngine>"
                 "-DSPARK_GAME=$<TARGET_FILE:SparkGameFPS>"
                 "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+                "-DSPARK_AUTOMATION_SMOKE_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+                "-DSPARK_AUTOMATION_SMOKE_OUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/spark-automation-nullrhi-smoke"
                 -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkAutomationNullRHISmoke.cmake)
         set_tests_properties(SparkAutomationNullRHIExecutableSmoke PROPERTIES
             LABELS "release;automation;nullrhi;process"
