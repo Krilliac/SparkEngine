@@ -2337,19 +2337,30 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_native_msi_qualification_blocks_package_upload_and_retains_logs(self) -> None:
         windows = yaml_section(self.release, "build-windows", indent=2)
-        block = named_step(windows, "Qualify Windows stable MSI install and uninstall")
+        block = named_step(windows, "Qualify Windows stable MSI install upgrade rollback repair and uninstall")
         self.assertIn("if: needs.prepare.outputs.is_versioned == 'true'", block)
         self.assertIn("python .github/scripts/qualify-windows-msi.py", block)
         self.assertIn("python .github/scripts/write-shipping-package-manifest.py", block)
+        self.assertIn("python .github/scripts/provision-previous-windows-msi.py", block)
+        self.assertIn('--repository "${{ github.repository }}"', block)
+        self.assertIn('--current-version "${{ needs.prepare.outputs.cmake_version }}"', block)
+        self.assertIn("provisioning-receipt.json", block)
+        self.assertNotIn("SPARK_PREVIOUS_WINDOWS_PACKAGE_DIR", block)
+        self.assertNotIn("SPARK_PREVIOUS_WINDOWS_PACKAGE_MANIFEST", block)
         self.assertIn('--manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake"', block)
         self.assertIn('$packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"', block)
         self.assertIn("--package-manifest $packageManifest", block)
+        self.assertIn("--previous-packages $previousPackages", block)
+        self.assertIn("--previous-version $previousVersion", block)
+        self.assertIn("--previous-package-manifest $previousManifest", block)
         self.assertIn('--runner-temp "${{ runner.temp }}"', block)
         self.assertIn('--source-sha "${{ github.sha }}"', block)
         self.assertTrue(block.rstrip().endswith("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"))
         self.assertNotIn("continue-on-error", block)
         self.assertLess(windows.index("Generate CPack packages"), windows.index("Qualify Windows stable MSI"))
         self.assertLess(windows.index("Qualify Windows stable MSI"), windows.index("Upload packaged artifact"))
+        upload = named_step(windows, "Upload packaged artifact")
+        self.assertIn("shipping-package-manifest.json", upload)
         logs = named_step(windows, "Upload native MSI qualification diagnostics")
         self.assertIn("if: always()", logs)
         self.assertIn("path: msi-qualification/", logs)
@@ -2399,6 +2410,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         step = named_step(windows, "Test native Windows package evidence producers")
         self.assertIn("if: matrix.config == 'Release'", step)
         self.assertIn("test_write_shipping_package_manifest.py", step)
+        self.assertIn("test_provision_previous_windows_msi.py", step)
         self.assertIn("test_qualify_windows_msi.py", step)
         self.assertNotIn("continue-on-error", step)
 
@@ -2476,8 +2488,9 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "SparkEngine-7.8.9-Windows-AMD64-MinSizeRel.zip",
             "SparkEngine-7.8.9-Windows-AMD64-MinSizeRel-Runtime.exe",
             "SparkEngine-7.8.9-Windows-AMD64-MinSizeRel-Runtime.msi",
+            "shipping-package-manifest.json",
         )
-        for missing in (None, names[0], names[1], names[2]):
+        for missing in (None, names[0], names[1], names[2], names[3]):
             with self.subTest(missing=missing), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
                 packages = root / "release-assets/SparkEngine-Windows-MinSizeRel-packages"
@@ -2501,6 +2514,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                     self.assertEqual(completed.returncode, 0, completed.stderr)
                     assets = (root / "expected-release-assets.txt").read_text().splitlines()
                     self.assertEqual(set(assets), {*names, "SHA256SUMS"})
+                    self.assertEqual(assets.count("shipping-package-manifest.json"), 1)
 
     def test_release_binaries_bind_and_verify_the_requested_cmake_version(self) -> None:
         installer_cmake = (REPO_ROOT / "SparkInstaller" / "CMakeLists.txt").read_text(encoding="utf-8")

@@ -343,28 +343,35 @@ jobs:
       if: needs.prepare.outputs.is_versioned == 'true'
       shell: pwsh
       # Hosted Windows Server evidence is not Windows 11 certification. Stable
-      # publication also requires an exact previous MSI+manifest pair; the
-      # repository currently has no safe artifact source for that pair, so the
-      # explicit inputs below fail closed until release provisioning supplies it.
+      # Publication requires an exact predecessor MSI+manifest pair. Resolve it
+      # from the published GitHub release API by immutable asset id; runner-local
+      # repository variables are not an acceptable artifact source. The first
+      # stable release intentionally fails: a real prior published release with
+      # both signed assets must exist; no synthetic predecessor is permitted.
       env:
-        SPARK_PREVIOUS_WINDOWS_VERSION: ${{ vars.SPARK_PREVIOUS_WINDOWS_VERSION }}
-        SPARK_PREVIOUS_WINDOWS_PACKAGE_DIR: ${{ vars.SPARK_PREVIOUS_WINDOWS_PACKAGE_DIR }}
-        SPARK_PREVIOUS_WINDOWS_PACKAGE_MANIFEST: ${{ vars.SPARK_PREVIOUS_WINDOWS_PACKAGE_MANIFEST }}
+        GH_TOKEN: ${{ github.token }}
       run: |
-        $previousVersion = $env:SPARK_PREVIOUS_WINDOWS_VERSION
-        $previousPackages = $env:SPARK_PREVIOUS_WINDOWS_PACKAGE_DIR
-        $previousManifest = $env:SPARK_PREVIOUS_WINDOWS_PACKAGE_MANIFEST
-        if ([string]::IsNullOrWhiteSpace($previousVersion) -or
-            [string]::IsNullOrWhiteSpace($previousPackages) -or
-            [string]::IsNullOrWhiteSpace($previousManifest)) {
-          throw "Stable MSI upgrade qualification requires SPARK_PREVIOUS_WINDOWS_VERSION, SPARK_PREVIOUS_WINDOWS_PACKAGE_DIR, and SPARK_PREVIOUS_WINDOWS_PACKAGE_MANIFEST repository variables; no safe previous-artifact source is provisioned."
-        }
         $packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"
         python .github/scripts/write-shipping-package-manifest.py `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
           --version "${{ needs.prepare.outputs.cmake_version }}" `
           --commit-sha "${{ github.sha }}" --out $packageManifest
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $previousRoot = Join-Path "${{ runner.temp }}" "spark-previous-release-${{ github.run_id }}-${{ github.run_attempt }}"
+        $previousReceipt = Join-Path $previousRoot "provisioning-receipt.json"
+        python .github/scripts/provision-previous-windows-msi.py `
+          --repository "${{ github.repository }}" `
+          --current-version "${{ needs.prepare.outputs.cmake_version }}" `
+          --output-dir $previousRoot --receipt $previousReceipt
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if (-not (Test-Path -LiteralPath $previousReceipt -PathType Leaf)) { throw "Previous-release provisioner did not publish its receipt" }
+        $previous = Get-Content -LiteralPath $previousReceipt -Raw | ConvertFrom-Json
+        $previousVersion = [string]$previous.previous_version
+        if ($previousVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw "Previous-release receipt has an invalid version" }
+        $previousPackages = Join-Path $previousRoot "packages"
+        $previousManifest = Join-Path $previousRoot "shipping-package-manifest.json"
+        if (-not (Test-Path -LiteralPath $previousPackages -PathType Container) -or
+            -not (Test-Path -LiteralPath $previousManifest -PathType Leaf)) { throw "Previous-release provisioner did not publish the required MSI and manifest" }
         python .github/scripts/qualify-windows-msi.py `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
           --version "${{ needs.prepare.outputs.cmake_version }}" `
@@ -471,6 +478,7 @@ jobs:
           ${{ matrix.build_dir }}/packages/*.zip
           ${{ matrix.build_dir }}/packages/*.exe
           ${{ matrix.build_dir }}/packages/*.msi
+          ${{ matrix.build_dir }}/packages/shipping-package-manifest.json
         retention-days: 7
         if-no-files-found: error
 
@@ -1001,6 +1009,7 @@ jobs:
             "SparkEngine-${RELEASE_VERSION}-Windows-AMD64-MinSizeRel.zip"
             "SparkEngine-${RELEASE_VERSION}-Windows-AMD64-MinSizeRel-Runtime.exe"
             "SparkEngine-${RELEASE_VERSION}-Windows-AMD64-MinSizeRel-Runtime.msi"
+            "shipping-package-manifest.json"
           )
           for required_package in "${required_stable_packages[@]}"; do
             if [[ ! -f "$package_root/$required_package" || -L "$package_root/$required_package" ]]; then
@@ -1025,7 +1034,7 @@ jobs:
         done < <(
           find "$package_root" -type f \
             \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
-               -o -name "SparkInstaller-*" \) -print0
+               -o -name "SparkInstaller-*" -o -name "shipping-package-manifest.json" \) -print0
         )
 
         # Publish version-independent aliases for direct README downloads.
@@ -1106,6 +1115,7 @@ jobs:
           find . -maxdepth 1 -type f \
             \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
                -o -name "SparkInstaller-*" -o -name "*.spdx.json" \
+               -o -name "shipping-package-manifest.json" \
                -o -name "SparkEngine-Exact-CI-Evidence.json" \) -print0 | sort -z
         )
 

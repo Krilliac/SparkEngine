@@ -3001,6 +3001,8 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         self.assertIn(f'if [[ "$artifact" != "{evidence}" ]]', collect_step)
         self.assertIn('sha256sum "$artifact" >> SHA256SUMS', collect_step)
         self.assertIn('printf \'%s\' "$FILES" > expected-release-assets.txt', collect_step)
+        self.assertIn('"shipping-package-manifest.json"', collect_step)
+        self.assertIn('-o -name "shipping-package-manifest.json"', collect_step)
         self.assertIn(
             'done < expected-release-assets.txt > expected-release-digests.txt',
             collect_step,
