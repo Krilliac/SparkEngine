@@ -1764,6 +1764,24 @@ endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+    # CI-110: exercise the shipped SparkCooker binary against real nested
+    # assets. The smoke is cross-platform because SparkCooker supports both
+    # Windows and POSIX process/filesystem implementations.
+    if(TARGET SparkCooker)
+        if(TARGET SparkTests)
+            add_dependencies(SparkTests SparkCooker)
+        endif()
+        add_test(
+            NAME SparkCookerExecutableSmoke
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_COOKER=$<TARGET_FILE:SparkCooker>"
+                "-DSPARK_COOKER_WORK_DIR=${CMAKE_BINARY_DIR}/cooker-executable-smoke/$<CONFIG>"
+                -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkCookerSmoke.cmake)
+        set_tests_properties(SparkCookerExecutableSmoke PROPERTIES
+            LABELS "release;cooker;process"
+            TIMEOUT 30)
+    endif()
+
     # CI-110: exercise the actual shipped Windows shader compiler binary. The
     # test is intentionally Windows-only because D3DCompiler is the only
     # integrated HLSL backend; non-Windows builds must not report a fake pass.
