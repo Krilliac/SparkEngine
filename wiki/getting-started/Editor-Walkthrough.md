@@ -158,7 +158,7 @@ Open from **Window → Weapon Editor**. It is a balance calculator (DPS chart an
 ### AI Editor & Debug
 
 - **AI Editor** — Create behavior tree templates with Selector, Sequence, Action, Condition, Decorator, and Parallel nodes
-- **AI Debug** — Live-inspect AI agents during play mode. Shows blackboard variables, BT execution trace, perception ranges, and nav paths
+- **AI Debug** — Inspect available agent diagnostics and panel views. State preview does not run AI or produce live game-agent data; use a separately launched game for gameplay diagnosis.
 
 ### Dialogue Editor
 
@@ -296,33 +296,39 @@ Open from **Window → Coroutine Debug**. Monitor active coroutines:
 
 ---
 
-## Play Mode
+## State Preview and Launch Game
 
-The **Play Mode Toolbar** (top of editor) controls simulation:
+The editor's **State Preview Toolbar** (F5/F6) controls a local preview state
+machine. It does not tick game physics, AI, scripts, audio, or a game module.
+Use **Play Control → Launch Game** to start gameplay in a separate SparkEngine
+process; verify that process independently.
 
 | Button | Action |
 |--------|--------|
-| **Play** | Start simulation |
-| **Pause** | Freeze simulation |
-| **Stop** | Reset to editor state |
-| **Step** | Advance one frame |
+| **Start** | Enter state preview; no gameplay runs |
+| **Pause** | Pause the preview state counter |
+| **Stop** | Exit state preview and restore the editor snapshot |
+| **Step** | Advance one preview state frame, not a game frame |
 
 ### Time Scale
 
 The toolbar includes a time-scale slider with presets:
 
-- **0.25x** — Quarter speed (useful for debugging physics)
+- **0.25x** — Quarter preview-counter speed
 - **0.5x** — Half speed
 - **1x** — Normal
 - **2x / 4x** — Fast-forward
 
+These settings scale preview state time, not gameplay simulation speed.
+
 ### Subsystem Toggles
 
-During play mode, you can selectively enable/disable:
+The preview exposes flags named for these subsystems:
 
 - Physics, AI, Audio, Animation, Scripting, Particles
 
-This is useful for isolating bugs — disable everything except the system you are debugging.
+These flags affect preview counters only. They do not enable, disable, or
+exercise the actual subsystems, so they cannot isolate gameplay bugs.
 
 ---
 

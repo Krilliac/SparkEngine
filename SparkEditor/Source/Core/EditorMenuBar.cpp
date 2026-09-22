@@ -784,7 +784,7 @@ namespace SparkEditor
         if (cursorX > ImGui::GetCursorPosX())
             ImGui::SetCursorPosX(cursorX);
 
-        bool isPlaying = (m_playMode == PlayMode::Playing || m_playMode == PlayMode::Simulating);
+        bool isPlaying = m_playModeManager.IsPlaying() || m_playModeManager.IsSimulating();
         if (isPlaying)
         {
             ImGui::PushStyleColor(ImGuiCol_Button, playGreen);
@@ -798,26 +798,22 @@ namespace SparkEditor
         if (ImGui::Button(ICON_FA_PLAY, btnDim))
         {
             m_playModeManager.TogglePlayMode();
-            m_playMode = m_playModeManager.IsPlaying()
-                             ? PlayMode::Playing
-                             : (m_playModeManager.IsSimulating()
-                                    ? PlayMode::Simulating
-                                    : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Play mode toggled: %s",
-                           m_playMode == PlayMode::Playing
+                           m_playModeManager.IsPlaying()
                                ? "Playing"
-                               : (m_playMode == PlayMode::Simulating
+                               : (m_playModeManager.IsSimulating()
                                       ? "Simulating"
-                                      : (m_playMode == PlayMode::Paused ? "Paused" : "Stopped")));
-            ShowNotification(m_playMode == PlayMode::Stopped ? "Stopped" : "Running...",
-                             m_playMode == PlayMode::Stopped ? "info" : "success", 2.0f);
+                                      : (m_playModeManager.IsPaused() ? "Paused" : "Stopped")));
+            ShowNotification(m_playModeManager.IsStopped() ? "Preview stopped"
+                                                           : "State preview active (no gameplay tick)",
+                             "info", 2.0f);
         }
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Play (F5)");
+            ImGui::SetTooltip("State preview only (F5); use Play Control > Launch Game for gameplay");
         ImGui::SameLine();
 
-        bool isPaused = (m_playMode == PlayMode::Paused);
+        bool isPaused = m_playModeManager.IsPaused();
         if (isPaused)
         {
             ImGui::PushStyleColor(ImGuiCol_Button, accentAmber);
@@ -831,12 +827,6 @@ namespace SparkEditor
         if (ImGui::Button(ICON_FA_PAUSE, btnDim))
         {
             m_playModeManager.TogglePause();
-            if (m_playModeManager.IsPaused())
-                m_playMode = PlayMode::Paused;
-            else if (m_playModeManager.IsSimulating())
-                m_playMode = PlayMode::Simulating;
-            else if (m_playModeManager.IsInPlayMode())
-                m_playMode = PlayMode::Playing;
         }
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered())
@@ -847,10 +837,9 @@ namespace SparkEditor
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
         if (ImGui::Button(ICON_FA_STOP, btnDim))
         {
-            if (m_playMode != PlayMode::Stopped)
+            if (m_playModeManager.IsInPlayMode())
             {
                 m_playModeManager.ExitPlayMode();
-                m_playMode = PlayMode::Stopped;
                 ShowNotification("Stopped", "info", 2.0f);
             }
         }

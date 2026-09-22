@@ -173,11 +173,11 @@ The viewport provides translate, rotate, and scale gizmos for selected entities:
 ### Basic Workflow
 
 1. **Create or open a scene** via File > New Scene or File > Open Scene
-2. **Import assets** by dragging files from the Asset Browser into the viewport
+2. **Browse assets** in the Asset Browser; viewport drag-and-drop placement is not release-qualified
 3. **Position objects** using the translate gizmo (W) and snap settings
-4. **Assign materials** in the Properties panel or drag from the Material Editor
+4. **Inspect materials** in the Properties/Material panels; asset-to-material assignment is not release-qualified
 5. **Add lights** from the Lighting panel or right-click > Add Light
-6. **Test** by pressing Play (or Ctrl+Enter) to enter play mode
+6. **Test** with **Play Control → Launch Game**, which starts a separate SparkEngine process. F5 only advances editor state preview and does not run gameplay
 7. **Save** with Ctrl+S
 
 ---

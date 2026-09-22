@@ -811,9 +811,9 @@ namespace SparkEditor
         // "Game View" center text (subtle) — show capture hint when not captured
         if (!m_isCursorCaptured)
         {
-            const char* label = !m_isPlaying               ? ICON_FA_PLAY " Press F5 to play"
-                                : m_fpsHUDPreviewAvailable ? ICON_FA_GAMEPAD " Click to enter Game View"
-                                                           : ICON_FA_GAMEPAD " Game View running";
+            const char* label = !m_isPlaying               ? ICON_FA_PLAY " F5: state preview only (no gameplay)"
+                                : m_fpsHUDPreviewAvailable ? ICON_FA_GAMEPAD " Click for simulated HUD input"
+                                                           : ICON_FA_GAMEPAD " Scene preview active";
             ImVec2 textSize = ImGui::CalcTextSize(label);
             ImVec2 textPos(pos.x + (viewportSize.x - textSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f);
             drawList->AddText(textPos, IM_COL32(80, 100, 120, 140), label);

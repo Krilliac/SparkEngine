@@ -131,9 +131,9 @@ namespace SparkEditor
 
         m_commandPalette->RegisterAction("Save Scene", "Scene", [this]() { SaveScene(); });
 
-        // Play mode
+        // Editor state preview; actual gameplay launches through Play Control.
         m_commandPalette->RegisterAction(
-            "Play", "Command",
+            "Preview scene state", "Command",
             [this]()
             {
                 if (m_playModeManager.IsPaused())
@@ -141,13 +141,9 @@ namespace SparkEditor
                 else if (m_playModeManager.IsStopped())
                     m_playModeManager.EnterPlayMode();
 
-                m_playMode = m_playModeManager.IsPlaying()
-                                 ? PlayMode::Playing
-                                 : (m_playModeManager.IsSimulating()
-                                        ? PlayMode::Simulating
-                                        : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
-                const bool running = m_playMode != PlayMode::Stopped;
-                ShowNotification(running ? "Running..." : "Unable to enter play mode", running ? "success" : "error");
+                const bool running = m_playModeManager.IsInPlayMode();
+                ShowNotification(running ? "State preview active (no gameplay tick)" : "Unable to enter state preview",
+                                 running ? "info" : "error");
             },
             "F5");
 
@@ -156,7 +152,6 @@ namespace SparkEditor
             [this]()
             {
                 m_playModeManager.ExitPlayMode();
-                m_playMode = PlayMode::Stopped;
                 ShowNotification("Stopped", "info");
             },
             "Shift+F5");

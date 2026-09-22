@@ -241,7 +241,8 @@ namespace SparkEditor
         if (m_streamEvents.empty())
         {
             ImGui::TextDisabled("No streaming events recorded yet.");
-            ImGui::TextDisabled("Events appear when areas load or unload during Play mode.");
+            ImGui::TextDisabled("F5 preview does not stream game areas.");
+            ImGui::TextDisabled("Use Play Control > Launch Game to test area streaming.");
             return;
         }
 

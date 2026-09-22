@@ -1,11 +1,12 @@
 /**
  * @file PlayModeToolbarPanel.h
- * @brief Dedicated play-in-editor toolbar with transport controls and simulation options
+ * @brief Editor state-preview toolbar; actual gameplay runs out of process
  * @author Spark Engine Team
  * @date 2025
  *
- * Provides a compact toolbar for controlling play mode: Play/Pause/Stop/Step,
- * time-scale slider, simulation subsystem toggles, and camera-mode switcher.
+ * Provides a compact toolbar for preview-state controls: start/pause/stop/step,
+ * time-scale slider, counter flags, and a camera-mode label selector. It does
+ * not tick game subsystems.
  * Designed to dock at the top of the editor viewport.
  */
 
@@ -28,15 +29,15 @@ namespace SparkEditor
 {
 
     /**
-     * @brief Play-mode toolbar panel
+     * @brief Editor state-preview toolbar panel
      *
      * Renders a horizontal toolbar with:
      * - Transport controls: Play, Pause, Stop, Step, Multi-Step
      * - Time-scale slider with preset buttons (0.25x, 0.5x, 1x, 2x, 4x)
-     * - Simulation subsystem toggles (Physics, AI, Audio, Animation, Scripting, Particles)
+     * - Counter flags (Physics, AI, Audio, Animation, Scripting, Particles); no subsystem ticks
      * - Camera-mode switcher (Editor Free, Game Camera, Follow Player)
      * - Live-editing toggle and keep-changes-on-stop toggle
-     * - Status display: play time, frame count, FPS
+     * - Status display: scaled preview time, state frame count, state rate
      */
     class PlayModeToolbarPanel : public EditorPanel
     {

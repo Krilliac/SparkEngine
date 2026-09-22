@@ -1814,6 +1814,14 @@ if(WIN32 AND TARGET SparkEditor)
 endif()
 
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME SparkEditorPlayTruthContract
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_editor_play_truth.py)
+    set_tests_properties(SparkEditorPlayTruthContract PROPERTIES
+        LABELS "release;editor;static;python"
+        TIMEOUT 30)
+
     # CI-110: exercise the actual shipped Windows shader compiler binary. The
     # test is intentionally Windows-only because D3DCompiler is the only
     # integrated HLSL backend; non-Windows builds must not report a fake pass.

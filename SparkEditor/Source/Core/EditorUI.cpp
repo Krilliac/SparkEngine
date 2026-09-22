@@ -547,7 +547,7 @@ namespace SparkEditor
         // Tick tutorial auto-advance timers so active tutorials progress.
         SPARK_GUARDED_UPDATE("TutorialSystem", "Editor", { TutorialSystem::GetInstance().Update(deltaTime); });
 
-        // Tick play/simulate state machine (PIE and in-editor simulation stepping/stats)
+        // Tick only the editor preview state machine; gameplay runs in a separate process.
         m_playModeManager.Update(deltaTime);
         if (auto it = m_panels.find("GameView"); it != m_panels.end())
             if (auto* gameView = dynamic_cast<GameViewPanel*>(it->second.get()))
@@ -603,48 +603,38 @@ namespace SparkEditor
     {
         ImGuiIO& io = ImGui::GetIO();
 
-        // F5: Toggle play mode (delegates to PlayModeManager)
+        // F5: Toggle editor state preview (not an in-editor game tick).
         if (ImGui::IsKeyPressed(ImGuiKey_F5) && !io.WantTextInput)
         {
             if (io.KeyShift)
             {
                 m_playModeManager.ExitPlayMode();
-                m_playMode = PlayMode::Stopped;
                 ShowNotification("Stopped", "info", 2.0f);
             }
             else
             {
                 m_playModeManager.TogglePlayMode();
-                m_playMode = m_playModeManager.IsPlaying()
-                                 ? PlayMode::Playing
-                                 : (m_playModeManager.IsSimulating()
-                                        ? PlayMode::Simulating
-                                        : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
-                ShowNotification(m_playMode == PlayMode::Playing
-                                     ? "Playing..."
-                                     : (m_playMode == PlayMode::Simulating ? "Simulating..." : "Stopped"),
+                ShowNotification(m_playModeManager.IsPlaying() ? "State preview active (no gameplay tick)"
+                                                               : (m_playModeManager.IsSimulating()
+                                                                      ? "Simulation preview active (no gameplay tick)"
+                                                                      : "Preview stopped"),
                                  "info", 2.0f);
             }
         }
 
-        // F6: Toggle simulation mode (physics/AI/etc. while retaining editor camera workflow)
+        // F6: Toggle simulation-preview state, without ticking physics or AI.
         if (ImGui::IsKeyPressed(ImGuiKey_F6) && !io.WantTextInput)
         {
             if (io.KeyShift)
             {
                 m_playModeManager.ExitPlayMode();
-                m_playMode = PlayMode::Stopped;
                 ShowNotification("Stopped simulation", "info", 2.0f);
             }
             else
             {
                 m_playModeManager.ToggleSimulationMode();
-                m_playMode = m_playModeManager.IsPlaying()
-                                 ? PlayMode::Playing
-                                 : (m_playModeManager.IsSimulating()
-                                        ? PlayMode::Simulating
-                                        : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
-                ShowNotification(m_playMode == PlayMode::Simulating ? "Simulation running..." : "Simulation stopped",
+                ShowNotification(m_playModeManager.IsSimulating() ? "Simulation preview active (no gameplay tick)"
+                                                                  : "Simulation preview stopped",
                                  "info", 2.0f);
             }
         }
@@ -2409,7 +2399,6 @@ namespace SparkEditor
     {
         if (m_playModeManager.IsInPlayMode())
             m_playModeManager.ExitPlayMode();
-        m_playMode = PlayMode::Stopped;
     }
 
     void EditorUI::SwapWorld(std::unique_ptr<::World> newWorld)

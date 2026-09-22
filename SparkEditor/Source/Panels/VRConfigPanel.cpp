@@ -93,7 +93,8 @@ namespace SparkEditor
                     m_headOrientation[2], m_headOrientation[3]);
 
         ImGui::Separator();
-        ImGui::TextDisabled("Tracking data updates in Play mode when VR is active.");
+        ImGui::TextDisabled("F5 preview does not update VR tracking.");
+        ImGui::TextDisabled("Use Play Control > Launch Game to test runtime VR tracking.");
     }
 
     void VRConfigPanel::RenderControllerMapping()

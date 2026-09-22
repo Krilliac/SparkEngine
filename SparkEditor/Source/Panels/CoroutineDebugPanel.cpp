@@ -82,7 +82,8 @@ namespace SparkEditor
         if (m_coroutines.empty())
         {
             ImGui::TextDisabled("No active coroutines.");
-            ImGui::TextDisabled("Coroutines are started during Play mode via CoroutineScheduler.");
+            ImGui::TextDisabled("F5 preview does not run game coroutines.");
+            ImGui::TextDisabled("Use Play Control > Launch Game to test runtime coroutines.");
             return;
         }
 
