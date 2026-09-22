@@ -210,8 +210,7 @@ namespace
     {
         const std::vector<std::filesystem::path> currentDirectories = FindCrashArtifactDirectories();
         const auto found = std::find_if(currentDirectories.begin(), currentDirectories.end(),
-                                        [&existingDirectories](const std::filesystem::path& candidate)
-                                        {
+                                        [&existingDirectories](const std::filesystem::path& candidate) {
                                             return std::find(existingDirectories.begin(), existingDirectories.end(),
                                                              candidate) == existingDirectories.end();
                                         });

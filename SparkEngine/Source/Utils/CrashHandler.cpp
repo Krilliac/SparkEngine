@@ -183,7 +183,9 @@ static bool PinArtifactRoot(const std::filesystem::path& root)
     flags |= O_CLOEXEC;
 #endif
     const int handle = open(absoluteRoot.c_str(), flags);
-    struct stat info{};
+    struct stat info
+    {
+    };
     if (handle < 0 || fstat(handle, &info) != 0 || !S_ISDIR(info.st_mode) || info.st_uid != geteuid() ||
         (info.st_mode & (S_IRWXG | S_IRWXO)) != 0)
     {
@@ -343,7 +345,9 @@ static PinnedFile OpenPinnedInputFile(const std::string& path)
     if (descriptor < 0)
         return result;
 
-    struct stat info{};
+    struct stat info
+    {
+    };
     if (fstat(descriptor, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1)
     {
         close(descriptor);
@@ -406,7 +410,9 @@ static PinnedFile CreateExclusiveOutputFile(const std::string& path)
     const int descriptor = openat(g_artifactRootHandle, name.c_str(), flags, S_IRUSR | S_IWUSR);
     if (descriptor < 0)
         return result;
-    struct stat info{};
+    struct stat info
+    {
+    };
     if (fstat(descriptor, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1)
     {
         close(descriptor);
