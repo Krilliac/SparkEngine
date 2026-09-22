@@ -18,6 +18,7 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <string_view>
 
 // Forward‐declare Projectile to avoid include cycles
 class Projectile;
@@ -253,6 +254,17 @@ class GameObject
     void SetMaterialPath(const std::string& p) { m_materialPath = p; }
 
     /**
+     * @brief Set the trusted project root used to resolve an authored material.
+     *
+     * Scene data must never supply this root. The root must contain an Assets
+     * directory; invalid roots clear any previous binding so a project switch
+     * cannot silently reuse another project's material.
+     * @param projectRootUtf8 Absolute UTF-8 project/package root from the host.
+     * @return True when the root was canonicalized and contains Assets.
+     */
+    bool SetMaterialProjectRoot(std::string_view projectRootUtf8);
+
+    /**
      * @brief Get the mesh associated with this object
      * @return Pointer to the object's mesh, or nullptr if no mesh is set
      */
@@ -310,6 +322,7 @@ class GameObject
     UINT m_id{0};                      ///< Unique identifier for this object
     std::string m_name;                ///< Human-readable name for debugging
     std::string m_materialPath;        ///< Scene-assigned material JSON path (may be empty)
+    std::string m_materialProjectRoot; ///< Canonical native-spelled UTF-8 root; never read from scene data
 
     /**
      * @brief Path to model file for mesh loading

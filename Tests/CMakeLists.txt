@@ -912,6 +912,7 @@ endif()
 
 if(WIN32)
     target_sources(SparkTests PRIVATE TestWorldBasicRender.cpp)
+    target_sources(SparkTests PRIVATE TestLegacyGameObjectMaterial.cpp)
     target_sources(SparkTests PRIVATE TestPostProcessingPipelineD3D11.cpp)
     target_sources(SparkTests PRIVATE TestGPUDrivenRendererD3D11.cpp)
     target_compile_definitions(SparkTests PRIVATE
