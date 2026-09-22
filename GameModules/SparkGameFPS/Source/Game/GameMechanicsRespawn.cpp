@@ -30,10 +30,13 @@ namespace Spark
         m_waitingForRespawn = false;
         m_missingBusReported = false;
 
-        // Add default spawn point
+        // Match the authored North_Spawn in Assets/Scenes/level1.scene. The
+        // legacy scene loader does not register [SpawnPoint] with this system;
+        // the old z=-5 default placed the first-person lens against the center
+        // building's back wall on match start and after every death.
         RespawnPoint defaultSpawn;
         defaultSpawn.name = "Default Spawn";
-        defaultSpawn.position = {0, 2, -5};
+        defaultSpawn.position = {0, 2, -20};
         defaultSpawn.isActive = true;
         m_spawnPoints.push_back(defaultSpawn);
 

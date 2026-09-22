@@ -97,12 +97,11 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     ASSERT_MSG(aspect > 0.0f, "Invalid aspect ratio");
 
     m_camera->Initialize(aspect);
-    // NOTE: Camera position is now defined in the scene file (Assets/Scenes/level1.scene)
-    // as a [Camera] entry. It can be placed and edited in the SparkEditor.
-    // The code below shows the equivalent C++ approach for reference.
-    // m_camera->SetPosition({0.0f, 2.0f, -5.0f});
-    m_camera->SetPosition({0.0f, 2.0f, -5.0f}); // Fallback if scene camera not loaded
-    LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized (scene override available)", L"INFO");
+    // The legacy .scene loader does not apply [Camera] to this game camera.
+    // Match the authored North_Spawn instead: z=-5 puts the lens directly
+    // against the center building's back wall and paints a solid frame.
+    m_camera->SetPosition({0.0f, 2.0f, -20.0f});
+    LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized at north arena spawn", L"INFO");
 
     /* Class System -----------------------------------------*/
     m_classSystem = std::make_unique<Spark::ClassSystem>();

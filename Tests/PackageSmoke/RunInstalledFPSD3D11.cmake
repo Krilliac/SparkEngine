@@ -250,6 +250,9 @@ file(MAKE_DIRECTORY "${_run_root}")
 set(_stdout_log "${_run_root}/stdout.log")
 set(_stderr_log "${_run_root}/stderr.log")
 set(_combined_log "${_run_root}/combined.log")
+set(_visual_image "${_run_root}/fps-visible.png")
+set(_visual_script "${_run_root}/visual.exec")
+file(WRITE "${_visual_script}" "0 gfx_screenshot fps-visible.png\n")
 
 set(SPARK_LIFECYCLE_PARSER_INCLUDE_ONLY ON)
 include("${SPARK_SOURCE_ROOT}/cmake/RunSparkModuleProfileLifecycle.cmake")
@@ -267,7 +270,8 @@ execute_process(
         -threads 2
         -window-size 640x360
         -no-subprocess
-    WORKING_DIRECTORY "${_bin}"
+        -exec "${_visual_script}"
+    WORKING_DIRECTORY "${_run_root}"
     RESULT_VARIABLE _result
     OUTPUT_VARIABLE _stdout
     ERROR_VARIABLE _stderr
@@ -286,6 +290,28 @@ if(NOT _lifecycle_ok)
         "stderr: ${_stderr}")
 endif()
 
+if(NOT EXISTS "${_visual_image}" OR IS_DIRECTORY "${_visual_image}" OR IS_SYMLINK "${_visual_image}")
+    message(FATAL_ERROR "Installed FPS D3D11 run did not save its pre-present visual frame: ${_visual_image}")
+endif()
+set(_powershell "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe")
+if(NOT EXISTS "${_powershell}")
+    message(FATAL_ERROR "Installed FPS D3D11 visual smoke requires Windows PowerShell")
+endif()
+execute_process(
+    COMMAND "${_powershell}" -NoProfile -NonInteractive -File
+        "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CheckFPSVisibleFrame.ps1"
+        -ImagePath "${_visual_image}"
+    RESULT_VARIABLE _visual_result
+    OUTPUT_VARIABLE _visual_stdout
+    ERROR_VARIABLE _visual_stderr
+    TIMEOUT 30)
+if(NOT _visual_result EQUAL 0)
+    message(FATAL_ERROR
+        "Installed FPS D3D11 visual smoke failed (${_visual_result}):\n"
+        "${_visual_stdout}\n${_visual_stderr}")
+endif()
+file(SHA256 "${_visual_image}" _visual_sha256)
+
 file(WRITE "${_run_root}/evidence.txt"
     "engine=${_engine}\n"
     "module=${_module}\n"
@@ -295,7 +321,9 @@ file(WRITE "${_run_root}/evidence.txt"
     "backend=d3d11-warp\n"
     "asset_root_guard=installed-bin\n"
     "frames=8\n"
+    "visual_screenshot_sha256=${_visual_sha256}\n"
+    "visual_result=pass\n"
     "result=pass\n")
 message(STATUS
     "Installed SparkGameFPS D3D11/WARP executable smoke passed with strict device, "
-    "rendered-lifecycle, and clean-exit evidence; artifacts retained under ${_run_root}")
+    "rendered-lifecycle, visible-frame, and clean-exit evidence; artifacts retained under ${_run_root}")
