@@ -801,6 +801,55 @@ class RepositoryEvidenceTests(unittest.TestCase):
         ids = tuple(row["id"] for row in contract["generators"])
         self.assertEqual(docs_currentness.REQUIRED_GENERATORS, ids)
 
+    def test_wiki_ecs_inventory_is_identical_for_lf_and_crlf_headers(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wiki-ecs-newlines-") as directory:
+            root = Path(directory)
+            write(root / "docs" / "sync-wiki.sh", (REPO_ROOT / "docs" / "sync-wiki.sh").read_text(encoding="utf-8"))
+            for relative in ("SparkEditor/Source/Panels", "Tests", "GameModules"):
+                (root / relative).mkdir(parents=True)
+            headers = {
+                "SparkEngine/Source/Engine/ECS/Components/FixtureComponents.h": (
+                    "struct ZuluComponent\n{\n};\n"
+                    "struct AlphaComponent\n{\n};\n"
+                    "struct AlphaComponentExtra {};\n"
+                ),
+                "SparkEngine/Source/Engine/ECS/Systems/FixtureSystems.h": (
+                    "class ZuluSystem\n{\n};\n"
+                    "class AlphaSystem\n{\n};\n"
+                    "class AlphaSystemExtra : public AlphaSystem {};\n"
+                ),
+            }
+            page = root / "wiki" / "subsystems" / "Entity-Component-System.md"
+            git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            command = [str(git_bash if git_bash.is_file() else "bash"), "docs/sync-wiki.sh", "sync"]
+            generated = []
+            for newline in ("\n", "\r\n"):
+                with self.subTest(newline=repr(newline)):
+                    for relative, content in headers.items():
+                        path = root / relative
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_bytes(content.replace("\n", newline).encode("utf-8"))
+                    write(page, "# ECS\n")
+                    result = subprocess.run(
+                        command,
+                        cwd=root,
+                        env={**os.environ, "SPARK_WIKI_DIR": str(root / "wiki")},
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=30,
+                    )
+                    self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+                    published = page.read_bytes()
+                    generated.append(published)
+                    self.assertEqual(
+                        [b"AlphaComponentExtra", b"AlphaComponent", b"ZuluComponent",
+                         b"AlphaSystemExtra", b"AlphaSystem", b"ZuluSystem"],
+                        [line.split(b"`")[1] for line in published.split(b"\n") if line.startswith(b"| `")],
+                    )
+                    self.assertNotIn(b"\r", published)
+            self.assertEqual(generated[0], generated[1])
+
     def test_wiki_test_inventory_includes_all_registered_test_sources(self) -> None:
         with tempfile.TemporaryDirectory(prefix="wiki-test-inventory-") as directory:
             wiki = Path(directory)

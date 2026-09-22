@@ -97,8 +97,9 @@ collect_inventory() {
         [ -z "$cfile" ] && continue
         local rel="${cfile#$PROJECT_ROOT/}"
         local structs
+        # Strip CRLF carriage returns before using names as table sort keys.
         structs=$(grep -E '^\s*struct\s+[A-Z][A-Za-z0-9]+' "$cfile" 2>/dev/null | \
-            sed 's/.*struct\s\+//' | sed 's/[:{; ].*//' | tr -d ' ' | sort)
+            sed 's/.*struct\s\+//' | sed 's/[:{; ].*//' | tr -d ' \r' | sort)
         [ -z "$structs" ] && continue
         while IFS= read -r s; do
             [ -z "$s" ] && continue
@@ -114,7 +115,7 @@ collect_inventory() {
         local rel="${sfile#$PROJECT_ROOT/}"
         local classes
         classes=$(grep -E '^\s*class\s+[A-Z][A-Za-z0-9]*System' "$sfile" 2>/dev/null | \
-            sed 's/.*class\s\+//' | sed 's/[:{; ].*//' | tr -d ' ' | sort)
+            sed 's/.*class\s\+//' | sed 's/[:{; ].*//' | tr -d ' \r' | sort)
         [ -z "$classes" ] && continue
         while IFS= read -r c; do
             [ -z "$c" ] && continue
