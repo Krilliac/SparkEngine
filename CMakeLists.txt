@@ -2845,6 +2845,18 @@ foreach(_SPARK_GAME_MODULE IN LISTS _SPARK_GAME_MODULE_NAMES)
     )
 endforeach()
 
+# The focused Windows FPS package has a public tester entry point beside its
+# installed engine and module. Other module selections do not receive a broken
+# launcher that names a missing SparkGameFPS.dll.
+if(WIN32 AND TARGET SparkGameFPS)
+    install(FILES
+        "${CMAKE_SOURCE_DIR}/Tools/playtest/PlaytestSparkFPS.cmd"
+        "${CMAKE_SOURCE_DIR}/Tools/playtest/PLAYTESTING.md"
+        DESTINATION bin
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
+    )
+endif()
+
 if(TARGET SparkCrashReporter)
     install(TARGETS SparkCrashReporter
         RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}

@@ -9,6 +9,13 @@ multiplayer result is required for the single-player slice.
 
 ## Play the arena
 
+For an installed Windows package, use `bin/PlaytestSparkFPS.cmd` to launch the
+real engine with the packaged FPS module. `check` verifies that both files are
+present and prints the engine version; `smoke` runs eight headless NullRHI
+frames; `report` opens the GitHub playtest issue form. The shipped
+`bin/PLAYTESTING.md` explains the workflow and safe report contents. These
+commands do not certify the still-blocked `stable-v1` release.
+
 - `WASD` moves, mouse looks, left mouse fires, `R` reloads, and `Space` jumps.
 - `1`-`4` select loadout slots; `F` and `G` activate class abilities.
 - `F5`-`F10` select a class, while `[` and `]` cycle classes.

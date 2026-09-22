@@ -92,6 +92,12 @@ _run_checked("Install configured FPS module component" 90
     "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
     --config "${SPARK_CONFIG}" --prefix "${_install_root}" --component samples)
 
+_run_checked("Exercise installed FPS playtester entry point" 120
+    "${CMAKE_COMMAND}"
+    "-DSPARK_INSTALLED_ROOT=${_install_root}"
+    "-DSPARK_PLAYTEST_TEST_ROOT=${_run_root}/launcher-smoke"
+    -P "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/TestPlaytestFPSLauncher.cmake")
+
 _run_checked("Validate installed FPS asset manifest and payload" 120
     "${CMAKE_COMMAND}"
     "-DSPARK_ASSETS_ROOT=${_install_root}/bin/Assets"
