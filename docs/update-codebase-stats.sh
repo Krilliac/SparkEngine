@@ -176,13 +176,11 @@ collect_metrics() {
 # Generate the markdown page
 # ============================================================================
 generate_page() {
-    local today
-    today="${GENERATED_DATE:-$(date -u +%Y-%m-%d)}"
-
     cat << HEREDOC
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated ${today}.
+Comprehensive metrics and analysis of the SparkEngine codebase, generated from
+the exact tracked source tree.
 This source inventory is not readiness evidence. The \`stable-v1\` Windows 11
 x64 profile remains blocked and uncertified in \`docs/site/readiness.json\`.
 
@@ -387,9 +385,7 @@ check_mode() {
     collect_metrics
     local tmpout
     tmpout=$(mktemp)
-    local existing_date
-    existing_date=$(sed -n 's/^Comprehensive metrics and analysis of the SparkEngine codebase\. Updated \([0-9-]*\)\.$/\1/p' "$OUTPUT" | head -n 1)
-    GENERATED_DATE="${existing_date:-$(date -u +%Y-%m-%d)}" generate_page > "$tmpout"
+    generate_page > "$tmpout"
     local new_hash
     new_hash=$(md5sum "$tmpout" | awk '{ print $1 }')
     rm -f "$tmpout"

@@ -255,7 +255,7 @@ class DocsGenerationHostileTests(unittest.TestCase):
         self.assertNotIn("SPARK_FILE_TREE_OUTPUT", environment)
         self.assertNotIn("SPARK_WIKI_DIR", environment)
 
-    def test_currentness_pins_generation_date_to_source_commit_utc_day(self) -> None:
+    def test_currentness_strips_date_overrides_and_preserves_source_identity(self) -> None:
         environments: list[dict[str, str]] = []
 
         def completed_process(
@@ -290,11 +290,31 @@ class DocsGenerationHostileTests(unittest.TestCase):
 
         self.assertEqual(
             [environment.get("GENERATED_DATE") for environment in environments],
-            ["2026-09-01", "2026-09-01", "2026-09-01"],
+            [None] * 3,
+        )
+        self.assertEqual(
+            [environment.get("SPARKENGINE_DOC_SOURCE_SHA") for environment in environments],
+            [EXACT_SHA] * 3,
+        )
+        self.assertEqual(
+            [environment.get("SPARKENGINE_DOC_SOURCE_COMMITTED_AT") for environment in environments],
+            ["2026-08-31T19:31:59-05:00"] * 3,
         )
         self.assertEqual(
             {environment.get("PYTHONDONTWRITEBYTECODE") for environment in environments},
             {"1"},
+        )
+
+    def test_tracked_codebase_statistics_excludes_calendar_time(self) -> None:
+        script = (REPO_ROOT / "docs" / "update-codebase-stats.sh").read_text(encoding="utf-8")
+        page = (REPO_ROOT / "wiki" / "advanced" / "Codebase-Statistics.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("GENERATED_DATE", script)
+        self.assertNotIn("date -u", script)
+        self.assertNotRegex(
+            page,
+            r"(?m)^Comprehensive metrics.*Updated [0-9]{4}-[0-9]{2}-[0-9]{2}\.$",
         )
 
     def test_windows_prefers_installed_git_bash_over_wsl_shim(self) -> None:

@@ -198,16 +198,6 @@ def exact_identity(source_sha: str | None, committed_at: str | None) -> tuple[st
     return sha, timestamp
 
 
-def source_commit_utc_date(committed_at: str) -> str:
-    try:
-        parsed = datetime.fromisoformat(committed_at.replace("Z", "+00:00"))
-    except (AttributeError, ValueError) as exc:
-        raise CurrentnessError("source committed-at timestamp must be RFC 3339") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise CurrentnessError("source committed-at timestamp must include an offset")
-    return parsed.astimezone(timezone.utc).date().isoformat()
-
-
 def tracked_inventory() -> tuple[list[str], dict[str, str]]:
     raw = git_output(["ls-files", "-s", "-z", "--cached"], text=False)
     assert isinstance(raw, bytes)
@@ -320,7 +310,6 @@ def run_snapshot(root: Path, tracked_manifest: Path, sha: str, committed_at: str
         "SPARK_DOC_TRACKED_PATHS": str(tracked_manifest),
         "SPARKENGINE_DOC_SOURCE_SHA": sha,
         "SPARKENGINE_DOC_SOURCE_COMMITTED_AT": committed_at,
-        "GENERATED_DATE": source_commit_utc_date(committed_at),
         # The API generator imports repository modules.  Prevent Python from
         # leaving __pycache__ files in the isolated snapshot, where they would
         # look like undeclared generated documentation output.

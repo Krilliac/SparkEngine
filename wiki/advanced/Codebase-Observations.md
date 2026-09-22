@@ -128,9 +128,9 @@ Six split waves reduced the over-threshold file count from **104 to 1** (103 fil
 
 ---
 
-## Generated Docs Are Pinned to the Commit's UTC Day
+## Tracked Generated Docs Exclude Ephemeral Calendar Dates
 
-`docs/update-all-docs.sh check` (run by the `docs-health` and `Validate CI tooling` jobs) regenerates every declared output into two isolated roots with `SPARKENGINE_DOC_SOURCE_COMMITTED_AT` set to the commit's committer timestamp, then compares bytes against the tracked files. `wiki/advanced/Codebase-Statistics.md` embeds that date as `Updated YYYY-MM-DD`, so a commit whose committer date lands on a new UTC day is stale by construction even when no source changed (this is what turned `Working` red at `9f9215a`, a README-only change committed after 00:00 UTC). Run `bash docs/update-all-docs.sh update` and commit the regenerated statistics page on the same UTC day as the commit; the local `update-codebase-stats.sh check` passes regardless because it reuses the date already in the page. The check also refuses a dirty worktree, so run it after committing and amend if needed.
+`docs/update-all-docs.sh check` (run by the `docs-health` and `Validate CI tooling` jobs) regenerates every declared output into two isolated roots and compares exact bytes against the tracked files. `wiki/advanced/Codebase-Statistics.md` intentionally contains only source-derived metrics: it no longer embeds a wall-clock or commit-calendar date, because GitHub's synthetic pull-request merge commit can cross a UTC-day boundary without changing the tree. Exact SHA and timestamp provenance remain in `.health.json` and API generation metadata. Do not reintroduce a calendar field into tracked generated output; it makes identical trees differ solely because of when or where the verifier runs. The check still refuses a dirty worktree, so run it after committing.
 
 ---
 
