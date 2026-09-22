@@ -183,9 +183,7 @@ static bool PinArtifactRoot(const std::filesystem::path& root)
     flags |= O_CLOEXEC;
 #endif
     const int handle = open(absoluteRoot.c_str(), flags);
-    struct stat info
-    {
-    };
+    struct stat info{};
     if (handle < 0 || fstat(handle, &info) != 0 || !S_ISDIR(info.st_mode) || info.st_uid != geteuid() ||
         (info.st_mode & (S_IRWXG | S_IRWXO)) != 0)
     {
@@ -345,9 +343,7 @@ static PinnedFile OpenPinnedInputFile(const std::string& path)
     if (descriptor < 0)
         return result;
 
-    struct stat info
-    {
-    };
+    struct stat info{};
     if (fstat(descriptor, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1)
     {
         close(descriptor);
@@ -410,9 +406,7 @@ static PinnedFile CreateExclusiveOutputFile(const std::string& path)
     const int descriptor = openat(g_artifactRootHandle, name.c_str(), flags, S_IRUSR | S_IWUSR);
     if (descriptor < 0)
         return result;
-    struct stat info
-    {
-    };
+    struct stat info{};
     if (fstat(descriptor, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1)
     {
         close(descriptor);
@@ -613,8 +607,22 @@ static bool PublishCrashManifest(std::string_view reportId, const std::string& j
     renameInfo->RootDirectory = g_artifactRootHandle;
     renameInfo->FileNameLength = static_cast<DWORD>(readyNative.size() * sizeof(wchar_t));
     std::memcpy(renameInfo->FileName, readyNative.data(), renameInfo->FileNameLength);
-    const bool published = SetFileInformationByHandle(temporary, FileRenameInfo, renameInfo,
-                                                      static_cast<DWORD>(renameStorage.size())) != FALSE;
+    // Keep the destination relative to the pinned root. The Win32 rename
+    // wrapper rejects this RootDirectory form with ERROR_INVALID_PARAMETER;
+    // the native operation preserves the same authority used by NtCreateFile.
+    using NtSetInformationFileFn = NTSTATUS(NTAPI*)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, FILE_INFORMATION_CLASS);
+    static const auto ntSetInformationFile = []() -> NtSetInformationFileFn
+    {
+        const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+        return ntdll ? reinterpret_cast<NtSetInformationFileFn>(GetProcAddress(ntdll, "NtSetInformationFile"))
+                     : nullptr;
+    }();
+    IO_STATUS_BLOCK ioStatus{};
+    // FileRenameInformation is class 10; the user-mode SDK enum omits its name.
+    constexpr auto renameInformationClass = static_cast<FILE_INFORMATION_CLASS>(10);
+    const bool published = ntSetInformationFile &&
+                           ntSetInformationFile(temporary, &ioStatus, renameInfo,
+                                                static_cast<ULONG>(renameStorage.size()), renameInformationClass) >= 0;
     if (!published)
     {
         FILE_DISPOSITION_INFO disposition{};
@@ -692,7 +700,24 @@ static bool WriteCrashManifest(std::string_view reportId, const std::string& dum
     if (g_manifestDir.empty())
         return false;
 
-    std::string json = MakeManifestJson(dumpFile, logFile, screenshotFile, zipFile, crashTitle);
+    // The pinned root is the authority; persist only its immediate child names.
+    // Keep absolute-path compatibility in the reader for older manifests.
+    const auto leafName = [](const std::string& path, std::string& output)
+    {
+        if (path.empty())
+            return true;
+        std::filesystem::path name;
+        if (!ArtifactNameInPinnedRoot(path, name))
+            return false;
+        output = Spark::CrashHandlerDetail::PathToUtf8(name);
+        return !output.empty();
+    };
+    std::string dumpName, logName, screenshotName, zipName;
+    if (logFile.empty() || !leafName(dumpFile, dumpName) || !leafName(logFile, logName) ||
+        !leafName(screenshotFile, screenshotName) || !leafName(zipFile, zipName))
+        return false;
+
+    std::string json = MakeManifestJson(dumpName, logName, screenshotName, zipName, crashTitle);
     return PublishCrashManifest(reportId, json);
 }
 
@@ -1035,7 +1060,8 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
         int len = MultiByteToWideChar(CP_UTF8, 0, assertMsg, -1, nullptr, 0);
         std::wstring wmsg(len, L'\0');
         MultiByteToWideChar(CP_UTF8, 0, assertMsg, -1, &wmsg[0], len);
-        log << L"*** ASSERTION FAILURE ***\n" << wmsg << L"\n\n";
+        // The -1 conversion includes a terminator; keep it out of the text log.
+        log << L"*** ASSERTION FAILURE ***\n" << wmsg.c_str() << L"\n\n";
     }
     else
     {
@@ -1051,7 +1077,7 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
         MultiByteToWideChar(CP_UTF8, 0, codeName, -1, &wCodeName[0], codeNameLen);
 
         log << L"Exception Code    : 0x" << std::hex << code << std::dec << L"\n";
-        log << L"Exception Name    : " << wCodeName << L"\n";
+        log << L"Exception Name    : " << wCodeName.c_str() << L"\n";
         log << L"Exception Address : 0x" << std::hex
             << reinterpret_cast<uintptr_t>(ep->ExceptionRecord->ExceptionAddress) << std::dec << L"\n";
         log << L"Exception Flags   : " << ep->ExceptionRecord->ExceptionFlags << L"\n";

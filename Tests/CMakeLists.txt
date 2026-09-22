@@ -1763,6 +1763,20 @@ endif()
 
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkCrashReporter)
+    add_dependencies(SparkTests SparkCrashReporter)
+    add_test(
+        NAME CrashCapturePackageSecurity
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/run_crash_capture_security.py
+            --producer $<TARGET_FILE:SparkTests>
+            --reporter $<TARGET_FILE:SparkCrashReporter>)
+    set_tests_properties(CrashCapturePackageSecurity PROPERTIES
+        LABELS "crash-security;security;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 180)
+endif()
+
 # CI-110: exercise the shipped SparkCooker binary against real nested assets.
 # This registration is independent of Python because the smoke is a CMake
 # script invoking the executable directly.

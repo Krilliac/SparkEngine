@@ -287,8 +287,15 @@ TEST(CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot)
     TriggerCrashReport("duplicate-entry-probe-778899");
     EXPECT_EQ(CountReportsContaining(artifacts, "duplicate-entry-probe-778899"), static_cast<size_t>(0));
 
-    std::error_code error;
-    std::filesystem::remove_all(artifacts, error);
+    // The isolated crash-security driver validates these exact bytes after this
+    // process exits and releases its pinned directory handle. Normal runs keep
+    // the existing cleanup behavior.
+    const char* keepArtifacts = std::getenv("SPARK_TEST_KEEP_CRASH_ARTIFACTS");
+    if (keepArtifacts == nullptr || std::string(keepArtifacts) != "1")
+    {
+        std::error_code error;
+        std::filesystem::remove_all(artifacts, error);
+    }
 }
 
 #endif // SPARK_PLATFORM_WINDOWS && SPARK_MINIZ_AVAILABLE
