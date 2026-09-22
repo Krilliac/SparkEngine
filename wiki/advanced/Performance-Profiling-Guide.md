@@ -94,6 +94,23 @@ profiler.EndGPUSection("ShadowPass");
 float shadowMs = profiler.GetGPUSectionTime("ShadowPass");
 ```
 
+On the Windows D3D11 game path, `gfx_benchmark <seconds>` (1-300) observes
+actual successful swap-chain presents while normal gameplay continues. The
+command returns a start acknowledgement; the final console entry reports the
+successful present count, elapsed wall-clock FPS, and CPU time from
+`BeginFrame()` through `Present()`. It does **not** measure GPU frame time or
+GPU throughput and labels that value unavailable. If rendering stops before
+the requested interval, the result is explicitly incomplete.
+
+Compare runs only with the same scene/workload, VSync state, resolution,
+graphics settings, backend, and hardware; the wall-clock Present-call rate
+is not a cross-configuration GPU benchmark.
+
+`gfx_screenshot [filename]` likewise acknowledges a queued request, not a
+saved file. The next D3D11 frame is captured after the game overlay and
+before `Present()`; the console then reports the saved path or a failure. A
+request still queued at renderer shutdown is reported as not saved.
+
 ---
 
 ## Frame Timing History

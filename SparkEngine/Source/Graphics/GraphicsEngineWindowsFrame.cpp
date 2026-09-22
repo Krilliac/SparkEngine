@@ -44,6 +44,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #include <chrono>
 #include <cstdint>
 #include <mutex>
+#include <sstream>
 #include <vector>
 
 using namespace DirectX;
@@ -230,6 +231,17 @@ void GraphicsEngine::EndFrame()
         m_prePresentHook(m_prePresentHookUser);
     }
 
+    std::optional<std::string> screenshotFilename;
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        screenshotFilename.swap(m_pendingScreenshotFilename);
+    }
+    if (screenshotFilename)
+    {
+        if (!CaptureScreenshotBeforePresent(*screenshotFilename))
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Queued screenshot failed before Present");
+    }
+
     UINT syncInterval = m_settings.vsync ? 1 : 0;
     HRESULT hr = m_swapChain->Present(syncInterval, 0);
 
@@ -282,10 +294,58 @@ void GraphicsEngine::EndFrame()
     auto frameTime = std::chrono::duration_cast<std::chrono::microseconds>(frameEndTime - m_frameStartTime);
     auto renderTime = std::chrono::duration_cast<std::chrono::microseconds>(renderEndTime - m_renderStartTime);
 
+    std::string benchmarkResult;
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         m_statistics.frameTime = frameTime.count() / 1000.0f;
         m_statistics.renderTime = renderTime.count() / 1000.0f;
+
+        if (m_benchmarkActive)
+        {
+            if (FAILED(hr))
+            {
+                benchmarkResult = "Benchmark failed: swapchain Present failed; no performance result";
+                m_benchmarkActive = false;
+            }
+            else
+            {
+                const double cpuMs = std::chrono::duration<double, std::milli>(frameEndTime - m_frameStartTime).count();
+                ++m_benchmarkPresentedFrames;
+                m_benchmarkCpuTotalMs += cpuMs;
+                if (m_benchmarkPresentedFrames == 1)
+                    m_benchmarkCpuMinMs = m_benchmarkCpuMaxMs = cpuMs;
+                else
+                {
+                    m_benchmarkCpuMinMs = (std::min)(m_benchmarkCpuMinMs, cpuMs);
+                    m_benchmarkCpuMaxMs = (std::max)(m_benchmarkCpuMaxMs, cpuMs);
+                }
+
+                const double elapsedSeconds =
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - m_benchmarkStart).count();
+                if (elapsedSeconds >= m_benchmarkSeconds)
+                {
+                    std::ostringstream result;
+                    result << "=== Graphics Benchmark (actual presents) ===\n"
+                           << "Elapsed wall time: " << elapsedSeconds << " s\n"
+                           << "Presented frames: " << m_benchmarkPresentedFrames << "\n"
+                           << "Presented FPS: " << m_benchmarkPresentedFrames / elapsedSeconds << "\n"
+                           << "CPU BeginFrame-to-Present: avg "
+                           << m_benchmarkCpuTotalMs / static_cast<double>(m_benchmarkPresentedFrames) << " ms, min "
+                           << m_benchmarkCpuMinMs << " ms, max " << m_benchmarkCpuMaxMs << " ms\n"
+                           << "GPU frame time: unavailable (not measured by gfx_benchmark)";
+                    benchmarkResult = result.str();
+                    m_benchmarkActive = false;
+                }
+            }
+        }
+    }
+    if (!benchmarkResult.empty())
+    {
+        Spark::SimpleConsole::GetInstance().Log(benchmarkResult, FAILED(hr) ? "ERROR" : "SUCCESS");
+        if (FAILED(hr))
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "%s", benchmarkResult.c_str());
+        else
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "%s", benchmarkResult.c_str());
     }
 }
 

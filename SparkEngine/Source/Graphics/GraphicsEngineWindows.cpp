@@ -216,6 +216,32 @@ void GraphicsEngine::Shutdown()
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GraphicsEngine::Shutdown — beginning graphics subsystem teardown");
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine::Shutdown called.", L"INFO");
 
+    // Commands are processed after Present. If the process exits before the
+    // next frame or benchmark deadline, never imply that work completed.
+    bool discardedScreenshot = false;
+    std::string interruptedBenchmark;
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        discardedScreenshot = m_pendingScreenshotFilename.has_value();
+        m_pendingScreenshotFilename.reset();
+        if (m_benchmarkActive)
+        {
+            interruptedBenchmark = "Benchmark incomplete: renderer stopped after " +
+                                   std::to_string(m_benchmarkPresentedFrames) + " successful presents";
+            m_benchmarkActive = false;
+        }
+    }
+    if (discardedScreenshot)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot not saved: renderer stopped before the next frame", L"WARNING");
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Screenshot not saved: renderer stopped before the next frame");
+    }
+    if (!interruptedBenchmark.empty())
+    {
+        Spark::SimpleConsole::GetInstance().Log(interruptedBenchmark, "WARNING");
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "%s", interruptedBenchmark.c_str());
+    }
+
     // Shutdown advanced systems
     if (m_textureSystem)
     {
