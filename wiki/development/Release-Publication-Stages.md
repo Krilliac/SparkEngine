@@ -172,10 +172,14 @@ independently verified as published, the provisioner correctly rejects
 `v1.0.0`. Fabricating an older release, treating nightly as the predecessor,
 or marking upgrade/rollback done without the real transaction is prohibited.
 
-This choice is a release sequence, not authorization to relabel the current
-`1.0.0` source as `0.9.0`. The release controller requires the stable tag to
-match the single CMake version default and its changelog heading. No `v0.9.0`
-source/tag or published release currently satisfies that rule. The existing
+The maintainer chose to derive a reviewed `v0.9.0` candidate from the current
+release branch in an isolated checkout after its source batch is sealed. That
+does not authorize relabeling the current `1.0.0` checkout in place or
+manufacturing an old tag: the candidate needs its own reviewed version and
+changelog commit, exact-source CI, signed artifacts, and publication evidence.
+The release controller requires the stable tag to match the single CMake
+version default and its changelog heading. No `v0.9.0` source/tag or published
+release currently satisfies that rule. The existing
 versioned MSI job also always requires a prior release; it is intentionally not
 a `v0.9.0` bootstrap path. Before any `v0.9.0` dispatch, the owner must review
 and identify an authentic `0.9.0` source commit with corresponding version and
