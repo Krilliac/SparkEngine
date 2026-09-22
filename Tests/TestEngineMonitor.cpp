@@ -617,21 +617,25 @@ TEST(Monitor_TweenSustainedLoad)
 TEST(Monitor_NetworkServerCycling)
 {
     auto& net = Spark::Net::NetworkManager::GetInstance();
+    net.Shutdown();
 
     FrameStats stats;
     int successfulCycles = 0;
 
-    // Start and stop server 10 times on different ports
+    // Let the OS select a free port for each real bind. Fixed ports in the
+    // Windows ephemeral range can all be unavailable on a shared CI runner.
     for (int i = 0; i < 10; i++)
     {
-        uint16_t port = static_cast<uint16_t>(50000 + i);
         auto start = std::chrono::high_resolution_clock::now();
 
-        bool started = net.StartServer(port, 4);
+        bool started = net.StartServer(0, 4);
         if (started)
         {
             // Verify state
             EXPECT_TRUE(net.GetRole() == Spark::Net::NetworkRole::Server);
+#ifdef SPARK_TEST_HAS_NETWORKING
+            EXPECT_TRUE(net.GetBoundPort() != 0);
+#endif
 
             // Tick a few frames
             for (int f = 0; f < 5; f++)
@@ -652,7 +656,7 @@ TEST(Monitor_NetworkServerCycling)
     std::cout << "\n=== Network Server Cycling (10 start/stop cycles) ===\n" << stats.Format();
     std::cout << "  Successful cycles: " << successfulCycles << "/10\n" << std::flush;
 
-    EXPECT_TRUE(successfulCycles >= 8); // allow some port-in-use failures
+    EXPECT_EQ(successfulCycles, 10);
     net.Shutdown();
 }
 
