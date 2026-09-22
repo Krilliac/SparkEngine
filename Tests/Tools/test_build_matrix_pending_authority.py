@@ -128,16 +128,7 @@ def valid_documents() -> tuple[dict[str, Any], dict[str, Any]]:
         "warningCount": 3,
         "findings": [
             dict(pending.EXPECTED_OUTSIDE_OPTION_WARNING),
-            {
-                "category": pending.EXPECTED_WARNING_CATEGORY,
-                "severity": "warning",
-                "message": "Target name '${TARGET_NAME}' cannot be resolved statically",
-            },
-            {
-                "category": pending.EXPECTED_WARNING_CATEGORY,
-                "severity": "warning",
-                "message": "Another target name cannot be resolved statically",
-            },
+            *(dict(item) for item in pending.EXPECTED_UNRESOLVED_TARGET_WARNINGS),
             *[
                 {
                     "category": pending.EXPECTED_ERROR_CATEGORY,
@@ -316,6 +307,12 @@ class PendingAuthorityTests(unittest.TestCase):
         self.assertEqual(receipt["parity"]["warningCategories"], ["cmake-only", "target-name-unresolved"])
 
         report["findings"][0]["message"] = "CMake option 'UNREVIEWED' is not representable in SparkBuild"
+        with self.assertRaisesRegex(pending.PendingAuthorityError, "reviewed static"):
+            self.receipt(inventory_document, report)
+
+    def test_unresolved_target_warning_must_match_reviewed_identity(self) -> None:
+        inventory_document, report = valid_documents()
+        report["findings"][1]["message"] = "Target name '${FORGED}' cannot be resolved statically"
         with self.assertRaisesRegex(pending.PendingAuthorityError, "reviewed static"):
             self.receipt(inventory_document, report)
 

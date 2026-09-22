@@ -40,6 +40,20 @@ EXPECTED_OUTSIDE_OPTION_WARNING = {
         "tooling and are outside the Windows stable-v1 product profile."
     ),
 }
+EXPECTED_UNRESOLVED_TARGET_WARNINGS = [
+    {
+        "category": EXPECTED_WARNING_CATEGORY,
+        "severity": "warning",
+        "message": "Target name '${TARGET_NAME}' at cmake/SparkGameModule.cmake:190 cannot be resolved statically",
+        "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration.",
+    },
+    {
+        "category": EXPECTED_WARNING_CATEGORY,
+        "severity": "warning",
+        "message": "Target name '${TARGET_NAME}' at cmake/SparkPlugin.cmake:62 cannot be resolved statically",
+        "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration.",
+    },
+]
 MAX_INVENTORY_BYTES = 128 * 1024 * 1024
 MAX_REPORT_BYTES = 64 * 1024 * 1024
 
@@ -127,7 +141,11 @@ def _validate_report(report: dict[str, Any]) -> dict[str, Any]:
         raise PendingAuthorityError("parity has a blocking error other than missing external authority")
     outside_options = [item for item in warnings if item.get("category") == "cmake-only"]
     unresolved_targets = [item for item in warnings if item.get("category") == EXPECTED_WARNING_CATEGORY]
-    if outside_options != [EXPECTED_OUTSIDE_OPTION_WARNING] or len(unresolved_targets) != 2:
+    if (
+        outside_options != [EXPECTED_OUTSIDE_OPTION_WARNING]
+        or sorted(unresolved_targets, key=lambda item: item["message"])
+        != EXPECTED_UNRESOLVED_TARGET_WARNINGS
+    ):
         raise PendingAuthorityError("parity warnings differ from the reviewed static target-name warnings")
 
     error_profiles: set[str] = set()
