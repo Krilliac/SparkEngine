@@ -172,11 +172,30 @@ independently verified as published, the provisioner correctly rejects
 `v1.0.0`. Fabricating an older release, treating nightly as the predecessor,
 or marking upgrade/rollback done without the real transaction is prohibited.
 
+This choice is a release sequence, not authorization to relabel the current
+`1.0.0` source as `0.9.0`. The release controller requires the stable tag to
+match the single CMake version default and its changelog heading. No `v0.9.0`
+source/tag or published release currently satisfies that rule. The existing
+versioned MSI job also always requires a prior release; it is intentionally not
+a `v0.9.0` bootstrap path. Before any `v0.9.0` dispatch, the owner must review
+and identify an authentic `0.9.0` source commit with corresponding version and
+changelog, and approve a separate one-time native qualification contract for a
+signed clean install, repair, runtime smoke, uninstall, and user-data retention
+without pretending to perform an upgrade or rollback. That contract must still
+pass the applicable exact-source CI, package, signing, protected-environment,
+immutable-publication, and independent-consumer gates. Only after the resulting
+`v0.9.0` release is independently verified should the normal `v1.0.0` gate run
+its actual old-to-new upgrade/rollback transaction. The normal provisioner pins
+`v1.0.0` specifically to an immutable `v0.9.0` release; a different earlier
+version or a mutable release cannot substitute for it.
+
 ## Source & Freshness
 
 Implemented 2026-09-21. Sources: [readiness contract](../../docs/site/readiness.json),
 [release workflow](../../.github/workflows/release.yml), and
 [GitHub environment API](https://docs.github.com/en/rest/deployments/environments),
 and the [repository immutability API](https://docs.github.com/en/enterprise-cloud%40latest/rest/repos/repos#check-if-immutable-releases-are-enabled-for-a-repository).
+Predecessor identity and source-lineage review updated 2026-09-22; see the
+[release API immutable field](https://docs.github.com/en/rest/releases/releases).
 Recheck live environment protection, approval history, signing authority, and
 exact-SHA run/artifact identities before each release.

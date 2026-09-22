@@ -355,9 +355,9 @@ jobs:
       # Hosted Windows Server evidence is not Windows 11 certification. Stable
       # Publication requires an exact predecessor MSI+manifest pair. Resolve it
       # from the published GitHub release API by immutable asset id; runner-local
-      # repository variables are not an acceptable artifact source. The first
-      # stable release intentionally fails: a real prior published release with
-      # both signed assets must exist; no synthetic predecessor is permitted.
+      # repository variables are not an acceptable artifact source. v1.0.0
+      # requires the exact published immutable v0.9.0 predecessor. This job is
+      # not a bootstrap path for v0.9.0; no synthetic predecessor is permitted.
       env:
         GH_TOKEN: ${{ github.token }}
       run: |

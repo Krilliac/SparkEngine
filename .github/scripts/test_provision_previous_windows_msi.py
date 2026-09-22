@@ -45,8 +45,7 @@ def asset(name, asset_id, content):
 
 
 class ProvisionTests(unittest.TestCase):
-    def fixture(self):
-        version = "1.2.3"
+    def fixture(self, version="1.2.3"):
         msi_name = f"SparkEngine-{version}-Windows-AMD64-MinSizeRel-Runtime.msi"
         msi = b"real-msi-fixture"
         commit = "0123456789abcdef0123456789abcdef01234567"
@@ -55,10 +54,11 @@ class ProvisionTests(unittest.TestCase):
             "profile": "stable-v1", "configuration": "MinSizeRel", "version": version,
             "msi": msi_name, "sha256": hashlib.sha256(msi).hexdigest(),
         }, sort_keys=True).encode() + b"\n"
-        release = {"id": 22, "draft": False, "prerelease": False, "tag_name": "v1.2.3",
+        release = {"id": 22, "draft": False, "prerelease": False, "immutable": True,
+                   "tag_name": "v" + version,
                    "assets": [asset(msi_name, 11, msi), asset("shipping-package-manifest.json", 12, manifest)]}
         api = FakeApi([{"draft": False, "prerelease": True, "tag_name": "v9.0.0"}, release],
-                      {"v1.2.3": {"ref": "refs/tags/v1.2.3", "object": {"type": "commit", "sha": commit}}}, {},
+                      {"v" + version: {"ref": "refs/tags/v" + version, "object": {"type": "commit", "sha": commit}}}, {},
                       {11: msi, 12: manifest})
         return api, version, commit
 
@@ -69,6 +69,8 @@ class ProvisionTests(unittest.TestCase):
             result = MODULE.provision("acme/SparkEngine", "1.2.4", root / "previous", root / "receipt.json", api=api)
             self.assertEqual(result["previous_version"], version)
             self.assertEqual(result["tag_commit_sha"], commit)
+            self.assertEqual(result["release_id"], 22)
+            self.assertIs(result["release_immutable"], True)
             self.assertEqual([call for call in api.calls if call.startswith("asset:")], ["asset:11", "asset:12"])
             self.assertTrue((root / "previous/packages" / result["msi"]["name"]).is_file())
             self.assertEqual(json.loads((root / "receipt.json").read_text())["schema"], "spark-previous-windows-msi-v1")
@@ -90,6 +92,45 @@ class ProvisionTests(unittest.TestCase):
             with self.assertRaises(MODULE.ProvisionError):
                 MODULE.provision("acme/SparkEngine", "1.2.4", output, Path(temp) / "receipt", api=api)
             self.assertFalse(output.exists())
+
+    def test_v1_requires_exact_v090_predecessor(self):
+        api, _, _ = self.fixture()
+        api.releases.insert(0, {"id": 21, "draft": False, "prerelease": False,
+                                "immutable": True, "tag_name": "v0.8.0"})
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(MODULE.ProvisionError, "v0.9.0"):
+                MODULE.provision("acme/SparkEngine", "1.0.0", Path(temp) / "out", Path(temp) / "receipt", api=api)
+
+    def test_v1_accepts_exact_immutable_v090_predecessor(self):
+        api, _, commit = self.fixture("0.9.0")
+        with tempfile.TemporaryDirectory() as temp:
+            result = MODULE.provision("acme/SparkEngine", "1.0.0", Path(temp) / "out", Path(temp) / "receipt", api=api)
+            self.assertEqual(result["previous_version"], "0.9.0")
+            self.assertEqual(result["tag_commit_sha"], commit)
+
+    def test_mutable_predecessor_is_rejected(self):
+        api, _, _ = self.fixture()
+        api.releases[-1]["immutable"] = False
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(MODULE.ProvisionError, "immutable"):
+                MODULE.provision("acme/SparkEngine", "1.2.4", Path(temp) / "out", Path(temp) / "receipt", api=api)
+
+    def test_missing_immutable_field_is_rejected(self):
+        api, _, _ = self.fixture()
+        del api.releases[-1]["immutable"]
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(MODULE.ProvisionError, "immutable"):
+                MODULE.provision("acme/SparkEngine", "1.2.4", Path(temp) / "out", Path(temp) / "receipt", api=api)
+
+    def test_predecessor_immutability_drift_is_rejected(self):
+        api, _, _ = self.fixture()
+        def drift(fake, asset_id):
+            if asset_id == 12:
+                fake.release_detail["immutable"] = False
+        api.on_download = drift
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(MODULE.ProvisionError, "immutable"):
+                MODULE.provision("acme/SparkEngine", "1.2.4", Path(temp) / "out", Path(temp) / "receipt", api=api)
 
     def test_digest_mismatch_removes_partial_output(self):
         api, _, _ = self.fixture()

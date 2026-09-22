@@ -124,6 +124,10 @@ class GitHubApi:
 
 
 def _release_candidates(api: GitHubApi, current_version):
+    # The first fully gated stable release has a reviewed predecessor identity.
+    # An arbitrary lower version (including a nightly relabeled as stable) must
+    # not silently satisfy the v1.0.0 upgrade/rollback qualification policy.
+    required_tag = "v0.9.0" if current_version == (1, 0, 0) else None
     found = []
     for page in range(1, MAX_RELEASE_PAGES + 1):
         payload = api.json(f"/repos/{api.repository}/releases?per_page=100&page={page}")
@@ -134,12 +138,17 @@ def _release_candidates(api: GitHubApi, current_version):
                 continue
             tag = release.get("tag_name")
             version = _semver(tag) if isinstance(tag, str) else None
-            if version is not None and version < current_version:
+            if (version is not None and version < current_version
+                    and (required_tag is None or tag == required_tag)):
                 found.append((version, tag, release))
         if len(payload) < 100:
             break
     if not found:
+        if required_tag is not None:
+            raise ProvisionError("no published non-prerelease v0.9.0 predecessor release exists")
         raise ProvisionError("no published non-prerelease predecessor release exists (first stable release is unsupported)")
+    if required_tag is not None and len(found) != 1:
+        raise ProvisionError("v0.9.0 predecessor release identity is ambiguous")
     found.sort(key=lambda item: item[0], reverse=True)
     return found[0]
 
@@ -184,7 +193,9 @@ def _release_identity(release: dict):
             or type(release.get("draft")) is not bool
             or type(release.get("prerelease")) is not bool):
         raise ProvisionError("release metadata is missing its immutable identity fields")
-    return (release_id, release["tag_name"], release["draft"], release["prerelease"])
+    if release.get("immutable") is not True:
+        raise ProvisionError("predecessor release is not proven immutable")
+    return (release_id, release["tag_name"], release["draft"], release["prerelease"], True)
 
 
 def _manifest(path: Path, *, tag_sha: str, version: str, msi_name: str, msi_sha: str):
@@ -245,7 +256,18 @@ def provision(repository: str, current_version: str, output_dir: Path, receipt: 
         msi_path, msi_sha = downloaded[msi_name]
         _manifest(manifest_path, tag_sha=commit_sha, version=version, msi_name=msi_name, msi_sha=msi_sha)
         Path(output_dir / "previous-version.txt").write_text(version + "\n", encoding="ascii", newline="")
-        result = {"schema": "spark-previous-windows-msi-v1", "repository": repository, "current_version": current_version, "previous_version": version, "tag": tag, "tag_commit_sha": commit_sha, "msi": {**msi, "downloaded_sha256": msi_sha, "path": "packages/" + msi_name}, "manifest": {**manifest_asset, "path": "shipping-package-manifest.json"}}
+        result = {
+            "schema": "spark-previous-windows-msi-v1",
+            "repository": repository,
+            "current_version": current_version,
+            "previous_version": version,
+            "tag": tag,
+            "tag_commit_sha": commit_sha,
+            "release_id": release_identity[0],
+            "release_immutable": release_identity[4],
+            "msi": {**msi, "downloaded_sha256": msi_sha, "path": "packages/" + msi_name},
+            "manifest": {**manifest_asset, "path": "shipping-package-manifest.json"},
+        }
         receipt.parent.mkdir(parents=True, exist_ok=True)
         receipt.write_text(json.dumps(result, sort_keys=True, indent=2) + "\n", encoding="utf-8", newline="")
         return result
