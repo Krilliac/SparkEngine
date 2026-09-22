@@ -84,7 +84,16 @@ foreach ($product in $installer.RelatedProducts($identity.UpgradeCode)) {
     $related += [string]$product
 }
 $identity.RelatedProducts = @($related)
-$identity | ConvertTo-Json -Compress
+$json = $identity | ConvertTo-Json -Compress
+$bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($json)
+$stream = [System.IO.File]::Open(
+    $env:SPARK_MSI_IDENTITY_JSON_PATH,
+    [System.IO.FileMode]::CreateNew,
+    [System.IO.FileAccess]::Write,
+    [System.IO.FileShare]::None
+)
+try { $stream.Write($bytes, 0, $bytes.Length) }
+finally { $stream.Dispose() }
 """
 
 
@@ -306,10 +315,19 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
     def identity(label, selected_package=None):
         selected_package = selected_package or package
         command = base64.b64encode(IDENTITY_SCRIPT.encode("utf-16-le")).decode("ascii")
+        identity_path = logs / f"{label}.json"
         execute(label, [powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", command],
-                env={**os.environ, "SPARK_MSI_PATH": str(selected_package)})
-        info = json.loads((logs / f"{label}.log").read_text(encoding="utf-8-sig"))
-        if (not isinstance(info, dict) or type(info.get("ProductState")) is not int
+                env={**os.environ, "SPARK_MSI_PATH": str(selected_package),
+                     "SPARK_MSI_IDENTITY_JSON_PATH": str(identity_path.absolute())})
+        try:
+            data = strict_json.read_file_no_follow_bytes(identity_path.absolute(), max_bytes=64 * 1024)
+            info = json.loads(data.decode("utf-8"), object_pairs_hook=_reject_duplicate_json_keys)
+        except (OSError, UnicodeDecodeError, ValueError, strict_json.StrictJSONError) as exc:
+            raise ValueError(f"MSI identity query did not write valid isolated JSON: {exc}") from exc
+        if (not isinstance(info, dict) or set(info) != {
+                "ProductName", "ProductVersion", "ProductCode", "UpgradeCode",
+                "InstallRoot", "ProductState", "RelatedProducts",
+            } or type(info.get("ProductState")) is not int
                 or not isinstance(info.get("RelatedProducts"), list)
                 or any(not isinstance(code, str) for code in info.get("RelatedProducts", []))
                 or any(not isinstance(info.get(key), str)

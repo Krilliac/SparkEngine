@@ -139,7 +139,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 upgrade_code = ("{BADF00D0-0000-0000-0000-000000000001}"
                                 if mismatch_upgrade_code and version == "1.2.3"
                                 else "{ABCDEF01-1234-1234-1234-123456789ABC}")
-                log.write_text(json.dumps({
+                Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text(json.dumps({
                     "ProductName": "SparkEngine",
                     "ProductVersion": version,
                     "ProductCode": product_code,
@@ -218,6 +218,72 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             return 0
 
         return runner
+
+    def test_identity_progress_noise_cannot_replace_msi_identity(self):
+        """MSI COM progress on the process log must not contaminate identity JSON."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            logs = root / "progress-noise-logs"
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "install_root": str(root / "install")}
+            native_runner = self._identity_runner(calls, state)
+
+            def noisy_identity_runner(argv, log, *, timeout, env=None, cwd=None):
+                result = native_runner(argv, log, timeout=timeout, env=env, cwd=cwd)
+                if env and "SPARK_MSI_PATH" in env:
+                    identity_json = Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).read_text(encoding="utf-8")
+                    log.write_text("#< CLIXML\n" + identity_json + "\n<Objs Version=\"1.1.0.1\"/>\n",
+                                   encoding="utf-8")
+                return result
+
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs, runner=noisy_identity_runner,
+            )
+            self.assertEqual(result, 0, (logs / "result.json").read_text(encoding="utf-8")
+                             if result else "")
+            self.assertTrue((logs / "package-smoke.log").is_file())
+            self.assertTrue((logs / "identity-before.log").read_text(encoding="utf-8").startswith("#< CLIXML"))
+
+    def test_identity_requires_one_valid_closed_json_file_before_install(self):
+        for case in ("missing", "malformed", "duplicate-key", "extra-field"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                logs = root / "invalid-identity-logs"
+                calls = []
+                state = {"installed": False, "version": None, "repaired": False}
+                native_runner = self._identity_runner(calls, state)
+
+                def bad_identity_runner(argv, log, *, timeout, env=None, cwd=None):
+                    result = native_runner(argv, log, timeout=timeout, env=env, cwd=cwd)
+                    if env and "SPARK_MSI_PATH" in env:
+                        identity_path = Path(env["SPARK_MSI_IDENTITY_JSON_PATH"])
+                        if case == "missing":
+                            identity_path.unlink()
+                        elif case == "malformed":
+                            identity_path.write_text("{", encoding="utf-8")
+                        elif case == "duplicate-key":
+                            identity_path.write_text(identity_path.read_text(encoding="utf-8").replace(
+                                '"ProductName":', '"ProductName":"Unexpected","ProductName":', 1
+                            ), encoding="utf-8")
+                        else:
+                            document = json.loads(identity_path.read_text(encoding="utf-8"))
+                            document["UntrustedExtra"] = "value"
+                            identity_path.write_text(json.dumps(document), encoding="utf-8")
+                    return result
+
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=logs, runner=bad_identity_runner,
+                )
+                self.assertNotEqual(result, 0)
+                self.assertFalse(any("/i" in call for call in calls))
+                self.assertFalse((logs / "package-smoke.log").exists())
 
     def test_unacceptable_predecessor_signature_prevents_every_msiexec(self):
         for changes in (
@@ -785,7 +851,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             def runner(argv, log, *, timeout, env=None, cwd=None):
                 nonlocal installed, install_root
                 if "-EncodedCommand" in argv:
-                    log.write_text(json.dumps({
+                    Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text(json.dumps({
                         "ProductName": "SparkEngine",
                         "ProductVersion": "1.2.3",
                         "ProductCode": "{12345678-1234-1234-1234-123456789ABC}",
@@ -927,7 +993,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                             identity_copy_swapped = True
                         except OSError:
                             pass
-                    log.write_text(json.dumps({
+                    Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text(json.dumps({
                         "ProductName": "SparkEngine",
                         "ProductVersion": "1.2.3",
                         "ProductCode": "{12345678-1234-1234-1234-123456789ABC}",
@@ -1089,7 +1155,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             def runner(argv, log, *, timeout, env=None, cwd=None):
                 nonlocal installed, install_root
                 if "-EncodedCommand" in argv:
-                    log.write_text(json.dumps({
+                    Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text(json.dumps({
                         "ProductName": "SparkEngine",
                         "ProductVersion": "1.2.3",
                         "ProductCode": "{12345678-1234-1234-1234-123456789ABC}",
@@ -1157,14 +1223,14 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                     log.write_text("fixture command output")
                     if "-EncodedCommand" in argv:
                         if case == "invalid_identity":
-                            log.write_text("[]")
+                            Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text("[]")
                             return 0
                         product_state = 5 if case == "preexisting" or installed or (
                             case == "registration_remains" and any("/x" in call for call in calls)) else -1
                         if installed:
                             product_state = {"unregistered_install": -1, "absent_install": 2,
                                              "advertised_install": 1, "broken_install": 0}.get(case, product_state)
-                        log.write_text(json.dumps({"ProductName": "Wrong" if case == "wrong_identity" else "SparkEngine",
+                        Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text(json.dumps({"ProductName": "Wrong" if case == "wrong_identity" else "SparkEngine",
                                                   "ProductVersion": "9.8.7" if case == "wrong_version" else "1.2.3", "ProductCode": "{12345678-1234-1234-1234-123456789ABC}",
                                                   "UpgradeCode": "{ABCDEF01-1234-1234-1234-123456789ABC}",
                                                   "RelatedProducts": ["{98765432-1234-1234-1234-123456789ABC}"] if case == "older_related_product" else [],
