@@ -617,7 +617,7 @@ ctest --test-dir build/windows-shipping -L profile-package --output-on-failure -
 **Automated evidence**
 
 - Test selectors: `AssetManifest_*`, `PackageAssets_*`, `PathCase_*`, `ProjectMaterialization_*`, `SparkTemplateAssets`
-- Required CI jobs: `asset-integrity`, `profile-module-package-smoke`
+- Required CI jobs: `asset-integrity`, `module-profile-package-smoke`
 - Performance / reliability budgets:
   - Manifest validation completes before compilation cache restore is material
 
@@ -791,7 +791,7 @@ git diff --exit-code
 
 **Automated evidence**
 
-- Test selectors: `DocsGeneration_*`, `DocsLinks_*`
+- Test selectors: none declared
 - Required CI jobs: `docs-health`, `site-data-validate`
 - Performance / reliability budgets:
   - Each generator is bounded to five minutes and the blocking exact-currentness job to fifteen minutes

@@ -260,10 +260,7 @@
         "python3 tools/site-data/render_handoff.py --check",
         "git diff --exit-code"
       ],
-      "testSelectors": [
-        "DocsGeneration_*",
-        "DocsLinks_*"
-      ],
+      "testSelectors": [],
       "requiredCiJobs": [
         "docs-health",
         "site-data-validate"
@@ -299,10 +296,7 @@
       "profileApplicability": {
         "stable-v1": "shared"
       },
-      "plannedTestSelectors": [
-        "DocsGeneration_*",
-        "DocsLinks_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "DOC-400",
