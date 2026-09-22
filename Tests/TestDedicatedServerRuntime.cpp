@@ -261,6 +261,64 @@ TEST(DedicatedServerRuntime_ChatCannotInvokeRcon)
     server.Stop();
 }
 
+TEST(DedicatedServerRuntime_RconAuditRedactsArgumentsAndResponses)
+{
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime);
+    ServerConfig config;
+    config.enableLogging = false;
+    ASSERT_TRUE(server.InitializeOnly(config));
+
+    const std::string secretArgument = "SEC100_FAKE_ARGUMENT_73B19";
+    const std::string secretResponse = "ERROR: SEC100_FAKE_RESPONSE_84C20";
+    const std::string unknownCommand = "SEC100_FAKE_UNKNOWN_95D31";
+    const std::string commandLine = "audit_probe " + secretArgument;
+    std::vector<std::string> auditMessages;
+    std::vector<std::string> receivedArguments;
+    std::string callbackCommand;
+    std::string callbackResponse;
+    int handlerCalls = 0;
+    int callbackCalls = 0;
+    ServerCallbacks callbacks;
+    callbacks.onLogMessage = [&](const std::string& message) { auditMessages.push_back(message); };
+    callbacks.onRconCommand = [&](const std::string& command, const std::string& response)
+    {
+        ++callbackCalls;
+        callbackCommand = command;
+        callbackResponse = response;
+    };
+    server.SetCallbacks(callbacks);
+    server.RegisterRconCommand("audit_probe", "Audit redaction probe",
+                               [&](const std::vector<std::string>& arguments)
+                               {
+                                   ++handlerCalls;
+                                   receivedArguments = arguments;
+                                   return secretResponse;
+                               });
+
+    EXPECT_EQ(server.ExecuteRcon(commandLine), secretResponse);
+    EXPECT_EQ(handlerCalls, 1);
+    ASSERT_EQ(receivedArguments.size(), static_cast<size_t>(1));
+    EXPECT_EQ(receivedArguments.front(), secretArgument);
+    EXPECT_EQ(callbackCalls, 1);
+    EXPECT_EQ(callbackCommand, commandLine);
+    EXPECT_EQ(callbackResponse, secretResponse);
+
+    EXPECT_EQ(server.ExecuteRcon(unknownCommand + " " + secretArgument), "Unknown command: " + unknownCommand);
+    EXPECT_EQ(handlerCalls, 1);
+    EXPECT_EQ(callbackCalls, 1);
+    ASSERT_EQ(auditMessages.size(), static_cast<size_t>(2));
+    EXPECT_STR_CONTAINS(auditMessages[0], "RCON: command=audit_probe disposition=dispatched");
+    EXPECT_STR_CONTAINS(auditMessages[1], "RCON: command=<unknown> disposition=unknown_command");
+    for (const auto& message : auditMessages)
+    {
+        EXPECT_TRUE(message.find(secretArgument) == std::string::npos);
+        EXPECT_TRUE(message.find(secretResponse) == std::string::npos);
+        EXPECT_TRUE(message.find(unknownCommand) == std::string::npos);
+    }
+    server.Stop();
+}
+
 TEST(DedicatedServerRuntime_StopClearsHandlersAndShutsDownRuntime)
 {
     MockNetworkRuntime runtime;

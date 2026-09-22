@@ -634,13 +634,21 @@ namespace Spark::Net
             std::string response = handler(args);
             if (m_callbacks.onRconCommand)
                 m_callbacks.onRconCommand(commandLine, response);
-            Log("RCON: " + commandLine + " -> " + response);
+            // Arguments and response bodies may contain reusable secrets. Only
+            // retain a bounded, log-safe identifier for a registered command.
+            const std::string auditName =
+                !cmdName.empty() && cmdName.size() <= 64 &&
+                        cmdName.find_first_not_of(
+                            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-") == std::string::npos
+                    ? cmdName
+                    : "<redacted>";
+            Log("RCON: command=" + auditName + " disposition=dispatched");
             return response;
         }
 
         std::string err = "Unknown command: " + cmdName;
-        SPARK_LOG_WARN(Spark::LogCategory::Network, "RCON unknown command: %s", cmdName.c_str());
-        Log("RCON: " + err);
+        SPARK_LOG_WARN(Spark::LogCategory::Network, "RCON: command=<unknown> disposition=unknown_command");
+        Log("RCON: command=<unknown> disposition=unknown_command");
         return err;
     }
 
