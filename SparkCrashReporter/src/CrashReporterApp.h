@@ -4,8 +4,9 @@
  *
  * Standalone application launched by SparkEngine at startup. Monitors the
  * engine process and, when a crash is detected, shows a user-facing dialog
- * with consent, description input, screenshot selection, and local report
- * preparation. Network delivery is not implemented by this executable.
+ * with consent, screenshot selection, and local report review. A separate
+ * user-local opt-in may create a metadata-only GitHub Issue via the user's
+ * authenticated GitHub CLI. Manifest fields cannot enable network delivery.
  *
  * Communication:
  *   Engine writes a crash manifest file (JSON) to a known path, then signals
@@ -85,6 +86,9 @@ namespace SparkCrashReporter
     /// Run the crash reporter UI and prepare the local report
     /// Returns 0 on success, non-zero on error
     int RunCrashReporter(const CrashManifest& manifest);
+
+    /// Show bounded, local automatic-Issue receipts from a crash directory.
+    int ShowAutoIssueStatus(const std::string& crashDirectory);
 
     /// Watch for the engine process to crash (used in watchdog mode)
     /// Consumes sequential manifests and returns after the engine exits

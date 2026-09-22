@@ -4,6 +4,7 @@
  */
 
 #include "CrashReporterApp.h"
+#include "CrashAutoIssues.h"
 
 #include <algorithm>
 #include <charconv>
@@ -1215,16 +1216,30 @@ namespace SparkCrashReporter
             std::cerr << "Prebuilt archive: ignored by this read-only reporter\n";
         std::cerr << "\n";
 
+        // This setting is user-local. No manifest field, including the legacy
+        // transport fields or requireConsent, can opt a user into publishing.
+        const bool autoIssues = AutoIssuesEnabled();
+        if (autoIssues)
+            std::cerr << "Automatic GitHub Issues are enabled by this user's local setting. "
+                         "Issue metadata will be public; no crash artifacts will be sent.\n";
+
         // Consent
         bool shouldReview = true;
         if (manifest.requireConsent)
         {
 #ifdef _WIN32
-            const std::string consentMessage = BuildConsentMessage(manifest);
+            std::string consentMessage = BuildConsentMessage(manifest);
+            if (autoIssues)
+                consentMessage += "\n\nIf you continue, a metadata-only GitHub Issue will be attempted publicly. "
+                                  "No log, dump, screenshot, path, or description will be sent.";
             int result = MessageBoxA(nullptr, consentMessage.c_str(), "Crash Report", MB_YESNO | MB_ICONERROR);
             shouldReview = (result == IDYES);
 #else
-            std::cerr << BuildConsentMessage(manifest) << "\n[Y/n]: ";
+            std::cerr << BuildConsentMessage(manifest);
+            if (autoIssues)
+                std::cerr << "\n\nIf you continue, a metadata-only GitHub Issue will be attempted publicly. "
+                             "No log, dump, screenshot, path, or description will be sent.";
+            std::cerr << "\n[Y/n]: ";
             std::string input;
             std::getline(std::cin, input);
             shouldReview = input.empty() || input[0] == 'Y' || input[0] == 'y';
@@ -1269,7 +1284,128 @@ namespace SparkCrashReporter
             std::cerr << "This read-only reporter does not append descriptions to crash files.\n";
         }
 
-        std::cerr << "\nCrash report remains saved locally. No files were modified, archived, or uploaded.\n";
+        std::cerr << "\nCrash report remains saved locally. No crash artifacts were modified or uploaded.\n";
+        if (autoIssues)
+        {
+            const std::string receiptKey = CrashReceiptKey(manifest);
+            const std::string incidentId = GeneratePublicIncidentId();
+            if (incidentId.empty())
+            {
+                std::cerr << "Automatic issue not attempted: secure incident ID unavailable.\n";
+                return 3;
+            }
+            const PreparedAutoIssue prepared = PrepareAutoIssue(manifest, incidentId);
+            if (!prepared.ready)
+            {
+                std::cerr << "Automatic issue not attempted: " << prepared.reason
+                          << ". Local artifacts remain available; the issue may be retried after setup.\n";
+                return 3;
+            }
+            // Claim before making an external request. A timeout or lost reply
+            // is uncertain, so automatic retry could create duplicate issues.
+            const std::filesystem::path receiptName = "issue_attempt_" + receiptKey + ".txt";
+            if (!WriteNewFileInDirectory(root, receiptName,
+                                         "Public incident: " + incidentId +
+                                             "\nAutomatic issue attempt started; outcome may be uncertain. "
+                                             "Do not retry automatically.\n"))
+            {
+                std::cerr << "Automatic issue not attempted: incident already claimed or local receipt unavailable.\n";
+                return 3;
+            }
+            const AutoIssueResult issue = SubmitPreparedAutoIssue(prepared);
+            const std::filesystem::path resultName = "issue_result_" + receiptKey + ".txt";
+            const std::string resultText = issue.delivered ? "confirmed\n" + issue.issueUrl + "\n" : "unconfirmed\n";
+            if (!WriteNewFileInDirectory(root, resultName, resultText))
+            {
+                std::cerr << "Automatic issue outcome could not be saved locally. "
+                             "Check GitHub Issues before any manual retry.\n";
+                return 3;
+            }
+            if (issue.delivered)
+            {
+                std::cerr << "Automatic GitHub Issue created: " << issue.issueUrl << "\n";
+                return 0;
+            }
+            std::cerr << "Automatic GitHub Issue not confirmed: " << issue.reason
+                      << ". Local crash artifacts remain available.\n";
+            return 3;
+        }
+        std::cerr << "No files were modified, archived, or uploaded.\n";
+        return 0;
+    }
+
+    int ShowAutoIssueStatus(const std::string& crashDirectory)
+    {
+        PinnedDirectory root;
+        if (!OpenPinnedDirectory(PathFromUtf8(crashDirectory), root))
+        {
+            std::cerr << "Cannot open a private crash directory for issue status.\n";
+            return 2;
+        }
+        constexpr std::string_view prefix = "issue_attempt_";
+        constexpr std::string_view suffix = ".txt";
+        std::vector<std::filesystem::path> receipts;
+        std::error_code error;
+        size_t entries = 0;
+        for (const auto& entry : std::filesystem::directory_iterator(root.path, error))
+        {
+            if (++entries > 4096)
+                break;
+            const std::filesystem::path name = entry.path().filename();
+            const std::string text = PathToUtf8(name);
+            if (text.size() != prefix.size() + 16 + suffix.size() || !text.starts_with(prefix) ||
+                !text.ends_with(suffix))
+                continue;
+            if (!std::all_of(text.begin() + static_cast<std::ptrdiff_t>(prefix.size()),
+                             text.end() - static_cast<std::ptrdiff_t>(suffix.size()),
+                             [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }))
+                continue;
+            receipts.push_back(name);
+            if (receipts.size() == 32)
+                break;
+        }
+        if (error)
+        {
+            std::cerr << "Cannot enumerate issue receipts safely.\n";
+            return 2;
+        }
+        std::sort(receipts.begin(), receipts.end());
+        if (receipts.empty())
+        {
+            std::cout << "No automatic issue attempts found.\n";
+            return 0;
+        }
+        constexpr std::string_view urlPrefix = "https://github.com/Krilliac/SparkEngine/issues/";
+        for (const std::filesystem::path& receiptName : receipts)
+        {
+            ScopedNativeHandle receiptHandle;
+            ArtifactIdentity identity;
+            if (!OpenArtifact(root, receiptName, receiptHandle, identity))
+                continue;
+            const std::string key = PathToUtf8(receiptName).substr(prefix.size(), 16);
+            const std::filesystem::path resultName = "issue_result_" + key + ".txt";
+            ScopedNativeHandle resultHandle;
+            ArtifactIdentity resultIdentity;
+            std::uint64_t resultBytes = 0;
+            std::string status;
+            if (OpenArtifact(root, resultName, resultHandle, resultIdentity, &resultBytes) && resultBytes <= 256)
+                (void)ReadOpenedFile(resultHandle.Get(), resultBytes, 256, status);
+            std::cout << "Incident " << key << ": ";
+            if (status.starts_with("confirmed\n"))
+            {
+                std::string_view url(status.data() + 10, status.size() - 10);
+                if (!url.empty() && url.back() == '\n')
+                    url.remove_suffix(1);
+                if (url.starts_with(urlPrefix) && url.size() > urlPrefix.size() &&
+                    std::all_of(url.begin() + static_cast<std::ptrdiff_t>(urlPrefix.size()), url.end(),
+                                [](char c) { return c >= '0' && c <= '9'; }))
+                {
+                    std::cout << "confirmed " << url << '\n';
+                    continue;
+                }
+            }
+            std::cout << (status == "unconfirmed\n" ? "unconfirmed" : "outcome unavailable") << '\n';
+        }
         return 0;
     }
 

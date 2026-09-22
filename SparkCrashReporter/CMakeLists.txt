@@ -44,7 +44,7 @@ if(REPORTER_SOURCES)
             SPARK_PLATFORM_WINDOWS
         )
         target_link_libraries(SparkCrashReporter PRIVATE
-            kernel32 user32
+            kernel32 user32 bcrypt
         )
     else()
         find_package(Threads REQUIRED)
@@ -62,10 +62,33 @@ if(REPORTER_SOURCES)
     if(BUILD_TESTS)
         enable_testing()
 
+        add_executable(SparkCrashReporterFakeGh tests/FakeGh.cpp)
+
+        add_executable(SparkCrashReporterProductionTimeoutTests
+            tests/CrashReporterProductionTimeoutTests.cpp
+            src/CrashAutoIssues.cpp
+            src/CrashAutoIssues.h
+        )
+        target_include_directories(SparkCrashReporterProductionTimeoutTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_compile_definitions(SparkCrashReporterProductionTimeoutTests PRIVATE
+            SPARK_CRASH_REPORTER_VERSION="${PROJECT_VERSION}"
+        )
+        if(WIN32)
+            target_compile_definitions(SparkCrashReporterProductionTimeoutTests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+            target_link_libraries(SparkCrashReporterProductionTimeoutTests PRIVATE kernel32 user32 bcrypt)
+        else()
+            target_link_libraries(SparkCrashReporterProductionTimeoutTests PRIVATE Threads::Threads)
+        endif()
+        add_test(NAME SparkCrashReporter.ProductionTimeout
+                 COMMAND SparkCrashReporterProductionTimeoutTests $<TARGET_FILE:SparkCrashReporterFakeGh>)
+        set_tests_properties(SparkCrashReporter.ProductionTimeout PROPERTIES TIMEOUT 5)
+
         add_executable(SparkCrashReporterManifestTests
             tests/CrashReporterManifestTests.cpp
             src/CrashReporterApp.cpp
             src/CrashReporterApp.h
+            src/CrashAutoIssues.cpp
+            src/CrashAutoIssues.h
         )
         target_include_directories(SparkCrashReporterManifestTests PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -73,6 +96,8 @@ if(REPORTER_SOURCES)
         )
         target_compile_definitions(SparkCrashReporterManifestTests PRIVATE
             _CRT_SECURE_NO_WARNINGS
+            SPARK_CRASH_REPORTER_VERSION="${PROJECT_VERSION}"
+            SPARK_AUTO_ISSUE_TEST_TIMEOUT_MS=400
         )
         if(WIN32)
             target_compile_definitions(SparkCrashReporterManifestTests PRIVATE
@@ -88,7 +113,7 @@ if(REPORTER_SOURCES)
         endif()
 
         add_test(NAME SparkCrashReporter.ManifestCompatibility
-                 COMMAND SparkCrashReporterManifestTests)
+                 COMMAND SparkCrashReporterManifestTests $<TARGET_FILE:SparkCrashReporterFakeGh>)
 
         add_test(NAME SparkCrashReporter.ExecutableSmoke
                  COMMAND ${CMAKE_COMMAND}

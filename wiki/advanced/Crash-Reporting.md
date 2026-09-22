@@ -1,6 +1,6 @@
 # Crash Reporting
 
-Spark's crash path writes a local manifest and artifacts, then launches `SparkCrashReporter` to present them to the user. The current reporting operation is **read-only for crash artifacts**: it displays local information but does not modify the log, dump, screenshot, or archive. It does not upload, email, open a GitHub issue, contact a relay, or consume reusable network credentials. Watchdog queue housekeeping is narrower but mutating: it atomically renames a ready manifest to a claimed name and consumes that claimed manifest after loading it.
+Spark's crash path writes a local manifest and artifacts, then launches `SparkCrashReporter` to present them to the user. The reporter remains **read-only for crash artifacts**: it displays local information but does not modify or upload the log, dump, screenshot, or archive. A separate, explicit user-local opt-in can post a small metadata-only GitHub Issue through the user's already-authenticated GitHub CLI. Watchdog queue housekeeping is narrower but mutating: it atomically renames a ready manifest to a claimed name and consumes that claimed manifest after loading it.
 
 **Sources:** `SparkEngine/Source/Utils/CrashHandler.cpp`, `SparkCrashReporter/src/CrashReporterApp.cpp`
 
@@ -10,7 +10,7 @@ The crash directory is an authoritative local root, not a hint. Runtime code ope
 
 Ready manifests use `crash_manifest_<16 lowercase hex>.json`. The reporter bounds a manifest at 1 MiB, JSON strings at 256 KiB, nesting at 16, collections at 4,096 entries, the ready queue at 32 manifests, and a displayed crash log at 8 MiB. These are source constants, not claims about delivery or retention.
 
-Legacy transport fields (`uploadURL`, proxy, GitHub, SMTP, and email fields) are parse-only compatibility input. They are discarded and must not be written into new manifests. `artifactRoot` and pinned identities are in-memory trust state and must not be serialized.
+Legacy transport fields (`uploadURL`, proxy, GitHub, SMTP, and email fields) are parse-only compatibility input. They are discarded and must not be written into new manifests. `requireConsent: false` also does **not** authorize network delivery. `artifactRoot` and pinned identities are in-memory trust state and must not be serialized.
 
 ## Offline validation
 
@@ -27,9 +27,22 @@ Secret inspection is shared with telemetry validation. Text, JSON values, dump b
 
 The aggregate/file/archive/time limits defined by the Python tools are defensive offline-validation limits. They are **not C++ runtime guarantees**.
 
-## Consent and delivery status
+## Optional automatic GitHub Issues
 
-There is no crash upload implementation to consent to today. A future relay must use scoped, ephemeral authorization, explicit reversible consent, truthful queued/delivered/rejected/failed states, and end-to-end tests. Until a synthetic release crash reaches that relay and symbolicates against private build-ID-indexed symbols, OPS-100 remains open and crash delivery must not be presented as available.
+From the installed `bin` directory, a playtester who wants public, automatic **metadata-only** Issues can run:
+
+```text
+SparkCrashReporter --enable-auto-issues
+SparkCrashReporter --auto-issues-status
+SparkCrashReporter --disable-auto-issues
+SparkCrashReporter --issue-status <private-crash-directory>
+```
+
+Opt-in is off by default, persists in the user's local configuration, and is revocable. It requires a trusted `gh` executable on an absolute `PATH` entry and the playtester's own authenticated GitHub account with permission to create Issues in `Krilliac/SparkEngine`. The reporter invokes `gh issue create` without a shell, PAT, or embedded token; it cannot verify the provenance of a binary on the user's `PATH`. The target repository is fixed; a crash manifest cannot redirect it. The Issue contains only reporter version, platform, and an opaque incident ID. No log text, dump, screenshot, file path, command line, crash title, or user description is transmitted. **GitHub Issues are public**; opt in only if publishing that limited metadata is acceptable.
+
+The reporter first validates and reviews local crash artifacts. Declining an interactive review prevents the Issue attempt. Missing `gh` and other certain local setup failures do not claim the incident, so it can be retried after setup. Immediately before contacting GitHub, it writes a one-attempt receipt in the private crash directory; a timeout or lost response is never retried automatically into a duplicate public Issue. The reporter also saves `confirmed` plus the exact Issue URL, or `unconfirmed`, in a bounded local result file. `--issue-status` reads those receipts even when the detached watchdog's output is hidden. Authentication or network failures, timeouts, and unexpected replies are unconfirmed; local artifacts remain available. To report manually, review and sanitize the evidence first, then use the repository's Issues tab.
+
+The automatic Issue is only a signal, not a triage-ready bug report. The playtester should add sanitized reproduction steps and an exact build identifier when known, without pasting raw logs, dumps, screenshots, private paths, tokens, or personal data. This feature is **not crash-artifact upload** and does not satisfy the OPS-100 relay/symbolication gate. A future private relay still needs scoped ephemeral authorization, explicit reversible consent, truthful delivery states, end-to-end tests, private symbol publication, and a release-crash canary.
 
 ## Remaining work
 
