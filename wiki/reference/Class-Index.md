@@ -76,7 +76,7 @@
 | `ActiveQuest` | struct | Tests | [TestGameplayStress.cpp:L181](../../Tests/TestGameplayStress.cpp#L181) |  |
 | `ActiveQuest` | struct | Tests | [TestQuestSystem.cpp:L57](../../Tests/TestQuestSystem.cpp#L57) |  |
 | `ActiveQuestData` | struct | SparkEngine | [QuestSystem.h:L239](../../SparkEngine/Source/Engine/Gameplay/QuestSystem.h#L239) | Per-entity quest instance with mutable objective progress |
-| `ActiveReset` | struct | SparkEngine | [DedicatedServer.cpp:L825](../../SparkEngine/Source/Engine/Networking/DedicatedServer.cpp#L825) |  |
+| `ActiveReset` | struct | SparkEngine | [DedicatedServer.cpp:L833](../../SparkEngine/Source/Engine/Networking/DedicatedServer.cpp#L833) |  |
 | `ActiveSound` | struct | SparkEngine | [ParallelPerception.h:L81](../../SparkEngine/Source/Engine/AI/ParallelPerception.h#L81) | Describes an active sound event for hearing checks. |
 | `ActiveSoundInfo` | struct | SparkEditor | [AudioMixerPanel.h:L49](../../SparkEditor/Source/Panels/AudioMixerPanel.h#L49) |  |
 | `ActiveVolume` | struct | SparkEngine | [VolumeSystem.h:L430](../../SparkEngine/Source/Graphics/VolumeSystem.h#L430) |  |
@@ -1884,8 +1884,8 @@
 | `info` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L626](../../SparkCrashReporter/src/CrashReporterApp.cpp#L626) |  |
 | `info` | struct | SparkEngine | [CrashArtifactDirectory.h:L130](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L130) |  |
 | `info` | struct | SparkEngine | [CrashHandler.cpp:L186](../../SparkEngine/Source/Utils/CrashHandler.cpp#L186) |  |
-| `info` | struct | SparkEngine | [CrashHandler.cpp:L348](../../SparkEngine/Source/Utils/CrashHandler.cpp#L348) |  |
-| `info` | struct | SparkEngine | [CrashHandler.cpp:L413](../../SparkEngine/Source/Utils/CrashHandler.cpp#L413) |  |
+| `info` | struct | SparkEngine | [CrashHandler.cpp:L346](../../SparkEngine/Source/Utils/CrashHandler.cpp#L346) |  |
+| `info` | struct | SparkEngine | [CrashHandler.cpp:L409](../../SparkEngine/Source/Utils/CrashHandler.cpp#L409) |  |
 | `info` | struct | SparkGateway | [GatewaySecurity.cpp:L310](../../SparkGateway/src/GatewaySecurity.cpp#L310) |  |
 | `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L403](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L403) |  |
 | `information` | struct | SparkEditor | [ProjectManager.cpp:L701](../../SparkEditor/Source/Core/ProjectManager.cpp#L701) |  |
@@ -2937,7 +2937,7 @@
 | `PIEServerConfig` | struct | SparkEditor | [DedicatedServerPanel.h:L85](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L85) |  |
 | `PinDescriptor` | struct | Tests | [TestShaderGraphCompiler.cpp:L211](../../Tests/TestShaderGraphCompiler.cpp#L211) |  |
 | `PinnedDirectory` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L598](../../SparkCrashReporter/src/CrashReporterApp.cpp#L598) |  |
-| `PinnedFile` | struct | SparkEngine | [CrashHandler.cpp:L260](../../SparkEngine/Source/Utils/CrashHandler.cpp#L260) |  |
+| `PinnedFile` | struct | SparkEngine | [CrashHandler.cpp:L258](../../SparkEngine/Source/Utils/CrashHandler.cpp#L258) |  |
 | `PipelineCacheMetrics` | struct | SparkEngine | [PipelineStateCache.h:L103](../../SparkEngine/Source/Graphics/PipelineStateCache.h#L103) | Cache metrics for profiling state object reuse. |
 | `PipelineCallbacks` | struct | SparkEngine | [RenderGraphBuilder.h:L176](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L176) | User-supplied rendering callbacks for each standard pass. |
 | `PipelineConfig` | struct | SparkEngine | [RenderGraphBuilder.h:L72](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L72) | Configuration that controls which passes are enabled and at what |
@@ -3559,7 +3559,7 @@
 | `S4` | struct | Tests | [TestEngineContext.cpp:L352](../../Tests/TestEngineContext.cpp#L352) |  |
 | `S5` | struct | Tests | [TestEngineContext.cpp:L356](../../Tests/TestEngineContext.cpp#L356) |  |
 | `sa` | struct | SparkEditor | [EditorCrashHandler.cpp:L251](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L251) |  |
-| `sa` | struct | SparkEngine | [CrashHandler.cpp:L1850](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1850) |  |
+| `sa` | struct | SparkEngine | [CrashHandler.cpp:L1876](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1876) |  |
 | `SafeArea` | struct | SparkEngine | [MobilePlatform.h:L137](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h#L137) | Screen safe area (avoiding notches, home indicators). |
 | `SAHBucket` | struct | SparkEngine | [BVHAccelerator.h:L178](../../SparkEngine/Source/Graphics/BVHAccelerator.h#L178) |  |
 | `Sample` | struct | SparkEngine | [InterpolationBuffer.h:L192](../../SparkEngine/Source/Engine/Networking/InterpolationBuffer.h#L192) |  |
@@ -3878,7 +3878,7 @@
 | `ShotFx` | struct | GameModules | [TFWorldSetup.h:L223](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h#L223) |  |
 | `ShutdownStage` | class | SparkEngine | [ShutdownStage.cpp:L6](../../SparkEngine/Source/Core/Lifecycle/ShutdownStage.cpp#L6) |  |
 | `si` | struct | SparkEditor | [EditorCrashHandler.cpp:L762](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L762) |  |
-| `si` | struct | SparkEngine | [CrashHandler.cpp:L1586](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1586) |  |
+| `si` | struct | SparkEngine | [CrashHandler.cpp:L1612](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1612) |  |
 | `SiblingDependentModule` | class | Tests | [SiblingDependentModule.cpp:L9](../../Tests/Fixtures/ModuleABI/SiblingDependentModule.cpp#L9) |  |
 | `SimDamageIndicator` | struct | SparkEditor | [GameViewPanel.h:L165](../../SparkEditor/Source/Panels/GameViewPanel.h#L165) |  |
 | `SimKillFeedEntry` | struct | SparkEditor | [GameViewPanel.h:L153](../../SparkEditor/Source/Panels/GameViewPanel.h#L153) |  |
@@ -4627,7 +4627,7 @@
 | `ThreadLockState` | struct | Tests | [TestDeadlockDetector.cpp:L37](../../Tests/TestDeadlockDetector.cpp#L37) |  |
 | `ThreadRecord` | struct | SparkEngine | [ThreadDebugger.h:L45](../../SparkEngine/Source/Utils/ThreadDebugger.h#L45) | Record of a tracked thread |
 | `ThreadSafeRandomEngine` | class | SparkEngine | [RandomEngine.h:L216](../../SparkEngine/Source/Utils/RandomEngine.h#L216) | Mutex-protected wrapper around RandomEngine for shared use. |
-| `ThreadStacksCapture` | struct | SparkEngine | [CrashHandler.cpp:L805](../../SparkEngine/Source/Utils/CrashHandler.cpp#L805) |  |
+| `ThreadStacksCapture` | struct | SparkEngine | [CrashHandler.cpp:L830](../../SparkEngine/Source/Utils/CrashHandler.cpp#L830) |  |
 | `ThreadState` | struct | SparkEngine | [DeadlockDetector.h:L123](../../SparkEngine/Source/Utils/DeadlockDetector.h#L123) |  |
 | `ThreadState` | struct | Tests | [TestDeadlockDetector.cpp:L112](../../Tests/TestDeadlockDetector.cpp#L112) |  |
 | `ThreatInfo` | struct | SparkEngine | [GroupAI.h:L103](../../SparkEngine/Source/Engine/AI/GroupAI.h#L103) | Information about a known threat shared across the group. |
@@ -4788,7 +4788,7 @@
 | `UITextInput` | class | SparkEngine | [UILayoutExtensions.h:L119](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L119) |  |
 | `UIWidget` | class | SparkEngine | [UISystem.h:L124](../../SparkEngine/Source/Engine/UI/UISystem.h#L124) | Base class for all UI widgets. |
 | `UIWidgetConfig` | struct | SparkEngine | [UIFactory.h:L97](../../SparkEngine/Source/Engine/UI/UIFactory.h#L97) | Simple config node for UI widget definition |
-| `un` | struct | SparkEngine | [CrashHandler.cpp:L1579](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1579) |  |
+| `un` | struct | SparkEngine | [CrashHandler.cpp:L1605](../../SparkEngine/Source/Utils/CrashHandler.cpp#L1605) |  |
 | `UnackedTracker` | struct | Tests | [TestReliableChannel.cpp:L57](../../Tests/TestReliableChannel.cpp#L57) |  |
 | `UndoHistoryPanel` | class | SparkEditor | [UndoHistoryPanel.h:L26](../../SparkEditor/Source/Panels/UndoHistoryPanel.h#L26) | Panel displaying the undo/redo command history |
 | `UndoRedoManager` | class | SparkEditor | [UndoRedoManager.h:L37](../../SparkEditor/Source/UndoRedo/UndoRedoManager.h#L37) | Manages the undo/redo command stack for the editor |
