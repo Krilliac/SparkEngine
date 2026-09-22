@@ -158,14 +158,19 @@ declared finalization work and promote all required gates/profile/global state.
 or consumer alone is insufficient. The released candidate commit is immutable;
 later evidence-recording commits must retain that exact artifact source identity.
 
-## First-release policy blocker
+## First-release predecessor policy
 
-The strict MSI qualifier still requires a real previously published, signed,
-non-prerelease stable MSI and its matching manifest. The provisioner explicitly
-rejects a first stable release without that predecessor. There is currently no
-bootstrap exception. A maintainer policy decision and reviewed implementation
-are required to resolve this separately; fabricating an older release, changing
-nightly into a predecessor, or marking upgrade/rollback done is not permitted.
+The maintainer chose a signed, immutable `v0.9.0` stable predecessor before
+`v1.0.0`, rather than a first-release bootstrap exception. The strict MSI
+qualifier must continue to require a real previously published, signed,
+non-prerelease stable MSI and its matching manifest. Publish `v0.9.0` only after
+its own applicable signing, package, publication, and acceptance evidence is
+complete; then qualify the `v1.0.0` upgrade, rollback, repair, and user-data
+retention gates against those exact immutable predecessor assets. The choice
+does not mark either release ready or waive any gate. Until `v0.9.0` is
+independently verified as published, the provisioner correctly rejects
+`v1.0.0`. Fabricating an older release, treating nightly as the predecessor,
+or marking upgrade/rollback done without the real transaction is prohibited.
 
 ## Source & Freshness
 
