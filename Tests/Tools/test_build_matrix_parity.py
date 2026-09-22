@@ -3274,6 +3274,35 @@ class CodemodelProvenanceTests(unittest.TestCase):
         self.assertEqual(len(undeclared), 1)
         self.assertIn("TotallyInvented", undeclared[0].message)
 
+    def test_reviewed_fuzz_policy_target_is_only_corroborated_for_validation(self) -> None:
+        declarations = inventory.extract_cmake_targets()
+        enabled = {"SPARK_ENABLE_FUZZ_POLICY_CHECKS": "ON"}
+        reviewed = inventory.reviewed_configured_function_targets(
+            declarations, "windows-validation", enabled
+        )
+        self.assertEqual(reviewed, {"check-fuzz-policy"})
+        self.assertEqual(
+            inventory.reviewed_configured_function_targets(
+                declarations, "windows-shipping", enabled
+            ),
+            set(),
+        )
+        self.assertEqual(
+            inventory.reviewed_configured_function_targets(
+                declarations, "windows-validation", {"SPARK_ENABLE_FUZZ_POLICY_CHECKS": "OFF"}
+            ),
+            set(),
+        )
+
+        forged = copy.deepcopy(declarations)
+        for declaration in forged:
+            if declaration.get("target") == "check-fuzz-policy":
+                declaration["line"] += 1
+        self.assertEqual(
+            inventory.reviewed_configured_function_targets(forged, "windows-validation", enabled),
+            set(),
+        )
+
     def test_caller_asserted_commit_cannot_replace_producer_provenance(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             write_codemodel_reply(

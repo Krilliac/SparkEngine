@@ -184,7 +184,7 @@ function receiptHasSemanticClosure(receipt) {
         !RAW_DIGEST_PATTERN.test(inputArtifact.parityReportSha256 || '') ||
         pendingState.state !== 'pending-external-attestation' ||
         pendingState.authority !== 'external-attestation-required' ||
-        pendingState.errorCount !== EXPECTED_PROFILES.length || pendingState.warningCount !== 2) {
+        pendingState.errorCount !== EXPECTED_PROFILES.length || pendingState.warningCount !== 3) {
         return false;
     }
     return profiles.every((profile, index) => isObject(profile) &&

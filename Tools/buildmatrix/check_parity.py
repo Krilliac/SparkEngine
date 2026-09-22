@@ -1429,6 +1429,8 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
             evidence_cache = {}
         corroborated = declared | inventory_tool.reviewed_required_target_references(
             data.get("cmakeTargetDeclarations", []), identifier, evidence_cache
+        ) | inventory_tool.reviewed_configured_function_targets(
+            data.get("cmakeTargetDeclarations", []), identifier, evidence_cache
         )
         config = configs.get(identifier, {})
         root = str(repository.get("root", ""))

@@ -125,8 +125,9 @@ def valid_documents() -> tuple[dict[str, Any], dict[str, Any]]:
         "profile": "stable-v1",
         "state": "blocked",
         "errorCount": 3,
-        "warningCount": 2,
+        "warningCount": 3,
         "findings": [
+            dict(pending.EXPECTED_OUTSIDE_OPTION_WARNING),
             {
                 "category": pending.EXPECTED_WARNING_CATEGORY,
                 "severity": "warning",
@@ -307,6 +308,16 @@ class PendingAuthorityTests(unittest.TestCase):
         self.assertEqual(receipt["state"], "pending-external-attestation")
         self.assertEqual(receipt["sourceCommit"], COMMIT)
         self.assertEqual([entry["id"] for entry in receipt["profiles"]], list(pending.EXPECTED_PROFILES))
+
+    def test_reviewed_outside_fuzz_option_is_accepted_as_one_warning(self) -> None:
+        inventory_document, report = valid_documents()
+        receipt = self.receipt(inventory_document, report)
+        self.assertEqual(receipt["parity"]["warningCount"], 3)
+        self.assertEqual(receipt["parity"]["warningCategories"], ["cmake-only", "target-name-unresolved"])
+
+        report["findings"][0]["message"] = "CMake option 'UNREVIEWED' is not representable in SparkBuild"
+        with self.assertRaisesRegex(pending.PendingAuthorityError, "reviewed static"):
+            self.receipt(inventory_document, report)
 
     def test_utility_target_with_empty_artifact_identities_is_accepted(self) -> None:
         inventory_document, report = valid_documents()

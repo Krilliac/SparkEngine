@@ -999,6 +999,32 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
     },
 }
 
+# These literal targets are created inside a called CMake function, so they are
+# absent from the top-level static target set even though the configured File
+# API reports them. Admit only this reviewed declaration in its active profile.
+_REVIEWED_CONFIGURED_FUNCTION_TARGET_CONTRACTS = {
+    "check-fuzz-policy": {
+        "profiles": frozenset({"windows-validation"}),
+        "requiredCache": {"SPARK_ENABLE_FUZZ_POLICY_CHECKS": "ON"},
+        "record": {
+            "target": "check-fuzz-policy",
+            "kind": "utility",
+            "file": "cmake/SparkFuzzPolicy.cmake",
+            "line": 19,
+            "conditionFrames": [
+                {
+                    "id": "cmake/SparkFuzzPolicy.cmake:18",
+                    "branch": 0,
+                    "branches": ["NOT TARGET check-fuzz-policy"],
+                }
+            ],
+            "definitionScope": ["spark_enable_fuzz_policy"],
+            "origin": "function-template",
+            "resolved": True,
+        },
+    },
+}
+
 
 def _wrapper_definitions(commands: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Map function/macro name -> the target it creates from its first parameter.
@@ -1144,6 +1170,30 @@ def reviewed_required_target_references(
         if target == "angelscript" and str(
             cache_variables.get("ENABLE_ANGELSCRIPT", "")
         ).upper() != "ON":
+            continue
+        if declaration == contract["record"]:
+            reviewed.add(str(target))
+    return reviewed
+
+
+def reviewed_configured_function_targets(
+    declarations: list[dict[str, Any]],
+    profile: str,
+    cache_variables: dict[str, Any],
+) -> set[str]:
+    """Corroborate an exact function-scoped declaration only when enabled."""
+    reviewed: set[str] = set()
+    for declaration in declarations:
+        if not isinstance(declaration, dict):
+            continue
+        target = declaration.get("target")
+        contract = _REVIEWED_CONFIGURED_FUNCTION_TARGET_CONTRACTS.get(str(target))
+        if contract is None or profile not in contract["profiles"]:
+            continue
+        if not all(
+            str(cache_variables.get(name, "")).upper() == required
+            for name, required in contract["requiredCache"].items()
+        ):
             continue
         if declaration == contract["record"]:
             reviewed.add(str(target))

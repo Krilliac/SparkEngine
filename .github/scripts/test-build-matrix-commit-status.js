@@ -325,7 +325,7 @@ function trustedReceipt(metadata = sourceMetadata()) {
             state: 'pending-external-attestation',
             authority: 'external-attestation-required',
             errorCount: 3,
-            warningCount: 2
+            warningCount: 3
         }
     };
 }
