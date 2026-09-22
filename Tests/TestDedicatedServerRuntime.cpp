@@ -263,12 +263,6 @@ TEST(DedicatedServerRuntime_ChatCannotInvokeRcon)
 
 TEST(DedicatedServerRuntime_RconAuditRedactsArgumentsAndResponses)
 {
-    MockNetworkRuntime runtime;
-    DedicatedServer server(runtime);
-    ServerConfig config;
-    config.enableLogging = false;
-    ASSERT_TRUE(server.InitializeOnly(config));
-
     const std::string secretArgument = "SEC100_FAKE_ARGUMENT_73B19";
     const std::string secretResponse = "ERROR: SEC100_FAKE_RESPONSE_84C20";
     const std::string unknownCommand = "SEC100_FAKE_UNKNOWN_95D31";
@@ -287,6 +281,14 @@ TEST(DedicatedServerRuntime_RconAuditRedactsArgumentsAndResponses)
         callbackCommand = command;
         callbackResponse = response;
     };
+
+    // Callback captures must outlive the server: a failed assertion can unwind
+    // through DedicatedServer::~DedicatedServer(), which logs during Stop().
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime);
+    ServerConfig config;
+    config.enableLogging = false;
+    ASSERT_TRUE(server.InitializeOnly(config));
     server.SetCallbacks(callbacks);
     server.RegisterRconCommand("audit_probe", "Audit redaction probe",
                                [&](const std::vector<std::string>& arguments)
