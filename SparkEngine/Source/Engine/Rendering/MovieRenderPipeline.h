@@ -1,13 +1,13 @@
 /**
  * @file MovieRenderPipeline.h
- * @brief Offline cinematic rendering pipeline for high-quality frame output
+ * @brief Prototype offline-render job state tracker; does not output frames
  * @author Spark Engine Team
  * @date 2026
  *
- * Renders cinematic sequences offline at arbitrary resolution and quality,
- * stepping the simulation deterministically at a fixed timestep. Supports
- * temporal accumulation, motion blur sub-frames, warm-up periods, and
- * console variable overrides. Pixel readback delegates to ScreenCapture.
+ * Tracks settings, fixed-time counters, warm-up periods, and job callbacks.
+ * It does not advance the engine simulation, read pixels, blend sub-frames,
+ * apply console overrides, or write image files. Callers must explicitly
+ * initialize, update, and shut down this optional prototype.
  */
 
 #pragma once
@@ -25,17 +25,17 @@
 namespace Spark::Rendering
 {
 
-    /// @brief Quality preset for offline rendering
+    /// @brief Preset for prototype job-state step counts
     enum class RenderQuality
     {
-        Preview,   ///< Fast preview — low AA, no motion blur
-        Standard,  ///< Balanced quality and speed
-        High,      ///< High quality — 8x AA, 4 motion blur sub-frames
-        Cinematic, ///< Maximum quality — 32x AA, 16 motion blur sub-frames
+        Preview,   ///< Fewest internal steps
+        Standard,  ///< Standard internal step counts
+        High,      ///< 8 AA-count steps, 4 motion-blur-count steps
+        Cinematic, ///< 32 AA-count steps, 16 motion-blur-count steps
         Custom     ///< User-defined settings (no preset overrides)
     };
 
-    /// @brief Output image format for rendered frames
+    /// @brief Intended image format; no encoder is currently wired
     enum class OutputFormat
     {
         PNG, ///< 8-bit RGBA PNG
@@ -48,18 +48,18 @@ namespace Spark::Rendering
     {
         std::string outputDirectory = "Renders";                        ///< Output directory
         std::string filenamePattern = "frame_{0:06d}.png";              ///< Filename pattern
-        uint32_t width = 1920;                                          ///< Output width (pixels)
-        uint32_t height = 1080;                                         ///< Output height (pixels)
+        uint32_t width = 1920;                                          ///< Intended output width (not applied)
+        uint32_t height = 1080;                                         ///< Intended output height (not applied)
         float frameRate = 30.0f;                                        ///< Target fps
         int32_t startFrame = 0;                                         ///< First frame
         int32_t endFrame = 300;                                         ///< Last frame (inclusive)
-        uint32_t aaSamples = 1;                                         ///< Temporal AA samples (1,4,8,16,32)
-        uint32_t motionBlurSubFrames = 1;                               ///< Motion blur sub-frames (1-16)
+        uint32_t aaSamples = 1;                                         ///< Internal step count; no AA applied
+        uint32_t motionBlurSubFrames = 1;                               ///< Internal step count; no blur applied
         RenderQuality qualityPreset = RenderQuality::Standard;          ///< Quality preset
         OutputFormat outputFormat = OutputFormat::PNG;                  ///< Image format
-        uint32_t warmUpFrames = 0;                                      ///< Warm-up frames before recording
+        uint32_t warmUpFrames = 0;                                      ///< Internal warm-up steps only
         bool includeAlpha = false;                                      ///< Include alpha channel
-        std::vector<std::pair<std::string, std::string>> cvarOverrides; ///< CVar overrides
+        std::vector<std::pair<std::string, std::string>> cvarOverrides; ///< Stored only; not applied
 
         /// @brief Seconds per frame based on frame rate
         [[nodiscard]] float GetFixedDeltaTime() const
@@ -107,14 +107,14 @@ namespace Spark::Rendering
         }
     };
 
-    /// @brief State of a movie render job
+    /// @brief State of a prototype movie-render job sequence
     enum class RenderJobState
     {
         Idle,       ///< Not started
-        WarmingUp,  ///< Running warm-up frames
-        Rendering,  ///< Actively rendering frames
-        Finalizing, ///< Writing remaining output
-        Complete,   ///< Successfully finished
+        WarmingUp,  ///< Counting warm-up steps
+        Rendering,  ///< Counting planned frame steps; no pixel rendering
+        Finalizing, ///< Finalizing job state; no file output
+        Complete,   ///< State sequence finished; not proof of image output
         Failed,     ///< Encountered an error
         Cancelled   ///< User cancelled
     };
@@ -124,7 +124,7 @@ namespace Spark::Rendering
     {
         MovieRenderSettings settings;                ///< Job settings
         RenderJobState state = RenderJobState::Idle; ///< Current state
-        int32_t currentFrame = 0;                    ///< Frame being rendered
+        int32_t currentFrame = 0;                    ///< Current planned frame
         int32_t totalFrames = 0;                     ///< Total frames
         uint32_t currentSubFrame = 0;                ///< Sub-frame index
         uint32_t totalSubFramesPerFrame = 0;         ///< Sub-frames per output frame
@@ -132,7 +132,7 @@ namespace Spark::Rendering
         float progress = 0.0f;                       ///< Progress [0, 1]
         float elapsedSeconds = 0.0f;                 ///< Wall-clock elapsed
         float estimatedRemainingSeconds = 0.0f;      ///< Estimated remaining
-        std::vector<std::string> outputFiles;        ///< Output file paths
+        std::vector<std::string> outputFiles;        ///< Planned paths, not verified files
         std::string errorMessage;                    ///< Error if failed
 
         /// @brief Recompute progress and ETA from current frame count
@@ -150,11 +150,11 @@ namespace Spark::Rendering
         }
     };
 
-    /// @brief Overrides engine delta time during offline rendering for deterministic simulation
+    /// @brief Tracks fixed-time steps locally; does not override engine delta time
     class DeterministicTimeController
     {
       public:
-        /// @brief Begin time override
+        /// @brief Begin local fixed-time tracking
         void Begin(float fixedDt, uint32_t warmUpFrames)
         {
             m_fixedDt = fixedDt;
@@ -167,7 +167,7 @@ namespace Spark::Rendering
 
         void End() { m_active = false; }
 
-        /// @brief Advance one simulation step, returns the fixed dt used
+        /// @brief Advance the internal step counter, returning its fixed dt
         float Step()
         {
             m_currentTime += m_fixedDt;
@@ -194,7 +194,7 @@ namespace Spark::Rendering
         bool m_active = false;
     };
 
-    /// @brief Offline cinematic rendering pipeline (singleton). Call Update() each frame.
+    /// @brief Offline-render job-state prototype (singleton); no pixel output.
     class MovieRenderPipeline
     {
       public:
@@ -227,7 +227,7 @@ namespace Spark::Rendering
             m_initialized = false;
         }
 
-        /// @brief Start an offline render; returns true on success
+        /// @brief Start a job-state sequence; does not render or write images
         bool StartRender(MovieRenderSettings settings)
         {
             if (!m_initialized || IsRendering())
@@ -296,7 +296,7 @@ namespace Spark::Rendering
         void SetFrameCapturedCallback(FrameCapturedCallback cb) { m_frameCapturedCallback = std::move(cb); }
         void SetRenderCompleteCallback(RenderCompleteCallback cb) { m_renderCompleteCallback = std::move(cb); }
 
-        /// @brief Main update -- call each frame. Uses fixed dt when rendering.
+        /// @brief Advance internal job counters; explicit callers invoke per frame.
         // Intentional: uses internal fixed timestep via UpdateElapsedTime(), deltaTime for interface conformance
         void Update([[maybe_unused]] float deltaTime)
         {
@@ -389,7 +389,7 @@ namespace Spark::Rendering
             }
         }
 
-        /// @brief Capture the accumulated frame to disk via ScreenCapture
+        /// @brief Record a planned output path; pixel capture is not implemented.
         void CaptureFrame()
         {
             const int32_t absoluteFrame = m_activeJob.settings.startFrame + m_activeJob.currentFrame;
@@ -397,7 +397,7 @@ namespace Spark::Rendering
                 std::vformat(m_activeJob.settings.filenamePattern, std::make_format_args(absoluteFrame));
             const std::string filePath = m_activeJob.settings.outputDirectory + "/" + filename;
 
-            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "MovieRenderPipeline: captured frame %d -> %s", absoluteFrame,
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "MovieRenderPipeline: planned frame %d -> %s", absoluteFrame,
                             filePath.c_str());
 
             // In production: resolve accumulation buffer, call ScreenCapture::CaptureFrame()
@@ -471,7 +471,7 @@ namespace Spark::Rendering
         std::vector<MovieRenderJob> m_completedJobs;
         DeterministicTimeController m_timeController;
         std::chrono::steady_clock::time_point m_renderStartTime;
-        std::vector<float> m_accumulationBuffer; ///< Sub-frame blending buffer (real pixels from GPU)
+        std::vector<float> m_accumulationBuffer; ///< Reserved; no pixel data is accumulated
         FrameCapturedCallback m_frameCapturedCallback;
         RenderCompleteCallback m_renderCompleteCallback;
     };
