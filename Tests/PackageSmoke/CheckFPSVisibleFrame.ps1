@@ -29,7 +29,28 @@ try {
         throw "FPS play area is visually uniform ($($colors.Count) sampled colors); camera may be inside geometry"
     }
 
-    Write-Output "FPS visible-frame smoke passed: $($colors.Count) sampled colors in $($bitmap.Width)x$($bitmap.Height)"
+    # A vertical sky/floor gradient alone is not evidence of arena geometry.
+    # The authored central structure crosses this middle scanline, so require
+    # two substantial horizontal color boundaries away from HUD edges.
+    $scanY = [int](($bitmap.Height - 1) * 0.45)
+    $previous = $null
+    $transitions = 0
+    foreach ($xFraction in @(0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85)) {
+        $x = [int](($bitmap.Width - 1) * $xFraction)
+        $pixel = $bitmap.GetPixel($x, $scanY)
+        if ($null -ne $previous) {
+            $difference = [Math]::Abs([int]$pixel.R - [int]$previous.R) +
+                          [Math]::Abs([int]$pixel.G - [int]$previous.G) +
+                          [Math]::Abs([int]$pixel.B - [int]$previous.B)
+            if ($difference -ge 48) { $transitions++ }
+        }
+        $previous = $pixel
+    }
+    if ($transitions -lt 2) {
+        throw "FPS play area lacks central geometry boundaries ($transitions strong horizontal transitions)"
+    }
+
+    Write-Output "FPS visible-frame smoke passed: $($colors.Count) sampled colors and $transitions central geometry transitions in $($bitmap.Width)x$($bitmap.Height)"
 }
 finally {
     $bitmap.Dispose()
