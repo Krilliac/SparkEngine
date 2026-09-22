@@ -83,6 +83,13 @@ file(WRITE "${_project}" [=[{
 }
 ]=])
 
+# Keep the missing-scene case independent of the project whose scene is saved
+# and reopened below. Startup must load this project before the bad scene is requested.
+set(_missing_work_dir "${_canonical_work_dir}/missing-scene-case")
+file(MAKE_DIRECTORY "${_missing_work_dir}/Assets" "${_missing_work_dir}/Scenes")
+set(_missing_project "${_missing_work_dir}/EditorSmoke.sparkproject")
+file(COPY_FILE "${_project}" "${_missing_project}")
+
 set(_output "${_canonical_work_dir}/editor-smoke-output.txt")
 set(_result_file "${_canonical_work_dir}/editor-smoke-result.json")
 execute_process(
@@ -116,3 +123,54 @@ foreach(_marker IN ITEMS
 endforeach()
 
 message(STATUS "SparkEditor executable smoke passed (project load, 3-frame run, clean shutdown)")
+
+# Exercise the explicit scene CLI path through the executable. A successful
+# frame run must not conceal a failed --open-scene request.
+set(_saved_scene "${_canonical_work_dir}/Scenes/EditorRoundTrip.sparkscene")
+execute_process(
+    COMMAND "${SPARK_EDITOR}" --test-mode --project "${_project}"
+        --save-scene "Scenes/EditorRoundTrip.sparkscene"
+    WORKING_DIRECTORY "${_canonical_work_dir}"
+    TIMEOUT 30
+    RESULT_VARIABLE _save_result)
+if(NOT _save_result EQUAL 0 OR NOT EXISTS "${_saved_scene}")
+    message(FATAL_ERROR "SparkEditor could not save the round-trip scene (exit ${_save_result})")
+endif()
+
+set(_reopen_result_file "${_canonical_work_dir}/editor-reopen-result.json")
+execute_process(
+    COMMAND "${SPARK_EDITOR}" --test-mode --test-frames 3 --project "${_project}"
+        --open-scene "Scenes/EditorRoundTrip.sparkscene" --smoke-result "${_reopen_result_file}"
+    WORKING_DIRECTORY "${_canonical_work_dir}"
+    TIMEOUT 30
+    RESULT_VARIABLE _reopen_result)
+if(NOT _reopen_result EQUAL 0 OR NOT EXISTS "${_reopen_result_file}")
+    message(FATAL_ERROR "SparkEditor could not reopen the saved scene (exit ${_reopen_result})")
+endif()
+file(READ "${_reopen_result_file}" _reopen_json)
+if(NOT _reopen_json MATCHES "\"status\": \"passed\"")
+    message(FATAL_ERROR "SparkEditor did not report a successful scene reopen: ${_reopen_json}")
+endif()
+
+set(_missing_result_file "${_missing_work_dir}/editor-missing-scene-result.json")
+execute_process(
+    COMMAND "${SPARK_EDITOR}" --test-mode --test-frames 3 --project "${_missing_project}"
+        --open-scene "Scenes/DefinitelyMissing.sparkscene" --smoke-result "${_missing_result_file}"
+    WORKING_DIRECTORY "${_missing_work_dir}"
+    TIMEOUT 30
+    RESULT_VARIABLE _missing_result)
+if(_missing_result EQUAL 0 OR NOT EXISTS "${_missing_result_file}")
+    message(FATAL_ERROR "SparkEditor treated an explicit missing scene as successful (exit ${_missing_result})")
+endif()
+file(READ "${_missing_result_file}" _missing_json)
+foreach(_marker IN ITEMS
+        "\"status\": \"scene-open-failed\""
+        "\"projectLoaded\": true"
+        "\"runResult\": -1")
+    string(FIND "${_missing_json}" "${_marker}" _marker_offset)
+    if(_marker_offset EQUAL -1)
+        message(FATAL_ERROR "SparkEditor missing-scene result lacks '${_marker}': ${_missing_json}")
+    endif()
+endforeach()
+
+message(STATUS "SparkEditor explicit scene open passed (saved scene reopens; missing scene fails closed)")

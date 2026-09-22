@@ -498,6 +498,13 @@ int main(int argc, char* argv[])
                 {
                     std::cerr << "Failed to open scene from " << openScenePath << std::endl;
                 }
+                app->Shutdown();
+                std::string smokeResultError;
+                if (!WriteSmokeResult(smokeResultPath, "scene-open-failed", smokeProjectLoaded, -1, smokeResultError) &&
+                    !smokeResultPath.empty())
+                    console.LogError("Failed to publish SparkEditor smoke result: " + smokeResultError);
+                console.Shutdown();
+                return -1;
             }
         }
 
