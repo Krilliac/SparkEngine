@@ -597,8 +597,8 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
         file << node.type << " " << node.name << " " << std::fixed << std::setprecision(3) << node.position.x << " "
              << node.position.y << " " << node.position.z << " " << node.rotation.x << " " << node.rotation.y << " "
              << node.rotation.z << " " << node.scale.x << " " << node.scale.y << " " << node.scale.z << " "
-             << node.parentIndex << " " << std::quoted(node.modelPath) << " " << std::quoted(node.materialPath)
-             << " " << node.properties.size();
+             << node.parentIndex << " " << std::quoted(node.modelPath) << " " << std::quoted(node.materialPath) << " "
+             << node.properties.size();
         std::vector<std::pair<std::string, std::string>> properties(node.properties.begin(), node.properties.end());
         std::sort(properties.begin(), properties.end());
         for (const auto& [key, value] : properties)
