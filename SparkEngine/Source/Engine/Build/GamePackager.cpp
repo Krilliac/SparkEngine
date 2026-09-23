@@ -142,7 +142,9 @@ namespace Spark::Build
                 fs::copy_file(entry.path(), destination, fs::copy_options::overwrite_existing, ec);
                 if (ec)
                 {
-                    result.warnings.push_back(std::format("Failed to copy asset '{}': {}", relative, ec.message()));
+                    // A missing asset makes the package incomplete; report it as
+                    // an error so the aggregate failure path below rejects it.
+                    result.errors.push_back(std::format("Failed to copy asset '{}': {}", relative, ec.message()));
                     ec.clear();
                 }
                 else
