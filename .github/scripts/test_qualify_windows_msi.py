@@ -121,7 +121,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                     "SignerThumbprint": PREVIOUS_SIGNER_THUMBPRINT,
                     "SignerSubject": "CN=Generated Fixture",
                     "SignerIssuer": "CN=Generated Fixture", "TrustModel": "self-signed",
-                    "PublisherWarning": "Unknown Publisher may be shown.",
+                    "ChainBuild": "True", "ChainRootThumbprint": PREVIOUS_SIGNER_THUMBPRINT,
+                    "PublisherWarning": "Unknown Publisher may be shown because the stable certificate is self-signed.",
                     "TimestampThumbprint": "C" * 40, "TimestampSubject": "CN=Timestamp Fixture",
                 }
                 evidence.update(signature_changes or {})

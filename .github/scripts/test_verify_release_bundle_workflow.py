@@ -58,6 +58,22 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         self.assertIn("SPARK_RELEASE_TRUST_MODEL: ${{ vars.SPARK_RELEASE_TRUST_MODEL }}", block)
         self.assertIn("self-signed", self.text[start - 500:start])
 
+    def test_stable_signing_is_protected_and_precedes_native_verification(self) -> None:
+        signing = self.text.index("- name: Sign Windows stable outer installers")
+        verification = self.text.index("- name: Verify Windows stable outer installer signatures")
+        self.assertLess(signing, verification)
+        block = self.text[signing:self.text.index("\n    - name:", signing + 10)]
+        self.assertIn("if: needs.prepare.outputs.is_versioned == 'true'", block)
+        self.assertIn("SPARK_RELEASE_SIGNING_PFX_BASE64: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_BASE64 }}", block)
+        self.assertIn("SPARK_RELEASE_SIGNING_PFX_PASSWORD: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_PASSWORD }}", block)
+        self.assertIn("Import-PfxCertificate", block)
+        self.assertIn("signtool.Source sign", block)
+        self.assertIn("/fd SHA256", block)
+        self.assertIn("/tr 'http://timestamp.digicert.com'", block)
+        self.assertIn("/td SHA256", block)
+        self.assertIn("thumbprint does not match", block)
+        self.assertIn("Remove-Item -LiteralPath $pfxPath", block)
+
 
 if __name__ == "__main__":
     unittest.main()

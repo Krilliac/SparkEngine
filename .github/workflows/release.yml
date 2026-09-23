@@ -188,6 +188,7 @@ jobs:
   build-windows:
     needs: [prepare]
     runs-on: windows-2022
+    environment: ${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}
     strategy:
       fail-fast: false
       matrix:
@@ -333,6 +334,49 @@ jobs:
               Get-Content -LiteralPath $_.FullName
             }
           exit $cpackExitCode
+        }
+
+    # Stable signing is performed only after the protected stable-release
+    # environment has authorized this job. The PFX is provisioned externally;
+    # it is never committed, uploaded, or exposed to rolling nightly builds.
+    - name: Sign Windows stable outer installers
+      if: needs.prepare.outputs.is_versioned == 'true'
+      shell: pwsh
+      env:
+        SPARK_RELEASE_SIGNER_THUMBPRINT: ${{ vars.SPARK_RELEASE_SIGNER_THUMBPRINT }}
+        SPARK_RELEASE_SIGNING_PFX_BASE64: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_BASE64 }}
+        SPARK_RELEASE_SIGNING_PFX_PASSWORD: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_PASSWORD }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        if ($env:SPARK_RELEASE_SIGNER_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
+          throw 'SPARK_RELEASE_SIGNER_THUMBPRINT must be the protected 40-hex public certificate thumbprint'
+        }
+        if ([string]::IsNullOrWhiteSpace($env:SPARK_RELEASE_SIGNING_PFX_BASE64) -or
+            [string]::IsNullOrEmpty($env:SPARK_RELEASE_SIGNING_PFX_PASSWORD)) {
+          throw 'Stable signing requires the protected PFX and password secrets'
+        }
+        $pfxPath = Join-Path $env:RUNNER_TEMP ('spark-signing-' + [guid]::NewGuid().ToString('N') + '.pfx')
+        $cert = $null
+        try {
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:SPARK_RELEASE_SIGNING_PFX_BASE64))
+          $securePassword = ConvertTo-SecureString $env:SPARK_RELEASE_SIGNING_PFX_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation 'Cert:\CurrentUser\My' -Password $securePassword
+          if ($null -eq $cert -or $cert.Thumbprint -ne $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant()) {
+            throw 'Imported signing certificate thumbprint does not match the protected public thumbprint'
+          }
+          $signtool = Get-Command signtool.exe -ErrorAction Stop
+          $targets = @(Get-ChildItem -LiteralPath "${{ github.workspace }}/${{ matrix.build_dir }}/packages" -File |
+            Where-Object { $_.Extension -in @('.exe', '.msi') } | Sort-Object Name)
+          if ($targets.Count -ne 2) { throw "Expected exactly two Windows outer installers; found $($targets.Count)" }
+          foreach ($target in $targets) {
+            & $signtool.Source sign /sha1 $env:SPARK_RELEASE_SIGNER_THUMBPRINT /fd SHA256 /tr 'http://timestamp.digicert.com' /td SHA256 $target.FullName
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed for $($target.Name)" }
+          }
+        } finally {
+          if ($null -ne $cert) {
+            Remove-Item -LiteralPath ('Cert:\CurrentUser\My\' + $cert.Thumbprint) -Force -ErrorAction SilentlyContinue
+          }
+          Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue
         }
 
     # Owner prerequisite: sign the final CPack outputs with the project-pinned

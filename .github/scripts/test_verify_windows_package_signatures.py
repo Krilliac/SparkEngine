@@ -27,7 +27,8 @@ class SignatureTests(unittest.TestCase):
             "Status": "Valid", "SignatureType": "Authenticode",
             "SignerThumbprint": THUMBPRINT, "SignerSubject": "CN=Fixture",
             "SignerIssuer": "CN=Fixture", "TrustModel": "self-signed",
-            "PublisherWarning": "Unknown Publisher may be shown.",
+            "ChainBuild": "True", "ChainRootThumbprint": THUMBPRINT,
+            "PublisherWarning": "Unknown Publisher may be shown because the stable certificate is self-signed.",
             "TimestampThumbprint": "C" * 40, "TimestampSubject": "CN=Timestamp",
         }
         for mutation in (
@@ -74,7 +75,8 @@ class SignatureTests(unittest.TestCase):
                     evidence = {"Status": "Valid", "SignatureType": "Authenticode",
                                 "SignerThumbprint": THUMBPRINT, "SignerSubject": "CN=Fixture",
                                 "SignerIssuer": "CN=Fixture", "TrustModel": "self-signed",
-                                "PublisherWarning": "Unknown Publisher may be shown.",
+                                "ChainBuild": "True", "ChainRootThumbprint": THUMBPRINT,
+                                "PublisherWarning": "Unknown Publisher may be shown because the stable certificate is self-signed.",
                                 "TimestampThumbprint": "C" * 40, "TimestampSubject": "CN=Timestamp"}
                     changes = {"unsigned": {"Status": "NotSigned"}, "untrusted": {"Status": "NotTrusted"},
                                "hash_mismatch": {"Status": "HashMismatch"}, "expired": {"Status": "UnknownError"},
@@ -129,7 +131,8 @@ class SignatureTests(unittest.TestCase):
                 "SignerThumbprint": THUMBPRINT,
                 "SignerSubject": "CN=Fixture",
                 "SignerIssuer": "CN=Fixture", "TrustModel": "self-signed",
-                "PublisherWarning": "Unknown Publisher may be shown.",
+                "ChainBuild": "True", "ChainRootThumbprint": THUMBPRINT,
+                "PublisherWarning": "Unknown Publisher may be shown because the stable certificate is self-signed.",
                 "TimestampThumbprint": "C" * 40,
                 "TimestampSubject": "CN=Timestamp",
             }
@@ -185,7 +188,9 @@ class SignatureTests(unittest.TestCase):
                 '"SignatureType":"Authenticode",'
                 f'"SignerThumbprint":"{THUMBPRINT}",'
                 '"SignerSubject":"CN=Fixture","SignerIssuer":"CN=Fixture",'
-                '"TrustModel":"self-signed","PublisherWarning":"Unknown Publisher may be shown.",'
+                '"TrustModel":"self-signed","ChainBuild":"True",'
+                f'"ChainRootThumbprint":"{THUMBPRINT}",'
+                '"PublisherWarning":"Unknown Publisher may be shown because the stable certificate is self-signed.",'
                 '"TimestampThumbprint":"' + "C" * 40 + '",'
                 '"TimestampSubject":"CN=Timestamp"}'
             )
@@ -217,7 +222,8 @@ class SignatureTests(unittest.TestCase):
                 "SignerThumbprint": THUMBPRINT,
                 "SignerSubject": "CN=Fixture",
                 "SignerIssuer": "CN=Fixture", "TrustModel": "self-signed",
-                "PublisherWarning": "Unknown Publisher may be shown.",
+                "ChainBuild": "True", "ChainRootThumbprint": THUMBPRINT,
+                "PublisherWarning": "Unknown Publisher may be shown because the stable certificate is self-signed.",
                 "TimestampThumbprint": "C" * 40,
                 "TimestampSubject": "CN=Timestamp",
             }
@@ -273,7 +279,8 @@ class SignatureTests(unittest.TestCase):
                 "SignerThumbprint": THUMBPRINT,
                 "SignerSubject": "CN=Fixture",
                 "SignerIssuer": "CN=Fixture", "TrustModel": "self-signed",
-                "PublisherWarning": "Unknown Publisher may be shown.",
+                "ChainBuild": "True", "ChainRootThumbprint": THUMBPRINT,
+                "PublisherWarning": "Unknown Publisher may be shown because the stable certificate is self-signed.",
                 "TimestampThumbprint": "C" * 40,
                 "TimestampSubject": "CN=Timestamp",
             }
@@ -353,8 +360,9 @@ class SignatureTests(unittest.TestCase):
                     evidence = json.loads(result.stdout)
                     self.assertIsInstance(evidence, dict)
                     self.assertEqual(set(evidence), {"Status", "SignatureType", "SignerThumbprint",
-                                                    "SignerSubject", "SignerIssuer", "TrustModel",
-                                                    "PublisherWarning", "TimestampThumbprint", "TimestampSubject"})
+                                                    "SignerSubject", "SignerIssuer", "TrustModel", "ChainBuild",
+                                                    "ChainRootThumbprint", "PublisherWarning",
+                                                    "TimestampThumbprint", "TimestampSubject"})
                     self.assertIsInstance(evidence["Status"], str)
                     self.assertTrue(evidence["Status"])
                     self.assertNotEqual(evidence["Status"], "Valid")

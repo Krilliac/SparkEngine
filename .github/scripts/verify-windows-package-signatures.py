@@ -32,6 +32,17 @@ Import-Module -Name $systemSecurityModule -Force -ErrorAction Stop
 $signature = Get-AuthenticodeSignature -LiteralPath $env:SPARK_SIGNATURE_PATH
 $signer = $signature.SignerCertificate
 $trustModel = if ($signer -and $signer.Subject -eq $signer.Issuer) { 'self-signed' } else { 'ca' }
+$chain = $null
+$chainBuild = $false
+$chainRootThumbprint = $null
+if ($signer) {
+    $chain = New-Object System.Security.Cryptography.X509Certificates.X509Chain
+    $chain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+    $chainBuild = $chain.Build($signer)
+    if ($chain.ChainElements.Count -gt 0) {
+        $chainRootThumbprint = $chain.ChainElements[$chain.ChainElements.Count - 1].Certificate.Thumbprint
+    }
+}
 @{
     Status = [string]$signature.Status
     SignatureType = [string]$signature.SignatureType
@@ -39,6 +50,8 @@ $trustModel = if ($signer -and $signer.Subject -eq $signer.Issuer) { 'self-signe
     SignerSubject = if ($signer) { $signer.Subject } else { $null }
     SignerIssuer = if ($signer) { $signer.Issuer } else { $null }
     TrustModel = $trustModel
+    ChainBuild = [string]$chainBuild
+    ChainRootThumbprint = $chainRootThumbprint
     PublisherWarning = 'Unknown Publisher may be shown because the stable certificate is self-signed.'
     TimestampThumbprint = $signature.TimeStamperCertificate.Thumbprint
     TimestampSubject = $signature.TimeStamperCertificate.Subject
@@ -124,8 +137,13 @@ def _validate_signature_evidence(signature, thumbprint, artifact_name, trust_mod
         raise ValueError("Invalid signature certificate evidence schema")
     if signature["SignerSubject"] != signature["SignerIssuer"]:
         raise ValueError(f"Publisher certificate is not self-signed: {artifact_name}")
-    if not isinstance(signature.get("PublisherWarning"), str) or not signature["PublisherWarning"]:
+    if signature.get("PublisherWarning") != "Unknown Publisher may be shown because the stable certificate is self-signed.":
         raise ValueError("Self-signed publisher warning disclosure is required")
+    if signature.get("ChainBuild") != "True":
+        raise ValueError(f"Publisher certificate chain did not validate: {artifact_name}")
+    root = signature.get("ChainRootThumbprint")
+    if not isinstance(root, str) or root.upper() != signer.upper():
+        raise ValueError(f"Publisher chain is not anchored by the pinned self-signed certificate: {artifact_name}")
 
 
 def _write_report(report_path, report):
