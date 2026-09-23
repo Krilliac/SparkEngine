@@ -34,7 +34,10 @@ namespace
         ScratchDirectory()
         {
             const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
-            path = fs::temp_directory_path() / ("spark-crash-reporter-tests-" + std::to_string(nonce));
+            // macOS exposes its temp directory through /var -> /private/var.
+            // The reporter deliberately rejects redirected config ancestors,
+            // so run the fixture under the real directory, not that alias.
+            path = fs::canonical(fs::temp_directory_path()) / ("spark-crash-reporter-tests-" + std::to_string(nonce));
             fs::create_directories(path);
         }
 
@@ -826,8 +829,7 @@ namespace
             const int missingGhResult = SparkCrashReporter::RunCrashReporter(missingGh);
             std::cerr.rdbuf(previousError);
             Check(missingGhResult == 3, "missing gh fails without contacting GitHub");
-            Check(missingGhOutput.str().find("https://github.com/Krilliac/SparkEngine/issues/new") !=
-                      std::string::npos,
+            Check(missingGhOutput.str().find("https://github.com/Krilliac/SparkEngine/issues/new") != std::string::npos,
                   "missing gh gives the playtester a manual issue route");
             Check(missingGhOutput.str().find("Incident ID: ") != std::string::npos,
                   "missing gh displays a safe correlation ID for a manual report");

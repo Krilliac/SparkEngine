@@ -138,7 +138,13 @@ namespace Spark
             std::replace(normalized.begin(), normalized.end(), '\\', '/');
             const std::u8string normalizedU8(reinterpret_cast<const char8_t*>(normalized.data()), normalized.size());
             const std::filesystem::path supplied = std::filesystem::u8path(normalizedU8);
-            if (supplied.is_absolute() || !supplied.root_name().empty() || normalized.front() == '/')
+            // POSIX path parsing treats C:/... as relative, but packaged scene
+            // names must reject Windows drive paths on every host.
+            const bool hasDrivePrefix =
+                normalized.size() >= 2 &&
+                ((normalized[0] >= 'A' && normalized[0] <= 'Z') || (normalized[0] >= 'a' && normalized[0] <= 'z')) &&
+                normalized[1] == ':';
+            if (supplied.is_absolute() || !supplied.root_name().empty() || normalized.front() == '/' || hasDrivePrefix)
             {
                 error = "absolute scene paths are not permitted";
                 return false;
