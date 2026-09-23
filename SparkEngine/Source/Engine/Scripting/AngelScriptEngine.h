@@ -69,6 +69,7 @@ struct asIScriptFunction;
 struct asSMessageInfo;
 #endif // SPARK_ANGELSCRIPT_SUPPORT
 
+#include <functional>
 #include <unordered_map>
 #include <memory>
 #include <string>
@@ -204,6 +205,21 @@ class AngelScriptEngine
     std::string GetLastError() const { return m_lastError; }
 
     /**
+     * @brief Whether the entity's script was disabled by a runtime fault.
+     *
+     * A script exception or a sandbox budget termination in Start(),
+     * Update(), or OnCollision() disables that entity's script: later
+     * callbacks are skipped instead of re-running the fault every frame.
+     * GetLastError() holds the diagnostic (callback, script section, line,
+     * and function). Re-attaching the class — the hot-reload path — clears
+     * the fault.
+     *
+     * @param entity Entity to query
+     * @return true if a script is attached and currently faulted
+     */
+    bool IsScriptFaulted(EntityID entity) const;
+
+    /**
      * @brief Get the script execution sandbox
      * @return Pointer to the ScriptSandbox, or nullptr if not initialized
      */
@@ -282,11 +298,13 @@ class AngelScriptEngine
         asIScriptFunction* onCollisionMethod = nullptr; ///< Cached pointer to the OnCollision(EntityID) method
         std::string className;                          ///< Name of the script class
         std::string moduleName;                         ///< Name of the module containing the class
+        bool faulted = false;                           ///< Disabled by a runtime fault until re-attached
     };
 
     std::unordered_map<EntityID, ScriptInstance> m_entityScripts; ///< Active script instances by entity ID
     std::string m_lastError;                                      ///< Last error message from AS engine
-    std::unique_ptr<Spark::ScriptSandbox> m_sandbox;              ///< Script execution sandbox
+    std::string m_firstCompileError; ///< First compiler error of the current build (kept for diagnostics)
+    std::unique_ptr<Spark::ScriptSandbox> m_sandbox; ///< Script execution sandbox
 
     // Sandbox security configuration staged via ConfigureSandboxSecurity()
     // before Initialize() constructs m_sandbox and registers the engine API.
@@ -349,6 +367,30 @@ class AngelScriptEngine
      * @param moduleName Name of the module whose classes were compiled.
      */
     void RecordModuleContexts(CScriptBuilder& builder, const std::string& moduleName);
+
+    /**
+     * @brief Run one lifecycle callback on an attached script instance.
+     *
+     * Skips faulted instances, runs under the sandbox line callback, and on
+     * any non-finished result marks the instance faulted and records an
+     * actionable diagnostic via DescribeScriptFault().
+     *
+     * @param instance     Script instance to dispatch to
+     * @param method       Cached method to call (no-op when null)
+     * @param callbackName Script-facing callback name for diagnostics (e.g. "Update()")
+     * @param setArgs      Sets the call arguments after Prepare/SetObject (may be empty)
+     */
+    void DispatchCallback(ScriptInstance& instance, asIScriptFunction* method, const char* callbackName,
+                          const std::function<void(asIScriptContext*)>& setArgs);
+
+    /**
+     * @brief Describe why an Execute() did not finish, with source location.
+     * @param ctx        Context that just returned from Execute()
+     * @param execResult Execute() return code
+     * @param where      Who was running (e.g. "Script 'Enemy' Update()")
+     * @return "<where> <reason> at <section>:<line>:<column> in '<function>'"
+     */
+    std::string DescribeScriptFault(asIScriptContext* ctx, int execResult, const std::string& where) const;
 #endif
 
     // ========================================================================
