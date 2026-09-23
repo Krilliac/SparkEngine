@@ -389,20 +389,22 @@ jobs:
           if ($null -eq $cert -or $cert.Thumbprint -ne $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant()) {
             throw 'Imported signing certificate thumbprint does not match the protected public thumbprint'
           }
-          # Get-Command is empty on some hosted images; constrain fallback to
-          # the installed Windows SDK x64 SignTool, never an arbitrary PATH hit.
-          $signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
-          if ($null -eq $signtool) {
-            $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
-            $sdkTool = Get-ChildItem -LiteralPath $sdkRoot -Filter signtool.exe -File -Recurse -ErrorAction SilentlyContinue |
-              Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
-              Sort-Object FullName -Descending | Select-Object -First 1
-            if ($null -eq $sdkTool) { throw 'Windows SDK x64 SignTool was not found' }
-            $signtool = $sdkTool
+          # Never resolve SignTool through PATH: an arbitrary PATH binary must
+          # not receive access to the imported private signing certificate.
+          $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+          if (-not (Test-Path -LiteralPath $sdkRoot -PathType Container)) {
+            throw 'Windows SDK x64 SignTool root was not found'
           }
-          $signtoolPath = if ($signtool.PSObject.Properties.Name -contains 'Source') { $signtool.Source } else { $signtool.FullName }
+          $sdkTool = Get-ChildItem -LiteralPath $sdkRoot -Filter signtool.exe -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object {
+              $_.FullName -match '\\Windows Kits\\10\\bin\\[^\\]+\\x64\\signtool\.exe$' -and
+              -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint)
+            } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if ($null -eq $sdkTool) { throw 'Windows SDK x64 SignTool was not found' }
+          $signtoolPath = $sdkTool.FullName
           if ([string]::IsNullOrWhiteSpace($signtoolPath) -or -not (Test-Path -LiteralPath $signtoolPath -PathType Leaf)) {
-            throw 'Resolved SignTool path is not a regular file'
+            throw 'Resolved SDK SignTool path is not a regular file'
           }
           $existingRoot = @(Get-ChildItem -Path 'Cert:\CurrentUser\Root' -ErrorAction Stop |
             Where-Object { $_.Thumbprint -eq $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant() })

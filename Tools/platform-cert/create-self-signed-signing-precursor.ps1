@@ -50,6 +50,22 @@ function Assert-NoReparseComponents([string]$Path) {
     }
 }
 
+function Assert-PrivateAcl([string]$Path) {
+    $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
+    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $ownerSid = (New-Object Security.Principal.NTAccount($acl.Owner)).Translate([Security.Principal.SecurityIdentifier]).Value
+    if ($ownerSid -ne $currentSid) {
+        throw "Private signing path owner is not the current user: $Path"
+    }
+    $broad = @($acl.Access | Where-Object {
+        $_.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
+        $_.IdentityReference.Value -match '(?i)(^|\\)(Everyone|Users|Authenticated Users|ANONYMOUS LOGON|ALL APPLICATION PACKAGES)$'
+    })
+    if ($broad.Count -ne 0) {
+        throw "Private signing path grants broad access: $Path"
+    }
+}
+
 if ($NonInteractive -or -not [Environment]::UserInteractive -or $null -eq $Host.UI -or $null -eq $Host.UI.RawUI) {
     throw 'This helper requires an interactive owner-run PowerShell session; CI and -NonInteractive execution are refused.'
 }
@@ -72,6 +88,9 @@ Assert-NoReparseComponents $outputParent
 if (-not (Test-PathInside $privateRoot $outputParent)) {
     throw 'PFX output must remain under the current user LOCALAPPDATA private directory.'
 }
+if (Test-PathInside $repoRoot $outputParent) {
+    throw 'PFX output must not be inside the SparkEngine repository.'
+}
 $outputDrive = Get-PSDrive -Name ([IO.Path]::GetPathRoot($outputParent).TrimEnd('\').TrimEnd(':')) -ErrorAction Stop
 if ($outputDrive.DisplayRoot -and $outputDrive.Used -ne $null -and $outputDrive.Description -match '(?i)removable|usb') {
     throw 'The PFX output volume appears removable; choose a user-local fixed volume.'
@@ -89,9 +108,7 @@ if (Test-Path -LiteralPath $outputParent) {
     New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
     $outputParent = Get-CanonicalExistingPath $outputParent
 }
-if (Test-PathInside $repoRoot $outputParent) {
-    throw 'PFX output must not be inside the SparkEngine repository.'
-}
+Assert-PrivateAcl $outputParent
 $pfxPath = Join-Path $outputParent 'SparkEngine-Stable-CodeSigning.pfx'
 if (Test-Path -LiteralPath $pfxPath) {
     throw "Refusing to overwrite existing PFX: $pfxPath"
@@ -127,6 +144,7 @@ try {
     if ($pfxItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
         throw 'Exported PFX is a reparse point; refusing to report it.'
     }
+    Assert-PrivateAcl $pfxPath
 } catch {
     if (Test-Path -LiteralPath $pfxPath) {
         Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue
