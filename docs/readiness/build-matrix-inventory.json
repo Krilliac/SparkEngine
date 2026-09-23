@@ -1395,7 +1395,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1763,
+      "line": 1779,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1481,7 +1481,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1318,
+      "line": 1322,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2787,6 +2787,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzTextureStex",
+      "kind": "executable",
+      "file": "Tests/Fuzz/CMakeLists.txt",
+      "line": 142,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkGame",
       "kind": "shared_library",
       "file": "GameModules/SparkGame/CMakeLists.txt",
@@ -2988,7 +2998,7 @@
       "target": "SparkInstallerInstallStateTests",
       "kind": "executable",
       "file": "SparkInstaller/CMakeLists.txt",
-      "line": 148,
+      "line": 149,
       "conditionFrames": [
         {
           "id": "SparkInstaller/CMakeLists.txt:128",
@@ -3006,7 +3016,7 @@
       "target": "SparkInstallerTransactionTests",
       "kind": "executable",
       "file": "SparkInstaller/CMakeLists.txt",
-      "line": 164,
+      "line": 165,
       "conditionFrames": [
         {
           "id": "SparkInstaller/CMakeLists.txt:128",
@@ -4502,6 +4512,24 @@
       ]
     },
     {
+      "target": "SparkFuzzTextureStex",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/Fuzz/CMakeLists.txt",
+          "line": 142,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkGame",
       "kind": "shared_library",
       "buildable": true,
@@ -4837,7 +4865,7 @@
       "declarations": [
         {
           "file": "SparkInstaller/CMakeLists.txt",
-          "line": 148,
+          "line": 149,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4855,7 +4883,7 @@
       "declarations": [
         {
           "file": "SparkInstaller/CMakeLists.txt",
-          "line": 164,
+          "line": 165,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6762,7 +6790,7 @@
             "env": [
               "FORMAT_BASE_SHA"
             ],
-            "runDigest": "1a21831f98e16d11"
+            "runDigest": "b07c65089d213e6c"
           },
           {
             "index": 3,
@@ -10330,7 +10358,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "a8d0b3ad35494406"
+            "runDigest": "a22421f2fbdf415c"
           },
           {
             "index": 2,
