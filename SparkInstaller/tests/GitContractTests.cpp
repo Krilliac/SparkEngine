@@ -72,9 +72,11 @@ namespace
         const std::string command = argv[1];
         if (command == "status")
         {
-            if (const char* status = std::getenv("SPARK_FAKE_GIT_STATUS"); status && std::string_view(status) == "error")
+            if (const char* status = std::getenv("SPARK_FAKE_GIT_STATUS");
+                status && std::string_view(status) == "error")
                 return 47;
-            if (const char* status = std::getenv("SPARK_FAKE_GIT_STATUS"); status && std::string_view(status) == "dirty")
+            if (const char* status = std::getenv("SPARK_FAKE_GIT_STATUS");
+                status && std::string_view(status) == "dirty")
                 std::cout << " M user-change.txt\n";
             return 0;
         }
@@ -141,11 +143,11 @@ int main(int argc, char* argv[])
         !git.Clone("https://github.com/Krilliac/SparkEngine.git", "Working", "--config=core.sshCommand=attacker", {}),
         "option-shaped clone destination was accepted");
     SetFakeGitStatus("clean");
-    failures += Check(git.WorkingTreeClean((testRoot / "checkout").string(), {}),
-                      "clean install was not recognized as clean");
+    failures +=
+        Check(git.WorkingTreeClean((testRoot / "checkout").string(), {}), "clean install was not recognized as clean");
     SetFakeGitStatus("dirty");
-    failures += Check(!git.WorkingTreeClean((testRoot / "checkout").string(), {}),
-                      "dirty install was accepted for update");
+    failures +=
+        Check(!git.WorkingTreeClean((testRoot / "checkout").string(), {}), "dirty install was accepted for update");
     SetFakeGitStatus("error");
     failures += Check(!git.WorkingTreeClean((testRoot / "checkout").string(), {}),
                       "failed install status query was accepted for update");
