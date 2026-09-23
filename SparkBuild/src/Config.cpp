@@ -384,7 +384,11 @@ namespace SparkBuild
                 opt.cmakeVar == "ENABLE_NETWORKING" || opt.cmakeVar == "ENABLE_SERVER_PROCESSES" ||
                 opt.cmakeVar == "ENABLE_VULKAN" || opt.cmakeVar == "ENABLE_OPENGL" || opt.cmakeVar == "ENABLE_SDL2" ||
                 opt.cmakeVar == "ENABLE_METAL" || opt.cmakeVar == "ENABLE_VR" || opt.cmakeVar == "ENABLE_MOBILE" ||
-                opt.cmakeVar == "SPARK_NATIVE_ARCH")
+                opt.cmakeVar == "SPARK_NATIVE_ARCH" ||
+                // windows-shipping sets ENABLE_LTO=OFF so the installed SDK's
+                // SparkEngineLib.lib stays linkable by other MSVC toolset builds
+                // (/GL objects are C1047-bound to the exact compiler).
+                opt.cmakeVar == "ENABLE_LTO")
             {
                 opt.currentValue = false;
             }

@@ -496,6 +496,11 @@ class PresetAndCodemodelTests(unittest.TestCase):
                     "cacheVariables": {
                         "SPARK_STRICT_DEPS": "ON",
                         "STRIP_DEBUG_SYMBOLS": "ON",
+                        "CMAKE_BUILD_TYPE": "MinSizeRel",
+                        "ENABLE_PROFILING": "OFF",
+                        "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
+                        "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
+                        "BUILD_TESTS": "OFF",
                     },
                 },
                 {
@@ -514,6 +519,11 @@ class PresetAndCodemodelTests(unittest.TestCase):
                 "SPARK_STRICT_DEPS": "ON",
                 "SPARK_NATIVE_ARCH": "OFF",
                 "STRIP_DEBUG_SYMBOLS": "ON",
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "ENABLE_PROFILING": "OFF",
+                "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
+                "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
+                "BUILD_TESTS": "OFF",
             },
         )
         self.assertEqual(check_parity.check_shipping_preset_options(presets), [])

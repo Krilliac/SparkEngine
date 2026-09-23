@@ -515,7 +515,7 @@ else()
         endif()
     endif()
 endif()
-
+include("${CMAKE_SOURCE_DIR}/cmake/SparkReproducibleBuild.cmake") # BLD-100: before any target
 # MinGW cross-compilation from Linux: defines the Windows macros needed by the
 # general Windows and D3D11 paths. The D3D12/DXR sources are excluded below
 # because the MinGW SDK headers do not provide the required interfaces.

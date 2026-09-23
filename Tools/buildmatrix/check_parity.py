@@ -386,6 +386,11 @@ def check_shipping_preset_options(
         ("SPARK_STRICT_DEPS", "ON", "Stable-v1 must fail on a missing critical dependency."),
         ("SPARK_NATIVE_ARCH", "OFF", "Distributed binaries cannot inherit the build host CPU."),
         ("STRIP_DEBUG_SYMBOLS", "ON", "Shipping binaries must not emit debug symbols or PDB paths."),
+        ("CMAKE_BUILD_TYPE", "MINSIZEREL", "Shipping must stay distinct from the Debug and Release configurations."),
+        ("ENABLE_PROFILING", "OFF", "Profiling instrumentation is a development-only toggle."),
+        ("ENABLE_CONSOLE_IN_SHIPPING", "OFF", "The developer console must not ship in stable-v1 binaries."),
+        ("ENABLE_DEVCOMMANDS_IN_SHIPPING", "OFF", "Developer commands must not ship in stable-v1 binaries."),
+        ("BUILD_TESTS", "OFF", "Test executables and fixtures are not Shipping products."),
     ):
         if str(cache.get(name, "")).upper() != expected:
             findings.append(
