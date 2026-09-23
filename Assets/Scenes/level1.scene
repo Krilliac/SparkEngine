@@ -25,7 +25,7 @@ type=plane
 width=50.0
 depth=50.0
 position=0.0,-0.5,0.0
-material=ground_dirt
+material=Assets/Materials/Terrain_Dirt.json
 
 # ============================================================
 # CAMERA (was hardcoded in Game.cpp line 95)
@@ -49,6 +49,7 @@ type=plane
 position=0.0,-0.5,0.0
 scale=50.0,1.0,50.0
 name=Arena_Floor_Main
+material=Assets/Materials/Terrain_Dirt.json
 
 [Object]
 type=plane

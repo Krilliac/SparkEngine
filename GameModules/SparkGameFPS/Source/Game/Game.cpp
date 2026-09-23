@@ -90,6 +90,31 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     std::wstring sceneMsg = L"SceneManager::LoadScene returned: " + std::wstring(sceneLoaded ? L"SUCCESS" : L"FAILURE");
     LOG_TO_CONSOLE_IMMEDIATE(sceneMsg, L"INFO");
 
+    // Scene material paths are authored data, but the project root is trusted
+    // module state. Bind that root immediately after scene construction so
+    // GameObject::Render can resolve Assets/Materials/*.json without consulting
+    // the process working directory or accepting an arbitrary scene-controlled
+    // filesystem root. Keep the UTF-8 conversion explicit for installed paths
+    // containing non-ASCII characters.
+    if (sceneLoaded)
+    {
+        const std::filesystem::path projectRoot = Spark::FPSAssets::Root().parent_path();
+        const std::u8string projectRootU8 = projectRoot.u8string();
+        const std::string projectRootUtf8(reinterpret_cast<const char*>(projectRootU8.data()), projectRootU8.size());
+        int materialRootsBound = 0;
+        if (!projectRootUtf8.empty())
+        {
+            for (auto& object : m_sceneManager->GetObjects())
+            {
+                if (object && object->SetMaterialProjectRoot(projectRootUtf8))
+                    ++materialRootsBound;
+            }
+        }
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene material project root bound for " + std::to_wstring(materialRootsBound) +
+                                     L" renderable objects",
+                                 L"INFO");
+    }
+
     /* Camera ------------------------------------------------*/
     m_camera = std::make_unique<SparkEngineCamera>();
     ASSERT(m_camera);
