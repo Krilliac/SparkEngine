@@ -3,6 +3,7 @@
 #include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <cstdint>
+#include <cctype>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
@@ -148,13 +149,16 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         {
             auto parseFiniteFloat = [](const std::string& text, float& value)
             {
-                if (text.empty())
+                // Keep the old from_chars contract: the complete token must
+                // be a finite number, with no leading/trailing whitespace or
+                // a leading plus sign. noskipws is required because formatted
+                // extraction otherwise silently accepts surrounding spaces.
+                if (text.empty() || text.front() == '+' || std::isspace(static_cast<unsigned char>(text.front())))
                     return false;
                 std::istringstream stream(text);
                 stream.imbue(std::locale::classic());
-                stream >> value;
-                stream >> std::ws;
-                return !stream.fail() && stream.eof() && std::isfinite(value);
+                stream >> std::noskipws >> value;
+                return !stream.fail() && stream.peek() == std::char_traits<char>::eof() && std::isfinite(value);
             };
             float nearPlane = 0.0f;
             float farPlane = 0.0f;
