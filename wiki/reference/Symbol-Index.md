@@ -4732,7 +4732,7 @@
 | `CommandCount` | function | Tests | [TestAdversarialEngine.cpp:L1243](../../Tests/TestAdversarialEngine.cpp#L1243) |  |
 | `CommandCount` | function | Tests | [TestSubsystemConsoleCommands.cpp:L134](../../Tests/TestSubsystemConsoleCommands.cpp#L134) |  |
 | `CommandFailureReason` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L217](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L217) |  |
-| `CommandFailureReason` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L652](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L652) |  |
+| `CommandFailureReason` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L653](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L653) |  |
 | `CommandHandler` | alias | SparkConsole | [CommandRegistry.h:L23](../../SparkConsole/src/CommandRegistry.h#L23) |  |
 | `CommandHandler` | alias | SparkEditor | [EditorConsoleBridge.h:L57](../../SparkEditor/Source/Utils/EditorConsoleBridge.h#L57) |  |
 | `CommandHandler` | alias | SparkEngine | [RemoteDebugSystem.h:L245](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L245) | Command handler callback: receives a command, returns a response |
@@ -29076,7 +29076,7 @@
 | `probe_wrgsbase_usable` | function | tools | [gvisor-wine-shim.c:L470](../../tools/gvisor-wine-shim.c#L470) |  |
 | `ProbeCacheEntry` | struct | SparkEngine | [ReflectionProbeCache.h:L57](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h#L57) |  |
 | `ProbeData` | struct | SparkEngine | [ProbeSystem.h:L44](../../SparkEngine/Source/Graphics/HybridRT/ProbeSystem.h#L44) | GPU probe data layout (matches HLSL ProbeData struct) |
-| `ProbeGhVersion` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L645](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L645) |  |
+| `ProbeGhVersion` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L646](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L646) |  |
 | `ProbeGhVersion` | function | SparkCrashReporter | [CrashAutoIssues.h:L41](../../SparkCrashReporter/src/CrashAutoIssues.h#L41) |  |
 | `ProbeGPUData` | struct | SparkEngine | [LightProbeSystem.h:L128](../../SparkEngine/Source/Graphics/LightProbeSystem.h#L128) | GPU constant buffer layout for uploading probe SH data |
 | `ProbeGrid` | struct | SparkEngine | [LightProbeSystem.h:L57](../../SparkEngine/Source/Graphics/LightProbeSystem.h#L57) | Grid definition for auto-placement |
@@ -40570,7 +40570,7 @@
 | `SubmitLight` | function | SparkEngine | [LightManager.h:L237](../../SparkEngine/Source/Graphics/LightManager.h#L237) | Submit a light for this frame's rendering |
 | `SubmitMeshForRendering` | function | SparkEngine | [GraphicsEngine.h:L289](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L289) |  |
 | `SubmitOccluder` | function | SparkEngine | [OcclusionCulling.h:L142](../../SparkEngine/Source/Graphics/OcclusionCulling.h#L142) | Rasterize an occluder mesh into the depth buffer. |
-| `SubmitPreparedAutoIssue` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L628](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L628) |  |
+| `SubmitPreparedAutoIssue` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L629](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L629) |  |
 | `SubmitPreparedAutoIssue` | function | SparkCrashReporter | [CrashAutoIssues.h:L38](../../SparkCrashReporter/src/CrashAutoIssues.h#L38) |  |
 | `SubmitScore` | function | SparkEngine | [OnlineServices.h:L163](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L163) |  |
 | `SubmitScore` | function | SparkEngine | [OnlineServices.h:L260](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L260) |  |

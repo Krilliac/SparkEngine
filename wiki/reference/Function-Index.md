@@ -3716,7 +3716,7 @@
 | `CommandCount` | function | Tests | [TestAdversarialEngine.cpp:L1243](../../Tests/TestAdversarialEngine.cpp#L1243) |  |
 | `CommandCount` | function | Tests | [TestSubsystemConsoleCommands.cpp:L134](../../Tests/TestSubsystemConsoleCommands.cpp#L134) |  |
 | `CommandFailureReason` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L217](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L217) |  |
-| `CommandFailureReason` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L652](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L652) |  |
+| `CommandFailureReason` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L653](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L653) |  |
 | `CommandHistoryAdapterCommand` | function | SparkEditor | [CommandHistory.h:L231](../../SparkEditor/Source/CommandHistory.h#L231) |  |
 | `commandLock` | function | SparkEngine | [SparkConsole.cpp:L578](../../SparkEngine/Source/Utils/SparkConsole.cpp#L578) |  |
 | `CommandPalette::CalculateMatchScore` | method | SparkEditor | [CommandPalette.cpp:L339](../../SparkEditor/Source/Search/CommandPalette.cpp#L339) |  |
@@ -24618,7 +24618,7 @@
 | `PrintWelcome` | function | SparkInstaller | [WizardTui.cpp:L20](../../SparkInstaller/src/tui/WizardTui.cpp#L20) |  |
 | `PrintWindowsStackTrace` | function | Tests | [TestMain.cpp:L114](../../Tests/TestMain.cpp#L114) |  |
 | `probe_wrgsbase_usable` | function | tools | [gvisor-wine-shim.c:L470](../../tools/gvisor-wine-shim.c#L470) |  |
-| `ProbeGhVersion` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L645](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L645) |  |
+| `ProbeGhVersion` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L646](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L646) |  |
 | `ProbeGhVersion` | function | SparkCrashReporter | [CrashAutoIssues.h:L41](../../SparkCrashReporter/src/CrashAutoIssues.h#L41) |  |
 | `ProbeIndex` | function | SparkEngine | [DDGIProbeSystem.h:L213](../../SparkEngine/Source/Graphics/DDGIProbeSystem.h#L213) | Compute flat index from 3D grid coordinates |
 | `probes` | function | SparkEngine | [ProbeSystem.cpp:L134](../../SparkEngine/Source/Graphics/HybridRT/ProbeSystem.cpp#L134) |  |
@@ -34397,7 +34397,7 @@
 | `SubmitLight` | function | SparkEngine | [LightManager.h:L237](../../SparkEngine/Source/Graphics/LightManager.h#L237) | Submit a light for this frame's rendering |
 | `SubmitMeshForRendering` | function | SparkEngine | [GraphicsEngine.h:L289](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L289) |  |
 | `SubmitOccluder` | function | SparkEngine | [OcclusionCulling.h:L142](../../SparkEngine/Source/Graphics/OcclusionCulling.h#L142) | Rasterize an occluder mesh into the depth buffer. |
-| `SubmitPreparedAutoIssue` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L628](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L628) |  |
+| `SubmitPreparedAutoIssue` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L629](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L629) |  |
 | `SubmitPreparedAutoIssue` | function | SparkCrashReporter | [CrashAutoIssues.h:L38](../../SparkCrashReporter/src/CrashAutoIssues.h#L38) |  |
 | `SubmitScore` | function | SparkEngine | [OnlineServices.h:L163](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L163) |  |
 | `SubmitScore` | function | SparkEngine | [OnlineServices.h:L260](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L260) |  |
