@@ -314,9 +314,17 @@ namespace SparkCrashReporter
                 DWORD available = 0;
                 if (!PeekNamedPipe(readPipe, nullptr, 0, nullptr, &available, nullptr))
                 {
-                    result.failureClass = "output-inspection-failed";
-                    result.systemError = GetLastError();
-                    result.finished = false;
+                    const DWORD pipeError = GetLastError();
+                    // A gh failure can exit without writing stdout. Once its
+                    // write handle closes, an empty anonymous pipe reports a
+                    // broken pipe; that is not a failed output inspection.
+                    if (pipeError != ERROR_BROKEN_PIPE && pipeError != ERROR_NO_DATA &&
+                        pipeError != ERROR_PIPE_NOT_CONNECTED)
+                    {
+                        result.failureClass = "output-inspection-failed";
+                        result.systemError = pipeError;
+                        result.finished = false;
+                    }
                 }
                 else if (available > kMaxOutput)
                 {

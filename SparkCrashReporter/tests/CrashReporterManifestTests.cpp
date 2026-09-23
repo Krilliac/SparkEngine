@@ -794,7 +794,13 @@ namespace
 
         ScopedEnvironment failureMode("SPARK_FAKE_GH_MODE", "failure");
         const auto failure = MakeAutoIssueManifest(scratch, "failure");
-        Check(SparkCrashReporter::RunCrashReporter(failure) == 3, "gh authentication or network failure is reported");
+        std::ostringstream failureOutput;
+        std::streambuf* previousFailureError = std::cerr.rdbuf(failureOutput.rdbuf());
+        const int failureResult = SparkCrashReporter::RunCrashReporter(failure);
+        std::cerr.rdbuf(previousFailureError);
+        Check(failureResult == 3, "gh authentication or network failure is reported");
+        Check(failureOutput.str().find("GitHub CLI could not create an issue") != std::string::npos,
+              "a failed gh process with no stdout is classified by its exit code");
         Check(fs::exists(failure.logFile), "failed delivery retains local crash log");
 
         ScopedEnvironment timeoutMode("SPARK_FAKE_GH_MODE", "timeout");
@@ -815,7 +821,16 @@ namespace
         const auto missingGh = MakeAutoIssueManifest(scratch, "missing-gh");
         {
             ScopedEnvironment missingGhPath("PATH", "");
-            Check(SparkCrashReporter::RunCrashReporter(missingGh) == 3, "missing gh fails without contacting GitHub");
+            std::ostringstream missingGhOutput;
+            std::streambuf* previousError = std::cerr.rdbuf(missingGhOutput.rdbuf());
+            const int missingGhResult = SparkCrashReporter::RunCrashReporter(missingGh);
+            std::cerr.rdbuf(previousError);
+            Check(missingGhResult == 3, "missing gh fails without contacting GitHub");
+            Check(missingGhOutput.str().find("https://github.com/Krilliac/SparkEngine/issues/new") !=
+                      std::string::npos,
+                  "missing gh gives the playtester a manual issue route");
+            Check(missingGhOutput.str().find("Incident ID: ") != std::string::npos,
+                  "missing gh displays a safe correlation ID for a manual report");
         }
         const fs::path missingGhReceipt = fs::path(missingGh.artifactRoot) /
                                           ("issue_attempt_" + SparkCrashReporter::CrashReceiptKey(missingGh) + ".txt");

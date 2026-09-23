@@ -1222,6 +1222,21 @@ namespace SparkCrashReporter
         if (autoIssues)
             std::cerr << "Automatic GitHub Issues are enabled by this user's local setting. "
                          "Issue metadata will be public; no crash artifacts will be sent.\n";
+        // The engine launches this reporter as a detached process on Windows,
+        // so stderr cannot be the only place a playtester sees delivery status.
+        const auto showIssueOutcome = [&](const std::string& message, bool confirmed)
+        {
+            std::cerr << message << '\n';
+#ifdef _WIN32
+            if (manifest.requireConsent)
+                MessageBoxA(nullptr, message.c_str(),
+                            confirmed ? "SparkEngine Issue created" : "SparkEngine Issue not confirmed",
+                            MB_OK | (confirmed ? MB_ICONINFORMATION : MB_ICONWARNING));
+#else
+            (void)confirmed;
+#endif
+        };
+        constexpr std::string_view manualIssueUrl = "https://github.com/Krilliac/SparkEngine/issues/new";
 
         // Consent
         bool shouldReview = true;
@@ -1291,14 +1306,19 @@ namespace SparkCrashReporter
             const std::string incidentId = GeneratePublicIncidentId();
             if (incidentId.empty())
             {
-                std::cerr << "Automatic issue not attempted: secure incident ID unavailable.\n";
+                showIssueOutcome("Automatic issue not attempted: secure incident ID unavailable. Report manually at " +
+                                     std::string(manualIssueUrl),
+                                 false);
                 return 3;
             }
             const PreparedAutoIssue prepared = PrepareAutoIssue(manifest, incidentId);
             if (!prepared.ready)
             {
-                std::cerr << "Automatic issue not attempted: " << prepared.reason
-                          << ". Local artifacts remain available; the issue may be retried after setup.\n";
+                showIssueOutcome("Automatic issue not attempted: " + prepared.reason +
+                                     ". Local artifacts remain available. Incident ID: " + incidentId +
+                                     ". Report manually at " + std::string(manualIssueUrl) +
+                                     " or retry after GitHub CLI setup.",
+                                 false);
                 return 3;
             }
             // Claim before making an external request. A timeout or lost reply
@@ -1309,7 +1329,9 @@ namespace SparkCrashReporter
                                              "\nAutomatic issue attempt started; outcome may be uncertain. "
                                              "Do not retry automatically.\n"))
             {
-                std::cerr << "Automatic issue not attempted: incident already claimed or local receipt unavailable.\n";
+                showIssueOutcome("Automatic issue not attempted: incident already claimed or local receipt unavailable. "
+                                 "Check existing GitHub Issues before reporting again.",
+                                 false);
                 return 3;
             }
             const AutoIssueResult issue = SubmitPreparedAutoIssue(prepared);
@@ -1317,17 +1339,22 @@ namespace SparkCrashReporter
             const std::string resultText = issue.delivered ? "confirmed\n" + issue.issueUrl + "\n" : "unconfirmed\n";
             if (!WriteNewFileInDirectory(root, resultName, resultText))
             {
-                std::cerr << "Automatic issue outcome could not be saved locally. "
-                             "Check GitHub Issues before any manual retry.\n";
+                showIssueOutcome("Automatic issue outcome could not be saved locally. Incident ID: " + incidentId +
+                                     ". Check GitHub Issues before any manual retry.",
+                                 false);
                 return 3;
             }
             if (issue.delivered)
             {
-                std::cerr << "Automatic GitHub Issue created: " << issue.issueUrl << "\n";
+                showIssueOutcome("Automatic GitHub Issue created: " + issue.issueUrl +
+                                     "\nIncident ID: " + incidentId,
+                                 true);
                 return 0;
             }
-            std::cerr << "Automatic GitHub Issue not confirmed: " << issue.reason
-                      << ". Local crash artifacts remain available.\n";
+            showIssueOutcome("Automatic GitHub Issue not confirmed: " + issue.reason +
+                                 ". Local crash artifacts remain available. Incident ID: " + incidentId +
+                                 ". Check GitHub Issues before reporting manually.",
+                             false);
             return 3;
         }
         std::cerr << "No files were modified, archived, or uploaded.\n";
