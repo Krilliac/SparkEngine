@@ -29,7 +29,8 @@ from common import (
 )
 from contract_selectors import resolve_ci_job, resolve_test_selector
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
-from release_stages import candidate_readiness_errors, finalization_contract_errors
+from release_stages import (candidate_readiness_errors, finalization_contract_errors,
+                            predecessor_candidate_readiness_errors)
 
 
 IMPLEMENTATION_STATES = {"absent", "stub", "partial", "functional", "complete"}
@@ -2251,6 +2252,7 @@ class Validator:
         *,
         require_ready: bool = False,
         require_candidate_ready: bool = False,
+        require_predecessor_candidate: bool = False,
         modules: bool = False,
         assets: bool = False,
         legal: bool = False,
@@ -2267,6 +2269,9 @@ class Validator:
         if require_candidate_ready:
             for message in candidate_readiness_errors(self.contract):
                 self.error("candidate readiness", message)
+        if require_predecessor_candidate:
+            for message in predecessor_candidate_readiness_errors(self.contract):
+                self.error("predecessor candidate readiness", message)
         self.validate_execution(item_ids)
         self.validate_content(capability_ids, profile_ids)
         for location, message in validate_assets():
@@ -2312,6 +2317,7 @@ def validate_contract(
     *,
     require_ready: bool = False,
     require_candidate_ready: bool = False,
+    require_predecessor_candidate: bool = False,
     modules: bool = False,
     assets: bool = False,
     legal: bool = False,
@@ -2328,6 +2334,7 @@ def validate_contract(
     ).validate(
         require_ready=require_ready,
         require_candidate_ready=require_candidate_ready,
+        require_predecessor_candidate=require_predecessor_candidate,
         modules=modules,
         assets=assets,
         legal=legal,
@@ -2506,6 +2513,7 @@ def main() -> int:
     stages = parser.add_mutually_exclusive_group()
     stages.add_argument("--require-ready", action="store_true", help="require final global release readiness")
     stages.add_argument("--require-candidate-ready", action="store_true", help="require all qualification gates with declared publication finalization pending")
+    stages.add_argument("--require-predecessor-candidate", action="store_true", help="require the explicitly reviewed immutable predecessor stage without waiving v1 qualification")
     parser.add_argument("--modules", action="store_true")
     parser.add_argument("--assets", action="store_true")
     parser.add_argument("--legal", action="store_true")
@@ -2549,6 +2557,7 @@ def main() -> int:
         contract = validate_contract(
             require_ready=args.require_ready,
             require_candidate_ready=args.require_candidate_ready,
+            require_predecessor_candidate=args.require_predecessor_candidate,
             modules=args.modules,
             assets=args.assets,
             legal=args.legal,

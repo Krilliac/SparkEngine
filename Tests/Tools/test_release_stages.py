@@ -7,7 +7,8 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "site-data"))
-from release_stages import candidate_readiness_errors, finalization_contract_errors
+from release_stages import (candidate_readiness_errors, finalization_contract_errors,
+                            predecessor_candidate_readiness_errors)
 from common import load_contract
 
 
@@ -39,7 +40,103 @@ def candidate():
     }
 
 
+def predecessor_candidate():
+    contract = candidate()
+    contract["readiness"]["gates"][1] = {
+        "id": "mixed", "state": "at-risk", "blockingWorkItemIds": ["build", "predecessor-publish"]
+    }
+    contract["readiness"]["gates"].append({
+        "id": "predecessor-publication", "completionPhase": "publication-finalization",
+        "state": "at-risk", "blockingWorkItemIds": ["predecessor-publish"],
+    })
+    profile = contract["readiness"]["releaseProfiles"][0]
+    contract["readiness"]["predecessorRelease"] = {
+        "id": "v0.9.0-predecessor", "profileId": "test-profile", "state": "candidate",
+        "owner": "release-owner", "signOffEvidence": [{"label": "review", "path": "review.json"}],
+        "sourceCommitEvidence": {"commit": "0123456789abcdef0123456789abcdef01234567", "reviewPath": "review.json"},
+        "requiredGateIds": ["technical", "mixed", "predecessor-publication"],
+        "blockingWorkItemIds": ["build", "predecessor-publish"],
+        "publicationFinalization": {
+            "workItemIds": ["predecessor-publish"], "gateId": "predecessor-publication", "environment": "stable-release",
+        },
+    }
+    contract["workItems"].append({
+        "id": "predecessor-publish", "status": "in-progress", "dependencies": ["build"],
+        "completionPhase": "publication-finalization", "area": "release", "blocking": True,
+        "profileApplicability": {profile["id"]: "shared"},
+    })
+    return contract
+
+
 class ReleaseStageTests(unittest.TestCase):
+    def test_predecessor_replaces_only_v1_terminal_publication(self):
+        contract = predecessor_candidate()
+        self.assertEqual(predecessor_candidate_readiness_errors(contract), [])
+
+    def test_predecessor_cannot_waive_common_gate_or_work(self):
+        contract = predecessor_candidate()
+        contract["readiness"]["predecessorRelease"]["requiredGateIds"] = ["predecessor-publication"]
+        contract["readiness"]["predecessorRelease"]["blockingWorkItemIds"] = ["predecessor-publish"]
+        errors = predecessor_candidate_readiness_errors(contract)
+        self.assertTrue(any("requiredGateIds" in error for error in errors))
+        self.assertTrue(any("blockingWorkItemIds" in error for error in errors))
+
+    def test_predecessor_requires_real_reviewed_commit_evidence(self):
+        contract = predecessor_candidate()
+        contract["readiness"]["predecessorRelease"]["sourceCommitEvidence"]["commit"] = "current-branch"
+        self.assertTrue(predecessor_candidate_readiness_errors(contract))
+
+    def test_predecessor_cannot_reuse_v1_finalizer_or_finish_publication(self):
+        contract = predecessor_candidate()
+        stage = contract["readiness"]["predecessorRelease"]
+        stage["publicationFinalization"]["workItemIds"] = ["publish"]
+        self.assertTrue(predecessor_candidate_readiness_errors(contract))
+        contract = predecessor_candidate()
+        contract["workItems"][-1]["status"] = "done"
+        self.assertTrue(predecessor_candidate_readiness_errors(contract))
+
+    def test_predecessor_malformed_types_fail_closed_without_exceptions(self):
+        mutations = (
+            lambda c: c["readiness"]["predecessorRelease"].update(profileId={}),
+            lambda c: c["readiness"]["predecessorRelease"].update(requiredGateIds=[{}]),
+            lambda c: c["readiness"]["predecessorRelease"].update(requiredGateIds=None),
+            lambda c: c["readiness"]["predecessorRelease"]["publicationFinalization"].update(workItemIds=[{}]),
+            lambda c: c["readiness"]["predecessorRelease"].update(blockingWorkItemIds=[{}]),
+        )
+        for mutate in mutations:
+            contract = predecessor_candidate()
+            mutate(contract)
+            self.assertTrue(predecessor_candidate_readiness_errors(contract))
+
+    def test_predecessor_retains_global_profile_and_signoff_state_contract(self):
+        for path in (
+            ("readiness", "globalRelease", "state"),
+            ("readiness", "releaseProfiles", 0, "state"),
+            ("readiness", "releaseProfiles", 0, "owner"),
+            ("readiness", "releaseProfiles", 0, "signOffEvidence"),
+        ):
+            contract = predecessor_candidate()
+            target = contract
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = "blocked" if path[-1] == "state" else ([] if path[-1] == "signOffEvidence" else "unassigned")
+            self.assertTrue(predecessor_candidate_readiness_errors(contract), path)
+
+    def test_predecessor_nested_malformed_ledger_values_fail_closed(self):
+        mutations = (
+            ("work item id", lambda c: c["workItems"][0].update(id={})),
+            ("gate id", lambda c: c["readiness"]["gates"][0].update(id={})),
+            ("gate blockers", lambda c: c["readiness"]["gates"][0].update(blockingWorkItemIds=[{}])),
+            ("work dependencies", lambda c: c["workItems"][0].update(dependencies=[{}])),
+            ("profile terminal gate", lambda c: c["readiness"]["releaseProfiles"][0]["publicationFinalization"].update(gateId={})),
+            ("predecessor owner", lambda c: c["readiness"]["predecessorRelease"].update(owner={})),
+            ("predecessor signoff", lambda c: c["readiness"]["predecessorRelease"].update(signOffEvidence="x")),
+        )
+        for label, mutate in mutations:
+            contract = predecessor_candidate()
+            mutate(contract)
+            self.assertTrue(predecessor_candidate_readiness_errors(contract), label)
+
     def test_candidate_keeps_finalizer_and_publication_gates_open_without_mutating(self):
         contract = candidate()
         before = copy.deepcopy(contract)
