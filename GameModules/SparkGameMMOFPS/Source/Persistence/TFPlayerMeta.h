@@ -30,6 +30,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace Terrafront
 {
@@ -115,13 +116,21 @@ namespace Terrafront
         bool PersistIfDirty(PlayerId player, TFDatabase& db);
 
         /// Persist every dirty character-bound record (SaveNow / Shutdown sweep).
-        bool PersistAllDirty(TFDatabase& db);
+        bool PersistAllDirty(TFDatabase& db) { return PersistAllDirty(db, {}); }
+
+        /// DATA-120: persist every dirty record together with the caller's
+        /// xp/rank/flux rows in ONE TFDatabase commit, so an unlock purchase's
+        /// flux debit and unlock key can never land separately. Rows whose
+        /// character no longer exists are left dirty and reported as failure
+        /// without blocking the rest of the batch.
+        bool PersistAllDirty(TFDatabase& db, std::vector<TFCharacterUpdate> progressUpdates);
 
         /// Debug UI iteration only.
         const std::unordered_map<PlayerId, Meta>& AllMeta() const { return m_meta; }
 
       private:
         static bool PersistOne(Meta& meta, TFDatabase& db);
+        static void AddMetaToUpdate(const Meta& meta, TFCharacterUpdate& update);
 
         std::unordered_map<PlayerId, Meta> m_meta;
         std::unordered_map<uint64_t, Meta> m_pendingByCharacter;
