@@ -11,15 +11,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 322404 |
+| **SparkEngine/Source** | 322573 |
 | **SparkEditor/Source** | 103706 |
 | **GameModules** | 143047 |
 | **External services** | 11305 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 186344 |
+| **Tests** | 186375 |
 | **SparkConsole/src** | 1770 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~785369** |
+| **Total C++ (excl. ThirdParty)** | **~785569** |
 
 ### File Counts
 
@@ -35,7 +35,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 121463 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 121601 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -43,9 +43,9 @@ Graphics contains 121463 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121463 | 37.6% |
-| Engine (all subsystems) | 89665 | 27.8% |
-| Utils | 46176 | 14.3% |
+| Graphics | 121601 | 37.6% |
+| Engine (all subsystems) | 89665 | 27.7% |
+| Utils | 46207 | 14.3% |
 | Core | 30919 | 9.5% |
 | Physics | 10812 | 3.3% |
 | Audio | 6884 | 2.1% |
@@ -111,7 +111,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 608 |
-| TEST() definitions | 7408 |
+| TEST() definitions | 7410 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -160,7 +160,7 @@ inventory is implementation evidence, not support certification.
 | `SaveSystem.cpp` | 2485 |
 | `OpenGLDevice.cpp` | 2160 |
 | `ModuleManager.cpp` | 2107 |
-| `CrashHandler.cpp` | 2050 |
+| `CrashHandler.cpp` | 2081 |
 | `VulkanDevice.cpp` | 1991 |
 | `D3D11Device.cpp` | 1991 |
 | `EngineSettings.cpp` | 1849 |
@@ -175,7 +175,7 @@ inventory is implementation evidence, not support certification.
 | `RenderGraph.h` | 1427 |
 | `Telemetry.h` | 1419 |
 | `JsonUtils.h` | 1318 |
-| `GraphicsEngine.h` | 1291 |
+| `GraphicsEngine.h` | 1293 |
 | `EngineSettings.h` | 1152 |
 | `NetworkManager.h` | 943 |
 | `RemoteDebugSystem.h` | 874 |

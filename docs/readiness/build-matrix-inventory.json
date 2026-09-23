@@ -25,7 +25,7 @@
         "architecture": "x64",
         "toolset": "v143",
         "packageDirectory": "build/build-matrix-stage/lib/cmake/SparkEngine",
-        "expectedEngineVersion": "1.0.0",
+        "expectedEngineVersion": "0.9.0",
         "description": "A separate configure against an installed SparkEngine package that proves public SDK headers, imports, and module linkage without source-tree include leakage."
       },
       {
@@ -1395,7 +1395,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1756,
+      "line": 1760,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1481,7 +1481,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1315,
+      "line": 1316,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2454,7 +2454,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 710,
+      "line": 711,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2625,7 +2625,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 676,
+      "line": 677,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2749,7 +2749,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 817,
+      "line": 818,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2929,10 +2929,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 697,
+      "line": 698,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:696",
+          "id": "Tests/CMakeLists.txt:697",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -3060,7 +3060,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 714,
+      "line": 715,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3070,7 +3070,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 708,
+      "line": 709,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3080,7 +3080,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 716,
+      "line": 717,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3110,10 +3110,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 689,
+      "line": 690,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:688",
+          "id": "Tests/CMakeLists.txt:689",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -3150,7 +3150,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 712,
+      "line": 713,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3160,7 +3160,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 822,
+      "line": 823,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3210,7 +3210,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 718,
+      "line": 719,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3242,7 +3242,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 812,
+      "line": 813,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3252,7 +3252,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 665,
+      "line": 666,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4130,7 +4130,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 710,
+          "line": 711,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4312,7 +4312,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 676,
+          "line": 677,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4438,7 +4438,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 817,
+          "line": 818,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4762,7 +4762,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 697,
+          "line": 698,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4898,7 +4898,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 714,
+          "line": 715,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4916,7 +4916,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 708,
+          "line": 709,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4934,7 +4934,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 716,
+          "line": 717,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4972,7 +4972,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 689,
+          "line": 690,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5028,7 +5028,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 712,
+          "line": 713,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5046,7 +5046,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 822,
+          "line": 823,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5136,7 +5136,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 718,
+          "line": 719,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5192,7 +5192,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 812,
+          "line": 813,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5210,7 +5210,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 665,
+          "line": 666,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6189,7 +6189,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 39,
+        "stepCount": 41,
         "steps": [
           {
             "index": 0,
@@ -6349,6 +6349,18 @@
           },
           {
             "index": 13,
+            "name": "Test owner-run signing precursor contract",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "01da044626efd297"
+          },
+          {
+            "index": 14,
             "name": "Test native MSI qualification orchestration",
             "id": "",
             "uses": "",
@@ -6360,7 +6372,7 @@
             "runDigest": "9c8bed06b88ba1bd"
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Test exact release asset publication boundary",
             "id": "",
             "uses": "",
@@ -6372,7 +6384,19 @@
             "runDigest": "c1cda3d75fd3d19c"
           },
           {
-            "index": 15,
+            "index": 16,
+            "name": "Test detached stable signature bundle contracts",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "060c512ac0d124b9"
+          },
+          {
+            "index": 17,
             "name": "Test release publication recovery",
             "id": "",
             "uses": "",
@@ -6384,7 +6408,7 @@
             "runDigest": "b5a4aee105620528"
           },
           {
-            "index": 16,
+            "index": 18,
             "name": "Test extracted portable-package validation",
             "id": "",
             "uses": "",
@@ -6396,7 +6420,7 @@
             "runDigest": "3cede89fce1f5dba"
           },
           {
-            "index": 17,
+            "index": 19,
             "name": "Test coverage evidence semantics",
             "id": "",
             "uses": "",
@@ -6408,7 +6432,7 @@
             "runDigest": "b870b844a6e610de"
           },
           {
-            "index": 18,
+            "index": 20,
             "name": "Test sanitizer pipeline exit propagation",
             "id": "",
             "uses": "",
@@ -6420,7 +6444,7 @@
             "runDigest": "e9e9310a91486157"
           },
           {
-            "index": 19,
+            "index": 21,
             "name": "Test workflow failure-propagation contract",
             "id": "",
             "uses": "",
@@ -6432,7 +6456,7 @@
             "runDigest": "f7233b3f14c1a94a"
           },
           {
-            "index": 20,
+            "index": 22,
             "name": "Test granular SparkTests wrapper failure recovery",
             "id": "",
             "uses": "",
@@ -6444,7 +6468,7 @@
             "runDigest": "326ef3bd02bde17a"
           },
           {
-            "index": 21,
+            "index": 23,
             "name": "Test Spark CLI",
             "id": "",
             "uses": "",
@@ -6456,7 +6480,7 @@
             "runDigest": "409c9f97b4a909ab"
           },
           {
-            "index": 22,
+            "index": 24,
             "name": "Test ThirdParty manifest-sync gate",
             "id": "",
             "uses": "",
@@ -6468,7 +6492,7 @@
             "runDigest": "20b1682609fdd8b9"
           },
           {
-            "index": 23,
+            "index": 25,
             "name": "Platform certification validator",
             "id": "",
             "uses": "",
@@ -6480,7 +6504,7 @@
             "runDigest": "6b643bc930292a59"
           },
           {
-            "index": 24,
+            "index": 26,
             "name": "Validate certification matrix",
             "id": "",
             "uses": "",
@@ -6492,7 +6516,7 @@
             "runDigest": "edbea8f70422546c"
           },
           {
-            "index": 25,
+            "index": 27,
             "name": "Verify every test source is registered",
             "id": "",
             "uses": "",
@@ -6504,7 +6528,7 @@
             "runDigest": "4033bf80ea364bbe"
           },
           {
-            "index": 26,
+            "index": 28,
             "name": "Test asset integrity verifier",
             "id": "",
             "uses": "",
@@ -6516,7 +6540,7 @@
             "runDigest": "b1c686bd5499a5fd"
           },
           {
-            "index": 27,
+            "index": 29,
             "name": "Verify repository asset integrity baseline",
             "id": "",
             "uses": "",
@@ -6528,7 +6552,7 @@
             "runDigest": "24c6f12eaf03dec2"
           },
           {
-            "index": 28,
+            "index": 30,
             "name": "Validate module evidence manifest (declarative layer)",
             "id": "",
             "uses": "",
@@ -6540,7 +6564,7 @@
             "runDigest": "3207d199801cc28d"
           },
           {
-            "index": 29,
+            "index": 31,
             "name": "Run module evidence adversarial tests",
             "id": "",
             "uses": "",
@@ -6552,7 +6576,7 @@
             "runDigest": "1593673681e72374"
           },
           {
-            "index": 30,
+            "index": 32,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -6564,7 +6588,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 31,
+            "index": 33,
             "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
@@ -6576,7 +6600,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 32,
+            "index": 34,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -6588,7 +6612,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 33,
+            "index": 35,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -6600,7 +6624,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 34,
+            "index": 36,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6612,7 +6636,7 @@
             "runDigest": ""
           },
           {
-            "index": 35,
+            "index": 37,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -6624,7 +6648,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 36,
+            "index": 38,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -6639,7 +6663,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 37,
+            "index": 39,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6651,7 +6675,7 @@
             "runDigest": ""
           },
           {
-            "index": 38,
+            "index": 40,
             "name": "Controlled required-job failure probe",
             "id": "",
             "uses": "",
@@ -7253,7 +7277,7 @@
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
             "shell": "",
-            "if": "absent",
+            "if": "always()",
             "continueOnError": "absent",
             "hasRun": false,
             "env": [],
@@ -7462,7 +7486,7 @@
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
             "shell": "",
-            "if": "absent",
+            "if": "always()",
             "continueOnError": "absent",
             "hasRun": false,
             "env": [],
@@ -15129,7 +15153,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 32,
+        "stepIndex": 34,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -15157,7 +15181,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 33,
+        "stepIndex": 35,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
