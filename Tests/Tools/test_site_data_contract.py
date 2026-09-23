@@ -1255,9 +1255,11 @@ class PublicClaimInvariantTests(ContractTestCase):
     def test_readme_does_not_overclaim_templates_or_generic_nullrhi(self) -> None:
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertNotIn("Nine complete installed-SDK-independent templates", readme)
-        self.assertIn("contract targets the no-render `NullRHIDevice` path", readme)
-        self.assertIn("do not instantiate it (`HEAD-220` remains open)", readme)
-        self.assertIn("NullRHI itself rasterizes no pixels", readme)
+        self.assertIn("headless entry points now own and tick a NullRHI bridge", readme)
+        self.assertIn("passing no windowed `GraphicsEngine` or `InputManager`", readme)
+        self.assertIn("the FPS client module does not load through `SparkServer`", readme)
+        self.assertIn("Packaged clean-host, soak, and recovery qualification remains open (`HEAD-220`)", readme)
+        self.assertIn("NullRHI rasterizes no pixels", readme)
 
     def test_public_content_uses_profile_derived_gate_wording(self) -> None:
         content = (REPO_ROOT / "docs" / "site" / "content.json").read_text(

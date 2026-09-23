@@ -610,9 +610,12 @@ class ExtractedPackageWorkflowWiringTests(unittest.TestCase):
         self.assertEqual(workflow.count("validate-extracted-package.py"), 6)
         self.assertEqual(workflow.count("--preflight-archive"), 3)
         self.assertEqual(workflow.count("--stage-root"), 3)
-        # Beyond the three platform packages, both the publisher and the
-        # independent consumer extract the pinned stable signature control asset.
-        self.assertEqual(workflow.count("--archive"), 5)
+        # These are the three platform package validators. The protected
+        # signature bundle is generated after asset freeze and extracted by
+        # the independent consumer, which has its own focused contract tests.
+        self.assertEqual(workflow.count("--archive"), 3)
+        self.assertIn("sign_release_bundle.ps1", workflow)
+        self.assertIn('--signature-control-asset "SparkEngine-release-signature-bundle.tar.gz"', workflow)
         self.assertEqual(workflow.count("package-template-smoke-build"), 3)
         self.assertIn(
             'SPARK_TEMPLATE_ROOT="$packageRoot/share/SparkEngine/templates"', workflow
