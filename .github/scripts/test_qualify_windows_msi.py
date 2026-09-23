@@ -57,7 +57,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
     def _run_transaction_contract(self, *, root, old_packages, new_packages,
                                   old_manifest, new_manifest, module_manifest,
                                   logs, runner, previous_signer_thumbprint=PREVIOUS_SIGNER_THUMBPRINT,
-                                  powershell="powershell.exe"):
+                                  powershell="powershell.exe", bootstrap=False):
         """Exercise the old->new contract with generated native-process fixtures."""
         def copy_private_verified_file(source, private_directory, destination_name):
             destination = private_directory / destination_name
@@ -80,6 +80,16 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 "publish_bytes_no_replace",
                 side_effect=publish_bytes_no_replace,
             ):
+                kwargs = {}
+                if not bootstrap:
+                    kwargs.update(
+                        previous_packages=old_packages,
+                        previous_version="1.2.2",
+                        previous_package_manifest=old_manifest,
+                        previous_signer_thumbprint=previous_signer_thumbprint,
+                    )
+                else:
+                    kwargs["bootstrap_repair"] = True
                 return MODULE._qualify_impl(
                     new_packages,
                     "1.2.3",
@@ -92,10 +102,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                     cmake="cmake",
                     source_sha=SOURCE_SHA,
                     package_manifest=new_manifest,
-                    previous_packages=old_packages,
-                    previous_version="1.2.2",
-                    previous_package_manifest=old_manifest,
-                    previous_signer_thumbprint=previous_signer_thumbprint,
+                    **kwargs,
                 )
         except TypeError as exc:
             if "unexpected keyword argument" in str(exc):
@@ -686,6 +693,26 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertTrue(state["repaired"])
             self.assertTrue(state.get("user_data_preserved"))
             self.assertTrue(state["user_data_path"].is_file())
+
+    def test_bootstrap_install_runs_repair_and_preserves_user_data_without_n_minus_one(self):
+        """The v0.9 bootstrap path still repairs; it only omits predecessor inputs."""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+            logs = root / "bootstrap-repair-logs"
+            calls = []
+            state = {"installed": False, "version": None, "repaired": False,
+                     "install_root": str(root / "install")}
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state), bootstrap=True,
+            )
+            self.assertEqual(result, 0)
+            self.assertTrue(state["repaired"])
+            self.assertTrue(state.get("user_data_preserved"))
+            self.assertTrue(any("/fvomus" in call for call in calls if call))
 
     @unittest.skipUnless(os.name == "nt", "Windows sharing-mode mutation protection")
     def test_repair_keeps_verified_msi_locked_against_write_replace_and_parent_rename(self):

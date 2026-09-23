@@ -116,6 +116,7 @@ class WorkflowTests(unittest.TestCase):
             "needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version == '0.9.0'",
         )
         self.assertIn("qualify-windows-msi.py", bootstrap["run"])
+        self.assertIn("--bootstrap-repair", bootstrap["run"])
         self.assertNotIn("--previous-packages", bootstrap["run"])
         self.assertNotIn("provision-previous-windows-msi.py", bootstrap["run"])
 

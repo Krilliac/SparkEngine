@@ -474,6 +474,7 @@ jobs:
           --version "${{ needs.prepare.outputs.cmake_version }}" `
           --manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake" `
           --package-manifest $packageManifest `
+          --bootstrap-repair `
           --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `
           --source-sha "${{ github.sha }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

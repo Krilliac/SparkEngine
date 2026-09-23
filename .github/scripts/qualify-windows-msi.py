@@ -273,7 +273,7 @@ def _validate_shipping_package_manifest(path, source_sha, version, msi_name, msi
 def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_command,
                   msiexec, powershell, cmake, source_sha=None, package_manifest=None,
                   previous_packages=None, previous_version=None, previous_package_manifest=None,
-                  previous_signer_thumbprint=None):
+                  previous_signer_thumbprint=None, bootstrap_repair=False):
     logs = Path(logs)
     if os.path.lexists(logs):
         raise ValueError("package-evidence log directory must be fresh")
@@ -282,8 +282,11 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
     transaction = any(value is not None for value in
                       (previous_packages, previous_version, previous_package_manifest,
                        previous_signer_thumbprint))
+    if bootstrap_repair and transaction:
+        raise ValueError("bootstrap_repair cannot be combined with predecessor transaction inputs")
     report = {"scope": ("hosted-windows-msi-upgrade-repair-rollback-uninstall"
-                         if transaction else "hosted-windows-msi-install-uninstall"),
+                         if transaction else ("hosted-windows-msi-bootstrap-repair-uninstall"
+                                              if bootstrap_repair else "hosted-windows-msi-install-uninstall")),
               "source_sha": source_sha,
               "version": version, "errors": errors, "certifies_windows11": False}
     attempted = False
@@ -512,6 +515,15 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                 execute("repair", [msiexec, "/fvomus", str(package), "/qn", "/norestart", "/L*V",
                                     str(logs / "msi-repair.log"), f"INSTALL_ROOT={install_root}"])
             verify_user_data("upgrade+repair")
+        elif bootstrap_repair:
+            # Bootstrap qualification has no N-1 package, but it must still
+            # exercise the repair transaction and prove user data survives it.
+            with _hold_private_msi_identity(package):
+                if package_digest(package) != digest:
+                    raise ValueError("private MSI changed before bootstrap repair")
+                execute("repair-bootstrap", [msiexec, "/fvomus", str(package), "/qn", "/norestart", "/L*V",
+                                              str(logs / "msi-repair-bootstrap.log"), f"INSTALL_ROOT={install_root}"])
+            verify_user_data("bootstrap+repair")
         with _hold_private_msi_identity(package):
             if package_digest(package) != digest:
                 raise ValueError("private MSI changed before installed identity validation")
@@ -647,7 +659,7 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
 def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_command,
             msiexec, powershell, cmake, source_sha=None, package_manifest=None,
             previous_packages=None, previous_version=None, previous_package_manifest=None,
-            previous_signer_thumbprint=None):
+            previous_signer_thumbprint=None, bootstrap_repair=False):
     """Run native MSI qualification on Windows.
 
     The platform-independent transaction state machine lives in the private
@@ -663,6 +675,7 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         previous_packages=previous_packages, previous_version=previous_version,
         previous_package_manifest=previous_package_manifest,
         previous_signer_thumbprint=previous_signer_thumbprint,
+        bootstrap_repair=bootstrap_repair,
     )
 
 
@@ -679,12 +692,16 @@ def main():
     parser.add_argument("--previous-version")
     parser.add_argument("--previous-package-manifest", type=Path)
     parser.add_argument("--previous-signer-thumbprint", help="Trusted Authenticode publisher for the predecessor MSI")
+    parser.add_argument("--bootstrap-repair", action="store_true",
+                        help="run repair after a fresh install without an N-1 predecessor")
     args = parser.parse_args()
     previous_values = (args.previous_packages, args.previous_version, args.previous_package_manifest,
                        args.previous_signer_thumbprint)
     if any(value is not None for value in previous_values) and not all(value is not None for value in previous_values):
         parser.error("--previous-packages, --previous-version, --previous-package-manifest, and "
                      "--previous-signer-thumbprint must be supplied together")
+    if args.bootstrap_repair and any(value is not None for value in previous_values):
+        parser.error("--bootstrap-repair cannot be combined with predecessor transaction inputs")
     if os.name != "nt" or not re.fullmatch(r"[0-9a-f]{40}", args.source_sha):
         parser.error("Native Windows and an exact source commit are required")
     system = Path(os.environ["SystemRoot"]) / "System32"
@@ -694,7 +711,8 @@ def main():
                    source_sha=args.source_sha, package_manifest=args.package_manifest,
                    previous_packages=args.previous_packages, previous_version=args.previous_version,
                    previous_package_manifest=args.previous_package_manifest,
-                   previous_signer_thumbprint=args.previous_signer_thumbprint)
+                   previous_signer_thumbprint=args.previous_signer_thumbprint,
+                   bootstrap_repair=args.bootstrap_repair)
 
 
 if __name__ == "__main__":
