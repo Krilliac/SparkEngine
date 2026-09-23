@@ -27,6 +27,7 @@
 #include <cmath>
 #include <cerrno>
 #include <atomic>
+#include <optional>
 #include <system_error>
 
 #if defined(_WIN32)
@@ -49,6 +50,23 @@ static std::string WideToNarrow(const std::wstring& wide)
     for (wchar_t wc : wide)
         narrow.push_back(static_cast<char>(wc));
     return narrow;
+}
+
+// Narrow cache/file APIs are usable only when their spelling resolves to the
+// same native path. Keep the existing fast path for ASCII/ACP-compatible
+// paths, but never let a lossy conversion choose a different file or cache key.
+static std::optional<std::string> NarrowPathIfRoundTrips(const std::wstring& wide)
+{
+    const std::string narrow = WideToNarrow(wide);
+    try
+    {
+        if (std::filesystem::path(narrow) == std::filesystem::path(wide))
+            return narrow;
+    }
+    catch (const std::exception&)
+    {
+    }
+    return std::nullopt;
 }
 
 namespace
@@ -250,9 +268,11 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
     std::string narrowName(filepath.begin(), filepath.end());
     SPARK_DEBUG_HOOK_SCENE(ScenePreLoad, narrowName);
 
-    // Security: reject path traversal attempts
-    std::string narrowCheck = WideToNarrow(filepath);
-    if (narrowCheck.contains(".."))
+    // Inspect native path components before any file access. Narrowing a wide
+    // profile path can change its spelling and is not a traversal check.
+    const std::filesystem::path nativeScenePath(filepath);
+    if (std::find(nativeScenePath.begin(), nativeScenePath.end(), std::filesystem::path(L"..")) !=
+        nativeScenePath.end())
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Path traversal rejected: " + filepath, L"ERROR");
         return false;
@@ -662,20 +682,21 @@ std::vector<std::string> SceneManager::GetAvailableScenes(const std::wstring& di
 bool SceneManager::LoadJSON(const std::wstring& path)
 {
     std::string content;
-    std::string narrowPath = WideToNarrow(path);
+    const std::filesystem::path nativePath(path);
 
     if (m_fileCache)
     {
-        auto result = m_fileCache->ReadText(narrowPath);
-        if (result.IsOk())
+        if (const auto narrowPath = NarrowPathIfRoundTrips(path))
         {
-            content = result.Value();
+            auto result = m_fileCache->ReadText(*narrowPath);
+            if (result.IsOk())
+                content = result.Value();
         }
     }
 
     if (content.empty())
     {
-        std::ifstream file(narrowPath);
+        std::ifstream file(nativePath);
         if (!file.is_open())
         {
             LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot open JSON scene: " + path, L"ERROR");
@@ -845,7 +866,7 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
         serialized << "\n";
     }
 
-    const std::filesystem::path destination(WideToNarrow(path));
+    const std::filesystem::path destination(path);
     const std::filesystem::path temporary = MakeUniqueTemporaryPath(destination);
     if (temporary.empty())
     {
@@ -861,7 +882,10 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
     }
 
     if (m_fileCache)
-        m_fileCache->Invalidate(WideToNarrow(path));
+    {
+        if (const auto narrowPath = NarrowPathIfRoundTrips(path))
+            m_fileCache->Invalidate(*narrowPath);
+    }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: " + std::to_wstring(m_sceneNodes.size()) + L" nodes", L"SUCCESS");
     return true;
@@ -977,7 +1001,7 @@ bool SceneManager::LoadCustom(const std::wstring& path)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager::LoadCustom called. path=" + path, L"OPERATION");
 
-    std::ifstream file(WideToNarrow(path));
+    std::ifstream file{std::filesystem::path(path)};
     if (!file.is_open())
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Could not open scene file: " + path, L"ERROR");

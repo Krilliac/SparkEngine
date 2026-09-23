@@ -84,6 +84,18 @@ def _validate_junit_outcome_counts(
             )
 
 
+def _validate_junit_testcase_outcomes(
+    testcases: list[ET.Element], errors: list[str],
+) -> None:
+    """Reject failure/error testcase children even when aggregate counts lie."""
+    for index, testcase in enumerate(testcases):
+        for outcome in ("failure", "error"):
+            if testcase.find(outcome) is not None:
+                errors.append(
+                    f"junit-xml testcase[{index}] contains a <{outcome}> outcome"
+                )
+
+
 def validate_junit_xml(path: Path, module_name: str) -> list[str]:
     """Validate a JUnit XML artifact carries real test evidence."""
     errors: list[str] = []
@@ -159,6 +171,7 @@ def validate_junit_xml(path: Path, module_name: str) -> list[str]:
         _validate_junit_outcome_counts(suite, "junit-xml testsuite", errors)
 
     testcases = root.findall(".//testcase")
+    _validate_junit_testcase_outcomes(testcases, errors)
     if not testcases:
         errors.append(
             "junit-xml contains no <testcase> elements — a JUnit document "
@@ -175,11 +188,6 @@ def validate_junit_xml(path: Path, module_name: str) -> list[str]:
             if tc.get("name") is None:
                 errors.append(
                     f"junit-xml testcase[{i}] has no name attribute"
-                )
-                break
-            if tc.get("classname") is None:
-                errors.append(
-                    f"junit-xml testcase[{i}] has no classname attribute"
                 )
                 break
 
@@ -278,6 +286,7 @@ def validate_junit_xml_bytes(data: bytes, leaf_name: str, module_name: str) -> l
     for suite in root.findall(".//testsuite"):
         _validate_junit_outcome_counts(suite, "junit-xml testsuite", errors)
     testcases = root.findall(".//testcase")
+    _validate_junit_testcase_outcomes(testcases, errors)
     if not testcases:
         errors.append("junit-xml contains no <testcase> elements — a JUnit document without test cases is not test evidence")
     elif len(testcases) < MIN_JUNIT_TESTCASES:
@@ -290,9 +299,6 @@ def validate_junit_xml_bytes(data: bytes, leaf_name: str, module_name: str) -> l
         for index, testcase in enumerate(testcases):
             if testcase.get("name") is None:
                 errors.append(f"junit-xml testcase[{index}] has no name attribute")
-                break
-            if testcase.get("classname") is None:
-                errors.append(f"junit-xml testcase[{index}] has no classname attribute")
                 break
     return errors
 

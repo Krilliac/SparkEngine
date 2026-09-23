@@ -10,12 +10,38 @@
 #include "ShaderDaemonBridge.h"
 
 #include <cstring>
+#include <exception>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
 
 namespace Spark::Graphics
 {
+    namespace
+    {
+        std::string PathForLog(const std::filesystem::path& path)
+        {
+            constexpr size_t MaxPathLength = 512;
+            try
+            {
+                const auto utf8 = path.u8string();
+                std::string result(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+                if (result.size() > MaxPathLength)
+                {
+                    size_t end = MaxPathLength - 3;
+                    while (end > 0 && (static_cast<unsigned char>(result[end]) & 0xC0) == 0x80)
+                        --end;
+                    result.resize(end);
+                    result += "...";
+                }
+                return result;
+            }
+            catch (const std::exception&)
+            {
+                return "<unrepresentable path>";
+            }
+        }
+    } // namespace
 
     void ShaderDiskCache::Initialize(const std::filesystem::path& cacheDir)
     {
@@ -27,13 +53,13 @@ namespace Spark::Graphics
         if (ec)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Graphics, "ShaderDiskCache: failed to create '%s': %s",
-                           m_cacheDir.string().c_str(), ec.message().c_str());
+                           PathForLog(m_cacheDir).c_str(), ec.message().c_str());
             return;
         }
 
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ShaderDiskCache: initialized at '%s' (%zu entries)",
-                       m_cacheDir.string().c_str(), GetEntryCount());
+                       PathForLog(m_cacheDir).c_str(), GetEntryCount());
     }
 
     void ShaderDiskCache::Shutdown()
@@ -95,7 +121,7 @@ namespace Spark::Graphics
             // (concurrent cache clear) or permission problem. Log rate-limited
             // so a broken cache doesn't spam the log.
             SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
-                           "ShaderDiskCache: cached blob existed but failed to open '%s'", path.string().c_str());
+                           "ShaderDiskCache: cached blob existed but failed to open '%s'", PathForLog(path).c_str());
             return std::nullopt;
         }
 
@@ -108,7 +134,7 @@ namespace Spark::Graphics
         {
             SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
                            "ShaderDiskCache: short read on '%s' (expected %zu bytes) — treating as miss",
-                           path.string().c_str(), static_cast<size_t>(fileSize));
+                           PathForLog(path).c_str(), static_cast<size_t>(fileSize));
             return std::nullopt;
         }
 
@@ -143,14 +169,14 @@ namespace Spark::Graphics
                     SPARK_LOG_ONCE(
                         Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
                         "ShaderDiskCache: write failure for '%s' (%zu bytes) — cache entry may be incomplete",
-                        path.string().c_str(), blob.bytecode.size());
+                        PathForLog(path).c_str(), blob.bytecode.size());
                 }
             }
             else
             {
                 SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
                                "ShaderDiskCache: failed to open '%s' for writing — disk full or read-only?",
-                               path.string().c_str());
+                               PathForLog(path).c_str());
             }
         }
 

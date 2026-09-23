@@ -1021,6 +1021,7 @@ target_sources(SparkTests PRIVATE
     TestFPSWeatherPort.cpp
     TestTemplateRuntimeReal.cpp
     TestUserDataPathsReal.cpp
+    TestSceneManagerUnicodeReal.cpp
     TestWeaponMechanicsReal.cpp
 )
 

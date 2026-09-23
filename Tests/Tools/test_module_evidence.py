@@ -5313,6 +5313,21 @@ class TestArtifactSemanticValidation(FixtureCase):
         errors = artifacts.validate_junit_xml(path, INCLUDED)
         self.assertEqual(errors, [], f"valid JUnit XML rejected: {errors}")
 
+    def test_ctest_junit_without_classname_is_accepted(self) -> None:
+        """CTest's JUnit producer omits the optional classname attribute."""
+        report = (
+            '<testsuites tests="3" failures="0" errors="0">'
+            '<testsuite name="SparkEngineTests" tests="3" failures="0" errors="0">'
+            '<testcase name="one"/><testcase name="two"/><testcase name="three"/>'
+            '</testsuite></testsuites>'
+        )
+        path_errors = artifacts.validate_junit_xml(self._junit_xml(report), INCLUDED)
+        byte_errors = artifacts.validate_junit_xml_bytes(
+            report.encode("utf-8"), "ctest-junit.xml", INCLUDED,
+        )
+        self.assertEqual(path_errors, [], path_errors)
+        self.assertEqual(byte_errors, [], byte_errors)
+
     def test_junit_xml_with_zero_tests_is_rejected(self) -> None:
         path = self._junit_xml(
             '<testsuites tests="0" failures="0" errors="0">'
@@ -5335,6 +5350,26 @@ class TestArtifactSemanticValidation(FixtureCase):
                 )
                 self.assertTrue(path_errors, path_errors)
                 self.assertTrue(byte_errors, byte_errors)
+
+    def test_junit_xml_rejects_failure_or_error_children_with_zero_counts(self) -> None:
+        """Failure/error elements cannot hide behind false aggregate counters."""
+        for outcome in ("failure", "error"):
+            with self.subTest(outcome=outcome):
+                report = (
+                    '<testsuites tests="3" failures="0" errors="0">'
+                    '<testsuite name="SparkEngineTests" tests="3" failures="0" errors="0">'
+                    f'<testcase name="bad"><{outcome}>boom</{outcome}></testcase>'
+                    '<testcase name="two"/><testcase name="three"/>'
+                    '</testsuite></testsuites>'
+                )
+                path_errors = artifacts.validate_junit_xml(
+                    self._junit_xml(report), INCLUDED,
+                )
+                byte_errors = artifacts.validate_junit_xml_bytes(
+                    report.encode("utf-8"), "ctest-junit.xml", INCLUDED,
+                )
+                self.assertTrue(any(f"<{outcome}>" in e for e in path_errors), path_errors)
+                self.assertTrue(any(f"<{outcome}>" in e for e in byte_errors), byte_errors)
 
     def test_junit_xml_with_no_testcases_is_rejected(self) -> None:
         path = self._junit_xml(
