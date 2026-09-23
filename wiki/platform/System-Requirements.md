@@ -175,7 +175,7 @@ total-VRAM envelope.
 
 ### Editor Overhead
 
-`SparkEditor` runs the full engine plus ImGui, an inventory of 65 `*Panel.h`
+`SparkEditor` runs the full engine plus ImGui, an inventory of 64 `*Panel.h`
 classes, the asset database, and collaborative-edit sessions. Registration and
 default visibility are separate from that source-file count. No current evidence
 artifact establishes a certified editor RAM/VRAM overhead.

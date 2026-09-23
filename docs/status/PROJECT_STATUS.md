@@ -113,7 +113,7 @@ This page records source presence and implementation maturity only. An **Impleme
 
 | System | Status | Notes |
 |--------|--------|-------|
-| Panel System | **Implemented** | 65 `*Panel.h` classes by source inventory; registration and default visibility are separate metrics |
+| Panel System | **Implemented** | 64 `*Panel.h` classes by source inventory; registration and default visibility are separate metrics |
 | Gizmos | Framework | Translation path exists; rotate and scale are explicit no-ops (`EDT-210`) |
 | Node Graphs | **Implemented** | Visual scripting, shader graph (imnodes) |
 | Command Palette | **Implemented** | Ctrl+P quick access |

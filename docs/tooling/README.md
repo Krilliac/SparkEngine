@@ -88,7 +88,7 @@ docs/
 | Directory | Description |
 |-----------|-------------|
 | `SparkEngine/Source/` | Core engine library (all subsystems) |
-| `SparkEditor/Source/` | ImGui visual editor (65 `*Panel.h` classes; registration and visibility are separate metrics) |
+| `SparkEditor/Source/` | ImGui visual editor (64 `*Panel.h` classes; registration and visibility are separate metrics) |
 | `SparkConsole/src/` | Standalone debug console application |
 | `SparkShaderCompiler/src/` | Offline shader compilation tool |
 | `GameModules/*/Source/` | 11 in-tree module targets: the base game plus genre and prototype modules |

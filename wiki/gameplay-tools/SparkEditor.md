@@ -1,6 +1,6 @@
 # SparkEditor
 
-SparkEditor is a required Windows build product and authoring surface in the blocked and uncertified `stable-v1` profile. Its source inventory contains 65 `*Panel.h` classes; registration and default visibility are separate metrics. All three transform gizmos (translate, rotate, scale) now apply to `World` entities through one `CommandHistory` entry per drag, and World-document create/delete/duplicate/reparent/rename/transform/inspector edits are command-backed; `EDT-210` remains open for the asset browse/drag/assign path, the author-to-installed-runtime round trip, and the still-unwired crash-recovery pipeline. Collaboration, visual scripting, plugin breadth, and non-Windows editor paths remain experimental or outside the profile.
+SparkEditor is a required Windows build product and authoring surface in the blocked and uncertified `stable-v1` profile. Its source inventory contains 64 `*Panel.h` classes; registration and default visibility are separate metrics. All three transform gizmos (translate, rotate, scale) now apply to `World` entities through one `CommandHistory` entry per drag, and World-document create/delete/duplicate/reparent/rename/transform/inspector edits are command-backed; `EDT-210` remains open for the asset browse/drag/assign path, the author-to-installed-runtime round trip, and the still-unwired crash-recovery pipeline. Collaboration, visual scripting, plugin breadth, and non-Windows editor paths remain experimental or outside the profile.
 
 ![SparkEditor default layout](../../docs/screenshots/editor-overview.png)
 

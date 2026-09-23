@@ -83,7 +83,7 @@ See [Templates/README.md](Templates/README.md) and [SparkTemplates](https://gith
 
 ![SparkEditor — Veyra Highlands region-map workflow](docs/screenshots/editor-region-map-veyra-highlands.jpg)
 
-The SparkEditor source inventory contains 65 `*Panel.h` classes spanning scene
+The SparkEditor source inventory contains 64 `*Panel.h` classes spanning scene
 construction, asset and shader workflows, profiling, multiplayer operations,
 collaboration, dedicated servers, world streaming, and live region design.
 That file count is not a claim that every class is registered, visible by default,
@@ -190,7 +190,7 @@ EnTT-backed ECS with 75+ component types. Includes: FPS weapons, damage model, H
 
 **Large worlds:** Source includes area-streaming and floating-point origin-rebasing implementations. "No load screens" and "100K+ entities per area" are design/load-test targets, not `stable-v1` evidence; the 100K entity-flood test validates entity-count correctness rather than per-area throughput or release performance.
 
-### Editor (65 panel header classes)
+### Editor (64 panel header classes)
 
 Scene hierarchy, Inspector, Asset browser, Game viewport, Gizmos (translate/rotate/scale), Node graphs (imnodes), Material editor, Visual script editor, Terrain editor, Weapon editor, Profiler, AI debugger, Physics debug overlay, Cinematic sequencer, Dialogue editor, Ability/condition editors, Destruction editor, 2D/tilemap editors, Audio mixer, Replay panel, Save system panel, Dedicated server panel, Version control integration, Build/deployment pipeline, Level streaming, Command palette (Ctrl+P), Prefab system, Event monitor, Coroutine debugger, Collaboration panel (multi-user with node locking and presence), and more. Collaboration, visual scripting, and their service paths are experimental and outside `stable-v1`; the asset drag/assign path and the author-to-package round trip remain open (`EDT-210`).
 
@@ -359,7 +359,7 @@ uncertified.
 | [Versioned Plugin ABI](docs/guides/plugin-abi.md) | Versioned C plugin boundary, sidecar integrity, tasks, and hot reload |
 | [Game Module Guide](Templates/README.md) | Building standalone games with the SDK |
 | [Networking Config](wiki/subsystems/Networking.md) | UDP, replication, MMO server setup |
-| [Wiki](wiki/) | 198 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
+| [Wiki](wiki/) | 202 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
 
 ---
 
@@ -380,11 +380,11 @@ SparkEngine/
 │       ├── Scripting/     AngelScript, Visual Scripting
 │       ├── Gameplay/      Weapons, Quests, Inventory
 │       └── 20+ other systems
-├── SparkEditor/Source/    65 *Panel.h classes, collaboration
+├── SparkEditor/Source/    64 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
 ├── Tests/                 7,431 test definitions, 611 files
-├── wiki/                  198 Markdown pages excluding _Sidebar.md (inventory only)
+├── wiki/                  202 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```
 

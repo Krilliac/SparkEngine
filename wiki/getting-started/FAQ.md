@@ -128,12 +128,12 @@ cmake -B build -DENABLE_EDITOR=OFF        # Everything except editor
 
 Build with `ENABLE_EDITOR=ON` and launch the separate `SparkEditor` executable.
 The source does not define an F1 engine-overlay toggle. The repository inventory
-currently contains 65 `*Panel.h` classes; registration and default visibility are
+currently contains 64 `*Panel.h` classes; registration and default visibility are
 separate metrics.
 
 ### What panels does the editor have?
 
-The source tree includes 65 `*Panel.h` classes covering scene editing, asset
+The source tree includes 64 `*Panel.h` classes covering scene editing, asset
 management, physics, gameplay, audio, scripting, profiling, and more. This
 source-file inventory is not `stable-v1` editor certification and does not mean
 all classes are registered or shown by default. The 6 core panels shown by

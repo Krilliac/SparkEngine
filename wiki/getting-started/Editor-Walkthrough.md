@@ -30,7 +30,7 @@ The current factory metadata marks 6 core panels visible by default:
 | **Console** | Bottom | Log output, command input, and filtering |
 | **Game View** | Tab (center) | In-game camera preview with HUD |
 
-Registered panels can be dragged, docked, resized, or closed. The **Window** menu can reopen the panels that the current editor build registers; the 65-header inventory is not a registration or release-certification count.
+Registered panels can be dragged, docked, resized, or closed. The **Window** menu can reopen the panels that the current editor build registers; the 64-header inventory is not a registration or release-certification count.
 
 ---
 
@@ -356,7 +356,7 @@ The editor uses a customizable theme system. Default themes are applied via `Edi
 ### Panel Visibility
 
 - Registered panels are accessible from the **Window** menu; the repository's
-  65 `*Panel.h` classes are a source inventory, not a visibility guarantee
+  64 `*Panel.h` classes are a source inventory, not a visibility guarantee
 - Drag panels to rearrange the layout
 - Layouts persist between sessions
 

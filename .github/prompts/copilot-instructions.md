@@ -28,7 +28,7 @@ SparkEngine/         ← Executable host (like Unreal's runtime)
       Cinematic/     ← Sequencer system
     Utils/           ← SparkConsole.h, Logger, Profiler, CrashHandler, Assert.h
 
-SparkEditor/         ← ImGui editor (65 `*Panel.h` source classes; not an operational-panel count)
+SparkEditor/         ← ImGui editor (64 `*Panel.h` source classes; not an operational-panel count)
   Source/            ← Animation, AssetBrowser, BuildSystem, Gizmos, LevelStreaming,
                        MaterialEditor, Profiler, VersionControl, etc.
 
