@@ -1174,6 +1174,30 @@ namespace SparkCrashReporter
         return message;
     }
 
+    bool ReadConsentAnswer(std::istream& input, bool emptyMeansYes)
+    {
+        // A detached watchdog, service, or CI job has stdin closed, redirected
+        // from /dev/null, or broken. That is nobody answering, never consent,
+        // so a failed read declines regardless of the prompt's default.
+        constexpr size_t kMaxAnswerBytes = 64;
+        std::string answer;
+        if (!input.good() || !std::getline(input, answer))
+            return false;
+        if (answer.size() > kMaxAnswerBytes)
+            return false;
+
+        const auto isSpace = [](char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; };
+        const auto first = std::find_if_not(answer.begin(), answer.end(), isSpace);
+        const auto last = std::find_if_not(answer.rbegin(), answer.rend(), isSpace).base();
+        std::string word = first < last ? std::string(first, last) : std::string{};
+        if (word.empty())
+            return emptyMeansYes; // Interactive Enter keeps the documented default.
+
+        std::transform(word.begin(), word.end(), word.begin(),
+                       [](unsigned char c) { return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c); });
+        return word == "y" || word == "yes";
+    }
+
     int RunCrashReporter(const CrashManifest& untrustedManifest)
     {
         CrashManifest manifest = untrustedManifest;
@@ -1254,10 +1278,9 @@ namespace SparkCrashReporter
             if (autoIssues)
                 std::cerr << "\n\nIf you continue, a metadata-only GitHub Issue will be attempted publicly. "
                              "No log, dump, screenshot, path, or description will be sent.";
-            std::cerr << "\n[Y/n]: ";
-            std::string input;
-            std::getline(std::cin, input);
-            shouldReview = input.empty() || input[0] == 'Y' || input[0] == 'y';
+            // A yes that authorizes a public post must be typed, not defaulted.
+            std::cerr << (autoIssues ? "\n[y/N]: " : "\n[Y/n]: ");
+            shouldReview = ReadConsentAnswer(std::cin, !autoIssues);
 #endif
         }
 
@@ -1279,9 +1302,7 @@ namespace SparkCrashReporter
             includeScreenshot = (ssResult == IDYES);
 #else
             std::cerr << "Include screenshot with report? [Y/n]: ";
-            std::string input;
-            std::getline(std::cin, input);
-            includeScreenshot = input.empty() || input[0] == 'Y' || input[0] == 'y';
+            includeScreenshot = ReadConsentAnswer(std::cin, true);
 #endif
         }
 

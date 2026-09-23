@@ -23,6 +23,7 @@
 #pragma once
 
 #include <cstdint>
+#include <iosfwd>
 #include <string>
 #include <string_view>
 
@@ -82,6 +83,10 @@ namespace SparkCrashReporter
 
     /// Build the privacy disclosure shown before crash-report consent.
     std::string BuildConsentMessage(const CrashManifest& manifest);
+
+    /// Read one console consent answer. @p emptyMeansYes is the prompt's
+    /// documented default for a bare Enter.
+    bool ReadConsentAnswer(std::istream& input, bool emptyMeansYes);
 
     /// Run the crash reporter UI and prepare the local report
     /// Returns 0 on success, non-zero on error
