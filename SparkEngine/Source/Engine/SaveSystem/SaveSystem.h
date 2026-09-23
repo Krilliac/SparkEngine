@@ -446,7 +446,9 @@ namespace Spark
      * The save directory is created if it does not exist. If a file already exists
      * for this slot and validates successfully, it is retained as
      * `<slotName>.spark_save.bak` and then replaced atomically. An unreadable primary
-     * never overwrites an existing last-good copy.
+     * never overwrites an existing last-good copy. A primary written by a newer build
+     * (SPRK header declaring a format newer than kCurrentSaveVersion) is never
+     * overwritten: the save fails with an actionable error and both files stay intact.
      *
      * @param slotName  Unique slot identifier (file-system-safe string, e.g. "slot1").
      *                  Must not be empty or contain path separators.
@@ -478,7 +480,9 @@ namespace Spark
      *
      * If the slot file cannot be read or parsed, the retained last-good copy
      * (`<slotName>.spark_save.bak`) is loaded instead and a warning is logged. The
-     * load only fails once both copies are unusable.
+     * load only fails once both copies are unusable. The exception is a primary written
+     * by a newer build: the load fails with an actionable error instead of silently
+     * rolling back to the older retained copy.
      *
      * @warning A successful load replaces the provided `world`. Ensure no raw pointers
      *          to world entities are held by callers before invoking this method.
@@ -577,7 +581,9 @@ namespace Spark
      * loading full save files. Every returned entry carries its `slotName`, so a
      * listed slot can be passed straight to Load(), GetSaveMetadata() or DeleteSave().
      * A slot that survives only as its retained last-good copy (`*.spark_save.bak`)
-     * is listed under its own slot name, because Load() recovers it.
+     * is listed under its own slot name, because Load() recovers it — unless the
+     * primary was written by a newer build, in which case Load() refuses the older
+     * copy and it is not listed.
      *
      * @return  Vector of SaveMetadata, one per discovered save file. Empty if the
      *          directory contains no valid save files.

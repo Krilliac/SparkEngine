@@ -1014,6 +1014,7 @@ target_sources(SparkTests PRIVATE
     TestRunnerSemanticsReal.cpp
     TestSEC100ChatAuditLogReal.cpp
     TestSaveSystemRoundTripReal.cpp
+    TestSAVE230NewerFormatSlotReal.cpp
     TestSecurityParsersReal.cpp
     TestShaderCompilerReal.cpp
     TestShadowPassReal.cpp

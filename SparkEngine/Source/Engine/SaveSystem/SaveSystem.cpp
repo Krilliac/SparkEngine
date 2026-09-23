@@ -252,6 +252,25 @@ namespace Spark
             return true;
         }
 
+        /// @brief Whether the file's CRC-32 trailer verifies once its header version field
+        ///        is replaced by @p headerVersion.
+        ///
+        /// Recognizes a checksummed file whose version field alone was damaged after the
+        /// writer sealed it: the trailer still covers the original header bytes.
+        bool TrailerVerifiesWithHeaderVersion(const std::vector<uint8_t>& fileData, uint32_t headerVersion) noexcept
+        {
+            if (fileData.size() < 8u + kSaveChecksumBytes)
+                return false;
+            const size_t candidatePayloadEnd = fileData.size() - kSaveChecksumBytes;
+            CRC32 candidate;
+            candidate.Update(fileData.data(), 4u);
+            const auto encodedVersion = EncodeLittleEndian32(headerVersion);
+            candidate.Update(encodedVersion.data(), encodedVersion.size());
+            if (candidatePayloadEnd > 8u)
+                candidate.Update(fileData.data() + 8u, candidatePayloadEnd - 8u);
+            return candidate.Finalize() == DecodeLittleEndian32(fileData.data() + candidatePayloadEnd);
+        }
+
         bool ValidateSaveEnvelope(const std::vector<uint8_t>& fileData, const std::string& filepath,
                                   const char* operation, uint32_t& outVersion, size_t& outPayloadEnd)
         {
@@ -295,30 +314,70 @@ namespace Spark
                     return false;
                 }
             }
-            else if (fileData.size() >= 8u + kSaveChecksumBytes)
+            else if (TrailerVerifiesWithHeaderVersion(fileData, kChecksummedSaveVersion))
             {
                 // A damaged v4 version field must not downgrade into the legacy
                 // metadata-only path and bypass integrity verification. Reconstruct
                 // the v4 header and recognize its still-present checksum trailer.
-                const size_t candidatePayloadEnd = fileData.size() - kSaveChecksumBytes;
-                CRC32 candidate;
-                candidate.Update(fileData.data(), 4u);
-                const auto encodedV4 = EncodeLittleEndian32(kChecksummedSaveVersion);
-                candidate.Update(encodedV4.data(), encodedV4.size());
-                if (candidatePayloadEnd > 8u)
-                    candidate.Update(fileData.data() + 8u, candidatePayloadEnd - 8u);
-                const uint32_t trailer = DecodeLittleEndian32(fileData.data() + candidatePayloadEnd);
-                if (candidate.Finalize() == trailer)
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: save '%s' has a corrupted v4 version field",
-                                   operation, filepath.c_str());
-                    return false;
-                }
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "%s: save '%s' has a corrupted v4 version field", operation,
+                               filepath.c_str());
+                return false;
             }
 
             outVersion = version;
             outPayloadEnd = payloadEnd;
             return true;
+        }
+
+        /// @brief Whether @p filepath holds a save written by a newer SparkEngine build.
+        ///
+        /// A newer build's save is valid player data this build cannot interpret, not
+        /// corruption. Treating it like a torn file is a silent downgrade: Load() would
+        /// fall back to the older retained copy (rolling progress back) and the next
+        /// Save() would replace the newer primary, destroying it. Callers use this to
+        /// refuse both instead.
+        ///
+        /// A file this build sealed whose version field alone was damaged is corruption,
+        /// not a newer format: its trailer still verifies under this build's version, so
+        /// it keeps the ordinary retained-copy recovery path.
+        ///
+        /// @param outVersion  Set to the declared newer version when this returns true.
+        /// @return            false when the file is absent, unreadable, lacks the SPRK
+        ///                    magic, declares a version this build supports, or is a
+        ///                    damaged file this build wrote.
+        bool IsNewerFormatSaveFile(const std::string& filepath, uint32_t& outVersion) noexcept
+        {
+            outVersion = 0;
+            try
+            {
+                std::error_code sizeError;
+                const uintmax_t size = std::filesystem::file_size(filepath, sizeError);
+                if (sizeError || size < 8u || size > static_cast<uintmax_t>(SaveRepresentationLimits::maxWireBytes))
+                    return false;
+
+                std::ifstream file(filepath, std::ios::binary);
+                if (!file.is_open())
+                    return false;
+                std::vector<uint8_t> fileData(static_cast<size_t>(size));
+                file.read(reinterpret_cast<char*>(fileData.data()), static_cast<std::streamsize>(fileData.size()));
+                if (!file)
+                    return false;
+
+                if (std::memcmp(fileData.data(), "SPRK", 4) != 0)
+                    return false;
+                const uint32_t version = DecodeLittleEndian32(fileData.data() + 4);
+                if (version <= kCurrentSaveVersion)
+                    return false;
+                if (TrailerVerifiesWithHeaderVersion(fileData, kCurrentSaveVersion))
+                    return false;
+
+                outVersion = version;
+                return true;
+            }
+            catch (...)
+            {
+                return false;
+            }
         }
 
         /// @brief Locate the single Transform record of a serialized entity, if any.
@@ -1258,6 +1317,23 @@ namespace Spark
         const std::string savePath = GetSavePath(slotName);
         if (!ReadFromFile(savePath, data))
         {
+            // A primary written by a newer build is not corruption. Falling back to the
+            // older retained copy here would silently roll the player's progress back,
+            // and the next Save() would then overwrite the newer primary for good.
+            uint32_t newerVersion = 0;
+            if (IsNewerFormatSaveFile(savePath, newerVersion))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Save,
+                                "Load: slot '%s' was written by a newer SparkEngine build (save format v%u; this build "
+                                "reads v%u..v%u). Refusing to load its older retained copy, which would silently roll "
+                                "progress back; open the slot with a build that supports v%u, or delete the slot to "
+                                "discard it",
+                                slotName.c_str(), newerVersion, kOldestSupportedSaveVersion, kCurrentSaveVersion,
+                                newerVersion);
+                EventBus::Global().Publish<LoadCompleteEvent>({slotName, false});
+                return false;
+            }
+
             // A corrupt or interrupted write must not cost the player the slot: fall
             // back to the copy retained by the previous successful Save.
             const std::string backupPath = savePath + kSaveBackupSuffix;
@@ -1417,6 +1493,13 @@ namespace Spark
                     std::any_of(slots.begin(), slots.end(),
                                 [&slotName](const SaveMetadata& listed) { return listed.slotName == slotName; });
                 if (alreadyListed)
+                    continue;
+
+                // Load() refuses the retained copy of a slot whose primary was written by
+                // a newer build; listing that older copy would advertise a rollback.
+                fs::path primary = retained;
+                primary.replace_extension();
+                if (uint32_t newerVersion = 0; IsNewerFormatSaveFile(primary.string(), newerVersion))
                     continue;
 
                 SaveMetadata meta;
@@ -2091,6 +2174,20 @@ namespace Spark
                         std::filesystem::remove(tmpPath, removeError);
                         return false;
                     }
+                }
+                else if (uint32_t newerVersion = 0; IsNewerFormatSaveFile(filepath, newerVersion))
+                {
+                    // A newer build's save is unreadable here only because this build is
+                    // older. Replacing it would be a destructive downgrade of data that is
+                    // still valid, so the write is refused and both files stay untouched.
+                    SPARK_LOG_ERROR(Spark::LogCategory::Save,
+                                    "WriteToFile: refusing to overwrite '%s': it was written by a newer SparkEngine "
+                                    "build (save format v%u; this build writes v%u). Save to a different slot, or "
+                                    "delete this slot explicitly to discard the newer data",
+                                    filepath.c_str(), newerVersion, kCurrentSaveVersion);
+                    std::error_code removeError;
+                    std::filesystem::remove(tmpPath, removeError);
+                    return false;
                 }
                 else
                 {
