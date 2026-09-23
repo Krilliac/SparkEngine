@@ -369,7 +369,12 @@ namespace Spark::Net
 
                                               if (m_callbacks.onChatMessage)
                                                   m_callbacks.onChatMessage(chatText);
-                                              Log("Chat: " + chatText);
+                                              // The server log also carries the administration audit trail.
+                                              // Remote text is escaped into one bounded field so a client
+                                              // cannot end its record and forge an audit line.
+                                              Log("Chat: client=" + std::to_string(msg.senderID) +
+                                                  " bytes=" + std::to_string(chatText.size()) + " text=\"" +
+                                                  EscapeRemoteTextForLog(chatText) + "\"");
                                           });
     }
 
@@ -1062,6 +1067,53 @@ namespace Spark::Net
         oss << "LAN Bcast:  " << (m_lanBroadcastActive.load(std::memory_order_acquire) ? "ON" : "OFF") << "\n";
         oss << "Admin Cmds: LOCAL API ONLY\n";
         return oss.str();
+    }
+
+    std::string DedicatedServer::EscapeRemoteTextForLog(std::string_view text)
+    {
+        static constexpr char kHexDigits[] = "0123456789ABCDEF";
+        const std::size_t copied = std::min(text.size(), kMaxLoggedRemoteTextBytes);
+
+        std::string escaped;
+        escaped.reserve(copied + 16);
+        for (std::size_t i = 0; i < copied; ++i)
+        {
+            const auto byte = static_cast<unsigned char>(text[i]);
+            switch (byte)
+            {
+            case '\\':
+                escaped += "\\\\";
+                break;
+            case '"':
+                escaped += "\\\"";
+                break;
+            case '\n':
+                escaped += "\\n";
+                break;
+            case '\r':
+                escaped += "\\r";
+                break;
+            case '\t':
+                escaped += "\\t";
+                break;
+            default:
+                if (byte < 0x20 || byte >= 0x7F)
+                {
+                    escaped += "\\x";
+                    escaped += kHexDigits[(byte >> 4) & 0x0F];
+                    escaped += kHexDigits[byte & 0x0F];
+                }
+                else
+                {
+                    escaped += static_cast<char>(byte);
+                }
+                break;
+            }
+        }
+
+        if (text.size() > copied)
+            escaped += "...[truncated]";
+        return escaped;
     }
 
     void DedicatedServer::Log(const std::string& message)

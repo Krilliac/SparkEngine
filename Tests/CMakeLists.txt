@@ -1012,6 +1012,7 @@ target_sources(SparkTests PRIVATE
     TestLoggerSinksReal.cpp
     TestModuleLifecycleReal.cpp
     TestRunnerSemanticsReal.cpp
+    TestSEC100ChatAuditLogReal.cpp
     TestSaveSystemRoundTripReal.cpp
     TestSecurityParsersReal.cpp
     TestShaderCompilerReal.cpp
