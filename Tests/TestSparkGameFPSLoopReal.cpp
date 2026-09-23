@@ -206,6 +206,39 @@ TEST(FPSAssets_ResolveIsRelativeToTheAssetRootNotTheParentOfTheCwd)
     EXPECT_TRUE(resolved.find(L"../Assets") == std::wstring::npos);
 }
 
+TEST(FPSAssets_ResolveScenePathAcceptsPackageRelativeForms)
+{
+    std::filesystem::path resolved;
+    std::string error;
+    ASSERT_TRUE(FPSAssets::ResolveScenePath("level1.scene", resolved, error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_TRUE(resolved == std::filesystem::weakly_canonical(FPSAssets::Root() / "Scenes" / "level1.scene"));
+
+    std::filesystem::path prefixed;
+    ASSERT_TRUE(FPSAssets::ResolveScenePath("Assets/Scenes/level1.scene", prefixed, error));
+    EXPECT_TRUE(prefixed == resolved);
+}
+
+TEST(FPSAssets_ResolveScenePathRejectsEscapesAndUnsupportedFiles)
+{
+    std::filesystem::path resolved;
+    std::string error;
+    EXPECT_FALSE(FPSAssets::ResolveScenePath("../Models/pistol.obj", resolved, error));
+    EXPECT_TRUE(!error.empty());
+    EXPECT_FALSE(FPSAssets::ResolveScenePath("Scenes/../Models/pistol.obj", resolved, error));
+    EXPECT_TRUE(!error.empty());
+    EXPECT_FALSE(FPSAssets::ResolveScenePath("C:/outside.scene", resolved, error));
+    EXPECT_STR_CONTAINS(error, "absolute");
+    EXPECT_FALSE(FPSAssets::ResolveScenePath("missing.scene", resolved, error));
+    EXPECT_STR_CONTAINS(error, "does not exist");
+    EXPECT_FALSE(FPSAssets::ResolveScenePath("level1.json", resolved, error));
+    EXPECT_STR_CONTAINS(error, ".scene");
+    EXPECT_FALSE(FPSAssets::ResolveScenePath("Scenes/不存在.scene", resolved, error));
+    EXPECT_STR_CONTAINS(error, "does not exist");
+    EXPECT_FALSE(FPSAssets::ResolveScenePath(std::string(4097, 'a'), resolved, error));
+    EXPECT_STR_CONTAINS(error, "too long");
+}
+
 // ============================================================================
 // Death -> respawn -> score loop (mod-fps-02, mod-fps-21)
 // ============================================================================

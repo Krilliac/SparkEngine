@@ -338,6 +338,20 @@ void SparkGameModule::RegisterGameConsoleCommands()
         "Show the live Spark Arena match, wave, player, and progression status");
 
     console.RegisterCommand(
+        "scene_load",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() != 1)
+                return "Usage: scene_load <level.scene|Scenes/level.scene>";
+            if (!game)
+                return "Game not available";
+            return game->LoadScene(args.front()) ? "Scene reloaded successfully: " + args.front()
+                                                 : "Scene reload failed: " + args.front();
+        },
+        "Reload a scene from the trusted FPS Assets/Scenes directory", "Scene",
+        "scene_load <level.scene|Scenes/level.scene>");
+
+    console.RegisterCommand(
         "game_timescale",
         [game](const std::vector<std::string>& args) -> std::string
         {

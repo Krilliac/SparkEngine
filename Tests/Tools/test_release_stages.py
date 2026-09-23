@@ -56,6 +56,7 @@ def predecessor_candidate():
         "sourceCommitEvidence": {"commit": "0123456789abcdef0123456789abcdef01234567", "reviewPath": "review.json"},
         "requiredGateIds": ["technical", "mixed", "predecessor-publication"],
         "blockingWorkItemIds": ["build", "predecessor-publish"],
+        "qualificationSubstitutions": {},
         "publicationFinalization": {
             "workItemIds": ["predecessor-publish"], "gateId": "predecessor-publication", "environment": "stable-release",
         },
@@ -90,6 +91,21 @@ class ReleaseStageTests(unittest.TestCase):
         contract = predecessor_candidate()
         stage = contract["readiness"]["predecessorRelease"]
         stage["publicationFinalization"]["workItemIds"] = ["publish"]
+        self.assertTrue(predecessor_candidate_readiness_errors(contract))
+
+    def test_predecessor_substitution_requires_an_evidenced_equivalent(self):
+        contract = predecessor_candidate()
+        contract["readiness"]["predecessorRelease"]["qualificationSubstitutions"] = {"build": "equivalent"}
+        contract["workItems"].append({"id": "equivalent", "status": "done", "dependencies": []})
+        self.assertTrue(predecessor_candidate_readiness_errors(contract))
+
+    def test_predecessor_equivalent_does_not_mark_v1_source_done(self):
+        contract = predecessor_candidate()
+        contract["readiness"]["predecessorRelease"]["qualificationSubstitutions"] = {"build": "equivalent"}
+        contract["workItems"].append({
+            "id": "equivalent", "status": "open", "dependencies": [],
+            "profileApplicability": {"test-profile": "outside"}, "predecessorOnly": True,
+        })
         self.assertTrue(predecessor_candidate_readiness_errors(contract))
         contract = predecessor_candidate()
         contract["workItems"][-1]["status"] = "done"

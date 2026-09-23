@@ -5,6 +5,9 @@
 
 #include "FPSAssetPaths.h"
 
+#include <algorithm>
+#include <string_view>
+
 // Executable discovery needs the native API, not private engine platform types.
 #ifdef _WIN32
 #include <windows.h>
@@ -112,6 +115,80 @@ namespace Spark
 
             const std::u8string utf8 = full.u8string();
             return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+        }
+
+        bool ResolveScenePath(const std::string& userPath, std::filesystem::path& resolved, std::string& error)
+        {
+            resolved.clear();
+            error.clear();
+            if (userPath.empty())
+            {
+                error = "scene path is empty";
+                return false;
+            }
+            if (userPath.size() > 4096 || userPath.find('\0') != std::string::npos)
+            {
+                error = "scene path is malformed or too long";
+                return false;
+            }
+
+            // Normalize separators before parsing. This also makes traversal
+            // checks identical on Windows and POSIX package smoke runners.
+            std::string normalized = userPath;
+            std::replace(normalized.begin(), normalized.end(), '\\', '/');
+            const std::u8string normalizedU8(reinterpret_cast<const char8_t*>(normalized.data()), normalized.size());
+            const std::filesystem::path supplied = std::filesystem::u8path(normalizedU8);
+            if (supplied.is_absolute() || !supplied.root_name().empty() || normalized.front() == '/')
+            {
+                error = "absolute scene paths are not permitted";
+                return false;
+            }
+
+            constexpr std::string_view kAssetsScenes = "Assets/Scenes/";
+            constexpr std::string_view kScenes = "Scenes/";
+            if (normalized.starts_with(kAssetsScenes))
+                normalized.erase(0, kAssetsScenes.size());
+            else if (normalized.starts_with(kScenes))
+                normalized.erase(0, kScenes.size());
+
+            const std::u8string relativeU8(reinterpret_cast<const char8_t*>(normalized.data()), normalized.size());
+            const std::filesystem::path relative = std::filesystem::u8path(relativeU8);
+            if (normalized.empty() || relative.has_root_path() || relative.extension() != ".scene")
+            {
+                error = "scene must be a relative .scene file";
+                return false;
+            }
+            for (const auto& component : relative)
+            {
+                if (component == ".." || component == "." || component.empty())
+                {
+                    error = "scene traversal or empty path component is not permitted";
+                    return false;
+                }
+            }
+
+            std::error_code ec;
+            const auto sceneRoot = std::filesystem::weakly_canonical(Root() / "Scenes", ec);
+            if (ec || !std::filesystem::is_directory(sceneRoot, ec))
+            {
+                error = "trusted scene directory is unavailable";
+                return false;
+            }
+            const auto candidate = std::filesystem::weakly_canonical(sceneRoot / relative, ec);
+            if (ec || !std::filesystem::is_regular_file(candidate, ec))
+            {
+                error = "scene file does not exist";
+                return false;
+            }
+            const auto relativeCandidate = candidate.lexically_relative(sceneRoot);
+            if (relativeCandidate.empty() || relativeCandidate.is_absolute() ||
+                relativeCandidate.begin()->string() == "..")
+            {
+                error = "scene resolves outside the trusted scene directory";
+                return false;
+            }
+            resolved = candidate;
+            return true;
         }
     } // namespace FPSAssets
 } // namespace Spark

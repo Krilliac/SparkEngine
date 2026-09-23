@@ -14,6 +14,28 @@
       "The repository-generated site bundle and handoff match the exact tested commit."
     ]
   },
+  "predecessorRelease": {
+    "id": "v0.9.0-predecessor",
+    "profileId": "stable-v1",
+    "state": "blocked",
+    "owner": "unassigned",
+    "signOffEvidence": [],
+    "sourceCommitEvidence": {
+      "commit": "",
+      "reviewPath": "docs/readiness/ENGINE_READINESS_HANDOFF.md"
+    },
+    "requiredGateIds": ["G00", "G01", "G02", "G03", "G04", "G05", "G06", "G07", "G08", "G09", "G10", "G13", "G14", "G15", "G16", "G18"],
+    "blockingWorkItemIds": ["ASSET-220", "BLD-100", "CI-100", "CI-110", "CI-120", "DOC-400", "DOC-410", "EDT-210", "ENG-220", "GOV-400", "HEAD-220", "INST-130", "INST-131", "LIFE-200", "MOD-290", "MOD-310", "OPS-100", "PERF-100", "PLT-200", "RDY-000", "RDY-010", "RDY-020", "REL-100", "REL-110", "REL-190", "REL-192", "REL-191", "RHI-210", "SAVE-230", "SDK-240", "SEC-100", "SEC-110"],
+    "qualificationSubstitutions": {
+      "INST-131": "INST-132",
+      "REL-192": "REL-191"
+    },
+    "publicationFinalization": {
+      "workItemIds": ["REL-191"],
+      "gateId": "G18",
+      "environment": "stable-release"
+    }
+  },
   "statusPromotionRules": [
     "Implementation, verification, support, and release are independent dimensions; never infer one from another.",
     "A capability cannot be release-ready while a required gate is not passing or a blocking work item is open.",
@@ -1296,6 +1318,7 @@
         "BLD-100",
         "REL-100",
         "INST-130",
+        "INST-131",
         "REL-200"
       ]
     },
@@ -1647,8 +1670,21 @@
       ],
       "blockingWorkItemIds": [
         "REL-190",
+        "REL-192",
         "REL-200"
       ]
+    },
+    {
+      "id": "G18",
+      "completionPhase": "publication-finalization",
+      "name": "Predecessor release rehearsal and sign-off",
+      "area": "release",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "The reviewed v0.9.0 predecessor has not completed its exact-SHA bootstrap rehearsal or protected sign-off.",
+      "acceptanceCriteria": ["Common qualification gates pass at the reviewed predecessor SHA", "Bootstrap recovery and retention evidence pass", "No N-1 upgrade result is substituted for predecessor evidence"],
+      "evidence": [{"type": "workflow", "path": ".github/workflows/release.yml", "label": "Release workflow"}],
+      "blockingWorkItemIds": ["REL-191"]
     }
   ],
   "releaseProfiles": [
@@ -2248,6 +2284,10 @@
         {
           "gateId": "G12",
           "reason": "The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported."
+        },
+        {
+          "gateId": "G18",
+          "reason": "G18 qualifies only the separately staged v0.9.0 predecessor; stable-v1 uses G17 and retains its own N-1 gate through REL-192."
         }
       ],
       "blockingWorkItemIds": [
@@ -2263,6 +2303,7 @@
         "GOV-400",
         "HEAD-220",
         "INST-130",
+        "INST-131",
         "LIFE-200",
         "MOD-290",
         "MOD-310",
@@ -2275,6 +2316,7 @@
         "REL-100",
         "REL-110",
         "REL-190",
+        "REL-192",
         "REL-200",
         "RHI-210",
         "SAVE-230",
@@ -2488,7 +2530,11 @@
         "workItemIds": [
           "GOV-400",
           "DOC-400",
+          "INST-131",
+          "INST-132",
           "REL-190",
+          "REL-191",
+          "REL-192",
           "REL-200"
         ]
       }

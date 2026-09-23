@@ -13,12 +13,13 @@ PUBLICATION_ENVIRONMENT = "stable-release"
 _COMMIT_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
-def _dependencies(items: dict, roots: set[str]) -> set[str]:
+def _dependencies(items: dict, roots: set[str], excluded: set[str] | None = None) -> set[str]:
+    excluded = excluded or set()
     visited: set[str] = set()
     pending = list(roots)
     while pending:
         current = pending.pop()
-        if current not in visited:
+        if current not in visited and current not in excluded:
             visited.add(current)
             pending.extend(items.get(current, {}).get("dependencies", []))
     return visited
@@ -140,7 +141,7 @@ def predecessor_candidate_readiness_errors(contract: dict[str, Any]) -> list[str
     required = {
         "id", "profileId", "state", "owner", "signOffEvidence",
         "sourceCommitEvidence", "requiredGateIds", "blockingWorkItemIds",
-        "publicationFinalization",
+        "publicationFinalization", "qualificationSubstitutions",
     }
     if set(stage) != required:
         errors.append("predecessorRelease: requires exactly the reviewed predecessor stage fields")
@@ -210,6 +211,15 @@ def predecessor_candidate_readiness_errors(contract: dict[str, Any]) -> list[str
             or not isinstance(source.get("reviewPath"), str) or not source["reviewPath"].strip()):
         errors.append("predecessorRelease.sourceCommitEvidence: reviewed immutable source commit and reviewPath are required")
 
+    substitutions = stage.get("qualificationSubstitutions")
+    if not isinstance(substitutions, dict):
+        errors.append("predecessorRelease.qualificationSubstitutions: must map v1 item IDs to predecessor equivalents")
+        substitutions = {}
+    elif any(not isinstance(source_id, str) or not source_id or not isinstance(target_id, str) or not target_id
+             for source_id, target_id in substitutions.items()):
+        errors.append("predecessorRelease.qualificationSubstitutions: keys and values must be nonempty strings")
+        substitutions = {}
+
     profile_finalization = profile.get("publicationFinalization", {})
     profile_finalizer_list, profile_finalizer_error = _string_list(
         profile_finalization.get("workItemIds") if isinstance(profile_finalization, dict) else None,
@@ -267,6 +277,16 @@ def predecessor_candidate_readiness_errors(contract: dict[str, Any]) -> list[str
         errors.append("predecessorRelease.publicationFinalization.gateId: must be a required publication-finalization gate")
 
     common_items = profile_blocking_ids - profile_finalizers
+    common_qualification = _dependencies(items, common_items)
+    for source_id, target_id in substitutions.items():
+        if source_id in profile_finalizers or source_id not in common_qualification:
+            errors.append(f"predecessorRelease.qualificationSubstitutions: {source_id} is not a v1 qualification dependency")
+        target_item = items.get(target_id)
+        target_applicability = target_item.get("profileApplicability", {}).get(profile_id) if isinstance(target_item, dict) else None
+        if (target_item is None or target_id in profile_finalizers
+                or (target_applicability not in {"required", "shared"}
+                    and not (target_applicability == "outside" and target_item.get("predecessorOnly") is True))):
+            errors.append(f"predecessorRelease.qualificationSubstitutions: {target_id} is not a valid predecessor equivalent")
     stage_blocking, stage_blocking_error = _string_list(stage.get("blockingWorkItemIds"), nonempty=True)
     if stage_blocking_error:
         errors.append(f"predecessorRelease.blockingWorkItemIds: {stage_blocking_error}")
@@ -287,7 +307,14 @@ def predecessor_candidate_readiness_errors(contract: dict[str, Any]) -> list[str
         if item.get("plannedCiJobs") or item.get("plannedTestSelectors"):
             errors.append(f"predecessorRelease: finalizer {item_id} conceals planned qualification")
 
-    required_items = _dependencies(items, set(stage_blocking))
+    # The v1 publication finalizer is not a predecessor requirement.  Other
+    # v1 gates may mention it transitively, so remove it from dependency
+    # traversal as well; only the predecessor's own finalizer may remain
+    # in-progress.
+    excluded = set(substitutions) | profile_finalizers
+    required_items = _dependencies(items, set(stage_blocking), excluded)
+    for target_id in substitutions.values():
+        required_items.update(_dependencies(items, {target_id}))
     for gate_id in stage_gates or []:
         gate = gates.get(gate_id, {})
         blockers = set(gate.get("blockingWorkItemIds", []))

@@ -388,8 +388,15 @@ bool Game::LoadScene(const std::string& scenePath)
 
     try
     {
-        // Convert string to wstring for scene manager
-        std::wstring wScenePath(scenePath.begin(), scenePath.end());
+        std::filesystem::path trustedScenePath;
+        std::string pathError;
+        if (!Spark::FPSAssets::ResolveScenePath(scenePath, trustedScenePath, pathError))
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"Scene load rejected: " + std::wstring(pathError.begin(), pathError.end()),
+                                     L"ERROR");
+            return false;
+        }
+        const std::wstring wScenePath = trustedScenePath.wstring();
         bool success = m_sceneManager->LoadScene(wScenePath);
 
         if (success)
