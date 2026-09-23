@@ -36,10 +36,11 @@
 #include "Console/AdvancedConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
 #include "Audio/MusicManager.h"
-#include <charconv>
 #include <cmath>
 #include <filesystem>
 #include <format>
+#include <locale>
+#include <sstream>
 
 // Centralized logging macros (previously defined locally with inconsistent rate limits)
 #include "Utils/LogMacros.h"
@@ -147,8 +148,13 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         {
             auto parseFiniteFloat = [](const std::string& text, float& value)
             {
-                const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
-                return result.ec == std::errc{} && result.ptr == text.data() + text.size() && std::isfinite(value);
+                if (text.empty())
+                    return false;
+                std::istringstream stream(text);
+                stream.imbue(std::locale::classic());
+                stream >> value;
+                stream >> std::ws;
+                return !stream.fail() && stream.eof() && std::isfinite(value);
             };
             float nearPlane = 0.0f;
             float farPlane = 0.0f;
