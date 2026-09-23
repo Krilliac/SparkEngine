@@ -2721,8 +2721,8 @@
     },
     {
       "path": "Scenes/level1.scene",
-      "sha256": "59d2b309543e16dd0f669a19397cc8c3775abb66f35b51dcb96102dc0b329b95",
-      "size": 10792
+      "sha256": "c3dc57fc4dddd19871aa68dbdc4eb900138aa5de4bb8253d50c53957fea66c6d",
+      "size": 10860
     },
     {
       "path": "Scripts/PlayerController.as",

@@ -8,9 +8,9 @@
 **Pre-release hardening — `blocked`.** SparkEngine is source-usable and feature-rich, but it is not yet a fully ready engine release. Required CI can mask failures, no versioned release exists, no versioned Shipping artifact has same-commit stable-v1 qualification, code-signing, install, uninstall, and rollback evidence, and the stable-v1 Windows, D3D11, editor, NullRHI, installed-package, public-SDK, and SparkGameFPS evidence is not certified.
 
 - Capabilities tracked: **22**
-- Ledger gates marked blocking: **18** (profile applicability determines release impact)
-- Gate states: **0 passing**, **0 at risk**, **18 blocked**, **0 not evaluated**
-- Work items: **59 total**, **49 unfinished ledger items marked blocking** (profile applicability determines release impact)
+- Ledger gates marked blocking: **19** (profile applicability determines release impact)
+- Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
+- Work items: **64 total**, **54 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -147,8 +147,9 @@ Configuration-surface exceptions (every omitted option remains required):
 - Explicitly excluded:
   - `G11` — Scripting is outside the profile: AngelScript and visual scripting are declared experimental and no profile claim depends on them.
   - `G12` — The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported.
+  - `G18` — G18 qualifies only the separately staged v0.9.0 predecessor; stable-v1 uses G17 and retains its own N-1 gate through REL-192.
 
-- Blocking work: `ASSET-220`, `BLD-100`, `CI-100`, `CI-110`, `CI-120`, `DOC-400`, `DOC-410`, `EDT-210`, `ENG-220`, `GOV-400`, `HEAD-220`, `INST-130`, `LIFE-200`, `MOD-290`, `MOD-310`, `OPS-100`, `PERF-100`, `PLT-200`, `RDY-000`, `RDY-010`, `RDY-020`, `REL-100`, `REL-110`, `REL-190`, `REL-200`, `RHI-210`, `SAVE-230`, `SDK-240`, `SEC-100`, `SEC-110`, `SEC-120`
+- Blocking work: `ASSET-220`, `BLD-100`, `CI-100`, `CI-110`, `CI-120`, `DOC-400`, `DOC-410`, `EDT-210`, `ENG-220`, `GOV-400`, `HEAD-220`, `INST-130`, `INST-131`, `LIFE-200`, `MOD-290`, `MOD-310`, `OPS-100`, `PERF-100`, `PLT-200`, `RDY-000`, `RDY-010`, `RDY-020`, `REL-100`, `REL-110`, `REL-190`, `REL-192`, `REL-200`, `RHI-210`, `SAVE-230`, `SDK-240`, `SEC-100`, `SEC-110`, `SEC-120`
 
 ### Profile limitations
 
@@ -175,7 +176,7 @@ Configuration-surface exceptions (every omitted option remains required):
 | `G02` Supported build matrix | build | **blocked** | yes | Declared host/compiler configurations configure and build from clean checkout; Every shipped target and real module library is built; Shipping configuration exists and is distinct from Debug/Release; Submodule/toolchain inputs are pinned; Configured build-matrix evidence is producer-verified only by an independently verified protected external attestation; a same-job OIDC token, mutable workflow, checkout, receipt, artifact path, or hash cannot satisfy this gate | `CI-120`, `BLD-100` |
 | `G03` Production-source test coverage | tests | **blocked** | yes | Every in-profile real module library loads and executes in tests; No mirror-only or tautological test satisfies release; Coverage thresholds are explicit and enforced; Sanitizer and concurrency lanes fail closed; Experimental module lifecycle evidence remains owned by RDY-015 outside stable-v1 | `RDY-010`, `CI-110` |
 | `G04` Asset, cook, and package integrity | content | **blocked** | yes | Every discovered module has a validated content manifest; Zero missing or case-mismatched references in declared manifests; In-profile cooked packages launch without repository-relative dependencies; Stable package smoke covers clean Windows 11 machines; Experimental module package debt remains outside stable-v1 | `RDY-020`, `ASSET-220` |
-| `G05` Versioned Shipping artifacts | release | **blocked** | yes | Version is derived from the tag and embedded everywhere; Shipping artifacts are deterministic; Installer/uninstaller/upgrade/rollback smoke tests pass; Release notes and compatibility policy are published | `BLD-100`, `REL-100`, `INST-130`, `REL-200` |
+| `G05` Versioned Shipping artifacts | release | **blocked** | yes | Version is derived from the tag and embedded everywhere; Shipping artifacts are deterministic; Installer/uninstaller/upgrade/rollback smoke tests pass; Release notes and compatibility policy are published | `BLD-100`, `REL-100`, `INST-130`, `INST-131`, `REL-200` |
 | `G06` Supply-chain integrity | security | **blocked** | yes | Every artifact is signed and checksummed; SBOM and provenance are attached; Third-party license/manifest validation is blocking; Dependency and CodeQL findings follow an owned severity policy | `REL-110`, `SEC-110` |
 | `G07` Security and hostile-input safety | security | **blocked** | yes | Threat model and security ownership are current; Shipped remote administration is disabled by default and cannot expose credentials; Save, scene, asset, shader, archive, manifest, package, and crash parsers meet fuzz and bounds budgets; Packet/protocol fuzzing stays with NET-100 behind G12; Script fuzzing stays with ENG-200 behind G11 | `SEC-100`, `SEC-120` |
 | `G08` Platform support certification | platform | **blocked** | yes | Every platform inside a release profile has a declared compiler/OS/device matrix; Build, install, launch, content, input, audio, crash, save, upgrade, and uninstall pass on it; Experimental and unsupported targets remain labeled and keep their own certification work outside this gate | `PLT-200` |
@@ -187,7 +188,8 @@ Configuration-surface exceptions (every omitted option remains required):
 | `G14` Performance, reliability, and operations | operations | **blocked** | yes | Representative CPU/GPU/memory budgets are versioned; Long soaks show bounded memory and tick/frame percentiles; Crashes produce symbolized actionable reports with retained symbols; Production server observability, load, backup, and incident drills stay gated by OPS-110 behind G12 with the service surfaces they serve | `PERF-100`, `OPS-100` |
 | `G15` Documentation, legal, and support truth | governance | **blocked** | yes | Docs health is current and every link resolves; License, attribution, trademark, privacy, security, support, and contribution text is reviewed for the release; Quick starts run from clean machines; Website wording is generated from the tested contract | `DOC-410`, `GOV-400`, `DOC-400` |
 | `G16` Compatibility and migration | compatibility | **blocked** | yes | Version contracts exist for SDK, modules, assets, saves, scenes, and scripts; N-1 upgrade and rollback fixtures pass; Breaking changes fail with actionable diagnostics; Release notes enumerate migrations; Network protocol version contracts stay gated by NET-100 behind G12 | `SDK-240`, `SAVE-230`, `REL-200` |
-| `G17` Release rehearsal and sign-off | release | **blocked** | yes | A release candidate tag passes every gate required by each target profile; Excluded gates may remain blocked and stay explicitly unsupported; Artifacts are installed and upgraded on clean supported hosts; Rollback and recovery drills pass; Named owners sign repository evidence before the final tag | `REL-190`, `REL-200` |
+| `G17` Release rehearsal and sign-off | release | **blocked** | yes | A release candidate tag passes every gate required by each target profile; Excluded gates may remain blocked and stay explicitly unsupported; Artifacts are installed and upgraded on clean supported hosts; Rollback and recovery drills pass; Named owners sign repository evidence before the final tag | `REL-190`, `REL-192`, `REL-200` |
+| `G18` Predecessor immutable publication and independent acceptance | release | **blocked** | yes | REL-191 common qualification and bootstrap rehearsal pass at the reviewed predecessor SHA before publication; Krilliac gives protected owner approval with administrative bypass disabled; Published immutable assets are independently downloaded and verified without claiming N-1 upgrade coverage | `INST-132`, `REL-191`, `REL-193` |
 
 ## Capability truth ledger
 
@@ -267,7 +269,7 @@ Certify Windows/D3D11, headless, runtime, editor, assets, installer, saves, SDK,
 | [`LIFE-200`](#life-200--close-runtime-ownership-shutdown-reload-and-failure-semantics) Close runtime ownership, shutdown, reload, and failure semantics | P0 | **open** | `RDY-010`, `BLD-100` | `HEAD-220`, `EDT-210`, `ENG-200` |
 | [`EDT-210`](#edt-210--finish-the-editor-authoring-and-undo-safe-package-round-trip) Finish the editor authoring and undo-safe package round trip | P1 | **open** | `RDY-010`, `RDY-020`, `LIFE-200` | `RHI-210`, `ENG-200`, `SAVE-230` |
 | [`ASSET-220`](#asset-220--consolidate-cooking-packaging-cli-and-installed-consumer-behavior) Consolidate cooking, packaging, CLI, and installed consumer behavior | P0 | **open** | `RDY-020`, `BLD-100`, `LIFE-200` | `EDT-210`, `SAVE-230`, `SDK-240` |
-| [`INST-130`](#inst-130--make-installer-and-updater-verified-transactional-and-recoverable) Make installer and updater verified, transactional, and recoverable | P0 | **open** | `ASSET-220`, `REL-100`, `REL-110` | `PLT-200`, `SDK-240` |
+| [`INST-130`](#inst-130--make-installer-clean-install-repair-and-uninstall-behavior-verified-and-recoverable) Make installer clean-install, repair, and uninstall behavior verified and recoverable | P0 | **open** | `ASSET-220`, `REL-100`, `REL-110` | `PLT-200`, `SDK-240` |
 | [`SAVE-230`](#save-230--version-saves-scenes-assets-editor-data-and-migrations) Version saves, scenes, assets, editor data, and migrations | P0 | **open** | `RDY-000`, `RDY-010`, `LIFE-200` | `EDT-210`, `ASSET-220`, `SDK-240` |
 | [`SDK-240`](#sdk-240--stabilize-sdk-module-abi-package-exports-and-compatibility-diagnostics) Stabilize SDK, module ABI, package exports, and compatibility diagnostics | P0 | **open** | `ASSET-220`, `LIFE-200`, `REL-100` | `SAVE-230`, `EDT-210` |
 | [`PERF-100`](#perf-100--make-performance-memory-startup-package-size-and-visual-regression-release-gates) Make performance, memory, startup, package size, and visual regression release gates | P1 | **in-progress** | `CI-110`, `BLD-100`, `RHI-210` | `EDT-210`, `SAVE-230`, `SDK-240` |
@@ -332,7 +334,12 @@ Finish governance, publish the live bundle, rehearse every gate required by each
 |---|---|---|---|---|
 | [`GOV-400`](#gov-400--resolve-licensing-third-party-notices-trademark-contribution-security-and-support-policy) Resolve licensing, third-party notices, trademark, contribution, security, and support policy | P0 | **open** | `RDY-000`, `SEC-110`, `REL-100` | `DOC-400` |
 | [`DOC-400`](#doc-400--publish-the-repository-synchronized-site-data-bundle-and-complete-public-framing) Publish the repository-synchronized site-data bundle and complete public framing | P0 | **in-progress** | `RDY-000` | `DOC-410`, `CI-100`, `GOV-400` |
+| [`INST-131`](#inst-131--qualify-stable-v1-n-1-upgrade-and-rollback-against-an-immutable-predecessor) Qualify stable-v1 N-1 upgrade and rollback against an immutable predecessor | P0 | **open** | `INST-130`, `REL-100`, `REL-110` | `REL-190` |
+| [`INST-132`](#inst-132--qualify-predecessor-bootstrap-recovery-without-an-n-1-dependency) Qualify predecessor bootstrap recovery without an N-1 dependency | P0 | **open** | `INST-130` | `INST-131` |
 | [`REL-190`](#rel-190--rehearse-and-approve-the-qualified-release-candidate-before-publication) Rehearse and approve the qualified release candidate before publication | P0 | **blocked** | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
+| [`REL-191`](#rel-191--rehearse-the-predecessor-release-without-n-1-upgrade-claims) Rehearse the predecessor release without N-1 upgrade claims | P0 | **open** | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
+| [`REL-192`](#rel-192--qualify-stable-v1-n-1-release-rehearsal-and-rollback) Qualify stable-v1 N-1 release rehearsal and rollback | P0 | **blocked** | `REL-190`, `INST-131` | — |
+| [`REL-193`](#rel-193--publish-and-independently-accept-the-reviewed-v090-predecessor) Publish and independently accept the reviewed v0.9.0 predecessor | P0 | **in-progress** | `REL-191` | — |
 | [`REL-200`](#rel-200--publish-and-independently-verify-the-qualified-release) Publish and independently verify the qualified release | P0 | **blocked** | `REL-190` | — |
 
 ## Game-module parity baseline
@@ -2074,7 +2081,7 @@ ctest --test-dir /tmp/spark-consumer --output-on-failure --no-tests=error
 - Packager is canonical
 - CLI behavior is real or removed
 
-### INST-130 — Make installer and updater verified, transactional, and recoverable
+### INST-130 — Make installer clean-install, repair, and uninstall behavior verified and recoverable
 
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
@@ -2107,13 +2114,13 @@ The published installer configuration and public GUI claims diverge; prerequisit
 - Use secure unique staging paths and content-aware extraction
 - Verify hashes and signatures before extraction
 - Propagate fetch, configure, build, and install errors
-- Stage, verify, atomically activate, rollback, repair, and recover interruptions
+- Stage, verify, atomically activate, repair, uninstall, and recover interruptions for a fresh install
 - Generate a Windows install manifest and remove nonexistent refs
 
 **Acceptance criteria**
 
 1. Tampered download, failed fetch/build, wrong archive, or interruption never replaces a working install
-2. Fresh install, upgrade, downgrade policy, rollback, repair, and uninstall pass on Windows 11 x64
+2. Fresh install, repair, user-data retention, and uninstall pass on Windows 11 x64
 3. Capabilities match documentation exactly
 4. Only signed artifacts can enter the stable channel
 5. Experimental platform installers remain owned by their platform work
@@ -2126,7 +2133,7 @@ ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-te
 
 **Automated evidence**
 
-- Test selectors: `Installer_Tamper`, `Installer_AtomicUpdate`, `Installer_Rollback`, `Installer_Interrupted`, `Installer_Uninstall`
+- Test selectors: `Installer_Tamper`, `Installer_AtomicUpdate`, `Installer_Interrupted`, `Installer_Uninstall`
 - Required CI jobs: `installer-windows`
 - Performance / reliability budgets:
   - Install/update time and disk overhead budgets are recorded
@@ -2154,7 +2161,7 @@ ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-te
 
 **Definition of done**
 
-- Tamper/interruption/rollback tests pass
+- Tamper/interruption/repair/uninstall tests pass
 - Clean-host install matrix passes
 - Claims match
 
@@ -4890,6 +4897,143 @@ npm test
 - Parity/no-drift tests pass
 - Owner-only site is redeployed once with the runtime
 
+### INST-131 — Qualify stable-v1 N-1 upgrade and rollback against an immutable predecessor
+
+**Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=required
+
+N-1 upgrade and rollback are distinct from fresh-install correctness and cannot be used to qualify the first immutable predecessor. This item owns the stable-v1-only transaction proof against a previously published signed MSI and manifest.
+
+**Dependency contract**
+
+- Depends on: `INST-130`, `REL-100`, `REL-110`
+- Safe parallel work: `REL-190`
+
+**Source context**
+
+- `SparkInstaller/src/Installer.cpp`
+- `.github/scripts/provision-previous-windows-msi.py`
+- `.github/workflows/release.yml`
+
+**Entry points**
+
+- `SparkInstaller/src/Installer.cpp`
+- `.github/scripts/qualify-windows-msi.py`
+
+**Implementation scope**
+
+- Verify the greatest-lower immutable signed MSI and shipping manifest
+- Exercise upgrade, rollback, interruption, and external user-data retention on Windows 11 x64
+
+**Acceptance criteria**
+
+1. A real published signed predecessor is selected by exact tag, commit, digest, and asset identity
+2. Upgrade and rollback pass on a clean supported Windows host
+3. Failure or interruption never replaces the working install
+
+**Required commands**
+
+```bash
+ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error
+```
+
+**Automated evidence**
+
+- Test selectors: `Installer_Upgrade`, `Installer_Rollback`, `Installer_Interrupted`
+- Required CI jobs: `installer-windows`
+- Performance / reliability budgets:
+
+**Same-change updates**
+
+- Documentation:
+  - `SparkInstaller/README.md`
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G05
+  - G08
+  - G17
+- Website impact:
+  - Stable-v1 upgrade claims remain blocked until exact predecessor evidence exists
+
+**Risks and boundaries**
+
+- Risks:
+  - Using the candidate itself as its own predecessor
+  - Rollback data loss
+- Out of scope:
+  - Bootstrapping the first signed predecessor
+
+**Definition of done**
+
+- Hosted exact-SHA upgrade and rollback evidence passes against a signed immutable predecessor
+
+### INST-132 — Qualify predecessor bootstrap recovery without an N-1 dependency
+
+**Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=outside
+
+The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence is explicit fresh-install activation, interruption recovery, repair, uninstall, and external user-data retention; it never claims v1 N-1 upgrade coverage.
+
+**Dependency contract**
+
+- Depends on: `INST-130`
+- Safe parallel work: `INST-131`
+
+**Source context**
+
+- `SparkInstaller/src/Installer.cpp`
+- `SparkInstaller/tests/InstallerTransactionTests.cpp`
+
+**Entry points**
+
+- `SparkInstaller/src/Installer.cpp`
+
+**Implementation scope**
+
+- Exercise bootstrap activation and recovery with no predecessor input
+- Retain user data across repair and uninstall
+
+**Acceptance criteria**
+
+1. Fresh predecessor installation and interrupted activation recover without replacing user data
+2. Repair and uninstall pass with no N-1 claim
+3. Evidence is bound to the reviewed v0.9.0 source commit
+
+**Required commands**
+
+```bash
+ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error
+```
+
+**Automated evidence**
+
+- Test selectors: `Installer_Tamper`, `Installer_AtomicUpdate`, `Installer_Interrupted`, `Installer_Uninstall`
+- Required CI jobs: `installer-windows`
+- Performance / reliability budgets:
+
+**Same-change updates**
+
+- Documentation:
+  - `SparkInstaller/README.md`
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G05
+  - G08
+  - G17
+- Website impact:
+  - Predecessor bootstrap evidence remains internal until signed publication
+
+**Risks and boundaries**
+
+- Risks:
+  - Mistaking bootstrap recovery for N-1 compatibility
+- Out of scope:
+  - Upgrade from a prior stable release
+
+**Definition of done**
+
+- Exact-SHA bootstrap recovery evidence passes and is reviewed
+
 ### REL-190 — Rehearse and approve the qualified release candidate before publication
 
 **Priority:** P0 · **Status:** blocked · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
@@ -4918,18 +5062,18 @@ Technical rehearsal, qualification sign-off, and release approval must finish be
 
 - Freeze the exact release-candidate commit and tag
 - Run every qualification gate required by each target release profile at the same SHA
-- Install and upgrade on clean supported hosts
-- Exercise rollback, save/asset migration, crash ingestion, repair, and uninstall for the target profiles
+- Install on clean supported hosts and exercise crash ingestion, repair, and uninstall for the target profiles
+- Delegate N-1 upgrade, rollback, and migration proof to REL-192
 - Collect named qualification owner sign-off and protected release approval evidence before publication
 
 **Acceptance criteria**
 
 1. Every technical qualification item, transitive dependency, and qualification requirement from requiredGateIds has passing exact-SHA evidence before publication
 2. Excluded gates may remain blocked and cannot be presented as supported
-3. Clean install, N-1 upgrade, uninstall, rollback, repair, and recovery drills pass
+3. Clean install, uninstall, repair, and recovery drills pass; REL-192 separately gates N-1 upgrade and rollback
 4. Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance
 5. The profile-required-gates and release-approval jobs execute and block on failure; no planned rehearsal selector remains
-6. Named qualification sign-off is retained and the stable-release environment enforces the owner-only required approval contract with administrative bypass disabled
+6. Named qualification sign-off is retained; the protected stable-release environment requires Krilliac owner approval with administrative bypass disabled, and independent technical verification remains separate
 
 **Required commands**
 
@@ -4971,6 +5115,200 @@ sha256sum -c SHA256SUMS
 - All supported-host rehearsals pass at the candidate SHA
 - Qualification sign-off and protected approval evidence are retained
 - No planned qualification job or selector remains
+
+### REL-191 — Rehearse the predecessor release without N-1 upgrade claims
+
+**Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=outside
+
+The first signed predecessor needs the same exact-SHA release rehearsal, sign-off, and protected approval discipline as v1, but its rehearsal cannot invent an older stable release.
+
+**Dependency contract**
+
+- Depends on: `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220`
+- Safe parallel work: none declared
+
+**Source context**
+
+- `.github/workflows/release.yml`
+- `docs/site/readiness.json`
+
+**Entry points**
+
+- `.github/workflows/release.yml`
+
+**Implementation scope**
+
+- Freeze and review the exact predecessor source commit
+- Run all common qualification gates and protected approval checks
+- Record bootstrap install, repair, retention, and uninstall evidence without N-1 claims
+
+**Acceptance criteria**
+
+1. Every common qualification item and gate passes at the reviewed predecessor SHA
+2. Named sign-off and protected approval evidence are retained
+3. No N-1 upgrade or rollback result is presented as predecessor evidence
+
+**Required commands**
+
+```bash
+python3 tools/site-data/validate.py --require-predecessor-candidate
+```
+
+**Automated evidence**
+
+- Test selectors: `ReleaseProfilePredecessorRehearsal_*`
+- Required CI jobs: `profile-required-gates`, `release-approval`
+- Performance / reliability budgets:
+
+**Same-change updates**
+
+- Documentation:
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G17
+- Website impact:
+  - Predecessor remains candidate-only until immutable publication
+
+**Risks and boundaries**
+
+- Risks:
+  - Accidentally claiming v1 compatibility from bootstrap evidence
+- Out of scope:
+  - Publishing the predecessor or proving v1 N-1 compatibility
+
+**Definition of done**
+
+- Exact-SHA predecessor rehearsal and protected sign-off pass
+
+### REL-192 — Qualify stable-v1 N-1 release rehearsal and rollback
+
+**Priority:** P0 · **Status:** blocked · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=required
+
+N-1 installer upgrade, rollback, and migration evidence is a v1 requirement and is intentionally separate from the first predecessor rehearsal.
+
+**Dependency contract**
+
+- Depends on: `REL-190`, `INST-131`
+- Safe parallel work: none declared
+
+**Source context**
+
+- `.github/workflows/release.yml`
+- `docs/site/readiness.json`
+
+**Entry points**
+
+- `.github/workflows/release.yml`
+
+**Implementation scope**
+
+- Run the stable-v1 rehearsal against a previously published signed predecessor
+- Verify upgrade, rollback, save migration, and recovery evidence
+
+**Acceptance criteria**
+
+1. Exact-SHA v1 rehearsal passes with a real immutable predecessor
+2. Upgrade and rollback evidence is independently retained
+3. The first predecessor path cannot satisfy this item
+
+**Required commands**
+
+```bash
+python3 tools/site-data/validate.py --require-candidate-ready
+```
+
+**Automated evidence**
+
+- Test selectors: `ReleaseProfileNMinusOneRehearsal_*`
+- Required CI jobs: `profile-required-gates`, `release-approval`
+- Performance / reliability budgets:
+
+**Same-change updates**
+
+- Documentation:
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G17
+- Website impact:
+  - Stable-v1 remains blocked until N-1 rehearsal passes
+
+**Risks and boundaries**
+
+- Risks:
+  - Using predecessor bootstrap evidence as N-1 proof
+- Out of scope:
+  - First-predecessor bootstrap qualification
+
+**Definition of done**
+
+- Hosted exact-SHA N-1 rehearsal and rollback pass
+
+### REL-193 — Publish and independently accept the reviewed v0.9.0 predecessor
+
+**Priority:** P0 · **Status:** in-progress · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=outside
+
+The predecessor publication is a distinct terminal action. It must remain incomplete until the reviewed source, signed immutable artifacts, protected approval, and independent consumer verification exist.
+
+**Dependency contract**
+
+- Depends on: `REL-191`
+- Safe parallel work: none declared
+
+**Source context**
+
+- `.github/workflows/release.yml`
+- `docs/site/readiness.json`
+
+**Entry points**
+
+- `.github/workflows/release.yml`
+
+**Implementation scope**
+
+- Publish only the reviewed immutable predecessor artifacts
+- Independently download and verify hashes, signatures, provenance, and exact source identity
+
+**Acceptance criteria**
+
+1. Artifacts are immutable and signed under the disclosed project-pinned trust model
+2. Krilliac gives required owner approval with administrative bypass disabled
+3. A read-only independent consumer verifies the published predecessor before v1 uses it
+
+**Required commands**
+
+```bash
+python3 tools/site-data/validate.py --require-predecessor-candidate
+```
+
+**Automated evidence**
+
+- Test selectors: none declared
+- Required CI jobs: none declared
+- Performance / reliability budgets:
+
+**Same-change updates**
+
+- Documentation:
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G17
+- Website impact:
+  - No public ready claim until independent predecessor acceptance exists
+
+**Risks and boundaries**
+
+- Risks:
+  - Sole-owner approval must not be misrepresented as a second human review
+  - Mutating an immutable release
+- Out of scope:
+  - v1 N-1 qualification, which remains REL-192
+
+**Definition of done**
+
+- Signed predecessor publication and independent acceptance evidence are retained
 
 ### REL-200 — Publish and independently verify the qualified release
 

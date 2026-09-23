@@ -1684,7 +1684,7 @@
       "summary": "The reviewed v0.9.0 predecessor has not been signed, published immutably, and independently accepted.",
       "acceptanceCriteria": ["REL-191 common qualification and bootstrap rehearsal pass at the reviewed predecessor SHA before publication", "Krilliac gives protected owner approval with administrative bypass disabled", "Published immutable assets are independently downloaded and verified without claiming N-1 upgrade coverage"],
       "evidence": [{"type": "workflow", "path": ".github/workflows/release.yml", "label": "Release workflow"}],
-      "blockingWorkItemIds": ["REL-193"]
+      "blockingWorkItemIds": ["INST-132", "REL-191", "REL-193"]
     }
   ],
   "releaseProfiles": [

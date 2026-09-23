@@ -625,10 +625,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3374,
+      "line": 3386,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3370",
+          "id": "CMakeLists.txt:3382",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1395,7 +1395,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1740,
+      "line": 1756,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1446,10 +1446,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3374,
+      "line": 3386,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3370",
+          "id": "CMakeLists.txt:3382",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1481,7 +1481,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1314,
+      "line": 1315,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2519,10 +2519,60 @@
       "resolved": true
     },
     {
-      "target": "SparkCrashReporterManifestTests",
+      "target": "SparkCrashReporterFakeGh",
       "kind": "executable",
       "file": "SparkCrashReporter/CMakeLists.txt",
       "line": 65,
+      "conditionFrames": [
+        {
+          "id": "SparkCrashReporter/CMakeLists.txt:29",
+          "branch": 0,
+          "branches": [
+            "REPORTER_SOURCES"
+          ]
+        },
+        {
+          "id": "SparkCrashReporter/CMakeLists.txt:62",
+          "branch": 0,
+          "branches": [
+            "BUILD_TESTS"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkCrashReporterManifestTests",
+      "kind": "executable",
+      "file": "SparkCrashReporter/CMakeLists.txt",
+      "line": 87,
+      "conditionFrames": [
+        {
+          "id": "SparkCrashReporter/CMakeLists.txt:29",
+          "branch": 0,
+          "branches": [
+            "REPORTER_SOURCES"
+          ]
+        },
+        {
+          "id": "SparkCrashReporter/CMakeLists.txt:62",
+          "branch": 0,
+          "branches": [
+            "BUILD_TESTS"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkCrashReporterProductionTimeoutTests",
+      "kind": "executable",
+      "file": "SparkCrashReporter/CMakeLists.txt",
+      "line": 67,
       "conditionFrames": [
         {
           "id": "SparkCrashReporter/CMakeLists.txt:29",
@@ -4163,7 +4213,7 @@
       ]
     },
     {
-      "target": "SparkCrashReporterManifestTests",
+      "target": "SparkCrashReporterFakeGh",
       "kind": "executable",
       "buildable": true,
       "origins": [
@@ -4173,6 +4223,42 @@
         {
           "file": "SparkCrashReporter/CMakeLists.txt",
           "line": 65,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkCrashReporterManifestTests",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "SparkCrashReporter/CMakeLists.txt",
+          "line": 87,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkCrashReporterProductionTimeoutTests",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "SparkCrashReporter/CMakeLists.txt",
+          "line": 67,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
