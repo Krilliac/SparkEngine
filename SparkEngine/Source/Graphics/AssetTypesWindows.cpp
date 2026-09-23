@@ -2,7 +2,8 @@
  * @file AssetTypesWindows.cpp
  * @brief Windows/D3D11 mesh asset implementation (MeshAsset)
  *
- * Contains the OBJ/glTF parsers and D3D11 GPU buffer creation for meshes.
+ * Converts geometry from the shared OBJ/glTF CPU loaders and creates the D3D11
+ * GPU buffers for meshes.
  * Split from AssetTypes.cpp for platform isolation; the texture/audio/cache
  * implementations live in AssetTypesWindowsMedia.cpp. The Linux counterpart
  * lives in AssetTypesLinux.cpp.
@@ -13,6 +14,7 @@
 
 #include "AssetPipeline.h"
 #include "GLTFStaticMeshLoader.h"
+#include "OBJStaticMeshLoader.h"
 #include "Utils/Assert.h"
 #include "Utils/LogMacros.h"
 #include "../Utils/Validate.h"
@@ -58,91 +60,59 @@ HRESULT MeshAsset::Load(ID3D11Device* device)
 
         if (ext == ".obj")
         {
-            std::ifstream file(m_path);
-            if (file.is_open())
+            // Shared with the portable MeshAsset path so D3D11 imports the same
+            // corners: every OBJ face form (including `v//vn`), UVs converted to
+            // the engine's top-left origin, generated normals for corners that
+            // lack one, and a hard failure (never the placeholder cube below)
+            // when an existing OBJ yields no triangles.
+            Spark::Graphics::Detail::OBJStaticMeshData imported;
+            std::string error;
+            if (!Spark::Graphics::Detail::LoadOBJStaticMesh(std::filesystem::path(m_path), imported, error))
             {
-                std::vector<XMFLOAT3> positions;
-                std::vector<XMFLOAT3> normals;
-                std::vector<XMFLOAT2> texCoords;
-                std::string line;
-
-                XMFLOAT3 bbMin = {FLT_MAX, FLT_MAX, FLT_MAX};
-                XMFLOAT3 bbMax = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
-
-                while (std::getline(file, line))
-                {
-                    std::istringstream iss(line);
-                    std::string prefix;
-                    iss >> prefix;
-
-                    if (prefix == "v")
-                    {
-                        XMFLOAT3 pos;
-                        iss >> pos.x >> pos.y >> pos.z;
-                        positions.push_back(pos);
-                        bbMin.x = std::min(bbMin.x, pos.x);
-                        bbMin.y = std::min(bbMin.y, pos.y);
-                        bbMin.z = std::min(bbMin.z, pos.z);
-                        bbMax.x = std::max(bbMax.x, pos.x);
-                        bbMax.y = std::max(bbMax.y, pos.y);
-                        bbMax.z = std::max(bbMax.z, pos.z);
-                    }
-                    else if (prefix == "vn")
-                    {
-                        XMFLOAT3 n;
-                        iss >> n.x >> n.y >> n.z;
-                        normals.push_back(n);
-                    }
-                    else if (prefix == "vt")
-                    {
-                        XMFLOAT2 tc;
-                        iss >> tc.x >> tc.y;
-                        texCoords.push_back(tc);
-                    }
-                    else if (prefix == "f")
-                    {
-                        std::string token;
-                        std::vector<uint32_t> faceIndices;
-                        while (iss >> token)
-                        {
-                            MeshAssetData::Vertex vert = {};
-                            int vi = 0, vti = 0, vni = 0;
-                            if (sscanf(token.c_str(), "%d/%d/%d", &vi, &vti, &vni) >= 1)
-                            {
-                                if (vi > 0 && vi <= static_cast<int>(positions.size()))
-                                    vert.position = positions[vi - 1];
-                                if (vti > 0 && vti <= static_cast<int>(texCoords.size()))
-                                    vert.texCoord0 = texCoords[vti - 1];
-                                if (vni > 0 && vni <= static_cast<int>(normals.size()))
-                                    vert.normal = normals[vni - 1];
-                            }
-                            vert.color = {1.0f, 1.0f, 1.0f, 1.0f};
-                            faceIndices.push_back(static_cast<uint32_t>(m_meshData.vertices.size()));
-                            m_meshData.vertices.push_back(vert);
-                        }
-                        for (size_t i = 2; i < faceIndices.size(); ++i)
-                        {
-                            m_meshData.indices.push_back(faceIndices[0]);
-                            m_meshData.indices.push_back(faceIndices[i - 1]);
-                            m_meshData.indices.push_back(faceIndices[i]);
-                        }
-                    }
-                }
-                m_meshData.boundingBoxMin = bbMin;
-                m_meshData.boundingBoxMax = bbMax;
-                m_meshData.boundingSphereCenter = {(bbMin.x + bbMax.x) * 0.5f, (bbMin.y + bbMax.y) * 0.5f,
-                                                   (bbMin.z + bbMax.z) * 0.5f};
-                float dx = bbMax.x - bbMin.x, dy = bbMax.y - bbMin.y, dz = bbMax.z - bbMin.z;
-                m_meshData.boundingSphereRadius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
-                file.close();
-
-                if (!m_meshData.vertices.empty())
-                {
-                    Spark::SimpleConsole::GetInstance().LogSuccess(
-                        "Loaded OBJ: " + m_path + " (" + std::to_string(m_meshData.vertices.size()) + " verts, " +
-                        std::to_string(m_meshData.indices.size() / 3) + " tris)");
-                }
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load OBJ '%s': %s", m_path.c_str(),
+                                error.c_str());
+                Spark::SimpleConsole::GetInstance().LogError("Failed to load OBJ: " + m_path + " (" + error + ")");
+                return E_FAIL;
             }
+
+            XMFLOAT3 bbMin = {FLT_MAX, FLT_MAX, FLT_MAX};
+            XMFLOAT3 bbMax = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+            m_meshData.vertices.reserve(imported.vertices.size());
+            for (const auto& source : imported.vertices)
+            {
+                MeshAssetData::Vertex vertex{};
+                vertex.position = {source.position[0], source.position[1], source.position[2]};
+                vertex.normal = {source.normal[0], source.normal[1], source.normal[2]};
+                vertex.texCoord0 = {source.texCoord[0], source.texCoord[1]};
+                vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+                m_meshData.vertices.push_back(vertex);
+
+                bbMin.x = std::min(bbMin.x, vertex.position.x);
+                bbMin.y = std::min(bbMin.y, vertex.position.y);
+                bbMin.z = std::min(bbMin.z, vertex.position.z);
+                bbMax.x = std::max(bbMax.x, vertex.position.x);
+                bbMax.y = std::max(bbMax.y, vertex.position.y);
+                bbMax.z = std::max(bbMax.z, vertex.position.z);
+            }
+            m_meshData.indices = std::move(imported.indices);
+            m_meshData.submeshes.reserve(imported.submeshes.size());
+            for (const auto& submesh : imported.submeshes)
+            {
+                m_meshData.submeshes.push_back(submesh.indexStart);
+            }
+
+            m_meshData.boundingBoxMin = bbMin;
+            m_meshData.boundingBoxMax = bbMax;
+            m_meshData.boundingSphereCenter = {(bbMin.x + bbMax.x) * 0.5f, (bbMin.y + bbMax.y) * 0.5f,
+                                               (bbMin.z + bbMax.z) * 0.5f};
+            const float dx = bbMax.x - bbMin.x;
+            const float dy = bbMax.y - bbMin.y;
+            const float dz = bbMax.z - bbMin.z;
+            m_meshData.boundingSphereRadius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
+
+            Spark::SimpleConsole::GetInstance().LogSuccess("Loaded OBJ: " + m_path + " (" +
+                                                           std::to_string(m_meshData.vertices.size()) + " verts, " +
+                                                           std::to_string(m_meshData.indices.size() / 3) + " tris)");
         }
         else if (ext == ".gltf" || ext == ".glb")
         {
