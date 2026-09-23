@@ -63,6 +63,8 @@ namespace Racing
         float throttle = 0.0f;
         float brake = 0.0f;
         float steer = 0.0f;
+        float trackSteer = 0.0f;    ///< Steering toward the authored track line (see SetTrackSteer)
+        bool hasTrackSteer = false; ///< When false the driver falls back to its synthetic racing line
         bool useNitro = false;
         bool useDrift = false;
 
@@ -106,6 +108,9 @@ namespace Racing
 
         /// Update rubber-banding based on player distance to each AI
         void UpdateRubberBanding(float playerDistance, float leadDistance, float lastDistance);
+
+        /// Feed the steering the authored track line demands so throttle/brake react to real corners.
+        void SetTrackSteer(uint32_t vehicleId, float steer);
 
         /// Get the computed input for a specific AI vehicle
         const AIDriverState* GetDriverState(uint32_t vehicleId) const;

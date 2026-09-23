@@ -150,7 +150,14 @@ namespace Racing
         // Acceleration
         float accelForce = throttle * vehicle.baseStats.acceleration * 100.0f;
         float brakeForce = brake * vehicle.baseStats.braking * 150.0f;
-        float drag = vehicle.speed * 0.5f;
+        // Off-track surfaces bleed speed on top of aero drag (SurfaceType: grass is a significant penalty,
+        // sand is heavy drag), so a car that runs wide slows enough to steer back onto the asphalt.
+        float surfaceDrag = 0.0f;
+        if (vehicle.currentSurface == SurfaceType::Grass)
+            surfaceDrag = 0.6f;
+        else if (vehicle.currentSurface == SurfaceType::Sand)
+            surfaceDrag = 0.9f;
+        float drag = vehicle.speed * (0.5f + surfaceDrag);
 
         // Damage reduces effective acceleration
         const float durability = std::max(vehicle.baseStats.durability, 1.0f);
@@ -300,13 +307,6 @@ namespace Racing
         // Decay boost timer
         if (vehicle.boostTimer > 0.0f)
             vehicle.boostTimer = std::max(0.0f, vehicle.boostTimer - dt);
-
-        // Natural speed decay from drag (non-player vehicles rely on AI input)
-        if (!vehicle.isPlayer)
-        {
-            float drag = vehicle.speed * 0.3f * dt;
-            vehicle.speed = std::max(0.0f, vehicle.speed - drag);
-        }
 
         // Clamp nitro
         vehicle.nitro = std::clamp(vehicle.nitro, 0.0f, 1.0f);

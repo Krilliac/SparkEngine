@@ -160,6 +160,15 @@ namespace Racing
         }
     }
 
+    void RacingAIDriver::SetTrackSteer(uint32_t vehicleId, float steer)
+    {
+        const auto it = m_stateIndexByVehicleId.find(vehicleId);
+        if (it == m_stateIndexByVehicleId.end() || it->second >= m_states.size() || !std::isfinite(steer))
+            return;
+        m_states[it->second].trackSteer = std::clamp(steer, -1.0f, 1.0f);
+        m_states[it->second].hasTrackSteer = true;
+    }
+
     const AIDriverState* RacingAIDriver::GetDriverState(uint32_t vehicleId) const
     {
         const auto it = m_stateIndexByVehicleId.find(vehicleId);
@@ -230,11 +239,12 @@ namespace Racing
 
     void RacingAIDriver::ComputeSteering(const AIDriverConfig& config, AIDriverState& state)
     {
-        // Synthetic racing line (sine-cosine blend) for deterministic behavior
-        // when no track-waypoint service is injected yet.
+        // Follow the authored track line when the race flow supplies it; otherwise fall back to a
+        // synthetic racing line (sine-cosine blend) for deterministic standalone behavior.
         const float phase = GetTrackPhase(state);
         const float upcomingPhase = phase + (state.lookAheadCount * 0.05f);
-        const float targetAngle = std::sin(phase) * 0.55f + std::sin(upcomingPhase * 0.7f) * 0.25f;
+        const float targetAngle =
+            state.hasTrackSteer ? state.trackSteer : std::sin(phase) * 0.55f + std::sin(upcomingPhase * 0.7f) * 0.25f;
 
         // Line accuracy adds noise: lower accuracy = wider, less precise lines
         const float deterministicSeed = static_cast<float>((state.vehicleId * 1103515245u + 12345u) & 0x3FFu) / 1023.0f;
