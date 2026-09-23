@@ -22,6 +22,7 @@
 
 // Forward‐declare Projectile to avoid include cycles
 class Projectile;
+class GraphicsEngine;
 
 /**
  * @brief Base class for all game objects in the world
@@ -285,6 +286,16 @@ class GameObject
     float GetDistanceFrom(const XMFLOAT3& p) const;
 
   protected:
+    /**
+     * @brief Prepare the basic shader state and bind this object's trusted JSON material.
+     *
+     * Derived renderers that own a different geometry representation can reuse
+     * the same confined material path without calling GameObject::Render().
+     * The caller must issue its geometry draw after this method returns.
+     */
+    void PrepareBasicMaterialRender(GraphicsEngine* graphics, const XMMATRIX& world, const XMMATRIX& view,
+                                    const XMMATRIX& projection);
+
     /**
      * @brief Create or set up the mesh for this object
      * 

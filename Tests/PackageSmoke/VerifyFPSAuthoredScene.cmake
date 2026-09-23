@@ -12,8 +12,9 @@ foreach(_required IN ITEMS SPARK_PACKAGE_BIN SPARK_TEST_ROOT SPARK_SOURCE_ROOT)
 endforeach()
 if(NOT EXISTS "${SPARK_PACKAGE_BIN}/SparkEngine.exe" OR
    NOT EXISTS "${SPARK_PACKAGE_BIN}/SparkGameFPS.dll" OR
-   NOT EXISTS "${SPARK_PACKAGE_BIN}/Assets/Scenes/level1.scene")
-    message(FATAL_ERROR "FPS package-layout engine, module, or scene is missing")
+   NOT EXISTS "${SPARK_PACKAGE_BIN}/Assets/Scenes/level1.scene" OR
+   NOT EXISTS "${SPARK_PACKAGE_BIN}/Assets/Materials/Arena_CenterBuilding.json")
+    message(FATAL_ERROR "FPS package-layout engine, module, scene, or center material is missing")
 endif()
 
 string(TIMESTAMP _stamp "%Y%m%dT%H%M%SZ" UTC)
@@ -180,4 +181,56 @@ execute_process(
 if(NOT _survival_visual_result EQUAL 0)
     message(FATAL_ERROR "FPS package-layout survival frame failed visual geometry check: ${_survival_visual_stderr}; logs: ${_run_root}")
 endif()
+
+# Center_Building is part of the procedural FPS arena, outside the authored
+# [Object] nodes. A copied package must visibly respond when only its material
+# albedo changes; the generic color-diversity smoke above cannot prove that.
+set(_baseline_image "${_run_root}/fps-center-baseline.png")
+file(COPY_FILE "${_image}" "${_baseline_image}")
+set(_center_material "${_run_root}/bin/Assets/Materials/Arena_CenterBuilding.json")
+file(READ "${_center_material}" _material_json)
+string(REPLACE "Textures/concrete_diffuse.png" "Textures/wood_diffuse.png"
+    _variant_material_json "${_material_json}")
+if(_variant_material_json STREQUAL _material_json)
+    message(FATAL_ERROR "FPS center material did not contain the expected baseline albedo; logs: ${_run_root}")
+endif()
+file(WRITE "${_center_material}" "${_variant_material_json}")
+
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env
+        "SPARK_RHI_BACKEND=d3d11"
+        "SPARK_D3D11_DRIVER=warp"
+        "LOCALAPPDATA=${_run_root}/localappdata"
+        "${_run_root}/bin/SparkEngine.exe"
+        -game "${_run_root}/bin/SparkGameFPS.dll"
+        -require-game -test-frames 13 -threads 2 -window-size 640x360 -no-subprocess
+        -exec "${_exec_script}"
+    WORKING_DIRECTORY "${_run_root}"
+    RESULT_VARIABLE _variant_result
+    OUTPUT_VARIABLE _variant_stdout
+    ERROR_VARIABLE _variant_stderr
+    TIMEOUT 120
+    ENCODING UTF-8)
+file(WRITE "${_run_root}/variant-stdout.log" "${_variant_stdout}")
+file(WRITE "${_run_root}/variant-stderr.log" "${_variant_stderr}")
+_spark_validate_lifecycle_result("${_variant_result}" "${_variant_stdout}" "${_variant_stderr}"
+    _variant_lifecycle_ok _variant_reason)
+if(NOT _variant_lifecycle_ok OR NOT EXISTS "${_image}")
+    message(FATAL_ERROR "FPS center-material variant run failed: ${_variant_reason}; logs: ${_run_root}")
+endif()
+execute_process(
+    COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+        -NoProfile -NonInteractive -File
+        "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CompareFPSMaterialFrames.ps1"
+        -BaselineImage "${_baseline_image}"
+        -VariantImage "${_image}"
+    RESULT_VARIABLE _material_visual_result
+    OUTPUT_VARIABLE _material_visual_stdout
+    ERROR_VARIABLE _material_visual_stderr
+    TIMEOUT 30)
+if(NOT _material_visual_result EQUAL 0)
+    message(FATAL_ERROR "FPS installed center material did not affect rendered pixels: ${_material_visual_stderr}; logs: ${_run_root}")
+endif()
+string(STRIP "${_material_visual_stdout}" _material_visual_summary)
+message(STATUS "${_material_visual_summary}")
 message(STATUS "FPS package-layout runtime honored edited scene camera and spawns; logs: ${_run_root}")

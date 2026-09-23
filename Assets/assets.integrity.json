@@ -2,7 +2,7 @@
   "version": 1,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 882,
+  "fileCount": 883,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -958,6 +958,11 @@
       "path": "MMOFPS/asset_manifest.json",
       "sha256": "a73a7cc5b2e91edc5d67e7dd58eb8e4affcbbfd37582a62ed0ac514aa4f581bf",
       "size": 33976
+    },
+    {
+      "path": "Materials/Arena_CenterBuilding.json",
+      "sha256": "cec075631416fa25358777c3b4602bbd9c5656383e58a8827cc2927a0775322f",
+      "size": 212
     },
     {
       "path": "Materials/Concrete.json",
@@ -2721,8 +2726,8 @@
     },
     {
       "path": "Scenes/level1.scene",
-      "sha256": "c3dc57fc4dddd19871aa68dbdc4eb900138aa5de4bb8253d50c53957fea66c6d",
-      "size": 10860
+      "sha256": "ca7dd18ff00c896623e8933fce3c8848f0b46e6900f9b6fbefa2436777257a8f",
+      "size": 13046
     },
     {
       "path": "Scripts/PlayerController.as",

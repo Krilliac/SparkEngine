@@ -250,6 +250,7 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
             if (auto* mo = dynamic_cast<ModelObject*>(obj.get()))
                 mo->SetGraphicsEngine(m_graphics);
         }
+        BindSceneMaterialRoots();
     }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Game initialization complete - class system & combat arena ready", L"SUCCESS");
@@ -323,8 +324,13 @@ void Game::BindSceneMaterialRoots()
             if (object && object->SetMaterialProjectRoot(projectRootUtf8))
                 ++materialRootsBound;
         }
+        for (auto& object : m_gameObjects)
+        {
+            if (object && object->SetMaterialProjectRoot(projectRootUtf8))
+                ++materialRootsBound;
+        }
     }
-    LOG_TO_CONSOLE_IMMEDIATE(L"Scene material project root bound for " + std::to_wstring(materialRootsBound) +
+    LOG_TO_CONSOLE_IMMEDIATE(L"Scene and procedural material roots bound for " + std::to_wstring(materialRootsBound) +
                                  L" renderable objects",
                              L"INFO");
 }

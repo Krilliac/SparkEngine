@@ -4717,6 +4717,11 @@ class TestCIWiring(unittest.TestCase):
         block = self._job_block("module-evidence")
         self.assertIn("collect_targets.py", block)
         self.assertIn("-DBUILD_GAME_MODULES=ON", block)
+        self.assertNotRegex(
+            block, r"--configure-arg\s+-D",
+            "CMake definitions must be attached to --configure-arg so argparse "
+            "does not treat a leading -D as another option",
+        )
 
     def test_module_evidence_gate_is_not_policy_only(self) -> None:
         """A --policy-only run must never be the release gate."""

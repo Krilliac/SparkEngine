@@ -58,10 +58,13 @@ void ModelObject::Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX&
 
     GraphicsEngine* graphics = m_graphics;
 
-    // **ENHANCED RENDERING: Set up shaders, constant buffers, and matrices**
+    // Model::Render owns the legacy geometry draw, while GameObject owns the
+    // confined JSON material contract shared by authored and procedural paths.
+    // Prepare the state first and pass nullptr so Model does not reset it.
     try
     {
-        m_model->Render(m_context, graphics, &world, &view, &proj);
+        PrepareBasicMaterialRender(graphics, world, view, proj);
+        m_model->Render(m_context, nullptr, &world, &view, &proj);
     }
     catch (...)
     {

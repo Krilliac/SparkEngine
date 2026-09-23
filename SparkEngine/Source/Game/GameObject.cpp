@@ -99,33 +99,39 @@ void GameObject::Render(const XMMATRIX& view, const XMMATRIX& projection)
     // Get graphics engine via EngineContext
     GraphicsEngine* graphics = EngineContext::Get() ? EngineContext::Get()->GetGraphics() : nullptr;
 
-    if (graphics)
-    {
-        // A fresh basic batch resets t0/t1/t2 to the white/flat/rough defaults,
-        // so an invalid or absent authored material cannot inherit a prior
-        // object's texture. The project root is supplied by trusted game code,
-        // never by the scene's material= value.
-        graphics->SetBasicShaders();
-        const GraphicsEngine::BasicMaterial* material = nullptr;
-        const bool supportedMaterialPath =
-            (m_materialPath.starts_with("Assets/Materials/") || m_materialPath.starts_with("Assets\\Materials\\")) &&
-            m_materialPath.ends_with(".json");
-        if (supportedMaterialPath && !m_materialProjectRoot.empty())
-            material = graphics->GetOrLoadBasicMaterial(m_materialPath, m_materialProjectRoot);
-
-        if (material)
-        {
-            graphics->UpdateBasicConstants(m_worldMatrix, view, projection, XMFLOAT4(1, 1, 1, 1), material->tiling);
-            graphics->SetBasicTexture(material->srv.Get());
-            graphics->SetBasicMaterialTextures(material->normalSrv.Get(), material->roughnessSrv.Get());
-        }
-        else
-        {
-            graphics->UpdateBasicConstants(m_worldMatrix, view, projection);
-        }
-    }
+    PrepareBasicMaterialRender(graphics, m_worldMatrix, view, projection);
 
     m_mesh->Render(m_context);
+}
+
+void GameObject::PrepareBasicMaterialRender(GraphicsEngine* graphics, const XMMATRIX& world, const XMMATRIX& view,
+                                            const XMMATRIX& projection)
+{
+    if (!graphics)
+        return;
+
+    // A fresh basic batch resets t0/t1/t2 to the white/flat/rough defaults,
+    // so an invalid or absent authored material cannot inherit a prior
+    // object's texture. The project root is supplied by trusted game code,
+    // never by scene or model content.
+    graphics->SetBasicShaders();
+    const GraphicsEngine::BasicMaterial* material = nullptr;
+    const bool supportedMaterialPath =
+        (m_materialPath.starts_with("Assets/Materials/") || m_materialPath.starts_with("Assets\\Materials\\")) &&
+        m_materialPath.ends_with(".json");
+    if (supportedMaterialPath && !m_materialProjectRoot.empty())
+        material = graphics->GetOrLoadBasicMaterial(m_materialPath, m_materialProjectRoot);
+
+    if (material)
+    {
+        graphics->UpdateBasicConstants(world, view, projection, XMFLOAT4(1, 1, 1, 1), material->tiling);
+        graphics->SetBasicTexture(material->srv.Get());
+        graphics->SetBasicMaterialTextures(material->normalSrv.Get(), material->roughnessSrv.Get());
+    }
+    else
+    {
+        graphics->UpdateBasicConstants(world, view, projection);
+    }
 }
 
 bool GameObject::SetMaterialProjectRoot(std::string_view projectRootUtf8)

@@ -490,6 +490,7 @@ bool Game::LoadScene(const std::string& scenePath)
                     if (auto* model = dynamic_cast<ModelObject*>(object.get()))
                         model->SetGraphicsEngine(m_graphics);
                 }
+                BindSceneMaterialRoots();
             }
             RefreshAuthoredSceneRuntimeState();
 
@@ -619,6 +620,24 @@ void Game::CyclePrevClass()
 namespace
 {
 
+    std::string ProceduralMaterialFor(const wchar_t* modelPath, const std::string& name)
+    {
+        if (name == "Center_Building")
+            return "Assets/Materials/Arena_CenterBuilding.json";
+
+        const std::wstring path(modelPath ? modelPath : L"");
+        if (path.find(L"crate.obj") != std::wstring::npos)
+            return "Assets/Materials/Wood.json";
+        if (path.find(L"target.obj") != std::wstring::npos || path.find(L"rifle.obj") != std::wstring::npos ||
+            path.find(L"sniper.obj") != std::wstring::npos || path.find(L"lmg.obj") != std::wstring::npos ||
+            path.find(L"shotgun.obj") != std::wstring::npos || path.find(L"pistol.obj") != std::wstring::npos)
+            return "Assets/Materials/Metal.json";
+        if (path.find(L"building_small.obj") != std::wstring::npos || path.find(L"barrier.obj") != std::wstring::npos ||
+            path.find(L"watchtower.obj") != std::wstring::npos || path.find(L"character.obj") != std::wstring::npos)
+            return "Assets/Materials/Concrete.json";
+        return {};
+    }
+
     /// Helper: create a ModelObject, initialize it, set position/name, and add to the list
     void PlaceModel(const wchar_t* modelPath, const std::string& name, XMFLOAT3 pos, ID3D11Device* device,
                     ID3D11DeviceContext* context, std::vector<std::unique_ptr<GameObject>>& objects,
@@ -630,6 +649,7 @@ namespace
             return;
         obj->SetPosition(pos);
         obj->SetName(name);
+        obj->SetMaterialPath(ProceduralMaterialFor(modelPath, name));
         if (scale.x != 1.0f || scale.y != 1.0f || scale.z != 1.0f)
             obj->SetScale(scale);
         objects.push_back(std::move(obj));
@@ -665,6 +685,7 @@ void Game::CreateCombatArena()
         {
             ground->SetPosition({0.0f, -1.0f, 0.0f});
             ground->SetName("Arena_Ground");
+            ground->SetMaterialPath("Assets/Materials/Terrain_Dirt.json");
             m_gameObjects.push_back(std::move(ground));
         }
     }
@@ -753,6 +774,7 @@ void Game::CreateCombatArena()
             {
                 sphere->SetPosition({cpPositions[i][0], cpPositions[i][1], cpPositions[i][2]});
                 sphere->SetName("ControlPoint_" + std::to_string(i + 1));
+                sphere->SetMaterialPath("Assets/Materials/Metal.json");
                 m_gameObjects.push_back(std::move(sphere));
             }
         }

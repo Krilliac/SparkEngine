@@ -1785,6 +1785,14 @@ endif()
 
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(
+    NAME FPSSceneMaterialContract
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_fps_scene_material_contract.py)
+set_tests_properties(FPSSceneMaterialContract PROPERTIES
+    LABELS "module;stable-v1;fps;asset;unit"
+    TIMEOUT 30)
+
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkCrashReporter)
     add_dependencies(SparkTests SparkCrashReporter)
     add_test(

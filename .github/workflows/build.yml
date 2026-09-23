@@ -214,6 +214,9 @@ jobs:
     - name: Verify repository asset integrity baseline
       run: python3 tools/asset-integrity/verify_asset_integrity.py check-all --repo-root .
 
+    - name: Verify authored FPS material coverage
+      run: python3 -m unittest Tests.Tools.test_fps_scene_material_contract -v
+
     - name: Validate module evidence manifest (declarative layer)
       # Fast pre-check: no build artifacts exist in this job. The release gate
       # is the module-evidence job, which validates against really-produced
@@ -3668,11 +3671,11 @@ jobs:
           python3 tools/module-evidence/collect_targets.py \
             --build-dir build/module-evidence-configure \
             --out build/module-evidence/module-targets.json \
-            --configure-arg -DCMAKE_BUILD_TYPE=Release \
-            --configure-arg -DBUILD_GAME_MODULES=ON \
-            --configure-arg -DBUILD_TESTS=OFF \
-            --configure-arg -DCMAKE_C_COMPILER=gcc-14 \
-            --configure-arg -DCMAKE_CXX_COMPILER=g++-14
+            --configure-arg=-DCMAKE_BUILD_TYPE=Release \
+            --configure-arg=-DBUILD_GAME_MODULES=ON \
+            --configure-arg=-DBUILD_TESTS=OFF \
+            --configure-arg=-DCMAKE_C_COMPILER=gcc-14 \
+            --configure-arg=-DCMAKE_CXX_COMPILER=g++-14
 
       - name: Download published JUnit evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
