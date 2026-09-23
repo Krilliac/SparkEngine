@@ -121,6 +121,7 @@ if ($existing.Count -ne 0) {
 }
 
 $certificate = $null
+$createdThumbprint = $null
 $password = $null
 try {
     $certificate = New-SelfSignedCertificate `
@@ -132,7 +133,13 @@ try {
         -KeyExportPolicy Exportable `
         -CertStoreLocation 'Cert:\CurrentUser\My' `
         -NotAfter (Get-Date).AddYears($ValidityYears)
-    if ($null -eq $certificate -or [string]::IsNullOrWhiteSpace($certificate.Thumbprint) -or -not $certificate.HasPrivateKey) {
+    if ($null -eq $certificate) {
+        throw 'Certificate creation did not return an exportable private-key certificate.'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($certificate.Thumbprint)) {
+        $createdThumbprint = $certificate.Thumbprint.ToUpperInvariant()
+    }
+    if ([string]::IsNullOrWhiteSpace($createdThumbprint) -or -not $certificate.HasPrivateKey) {
         throw 'Certificate creation did not return an exportable private-key certificate.'
     }
     $password = Read-Host -AsSecureString -Prompt 'Enter the password for the exported signing PFX (input is hidden)'
@@ -146,8 +153,37 @@ try {
     }
     Assert-PrivateAcl $pfxPath
 } catch {
+    $cleanupErrors = @()
     if (Test-Path -LiteralPath $pfxPath) {
-        Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue
+        try {
+            Remove-Item -LiteralPath $pfxPath -Force -ErrorAction Stop
+            if (Test-Path -LiteralPath $pfxPath) {
+                $cleanupErrors += "partial PFX remains: $pfxPath"
+            }
+        } catch {
+            $cleanupErrors += "partial PFX cleanup failed: $($_.Exception.Message)"
+        }
+    }
+    if ($createdThumbprint -and $createdThumbprint -match '^[0-9A-F]{40}$') {
+        try {
+            $createdCertificate = @(Get-ChildItem -Path 'Cert:\CurrentUser\My' -ErrorAction Stop |
+                Where-Object { $_.Thumbprint -eq $createdThumbprint })
+            if ($createdCertificate.Count -eq 1) {
+                Remove-Item -LiteralPath ([string]$createdCertificate[0].PSPath) -DeleteKey -Force -ErrorAction Stop
+                $remainingCertificate = @(Get-ChildItem -Path 'Cert:\CurrentUser\My' -ErrorAction Stop |
+                    Where-Object { $_.Thumbprint -eq $createdThumbprint })
+                if ($remainingCertificate.Count -ne 0) {
+                    $cleanupErrors += "created signer remains in CurrentUser personal store: $createdThumbprint"
+                }
+            } elseif ($createdCertificate.Count -gt 1) {
+                $cleanupErrors += "exact signer thumbprint is ambiguous during cleanup: $createdThumbprint"
+            }
+        } catch {
+            $cleanupErrors += "created signer cleanup failed: $($_.Exception.Message)"
+        }
+    }
+    if ($cleanupErrors.Count -ne 0) {
+        throw (($cleanupErrors -join '; ') + '. Original certificate/export failure was: ' + $_.Exception.Message)
     }
     throw
 } finally {

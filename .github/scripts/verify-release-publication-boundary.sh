@@ -114,6 +114,11 @@ gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$release_output"
 gh api --paginate --slurp \
   "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" \
   > "$assets_output"
+boundary_args=()
+if [[ "$IS_VERSIONED" == "true" ]]; then
+  boundary_args+=(--signature-control-asset "SparkEngine-release-signature-bundle.tar.gz")
+  boundary_args+=(--signature-control-path "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz")
+fi
 python3 -I "$GITHUB_WORKSPACE/.github/scripts/verify_release_asset_boundary.py" \
   --release-json "$release_output" \
   --assets-json "$assets_output" \
@@ -124,5 +129,6 @@ python3 -I "$GITHUB_WORKSPACE/.github/scripts/verify_release_asset_boundary.py" 
   --release-id "$RELEASE_ID" \
   --release-tag "$RELEASE_TAG" \
   --is-versioned "$IS_VERSIONED" \
+  "${boundary_args[@]}" \
   --immutable-channel "${RELEASE_IMMUTABLE:-false}" \
   --expected-draft "$expected_draft"

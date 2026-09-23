@@ -82,13 +82,14 @@ evidence receipt; guard errors do not render mutation argv or Git auth headers.
 The independent publication consumer receives neither environment secret.
 
 Provision native Authenticode signing and the publisher thumbprint separately.
-The public signature-bundle URL, digest, and trusted-key fingerprint must be
-available to both publisher and independent consumer as repository variables:
-`SPARKENGINE_STABLE_SIGNATURE_BUNDLE_URL`,
-`SPARKENGINE_STABLE_SIGNATURE_BUNDLE_SHA256`, and
-`SPARKENGINE_STABLE_SIGNATURE_KEY_FINGERPRINT`. They identify public verification
-material, never private keys. An environment-only variable with the same name
-must not shadow a different repository value. All existing signature, checksum,
+After the exact stable assets are frozen, the protected `stable-release` job
+imports the same PFX with an ephemeral key and creates deterministic detached
+signatures without exporting the private key. The derived SPKI SHA-256
+fingerprint must match the protected `SPARKENGINE_STABLE_SIGNATURE_KEY_FINGERPRINT`
+repository variable. The job uploads the resulting flat
+`SparkEngine-release-signature-bundle.tar.gz` as an immutable release control
+asset only after the durable download-counter preflight; the control asset is
+not a distributable or badge-ledger entry. All existing signature, checksum,
 SBOM, scan, exact-CI, source/tag, and package qualification gates still apply.
 
 ## Immutable stable and rolling-nightly policy conflict
@@ -126,10 +127,11 @@ channel policy change, is required. That policy work is outside this change.
 
 After publication, `verify-stable-publication` runs on a fresh runner with only
 Actions, contents, and attestations read permissions. It obtains the exact
-published asset IDs through GitHub, downloads the seven stable assets, checks
-their sizes and SHA-256 digests, verifies the pinned external signatures and
-SBOM, compares provenance to freshly revalidated exact-CI evidence, verifies the
-GitHub release attestation, and rechecks the release, assets, and tag for drift.
+published asset IDs through GitHub, downloads the stable assets and the
+signature control asset, checks their sizes and SHA-256 digests, extracts and
+verifies the pinned detached signatures and SBOM, compares provenance to freshly
+revalidated exact-CI evidence, verifies the GitHub release attestation, and
+rechecks the release, assets, and tag for drift.
 It cannot publish, edit the ledger, or turn the profile ready.
 
 Only success produces the immutable Actions artifact

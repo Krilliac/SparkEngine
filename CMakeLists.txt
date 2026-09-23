@@ -78,7 +78,7 @@ if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version" FORCE)
 endif()
 
-set(SPARK_ENGINE_VERSION "1.0.0" CACHE STRING "SparkEngine semantic version used for package metadata")
+set(SPARK_ENGINE_VERSION "0.9.0" CACHE STRING "SparkEngine semantic version used for package metadata")
 
 # Objective-C / Objective-C++ are required on macOS so SDL2's cocoa/.m sources
 # (SDL_cocoaevents.m, SDL_cocoametalview.m, SDL_rwopsbundlesupport.m, etc.) and

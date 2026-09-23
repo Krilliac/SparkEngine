@@ -68,7 +68,7 @@ class WorkflowTests(unittest.TestCase):
                 if re.search(r'(?:git -c .*\bpush\b|gh api --method (?:POST|PATCH|DELETE|PUT))', line):
                     writes.append(line)
                     self.assertIn("guard_release_mutation.py", line)
-        self.assertEqual(len(writes), 11)
+        self.assertEqual(len(writes), 12)
         for name in ("Stage new or interrupted stable versioned release as draft", "Stage nightly rolling release as draft"):
             step = next(step for step in steps if step["name"] == name)
             self.assertEqual(step["run"], "python3 .github/scripts/stage_release_draft.py")

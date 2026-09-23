@@ -426,7 +426,7 @@ jobs:
           if ($importAttempted) {
             $introducedPath = 'Cert:\CurrentUser\My\' + $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant()
             if (Test-Path -LiteralPath $introducedPath) {
-              Remove-Item -LiteralPath $introducedPath -Force -Confirm:$false -ErrorAction Stop
+              Remove-Item -LiteralPath $introducedPath -Force -DeleteKey -Confirm:$false -ErrorAction Stop
             }
             if (Test-Path -LiteralPath $introducedPath) { throw 'Imported signer remains after cleanup' }
           }
@@ -1461,31 +1461,34 @@ jobs:
         python3 tools/site-data/exact_evidence.py verify \
           --manifest "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json"
 
-    # Stable publication consumes a signature bundle produced by the protected
-    # external signing boundary. This intentionally fails closed: no in-workflow
-    # key, placeholder signature, or unsigned draft may proceed.
-    - name: Provision external stable signature bundle
+    # Stable publication signs the already-frozen exact asset bytes inside the
+    # protected stable-release job. The PFX private key is imported ephemerally
+    # and never exported to a file, artifact, log, or release asset.
+    - name: Generate protected stable signature bundle
       if: needs.prepare.outputs.is_versioned == 'true'
       env:
-        SIGNATURE_BUNDLE_URL: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_BUNDLE_URL }}
-        SIGNATURE_BUNDLE_SHA256: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_BUNDLE_SHA256 }}
+        SPARK_RELEASE_SIGNING_PFX_BASE64: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_BASE64 }}
+        SPARK_RELEASE_SIGNING_PFX_PASSWORD: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_PASSWORD }}
+        SIGNER_CERTIFICATE_THUMBPRINT: ${{ vars.SPARK_RELEASE_SIGNER_THUMBPRINT }}
+        SIGNATURE_KEY_FINGERPRINT: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_KEY_FINGERPRINT }}
+        SOURCE_COMMIT: ${{ github.sha }}
       run: |
         set -euo pipefail
-        if [[ ! "$SIGNATURE_BUNDLE_URL" =~ ^https:// ]]; then
-          echo "Stable signing precondition unsatisfied: protected signature bundle URL is not configured." >&2
-          exit 1
-        fi
-        if [[ ! "$SIGNATURE_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-          echo "Stable signing precondition unsatisfied: protected signature bundle digest is not configured." >&2
-          exit 1
-        fi
-        curl --fail --location --proto '=https' --tlsv1.2 "$SIGNATURE_BUNDLE_URL" \
-          --output "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz"
-        printf '%s  %s\n' "$SIGNATURE_BUNDLE_SHA256" "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz" \
-          | sha256sum --check --status
-        python3 -I "$GITHUB_WORKSPACE/.github/scripts/extract_release_signature_bundle.py" \
-          --archive "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz" \
-          --destination "$RUNNER_TEMP/spark-release-signature-bundle"
+        [[ "$SIGNATURE_KEY_FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]
+        pwsh -NoLogo -NoProfile -NonInteractive -File "$GITHUB_WORKSPACE/.github/scripts/sign_release_bundle.ps1" \
+          -InputRoot "$GITHUB_WORKSPACE" \
+          -ExpectedAssetsFile "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          -OutputDirectory "$RUNNER_TEMP/spark-release-signature-bundle" \
+          -SourceCommit "$SOURCE_COMMIT" \
+          -SignerFingerprint "$SIGNATURE_KEY_FINGERPRINT" \
+          -SignerCertificateThumbprint "$SIGNER_CERTIFICATE_THUMBPRINT"
+        mapfile -t signature_files < <(find "$RUNNER_TEMP/spark-release-signature-bundle" -maxdepth 1 -type f -name '*.sig' -printf '%f\n' | sort)
+        test "${#signature_files[@]}" -gt 0
+        GZIP=-n tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+          -czf "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz" \
+          -C "$RUNNER_TEMP/spark-release-signature-bundle" \
+          release-signatures.json spark-release-public-key.pem "${signature_files[@]}"
+        test ! -e "$GITHUB_WORKSPACE/spark-release-signature-bundle.tar.gz"
 
     - name: Verify complete stable release bundle before draft publication
       if: needs.prepare.outputs.is_versioned == 'true'
@@ -2470,6 +2473,7 @@ jobs:
         TARGET_SHA: ${{ github.sha }}
         EXPECTED_ASSETS_FILE: expected-release-assets.txt
         EXPECTED_DIGESTS_FILE: expected-release-digests.txt
+        SIGNATURE_BUNDLE_PATH: ${{ runner.temp }}/spark-release-signature-bundle.tar.gz
       run: |
         set -euo pipefail
         test -n "$RELEASE_ID"
@@ -2499,6 +2503,29 @@ jobs:
           --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
           --expected-digests-file "$GITHUB_WORKSPACE/expected-release-digests.txt" \
           --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
+        test -f "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz"
+        RELEASE_RECORD="$RUNNER_TEMP/signature-control-release.json"
+        ASSETS_RECORD="$RUNNER_TEMP/signature-control-assets.json"
+        gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$RELEASE_RECORD"
+        jq -e --arg tag "$RELEASE_TAG" --argjson id "$RELEASE_ID" \
+          '.id == $id and .tag_name == $tag and .draft == true and .prerelease == false and .immutable == false' \
+          "$RELEASE_RECORD" >/dev/null
+        gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$ASSETS_RECORD"
+        EXPECTED_DIGEST="sha256:$(sha256sum "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz" | awk '{print $1}')"
+        EXISTING="$(jq -c '[.[] | select(.name == "SparkEngine-release-signature-bundle.tar.gz")]' "$ASSETS_RECORD")"
+        if [[ "$EXISTING" != "[]" ]]; then
+          jq -e --arg digest "$EXPECTED_DIGEST" \
+            'length == 1 and .[0].state == "uploaded" and .[0].digest == $digest and .[0].uploader.id == 41898282 and .[0].uploader.login == "github-actions[bot]"' \
+            <<< "$EXISTING" >/dev/null || { echo 'Existing signature control asset differs; refusing overwrite.' >&2; exit 1; }
+        else
+          python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- gh api --method POST \
+            -H 'Content-Type: application/octet-stream' --input "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz" \
+            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=SparkEngine-release-signature-bundle.tar.gz" \
+            > "$RUNNER_TEMP/signature-control-upload.json"
+          jq -e --arg digest "$EXPECTED_DIGEST" \
+            '.name == "SparkEngine-release-signature-bundle.tar.gz" and .state == "uploaded" and .digest == $digest and .uploader.id == 41898282 and .uploader.login == "github-actions[bot]"' \
+            "$RUNNER_TEMP/signature-control-upload.json" >/dev/null
+        fi
         LOCAL_STAGED_COMMIT="$(git -C "$GITHUB_WORKSPACE/badge-repository" rev-parse HEAD)"
         REMOTE_STAGED_COMMIT="$(git -C "$GITHUB_WORKSPACE/badge-repository" \
           -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
@@ -2859,24 +2886,6 @@ jobs:
         GITHUB_OUTPUT="$RUNNER_TEMP/consumer-exact-ci.out" \
           python3 .github/scripts/verify-exact-required-gate.py
 
-    - name: Provision pinned consumer signature bundle
-      env:
-        SIGNATURE_BUNDLE_URL: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_BUNDLE_URL }}
-        SIGNATURE_BUNDLE_SHA256: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_BUNDLE_SHA256 }}
-      run: |
-        set -euo pipefail
-        if [[ ! "$SIGNATURE_BUNDLE_URL" =~ ^https:// || ! "$SIGNATURE_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-          echo "Independent consumer requires the externally signed bundle URL and pinned digest." >&2
-          exit 1
-        fi
-        curl --fail --location --proto '=https' --tlsv1.2 "$SIGNATURE_BUNDLE_URL" \
-          --output "$RUNNER_TEMP/consumer-signatures.tar.gz"
-        printf '%s  %s\n' "$SIGNATURE_BUNDLE_SHA256" "$RUNNER_TEMP/consumer-signatures.tar.gz" \
-          | sha256sum --check --status
-        python3 -I .github/scripts/extract_release_signature_bundle.py \
-          --archive "$RUNNER_TEMP/consumer-signatures.tar.gz" \
-          --destination "$RUNNER_TEMP/consumer-signatures"
-
     - name: Download and independently verify the published stable release
       env:
         GH_TOKEN: ${{ github.token }}
@@ -2887,7 +2896,8 @@ jobs:
         python3 .github/scripts/verify_published_stable_release.py \
           --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --source-commit "$GITHUB_SHA" \
           --directory "$RUNNER_TEMP/published-stable-download" \
-          --signature-directory "$RUNNER_TEMP/consumer-signatures" \
+           --signature-directory "$RUNNER_TEMP/consumer-signatures" \
+           --signature-control-asset "SparkEngine-release-signature-bundle.tar.gz" \
           --fingerprint "$SIGNATURE_KEY_FINGERPRINT" --gate-output "$RUNNER_TEMP/consumer-exact-ci.out" \
           --receipt "$RUNNER_TEMP/stable-publication-evidence.json" \
           --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"

@@ -1903,7 +1903,7 @@
           "architecture": "x64",
           "toolset": "v143",
           "packageDirectory": "build/build-matrix-stage/lib/cmake/SparkEngine",
-          "expectedEngineVersion": "1.0.0",
+          "expectedEngineVersion": "0.9.0",
           "description": "A separate configure against an installed SparkEngine package that proves public SDK headers, imports, and module linkage without source-tree include leakage."
         }
       ],

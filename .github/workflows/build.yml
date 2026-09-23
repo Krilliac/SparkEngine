@@ -159,11 +159,21 @@ jobs:
     - name: Test Windows package signature orchestration
       run: python3 .github/scripts/test_verify_windows_package_signatures.py
 
+    - name: Test owner-run signing precursor contract
+      run: python3 -m unittest Tests.Tools.test_self_signed_signing_precursor -v
+
     - name: Test native MSI qualification orchestration
       run: python3 .github/scripts/test_qualify_windows_msi.py
 
     - name: Test exact release asset publication boundary
       run: python3 .github/scripts/test_verify_release_asset_boundary.py
+
+    - name: Test detached stable signature bundle contracts
+      run: |
+        python3 .github/scripts/test_sign_release_bundle.py
+        python3 .github/scripts/test_extract_release_signature_bundle.py
+        python3 .github/scripts/test_verify_release_bundle.py
+        python3 .github/scripts/test_verify_release_bundle_workflow.py
 
     - name: Test release publication recovery
       run: python3 .github/scripts/test_recover_release_publication.py

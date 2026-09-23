@@ -611,7 +611,7 @@ class ExtractedPackageWorkflowWiringTests(unittest.TestCase):
         self.assertEqual(workflow.count("--preflight-archive"), 3)
         self.assertEqual(workflow.count("--stage-root"), 3)
         # Beyond the three platform packages, both the publisher and the
-        # independent consumer extract the pinned external signature bundle.
+        # independent consumer extract the pinned stable signature control asset.
         self.assertEqual(workflow.count("--archive"), 5)
         self.assertEqual(workflow.count("package-template-smoke-build"), 3)
         self.assertIn(

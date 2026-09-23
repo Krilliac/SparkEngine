@@ -14,6 +14,7 @@ from verify_release_environment import unique_object
 
 
 NIGHTLY_TAG_RE = re.compile(r"nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}")
+SIGNATURE_CONTROL_ASSET = "SparkEngine-release-signature-bundle.tar.gz"
 
 
 def require(condition, message):
@@ -103,6 +104,11 @@ def stage(*, repository, tag, source_sha, is_versioned, expected_id, title, body
         require(isinstance(entry, dict) and isinstance(entry.get("name"), str)
                 and entry["name"] not in by_name and type(entry.get("id")) is int and entry["id"] > 0,
                 "existing asset identity is malformed or duplicated")
+        if entry["name"] == SIGNATURE_CONTROL_ASSET and is_versioned:
+            # The stable signature bundle is uploaded after distributable assets
+            # are staged. It is immutable control data, not a badge-tracked
+            # distributable, and is validated by the dedicated upload step.
+            continue
         require(entry["name"] in payloads, "draft contains an asset outside the frozen inventory")
         by_name[entry["name"]] = entry
     for name, (path, digest, size) in payloads.items():

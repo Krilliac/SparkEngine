@@ -171,7 +171,12 @@ Some required actions cannot be completed with repository write access alone:
 - The GitHub account owner must enable the declared required-check ruleset and
   retain its enforcement evidence.
 - Protected release environments, signing identities, and artifact-attestation
-  permissions require authorized credential and organization setup.
+  permissions require authorized credential and organization setup. Stable
+  detached signatures are generated post-freeze inside the protected release
+  job from the same ephemeral PFX key used for Windows outer installers; the
+  public SPKI fingerprint is pinned as repository policy, and a dedicated
+  release control asset is independently downloaded and verified after
+  publication.
 - A real release tag, GitHub publication, download verification, and any
   clean-machine certification require their designated environments and owners.
 

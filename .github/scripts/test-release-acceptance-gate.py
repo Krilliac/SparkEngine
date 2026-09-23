@@ -8,6 +8,7 @@ identified in the adversarial audit of the release pipeline.
 from __future__ import annotations
 
 import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -796,6 +797,16 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
 
     def _run_gate(self, api, is_versioned=False, tag=RELEASE_TAG):
         with tempfile.TemporaryDirectory() as tmpdir, patch.dict(os.environ, {"RELEASE_POLICY_READ_TOKEN": "generated-policy-read-fixture"}):
+            if is_versioned:
+                control = Path(tmpdir) / "signature-control.tar.gz"
+                control.write_bytes(b"deterministic signature control fixture\n")
+                api.assets.append(_asset(
+                    MODULE.SIGNATURE_CONTROL_ASSET,
+                    "sha256:" + hashlib.sha256(control.read_bytes()).hexdigest(),
+                    id=999991, size=control.stat().st_size,
+                    uploader={"id": 41898282, "login": "github-actions[bot]"},
+                ))
+                os.environ["SIGNATURE_BUNDLE_PATH"] = str(control)
             assets_file = Path(tmpdir) / "expected-assets.txt"
             digests_file = Path(tmpdir) / "expected-digests.txt"
             _write_assets_file(assets_file)
@@ -818,6 +829,7 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
                     expected_digests_file=digests_file,
                 )
             finally:
+                os.environ.pop("SIGNATURE_BUNDLE_PATH", None)
                 MODULE._fetch_json = original_fetch
                 MODULE._patch_json = original_patch
 

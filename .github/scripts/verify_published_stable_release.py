@@ -17,6 +17,9 @@ import sys
 from receipt_publication import publish_receipt_no_replace
 from verify_release_bundle import verify_release_bundle
 
+
+SIGNATURE_CONTROL_ASSET = "SparkEngine-release-signature-bundle.tar.gz"
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "site-data"))
 from exact_evidence import verify_manifest, values_from_gate_output
@@ -62,19 +65,26 @@ def release_identity(record, tag):
     return {key: record[key] for key in ("id", "tag_name", "draft", "prerelease", "immutable", "published_at")}
 
 
-def asset_identity(assets, tag):
-    require(isinstance(assets, list) and len(assets) == len(expected_assets(tag)), "published asset count differs from stable contract")
+def asset_identity(assets, tag, *, signature_control_asset=None):
+    expected = expected_assets(tag)
+    allowed = expected | ({signature_control_asset} if signature_control_asset else set())
+    require(isinstance(assets, list) and len(assets) == len(allowed), "published asset count differs from stable contract")
     result = {}
     ids = set()
     for asset in assets:
         require(isinstance(asset, dict), "asset record must be an object")
         name, asset_id, size = asset.get("name"), asset.get("id"), asset.get("size")
-        require(isinstance(name, str) and name in expected_assets(tag) and name not in result, "unexpected or duplicate release asset")
+        require(isinstance(name, str) and name in allowed and name not in result, "unexpected or duplicate release asset")
         require(type(asset_id) is int and asset_id > 0 and asset_id not in ids, "invalid or duplicate asset id")
         require(type(size) is int and 0 < size <= 8 * 1024 ** 3, "asset size is outside the bounded download contract")
         require(asset.get("state") == "uploaded", "release asset is not uploaded")
         checksum = asset.get("digest")
         require(isinstance(checksum, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", checksum), "release asset lacks an authoritative SHA-256 digest")
+        if signature_control_asset is not None and name == signature_control_asset:
+            uploader = asset.get("uploader")
+            require(isinstance(uploader, dict) and uploader.get("id") == 41898282
+                    and uploader.get("login") == "github-actions[bot]",
+                    "signature control asset uploader is untrusted")
         result[name] = {"id": asset_id, "size": size, "sha256": checksum[7:]}
         ids.add(asset_id)
     return result
@@ -117,7 +127,8 @@ def tag_commit(api, tag):
 
 def verify(*, repository, tag, source_commit, directory, signature_directory, fingerprint,
            gate_output, receipt, run_id, run_attempt, api=None,
-           bundle_verifier=verify_release_bundle, provenance_verifier=verify_manifest):
+           bundle_verifier=verify_release_bundle, provenance_verifier=verify_manifest,
+           signature_control_asset=None):
     require(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository), "invalid repository identity")
     require(re.fullmatch(r"[0-9a-f]{40}", source_commit), "invalid source commit")
     require(type(run_id) is int and run_id > 0 and type(run_attempt) is int and run_attempt > 0, "invalid verifier run identity")
@@ -126,7 +137,7 @@ def verify(*, repository, tag, source_commit, directory, signature_directory, fi
     identity = release_identity(api.json(f"releases/tags/{tag}"), tag)
     require(tag_commit(api, tag) == source_commit, "published tag differs from candidate SHA")
     endpoint = f"releases/{identity['id']}/assets?per_page=100"
-    assets = asset_identity(api.json(endpoint), tag)
+    assets = asset_identity(api.json(endpoint), tag, signature_control_asset=signature_control_asset)
     directory.mkdir(mode=0o700, parents=False, exist_ok=False)
     for name in sorted(names):
         entry = assets[name]
@@ -135,6 +146,16 @@ def verify(*, repository, tag, source_commit, directory, signature_directory, fi
         require(destination.is_file() and not destination.is_symlink(), "download is not a regular file")
         require(destination.stat().st_size == entry["size"] and digest(destination) == entry["sha256"],
                 f"downloaded asset differs from GitHub identity: {name}")
+    if signature_control_asset is not None:
+        control = assets[signature_control_asset]
+        control_archive = directory.parent / signature_control_asset
+        api.download(control["id"], control_archive)
+        require(control_archive.is_file() and not control_archive.is_symlink()
+                and control_archive.stat().st_size == control["size"]
+                and digest(control_archive) == control["sha256"],
+                "downloaded signature control asset differs from GitHub identity")
+        from extract_release_signature_bundle import extract_archive
+        extract_archive(control_archive, signature_directory)
     expected = directory / "expected-assets.txt"
     expected.write_text("\n".join(sorted(names)) + "\n", encoding="utf-8")
     bundle_verifier(
@@ -150,7 +171,8 @@ def verify(*, repository, tag, source_commit, directory, signature_directory, fi
     api.verify_attestation(tag)
     require(release_identity(api.json(f"releases/{identity['id']}"), tag) == identity,
             "published release changed during consumer verification")
-    require(asset_identity(api.json(endpoint), tag) == assets, "published asset set changed during consumer verification")
+    require(asset_identity(api.json(endpoint), tag, signature_control_asset=signature_control_asset) == assets,
+            "published asset set changed during consumer verification")
     require(tag_commit(api, tag) == source_commit, "tag changed during consumer verification")
     result = {
         "schemaVersion": 1, "state": "publication-verified", "repository": repository,
@@ -174,6 +196,7 @@ def main():
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--run-id", required=True, type=int)
     parser.add_argument("--run-attempt", required=True, type=int)
+    parser.add_argument("--signature-control-asset", default=SIGNATURE_CONTROL_ASSET)
     args = parser.parse_args()
     try:
         verify(**vars(args))

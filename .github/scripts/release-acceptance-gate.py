@@ -10,6 +10,7 @@ window and records the instant at which recovery may be needed.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -33,6 +34,7 @@ BUILD_WORKFLOW_PATH = ".github/workflows/build.yml"
 WORKING_BRANCH = "Working"
 VERSION_TAG_PATTERN = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+")
 NIGHTLY_TAG_PATTERN = re.compile(r"nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}")
+SIGNATURE_CONTROL_ASSET = "SparkEngine-release-signature-bundle.tar.gz"
 
 
 class GateError(Exception):
@@ -194,10 +196,19 @@ def _verify_release_assets(
     assets: list[dict[str, Any]],
     expected_names: list[str],
     expected_digests: dict[str, str],
+    *,
+    allow_signature_control: bool = False,
+    signature_control_digest: str | None = None,
+    signature_control_size: int | None = None,
+    require_signature_control: bool = False,
 ) -> None:
     """Verify the complete asset inventory against the frozen manifest."""
     asset_names = {asset["name"] for asset in assets}
-    if len(assets) != len(expected_names) or asset_names != set(expected_names):
+    has_control = SIGNATURE_CONTROL_ASSET in asset_names
+    if require_signature_control and not has_control:
+        raise GateError("stable release is missing its signature control asset")
+    allowed_names = set(expected_names) | ({SIGNATURE_CONTROL_ASSET} if allow_signature_control and has_control else set())
+    if len(assets) != len(allowed_names) or asset_names != allowed_names:
         missing = set(expected_names) - asset_names
         extra = asset_names - set(expected_names)
         raise GateError(f"asset mismatch — missing: {missing}, extra: {extra}")
@@ -206,6 +217,20 @@ def _verify_release_assets(
         name = asset["name"]
         if asset.get("state") != "uploaded":
             raise GateError(f"asset '{name}' is not in 'uploaded' state")
+        if name == SIGNATURE_CONTROL_ASSET:
+            if not allow_signature_control:
+                raise GateError(f"asset '{name}' is not allowed on this channel")
+            digest = asset.get("digest")
+            uploader = asset.get("uploader")
+            if (not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
+                    or not isinstance(uploader, dict) or uploader.get("id") != 41898282
+                    or uploader.get("login") != "github-actions[bot]"):
+                raise GateError("signature control asset metadata is not trusted")
+            if signature_control_digest is not None and digest != signature_control_digest:
+                raise GateError("signature control asset digest does not match the frozen local bundle")
+            if signature_control_size is not None and asset.get("size") != signature_control_size:
+                raise GateError("signature control asset size does not match the frozen local bundle")
+            continue
         expected_digest = expected_digests[name]
         actual_digest = asset.get("digest")
         if not isinstance(actual_digest, str) or actual_digest.lower() != expected_digest:
@@ -223,6 +248,10 @@ def verify_draft_release(
     is_versioned: bool,
     expected_names: list[str],
     expected_digests: dict[str, str],
+    *,
+    signature_control_digest: str | None = None,
+    signature_control_size: int | None = None,
+    require_signature_control: bool = False,
 ) -> None:
     release = _fetch_json(f"{api_url}/repos/{repository}/releases/{release_id}", token)
     if not isinstance(release, dict):
@@ -240,7 +269,11 @@ def verify_draft_release(
 
     assets = _fetch_release_assets(api_url, token, repository, release_id)
 
-    _verify_release_assets(assets, expected_names, expected_digests)
+    _verify_release_assets(assets, expected_names, expected_digests,
+                           allow_signature_control=is_versioned,
+                           signature_control_digest=signature_control_digest,
+                           signature_control_size=signature_control_size,
+                           require_signature_control=require_signature_control)
 
 
 def verify_published_release(
@@ -253,6 +286,10 @@ def verify_published_release(
     published: Any,
     expected_names: list[str],
     expected_digests: dict[str, str],
+    *,
+    signature_control_digest: str | None = None,
+    signature_control_size: int | None = None,
+    require_signature_control: bool = False,
 ) -> None:
     """Re-check publication response and assets before reporting success."""
     if not isinstance(published, dict):
@@ -284,7 +321,11 @@ def verify_published_release(
         raise GateError("post-PATCH release immutability does not match its channel")
 
     assets = _fetch_release_assets(api_url, token, repository, release_id)
-    _verify_release_assets(assets, expected_names, expected_digests)
+    _verify_release_assets(assets, expected_names, expected_digests,
+                           allow_signature_control=is_versioned,
+                           signature_control_digest=signature_control_digest,
+                           signature_control_size=signature_control_size,
+                           require_signature_control=require_signature_control)
 
 
 def verify_tag(
@@ -543,10 +584,28 @@ def acceptance_gate(
     immutable_channel = is_versioned or os.environ.get("RELEASE_IMMUTABLE") == "true"
     expected_names = _read_expected_assets(expected_assets_file)
     expected_digests = _read_expected_digests(expected_digests_file, expected_names)
+    signature_control_digest = None
+    signature_control_size = None
+    require_signature_control = False
+    control_path = os.environ.get("SIGNATURE_BUNDLE_PATH", "")
+    if is_versioned:
+        if not control_path:
+            raise GateError("stable publication requires the protected signature control bundle path")
+        path = Path(control_path)
+        if not path.is_file() or path.is_symlink():
+            raise GateError("protected stable signature control bundle is missing or link-like")
+        if path.stat().st_size <= 0 or path.stat().st_size > 64 * 1024 * 1024:
+            raise GateError("protected stable signature control bundle is outside the size bound")
+        signature_control_digest = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+        signature_control_size = path.stat().st_size
+        require_signature_control = True
 
     verify_draft_release(
         api_url, token, repository, release_id, release_tag, is_versioned,
         expected_names, expected_digests,
+        signature_control_digest=signature_control_digest,
+        signature_control_size=signature_control_size,
+        require_signature_control=require_signature_control,
     )
     verify_tag(token, release_tag, target_sha)
     verify_ci_gate(api_url, token, repository, target_sha)
@@ -557,6 +616,9 @@ def acceptance_gate(
     verify_draft_release(
         api_url, token, repository, release_id, release_tag, is_versioned,
         expected_names, expected_digests,
+        signature_control_digest=signature_control_digest,
+        signature_control_size=signature_control_size,
+        require_signature_control=require_signature_control,
     )
 
     patch_body: dict[str, Any] = {"draft": False}
@@ -585,6 +647,9 @@ def acceptance_gate(
             published,
             expected_names,
             expected_digests,
+            signature_control_digest=signature_control_digest,
+            signature_control_size=signature_control_size,
+            require_signature_control=require_signature_control,
         )
     except GateError as publication_error:
         if is_versioned:

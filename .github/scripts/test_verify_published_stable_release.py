@@ -9,6 +9,7 @@ from pathlib import Path
 import stat
 import subprocess
 import tempfile
+import tarfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -91,6 +92,53 @@ class PublishedConsumerTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.run_consumer(root, **{fault: True})
                 self.assertFalse((root / "receipt.json").exists())
+
+    def test_fresh_consumer_downloads_and_checks_signature_control_asset(self):
+        control_name = "SparkEngine-release-signature-bundle.tar.gz"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            control = root / "control.tar.gz"
+            with tarfile.open(control, "w:gz") as archive:
+                manifest = root / "release-signatures.json"
+                public_key = root / "spark-release-public-key.pem"
+                manifest.write_text("{}\n", encoding="utf-8")
+                public_key.write_text("test\n", encoding="utf-8")
+                archive.add(manifest, arcname="release-signatures.json")
+                archive.add(public_key, arcname="spark-release-public-key.pem")
+            control_bytes = control.read_bytes()
+            control_asset = {"id": 99, "name": control_name, "size": len(control_bytes),
+                             "state": "uploaded", "digest": "sha256:" + hashlib.sha256(control_bytes).hexdigest(),
+                             "uploader": {"id": 41898282, "login": "github-actions[bot]"}}
+            assets = self.assets + [control_asset]
+            tag_record = {"ref": "refs/tags/" + self.tag, "object": {"type": "commit", "sha": self.sha}}
+            api = Mock()
+            api.json.side_effect = [self.release, tag_record, assets,
+                                    {**self.release}, assets, tag_record]
+            by_id = {entry["id"]: entry["name"] for entry in assets}
+            def download(asset_id, path):
+                if asset_id == 99:
+                    path.write_bytes(control_bytes)
+                else:
+                    path.write_bytes(self.payloads[by_id[asset_id]])
+            api.download.side_effect = download
+            bundle = Mock()
+            provenance = Mock()
+            with patch("verify_published_stable_release.values_from_gate_output", return_value={"source": self.sha}):
+                result = verify(repository="owner/repo", tag=self.tag, source_commit=self.sha,
+                                directory=root / "download", signature_directory=root / "signatures",
+                                fingerprint="b" * 64, gate_output=root / "gate.txt", receipt=root / "receipt.json",
+                                run_id=456, run_attempt=2, api=api, bundle_verifier=bundle,
+                                provenance_verifier=provenance, signature_control_asset=control_name)
+            self.assertEqual(result["state"], "publication-verified")
+            self.assertEqual(api.download.call_count, 8)
+            bundle.assert_called_once()
+            self.assertTrue((root / "signatures" / "release-signatures.json").is_file())
+            bad = copy.deepcopy(assets)
+            bad[-1]["digest"] = "not-a-digest"
+            with self.assertRaises(ValueError):
+                asset_identity(bad, self.tag, signature_control_asset=control_name)
+            with self.assertRaises(ValueError):
+                asset_identity(self.assets, self.tag, signature_control_asset=control_name)
 
     def test_duplicate_metadata_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "duplicate"):

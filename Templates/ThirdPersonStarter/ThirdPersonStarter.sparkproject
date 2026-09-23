@@ -3,7 +3,7 @@
   "name": "ThirdPersonStarter",
   "version": "0.2.0",
   "description": "A polished third-person wayfinding slice with camera-relative movement, sprinting, orbit and reset controls, a crystal objective, and a portal goal.",
-  "engineVersion": "1.0.0",
+  "engineVersion": "0.9.0",
   "template": "third-person",
   "defaultScene": "Scenes/Adventure.sparkscene",
   "lastOpenedScene": "Scenes/Adventure.sparkscene",

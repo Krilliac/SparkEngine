@@ -31,6 +31,7 @@ OPERATION_RE = re.compile(r"^[0-9]+:[0-9]+$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-fA-F]{64}$")
 PENDING_PHASES = frozenset({"prepared", "staged"})
 EXACT_CI_EVIDENCE_ASSET = "SparkEngine-Exact-CI-Evidence.json"
+SIGNATURE_CONTROL_ASSET = "SparkEngine-release-signature-bundle.tar.gz"
 
 
 class CounterError(RuntimeError):
@@ -937,6 +938,11 @@ def fetch_inventory_once(api: GitHubApi, repository: str) -> Inventory:
             name = raw_asset.get("name")
             if not isinstance(name, str) or not name or "\n" in name or "\r" in name:
                 raise CounterError(f"{label}.name must be a non-empty single-line string")
+            # Stable detached signatures are a control asset, not a
+            # distributable tracked by download counters. The publication
+            # boundary verifies this reserved asset separately.
+            if VERSION_TAG_RE.fullmatch(tag_name) and name == SIGNATURE_CONTROL_ASSET:
+                continue
             count = _nonnegative_integer(
                 raw_asset.get("download_count"), f"{label}.download_count"
             )

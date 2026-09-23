@@ -11,7 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+No post-candidate changes are listed yet.
+
+## [0.9.0] - 2026-09-23
+
+This is the reviewed predecessor source candidate for the first fully gated
+stable release. Publication remains blocked until the protected source seal,
+signing, and independent acceptance evidence are complete.
+
 ### Added
+- Release-readiness qualification baseline for the signed immutable v0.9.0 predecessor.
 - Production-source regression tests (`Tests/Test*Real.cpp`) covering audio, editor panels/gizmos/undo, engine wiring, save round trips, security parsers, the shader compiler, the shadow pass, module lifecycle, user data paths, logger sinks, crash-handler gating, and the SparkGameFPS loop; `Tools/test_source_census.py` reports production-source vs mirror tests with a `--check` gate
 - Test runner: `EXPECT_WARN_ONLY(expr, reason)`, `EXPECT_NO_CRASH(reason)`, an `[ EMPTY ]` label for zero-assertion tests (`--empty-is-error`), and JUnit `flaky=`/`empty=` attributes with `<flakyFailure>` instead of `<skipped>` for waived tests
 - `SparkEngineLoadTests` CTest lane (labels `load;slow`) split from `SparkEngineTests`, with per-configuration `SPARK_TEST_TIMEOUT_SECONDS` budgets and the `SPARK_TESTS_WARN_IS_ERROR` option

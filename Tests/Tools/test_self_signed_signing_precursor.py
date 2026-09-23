@@ -60,6 +60,18 @@ class SelfSignedSigningPrecursorTests(unittest.TestCase):
         self.assertNotIn("PlainText", self.text)
         self.assertNotIn("Write-Output $password", self.text)
 
+    def test_export_failure_cleans_only_the_exact_new_certificate(self) -> None:
+        for required in (
+            "$createdThumbprint = $certificate.Thumbprint.ToUpperInvariant()",
+            "$createdThumbprint -match '^[0-9A-F]{40}$'",
+            "Where-Object { $_.Thumbprint -eq $createdThumbprint }",
+            "if ($createdCertificate.Count -eq 1)",
+            "Remove-Item -LiteralPath ([string]$createdCertificate[0].PSPath) -DeleteKey -Force -ErrorAction Stop",
+            "$cleanupErrors +=",
+            "if ($cleanupErrors.Count -ne 0)",
+        ):
+            self.assertIn(required, self.text)
+
     def test_powershell_parser_accepts_script_without_executing_it(self) -> None:
         powershell = shutil.which("pwsh") or shutil.which("powershell")
         if not powershell:

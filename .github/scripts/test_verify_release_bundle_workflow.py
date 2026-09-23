@@ -20,8 +20,8 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         self.assertIn('FILES="${FILES}SHA256SUMS"', collect)
         self.assertNotIn('sha256sum SHA256SUMS >> SHA256SUMS', collect)
 
-    def test_external_producer_precedes_both_consumers(self) -> None:
-        producer = self.text.index("- name: Provision external stable signature bundle")
+    def test_protected_producer_precedes_both_consumers(self) -> None:
+        producer = self.text.index("- name: Generate protected stable signature bundle")
         first = self.text.index("- name: Verify complete stable release bundle before draft publication")
         second = self.text.index("- name: Reverify signed stable release bundle immediately before promotion")
         self.assertLess(producer, first)
@@ -32,14 +32,19 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
             self.assertIn("--trusted-key-fingerprint", block)
             self.assertIn("spark-release-signature-bundle/release-signatures.json", block)
 
-    def test_provisioning_requires_pinned_external_bundle_digest_and_url(self) -> None:
-        start = self.text.index("- name: Provision external stable signature bundle")
+    def test_provisioning_uses_protected_pfx_and_immutable_control_asset(self) -> None:
+        start = self.text.index("- name: Generate protected stable signature bundle")
         block = self.text[start:self.text.index("\n    - name:", start + 10)]
-        self.assertIn("SPARKENGINE_STABLE_SIGNATURE_BUNDLE_URL", block)
-        self.assertIn("SPARKENGINE_STABLE_SIGNATURE_BUNDLE_SHA256", block)
-        self.assertIn("sha256sum --check --status", block)
-        self.assertIn("extract_release_signature_bundle.py", block)
+        self.assertIn("SPARK_RELEASE_SIGNING_PFX_BASE64: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_BASE64 }}", block)
+        self.assertIn("SPARK_RELEASE_SIGNING_PFX_PASSWORD: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_PASSWORD }}", block)
+        self.assertIn("sign_release_bundle.ps1", block)
+        self.assertIn("EphemeralKeySet", Path(__file__).with_name("sign_release_bundle.ps1").read_text(encoding="utf-8"))
         self.assertIn("RUNNER_TEMP/spark-release-signature-bundle", block)
+        publish = self.text[self.text.index("- name: Publish complete stable versioned release"):]
+        self.assertIn("SparkEngine-release-signature-bundle.tar.gz", publish)
+        self.assertIn("guard_release_mutation.py", publish)
+        self.assertLess(publish.index("prepare-download-badges.py\" publish-preflight"),
+                        publish.index("signature-control-upload.json"))
 
     def test_msi_qualification_supplies_explicit_external_predecessor_publisher(self) -> None:
         start = self.text.index("- name: Qualify Windows stable MSI install upgrade rollback repair and uninstall")
@@ -98,6 +103,7 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         cleanup = block[block.index("} finally {"):]
         self.assertIn("if ($importAttempted)", cleanup)
         self.assertIn("'Cert:\\CurrentUser\\My\\' + $env:SPARK_RELEASE_SIGNER_THUMBPRINT", cleanup)
+        self.assertIn("Remove-Item -LiteralPath $introducedPath -Force -DeleteKey -Confirm:$false", cleanup)
 
 
 if __name__ == "__main__":
