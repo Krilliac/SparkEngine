@@ -372,6 +372,16 @@ void ASSetDebugTraceCallback(DebugTraceCallback callback)
 }
 
 // ============================================================================
+// Fault state query (shared by both the real and stub builds)
+// ============================================================================
+
+bool AngelScriptEngine::IsScriptFaulted(EntityID entity) const
+{
+    auto it = m_entityScripts.find(entity);
+    return it != m_entityScripts.end() && it->second.faulted;
+}
+
+// ============================================================================
 // Sandbox security configuration (shared by both the real and stub builds —
 // stages the level/whitelist/blacklist so Initialize() can apply them before
 // RegisterEngineAPI() runs; see RegisterGuardedFunction).
@@ -459,7 +469,10 @@ bool AngelScriptEngine::Initialize()
     }
 
     // Set the message callback so compilation/runtime errors are captured.
+    // Registration errors arrive through it too; the first one is kept for the
+    // configuration probe below.
     m_engine->SetMessageCallback(asFUNCTION(MessageCallback), this, asCALL_CDECL);
+    m_firstCompileError.clear();
 
     RegisterStandardLibrary();
 
@@ -485,6 +498,25 @@ bool AngelScriptEngine::Initialize()
     m_sandbox->RegisterConsoleCommands();
 
     RegisterEngineAPI();
+
+    // AngelScript only reports a rejected native registration as "Invalid
+    // configuration" when the first module builds, so every script would fail
+    // later with a misleading per-module error. Build an empty probe module now
+    // and fail closed with the registration diagnostic instead.
+    asIScriptModule* probe = m_engine->GetModule("$config_probe", asGM_ALWAYS_CREATE);
+    const int probeResult = probe ? probe->Build() : asERROR;
+    if (probe)
+    {
+        probe->Discard();
+    }
+    if (probeResult < 0)
+    {
+        SetLastError("Script engine API registration is invalid on this platform: " + m_firstCompileError);
+        LogError(m_lastError);
+        m_engine->ShutDownAndRelease();
+        m_engine = nullptr;
+        return false;
+    }
 
     const char* securityLevelStr = m_sandbox->GetSecurityLevel() == Spark::ScriptSecurityLevel::Unrestricted
                                        ? "Unrestricted"
@@ -540,6 +572,7 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
     fs::path path(scriptPath);
     std::string moduleName = path.stem().string();
 
+    m_firstCompileError.clear();
     CScriptBuilder builder;
     int result = builder.StartNewModule(m_engine, moduleName.c_str());
     if (result < 0)
@@ -565,7 +598,7 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
     result = builder.BuildModule();
     if (result < 0)
     {
-        SetLastError("Compilation failed for module '" + moduleName + "'.");
+        SetLastError("Compilation failed for module '" + moduleName + "': " + m_firstCompileError);
         LogError(m_lastError);
         // StartNewModule already discarded any previous module of this name; drop the stale pointer.
         m_modules.erase(moduleName);
@@ -626,6 +659,7 @@ bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
     //    and all its live instances completely untouched.
     const std::string stagingModule = moduleName + "$hotreload_stage";
     {
+        m_firstCompileError.clear();
         CScriptBuilder validator;
         bool staged = validator.StartNewModule(m_engine, stagingModule.c_str()) >= 0 &&
                       validator.AddSectionFromFile(filePath.c_str()) >= 0 && validator.BuildModule() >= 0;
@@ -639,7 +673,8 @@ bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
 
         if (!staged)
         {
-            SetLastError("Hot-reload aborted: recompilation of '" + filePath + "' failed; live scripts left intact.");
+            SetLastError("Hot-reload aborted: recompilation of '" + filePath + "' failed (" + m_firstCompileError +
+                         "); live scripts left intact.");
             LogError(m_lastError);
             return false;
         }
@@ -703,6 +738,7 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
         return false;
     }
 
+    m_firstCompileError.clear();
     CScriptBuilder builder;
     int result = builder.StartNewModule(m_engine, moduleName.c_str());
     if (result < 0)
@@ -715,7 +751,9 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
         return false;
     }
 
-    result = builder.AddSectionFromMemory("inline", script.c_str(), static_cast<unsigned int>(script.size()));
+    // The section is named after the module so compile and runtime diagnostics
+    // read "<module>:<line>" instead of an anonymous "inline:<line>".
+    result = builder.AddSectionFromMemory(moduleName.c_str(), script.c_str(), static_cast<unsigned int>(script.size()));
     if (result < 0)
     {
         SetLastError("Failed to add inline script section for module '" + moduleName + "'.");
@@ -728,7 +766,7 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
     result = builder.BuildModule();
     if (result < 0)
     {
-        SetLastError("Compilation failed for module '" + moduleName + "'.");
+        SetLastError("Compilation failed for module '" + moduleName + "': " + m_firstCompileError);
         LogError(m_lastError);
         // StartNewModule already discarded any previous module of this name; drop the stale pointer.
         m_modules.erase(moduleName);
@@ -904,14 +942,7 @@ bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& classNa
 
     if (execResult != asEXECUTION_FINISHED)
     {
-        if (execResult == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
-        {
-            SetLastError("Constructor for class '" + className + "' terminated by sandbox.");
-        }
-        else
-        {
-            SetLastError("Factory execution failed for class '" + className + "'.");
-        }
+        SetLastError(DescribeScriptFault(ctx, execResult, "Constructor of class '" + className + "'"));
         LogError(m_lastError);
         ctx->Release();
         return false;
@@ -967,103 +998,126 @@ void AngelScriptEngine::DetachScript(EntityID entity)
 
 void AngelScriptEngine::CallStart(EntityID entity)
 {
-    ScriptInstance* inst = GetScriptInstance(entity);
-    if (!inst || !inst->startMethod || !inst->context)
-        return;
-
-    if (m_sandbox)
+    if (ScriptInstance* inst = GetScriptInstance(entity))
     {
-        m_sandbox->BeginExecution(inst->className + "::Start");
-        inst->context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
-    }
-
-    inst->context->Prepare(inst->startMethod);
-    inst->context->SetObject(inst->object);
-    int result = inst->context->Execute();
-
-    if (m_sandbox)
-    {
-        m_sandbox->EndExecution();
-    }
-
-    if (result == asEXECUTION_EXCEPTION)
-    {
-        SetLastError(std::string("Exception in Start(): ") + inst->context->GetExceptionString());
-        LogError(m_lastError);
-    }
-    else if (result == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
-    {
-        SetLastError("Start() terminated by sandbox");
-        LogError(m_lastError);
+        DispatchCallback(*inst, inst->startMethod, "Start()", {});
     }
 }
 
 void AngelScriptEngine::CallUpdate(EntityID entity, float deltaTime)
 {
-    ScriptInstance* inst = GetScriptInstance(entity);
-    if (!inst || !inst->updateMethod || !inst->context)
-        return;
-
-    if (m_sandbox)
+    if (ScriptInstance* inst = GetScriptInstance(entity))
     {
-        m_sandbox->BeginExecution(inst->className + "::Update");
-        inst->context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
-    }
-
-    inst->context->Prepare(inst->updateMethod);
-    inst->context->SetObject(inst->object);
-    inst->context->SetArgFloat(0, deltaTime);
-    int result = inst->context->Execute();
-
-    if (m_sandbox)
-    {
-        m_sandbox->EndExecution();
-    }
-
-    if (result == asEXECUTION_EXCEPTION)
-    {
-        SetLastError(std::string("Exception in Update(): ") + inst->context->GetExceptionString());
-        LogError(m_lastError);
-    }
-    else if (result == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
-    {
-        SetLastError("Update() terminated by sandbox");
-        LogError(m_lastError);
+        DispatchCallback(*inst, inst->updateMethod, "Update()",
+                         [deltaTime](asIScriptContext* ctx) { ctx->SetArgFloat(0, deltaTime); });
     }
 }
 
 void AngelScriptEngine::CallOnCollision(EntityID entity, EntityID other)
 {
-    ScriptInstance* inst = GetScriptInstance(entity);
-    if (!inst || !inst->onCollisionMethod || !inst->context)
+    if (ScriptInstance* inst = GetScriptInstance(entity))
+    {
+        DispatchCallback(*inst, inst->onCollisionMethod, "OnCollision()",
+                         [other](asIScriptContext* ctx) { ctx->SetArgDWord(0, static_cast<asDWORD>(other)); });
+    }
+}
+
+void AngelScriptEngine::DispatchCallback(ScriptInstance& instance, asIScriptFunction* method, const char* callbackName,
+                                         const std::function<void(asIScriptContext*)>& setArgs)
+{
+    if (instance.faulted || !method || !instance.context)
         return;
+
+    const std::string where =
+        "Script '" + instance.className + "' (module '" + instance.moduleName + "') " + callbackName;
+
+    // A re-entrant dispatch into the same instance (script -> native -> Call*)
+    // finds its context still executing; Prepare() refuses instead of
+    // clobbering the outer call, so skip this callback without faulting.
+    const int prepareResult = instance.context->Prepare(method);
+    if (prepareResult < 0)
+    {
+        SetLastError(where + " skipped: context could not be prepared (AngelScript code " +
+                     std::to_string(prepareResult) + ").");
+        LogError(m_lastError);
+        return;
+    }
+    instance.context->SetObject(instance.object);
+    if (setArgs)
+        setArgs(instance.context);
 
     if (m_sandbox)
     {
-        m_sandbox->BeginExecution(inst->className + "::OnCollision");
-        inst->context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
+        m_sandbox->BeginExecution(instance.className + "::" + callbackName);
+        instance.context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(),
+                                          asCALL_CDECL);
     }
 
-    inst->context->Prepare(inst->onCollisionMethod);
-    inst->context->SetObject(inst->object);
-    inst->context->SetArgDWord(0, static_cast<asDWORD>(other));
-    int result = inst->context->Execute();
+    const int result = instance.context->Execute();
 
     if (m_sandbox)
     {
         m_sandbox->EndExecution();
     }
 
-    if (result == asEXECUTION_EXCEPTION)
+    if (result == asEXECUTION_FINISHED)
+        return;
+
+    // Disable the instance: re-running a faulting or runaway script every
+    // frame only repeats the fault (and, for a runaway, burns the whole
+    // sandbox budget each tick). Re-attaching the class clears the flag.
+    instance.faulted = true;
+    SetLastError(DescribeScriptFault(instance.context, result, where) +
+                 " Script disabled until it is re-attached or hot-reloaded.");
+    LogError(m_lastError);
+}
+
+std::string AngelScriptEngine::DescribeScriptFault(asIScriptContext* ctx, int execResult,
+                                                   const std::string& where) const
+{
+    std::string reason;
+    const char* section = nullptr;
+    int line = 0;
+    int column = 0;
+    asIScriptFunction* function = nullptr;
+
+    if (execResult == asEXECUTION_EXCEPTION)
     {
-        SetLastError(std::string("Exception in OnCollision(): ") + inst->context->GetExceptionString());
-        LogError(m_lastError);
+        const char* exception = ctx->GetExceptionString();
+        reason = std::string("threw exception '") + (exception ? exception : "unknown") + "'";
+        line = ctx->GetExceptionLineNumber(&column, &section);
+        function = ctx->GetExceptionFunction();
     }
-    else if (result == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
+    else if (execResult == asEXECUTION_ABORTED)
     {
-        SetLastError("OnCollision() terminated by sandbox");
-        LogError(m_lastError);
+        reason = "was aborted";
+        if (m_sandbox && m_sandbox->WasTerminated())
+        {
+            const auto violations = m_sandbox->GetViolations();
+            reason = "was terminated by sandbox";
+            if (!violations.empty())
+                reason += " (" + violations.back().details + ")";
+        }
+        // The aborted context keeps its call stack until the next Prepare(),
+        // so the innermost frame still names the line that was running.
+        line = ctx->GetLineNumber(0, &column, &section);
+        function = ctx->GetFunction(0);
     }
+    else
+    {
+        reason = "did not finish (AngelScript execution result " + std::to_string(execResult) + ")";
+    }
+
+    std::string description = where + " " + reason;
+    if (section && line > 0)
+    {
+        description += " at " + std::string(section) + ":" + std::to_string(line) + ":" + std::to_string(column);
+    }
+    if (function)
+    {
+        description += std::string(" in '") + function->GetDeclaration(true, true) + "'";
+    }
+    return description + ".";
 }
 
 // -------------------------------------------------------------------------
@@ -1086,9 +1140,15 @@ void AngelScriptEngine::RegisterEngineAPI()
 
 void AngelScriptEngine::RegisterMathTypes()
 {
-    // Register a lightweight Vector3 value type for script use.
+    // Register a lightweight Vector3 value type for script use. ALLFLOATS is
+    // required for natives that return Vector3 by value (getPosition,
+    // getRotation): on System V x86-64 (Linux/macOS) a three-float struct comes
+    // back in XMM registers, and without the flag AngelScript refuses the
+    // registration, which invalidates the whole engine configuration so that
+    // no script can compile. Other ABIs ignore the flag.
     m_engine->RegisterObjectType("Vector3", sizeof(DirectX::XMFLOAT3),
-                                 asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<DirectX::XMFLOAT3>());
+                                 asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<DirectX::XMFLOAT3>() |
+                                     asOBJ_APP_CLASS_ALLFLOATS);
     m_engine->RegisterObjectProperty("Vector3", "float x", asOFFSET(DirectX::XMFLOAT3, x));
     m_engine->RegisterObjectProperty("Vector3", "float y", asOFFSET(DirectX::XMFLOAT3, y));
     m_engine->RegisterObjectProperty("Vector3", "float z", asOFFSET(DirectX::XMFLOAT3, z));
@@ -1311,11 +1371,23 @@ void AngelScriptEngine::MessageCallback(const asSMessageInfo* msg, void* param)
     }
 
     std::ostringstream oss;
-    oss << msg->section << " (" << msg->row << ", " << msg->col << ") : " << prefix << " : " << msg->message;
+    // Registration-time messages carry no script section; only compiler
+    // messages get a "<section>:<line>:<column>:" location prefix.
+    if (msg->section && msg->section[0] != '\0')
+    {
+        oss << msg->section << ":" << msg->row << ":" << msg->col << ": ";
+    }
+    oss << prefix << ": " << msg->message;
 
     std::string formatted = oss.str();
     if (msg->type == asMSGTYPE_ERROR)
     {
+        // Later errors are usually cascades of the first; the first is the
+        // actionable one, so the compile-failure message reports it.
+        if (self->m_firstCompileError.empty())
+        {
+            self->m_firstCompileError = formatted;
+        }
         self->SetLastError(formatted);
         LogError(formatted);
     }

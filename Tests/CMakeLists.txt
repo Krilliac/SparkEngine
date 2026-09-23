@@ -360,6 +360,7 @@ add_executable(SparkTests
     TestSceneSerializerReal.cpp
     TestMusicManager.cpp
     TestAngelScriptEngine.cpp
+    TestENG200ScriptFaultsReal.cpp
     TestScriptHotReload.cpp
     TestVRSystem.cpp
     TestSeamlessAreaManager.cpp
