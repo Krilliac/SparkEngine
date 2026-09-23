@@ -93,6 +93,12 @@ spark_configure_module_abi(SparkGameRTS)
 
 target_compile_definitions(SparkGameRTS PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
 
+# The skirmish simulation must be bit-identical across runs and platforms: forbid the compiler from fusing
+# multiply-add pairs into FMA instructions (GCC defaults to -ffp-contract=fast, Clang on ARM64 to "on").
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(SparkGameRTS PRIVATE -ffp-contract=off)
+endif()
+
 # ---------------------------------------------------------------------
 # Link against SparkEngineLib
 # ---------------------------------------------------------------------

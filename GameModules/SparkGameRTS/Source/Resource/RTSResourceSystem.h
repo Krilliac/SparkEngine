@@ -17,7 +17,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 namespace RTS
@@ -78,7 +78,7 @@ namespace RTS
 
         // === Queries ===
         size_t GetNodeCount() const;
-        const std::unordered_map<uint32_t, ResourceNode>& GetNodes() const;
+        const std::map<uint32_t, ResourceNode>& GetNodes() const;
         std::string GetResourceListString() const;
 
         /** Replace the economy and resource nodes from a validated persistence snapshot. */
@@ -91,8 +91,9 @@ namespace RTS
         Spark::IEngineContext* m_context{nullptr};
         RTSUnitSystem* m_unitSystem{nullptr};
 
-        std::unordered_map<RTSFaction, PlayerResources> m_playerResources;
-        std::unordered_map<uint32_t, ResourceNode> m_nodes;
+        // Ordered containers: harvest and depletion walk nodes in id order on every run and platform.
+        std::map<RTSFaction, PlayerResources> m_playerResources;
+        std::map<uint32_t, ResourceNode> m_nodes;
         uint32_t m_nextNodeId = 1;
 
         static constexpr float GATHER_INTERVAL = 2.0f; ///< Seconds per resource tick

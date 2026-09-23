@@ -567,6 +567,7 @@ add_executable(SparkTests
     TestCoreAndBuildSystems.cpp
     TestOpenWorldModule.cpp
     TestGameModuleRTS.cpp
+    TestMOD370SkirmishDeterminismReal.cpp
     TestGameModuleMMO.cpp
     TestGameModuleRPG.cpp
     TestGameModuleRacing.cpp
@@ -1063,6 +1064,9 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Building/RTSBuildingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp"
     )
 
     # MMO module sources

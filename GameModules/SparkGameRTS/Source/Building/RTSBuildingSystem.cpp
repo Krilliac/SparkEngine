@@ -16,7 +16,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <unordered_map>
 
 namespace RTS
 {
@@ -107,6 +106,14 @@ namespace RTS
             ReleaseQueuedSupply(it->second);
             m_buildings.erase(it);
         }
+    }
+
+    void RTSBuildingSystem::ApplyDamage(uint32_t buildingId, float amount)
+    {
+        auto it = m_buildings.find(buildingId);
+        if (it == m_buildings.end() || !std::isfinite(amount) || amount <= 0.0f)
+            return;
+        it->second.health = std::max(it->second.health - amount, 0.0f);
     }
 
     // === Production ===
@@ -247,8 +254,7 @@ namespace RTS
 
     bool RTSBuildingSystem::RestoreState(const std::vector<BuildingData>& buildings)
     {
-        std::unordered_map<uint32_t, BuildingData> restored;
-        restored.reserve(buildings.size());
+        std::map<uint32_t, BuildingData> restored;
         uint32_t nextId = 1;
 
         for (const BuildingData& building : buildings)
