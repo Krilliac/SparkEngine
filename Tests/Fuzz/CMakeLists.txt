@@ -138,3 +138,60 @@ set_tests_properties(FuzzCrashManifestSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+add_executable(SparkFuzzTextureStex
+    FuzzTextureStex.cpp
+    FuzzTextureStexProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/TextureCompressor.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/TextureBlockCompression.cpp"
+    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzTextureStex.cpp
+# use libstdc++; the production loader, its logger, and the adapter use libc++
+# and meet the driver only at the C ABI in FuzzTextureStexProduction.h.
+set_source_files_properties(
+    FuzzTextureStexProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/TextureCompressor.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/TextureBlockCompression.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzTextureStex PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzTextureStex PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzTextureStex PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzTextureStex PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzTextureStex PRIVATE Threads::Threads c++ c++abi)
+
+# The corpus holds two minimized regressions (regression-*.stex) that made the
+# pre-fix loader allocate 16 GiB / 4 GiB from a header field; libFuzzer's
+# -rss_limit_mb also caps a single malloc at 256 MB, so replaying them against
+# an unbounded loader fails this test deterministically.
+add_test(
+    NAME FuzzTextureStexSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzTextureStex>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/Tests/Fuzz/corpus/texture-stex"
+)
+set_tests_properties(FuzzTextureStexSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

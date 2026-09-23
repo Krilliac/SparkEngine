@@ -1016,6 +1016,7 @@ target_sources(SparkTests PRIVATE
     TestSaveSystemRoundTripReal.cpp
     TestSAVE230NewerFormatSlotReal.cpp
     TestSecurityParsersReal.cpp
+    TestTextureStexBoundsReal.cpp
     TestShaderCompilerReal.cpp
     TestShadowPassReal.cpp
     TestSparkGameFPSLoopReal.cpp
