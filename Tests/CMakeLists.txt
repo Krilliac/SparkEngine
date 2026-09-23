@@ -1809,6 +1809,23 @@ set_tests_properties(FPSSceneMaterialContract PROPERTIES
     LABELS "module;stable-v1;fps;asset;unit"
     TIMEOUT 30)
 
+# RDY-010: ModuleDiscovery_* drive the production ModuleManager and the real ABI
+# fixture DLL. The exact count fails closed if the family stops being compiled
+# in; the contract test keeps the file from regressing to a test-local mirror.
+add_test(NAME ModuleDiscoveryProductionSource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(ModuleDiscoveryProductionSource PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=ModuleDiscovery_;SPARK_TEST_EXPECT_COUNT=7"
+    LABELS "module;module-profile;stable-v1;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 60)
+add_test(
+    NAME ModuleDiscoveryProductionSourceContract
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_module_evidence_discovery_real.py)
+set_tests_properties(ModuleDiscoveryProductionSourceContract PROPERTIES
+    LABELS "module;module-profile;stable-v1;unit"
+    TIMEOUT 30)
+
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkCrashReporter)
     add_dependencies(SparkTests SparkCrashReporter)
     add_test(
