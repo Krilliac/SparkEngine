@@ -49,6 +49,11 @@ jobs:
     - name: Supply-chain policy check
       run: python3 tools/check-supply-chain.py --ci
 
+    # REL-100: prove the per-artifact provenance gate still rejects forged,
+    # stale, or incomplete records before any job relies on it.
+    - name: Self-test per-artifact build provenance gate
+      run: python3 Tests/Tools/test_release_build_provenance.py
+
     - name: Attest current trusted release controller
       env:
         GH_TOKEN: ${{ github.token }}
@@ -636,6 +641,29 @@ jobs:
         }
         Remove-Item -LiteralPath $marker -Force -ErrorAction Stop
 
+    # REL-100: bind the final (signed, qualified) package bytes to the source
+    # SHA, committed dependency-lock digest, CMake toolchain, and configuration.
+    # The record is a separate artifact so the stable asset boundary is unchanged.
+    - name: Record per-artifact build provenance
+      shell: pwsh
+      run: |
+        python tools/release_build_provenance.py record `
+          --source-root "${{ github.workspace }}" --source-sha "${{ github.sha }}" `
+          --version "${{ needs.prepare.outputs.cmake_version }}" --profile "${{ matrix.profile }}" `
+          --platform Windows --configuration "${{ matrix.config }}" `
+          --build-dir "${{ github.workspace }}/${{ matrix.build_dir }}" `
+          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
+          --out "${{ github.workspace }}/build-provenance/build-provenance-Windows-${{ matrix.config }}.json"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Upload build provenance record
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: build-provenance-Windows-${{ matrix.config }}
+        path: build-provenance/build-provenance-Windows-${{ matrix.config }}.json
+        retention-days: 90
+        if-no-files-found: error
+
     - name: Upload packaged artifact
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
@@ -768,6 +796,23 @@ jobs:
           -DSPARK_CXX_COMPILER=g++-14 \
           -P cmake/VerifyInstalledTemplates.cmake
 
+    - name: Record per-artifact build provenance
+      run: |
+        python3 tools/release_build_provenance.py record \
+          --source-root . --source-sha "${{ github.sha }}" \
+          --version "${{ needs.prepare.outputs.cmake_version }}" --profile default \
+          --platform Linux --configuration "${{ matrix.config }}" \
+          --build-dir build --packages build/packages \
+          --out "build-provenance/build-provenance-Linux-${{ matrix.config }}.json"
+
+    - name: Upload build provenance record
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: build-provenance-Linux-${{ matrix.config }}
+        path: build-provenance/build-provenance-Linux-${{ matrix.config }}.json
+        retention-days: 90
+        if-no-files-found: error
+
     - name: Upload packaged artifact
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
@@ -893,6 +938,23 @@ jobs:
           "-DSPARK_CMAKE_GENERATOR=Unix Makefiles" \
           -P cmake/VerifyInstalledTemplates.cmake
 
+    - name: Record per-artifact build provenance
+      run: |
+        python3 tools/release_build_provenance.py record \
+          --source-root . --source-sha "${{ github.sha }}" \
+          --version "${{ needs.prepare.outputs.cmake_version }}" --profile default \
+          --platform macOS --configuration "${{ matrix.config }}" \
+          --build-dir build --packages build/packages \
+          --out "build-provenance/build-provenance-macOS-${{ matrix.config }}.json"
+
+    - name: Upload build provenance record
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: build-provenance-macOS-${{ matrix.config }}
+        path: build-provenance/build-provenance-macOS-${{ matrix.config }}.json
+        retention-days: 90
+        if-no-files-found: error
+
     - name: Upload packaged artifact
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
@@ -977,6 +1039,24 @@ jobs:
           "./staging/${{ matrix.artifact_name }}" --help | tee installer-help.txt
           sed $'s/\r$//' installer-version.txt | grep -Fqx -- "SparkInstaller ${EXPECTED_VERSION} (${EXPECTED_PLATFORM})"
           grep -Fq "Usage:" installer-help.txt
+
+      - name: Record per-artifact build provenance
+        shell: bash
+        run: |
+          ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/release_build_provenance.py record \
+            --source-root . --source-sha "${{ github.sha }}" \
+            --version "${{ needs.prepare.outputs.cmake_version }}" --profile default \
+            --platform "Installer-${{ matrix.platform_name }}" --configuration Release \
+            --build-dir build-installer/build --packages staging \
+            --out "build-provenance/build-provenance-Installer-${{ matrix.platform_name }}.json"
+
+      - name: Upload build provenance record
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: build-provenance-Installer-${{ matrix.platform_name }}
+          path: build-provenance/build-provenance-Installer-${{ matrix.platform_name }}.json
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Upload installer binary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1193,6 +1273,12 @@ jobs:
         pattern: ${{ needs.prepare.outputs.is_versioned == 'true' && 'SparkEngine-Windows-MinSizeRel-packages' || '*' }}
         path: release-assets
 
+    - name: Download build provenance records
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        pattern: ${{ needs.prepare.outputs.is_versioned == 'true' && 'build-provenance-Windows-MinSizeRel' || 'build-provenance-*' }}
+        path: build-provenance
+
     - name: Generate SPDX software bill of materials
       uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
       with:
@@ -1365,6 +1451,29 @@ jobs:
           echo "$TABLE"
           echo "TABLEEOF"
         } >> "$GITHUB_OUTPUT"
+
+    # REL-100: every published distributable (aliases included) must be covered
+    # by a build record from this exact source SHA whose dependency-lock digest
+    # equals the committed lock, and every recorded artifact must be published.
+    - name: Verify per-artifact build provenance before publication mutation
+      env:
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        RELEASE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
+        SOURCE_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        STABLE_ARGS=()
+        if [[ "$IS_VERSIONED" == "true" ]]; then
+          STABLE_ARGS+=(--stable)
+        fi
+        python3 tools/release_build_provenance.py verify \
+          --records-dir build-provenance \
+          --assets-dir . \
+          --assets-file expected-release-assets.txt \
+          --source-root . \
+          --source-sha "$SOURCE_SHA" \
+          --version "$RELEASE_VERSION" \
+          "${STABLE_ARGS[@]}"
 
     - name: Inspect existing release before mutation
       id: release-inspect
