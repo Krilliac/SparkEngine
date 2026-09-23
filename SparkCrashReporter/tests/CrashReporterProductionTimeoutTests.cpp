@@ -32,7 +32,7 @@ namespace
             fs::remove(root, ignored);
         }
     };
-}
+} // namespace
 
 int main(int argc, char* argv[])
 {
@@ -64,9 +64,9 @@ int main(int argc, char* argv[])
     // Prepare the real public payload in an isolated opt-in root. The only
     // executable on PATH is a copy of the local fake GitHub CLI.
     namespace fs = std::filesystem;
-    const fs::path testRoot = fs::absolute(argv[1]).parent_path() /
-                              ("auto-issue-body-test-" +
-                               std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const fs::path testRoot =
+        fs::absolute(argv[1]).parent_path() /
+        ("auto-issue-body-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const BodyTestCleanup cleanup{testRoot};
     const fs::path artifactRoot = testRoot / "artifacts";
 #ifdef _WIN32

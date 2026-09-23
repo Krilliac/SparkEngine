@@ -1329,9 +1329,10 @@ namespace SparkCrashReporter
                                              "\nAutomatic issue attempt started; outcome may be uncertain. "
                                              "Do not retry automatically.\n"))
             {
-                showIssueOutcome("Automatic issue not attempted: incident already claimed or local receipt unavailable. "
-                                 "Check existing GitHub Issues before reporting again.",
-                                 false);
+                showIssueOutcome(
+                    "Automatic issue not attempted: incident already claimed or local receipt unavailable. "
+                    "Check existing GitHub Issues before reporting again.",
+                    false);
                 return 3;
             }
             const AutoIssueResult issue = SubmitPreparedAutoIssue(prepared);
@@ -1346,8 +1347,7 @@ namespace SparkCrashReporter
             }
             if (issue.delivered)
             {
-                showIssueOutcome("Automatic GitHub Issue created: " + issue.issueUrl +
-                                     "\nIncident ID: " + incidentId,
+                showIssueOutcome("Automatic GitHub Issue created: " + issue.issueUrl + "\nIncident ID: " + incidentId,
                                  true);
                 return 0;
             }

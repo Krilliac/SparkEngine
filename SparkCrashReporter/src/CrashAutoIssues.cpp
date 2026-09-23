@@ -618,8 +618,9 @@ namespace SparkCrashReporter
 #endif
         const std::string body = "Automatic SparkEngine crash notification.\n\n"
                                  "Reporter version: " SPARK_CRASH_REPORTER_VERSION "\nPlatform: " +
-                                 std::string(platform) + "\nCrash class: " +
-                                 std::string(SafeCrashClass(manifest.crashTitle)) + "\nIncident: " + incidentId +
+                                 std::string(platform) +
+                                 "\nCrash class: " + std::string(SafeCrashClass(manifest.crashTitle)) +
+                                 "\nIncident: " + incidentId +
                                  "\n\nNo crash log, dump, screenshot, file path, command line, or personal data "
                                  "was attached. A playtester may add sanitized reproduction steps manually.";
         return {true, gh, cwd, body, {}};
