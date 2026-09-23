@@ -477,6 +477,47 @@ class TransitiveDependencyTests(ContractTestCase):
         self.items_of(self.mutable)["RDY-020"]["status"] = "open"
         self.assert_rejected(self.mutable, "unfinished transitive dependencies")
 
+    def close_blocker_over_open_dependency(self) -> None:
+        """DOC-410 done while its dependency RDY-000 is still open."""
+        items = self.items_of(self.mutable)
+        self.assertIn("RDY-000", items["DOC-410"]["dependencies"])
+        items["DOC-410"]["status"] = "done"
+        items["RDY-000"]["status"] = "open"
+
+    def validation_errors(self) -> str:
+        try:
+            site_data_validate.Validator(self.mutable).validate()
+        except SiteDataError as error:
+            return str(error)
+        return ""
+
+    def test_ready_capability_rejects_an_unfinished_transitive_dependency(self) -> None:
+        self.close_blocker_over_open_dependency()
+        capability = self.capabilities_of(self.mutable)["platform.console"]
+        capability["release"] = "ready"
+        capability["requiredGateIds"] = []
+        capability["blockingWorkItemIds"] = ["DOC-410"]
+        self.assert_rejected(
+            self.mutable,
+            "capabilities.platform.console: ready capability has unfinished "
+            "transitive dependencies: DOC-410 -> RDY-000",
+        )
+        # Control: once the dependency closes, the diagnostic disappears.
+        self.items_of(self.mutable)["RDY-000"]["status"] = "done"
+        self.assertNotIn("transitive dependencies", self.validation_errors())
+
+    def test_passing_gate_rejects_an_unfinished_transitive_dependency(self) -> None:
+        self.close_blocker_over_open_dependency()
+        gate = self.gates_of(self.mutable)["G00"]
+        gate["state"] = "passing"
+        gate["blockingWorkItemIds"] = ["DOC-410"]
+        self.assert_rejected(
+            self.mutable,
+            "gates.G00: passing gate has unfinished transitive dependencies: DOC-410 -> RDY-000",
+        )
+        self.items_of(self.mutable)["RDY-000"]["status"] = "done"
+        self.assertNotIn("transitive dependencies", self.validation_errors())
+
 
 class ReadyPromotionTests(ContractTestCase):
     """Frozen case 5: ready derives from profiles, not every ledger gate."""

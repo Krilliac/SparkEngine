@@ -1190,6 +1190,30 @@ class Validator:
             visit(identifier, [])
         return item_ids
 
+    @staticmethod
+    def unfinished_dependency_paths(
+        work_ids: Iterable[str], item_by_id: dict[Any, dict[str, Any]]
+    ) -> list[str]:
+        """Dependency paths from the given blockers that end in unfinished work.
+
+        A blocker marked done does not unblock anything while work it depends on
+        is still open, so readiness must follow the whole dependency closure.
+        """
+        paths: list[str] = []
+        seen: set[str] = set()
+        stack = [(work_id, [work_id]) for work_id in work_ids]
+        while stack:
+            current, path = stack.pop()
+            for dependency in item_by_id.get(current, {}).get("dependencies", []):
+                if dependency in seen or dependency not in item_by_id:
+                    continue
+                seen.add(dependency)
+                dependency_path = [*path, dependency]
+                if item_by_id[dependency].get("status") != "done":
+                    paths.append(" -> ".join(dependency_path))
+                stack.append((dependency, dependency_path))
+        return sorted(paths)
+
     def validate_readiness(self, item_ids: set[str]) -> tuple[set[str], set[str]]:
         readiness = self.contract["readiness"]
         capabilities = readiness.get("capabilities", [])
@@ -1229,6 +1253,12 @@ class Validator:
                 ]
                 self.require(not unfinished, location, f"ready capability has unfinished blockers: {unfinished}")
                 self.require(not nonpassing, location, f"ready capability has non-passing gates: {nonpassing}")
+                transitive = self.unfinished_dependency_paths(capability.get("blockingWorkItemIds", []), item_by_id)
+                self.require(
+                    not transitive,
+                    location,
+                    f"ready capability has unfinished transitive dependencies: {'; '.join(transitive)}",
+                )
 
         for gate in gates:
             identifier = gate.get("id", "?")
@@ -1246,6 +1276,12 @@ class Validator:
                     if work_id in item_by_id and item_by_id[work_id].get("status") != "done"
                 ]
                 self.require(not unfinished, location, f"passing gate has unfinished blockers: {unfinished}")
+                transitive = self.unfinished_dependency_paths(gate.get("blockingWorkItemIds", []), item_by_id)
+                self.require(
+                    not transitive,
+                    location,
+                    f"passing gate has unfinished transitive dependencies: {'; '.join(transitive)}",
+                )
 
         release = readiness.get("globalRelease", {})
         self.require(release.get("state") in RELEASE_STATES, "globalRelease.state", "invalid release state")
