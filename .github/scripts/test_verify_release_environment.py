@@ -51,10 +51,11 @@ class EnvironmentTests(unittest.TestCase):
             self.assertTrue(protection_errors(environment, self.policies, self.repository), mutation)
 
     def test_wildcard_tag_and_extra_deployment_policy_fail(self):
+        self.assertEqual(protection_errors(self.environment, self.policies, self.repository), [])
         for policy in ({"name": "*", "type": "branch"}, {"name": "Working", "type": "tag"}):
             self.assertTrue(protection_errors(self.environment, {"total_count": 1, "branch_policies": [policy]}, self.repository))
         self.policies["total_count"] = 101
-        self.assertTrue(protection_errors(self.environment, self.policies))
+        self.assertTrue(protection_errors(self.environment, self.policies, self.repository))
 
     def test_api_denial_never_falls_back_to_unprotected_publication(self):
         runner = Mock(return_value=subprocess.CompletedProcess([], 1, "", "forbidden"))
