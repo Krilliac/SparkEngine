@@ -11,6 +11,14 @@ endif()
 # exceed 2 GiB when MSVC whole-program optimization is enabled. Keep the full
 # SDK and project templates in the ZIP distribution, while the native Windows
 # installers carry the runnable engine, tools, and sample modules.
+if(CPACK_GENERATOR STREQUAL "ZIP" OR CPACK_GENERATOR STREQUAL "TGZ")
+    # Component archives otherwise flatten bin/, lib/, and share/ at the ZIP
+    # root. The extracted-package gate requires one enclosing package root so
+    # sibling files cannot be confused with package members. Native MSI/NSIS
+    # layouts are not changed by this archive-only setting.
+    set(CPACK_COMPONENT_INCLUDE_TOPLEVEL_DIRECTORY ON)
+endif()
+
 if(CPACK_GENERATOR STREQUAL "NSIS" OR CPACK_GENERATOR STREQUAL "WIX")
     set(CPACK_COMPONENTS_ALL runtime tools samples)
     if(NOT CPACK_PACKAGE_FILE_NAME MATCHES "-Runtime$")

@@ -578,8 +578,11 @@ jobs:
 
     - name: Configure CMake (ASan + UBSan + LSan)
       run: |
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc-14 \
@@ -723,8 +726,11 @@ jobs:
 
     - name: Configure CMake (TSan)
       run: |
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc-14 \
@@ -2112,8 +2118,11 @@ jobs:
     - name: Configure CMake
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc-14 \
@@ -2277,8 +2286,11 @@ jobs:
     - name: Configure CMake
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DENABLE_LTO=OFF \
@@ -2430,8 +2442,11 @@ jobs:
     - name: Configure CMake (MinGW cross-compilation)
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake \
           -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_TESTS=ON \
@@ -2567,12 +2582,15 @@ jobs:
     - name: Configure CMake
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         # macOS path: SDL2 + OpenGL + OpenAL. DXR/Vulkan always off here
         # (MoltenVK path has its own preset). ENABLE_METAL is matrix-driven —
         # the Metal entry compiles MetalDevice.mm and the Objective-C++ wiring.
         # ENABLE_SDL2=ON is required — macOS has no X11 fallback.
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DENABLE_LTO=OFF \
@@ -2724,8 +2742,11 @@ jobs:
             build-coverage-
       - name: Configure
         run: |
+          spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+          test -n "$spark_engine_version"
           command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DSPARK_ENGINE_VERSION="$spark_engine_version" \
             -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic" \
@@ -3116,7 +3137,10 @@ jobs:
             build-clang-tidy-
       - name: Configure
         run: |
+          spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+          test -n "$spark_engine_version"
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DSPARK_ENGINE_VERSION="$spark_engine_version" \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \

@@ -1719,6 +1719,7 @@
           "ENABLE_HYBRID_RT": "OFF",
           "ENABLE_INSTALLER": "ON",
           "ENABLE_LAUNCHER": "ON",
+          "ENABLE_LTO": "OFF",
           "ENABLE_METAL": "OFF",
           "ENABLE_MOBILE": "OFF",
           "ENABLE_NETWORKING": "OFF",
@@ -7169,7 +7170,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "fa9b7bca9c128115"
+            "runDigest": "6df6b348873e9d00"
           },
           {
             "index": 6,
@@ -7380,7 +7381,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "0e47981d9cafb276"
+            "runDigest": "55e51e5b4470b447"
           },
           {
             "index": 6,
@@ -8788,7 +8789,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "d7fbe87e13cca6bf"
+            "runDigest": "39b3a267ec6aedc2"
           },
           {
             "index": 6,
@@ -9028,7 +9029,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "1baed3b647e547ec"
+            "runDigest": "fdedf46442bf0fa1"
           },
           {
             "index": 6,
@@ -9223,7 +9224,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "3225a8970cd9e75a"
+            "runDigest": "debe2c4991e457e7"
           },
           {
             "index": 5,
@@ -9427,7 +9428,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "211182e865938cf5"
+            "runDigest": "ad12833c81e88a50"
           },
           {
             "index": 6,
@@ -9624,7 +9625,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "529ac8407c2a86e5"
+            "runDigest": "3ae51b441e6ebe8a"
           },
           {
             "index": 5,
@@ -9990,7 +9991,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "467e27cdb806f4d1"
+            "runDigest": "217c175e260ba94a"
           },
           {
             "index": 5,
@@ -11057,9 +11058,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "CMAKE_C_COMPILER": "gcc-14",
@@ -11116,9 +11118,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=thread\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=thread\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=thread\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=thread\"",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "CMAKE_C_COMPILER": "gcc-14",
@@ -12053,9 +12056,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "CMAKE_C_COMPILER": "gcc-14",
@@ -12137,9 +12141,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
           "CMAKE_C_COMPILER": "gcc-14",
@@ -12221,9 +12226,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "ENABLE_LTO": "OFF",
@@ -12309,9 +12315,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
           "ENABLE_LTO": "OFF",
@@ -12395,9 +12402,10 @@
         "gating": "conditional",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_TOOLCHAIN_FILE": "cmake/toolchains/mingw-w64-x86_64.cmake",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
@@ -12456,9 +12464,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "ENABLE_LTO": "OFF",
@@ -12551,9 +12560,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
           "ENABLE_LTO": "OFF",
@@ -12646,9 +12656,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=ON  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=ON  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
           "ENABLE_LTO": "OFF",
@@ -12737,10 +12748,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -fprofile-update=atomic\" -DCMAKE_C_FLAGS=\"--coverage -fprofile-update=atomic\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
+        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -fprofile-update=atomic\" -DCMAKE_C_FLAGS=\"--coverage -fprofile-update=atomic\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_BUILD_TYPE": "Debug",
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_C_COMPILER": "gcc-14",
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -12796,10 +12808,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\"  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\"  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_BUILD_TYPE": "Debug",
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_C_COMPILER": "clang",
           "CMAKE_CXX_COMPILER": "clang++",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -13132,9 +13145,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "CMAKE_C_COMPILER": "gcc-14",
@@ -13164,9 +13178,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=thread\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=thread\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=thread\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=thread\"",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "CMAKE_C_COMPILER": "gcc-14",
@@ -13495,9 +13510,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "CMAKE_C_COMPILER": "gcc-14",
@@ -13525,9 +13541,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
           "CMAKE_C_COMPILER": "gcc-14",
@@ -13555,9 +13572,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "ENABLE_LTO": "OFF",
@@ -13589,9 +13607,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
           "ENABLE_LTO": "OFF",
@@ -13621,9 +13640,10 @@
         "gating": "conditional",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_TOOLCHAIN_FILE": "cmake/toolchains/mingw-w64-x86_64.cmake",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
@@ -13655,9 +13675,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
           "ENABLE_LTO": "OFF",
@@ -13692,9 +13713,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
           "ENABLE_LTO": "OFF",
@@ -13729,9 +13751,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=ON  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=ON  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
           "ENABLE_LTO": "OFF",
@@ -13762,10 +13785,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -fprofile-update=atomic\" -DCMAKE_C_FLAGS=\"--coverage -fprofile-update=atomic\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
+        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -fprofile-update=atomic\" -DCMAKE_C_FLAGS=\"--coverage -fprofile-update=atomic\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_BUILD_TYPE": "Debug",
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_C_COMPILER": "gcc-14",
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -13794,10 +13818,11 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\"  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\"  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_BUILD_TYPE": "Debug",
+          "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_C_COMPILER": "clang",
           "CMAKE_CXX_COMPILER": "clang++",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -15455,9 +15480,10 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
       "commandProvenance": "literal",
       "options": {
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_BUILD_TYPE": "Debug",
         "BUILD_TESTS": "ON",
         "CMAKE_C_COMPILER": "gcc-14",
@@ -15487,9 +15513,10 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=thread\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=thread\"",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=thread -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=thread\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=thread\"",
       "commandProvenance": "literal",
       "options": {
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_BUILD_TYPE": "Debug",
         "BUILD_TESTS": "ON",
         "CMAKE_C_COMPILER": "gcc-14",
@@ -15818,9 +15845,10 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_BUILD_TYPE": "Debug",
         "BUILD_TESTS": "ON",
         "CMAKE_C_COMPILER": "gcc-14",
@@ -15848,9 +15876,10 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "ON",
         "CMAKE_C_COMPILER": "gcc-14",
@@ -15878,9 +15907,10 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_BUILD_TYPE": "Debug",
         "BUILD_TESTS": "ON",
         "ENABLE_LTO": "OFF",
@@ -15912,9 +15942,10 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DCMAKE_C_COMPILER=clang  -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\" 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "ON",
         "ENABLE_LTO": "OFF",
@@ -15944,9 +15975,10 @@
       "gating": "conditional",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_TOOLCHAIN_FILE": "cmake/toolchains/mingw-w64-x86_64.cmake",
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "ON",
@@ -15978,9 +16010,10 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_BUILD_TYPE": "Debug",
         "BUILD_TESTS": "ON",
         "ENABLE_LTO": "OFF",
@@ -16015,9 +16048,10 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=OFF  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "ON",
         "ENABLE_LTO": "OFF",
@@ -16052,9 +16086,10 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=ON  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_LTO=OFF  -DENABLE_SDL2=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=ON  -DENABLE_METAL=ON  -DENABLE_DXR=OFF  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "ON",
         "ENABLE_LTO": "OFF",
@@ -16085,10 +16120,11 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -fprofile-update=atomic\" -DCMAKE_C_FLAGS=\"--coverage -fprofile-update=atomic\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
+      "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -fprofile-update=atomic\" -DCMAKE_C_FLAGS=\"--coverage -fprofile-update=atomic\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
       "commandProvenance": "literal",
       "options": {
         "CMAKE_BUILD_TYPE": "Debug",
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_C_COMPILER": "gcc-14",
         "CMAKE_CXX_COMPILER": "g++-14",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -16117,10 +16153,11 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\"  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-stdlib=libc++\"  -DCMAKE_EXE_LINKER_FLAGS=\"-stdlib=libc++ -lc++abi\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-stdlib=libc++\"  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
       "commandProvenance": "literal",
       "options": {
         "CMAKE_BUILD_TYPE": "Debug",
+        "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",

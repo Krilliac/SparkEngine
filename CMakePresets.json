@@ -180,6 +180,7 @@
             "toolset": "v143",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "ENABLE_LTO": "OFF",
                 "SPARK_NATIVE_ARCH": "OFF",
                 "ENABLE_EDITOR": "ON",
                 "ENABLE_PROFILING": "OFF",

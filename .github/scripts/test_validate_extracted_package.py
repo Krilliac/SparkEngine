@@ -596,6 +596,11 @@ class ShippingPackageBomTests(unittest.TestCase):
 
 
 class ExtractedPackageWorkflowWiringTests(unittest.TestCase):
+    def test_component_archives_include_one_package_root(self) -> None:
+        cpack_options = (ROOT / "cmake" / "SparkCPackOptions.cmake").read_text(encoding="utf-8")
+        self.assertIn('if(CPACK_GENERATOR STREQUAL "ZIP" OR CPACK_GENERATOR STREQUAL "TGZ")', cpack_options)
+        self.assertIn("set(CPACK_COMPONENT_INCLUDE_TOPLEVEL_DIRECTORY ON)", cpack_options)
+
     def test_all_portable_platforms_run_the_full_extracted_gate(self) -> None:
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         runtime_header = "    - name: Validate Windows stable runtime component layout\n"

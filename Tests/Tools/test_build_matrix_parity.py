@@ -1449,6 +1449,39 @@ class CommandLineContractTests(unittest.TestCase):
 
 
 class WorkflowEnforcementTests(unittest.TestCase):
+    def test_cached_cmake_builds_reassert_authoritative_engine_version(self) -> None:
+        """A restored CMakeCache must not preserve a superseded source version."""
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "build.yml"
+        document = inventory.workflow_tool.parse_workflow_yaml(
+            workflow_path.read_text(encoding="utf-8")
+        )
+        cached_jobs = []
+        for job_id, job in document["jobs"].items():
+            steps = job.get("steps", []) if isinstance(job, dict) else []
+            if any(
+                isinstance(step, dict)
+                and step.get("name") == "Restore build directory"
+                for step in steps
+            ):
+                cached_jobs.append((job_id, steps))
+
+        self.assertGreaterEqual(len(cached_jobs), 8)
+        for job_id, steps in cached_jobs:
+            with self.subTest(job=job_id):
+                configure_runs = [
+                    str(step.get("run", ""))
+                    for step in steps
+                    if isinstance(step, dict)
+                    and "cmake -B build" in str(step.get("run", ""))
+                ]
+                self.assertTrue(configure_runs, "cached job must configure its build tree")
+                configure = "\n".join(configure_runs)
+                self.assertIn("spark_engine_version=", configure)
+                self.assertIn(
+                    '-DSPARK_ENGINE_VERSION="$spark_engine_version"',
+                    configure,
+                )
+
     def test_workflow_compares_uploads_and_enforces_without_or_echo(self) -> None:
         text = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
         self.assertNotIn("check_parity.py || echo", text)
