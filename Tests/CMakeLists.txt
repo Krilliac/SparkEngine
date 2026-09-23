@@ -313,6 +313,7 @@ add_executable(SparkTests
     TestFaultIsolation.cpp
     TestSelfRecovery.cpp
     TestVulkanLavapipe.cpp
+    TestRHI230VulkanValidationReal.cpp
     TestMSanCanary.cpp
     TestWARPRendering.cpp
     # Hardware acceleration tests
@@ -1423,6 +1424,17 @@ set_tests_properties(LifecyclePartialInit PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=PartialInit_EngineContext;SPARK_TEST_EXPECT_COUNT=4"
     LABELS "lifecycle;unit"
     TIMEOUT 30)
+
+# RHI-230: Vulkan backend under VK_LAYER_KHRONOS_validation (Lavapipe on CI).
+# Lavapipe proves API-usage correctness only, not hardware certification.
+if(SPARK_VULKAN_AVAILABLE)
+    add_test(NAME VulkanValidation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(VulkanValidation PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI230VulkanValidationReal.cpp;SPARK_TEST_EXPECT_COUNT=16"
+        LABELS "vulkan;rendering;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
 
 foreach(_remote_admin_selector IN ITEMS
         RemoteAdmin_AnonymousDenied

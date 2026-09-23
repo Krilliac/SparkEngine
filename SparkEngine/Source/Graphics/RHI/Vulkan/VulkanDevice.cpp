@@ -51,7 +51,12 @@ namespace Spark
             VulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
                                 const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData)
             {
-                if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+                // Validation errors are API misuse (undefined behavior on real drivers), not advisories.
+                if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Vulkan Validation: %s", callbackData->pMessage);
+                }
+                else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
                 {
                     SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Vulkan Validation: %s", callbackData->pMessage);
                 }
@@ -193,10 +198,6 @@ namespace Spark
                 QueryCapabilities();
                 FinalizeDeviceCapabilities(m_capabilities);
 
-                // Create immediate command list with statistics tracking
-                m_immediateCommandList = std::make_unique<VulkanCommandList>(m_device, m_commandPool, true,
-                                                                             &m_statistics, m_vkCmdPushDescriptorSet);
-
                 // Create pipeline cache
                 VkPipelineCacheCreateInfo cacheInfo = {};
                 cacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
@@ -219,9 +220,25 @@ namespace Spark
                 if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
                     return false;
 
+                // Load push descriptor function (Vulkan 1.4 core or VK_KHR_push_descriptor) before the set
+                // layout is created: the layout must carry the push-descriptor flag exactly when it is used.
+                if (m_pushDescriptorSupported)
+                {
+                    m_vkCmdPushDescriptorSet = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(
+                        vkGetDeviceProcAddr(m_device, "vkCmdPushDescriptorSetKHR"));
+                    if (!m_vkCmdPushDescriptorSet)
+                        m_pushDescriptorSupported = false;
+                }
+
                 // Create descriptor set layout and default pipeline layout
                 if (!CreateDescriptorSetLayout())
                     return false;
+
+                // Create immediate command list with statistics tracking. It is created after the push
+                // function is loaded; it used to capture a null pointer and never bind any descriptor.
+                m_immediateCommandList = std::make_unique<VulkanCommandList>(
+                    m_device, m_commandPool, true, &m_statistics, m_vkCmdPushDescriptorSet,
+                    m_pushDescriptorSupported ? VK_NULL_HANDLE : m_descriptorPool, m_bindingLayout);
 
                 // Create per-frame synchronization primitives
                 m_frameFences.resize(MAX_FRAMES_IN_FLIGHT);
@@ -258,15 +275,6 @@ namespace Spark
                         vkGetInstanceProcAddr(m_instance, "vkCmdEndDebugUtilsLabelEXT"));
                     m_vkCmdInsertDebugUtilsLabel = reinterpret_cast<PFN_vkCmdInsertDebugUtilsLabelEXT>(
                         vkGetInstanceProcAddr(m_instance, "vkCmdInsertDebugUtilsLabelEXT"));
-                }
-
-                // Load push descriptor function (Vulkan 1.4 core or VK_KHR_push_descriptor)
-                if (m_pushDescriptorSupported)
-                {
-                    m_vkCmdPushDescriptorSet = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(
-                        vkGetDeviceProcAddr(m_device, "vkCmdPushDescriptorSetKHR"));
-                    if (!m_vkCmdPushDescriptorSet)
-                        m_pushDescriptorSupported = false;
                 }
 
                 if (m_vulkan14Available)
@@ -341,6 +349,37 @@ namespace Spark
                         extensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 #endif
 #endif
+                }
+
+                // VK_EXT_headless_surface lets a swap chain exist without a window (CI, Lavapipe), so the
+                // present/resize path can run under validation on machines with no display.
+                m_headlessSurfaceEnabled = false;
+                if (hasInstanceExt(VK_KHR_SURFACE_EXTENSION_NAME) &&
+                    hasInstanceExt(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME))
+                {
+                    extensions.push_back(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME);
+                    m_headlessSurfaceEnabled = true;
+                }
+
+                // Requesting a layer that is not installed makes vkCreateInstance fail with
+                // VK_ERROR_LAYER_NOT_PRESENT, which used to take the whole backend down on any machine without
+                // the SDK. Validation is a debugging aid: fall back to running without it.
+                if (m_validationEnabled)
+                {
+                    uint32_t layerCount = 0;
+                    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+                    std::vector<VkLayerProperties> availableLayers(layerCount);
+                    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+                    const bool layerPresent =
+                        std::any_of(availableLayers.begin(), availableLayers.end(), [](const VkLayerProperties& layer)
+                                    { return std::strcmp(layer.layerName, "VK_LAYER_KHRONOS_validation") == 0; });
+                    if (!layerPresent || !hasInstanceExt(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                       "VulkanDevice: VK_LAYER_KHRONOS_validation or VK_EXT_debug_utils not available "
+                                       "— continuing without validation");
+                        m_validationEnabled = false;
+                    }
                 }
 
                 std::vector<const char*> layers;
@@ -419,6 +458,11 @@ namespace Spark
                     if (!queueFamilies.graphicsFamily.has_value())
                         continue;
 
+                    // The backend records with core Vulkan 1.3 dynamic rendering; an older device would pass
+                    // selection and then fail at the first vkCmdBeginRendering.
+                    if (properties.apiVersion < VK_API_VERSION_1_3)
+                        continue;
+
                     // CPU devices (Lavapipe) don't support VK_KHR_swapchain — skip that check for them
                     bool isCpuDevice = (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU);
                     if (!isCpuDevice && !CheckDeviceExtensionSupport(device))
@@ -457,6 +501,12 @@ namespace Spark
                 {
                     VkPhysicalDeviceProperties props;
                     vkGetPhysicalDeviceProperties(m_physicalDevice, &props);
+                    // A 1.4 instance says nothing about the device: chaining VkPhysicalDeviceVulkan14Features
+                    // for a 1.3 device is invalid, so 1.4 paths also require the device version.
+#ifdef VK_API_VERSION_1_4
+                    if (props.apiVersion < VK_API_VERSION_1_4)
+                        m_vulkan14Available = false;
+#endif
                     if (m_isSoftwareDevice)
                     {
                         SPARK_LOG_INFO(Spark::LogCategory::Graphics,
@@ -889,6 +939,9 @@ namespace Spark
 
                 VkDescriptorSetLayoutCreateInfo layoutInfo = {};
                 layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+                // vkCmdPushDescriptorSet is only valid on a layout created with this flag.
+                if (m_pushDescriptorSupported)
+                    layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
                 layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
                 layoutInfo.pBindings = bindings.data();
 
@@ -910,6 +963,8 @@ namespace Spark
 
             VkDescriptorSet VulkanDevice::AllocateDescriptorSet()
             {
+                if (m_pushDescriptorSupported)
+                    return VK_NULL_HANDLE; // push-descriptor layouts cannot back pool-allocated sets
                 VkDescriptorSetAllocateInfo allocInfo = {};
                 allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
                 allocInfo.descriptorPool = m_descriptorPool;
@@ -1051,8 +1106,11 @@ namespace Spark
                 return nullptr;
 #endif
 
-                return std::make_unique<VulkanSwapChain>(m_device, m_physicalDevice, surface, desc, m_queueFamilies,
-                                                         m_presentQueue);
+                auto swapChain = std::make_unique<VulkanSwapChain>(m_instance, m_device, m_physicalDevice, surface,
+                                                                   desc, m_queueFamilies, m_presentQueue);
+                if (!swapChain->IsValid())
+                    return nullptr;
+                return swapChain;
             }
 
             std::unique_ptr<IRHIBuffer> VulkanDevice::CreateBuffer(const RHIBufferDesc& desc)
@@ -1078,8 +1136,9 @@ namespace Spark
                 if (desc.usage & RHIBufferUsage::CopyDst)
                     bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-                // Ensure device-local buffers with initial data can be transfer targets
-                if (desc.initialData && desc.access == RHIBufferAccess::Static)
+                // Device-local (Static) buffers can only be written through a staging copy — at creation or
+                // later via UpdateBuffer — so they must always be transfer targets.
+                if (desc.access == RHIBufferAccess::Static)
                     bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
                 VkBuffer buffer;
@@ -1089,8 +1148,10 @@ namespace Spark
                 VkMemoryRequirements memRequirements;
                 vkGetBufferMemoryRequirements(m_device, buffer, &memRequirements);
 
+                // ReadBack buffers are read by the CPU, so they need host-visible memory too (they used to be
+                // device-local, which made MapBuffer on them invalid).
                 VkMemoryPropertyFlags memProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-                if (desc.access == RHIBufferAccess::Dynamic || desc.access == RHIBufferAccess::Staging)
+                if (desc.access != RHIBufferAccess::Static)
                 {
                     memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
                 }
@@ -1127,106 +1188,14 @@ namespace Spark
                         memcpy(mapped, desc.initialData, desc.size);
                         vkUnmapMemory(m_device, memory);
                     }
-                    else
+                    else if (!UploadViaStaging(buffer, desc.initialData, desc.size, 0))
                     {
-                        // Use staging buffer for device-local memory
-                        VkBuffer stagingBuffer;
-                        VkDeviceMemory stagingMemory;
-
-                        VkBufferCreateInfo stagingInfo = {};
-                        stagingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-                        stagingInfo.size = desc.size;
-                        stagingInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-                        stagingInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-                        if (vkCreateBuffer(m_device, &stagingInfo, nullptr, &stagingBuffer) == VK_SUCCESS)
-                        {
-                            VkMemoryRequirements stagingReqs;
-                            vkGetBufferMemoryRequirements(m_device, stagingBuffer, &stagingReqs);
-
-                            VkMemoryAllocateInfo stagingAlloc = {};
-                            stagingAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-                            stagingAlloc.allocationSize = stagingReqs.size;
-                            stagingAlloc.memoryTypeIndex =
-                                FindMemoryType(stagingReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                                                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-                            if (vkAllocateMemory(m_device, &stagingAlloc, nullptr, &stagingMemory) == VK_SUCCESS)
-                            {
-                                vkBindBufferMemory(m_device, stagingBuffer, stagingMemory, 0);
-
-                                void* mapped = nullptr;
-                                if (vkMapMemory(m_device, stagingMemory, 0, desc.size, 0, &mapped) != VK_SUCCESS ||
-                                    !mapped)
-                                {
-                                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                                                    "VulkanDevice::CreateBuffer: vkMapMemory failed on staging buffer");
-                                    vkFreeMemory(m_device, stagingMemory, nullptr);
-                                    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-                                    vkFreeMemory(m_device, memory, nullptr);
-                                    vkDestroyBuffer(m_device, buffer, nullptr);
-                                    return nullptr;
-                                }
-                                memcpy(mapped, desc.initialData, desc.size);
-                                vkUnmapMemory(m_device, stagingMemory);
-
-                                // Record and execute copy command
-                                VkCommandBufferAllocateInfo cmdAllocInfo = {};
-                                cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-                                cmdAllocInfo.commandPool = m_commandPool;
-                                cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-                                cmdAllocInfo.commandBufferCount = 1;
-
-                                VkCommandBuffer cmdBuffer = VK_NULL_HANDLE;
-                                if (vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &cmdBuffer) != VK_SUCCESS)
-                                {
-                                    SPARK_LOG_ERROR(
-                                        Spark::LogCategory::Graphics,
-                                        "VulkanDevice::CreateBuffer: vkAllocateCommandBuffers failed on upload path");
-                                    vkFreeMemory(m_device, stagingMemory, nullptr);
-                                    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-                                    vkFreeMemory(m_device, memory, nullptr);
-                                    vkDestroyBuffer(m_device, buffer, nullptr);
-                                    return nullptr;
-                                }
-
-                                VkCommandBufferBeginInfo beginInfo = {};
-                                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-                                beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-                                vkBeginCommandBuffer(cmdBuffer, &beginInfo);
-
-                                VkBufferCopy copyRegion = {};
-                                copyRegion.size = desc.size;
-                                vkCmdCopyBuffer(cmdBuffer, stagingBuffer, buffer, 1, &copyRegion);
-
-                                vkEndCommandBuffer(cmdBuffer);
-
-                                VkSubmitInfo submitInfo = {};
-                                submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-                                submitInfo.commandBufferCount = 1;
-                                submitInfo.pCommandBuffers = &cmdBuffer;
-
-                                vkResetFences(m_device, 1, &m_uploadFence);
-                                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_uploadFence);
-                                // Bounded wait (10s) — avoid indefinite block on a hung/lost GPU
-                                constexpr uint64_t kUploadTimeoutNs = 10ull * 1000ull * 1000ull * 1000ull;
-                                if (vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, kUploadTimeoutNs) !=
-                                    VK_SUCCESS)
-                                {
-                                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                                                    "VulkanDevice::CreateBuffer: vkWaitForFences timed out (10s) "
-                                                    "during staging upload");
-                                }
-
-                                vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmdBuffer);
-                                vkFreeMemory(m_device, stagingMemory, nullptr);
-                            }
-                            vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-                        }
+                        vkFreeMemory(m_device, memory, nullptr);
+                        vkDestroyBuffer(m_device, buffer, nullptr);
+                        return nullptr;
                     }
                 }
 
-                // Also set transfer dst flag for device-local buffers that may receive initial data
                 return std::make_unique<VulkanBuffer>(desc, buffer, memory, m_device);
             }
 
@@ -1242,7 +1211,7 @@ namespace Spark
                 imageInfo.extent = {desc.width, desc.height, desc.depth};
                 imageInfo.mipLevels = desc.mipLevels;
                 imageInfo.arrayLayers = desc.arraySize;
-                imageInfo.samples = static_cast<VkSampleCountFlagBits>(desc.sampleCount);
+                imageInfo.samples = static_cast<VkSampleCountFlagBits>(std::max(1u, desc.sampleCount));
                 imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
                 imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
                 imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -1255,7 +1224,13 @@ namespace Spark
                     imageInfo.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
                 if (desc.usage & RHITextureUsage::UnorderedAccess)
                     imageInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+                // Every texture can be cleared/uploaded (TRANSFER_DST). Render targets and TransferSrc textures
+                // can also be copy/readback sources; TransferSrc used to be ignored, so CopyTexture and readback
+                // from any texture violated the image's usage.
                 imageInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                if ((desc.usage & RHITextureUsage::TransferSrc) || (desc.usage & RHITextureUsage::RenderTarget) ||
+                    (desc.usage & RHITextureUsage::DepthStencil))
+                    imageInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
                 VkImage image;
                 if (vkCreateImage(m_device, &imageInfo, nullptr, &image) != VK_SUCCESS)
@@ -1318,15 +1293,38 @@ namespace Spark
             {
                 std::vector<uint8_t> spirvCode;
 
+                if (m_device == VK_NULL_HANDLE)
+                    return nullptr;
+
                 if (desc.language == ShaderLanguage::SPIRV && desc.bytecode && desc.bytecodeSize > 0)
                 {
+                    // vkCreateShaderModule requires a word-aligned module that starts with the SPIR-V magic
+                    // number; anything else is undefined behavior in the driver. Reject it here instead —
+                    // mislabeled DXBC/DXIL or a truncated file are the usual culprits.
+                    constexpr uint32_t kSpirvMagic = 0x07230203u;
+                    constexpr size_t kSpirvHeaderBytes = 5 * sizeof(uint32_t);
+                    uint32_t magic = 0;
+                    if (desc.bytecodeSize >= sizeof(magic))
+                        memcpy(&magic, desc.bytecode, sizeof(magic));
+                    if (desc.bytecodeSize % sizeof(uint32_t) != 0 || desc.bytecodeSize <= kSpirvHeaderBytes ||
+                        magic != kSpirvMagic)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "VulkanDevice::CreateShader: '%s' is not a SPIR-V module (%zu bytes, magic "
+                                        "0x%08x)",
+                                        desc.debugName.c_str(), desc.bytecodeSize, magic);
+                        return nullptr;
+                    }
                     spirvCode.resize(desc.bytecodeSize);
                     memcpy(spirvCode.data(), desc.bytecode, desc.bytecodeSize);
                 }
                 else
                 {
-                    // GLSL to SPIR-V compilation would happen here via glslang/shaderc
-                    // For now, expect pre-compiled SPIR-V
+                    // No runtime GLSL/HLSL -> SPIR-V compiler is linked; callers must supply SPIR-V.
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "VulkanDevice::CreateShader: '%s' is not precompiled SPIR-V; no runtime "
+                                    "compiler is integrated",
+                                    desc.debugName.c_str());
                     return nullptr;
                 }
 
@@ -1375,6 +1373,8 @@ namespace Spark
             {
                 auto* vkVS = static_cast<VulkanShader*>(vertexShader);
                 auto* vkPS = static_cast<VulkanShader*>(pixelShader);
+                if (m_device == VK_NULL_HANDLE || !vkVS || !vkPS)
+                    return nullptr;
 
                 // Shader stages
                 VkPipelineShaderStageCreateInfo shaderStages[2] = {};
@@ -1481,7 +1481,7 @@ namespace Spark
                 VkPipelineMultisampleStateCreateInfo multisampling = {};
                 multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
                 multisampling.sampleShadingEnable = VK_FALSE;
-                multisampling.rasterizationSamples = static_cast<VkSampleCountFlagBits>(desc.sampleCount);
+                multisampling.rasterizationSamples = static_cast<VkSampleCountFlagBits>(std::max(1u, desc.sampleCount));
 
                 // Depth stencil
                 VkPipelineDepthStencilStateCreateInfo depthStencil = {};
@@ -1536,6 +1536,10 @@ namespace Spark
                 renderingInfo.colorAttachmentCount = static_cast<uint32_t>(colorFormats.size());
                 renderingInfo.pColorAttachmentFormats = colorFormats.data();
                 renderingInfo.depthAttachmentFormat = ConvertFormat(desc.depthStencilFormat);
+                // Combined depth/stencil formats must be declared for the stencil attachment as well, matching
+                // what VulkanCommandList binds at vkCmdBeginRendering.
+                if (HasStencilComponent(desc.depthStencilFormat))
+                    renderingInfo.stencilAttachmentFormat = renderingInfo.depthAttachmentFormat;
 
                 // Create pipeline
                 VkGraphicsPipelineCreateInfo pipelineInfo = {};
@@ -1569,6 +1573,13 @@ namespace Spark
             void* VulkanDevice::MapBuffer(IRHIBuffer* buffer)
             {
                 auto* vkBuf = static_cast<VulkanBuffer*>(buffer);
+                if (!vkBuf || !vkBuf->IsHostVisible())
+                {
+                    // Mapping device-local memory is invalid; Static buffers are written with UpdateBuffer.
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "VulkanDevice::MapBuffer: buffer is not host-visible (Static access)");
+                    return nullptr;
+                }
                 void* mapped = nullptr;
                 if (vkMapMemory(m_device, vkBuf->GetVkMemory(), 0, vkBuf->GetSize(), 0, &mapped) != VK_SUCCESS)
                 {
@@ -1583,12 +1594,22 @@ namespace Spark
             void VulkanDevice::UnmapBuffer(IRHIBuffer* buffer)
             {
                 auto* vkBuf = static_cast<VulkanBuffer*>(buffer);
+                if (!vkBuf || !vkBuf->GetMappedPtr())
+                    return;
                 vkUnmapMemory(m_device, vkBuf->GetVkMemory());
                 vkBuf->SetMappedPtr(nullptr);
             }
 
             void VulkanDevice::UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset)
             {
+                auto* vkBuf = static_cast<VulkanBuffer*>(buffer);
+                if (!vkBuf || !data || size == 0 || offset + size > vkBuf->GetSize())
+                    return;
+                if (!vkBuf->IsHostVisible())
+                {
+                    UploadViaStaging(vkBuf->GetVkBuffer(), data, size, offset);
+                    return;
+                }
                 void* mapped = MapBuffer(buffer);
                 if (mapped)
                 {
@@ -1635,137 +1656,212 @@ namespace Spark
 
                 VkDeviceSize imageSize = static_cast<VkDeviceSize>(width) * height * bytesPerPixel;
 
-                // Create staging buffer
-                VkBuffer stagingBuffer;
-                VkDeviceMemory stagingMemory;
-
-                VkBufferCreateInfo bufInfo = {};
-                bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-                bufInfo.size = imageSize;
-                bufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-                bufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-                if (vkCreateBuffer(m_device, &bufInfo, nullptr, &stagingBuffer) != VK_SUCCESS)
+                VkBuffer stagingBuffer = VK_NULL_HANDLE;
+                VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
+                if (!CreateHostBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer, stagingMemory))
                     return;
 
-                VkMemoryRequirements memReqs;
-                vkGetBufferMemoryRequirements(m_device, stagingBuffer, &memReqs);
+                void* mapped = nullptr;
+                if (vkMapMemory(m_device, stagingMemory, 0, imageSize, 0, &mapped) == VK_SUCCESS && mapped)
+                {
+                    memcpy(mapped, data, static_cast<size_t>(imageSize));
+                    vkUnmapMemory(m_device, stagingMemory);
 
+                    // Barriers come from the tracked layout with matching access masks; the old hand-written
+                    // barrier assumed nothing was writing the image (srcAccess 0) and covered a single mip
+                    // while marking the whole texture SHADER_READ_ONLY.
+                    SubmitOneShot(
+                        [&](VkCommandBuffer cmd)
+                        {
+                            VulkanCommandList::RecordTextureTransition(cmd, vkTex,
+                                                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+                            VkBufferImageCopy region = {};
+                            region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                            region.imageSubresource.mipLevel = mipLevel;
+                            region.imageSubresource.baseArrayLayer = 0;
+                            region.imageSubresource.layerCount = 1;
+                            region.imageExtent = {width, height, 1};
+                            vkCmdCopyBufferToImage(cmd, stagingBuffer, vkTex->GetVkImage(),
+                                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+                            VulkanCommandList::RecordTextureTransition(cmd, vkTex,
+                                                                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                        });
+                }
+                else
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "VulkanDevice::UpdateTexture: vkMapMemory failed on staging buffer");
+                }
+
+                vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+                vkFreeMemory(m_device, stagingMemory, nullptr);
+            }
+
+            bool VulkanDevice::CreateHostBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer,
+                                                VkDeviceMemory& memory)
+            {
+                VkBufferCreateInfo bufInfo = {};
+                bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+                bufInfo.size = size;
+                bufInfo.usage = usage;
+                bufInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+                if (vkCreateBuffer(m_device, &bufInfo, nullptr, &buffer) != VK_SUCCESS)
+                    return false;
+
+                VkMemoryRequirements memReqs;
+                vkGetBufferMemoryRequirements(m_device, buffer, &memReqs);
                 VkMemoryAllocateInfo allocInfo = {};
                 allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
                 allocInfo.allocationSize = memReqs.size;
                 allocInfo.memoryTypeIndex = FindMemoryType(
                     memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-                if (vkAllocateMemory(m_device, &allocInfo, nullptr, &stagingMemory) != VK_SUCCESS)
+                if (vkAllocateMemory(m_device, &allocInfo, nullptr, &memory) != VK_SUCCESS)
                 {
-                    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-                    return;
+                    vkDestroyBuffer(m_device, buffer, nullptr);
+                    buffer = VK_NULL_HANDLE;
+                    return false;
                 }
+                vkBindBufferMemory(m_device, buffer, memory, 0);
+                return true;
+            }
 
-                vkBindBufferMemory(m_device, stagingBuffer, stagingMemory, 0);
-
-                // Copy data to staging buffer
-                void* mapped = nullptr;
-                if (vkMapMemory(m_device, stagingMemory, 0, imageSize, 0, &mapped) != VK_SUCCESS || !mapped)
-                {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                                    "VulkanDevice::UpdateTexture: vkMapMemory failed on staging buffer");
-                    vkFreeMemory(m_device, stagingMemory, nullptr);
-                    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-                    return;
-                }
-                memcpy(mapped, data, static_cast<size_t>(imageSize));
-                vkUnmapMemory(m_device, stagingMemory);
-
-                // Record copy command
+            bool VulkanDevice::SubmitOneShot(const std::function<void(VkCommandBuffer)>& record)
+            {
                 VkCommandBufferAllocateInfo cmdAllocInfo = {};
                 cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
                 cmdAllocInfo.commandPool = m_commandPool;
                 cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
                 cmdAllocInfo.commandBufferCount = 1;
 
-                VkCommandBuffer cmdBuffer = VK_NULL_HANDLE;
-                if (vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &cmdBuffer) != VK_SUCCESS)
+                VkCommandBuffer cmd = VK_NULL_HANDLE;
+                if (vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &cmd) != VK_SUCCESS)
                 {
                     SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                                    "VulkanDevice::UpdateTexture: vkAllocateCommandBuffers failed");
-                    vkFreeMemory(m_device, stagingMemory, nullptr);
-                    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-                    return;
+                                    "VulkanDevice::SubmitOneShot: vkAllocateCommandBuffers failed");
+                    return false;
                 }
 
                 VkCommandBufferBeginInfo beginInfo = {};
                 beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
                 beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-                vkBeginCommandBuffer(cmdBuffer, &beginInfo);
+                vkBeginCommandBuffer(cmd, &beginInfo);
+                record(cmd);
+                vkEndCommandBuffer(cmd);
 
-                // Transition to transfer dst
-                VkImageMemoryBarrier barrier = {};
-                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                barrier.oldLayout = vkTex->GetCurrentLayout();
-                barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier.image = vkTex->GetVkImage();
-                barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                barrier.subresourceRange.baseMipLevel = mipLevel;
-                barrier.subresourceRange.levelCount = 1;
-                barrier.subresourceRange.baseArrayLayer = 0;
-                barrier.subresourceRange.layerCount = 1;
-                barrier.srcAccessMask = 0;
-                barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-                vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0,
-                                     nullptr, 0, nullptr, 1, &barrier);
-
-                // Copy buffer to image
-                VkBufferImageCopy region = {};
-                region.bufferOffset = 0;
-                region.bufferRowLength = 0;
-                region.bufferImageHeight = 0;
-                region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                region.imageSubresource.mipLevel = mipLevel;
-                region.imageSubresource.baseArrayLayer = 0;
-                region.imageSubresource.layerCount = 1;
-                region.imageOffset = {0, 0, 0};
-                region.imageExtent = {width, height, 1};
-
-                vkCmdCopyBufferToImage(cmdBuffer, stagingBuffer, vkTex->GetVkImage(),
-                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-                // Transition to shader read optimal
-                barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-                vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                                     0, 0, nullptr, 0, nullptr, 1, &barrier);
-
-                vkEndCommandBuffer(cmdBuffer);
-
-                // Submit and wait
                 VkSubmitInfo submitInfo = {};
                 submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
                 submitInfo.commandBufferCount = 1;
-                submitInfo.pCommandBuffers = &cmdBuffer;
+                submitInfo.pCommandBuffers = &cmd;
 
                 vkResetFences(m_device, 1, &m_uploadFence);
                 vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_uploadFence);
                 // Bounded wait (10s) — avoid indefinite block on a hung/lost GPU
-                constexpr uint64_t kUpdateTextureTimeoutNs = 10ull * 1000ull * 1000ull * 1000ull;
-                if (vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, kUpdateTextureTimeoutNs) != VK_SUCCESS)
+                constexpr uint64_t kOneShotTimeoutNs = 10ull * 1000ull * 1000ull * 1000ull;
+                const bool completed =
+                    vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, kOneShotTimeoutNs) == VK_SUCCESS;
+                if (!completed)
+                {
+                    // Freeing a still-pending buffer is invalid; wait the queue out before releasing it.
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "VulkanDevice::SubmitOneShot: timed out (10s)");
+                    vkQueueWaitIdle(m_graphicsQueue);
+                }
+                vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmd);
+                return completed;
+            }
+
+            bool VulkanDevice::UploadViaStaging(VkBuffer destination, const void* data, VkDeviceSize size,
+                                                VkDeviceSize offset)
+            {
+                VkBuffer stagingBuffer = VK_NULL_HANDLE;
+                VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
+                if (!CreateHostBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer, stagingMemory))
+                    return false;
+
+                bool uploaded = false;
+                void* mapped = nullptr;
+                if (vkMapMemory(m_device, stagingMemory, 0, size, 0, &mapped) == VK_SUCCESS && mapped)
+                {
+                    memcpy(mapped, data, static_cast<size_t>(size));
+                    vkUnmapMemory(m_device, stagingMemory);
+                    uploaded = SubmitOneShot(
+                        [&](VkCommandBuffer cmd)
+                        {
+                            VkBufferCopy copyRegion = {};
+                            copyRegion.dstOffset = offset;
+                            copyRegion.size = size;
+                            vkCmdCopyBuffer(cmd, stagingBuffer, destination, 1, &copyRegion);
+                        });
+                }
+                else
                 {
                     SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                                    "VulkanDevice::UpdateTexture: vkWaitForFences timed out (10s)");
+                                    "VulkanDevice::UploadViaStaging: vkMapMemory failed on staging buffer");
                 }
 
-                vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmdBuffer);
                 vkDestroyBuffer(m_device, stagingBuffer, nullptr);
                 vkFreeMemory(m_device, stagingMemory, nullptr);
+                return uploaded;
+            }
 
-                vkTex->SetCurrentLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            std::vector<uint8_t> VulkanDevice::ReadbackTexture(IRHITexture* texture)
+            {
+                auto* vkTex = static_cast<VulkanTexture*>(texture);
+                if (m_device == VK_NULL_HANDLE || !vkTex || !vkTex->GetVkImage())
+                    return {};
+
+                const PixelFormat format = vkTex->GetFormat();
+                const uint32_t bytesPerPixel = GetFormatSize(format);
+                if (bytesPerPixel == 0 || IsDepthStencilFormat(format) || IsCompressedFormat(format))
+                    return {};
+
+                const VkDeviceSize byteSize =
+                    static_cast<VkDeviceSize>(vkTex->GetWidth()) * vkTex->GetHeight() * bytesPerPixel;
+                VkBuffer readbackBuffer = VK_NULL_HANDLE;
+                VkDeviceMemory readbackMemory = VK_NULL_HANDLE;
+                if (!CreateHostBuffer(byteSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, readbackBuffer, readbackMemory))
+                    return {};
+
+                // Pending immediate-list work may still be writing the texture.
+                vkQueueWaitIdle(m_graphicsQueue);
+
+                std::vector<uint8_t> pixels;
+                const bool copied = SubmitOneShot(
+                    [&](VkCommandBuffer cmd)
+                    {
+                        const VkImageLayout restoreLayout = vkTex->GetCurrentLayout();
+                        VulkanCommandList::RecordTextureTransition(cmd, vkTex, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+                        VkBufferImageCopy region = {};
+                        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                        region.imageSubresource.layerCount = 1;
+                        region.imageExtent = {vkTex->GetWidth(), vkTex->GetHeight(), 1};
+                        vkCmdCopyImageToBuffer(cmd, vkTex->GetVkImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                               readbackBuffer, 1, &region);
+                        if (restoreLayout != VK_IMAGE_LAYOUT_UNDEFINED)
+                            VulkanCommandList::RecordTextureTransition(cmd, vkTex, restoreLayout);
+
+                        VkBufferMemoryBarrier hostBarrier = {};
+                        hostBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+                        hostBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                        hostBarrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+                        hostBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        hostBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        hostBarrier.buffer = readbackBuffer;
+                        hostBarrier.size = VK_WHOLE_SIZE;
+                        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0,
+                                             nullptr, 1, &hostBarrier, 0, nullptr);
+                    });
+
+                void* mapped = nullptr;
+                if (copied && vkMapMemory(m_device, readbackMemory, 0, byteSize, 0, &mapped) == VK_SUCCESS && mapped)
+                {
+                    pixels.resize(static_cast<size_t>(byteSize));
+                    memcpy(pixels.data(), mapped, pixels.size());
+                    vkUnmapMemory(m_device, readbackMemory);
+                }
+
+                vkDestroyBuffer(m_device, readbackBuffer, nullptr);
+                vkFreeMemory(m_device, readbackMemory, nullptr);
+                return pixels;
             }
 
             IRHICommandList* VulkanDevice::GetImmediateCommandList()
@@ -1775,13 +1871,21 @@ namespace Spark
 
             std::unique_ptr<IRHICommandList> VulkanDevice::CreateDeferredCommandList()
             {
-                return std::make_unique<VulkanCommandList>(m_device, m_commandPool, false, nullptr,
-                                                           m_vkCmdPushDescriptorSet);
+                return std::make_unique<VulkanCommandList>(
+                    m_device, m_commandPool, false, nullptr, m_vkCmdPushDescriptorSet,
+                    m_pushDescriptorSupported ? VK_NULL_HANDLE : m_descriptorPool, m_bindingLayout);
             }
 
             void VulkanDevice::ExecuteCommandList(IRHICommandList* commandList)
             {
                 auto* vkCmd = static_cast<VulkanCommandList*>(commandList);
+                if (!vkCmd || !vkCmd->IsExecutable())
+                {
+                    // Submitting a command buffer in the initial or recording state is invalid.
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "VulkanDevice::ExecuteCommandList: list was not closed with End(); not submitted");
+                    return;
+                }
 
                 VkSubmitInfo submitInfo = {};
                 submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1789,9 +1893,9 @@ namespace Spark
                 VkCommandBuffer cmd = vkCmd->GetVkCommandBuffer();
                 submitInfo.pCommandBuffers = &cmd;
 
-                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+                // The list's own fence lets it block before re-recording or freeing a pending buffer.
+                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, vkCmd->PrepareSubmit());
             }
-
 
             void VulkanDevice::BeginFrame()
             {
@@ -1814,29 +1918,22 @@ namespace Spark
                 // before submitting the frame's command list.
                 m_transientBuffers.EndFrame(this);
 
-                // Submit the immediate command list if recording
+                // Submit the immediate command list only if something was recorded this frame; submitting a
+                // never-begun or still-recording buffer is invalid (it used to happen every idle frame).
                 auto* cmdList = static_cast<VulkanCommandList*>(GetImmediateCommandList());
-                VkCommandBuffer cmd = cmdList->GetVkCommandBuffer();
+                cmdList->End();
+                if (cmdList->IsExecutable())
+                    ExecuteCommandList(cmdList);
 
-                VkSubmitInfo submitInfo = {};
-                submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-                submitInfo.commandBufferCount = 1;
-                submitInfo.pCommandBuffers = &cmd;
-
-                VkFence frameFence = VK_NULL_HANDLE;
+                // The frame fence must be signaled every frame or the next BeginFrame on this slot blocks
+                // forever. An empty batch signals it once all earlier submissions on the queue complete.
                 if (!m_frameFences.empty())
                 {
-                    frameFence = m_frameFences[m_currentFrame];
-                }
-
-                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, frameFence);
-
-                // Advance frame index
-                if (!m_frameFences.empty())
-                {
+                    vkQueueSubmit(m_graphicsQueue, 0, nullptr, m_frameFences[m_currentFrame]);
                     m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
                 }
             }
+
             void VulkanDevice::WaitForIdle()
             {
                 if (m_device != VK_NULL_HANDLE)
