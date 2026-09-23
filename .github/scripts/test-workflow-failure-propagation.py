@@ -1826,6 +1826,19 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         expected_lanes = set(re.findall(r"--expected-lane ([A-Za-z0-9._-]+)", aggregate))
         self.assertEqual(expected_lanes, set(ratchet["lanes"]))
 
+    def test_sanitizer_exact_commit_artifacts_survive_test_failure(self) -> None:
+        for job_id, step_name in (
+            ("build-linux-asan", "Upload ASan exact-commit test evidence"),
+            ("build-linux-tsan", "Upload TSan exact-commit test evidence"),
+        ):
+            with self.subTest(job_id=job_id):
+                job = yaml_section(self.build, job_id, indent=2)
+                upload = named_step(job, step_name)
+                self.assertEqual(
+                    re.search(r"(?m)^      if: (.+)$", upload).group(1),
+                    "always()",
+                )
+
     def test_working_pushes_are_not_cancelled_before_evidence_finishes(self) -> None:
         self.assertIn("|| github.sha }}", self.build)
         self.assertIn(
