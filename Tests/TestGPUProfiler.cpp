@@ -154,8 +154,16 @@ TEST(GPUTimestampQuery_ResetPassHistoryClearsCompletedSamples)
 {
     Spark::Graphics::GPUTimestampQuery query;
     query.ResetPassHistory("gfx_benchmark_frame");
+    const auto firstGeneration = query.GetPassGeneration("gfx_benchmark_frame");
+    EXPECT_EQ(firstGeneration, 1ull);
     EXPECT_NEAR(query.GetAveragePassTimeMs("gfx_benchmark_frame"), 0.0f, 0.001f);
     EXPECT_NEAR(query.GetPassTimeMs("gfx_benchmark_frame"), 0.0f, 0.001f);
     EXPECT_EQ(query.GetPassSampleCount("gfx_benchmark_frame"), 0u);
+
+    query.ResetPassHistory("gfx_benchmark_frame");
+    const auto secondGeneration = query.GetPassGeneration("gfx_benchmark_frame");
+    EXPECT_EQ(secondGeneration, firstGeneration + 1);
+    EXPECT_FALSE(Spark::Graphics::GPUTimestampQuery::IsCurrentPassGeneration(firstGeneration, secondGeneration));
+    EXPECT_TRUE(Spark::Graphics::GPUTimestampQuery::IsCurrentPassGeneration(secondGeneration, secondGeneration));
 }
 #endif

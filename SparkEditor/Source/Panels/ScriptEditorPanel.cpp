@@ -82,7 +82,7 @@ namespace SparkEditor
         if (m_modules.empty())
         {
             ImGui::TextDisabled("No script modules loaded.");
-            ImGui::TextDisabled("F5 preview does not execute game scripts.");
+            ImGui::TextDisabled("State preview does not execute game scripts.");
             ImGui::TextDisabled("Use Play Control > Launch Game to test runtime scripts.");
             return;
         }

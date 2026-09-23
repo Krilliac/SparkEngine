@@ -20,6 +20,8 @@ stable release. Publication remains blocked until the protected source seal,
 signing, and independent acceptance evidence are complete.
 
 ### Added
+- Installed playtest entry points and the standalone `SparkCrashReporter` metadata-only GitHub Issues flow, with explicit consent, duplicate handling, and manual fallback; this is not a claim that a public authenticated release has passed acceptance.
+- A protected v0.9.0 publication route that signs frozen assets with the provisioned PFX and publishes a detached signature bundle; the self-signed Windows publisher warning remains disclosed until a publicly trusted certificate is available.
 - Release-readiness qualification baseline for the signed immutable v0.9.0 predecessor.
 - Production-source regression tests (`Tests/Test*Real.cpp`) covering audio, editor panels/gizmos/undo, engine wiring, save round trips, security parsers, the shader compiler, the shadow pass, module lifecycle, user data paths, logger sinks, crash-handler gating, and the SparkGameFPS loop; `Tools/test_source_census.py` reports production-source vs mirror tests with a `--check` gate
 - Test runner: `EXPECT_WARN_ONLY(expr, reason)`, `EXPECT_NO_CRASH(reason)`, an `[ EMPTY ]` label for zero-assertion tests (`--empty-is-error`), and JUnit `flaky=`/`empty=` attributes with `<flakyFailure>` instead of `<skipped>` for waived tests
@@ -54,6 +56,11 @@ signing, and independent acceptance evidence are complete.
 - Rolling Debug/Release build aliases and generated checksum/SBOM/provenance metadata for development artifacts; binaries/installers are not code-signed, and none of this is versioned stable-v1 release qualification
 
 ### Changed
+- Crash capture now serializes minidump writing with symbol resolution, rejects same-thread DbgHelp reentry, and retries one transient partial-memory read while keeping failed dumps out of the published manifest.
+- D3D11 `gfx_benchmark` now samples actual presented frames and GPU timestamps, names the active DXGI adapter, and reports bounded p50/p95/p99 distributions with sample-completeness status; representative PERF-100 baselines and soaks remain pending.
+- The editor asset browser carries confined, typed `Assets/...` mesh/material drag references into undo-backed inspector assignment instead of machine-local absolute paths.
+- SparkEditor’s prominent Play control and F5/F6 now open Play Control for the external game process; counter-only state preview remains explicitly labeled non-gameplay.
+- Shared-runner microsecond ECS churn samples remain diagnostic; deterministic entity-count checks stay blocking while certified performance budgets belong to PERF-100.
 - SparkServer headless startup now owns a real NullRHI device through `EngineRuntime`, advances its frame lifecycle with module ticks, and tears it down after module rollback/shutdown instead of running with a null rendering boundary
 - Failed ModuleHotReload replacements remain pending for retry instead of consuming the watched file change
 - clang-tidy now analyzes the complete shipped-product source inventory and fails closed when its roots or translation units are missing
@@ -116,6 +123,10 @@ signing, and independent acceptance evidence are complete.
 - Runtime packages now include complete deterministic third-party license notices rather than dependency metadata alone
 
 ### Fixed
+- The FPS `scene_load` path is confined to the packaged scene tree and recreates the built-in combat arena after a successful reload; package smoke checks malformed/foreign-path rejection, authored camera/spawn state, and rendered pre- and post-survival frames.
+- SceneManager `.scene` saves now reload through their matching versioned-text parser, retain authored camera/spawn/material fields and names with spaces, stage durable same-directory replacement, and preserve live object identity and runtime state when malformed or unsupported loads fail.
+- Shipping builds refuse the legacy in-process PAT-based GitHub crash uploader; generic and unknown-scheme endpoint diagnostics redact credentials and capability-bearing URL data.
+- Empty material references intentionally select the engine default on D3D11 and the NullRHI-tested non-Windows binding path instead of producing per-frame missing-material warnings or inheriting a previous texture; hardware backend certification remains pending.
 - Build-matrix provenance now keeps imported CMake File API dependencies in the hashed raw reply while excluding them from configured product identities; pending-authority failures name the exact target that lacks an artifact identity
 - Wiki test inventory generation now includes the registered runner test in `TestMain.cpp`, keeping Home, Testing, README, badge, and codebase-statistics counts aligned
 - OPS-100 validators now import their bounded JSON parser under a unique module name, so combined test discovery cannot resolve the module-evidence parser in its place

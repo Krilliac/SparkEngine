@@ -69,7 +69,13 @@ namespace Spark
             void SetVertexBuffer(IRHIBuffer*, uint32_t, uint32_t) override {}
             void SetIndexBuffer(IRHIBuffer*, uint32_t) override {}
             void SetConstantBuffer(RHIShaderStage, uint32_t, IRHIBuffer*) override {}
-            void SetShaderResource(RHIShaderStage, uint32_t, IRHITexture*) override {}
+            void SetShaderResource(RHIShaderStage stage, uint32_t slot, IRHITexture* texture) override
+            {
+                m_shaderResourceBindCount++;
+                m_lastShaderResourceStage = stage;
+                m_lastShaderResourceSlot = slot;
+                m_lastShaderResource = texture;
+            }
             void SetSampler(RHIShaderStage, uint32_t, IRHISampler*) override {}
 
             void Draw(uint32_t, uint32_t) override { m_drawCalls++; }
@@ -91,10 +97,18 @@ namespace Spark
 
             uint32_t GetDrawCallCount() const { return m_drawCalls; }
             uint32_t GetDispatchCount() const { return m_dispatchCalls; }
+            uint32_t GetShaderResourceBindCount() const { return m_shaderResourceBindCount; }
+            IRHITexture* GetLastShaderResource() const { return m_lastShaderResource; }
+            RHIShaderStage GetLastShaderResourceStage() const { return m_lastShaderResourceStage; }
+            uint32_t GetLastShaderResourceSlot() const { return m_lastShaderResourceSlot; }
 
           private:
             uint32_t m_drawCalls = 0;
             uint32_t m_dispatchCalls = 0;
+            uint32_t m_shaderResourceBindCount = 0;
+            RHIShaderStage m_lastShaderResourceStage = RHIShaderStage::Pixel;
+            uint32_t m_lastShaderResourceSlot = 0;
+            IRHITexture* m_lastShaderResource = nullptr;
         };
 
         /** @brief CPU-only swap chain with a stable NullTexture back buffer. */

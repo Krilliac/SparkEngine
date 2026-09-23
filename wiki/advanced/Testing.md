@@ -696,7 +696,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*609 test-bearing `.cpp`/`.mm` files, 7415 source-level test definitions*
+*611 test-bearing `.cpp`/`.mm` files, 7431 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -812,7 +812,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCpuNeuralInference` | 14 |
 | `TestCpuNeuralTraining` | 13 |
 | `TestCrashHandlerGatingReal` | 11 |
-| `TestCrashReportUploader` | 10 |
+| `TestCrashReportUploader` | 12 |
 | `TestCrossSystemIntegration` | 4 |
 | `TestD3D11DeviceContractsReal` | 14 |
 | `TestDXRSupport` | 13 |
@@ -862,9 +862,10 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestECSystemSpecialized` | 27 |
 | `TestECSystemsReal` | 12 |
 | `TestEcsCameraConsole` | 1 |
+| `TestEditorAssetReference` | 3 |
 | `TestEditorAutomation` | 9 |
 | `TestEditorCommands` | 8 |
-| `TestEditorCrashHandlerFilterReal` | 8 |
+| `TestEditorCrashHandlerFilterReal` | 9 |
 | `TestEditorDocumentTransition` | 7 |
 | `TestEditorGizmoTransformReal` | 6 |
 | `TestEditorLayoutManager` | 13 |
@@ -957,6 +958,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGatewaySecurity` | 14 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 17 |
+| `TestGraphicsBenchmarkStats` | 3 |
 | `TestGraphicsEngine` | 14 |
 | `TestGraphicsInitFallback` | 7 |
 | `TestGraphicsIntegration` | 33 |
@@ -1094,7 +1096,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestPostProcessingPipelinePhaseN` | 7 |
 | `TestProceduralGenerator` | 14 |
 | `TestProcess` | 20 |
-| `TestProcessDrawListLinux` | 9 |
+| `TestProcessDrawListLinux` | 10 |
 | `TestProfiler` | 19 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 11 |
@@ -1178,7 +1180,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkEngineCameraOwnership` | 1 |
 | `TestSparkError` | 6 |
 | `TestSparkGameARPG` | 5 |
-| `TestSparkGameFPSLoopReal` | 27 |
+| `TestSparkGameFPSLoopReal` | 32 |
 | `TestSparkGameFPSMirrorCompanionsReal` | 14 |
 | `TestSparkGamePlatformer` | 5 |
 | `TestSparkGameRPG` | 5 |
@@ -1194,7 +1196,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSpringArm` | 6 |
 | `TestSpringArmReal` | 8 |
 | `TestSprite2DComponents` | 35 |
-| `TestStackTrace` | 16 |
+| `TestStackTrace` | 17 |
 | `TestStartupSplash` | 7 |
 | `TestStateMachine` | 16 |
 | `TestStateMachineReal` | 7 |

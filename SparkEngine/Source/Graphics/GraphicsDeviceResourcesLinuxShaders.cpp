@@ -122,10 +122,10 @@ HRESULT GraphicsEngine::CreateDefaultTexture()
         return E_FAIL;
 
     const uint32_t whitePixel = 0xFFFFFFFF;
-    auto defaultTex = rhi.bridge.CreateTexture2D(1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
-                                                 Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
+    rhi.defaultTexture = rhi.bridge.CreateTexture2D(1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
+                                                    Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
 
-    if (!defaultTex)
+    if (!rhi.defaultTexture)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create default texture via RHI");
         return E_FAIL;

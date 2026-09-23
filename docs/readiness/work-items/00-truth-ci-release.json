@@ -795,7 +795,7 @@
         "Every stable-v1 artifact records source SHA, dependency-lock digest, exact toolchain, and configuration",
         "Stable publication requires every qualification gate and dependency; only explicitly typed publication-finalization work may remain pending in candidate state",
         "Nightly, stable, and experimental channels have explicit retention and support semantics",
-        "Resolve the repository-wide immutable stable versus mutable rolling-nightly policy conflict before claiming both channels operational; the current incompatibility remains release-blocking"
+        "Prove one uniquely tagged immutable nightly and the protected signed stable path independently; the repository policy and workflow topology are compatible, but live publication remains unverified"
       ],
       "commands": [
         "git ls-remote --tags origin",
@@ -1048,7 +1048,7 @@
       "wave": 6,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The real prior-stable MSI and incompatible immutable-stable/rolling-nightly channel policies remain unresolved release blockers; neither can be replaced with synthetic evidence.",
+      "rationale": "Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence.",
       "dependencies": [
         "REL-100", "REL-110", "PLT-200", "RHI-210", "HEAD-220", "EDT-210",
         "SDK-240", "PERF-100", "OPS-100", "GOV-400", "DOC-400", "INST-130",
@@ -1079,7 +1079,7 @@
       "documentationUpdates": ["CHANGELOG.md", "SECURITY.md", "wiki/development/Release-Publication-Stages.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
       "readinessChanges": ["G17 qualification evidence; this item must be done before candidate publication"],
       "websiteImpact": ["Qualification alone preserves candidate wording; no public ready claim"],
-      "risks": ["First stable MSI bootstrap is unsupported", "Immutable stable and rolling-nightly policies are mutually exclusive today"],
+      "risks": ["The v0.9.0 bootstrap MSI has not passed protected install and repair qualification", "Unique-tag immutable nightlies have not passed live publication acceptance"],
       "outOfScope": ["Publishing artifacts or changing final readiness", "Protocol migration, production-service backup/restore, and incident drills owned by G12 and OPS-110"],
       "definitionOfDone": ["All supported-host rehearsals pass at the candidate SHA", "Qualification sign-off and protected approval evidence are retained", "No planned qualification job or selector remains"],
       "profileApplicability": {"stable-v1": "shared"},

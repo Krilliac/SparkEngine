@@ -776,76 +776,32 @@ namespace SparkEditor
                                              const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg,
                                              const ImVec4& passiveHover)
     {
+        // The editor is not an in-process game host. PlayModeManager is an
+        // intentional state-preview aid, but its counters are not gameplay.
+        // Keep the prominent toolbar affordance on the verified out-of-process
+        // path so this button cannot look like a running game.
+        static_cast<void>(playGreen);
+        static_cast<void>(accentAmber);
+        static_cast<void>(stopRed);
+
         ImVec2 btnDim(btnSize, btnSize);
 
         float windowWidth = ImGui::GetWindowContentRegionMax().x;
-        float playWidth = btnSize * 3 + 12;
+        float playWidth = btnSize + 12;
         float cursorX = (windowWidth - playWidth) * 0.5f;
         if (cursorX > ImGui::GetCursorPosX())
             ImGui::SetCursorPosX(cursorX);
 
-        bool isPlaying = m_playModeManager.IsPlaying() || m_playModeManager.IsSimulating();
-        if (isPlaying)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, playGreen);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(playGreen.x, playGreen.y, playGreen.z, 0.85f));
-        }
-        else
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
-        }
-        if (ImGui::Button(ICON_FA_PLAY, btnDim))
-        {
-            m_playModeManager.TogglePlayMode();
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Play mode toggled: %s",
-                           m_playModeManager.IsPlaying()
-                               ? "Playing"
-                               : (m_playModeManager.IsSimulating()
-                                      ? "Simulating"
-                                      : (m_playModeManager.IsPaused() ? "Paused" : "Stopped")));
-            ShowNotification(m_playModeManager.IsStopped() ? "Preview stopped"
-                                                           : "State preview active (no gameplay tick)",
-                             "info", 2.0f);
-        }
-        ImGui::PopStyleColor(2);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("State preview only (F5); use Play Control > Launch Game for gameplay");
-        ImGui::SameLine();
-
-        bool isPaused = m_playModeManager.IsPaused();
-        if (isPaused)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, accentAmber);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(accentAmber.x, accentAmber.y, accentAmber.z, 0.85f));
-        }
-        else
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
-        }
-        if (ImGui::Button(ICON_FA_PAUSE, btnDim))
-        {
-            m_playModeManager.TogglePause();
-        }
-        ImGui::PopStyleColor(2);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Pause");
-        ImGui::SameLine();
-
         ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
-        if (ImGui::Button(ICON_FA_STOP, btnDim))
+        if (ImGui::Button(ICON_FA_PLAY "##OpenPlayControl", btnDim))
         {
-            if (m_playModeManager.IsInPlayMode())
-            {
-                m_playModeManager.ExitPlayMode();
-                ShowNotification("Stopped", "info", 2.0f);
-            }
+            SetPanelVisible("PlayControl", true);
+            ShowNotification("Play Control opened — select a module, then Launch Game", "info", 3.0f);
         }
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Stop (Shift+F5)");
+            ImGui::SetTooltip("Open Play Control; Launch Game runs actual gameplay in SparkEngine.exe");
 
         ImGui::SameLine(0, 8);
 

@@ -173,6 +173,7 @@ add_executable(SparkTests
     TestPhysicsSystem.cpp
     TestPhysicsTeardownGuard.cpp
     TestGraphicsEngine.cpp
+    TestGraphicsBenchmarkStats.cpp
     TestProcessDrawListLinux.cpp
     TestRenderGraph.cpp
     TestTerrainRenderer.cpp
@@ -554,6 +555,7 @@ add_executable(SparkTests
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp
+    TestEditorAssetReference.cpp
     TestDedicatedServerProcessController.cpp
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/DedicatedServerProcessController.cpp"
     TestServiceTopologyController.cpp

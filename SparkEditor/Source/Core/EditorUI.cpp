@@ -603,40 +603,23 @@ namespace SparkEditor
     {
         ImGuiIO& io = ImGui::GetIO();
 
-        // F5: Toggle editor state preview (not an in-editor game tick).
+        // F5: Open the verified out-of-process gameplay surface. The old
+        // in-editor state machine only advances preview counters and must not
+        // be presented as a playable game session.
         if (ImGui::IsKeyPressed(ImGuiKey_F5) && !io.WantTextInput)
         {
-            if (io.KeyShift)
-            {
-                m_playModeManager.ExitPlayMode();
-                ShowNotification("Stopped", "info", 2.0f);
-            }
-            else
-            {
-                m_playModeManager.TogglePlayMode();
-                ShowNotification(m_playModeManager.IsPlaying() ? "State preview active (no gameplay tick)"
-                                                               : (m_playModeManager.IsSimulating()
-                                                                      ? "Simulation preview active (no gameplay tick)"
-                                                                      : "Preview stopped"),
-                                 "info", 2.0f);
-            }
+            SetPanelVisible("PlayControl", true);
+            ShowNotification(io.KeyShift ? "Play Control opened — use STOP ALL to stop game processes"
+                                         : "Play Control opened — select a module, then Launch Game",
+                             "info", 3.0f);
         }
 
-        // F6: Toggle simulation-preview state, without ticking physics or AI.
+        // F6 remains a discoverable alias for the same real-play surface. Do
+        // not route it to the synthetic simulation counters either.
         if (ImGui::IsKeyPressed(ImGuiKey_F6) && !io.WantTextInput)
         {
-            if (io.KeyShift)
-            {
-                m_playModeManager.ExitPlayMode();
-                ShowNotification("Stopped simulation", "info", 2.0f);
-            }
-            else
-            {
-                m_playModeManager.ToggleSimulationMode();
-                ShowNotification(m_playModeManager.IsSimulating() ? "Simulation preview active (no gameplay tick)"
-                                                                  : "Simulation preview stopped",
-                                 "info", 2.0f);
-            }
+            SetPanelVisible("PlayControl", true);
+            ShowNotification("Play Control opened — Launch Game runs actual gameplay", "info", 3.0f);
         }
 
 #ifdef _WIN32

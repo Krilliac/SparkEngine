@@ -5,7 +5,8 @@
  * @date 2025
  *
  * Provides functions to upload crash reports via multiple backends:
- * - **GitHub Issues** — direct API with PAT (dev builds)
+ * - **GitHub Issues** — legacy direct API with PAT (development builds only;
+ *   disabled in shipping builds)
  * - **Proxy server** — relays to GitHub, token stays server-side (release builds)
  * - **Dropbox** — shared file request link or API upload
  * - **FTP/FTPS** — standard FTP upload via libcurl
@@ -81,7 +82,9 @@ bool UploadCrashReport(const CrashConfig& cfg, const std::string& logContent, co
  * @param cfg        Crash configuration (must have githubRepo and githubToken set)
  * @param logContent The crash log text to embed in the issue body
  * @param zipPath    Path to the compressed crash dump file (empty = no attachment)
- * @return true if the GitHub Issue was created (or comment added) successfully
+ * @return true if the GitHub Issue was created (or comment added) successfully.
+ *         Always returns false in shipping builds; shipped applications must
+ *         use the standalone SparkCrashReporter metadata-only flow.
  */
 bool UploadCrashToGitHub(const CrashConfig& cfg, const std::string& logContent, const std::string& zipPath);
 

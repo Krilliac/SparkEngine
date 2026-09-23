@@ -334,14 +334,16 @@ void GraphicsEngine::EndFrame()
             else
             {
                 const double cpuMs = std::chrono::duration<double, std::milli>(frameEndTime - m_frameStartTime).count();
+                m_benchmarkCpuSamples.Add(cpuMs);
                 ++m_benchmarkPresentedFrames;
-                m_benchmarkCpuTotalMs += cpuMs;
-                if (m_benchmarkPresentedFrames == 1)
-                    m_benchmarkCpuMinMs = m_benchmarkCpuMaxMs = cpuMs;
-                else
+
+                const uint64_t gpuSequence = m_gpuTimestampQuery.GetPassSampleSequence(kBenchmarkGpuPass);
+                if (gpuSequence > m_benchmarkGpuLastSampleSequence)
                 {
-                    m_benchmarkCpuMinMs = (std::min)(m_benchmarkCpuMinMs, cpuMs);
-                    m_benchmarkCpuMaxMs = (std::max)(m_benchmarkCpuMaxMs, cpuMs);
+                    const float latestGpuMs = m_gpuTimestampQuery.GetPassTimeMs(kBenchmarkGpuPass);
+                    if (latestGpuMs > 0.0f)
+                        m_benchmarkGpuSamples.Add(latestGpuMs);
+                    m_benchmarkGpuLastSampleSequence = gpuSequence;
                 }
 
                 const double elapsedSeconds =
@@ -349,21 +351,27 @@ void GraphicsEngine::EndFrame()
                 if (elapsedSeconds >= m_benchmarkSeconds)
                 {
                     std::ostringstream result;
-                    constexpr uint32_t kReportedGpuSamples = 60;
-                    const float gpuMs =
-                        m_gpuTimestampQuery.GetAveragePassTimeMs(kBenchmarkGpuPass, kReportedGpuSamples);
-                    const uint32_t gpuSamples =
-                        (std::min)(kReportedGpuSamples, m_gpuTimestampQuery.GetPassSampleCount(kBenchmarkGpuPass));
                     result << "=== Graphics Benchmark (actual presents) ===\n"
                            << "Elapsed wall time: " << elapsedSeconds << " s\n"
                            << "Presented frames: " << m_benchmarkPresentedFrames << "\n"
                            << "Presented FPS: " << m_benchmarkPresentedFrames / elapsedSeconds << "\n"
-                           << "CPU BeginFrame-to-Present: avg "
-                           << m_benchmarkCpuTotalMs / static_cast<double>(m_benchmarkPresentedFrames) << " ms, min "
-                           << m_benchmarkCpuMinMs << " ms, max " << m_benchmarkCpuMaxMs << " ms\n";
-                    if (gpuMs > 0.0f && gpuSamples > 0)
-                        result << "GPU render interval: avg " << gpuMs << " ms (" << gpuSamples
-                               << " valid D3D11 timestamp samples; two-frame collection lag)";
+                           << "Adapter: " << m_benchmarkAdapterIdentity << "\n"
+                           << "CPU BeginFrame-to-Present: avg " << m_benchmarkCpuSamples.Mean() << " ms, min "
+                           << m_benchmarkCpuSamples.Min() << " ms, max " << m_benchmarkCpuSamples.Max()
+                           << " ms, p50 " << m_benchmarkCpuSamples.Percentile(0.50) << " ms, p95 "
+                           << m_benchmarkCpuSamples.Percentile(0.95) << " ms, p99 "
+                           << m_benchmarkCpuSamples.Percentile(0.99) << " ms (" << m_benchmarkCpuSamples.Count()
+                           << "/" << m_benchmarkCpuSamples.Capacity() << " samples, "
+                           << (m_benchmarkCpuSamples.IsTruncated() ? "TRUNCATED" : "complete") << ")\n";
+                    if (m_benchmarkGpuSamples.Count() > 0)
+                        result << "GPU render interval: avg " << m_benchmarkGpuSamples.Mean() << " ms, p50 "
+                               << m_benchmarkGpuSamples.Percentile(0.50) << " ms, p95 "
+                               << m_benchmarkGpuSamples.Percentile(0.95) << " ms, p99 "
+                               << m_benchmarkGpuSamples.Percentile(0.99) << " ms ("
+                               << m_benchmarkGpuSamples.Count() << "/" << m_benchmarkGpuSamples.Capacity()
+                               << " valid D3D11 timestamp samples, "
+                               << (m_benchmarkGpuSamples.IsTruncated() ? "TRUNCATED" : "complete")
+                               << "; two-frame collection lag)";
                     else
                         result << "GPU render interval: unavailable (D3D11 timestamp query returned no valid samples)";
                     benchmarkResult = result.str();

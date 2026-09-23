@@ -30,6 +30,36 @@
 #include <chrono>
 #include <algorithm>
 
+namespace
+{
+std::string AdapterIdentity(ID3D11Device* device)
+{
+    if (!device)
+        return "unavailable";
+    Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
+    Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
+    DXGI_ADAPTER_DESC desc{};
+    if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dxgiDevice))) ||
+        FAILED(dxgiDevice->GetAdapter(&adapter)) || FAILED(adapter->GetDesc(&desc)))
+        return "unavailable";
+
+    const int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, desc.Description, -1, nullptr, 0,
+                                           nullptr, nullptr);
+    std::string name;
+    if (length > 1)
+    {
+        name.resize(static_cast<size_t>(length));
+        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, desc.Description, -1, name.data(), length, nullptr,
+                            nullptr);
+        name.resize(static_cast<size_t>(length - 1));
+    }
+    std::ostringstream result;
+    result << (name.empty() ? "unknown" : name) << " (vendor=0x" << std::hex << desc.VendorId << ", device=0x"
+           << desc.DeviceId << ")";
+    return result.str();
+}
+} // namespace
+
 // ============================================================================
 // CONSOLE DIAGNOSTICS AND DEVICE OPERATIONS
 // ============================================================================
@@ -250,10 +280,11 @@ std::string GraphicsEngine::Console_Benchmark(int seconds)
     m_benchmarkSeconds = seconds;
     m_benchmarkStart = std::chrono::steady_clock::now();
     m_benchmarkPresentedFrames = 0;
-    m_benchmarkCpuTotalMs = 0.0;
-    m_benchmarkCpuMinMs = 0.0;
-    m_benchmarkCpuMaxMs = 0.0;
     m_benchmarkGpuHistoryResetFrames = 0;
+    m_benchmarkGpuLastSampleSequence = 0;
+    m_benchmarkCpuSamples.Reset();
+    m_benchmarkGpuSamples.Reset();
+    m_benchmarkAdapterIdentity = AdapterIdentity(m_device.Get());
     return "Benchmark started: sampling actual presented frames for " + std::to_string(seconds) +
            " second(s); result will be logged after the interval";
 }

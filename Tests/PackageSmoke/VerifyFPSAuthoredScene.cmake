@@ -28,18 +28,18 @@ file(COPY "${SPARK_PACKAGE_BIN}/" DESTINATION "${_run_root}/bin")
 set(_scene_path "${_run_root}/bin/Assets/Scenes/level1.scene")
 file(READ "${_scene_path}" _scene)
 string(REGEX REPLACE "\\[Camera\\][\r\n]+position=0[.]0,2[.]0,-(5|20)[.]0"
-    "[Camera]\nposition=7.0,3.0,-17.0" _changed_scene "${_scene}")
+    "[Camera]\nposition=1.0,2.0,-20.0" _changed_scene "${_scene}")
 string(REPLACE "position=0.0,2.0,-20.0" "position=4.0,2.0,-19.0" _changed_scene "${_changed_scene}")
 string(REPLACE "position=20.0,1.0,20.0" "position=11.0,1.5,22.0" _changed_scene "${_changed_scene}")
 foreach(_edited_position IN ITEMS
-    "position=7.0,3.0,-17.0"
+    "position=1.0,2.0,-20.0"
     "position=4.0,2.0,-19.0"
     "position=11.0,1.5,22.0")
     if(NOT _changed_scene MATCHES "${_edited_position}")
         message(FATAL_ERROR "Expected authored edit missing: ${_edited_position}")
     endif()
 endforeach()
-string(REPLACE "projection=perspective" "projection=perspective\nrotation=5.0,30.0,0.0" _changed_scene "${_changed_scene}")
+string(REPLACE "projection=perspective" "projection=perspective\nrotation=0.0,5.0,0.0" _changed_scene "${_changed_scene}")
 string(REPLACE "nearPlane=0.1" "nearPlane=0.25" _changed_scene "${_changed_scene}")
 string(REPLACE "farPlane=1000.0" "farPlane=250.0" _changed_scene "${_changed_scene}")
 file(WRITE "${_scene_path}" "${_changed_scene}")
@@ -58,7 +58,7 @@ file(WRITE "${_exec_script}"
     "6 scene_load foreign.scene\n"
     "7 game_status\n"
     "8 wave_status\n8 gfx_screenshot fps-authored.png\n"
-    "10 wave_start\n11 game_status\n")
+    "10 wave_start\n11 game_status\n11 gfx_screenshot fps-survival.png\n")
 
 set(SPARK_LIFECYCLE_PARSER_INCLUDE_ONLY ON)
 include("${SPARK_SOURCE_ROOT}/cmake/RunSparkModuleProfileLifecycle.cmake")
@@ -71,7 +71,7 @@ execute_process(
         "LOCALAPPDATA=${_run_root}/localappdata"
         "${_run_root}/bin/SparkEngine.exe"
         -game "${_run_root}/bin/SparkGameFPS.dll"
-        -require-game -test-frames 12 -threads 2 -window-size 640x360 -no-subprocess
+        -require-game -test-frames 13 -threads 2 -window-size 640x360 -no-subprocess
         -exec "${_exec_script}"
     WORKING_DIRECTORY "${_run_root}"
     RESULT_VARIABLE _result
@@ -118,10 +118,10 @@ endif()
 if(NOT _status MATCHES "Scene load rejected: scene file does not exist")
     message(FATAL_ERROR "FPS package-layout runtime missed foreign-path rejection reason; logs: ${_run_root}")
 endif()
-if(NOT _status MATCHES "Camera initialized from authored scene at \\(7[.]000000, 3[.]000000, -17[.]000000\\)")
+if(NOT _status MATCHES "Camera initialized from authored scene at \\(1[.]000000, 2[.]000000, -20[.]000000\\)")
     message(FATAL_ERROR "FPS package-layout runtime ignored edited [Camera] position in live startup; logs: ${_run_root}")
 endif()
-if(NOT _status MATCHES "Camera authored state: rotation \\(5[.]0, 30[.]0, 0[.]0\\) near/far \\(0[.]25, 250[.]0\\)")
+if(NOT _status MATCHES "Camera authored state: rotation \\(0[.]0, 5[.]0, 0[.]0\\) near/far \\(0[.]25, 250[.]0\\)")
     message(FATAL_ERROR "FPS package-layout runtime ignored edited [Camera] rotation/clipping; logs: ${_run_root}")
 endif()
 if(NOT _status MATCHES "Scene-authored respawn points: 4; preferred at \\(4[.]000000, 2[.]000000, -19[.]000000\\)")
@@ -132,7 +132,7 @@ if(_post_frame_offset LESS 0)
     message(FATAL_ERROR "FPS package-layout runtime missed post-reload diagnostics; logs: ${_run_root}")
 endif()
 string(SUBSTRING "${_status}" ${_post_frame_offset} -1 _post_frame_status)
-if(NOT _post_frame_status MATCHES "Camera/Player XZ: \\(7[.]0, -17[.]0\\) / \\(7[.]0, -17[.]0\\)")
+if(NOT _post_frame_status MATCHES "Camera/Player XZ: \\(1[.]0, -20[.]0\\) / \\(1[.]0, -20[.]0\\)")
     message(FATAL_ERROR "FPS package-layout runtime lost authored camera/player location after rejected reloads; logs: ${_run_root}")
 endif()
 if(NOT _post_frame_status MATCHES "Wave Spawn Points: 10; first \\(11[.]0, 1[.]5, 22[.]0\\)")
@@ -164,5 +164,20 @@ execute_process(
     TIMEOUT 30)
 if(NOT _visual_result EQUAL 0)
     message(FATAL_ERROR "FPS package-layout frame failed visual geometry check: ${_visual_stderr}; logs: ${_run_root}")
+endif()
+set(_survival_image "${_run_root}/fps-survival.png")
+if(NOT EXISTS "${_survival_image}" OR IS_DIRECTORY "${_survival_image}")
+    message(FATAL_ERROR "FPS package-layout survival frame was not captured; logs: ${_run_root}")
+endif()
+execute_process(
+    COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+        -NoProfile -NonInteractive -File
+        "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CheckFPSVisibleFrame.ps1"
+        -ImagePath "${_survival_image}"
+    RESULT_VARIABLE _survival_visual_result
+    ERROR_VARIABLE _survival_visual_stderr
+    TIMEOUT 30)
+if(NOT _survival_visual_result EQUAL 0)
+    message(FATAL_ERROR "FPS package-layout survival frame failed visual geometry check: ${_survival_visual_stderr}; logs: ${_run_root}")
 endif()
 message(STATUS "FPS package-layout runtime honored edited scene camera and spawns; logs: ${_run_root}")

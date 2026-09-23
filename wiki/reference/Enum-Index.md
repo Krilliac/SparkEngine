@@ -79,8 +79,8 @@
 | `AuraType` | enum | SparkEngine | [AbilitySystem.h:L141](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L141) |  |
 | `AuraType` | enum | Tests | [TestAbilitySystem.cpp:L30](../../Tests/TestAbilitySystem.cpp#L30) |  |
 | `BackgroundLoadState` | enum | SparkEditor | [LevelStreamingEnums.h:L138](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L138) | Background loading states |
-| `BasicBlendMode` | enum | SparkEngine | [GraphicsEngine.h:L733](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L733) | Blend modes for the basic draw path. |
-| `BasicDepthMode` | enum | SparkEngine | [GraphicsEngine.h:L749](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L749) | Depth modes for the basic draw path. |
+| `BasicBlendMode` | enum | SparkEngine | [GraphicsEngine.h:L736](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L736) | Blend modes for the basic draw path. |
+| `BasicDepthMode` | enum | SparkEngine | [GraphicsEngine.h:L752](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L752) | Depth modes for the basic draw path. |
 | `BindingType` | enum | SparkEngine | [InputEnums.h:L90](../../SparkEngine/Source/Enums/InputEnums.h#L90) | Input binding types |
 | `Biome` | enum | GameModules | [OpenWorldEnums.h:L20](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L20) | World biome types affecting terrain, weather, wildlife, and resources |
 | `BlendMode` | enum | SparkEditor | [RenderingEnums.h:L72](../../SparkEditor/Source/Enums/RenderingEnums.h#L72) | Blend modes |

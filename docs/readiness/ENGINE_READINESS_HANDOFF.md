@@ -1155,7 +1155,7 @@ CMake, SDK generated headers, installer, and launcher consume the requested engi
 2. Every stable-v1 artifact records source SHA, dependency-lock digest, exact toolchain, and configuration
 3. Stable publication requires every qualification gate and dependency; only explicitly typed publication-finalization work may remain pending in candidate state
 4. Nightly, stable, and experimental channels have explicit retention and support semantics
-5. Resolve the repository-wide immutable stable versus mutable rolling-nightly policy conflict before claiming both channels operational; the current incompatibility remains release-blocking
+5. Prove one uniquely tagged immutable nightly and the protected signed stable path independently; the repository policy and workflow topology are compatible, but live publication remains unverified
 
 **Required commands**
 
@@ -5039,7 +5039,7 @@ ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-te
 **Priority:** P0 · **Status:** blocked · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The real prior-stable MSI and incompatible immutable-stable/rolling-nightly channel policies remain unresolved release blockers; neither can be replaced with synthetic evidence.
+Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence.
 
 **Dependency contract**
 
@@ -5104,8 +5104,8 @@ sha256sum -c SHA256SUMS
 **Risks and boundaries**
 
 - Risks:
-  - First stable MSI bootstrap is unsupported
-  - Immutable stable and rolling-nightly policies are mutually exclusive today
+  - The v0.9.0 bootstrap MSI has not passed protected install and repair qualification
+  - Unique-tag immutable nightlies have not passed live publication acceptance
 - Out of scope:
   - Publishing artifacts or changing final readiness
   - Protocol migration, production-service backup/restore, and incident drills owned by G12 and OPS-110

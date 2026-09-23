@@ -16,6 +16,7 @@
 #include "TestFramework.h"
 
 #include "Core/EditorCrashHandler.h"
+#include "Utils/StackTrace.h"
 
 #include <filesystem>
 #include <fstream>
@@ -115,6 +116,55 @@ TEST(EditorCrashHandlerReal_InitializeInstallsAnUnhandledExceptionFilter)
     // Shutdown must hand the process back exactly as it found it, or a later
     // owner (the engine crash handler, a debugger) loses its filter.
     EXPECT_TRUE(CurrentUnhandledExceptionFilter() == before);
+}
+
+TEST(EditorCrashHandlerReal_SymbolBusyWritesAnUnsymbolizedReport)
+{
+    ScratchCrashDir scratch("symbol_busy");
+    SparkEditor::EditorCrashHandler& handler = SparkEditor::EditorCrashHandler::GetInstance();
+    ASSERT_TRUE(handler.Initialize(scratch.Path()));
+
+    CONTEXT context{};
+    RtlCaptureContext(&context);
+    EXCEPTION_RECORD record{};
+    record.ExceptionCode = STATUS_FATAL_APP_EXIT;
+    EXCEPTION_POINTERS pointers{&record, &context};
+    int callbackCount = 0;
+    const auto filter = CurrentUnhandledExceptionFilter();
+    ASSERT_TRUE(filter != nullptr);
+    handler.SetCrashCallback(
+        [&](const SparkEditor::CrashInfo&)
+        {
+            ++callbackCount;
+            EXPECT_EQ(filter(&pointers), EXCEPTION_EXECUTE_HANDLER);
+        });
+
+    {
+        // Invoke the installed production filter while this same thread owns
+        // DbgHelp. It must preserve a report without recursive symbol calls
+        // or writing a partial full-memory dump.
+        Spark::StackTrace::SymbolLockLease symbolLock;
+        ASSERT_TRUE(symbolLock.owns_lock());
+        EXPECT_EQ(filter(&pointers), EXCEPTION_EXECUTE_HANDLER);
+    }
+    handler.SetCrashCallback({});
+    handler.Shutdown();
+
+    bool foundReport = false;
+    bool foundDump = false;
+    for (const auto& entry : std::filesystem::directory_iterator(scratch.Path()))
+    {
+        if (entry.path().extension() == ".dmp")
+            foundDump = true;
+        if (entry.path().extension() != ".log")
+            continue;
+        std::ifstream report(entry.path());
+        const std::string contents{std::istreambuf_iterator<char>(report), std::istreambuf_iterator<char>()};
+        foundReport |= contents.find("DbgHelp busy") != std::string::npos;
+    }
+    EXPECT_TRUE(foundReport);
+    EXPECT_FALSE(foundDump);
+    EXPECT_EQ(callbackCount, 1);
 }
 
 TEST(EditorCrashHandlerReal_InitializeCreatesTheCrashDirectory)

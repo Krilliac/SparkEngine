@@ -133,6 +133,7 @@ namespace Spark::Graphics
                 }
 
                 frameData.timerNames.resize(maxTimers);
+                frameData.timerGenerations.resize(maxTimers);
                 frameData.activeCount = 0;
             }
 
@@ -152,11 +153,13 @@ namespace Spark::Graphics
                 frame.beginQueries.clear();
                 frame.endQueries.clear();
                 frame.timerNames.clear();
+                frame.timerGenerations.clear();
                 frame.activeCount = 0;
             }
 
             m_passTimes.clear();
             m_passHistory.clear();
+            m_passGenerations.clear();
             m_initialized = false;
             m_frameIndex = 0;
         }
@@ -227,6 +230,7 @@ namespace Spark::Graphics
 
             uint32_t timerID = frameData.activeCount;
             frameData.timerNames[timerID] = name;
+            frameData.timerGenerations[timerID] = GetPassGeneration(name);
             context->End(frameData.beginQueries[timerID].Get());
 
             frameData.activeCount++;
@@ -308,18 +312,43 @@ namespace Spark::Graphics
             return it == m_passHistory.end() ? 0 : it->second.count;
         }
 
+        /// Monotonic number of valid samples collected for a pass since reset.
+        uint64_t GetPassSampleSequence(const char* name) const
+        {
+            if (!name)
+                return 0;
+            const auto it = m_passHistory.find(name);
+            return it == m_passHistory.end() ? 0 : it->second.totalSamples;
+        }
+
+        /// Current reset generation for a named pass; in-flight samples retain their captured generation.
+        uint64_t GetPassGeneration(const char* name) const
+        {
+            if (!name)
+                return 0;
+            const auto it = m_passGenerations.find(name);
+            return it == m_passGenerations.end() ? 0 : it->second;
+        }
+
+        /// Return whether an in-flight sample belongs to the current reset generation.
+        static constexpr bool IsCurrentPassGeneration(uint64_t sampleGeneration, uint64_t currentGeneration) noexcept
+        {
+            return sampleGeneration == currentGeneration;
+        }
+
         /**
          * @brief Drop all completed samples for one named pass.
          *
          * Benchmark consumers use this at the first frame of a run so a
          * result cannot accidentally reuse history from an earlier run. The
-         * in-flight D3D11 query slots remain untouched; their results still
-         * obey the normal two-frame latency when they are collected.
+         * in-flight D3D11 query slots remain untouched, but their captured
+         * generation prevents pre-reset results from entering the new history.
          */
         void ResetPassHistory(const char* name)
         {
             if (!name)
                 return;
+            ++m_passGenerations[name];
             m_passTimes.erase(name);
             m_passHistory.erase(name);
         }
@@ -402,6 +431,7 @@ namespace Spark::Graphics
             std::array<float, kHistorySize> samples = {};
             uint32_t writeIndex = 0;
             uint32_t count = 0;
+            uint64_t totalSamples = 0;
 
             void Push(float value)
             {
@@ -411,6 +441,7 @@ namespace Spark::Graphics
                 {
                     count++;
                 }
+                ++totalSamples;
             }
         };
 
@@ -423,6 +454,7 @@ namespace Spark::Graphics
             std::vector<ComPtr<ID3D11Query>> beginQueries;
             std::vector<ComPtr<ID3D11Query>> endQueries;
             std::vector<std::string> timerNames;
+            std::vector<uint64_t> timerGenerations;
             uint32_t activeCount = 0;
         };
 
@@ -477,6 +509,10 @@ namespace Spark::Graphics
                 float timeMs = static_cast<float>(static_cast<double>(endTicks - beginTicks) * ticksToMs);
 
                 const auto& name = frameData.timerNames[i];
+                if (!IsCurrentPassGeneration(frameData.timerGenerations[i], GetPassGeneration(name.c_str())))
+                {
+                    continue;
+                }
                 m_passTimes[name] = timeMs;
                 m_passHistory[name].Push(timeMs);
             }
@@ -485,6 +521,7 @@ namespace Spark::Graphics
         std::array<FrameData, kFrameLatency> m_frames;
         std::unordered_map<std::string, float> m_passTimes;         ///< Most recent results
         std::unordered_map<std::string, PassHistory> m_passHistory; ///< Rolling history
+        std::unordered_map<std::string, uint64_t> m_passGenerations; ///< Reset epoch per pass
         uint32_t m_maxTimers = 0;
         uint32_t m_frameIndex = 0;
         bool m_initialized = false;

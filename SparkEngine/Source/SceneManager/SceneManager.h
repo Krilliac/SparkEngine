@@ -158,9 +158,9 @@ class SceneManager
      * `m_metadata`, and calls `InstantiateNodes()` to create `GameObject` instances.
      * The dirty flag is cleared on success.
      *
-     * File format is determined by extension:
-     * - `.scene` → legacy binary (`LoadCustom`)
-     * - `.json` or anything else → JSON (`LoadJSON`)
+     * File format is determined by extension and the versioned file header:
+     * - `.scene` → authored INI or versioned text; older object rows remain readable
+     * - `.json` → versioned text (the historical method name predates this format)
      *
      * @param filepath  Absolute or asset-relative path to the scene file.
      * @return          `true` on success; `false` if the file is missing or malformed.
@@ -175,7 +175,7 @@ class SceneManager
     bool LoadScene(const std::wstring& filepath);
 
     /**
-     * @brief Serialize the current scene to a JSON file.
+     * @brief Serialize the current scene to the versioned text format.
      *
      * Writes `m_metadata` and all nodes in `m_sceneNodes` to the specified path.
      * The dirty flag is cleared on success.
@@ -485,33 +485,32 @@ class SceneManager
 
   private:
     /**
-     * @brief Load a scene from the legacy binary `.scene` format.
+     * @brief Load an authored INI or legacy `.scene` text file.
      *
-     * Invoked by `LoadScene()` when the file extension is `.scene`. The binary
-     * format is engine-version-specific; see the internal documentation for the
-     * exact byte layout.
+     * Invoked by `LoadScene()` for `.scene`. Versioned SaveScene output is
+     * recognized by its header and routed through `LoadJSON()`.
      *
-     * @param path  Path to the binary scene file.
+     * @param path  Path to the scene file.
      * @return      `true` on success; `false` on I/O error or format mismatch.
      */
     bool LoadCustom(const std::wstring& path);
 
     /**
-     * @brief Deserialize a scene from a JSON file into `m_metadata` and `m_sceneNodes`.
+     * @brief Deserialize versioned line-oriented scene text into metadata and nodes.
      *
-     * Parses the top-level `"metadata"` and `"nodes"` arrays. Unknown fields are
-     * silently ignored for forward compatibility.
+     * The historical name is retained for API compatibility; the current file
+     * format uses metadata comments and quoted node fields, not JSON syntax.
      *
      * @param path  Path to the JSON scene file.
-     * @return      `true` on success; `false` on I/O error or JSON parse failure.
+     * @return      `true` on success; `false` on I/O error or empty scene.
      */
     bool LoadJSON(const std::wstring& path);
 
     /**
-     * @brief Serialize the current scene to a JSON file.
+     * @brief Serialize the current scene to versioned line-oriented text.
      *
-     * Writes `m_metadata` followed by the full `m_sceneNodes` array. Existing
-     * file content is overwritten atomically.
+     * Writes `m_metadata` followed by the full `m_sceneNodes` array through a
+     * same-directory durable temporary file and atomic replacement.
      *
      * @param path  Destination file path. Must be writable.
      * @return      `true` on success; `false` on I/O error.

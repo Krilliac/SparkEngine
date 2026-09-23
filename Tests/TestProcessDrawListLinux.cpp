@@ -31,6 +31,7 @@
 #include "Graphics/GraphicsEngineRHI.h"
 #include "Graphics/RHI/RHIBridge.h"
 #include "Graphics/RHI/RHIResources.h"
+#include "Graphics/RHI/NullRHIDevice.h"
 
 #include <memory>
 
@@ -60,6 +61,7 @@ namespace
             if (m_owned)
             {
                 auto& rhi = Spark::Graphics::Detail::GetRHI();
+            rhi.defaultTexture.reset();
                 rhi.bridge.Shutdown();
                 rhi.initialized = false;
             }
@@ -219,6 +221,33 @@ TEST(ProcessDrawListLinux_BindMeshUnknownPathIsNoOp)
     pipeline.Shutdown();
 }
 
+TEST(ProcessDrawListLinux_DefaultMaterialRebindsAfterMissingMaterial)
+{
+    HeadlessBridge bridge;
+    ASSERT_TRUE(bridge.Usable());
+
+    AssetPipeline pipeline;
+    pipeline.Initialize(nullptr, nullptr);
+    auto* commandList = static_cast<Spark::RHI::NullCommandList*>(
+        Spark::Graphics::Detail::GetRHI().bridge.GetCommandList());
+    const uint32_t before = commandList->GetShaderResourceBindCount();
+
+    // A failed explicit material must first select the fallback, and an empty
+    // path must issue another explicit fallback bind rather than inheriting
+    // whatever resource a prior draw happened to leave in slot zero.
+    pipeline.BindMaterial("test://missing-material");
+    const uint32_t afterMissing = commandList->GetShaderResourceBindCount();
+    pipeline.BindMaterial("");
+
+    EXPECT_EQ(afterMissing, before + 1u);
+    EXPECT_EQ(commandList->GetShaderResourceBindCount(), before + 2u);
+    EXPECT_TRUE(commandList->GetLastShaderResource() != nullptr);
+    EXPECT_TRUE(commandList->GetLastShaderResourceStage() == Spark::RHI::RHIShaderStage::Pixel);
+    EXPECT_EQ(commandList->GetLastShaderResourceSlot(), 0u);
+
+    pipeline.Shutdown();
+}
+
 // ---------------------------------------------------------------------------
 // TextureAsset RHI upload — mirrors MeshAsset path
 // ---------------------------------------------------------------------------
@@ -306,6 +335,10 @@ TEST(ProcessDrawListLinux_SubmitAndProcessDrainsQueue)
     // sort / loop body without requiring a full asset round-trip (which
     // is covered by the BuildRHIBuffers tests above).
     const DirectX::XMMATRIX identity = DirectX::XMMatrixIdentity();
+    // Empty material paths are intentional: they select the engine default
+    // material used by starter scenes and must drain without a missing-asset
+    // warning or stale-material state.
+    engine.SubmitMeshForRendering("test://mesh_default_material", "", identity, false);
     engine.SubmitMeshForRendering("test://mesh_a", "test://mat_a", identity, false);
     engine.SubmitMeshForRendering("test://mesh_b", "test://mat_b", identity, false);
     engine.SubmitMeshForRendering("test://mesh_a", "test://mat_a", identity, false);

@@ -172,7 +172,7 @@ namespace SparkEditor
 
     void AIEditorPanel::RenderAgentInspector()
     {
-        ImGui::TextDisabled("F5 preview does not tick AI. This inspector has no live agent feed.");
+        ImGui::TextDisabled("State preview does not tick AI. This inspector has no live agent feed.");
         ImGui::Separator();
 
         if (ImGui::BeginTable("AgentTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
@@ -184,7 +184,8 @@ namespace SparkEditor
             ImGui::TableHeadersRow();
 
             // This panel currently has no live agent-data source. Keep the
-            // empty table explicit rather than implying F5 will populate it.
+            // Keep the empty table explicit rather than implying state preview
+            // will populate it.
 
             ImGui::EndTable();
         }
@@ -192,7 +193,7 @@ namespace SparkEditor
 
     void AIEditorPanel::RenderBlackboardViewer()
     {
-        ImGui::TextDisabled("F5 preview has no live AI blackboard; this inspector has no live feed.");
+        ImGui::TextDisabled("State preview has no live AI blackboard; this inspector has no live feed.");
         ImGui::Separator();
 
         if (ImGui::BeginTable("BlackboardTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))

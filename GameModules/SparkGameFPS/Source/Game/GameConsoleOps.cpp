@@ -470,10 +470,26 @@ bool Game::LoadScene(const std::string& scenePath)
 
         if (success)
         {
+            std::error_code arenaIdentityError;
+            const bool isBuiltInArena = std::filesystem::equivalent(
+                trustedScenePath, Spark::FPSAssets::Root() / "Scenes" / "level1.scene", arenaIdentityError) &&
+                !arenaIdentityError;
             BindSceneMaterialRoots();
-            // Clear existing game objects if loading a new scene
+            // A successful replacement discards objects from the old level.
+            // The built-in FPS level also has a legacy combat-arena layer
+            // created at startup; recreate that same layer on reload instead
+            // of leaving the player in a mostly empty blue scene.
             m_enemies.clear();
             m_gameObjects.clear();
+            if (m_renderingEnabled && isBuiltInArena)
+            {
+                CreateCombatArena();
+                for (auto& object : m_gameObjects)
+                {
+                    if (auto* model = dynamic_cast<ModelObject*>(object.get()))
+                        model->SetGraphicsEngine(m_graphics);
+                }
+            }
             RefreshAuthoredSceneRuntimeState();
 
             std::wstring loadMsg = L"Scene loaded successfully: " + wScenePath;

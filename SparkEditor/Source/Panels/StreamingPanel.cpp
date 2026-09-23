@@ -241,8 +241,8 @@ namespace SparkEditor
         if (m_streamEvents.empty())
         {
             ImGui::TextDisabled("No streaming events recorded yet.");
-            ImGui::TextDisabled("F5 preview does not stream game areas.");
-            ImGui::TextDisabled("Use Play Control > Launch Game to test area streaming.");
+            ImGui::TextDisabled("State preview does not stream game areas.");
+            ImGui::TextDisabled("Use Play Control > Launch Game to test runtime area streaming.");
             return;
         }
 

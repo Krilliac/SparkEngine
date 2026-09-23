@@ -34,6 +34,7 @@
 #include "MakeDesc.h"
 #include "TerrainRenderer.h"
 #include "GPUTimestampQuery.h"
+#include "GraphicsBenchmarkStats.h"
 // Phase Q: activated Tier 2 graphics orphan — abstract denoiser
 // interface plus SoftwareDenoiser fallback. Pure CPU (joint bilateral
 // filter), no external SDK dependency, runs on every platform.
@@ -282,7 +283,9 @@ class GraphicsEngine
      * the referenced strings outlive the current frame.
      *
      * @param meshPath      Asset path to the mesh resource (view into component storage).
-     * @param materialPath  Asset path to the material resource (view into component storage).
+     * @param materialPath  Optional asset path to the material resource (view into component
+     *                      storage). An empty path intentionally selects the mesh/engine
+     *                      default material; starter scenes use this for untextured geometry.
      * @param worldMatrix   World transformation matrix for the mesh instance.
      * @param castShadows   Whether this mesh should be included in the shadow pass.
      */
@@ -1045,11 +1048,12 @@ class GraphicsEngine
     int m_benchmarkSeconds = 0;
     std::chrono::steady_clock::time_point m_benchmarkStart{};
     uint64_t m_benchmarkPresentedFrames = 0;
-    double m_benchmarkCpuTotalMs = 0.0;
-    double m_benchmarkCpuMinMs = 0.0;
-    double m_benchmarkCpuMaxMs = 0.0;
     uint32_t m_benchmarkGpuTimerId = UINT32_MAX;
     uint32_t m_benchmarkGpuHistoryResetFrames = 0;
+    uint64_t m_benchmarkGpuLastSampleSequence = 0;
+    Spark::Graphics::GraphicsBenchmarkStats m_benchmarkCpuSamples;
+    Spark::Graphics::GraphicsBenchmarkStats m_benchmarkGpuSamples;
+    std::string m_benchmarkAdapterIdentity;
 
     ComPtr<ID3D11Query> m_disjointQuery;
     ComPtr<ID3D11Query> m_timestampStartQuery;

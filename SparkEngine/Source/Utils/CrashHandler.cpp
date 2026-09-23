@@ -1234,6 +1234,18 @@ static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWOR
 {
     if (failureError)
         *failureError = ERROR_SUCCESS;
+
+    // MiniDumpWriteDump shares DbgHelp's process-wide state with StackTrace.
+    // Never race a concurrent symbol lookup or block indefinitely when the
+    // faulting thread already owns the symbol lock.
+    Spark::StackTrace::SymbolLockLease symbolLock(true);
+    if (!symbolLock.owns_lock())
+    {
+        if (failureError)
+            *failureError = ERROR_BUSY;
+        return false;
+    }
+
     HANDLE h =
         CreateFileW(file.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE)
@@ -1250,10 +1262,29 @@ static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWOR
         dumpType =
             static_cast<MINIDUMP_TYPE>(MiniDumpWithFullMemory | MiniDumpWithHandleData | MiniDumpWithUnloadedModules);
     }
-    SetLastError(ERROR_SUCCESS);
-    const BOOL result =
-        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), h, dumpType, &info, nullptr, nullptr);
-    const DWORD error = result ? ERROR_SUCCESS : GetLastError();
+    BOOL result = FALSE;
+    DWORD error = ERROR_SUCCESS;
+    // A normal minidump can race a transiently inaccessible page on a live
+    // process. Retry that one DbgHelp error once using the same private file;
+    // no failed or partial dump is ever advertised in the manifest.
+    for (int attempt = 0; attempt < 2; ++attempt)
+    {
+        if (attempt != 0)
+        {
+            LARGE_INTEGER start{};
+            if (!SetFilePointerEx(h, start, nullptr, FILE_BEGIN) || !SetEndOfFile(h))
+            {
+                error = GetLastError();
+                break;
+            }
+        }
+        SetLastError(ERROR_SUCCESS);
+        result = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), h, dumpType, &info, nullptr, nullptr);
+        error = result ? ERROR_SUCCESS : GetLastError();
+        if (result || dumpType != MiniDumpNormal ||
+            (error != ERROR_PARTIAL_COPY && error != static_cast<DWORD>(HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY))))
+            break;
+    }
     CloseHandle(h);
     if (failureError)
         *failureError = error;
@@ -1269,39 +1300,12 @@ static std::wstring MakeTimeStamp()
     return buf;
 }
 
-/// Acquire the shared DbgHelp lock without ever blocking the fault path.
-///
-/// DbgHelp is single-threaded, so the crash path shares StackTrace's one
-/// process-wide lock (and its one SymInitialize) instead of running a private
-/// SymInitialize/SymCleanup pair that tore down the symbol handler for everyone
-/// else the moment it returned. But StackTrace::ResolveSymbols() holds that same
-/// non-recursive lock across its whole resolve loop, and the synchronous Logger
-/// runs that on whichever thread logs an Error. A fault raised inside DbgHelp on
-/// such a thread re-enters this filter on the same thread, where a lock_guard
-/// wedges the process for good: no dump, no log, no exit code. Bounded try-lock;
-/// every caller must have an unsymbolized fallback.
-///
-/// @return true when @p lock owns the mutex on return.
-[[nodiscard]] static bool TryAcquireSymbolLock(std::unique_lock<std::mutex>& lock)
-{
-    constexpr int kSymbolLockAttempts = 50;
-    constexpr DWORD kSymbolLockSleepMs = 10; // 50 x 10 ms = 500 ms ceiling
-    for (int attempt = 0; attempt < kSymbolLockAttempts && !lock.owns_lock(); ++attempt)
-    {
-        if (lock.try_lock())
-            break;
-        Sleep(kSymbolLockSleepMs);
-    }
-    return lock.owns_lock();
-}
-
 static std::wstring SymStackTrace(EXCEPTION_POINTERS* ep)
 {
     // Never block on the shared DbgHelp lock here: fall back to unsymbolized
     // frames instead — the raw addresses still resolve offline against the
-    // minidump. See TryAcquireSymbolLock().
-    std::unique_lock<std::mutex> symbolLock(Spark::StackTrace::SymbolLock(), std::defer_lock);
-    (void)TryAcquireSymbolLock(symbolLock);
+    // minidump. The lease also rejects same-thread DbgHelp reentry.
+    Spark::StackTrace::SymbolLockLease symbolLock(true);
 
     std::wstringstream out;
     if (!symbolLock.owns_lock())
@@ -1418,8 +1422,8 @@ static std::wstring ThreadStacks(DWORD skipThreadId)
     //
     // These lines deliberately carry no frame marker: only the faulting thread's
     // stack feeds the crash hash.
-    std::unique_lock<std::mutex> symbolLock(Spark::StackTrace::SymbolLock(), std::defer_lock);
-    if (!TryAcquireSymbolLock(symbolLock))
+    Spark::StackTrace::SymbolLockLease symbolLock(true);
+    if (!symbolLock.owns_lock())
     {
         return L"*** THREAD STACKS ***\nSkipped: DbgHelp busy (symbol lock held elsewhere) — "
                L"resolve the other threads against the dump\n";

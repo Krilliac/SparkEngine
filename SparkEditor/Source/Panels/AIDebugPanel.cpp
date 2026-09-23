@@ -33,7 +33,7 @@ namespace SparkEditor
 
         // Refresh agent data from AISystem
         // In a real integration, this would query AISystem::GetInstance() for live agent data.
-        // The F5 editor preview does not tick AI or populate live agent data.
+        // The editor state preview does not tick AI or populate live agent data.
     }
 
     void AIDebugPanel::Render()
@@ -115,7 +115,7 @@ namespace SparkEditor
 
         if (m_agents.empty())
         {
-            ImGui::TextDisabled("No editor AI agents. F5 preview does not tick AI.");
+            ImGui::TextDisabled("No editor AI agents. State preview does not tick AI.");
             ImGui::TextDisabled("Use Play Control > Launch Game to test game AI.");
             return;
         }
@@ -255,7 +255,7 @@ namespace SparkEditor
         ImGui::Separator();
 
         ImGui::TextDisabled("Behavior tree trace will display the call stack of the currently "
-                            "executing node, with timing data per node. No live trace in F5 preview.");
+                            "executing node, with timing data per node. No live trace in state preview.");
     }
 
     // =========================================================================

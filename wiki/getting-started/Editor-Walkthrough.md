@@ -298,10 +298,11 @@ Open from **Window → Coroutine Debug**. Monitor active coroutines:
 
 ## State Preview and Launch Game
 
-The editor's **State Preview Toolbar** (F5/F6) controls a local preview state
-machine. It does not tick game physics, AI, scripts, audio, or a game module.
-Use **Play Control → Launch Game** to start gameplay in a separate SparkEngine
-process; verify that process independently.
+The editor's **State Preview Toolbar** controls a local preview state machine.
+It does not tick game physics, AI, scripts, audio, or a game module. The main
+toolbar button and F5/F6 open **Play Control**; select a module there and use
+**Launch Game** to start gameplay in a separate SparkEngine process. Verify
+that process independently.
 
 | Button | Action |
 |--------|--------|

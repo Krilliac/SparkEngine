@@ -18,6 +18,7 @@
 #include "Game/ProgressionSystem.h"
 
 #include "Engine/Events/EventSystem.h"
+#include "Game/GameObject.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
 #include "SceneManager/SceneManager.h"
@@ -31,6 +32,11 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#ifdef SPARK_PLATFORM_WINDOWS
+#include <d3d11.h>
+#include <wrl/client.h>
+#endif
 
 using namespace Spark;
 
@@ -286,7 +292,13 @@ TEST(FPSScene_AuthoredCameraAndSpawnPointsSurviveHeadlessLoad)
 TEST(FPSScene_MalformedAuthoredLocationsCannotBecomeOriginSpawns)
 {
     const std::filesystem::path temp = MakeTempDir("invalid_locations");
+    const std::filesystem::path baselinePath = temp / "baseline.scene";
     const std::filesystem::path scenePath = temp / "invalid.scene";
+    {
+        std::ofstream baselineFile(baselinePath);
+        baselineFile << "[Scene]\nname=Baseline\n[Object]\ntype=plane\nname=StableFloor\n"
+                        "position=1,2,3\n";
+    }
     {
         std::ofstream sceneFile(scenePath);
         sceneFile << "[Scene]\nname=Invalid locations\n"
@@ -304,24 +316,16 @@ TEST(FPSScene_MalformedAuthoredLocationsCannotBecomeOriginSpawns)
     GraphicsEngine graphics;
     InputManager input;
     SceneManager scene(&graphics, &input);
-    ASSERT_TRUE(scene.LoadScene(scenePath.wstring()));
-    EXPECT_TRUE(scene.FindNode("Floor") >= 0);
-    const int legacyIndex = scene.FindNode("LegacyTrailing");
-    ASSERT_TRUE(legacyIndex >= 0);
-    EXPECT_NEAR(scene.GetNode(legacyIndex)->position.x, 1.0f, 0.001f);
-    EXPECT_NEAR(scene.GetNode(legacyIndex)->position.y, 2.0f, 0.001f);
-    EXPECT_NEAR(scene.GetNode(legacyIndex)->position.z, 3.0f, 0.001f);
+    ASSERT_TRUE(scene.LoadScene(baselinePath.wstring()));
+    ASSERT_EQ(scene.GetMetadata().sceneName, std::string("Baseline"));
+    ASSERT_EQ(scene.GetNodeCount(), 1);
+    EXPECT_FALSE(scene.LoadScene(scenePath.wstring()));
+    EXPECT_EQ(scene.GetMetadata().sceneName, std::string("Baseline"));
+    EXPECT_EQ(scene.GetNodeCount(), 1);
+    EXPECT_TRUE(scene.FindNode("StableFloor") >= 0);
+    EXPECT_EQ(scene.FindNode("Floor"), -1);
     EXPECT_EQ(scene.FindNode("MalformedCamera"), -1);
-    EXPECT_EQ(scene.FindNode("MalformedRotation"), -1);
     EXPECT_EQ(scene.FindNode("MalformedSpawn"), -1);
-    EXPECT_EQ(scene.FindNode("MalformedSpawnRotation"), -1);
-    EXPECT_EQ(scene.FindNode("NoTag"), -1);
-    const int validIndex = scene.FindNode("ValidSpawn");
-    ASSERT_TRUE(validIndex >= 0);
-    EXPECT_NEAR(scene.GetNode(validIndex)->position.x, 3.0f, 0.001f);
-    EXPECT_EQ(scene.GetObjects().size(), static_cast<size_t>(scene.GetNodeCount()));
-    EXPECT_TRUE(std::all_of(scene.GetObjects().begin(), scene.GetObjects().end(),
-                            [](const auto& object) { return object == nullptr; }));
 
     RemoveTree(temp);
 }
@@ -386,8 +390,61 @@ TEST(FPSScene_FailedReloadPreservesPreviousLiveScene)
     EXPECT_EQ(scene.GetObjects().size(), objectCount);
     EXPECT_TRUE(scene.FindNode("Floor") >= 0);
 
+    // Unsupported extensions must take the same rollback path; moving the
+    // live object vector before dispatch must never destroy it on this exit.
+    EXPECT_FALSE(scene.LoadScene((temp / "unsupported.txt").wstring()));
+    EXPECT_EQ(scene.GetObjects().size(), objectCount);
+    EXPECT_TRUE(scene.FindNode("Floor") >= 0);
+
     RemoveTree(temp);
 }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+TEST(FPSScene_FailedReloadPreservesLiveObjectIdentityAndRuntimeState)
+{
+    Microsoft::WRL::ComPtr<ID3D11Device> device;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
+    D3D_FEATURE_LEVEL level{};
+    const HRESULT created = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0,
+                                               D3D11_SDK_VERSION, &device, &level, &context);
+    ASSERT_TRUE(SUCCEEDED(created));
+
+    GraphicsEngine graphics;
+    ASSERT_TRUE(SUCCEEDED(graphics.InitializeFromDevice(device.Get(), context.Get())));
+    InputManager input;
+    SceneManager scene(&graphics, &input);
+
+    const auto temp = MakeTempDir("identity_rollback");
+    const auto valid = temp / "valid.scene";
+    const auto malformed = temp / "malformed.scene";
+    {
+        std::ofstream file(valid);
+        file << "[Scene]\nname=Live\n[Object]\ntype=plane\nname=Floor\nposition=1,2,3\n";
+    }
+    {
+        std::ofstream file(malformed);
+        file << "[Scene]\nname=Bad\n[Object]\ntype=plane\nname=ValidPrefix\nposition=0,0,0\n"
+                "[Camera]\nname=Broken\nposition=not-a-vector\n";
+    }
+
+    ASSERT_TRUE(scene.LoadScene(valid.wstring()));
+    ASSERT_EQ(scene.GetObjects().size(), 1u);
+    GameObject* live = scene.GetObjects()[0].get();
+    ASSERT_TRUE(live != nullptr);
+    live->SetPosition({9.0f, 8.0f, 7.0f});
+
+    EXPECT_FALSE(scene.LoadScene(malformed.wstring()));
+    ASSERT_EQ(scene.GetObjects().size(), 1u);
+    EXPECT_TRUE(scene.GetObjects()[0].get() == live);
+    EXPECT_NEAR(scene.GetObjects()[0]->GetPosition().x, 9.0f, 0.001f);
+    EXPECT_NEAR(scene.GetObjects()[0]->GetPosition().y, 8.0f, 0.001f);
+
+    EXPECT_FALSE(scene.LoadScene((temp / "unsupported.txt").wstring()));
+    EXPECT_TRUE(scene.GetObjects()[0].get() == live);
+    EXPECT_NEAR(scene.GetObjects()[0]->GetPosition().z, 7.0f, 0.001f);
+    RemoveTree(temp);
+}
+#endif
 
 TEST(SceneManager_SaveLoadRoundTripPreservesAuthoredFields)
 {
@@ -443,6 +500,145 @@ TEST(SceneManager_SaveLoadRoundTripPreservesAuthoredFields)
     EXPECT_EQ(reloaded.GetMetadata().description, scene.GetMetadata().description);
     EXPECT_NEAR(reloaded.GetMetadata().ambientLightG, scene.GetMetadata().ambientLightG, 0.001f);
     EXPECT_NEAR(reloaded.GetMetadata().gravityZ, scene.GetMetadata().gravityZ, 0.001f);
+
+    RemoveTree(temp);
+}
+
+TEST(SceneManager_AuthoredINIToSceneSaveRoundTripPreservesGameplayFields)
+{
+    const std::filesystem::path temp = MakeTempDir("authored_ini_roundtrip");
+    const std::filesystem::path authored = temp / "authored.scene";
+    const std::filesystem::path saved = temp / "saved.scene";
+    {
+        std::ofstream file(authored);
+        file << "[Scene]\nname=Roundtrip arena\nauthor=Playtester\nversion=2.0\n"
+                "description=Authored scene round trip\nambientLight=0.2,0.3,0.4\ngravity=1,-4,2\n"
+                "[Camera]\nname=Main Camera\nposition=1,2,-20\n"
+                "isMain=true\nnearPlane=0.25\nfarPlane=750\n"
+                "[SpawnPoint]\nname=North Spawn\ntag=default\npriority=7\nposition=5,2,-18\n"
+                "[Object]\ntype=plane\nname=Painted Floor\nposition=0,-1,0\n"
+                "material=Assets/Materials/Terrain_Dirt.json\ncustomNote=keep me\n";
+    }
+
+    GraphicsEngine graphics;
+    InputManager input;
+    SceneManager scene(&graphics, &input);
+    ASSERT_TRUE(scene.LoadScene(authored.wstring()));
+    ASSERT_EQ(scene.GetNodeCount(), 3);
+    ASSERT_TRUE(scene.SaveScene(saved.wstring()));
+
+    GraphicsEngine reloadedGraphics;
+    InputManager reloadedInput;
+    SceneManager reloaded(&reloadedGraphics, &reloadedInput);
+    ASSERT_TRUE(reloaded.LoadScene(saved.wstring()));
+    ASSERT_EQ(reloaded.GetNodeCount(), 3);
+    EXPECT_EQ(reloaded.GetMetadata().sceneName, std::string("Roundtrip arena"));
+    EXPECT_EQ(reloaded.GetMetadata().author, std::string("Playtester"));
+    EXPECT_EQ(reloaded.GetMetadata().version, std::string("2.0"));
+    EXPECT_EQ(reloaded.GetMetadata().description, std::string("Authored scene round trip"));
+    EXPECT_NEAR(reloaded.GetMetadata().ambientLightG, 0.3f, 0.001f);
+    EXPECT_NEAR(reloaded.GetMetadata().gravityY, -4.0f, 0.001f);
+
+    const SceneNode* camera = reloaded.GetNode(reloaded.FindNode("Main Camera"));
+    const SceneNode* spawn = reloaded.GetNode(reloaded.FindNode("North Spawn"));
+    const SceneNode* floor = reloaded.GetNode(reloaded.FindNode("Painted Floor"));
+    ASSERT_TRUE(camera != nullptr);
+    ASSERT_TRUE(spawn != nullptr);
+    ASSERT_TRUE(floor != nullptr);
+    EXPECT_EQ(camera->type, std::string("Camera"));
+    EXPECT_EQ(camera->properties.at("isMain"), std::string("true"));
+    EXPECT_EQ(camera->properties.at("nearPlane"), std::string("0.25"));
+    EXPECT_EQ(camera->properties.at("farPlane"), std::string("750"));
+    EXPECT_NEAR(camera->position.z, -20.0f, 0.001f);
+    EXPECT_EQ(spawn->type, std::string("SpawnPoint"));
+    EXPECT_EQ(spawn->properties.at("tag"), std::string("default"));
+    EXPECT_EQ(spawn->properties.at("priority"), std::string("7"));
+    EXPECT_NEAR(spawn->position.x, 5.0f, 0.001f);
+    EXPECT_EQ(floor->materialPath, std::string("Assets/Materials/Terrain_Dirt.json"));
+    EXPECT_EQ(floor->properties.at("customNote"), std::string("keep me"));
+
+    RemoveTree(temp);
+}
+
+TEST(SceneManager_VersionedRowsRejectMalformedRequiredCoordinates)
+{
+    const auto temp = MakeTempDir("versioned_row_validation");
+    const auto valid = temp / "valid.json";
+    const auto malformed = temp / "malformed.json";
+    {
+        std::ofstream file(valid);
+        file << "# SparkEngine Scene v1.0\n"
+                "plane \"Stable\" 1 2 3\n";
+    }
+    {
+        std::ofstream file(malformed);
+        file << "# SparkEngine Scene v1.0\n"
+                "plane \"Broken\" not-a-number 2 3\n";
+    }
+
+    GraphicsEngine graphics;
+    InputManager input;
+    SceneManager scene(&graphics, &input);
+    ASSERT_TRUE(scene.LoadScene(valid.wstring()));
+    ASSERT_EQ(scene.GetNodeCount(), 1);
+    EXPECT_FALSE(scene.LoadScene(malformed.wstring()));
+    EXPECT_EQ(scene.GetNodeCount(), 1);
+    EXPECT_EQ(scene.FindNode("Stable"), 0);
+    EXPECT_EQ(scene.FindNode("Broken"), -1);
+
+    RemoveTree(temp);
+}
+
+TEST(SceneManager_VersionedForwardParentReferencesRebuildChildren)
+{
+    const auto temp = MakeTempDir("versioned_forward_parent");
+    const auto path = temp / "forward.json";
+    {
+        std::ofstream file(path);
+        file << "# SparkEngine Scene v1.0\n"
+                "plane \"Child\" 1 2 3 0 0 0 1 1 1 1\n"
+                "plane \"Parent\" 0 0 0 0 0 0 1 1 1 -1\n";
+    }
+
+    GraphicsEngine graphics;
+    InputManager input;
+    SceneManager scene(&graphics, &input);
+    ASSERT_TRUE(scene.LoadScene(path.wstring()));
+    ASSERT_EQ(scene.GetNodeCount(), 2);
+    EXPECT_EQ(scene.GetNode(0)->parentIndex, 1);
+    ASSERT_EQ(scene.GetNode(1)->childIndices.size(), 1u);
+    EXPECT_EQ(scene.GetNode(1)->childIndices[0], 0);
+    ASSERT_EQ(scene.GetRootNodes().size(), 1u);
+    EXPECT_EQ(scene.GetRootNodes()[0], 1);
+
+    RemoveTree(temp);
+}
+
+TEST(SceneManager_SaveUsesAtomicSameDirectoryReplacement)
+{
+    const auto temp = MakeTempDir("atomic_scene_save");
+    const auto path = temp / "scene.json";
+    GraphicsEngine graphics;
+    InputManager input;
+    SceneManager scene(&graphics, &input);
+    SceneNode node;
+    node.type = "plane";
+    node.name = "AtomicSave";
+    ASSERT_TRUE(scene.AddNode(node) >= 0);
+    ASSERT_TRUE(scene.SaveScene(path.wstring()));
+    EXPECT_TRUE(std::filesystem::exists(path));
+    EXPECT_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+    bool stagingFileRemains = false;
+    for (const auto& entry : std::filesystem::directory_iterator(temp))
+    {
+        if (entry.path().filename().string().find("scene.json.tmp.") == 0)
+            stagingFileRemains = true;
+    }
+    EXPECT_FALSE(stagingFileRemains);
+
+    std::ifstream file(path);
+    const std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    EXPECT_TRUE(content.find("AtomicSave") != std::string::npos);
 
     RemoveTree(temp);
 }

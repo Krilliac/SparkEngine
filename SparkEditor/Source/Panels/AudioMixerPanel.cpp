@@ -186,7 +186,7 @@ namespace SparkEditor
 
         if (m_activeSounds.empty())
         {
-            ImGui::TextDisabled("No active editor sounds. F5 preview does not run game audio.");
+            ImGui::TextDisabled("No active editor sounds. State preview does not run game audio.");
             ImGui::TextDisabled("Use Play Control > Launch Game to test game audio.");
             return;
         }

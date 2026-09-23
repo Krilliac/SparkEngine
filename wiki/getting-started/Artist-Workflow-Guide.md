@@ -177,7 +177,7 @@ The viewport provides translate, rotate, and scale gizmos for selected entities:
 3. **Position objects** using the translate gizmo (W) and snap settings
 4. **Inspect materials** in the Properties/Material panels; asset-to-material assignment is not release-qualified
 5. **Add lights** from the Lighting panel or right-click > Add Light
-6. **Test** with **Play Control → Launch Game**, which starts a separate SparkEngine process. F5 only advances editor state preview and does not run gameplay
+6. **Test** with **Play Control → Launch Game**, which starts a separate SparkEngine process. The main toolbar button and F5/F6 open Play Control; the State Preview Toolbar is explicitly non-gameplay
 7. **Save** with Ctrl+S
 
 ---
