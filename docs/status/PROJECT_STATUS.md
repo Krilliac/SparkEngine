@@ -114,7 +114,7 @@ This page records source presence and implementation maturity only. An **Impleme
 | System | Status | Notes |
 |--------|--------|-------|
 | Panel System | **Implemented** | 64 `*Panel.h` classes by source inventory; registration and default visibility are separate metrics |
-| Gizmos | Framework | Translation path exists; rotate and scale are explicit no-ops (`EDT-210`) |
+| Gizmos | **Implemented** | Translation, rotation, and scale update World entities with undoable commits; full authoring workflow certification remains open (`EDT-210`) |
 | Node Graphs | **Implemented** | Visual scripting, shader graph (imnodes) |
 | Command Palette | **Implemented** | Ctrl+P quick access |
 | Undo/Redo | Experimental | Partial command coverage; full edit-history certification is absent (`EDT-210`) |
