@@ -104,11 +104,14 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
             if (!m_sceneNodes[i].name.empty())
                 m_nodeNameIndex[m_sceneNodes[i].name] = i;
         }
+        m_objects.clear();
         InstantiateNodes();
     };
 
     auto ext = std::filesystem::path(filepath).extension();
     bool loaded = false;
+    const bool previousEventSuppression = m_suppressSceneEvents;
+    m_suppressSceneEvents = true;
 
     if (ext == L".scene")
     {
@@ -121,11 +124,14 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
     else
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Scene file extension not recognized: " + filepath, L"WARNING");
+        m_suppressSceneEvents = previousEventSuppression;
         return false;
     }
 
     if (!loaded)
         restorePrevious();
+
+    m_suppressSceneEvents = previousEventSuppression;
 
     if (loaded)
     {
@@ -417,7 +423,7 @@ void SceneManager::NewScene(const std::string& name)
 void SceneManager::Clear()
 {
     // Publish SceneUnloadedEvent before clearing
-    if (!m_currentFilePath.empty())
+    if (!m_suppressSceneEvents && !m_currentFilePath.empty())
     {
         if (auto* ctx = EngineContext::Get())
         {
@@ -507,6 +513,17 @@ bool SceneManager::LoadJSON(const std::wstring& path)
                 std::istringstream gs(line.substr(11));
                 gs >> m_metadata.gravityX >> m_metadata.gravityY >> m_metadata.gravityZ;
             }
+            else if (line.find("# author:") == 0)
+                m_metadata.author = line.substr(10);
+            else if (line.find("# version:") == 0)
+                m_metadata.version = line.substr(11);
+            else if (line.find("# description:") == 0)
+                m_metadata.description = line.substr(15);
+            else if (line.find("# ambient:") == 0)
+            {
+                std::istringstream as(line.substr(11));
+                as >> m_metadata.ambientLightR >> m_metadata.ambientLightG >> m_metadata.ambientLightB;
+            }
             continue;
         }
         if (line[0] == '/' || line[0] == '{' || line[0] == '}')
@@ -522,6 +539,27 @@ bool SceneManager::LoadJSON(const std::wstring& path)
         // (rotation=0, scale=1, parent=-1).
         ls >> node.rotation.x >> node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >> node.scale.z >>
             node.parentIndex;
+        ls.clear();
+
+        // Extended fields are appended so files written by older versions
+        // remain readable: model/material paths followed by a property count
+        // and quoted key/value pairs. std::quoted preserves spaces and UTF-8
+        // bytes without introducing a second scene format.
+        if (ls >> std::quoted(node.modelPath) >> std::quoted(node.materialPath))
+        {
+            size_t propertyCount = 0;
+            if (ls >> propertyCount)
+            {
+                for (size_t property = 0; property < propertyCount; ++property)
+                {
+                    std::string key;
+                    std::string value;
+                    if (!(ls >> std::quoted(key) >> std::quoted(value)))
+                        break;
+                    node.properties.emplace(std::move(key), std::move(value));
+                }
+            }
+        }
 
         if (!node.type.empty())
             AddNode(node);
@@ -542,7 +580,12 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
 
     file << "# SparkEngine Scene v1.0\n";
     file << "# name: " << m_metadata.sceneName << "\n";
+    file << "# author: " << m_metadata.author << "\n";
+    file << "# version: " << m_metadata.version << "\n";
+    file << "# description: " << m_metadata.description << "\n";
     file << "# gravity: " << m_metadata.gravityX << " " << m_metadata.gravityY << " " << m_metadata.gravityZ << "\n";
+    file << "# ambient: " << m_metadata.ambientLightR << " " << m_metadata.ambientLightG << " "
+         << m_metadata.ambientLightB << "\n";
     file << "\n";
 
     for (size_t i = 0; i < m_sceneNodes.size(); ++i)
@@ -554,7 +597,13 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
         file << node.type << " " << node.name << " " << std::fixed << std::setprecision(3) << node.position.x << " "
              << node.position.y << " " << node.position.z << " " << node.rotation.x << " " << node.rotation.y << " "
              << node.rotation.z << " " << node.scale.x << " " << node.scale.y << " " << node.scale.z << " "
-             << node.parentIndex << "\n";
+             << node.parentIndex << " " << std::quoted(node.modelPath) << " " << std::quoted(node.materialPath)
+             << " " << node.properties.size();
+        std::vector<std::pair<std::string, std::string>> properties(node.properties.begin(), node.properties.end());
+        std::sort(properties.begin(), properties.end());
+        for (const auto& [key, value] : properties)
+            file << " " << std::quoted(key) << " " << std::quoted(value);
+        file << "\n";
     }
 
     file.close();

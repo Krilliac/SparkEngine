@@ -379,6 +379,71 @@ TEST(FPSScene_FailedReloadPreservesPreviousLiveScene)
     EXPECT_TRUE(scene.GetCurrentFilePath() == currentPath);
     EXPECT_EQ(scene.GetMetadata().sceneName, std::string("Stable"));
 
+    // A failed replacement must not append a second copy when the loader
+    // returns before Clear() (for example, an unreadable JSON file).
+    const auto objectCount = scene.GetObjects().size();
+    EXPECT_FALSE(scene.LoadScene((temp / "missing.json").wstring()));
+    EXPECT_EQ(scene.GetObjects().size(), objectCount);
+    EXPECT_TRUE(scene.FindNode("Floor") >= 0);
+
+    RemoveTree(temp);
+}
+
+TEST(SceneManager_SaveLoadRoundTripPreservesAuthoredFields)
+{
+    const std::filesystem::path temp = MakeTempDir("scene_roundtrip");
+    const std::filesystem::path path = temp / "roundtrip.json";
+
+    GraphicsEngine graphics;
+    InputManager input;
+    SceneManager scene(&graphics, &input);
+    scene.GetMetadata().sceneName = "Roundtrip scene";
+    scene.GetMetadata().author = "Playtester";
+    scene.GetMetadata().version = "2.4";
+    scene.GetMetadata().description = "Authored camera and material fixture";
+    scene.GetMetadata().ambientLightR = 0.25f;
+    scene.GetMetadata().ambientLightG = 0.35f;
+    scene.GetMetadata().ambientLightB = 0.45f;
+    scene.GetMetadata().gravityX = 1.0f;
+    scene.GetMetadata().gravityY = -4.0f;
+    scene.GetMetadata().gravityZ = 2.0f;
+
+    SceneNode node;
+    node.type = "model";
+    node.name = "AuthoredProp";
+    node.position = {1.0f, 2.0f, 3.0f};
+    node.rotation = {4.0f, 5.0f, 6.0f};
+    node.scale = {2.0f, 3.0f, 4.0f};
+    node.modelPath = "Models/large prop.obj";
+    node.materialPath = "Materials/painted metal.json";
+    node.properties["faction"] = "friendly patrol";
+    node.properties["health"] = "100";
+    ASSERT_TRUE(scene.AddNode(node) >= 0);
+    ASSERT_TRUE(scene.SaveScene(path.wstring()));
+
+    GraphicsEngine reloadedGraphics;
+    InputManager reloadedInput;
+    SceneManager reloaded(&reloadedGraphics, &reloadedInput);
+    ASSERT_TRUE(reloaded.LoadScene(path.wstring()));
+    ASSERT_EQ(reloaded.GetNodeCount(), 1);
+    const SceneNode* restored = reloaded.GetNode(0);
+    ASSERT_TRUE(restored != nullptr);
+    EXPECT_EQ(restored->modelPath, node.modelPath);
+    EXPECT_EQ(restored->materialPath, node.materialPath);
+    ASSERT_EQ(restored->properties.size(), node.properties.size());
+    for (const auto& [key, value] : node.properties)
+    {
+        ASSERT_TRUE(restored->properties.contains(key));
+        EXPECT_EQ(restored->properties.at(key), value);
+    }
+    EXPECT_NEAR(restored->rotation.y, node.rotation.y, 0.001f);
+    EXPECT_NEAR(restored->scale.z, node.scale.z, 0.001f);
+    EXPECT_EQ(reloaded.GetMetadata().author, scene.GetMetadata().author);
+    EXPECT_EQ(reloaded.GetMetadata().version, scene.GetMetadata().version);
+    EXPECT_EQ(reloaded.GetMetadata().description, scene.GetMetadata().description);
+    EXPECT_NEAR(reloaded.GetMetadata().ambientLightG, scene.GetMetadata().ambientLightG, 0.001f);
+    EXPECT_NEAR(reloaded.GetMetadata().gravityZ, scene.GetMetadata().gravityZ, 0.001f);
+
     RemoveTree(temp);
 }
 

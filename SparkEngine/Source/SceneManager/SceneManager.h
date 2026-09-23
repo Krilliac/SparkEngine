@@ -601,4 +601,8 @@ class SceneManager
 
     /** @brief Optional file cache for scene I/O (non-owning). */
     Spark::LocalFileCache* m_fileCache = nullptr;
+
+    // Replacement loads suppress transient unload notifications until parsing
+    // succeeds. Public Clear()/NewScene() retain their normal event semantics.
+    bool m_suppressSceneEvents = false;
 };
