@@ -21,6 +21,7 @@ namespace RTS
     class RTSFogOfWarSystem;
     class RTSMatchSystem;
     class RTSResourceSystem;
+    class RTSSkirmishSimulation;
     class RTSUnitSystem;
 
     /** @brief Turns the RTS systems into an immediately playable live example. */
@@ -29,11 +30,10 @@ namespace RTS
       public:
         bool Initialize(Spark::IEngineContext* context, RTSUnitSystem* units, RTSBuildingSystem* buildings,
                         RTSResourceSystem* resources, RTSCommandSystem* commands, RTSFogOfWarSystem* fog,
-                        RTSMatchSystem* match);
+                        RTSMatchSystem* match, RTSSkirmishSimulation* simulation);
         void Shutdown();
         bool Reset();
         void UpdateInput();
-        void RefreshVision();
         void RenderUI();
 
         void SelectUnitType(RTSUnitType type);
@@ -54,6 +54,7 @@ namespace RTS
         RTSCommandSystem* m_commands{nullptr};
         RTSFogOfWarSystem* m_fog{nullptr};
         RTSMatchSystem* m_match{nullptr};
+        RTSSkirmishSimulation* m_simulation{nullptr};
         uint32_t m_waypointIndex{0};
         bool m_workerHeld{false};
         bool m_marineHeld{false};

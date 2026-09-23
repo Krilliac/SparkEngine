@@ -66,6 +66,8 @@ namespace RTS
         int GetMapWidth() const;
         int GetMapHeight() const;
         float GetExploredPercent(RTSFaction faction) const;
+        /** @return The faction's visibility grid, or nullptr before Initialize. */
+        const FogGrid* GetGrid(RTSFaction faction) const;
         std::string GetFogStatusString() const;
 
       private:
