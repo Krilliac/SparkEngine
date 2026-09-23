@@ -299,7 +299,7 @@ below. Everything else in this table is experimental or uncertified.
 | Storage | 5 GB | 10 GB with all game modules |
 | Build tools | CMake 3.25+ | CMake 3.25+, Ninja |
 
-The `stable-v1` contract targets the no-render `NullRHIDevice` path on Windows 11 x64, but the current Windows and `SparkServer` headless entry points pass a null graphics service and do not instantiate it (`HEAD-220` remains open). NullRHI itself rasterizes no pixels; use on every other host remains uncertified.
+The Windows engine and `SparkServer` headless entry points now own and tick a NullRHI bridge, while deliberately passing no windowed `GraphicsEngine` or `InputManager` through `EngineContext`. The generic server module runs; the FPS client module does not load through `SparkServer`. Packaged clean-host, soak, and recovery qualification remains open (`HEAD-220`). NullRHI rasterizes no pixels, and use on other hosts remains uncertified.
 
 **Platform support.** SparkEngine declares exactly one release profile, `stable-v1`:
 Windows 11 x64, the MSVC v143 toolset line, Direct3D 11, NullRHI for headless
@@ -336,7 +336,7 @@ uncertified.
 | Platform | Compiler | Backend | Declared support |
 |---|---|---|---|
 | Windows 11 x64 | MSVC v143 (VS 2022) | DirectX 11 | In `stable-v1` — primary implementation path; blocked and uncertified |
-| Windows 11 x64, headless | MSVC v143 (VS 2022) | NullRHI (no-render) target | In `stable-v1` — current host wiring still passes `nullptr` (`HEAD-220`); blocked and uncertified |
+| Windows 11 x64, headless | MSVC v143 (VS 2022) | NullRHI (no-render) target | In `stable-v1` — source bridge is wired; packaged qualification remains blocked (`HEAD-220`) |
 | Windows 10 x64 | MSVC v143 (VS 2022) | DirectX 11 | Outside `stable-v1` — documented build floor, uncertified |
 | Windows, any version | MSVC v145 (VS 2026) | DirectX 11/12 | Outside `stable-v1` — advisory CI lane only |
 | Linux | GCC 13+ / Clang 17+ | Vulkan/OpenGL | Outside `stable-v1` — experimental, CI tested |
