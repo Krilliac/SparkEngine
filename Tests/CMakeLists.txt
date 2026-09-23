@@ -1672,7 +1672,10 @@ add_test(
 )
 set_tests_properties(SparkPackageModuleSidecarValidatorTests PROPERTIES
     LABELS "package;unit"
-    TIMEOUT 30)
+    # The contract launches a separate CMake validator for each malformed
+    # fixture. On a busy Windows host, 30 seconds can expire after only the
+    # first twenty cases; keep the full adversarial battery bounded at 90.
+    TIMEOUT 90)
 
 add_test(
     NAME SparkSDKRejectsAmbiguousVersionHeader
