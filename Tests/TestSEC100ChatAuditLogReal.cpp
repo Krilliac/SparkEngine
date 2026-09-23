@@ -86,7 +86,13 @@ namespace
         std::ifstream in(path, std::ios::binary);
         std::string line;
         while (std::getline(in, line))
+        {
+            // The server log is a text-mode stream, so Windows terminates each record
+            // with CRLF. Strip only that terminator; any other CR is still a forgery.
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
             lines.push_back(line);
+        }
         return lines;
     }
 
