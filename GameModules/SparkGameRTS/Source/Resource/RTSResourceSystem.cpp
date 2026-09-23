@@ -205,7 +205,7 @@ namespace RTS
         return m_nodes.size();
     }
 
-    const std::unordered_map<uint32_t, ResourceNode>& RTSResourceSystem::GetNodes() const
+    const std::map<uint32_t, ResourceNode>& RTSResourceSystem::GetNodes() const
     {
         return m_nodes;
     }
@@ -247,8 +247,7 @@ namespace RTS
     bool RTSResourceSystem::RestoreState(const std::vector<std::pair<RTSFaction, PlayerResources>>& players,
                                          const std::vector<ResourceNode>& nodes)
     {
-        std::unordered_map<RTSFaction, PlayerResources> restoredPlayers;
-        restoredPlayers.reserve(players.size());
+        std::map<RTSFaction, PlayerResources> restoredPlayers;
         for (const auto& [faction, resources] : players)
         {
             if (faction >= RTSFaction::Count || resources.minerals < 0 || resources.gas < 0 ||
@@ -259,8 +258,7 @@ namespace RTS
             }
         }
 
-        std::unordered_map<uint32_t, ResourceNode> restoredNodes;
-        restoredNodes.reserve(nodes.size());
+        std::map<uint32_t, ResourceNode> restoredNodes;
         uint32_t nextId = 1;
         for (const ResourceNode& node : nodes)
         {

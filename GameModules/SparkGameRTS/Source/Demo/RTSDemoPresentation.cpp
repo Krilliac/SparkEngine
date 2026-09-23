@@ -11,6 +11,7 @@
 #include "Input/InputManager.h"
 #include "Match/RTSMatchSystem.h"
 #include "Resource/RTSResourceSystem.h"
+#include "Simulation/RTSSkirmishSimulation.h"
 #include "Unit/RTSUnitSystem.h"
 
 #ifdef ENABLE_EDITOR
@@ -26,7 +27,7 @@ namespace RTS
     namespace
     {
         constexpr RTSFaction PLAYER_FACTION = RTSFaction::Human;
-        constexpr int DEMO_MAP_SIZE = 96;
+        constexpr int DEMO_MAP_SIZE = RTSSkirmishSimulation::MAP_SIZE;
 
 #ifdef ENABLE_EDITOR
         ImU32 GetFactionColor(RTSFaction faction)
@@ -48,7 +49,8 @@ namespace RTS
 
     bool RTSDemoPresentation::Initialize(Spark::IEngineContext* context, RTSUnitSystem* units,
                                          RTSBuildingSystem* buildings, RTSResourceSystem* resources,
-                                         RTSCommandSystem* commands, RTSFogOfWarSystem* fog, RTSMatchSystem* match)
+                                         RTSCommandSystem* commands, RTSFogOfWarSystem* fog, RTSMatchSystem* match,
+                                         RTSSkirmishSimulation* simulation)
     {
         m_context = context;
         m_units = units;
@@ -57,6 +59,7 @@ namespace RTS
         m_commands = commands;
         m_fog = fog;
         m_match = match;
+        m_simulation = simulation;
         return Reset();
     }
 
@@ -69,75 +72,19 @@ namespace RTS
         m_commands = nullptr;
         m_fog = nullptr;
         m_match = nullptr;
+        m_simulation = nullptr;
     }
 
     bool RTSDemoPresentation::Reset()
     {
-        if (!m_units || !m_buildings || !m_resources || !m_commands || !m_fog || !m_match)
-            return false;
-
-        m_commands->Shutdown();
-        m_buildings->Shutdown();
-        m_resources->Shutdown();
-        m_units->Shutdown();
-        m_fog->Shutdown();
-        m_match->Shutdown();
-
-        if (!m_units->Initialize(m_context) || !m_resources->Initialize(m_context, m_units) ||
-            !m_buildings->Initialize(m_context, m_units, m_resources) || !m_commands->Initialize(m_context, m_units) ||
-            !m_fog->Initialize(m_context, DEMO_MAP_SIZE, DEMO_MAP_SIZE) || !m_match->Initialize(m_context))
+        if (!m_units || !m_buildings || !m_resources || !m_commands || !m_fog || !m_match || !m_simulation ||
+            !m_simulation->StartDefaultSkirmish())
         {
             return false;
         }
 
-        m_resources->InitializePlayer(RTSFaction::Human);
-        m_resources->InitializePlayer(RTSFaction::Swarm);
-        m_match->SetupMatch(2);
-        m_match->SetPlayerFaction(0, RTSFaction::Human);
-        m_match->SetPlayerStartPosition(0, 18.0f, 22.0f);
-        m_match->SetPlayerFaction(1, RTSFaction::Swarm);
-        m_match->SetPlayerStartPosition(1, 78.0f, 74.0f);
-        m_match->SetPlayerIsAI(1, true);
-
-        const auto spawnStartingUnit = [this](RTSUnitType type, RTSFaction faction, float x, float y)
-        {
-            const uint32_t unitId = m_units->SpawnUnit(type, faction, x, y);
-            if (unitId != 0)
-            {
-                if (const UnitTemplate* unitTemplate = m_units->GetTemplate(type, faction))
-                    m_resources->UseSupply(faction, unitTemplate->cost.supply);
-            }
-            return unitId;
-        };
-
-        const uint32_t humanWorker = spawnStartingUnit(RTSUnitType::Worker, RTSFaction::Human, 21.0f, 24.0f);
-        spawnStartingUnit(RTSUnitType::Marine, RTSFaction::Human, 26.0f, 25.0f);
-        spawnStartingUnit(RTSUnitType::Marine, RTSFaction::Human, 29.0f, 27.0f);
-        spawnStartingUnit(RTSUnitType::Marine, RTSFaction::Human, 25.0f, 29.0f);
-        spawnStartingUnit(RTSUnitType::Tank, RTSFaction::Human, 21.0f, 31.0f);
-
-        const uint32_t swarmWorker = spawnStartingUnit(RTSUnitType::Worker, RTSFaction::Swarm, 76.0f, 72.0f);
-        spawnStartingUnit(RTSUnitType::Marine, RTSFaction::Swarm, 69.0f, 70.0f);
-        spawnStartingUnit(RTSUnitType::Marine, RTSFaction::Swarm, 72.0f, 67.0f);
-        spawnStartingUnit(RTSUnitType::Tank, RTSFaction::Swarm, 76.0f, 65.0f);
-
-        m_buildings->PlaceBuilding(RTSBuildingType::CommandCenter, RTSFaction::Human, 16.0f, 18.0f);
-        m_buildings->PlaceBuilding(RTSBuildingType::Barracks, RTSFaction::Human, 31.0f, 19.0f);
-        m_buildings->PlaceBuilding(RTSBuildingType::CommandCenter, RTSFaction::Swarm, 80.0f, 78.0f);
-        m_buildings->PlaceBuilding(RTSBuildingType::Barracks, RTSFaction::Swarm, 66.0f, 78.0f);
-        m_buildings->Update(120.0f);
-
-        const uint32_t humanMinerals = m_resources->CreateNode(RTSResourceType::Minerals, 13.0f, 29.0f, 1500);
-        m_resources->CreateNode(RTSResourceType::Gas, 36.0f, 15.0f, 900);
-        const uint32_t swarmMinerals = m_resources->CreateNode(RTSResourceType::Minerals, 82.0f, 67.0f, 1500);
-        m_resources->CreateNode(RTSResourceType::Gas, 61.0f, 82.0f, 900);
-        m_resources->AssignWorker(humanMinerals, humanWorker);
-        m_resources->AssignWorker(swarmMinerals, swarmWorker);
-
-        m_match->StartMatch();
         SelectUnitType(RTSUnitType::Marine);
         m_waypointIndex = 0;
-        RefreshVision();
         return true;
     }
 
@@ -172,22 +119,6 @@ namespace RTS
             const auto& waypoint = waypoints[m_waypointIndex % waypoints.size()];
             MoveSelection(waypoint[0], waypoint[1]);
             ++m_waypointIndex;
-        }
-    }
-
-    void RTSDemoPresentation::RefreshVision()
-    {
-        if (!m_units || !m_fog)
-            return;
-        for (int factionIndex = 0; factionIndex < static_cast<int>(RTSFaction::Count); ++factionIndex)
-        {
-            const auto faction = static_cast<RTSFaction>(factionIndex);
-            m_fog->ClearCurrentVision(faction);
-            for (uint32_t unitId : m_units->GetUnitsByFaction(faction))
-            {
-                if (const UnitData* unit = m_units->GetUnit(unitId))
-                    m_fog->UpdateVision(faction, unit->posX, unit->posY, unit->visionRange);
-            }
         }
     }
 

@@ -79,6 +79,12 @@ namespace RTS
         m_grids.clear();
     }
 
+    const FogGrid* RTSFogOfWarSystem::GetGrid(RTSFaction faction) const
+    {
+        const auto it = m_grids.find(faction);
+        return it != m_grids.end() ? &it->second : nullptr;
+    }
+
     // === Vision updates ===
 
     void RTSFogOfWarSystem::UpdateVision(RTSFaction faction, float unitX, float unitY, float visionRange)

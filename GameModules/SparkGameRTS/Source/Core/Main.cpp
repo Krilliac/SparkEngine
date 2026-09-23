@@ -15,6 +15,7 @@
 #include "Command/RTSCommandSystem.h"
 #include "FogOfWar/RTSFogOfWarSystem.h"
 #include "Match/RTSMatchSystem.h"
+#include "Simulation/RTSSkirmishSimulation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 #include "Utils/InvalidStateDetector.h"
@@ -119,9 +120,19 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
         console.LogWarning("[RTS] Engine system integrations partially unavailable (non-fatal)");
     }
 
+    // Fixed-step skirmish tick: the only place gameplay systems are advanced
+    m_simulation = std::make_unique<RTS::RTSSkirmishSimulation>();
+    if (!m_simulation->Initialize(context, {m_unitSystem.get(), m_buildingSystem.get(), m_resourceSystem.get(),
+                                            m_commandSystem.get(), m_fogOfWarSystem.get(), m_matchSystem.get()}))
+    {
+        console.LogError("[RTS] Failed to initialize skirmish simulation");
+        return false;
+    }
+
     m_demoPresentation = std::make_unique<RTS::RTSDemoPresentation>();
     if (!m_demoPresentation->Initialize(context, m_unitSystem.get(), m_buildingSystem.get(), m_resourceSystem.get(),
-                                        m_commandSystem.get(), m_fogOfWarSystem.get(), m_matchSystem.get()))
+                                        m_commandSystem.get(), m_fogOfWarSystem.get(), m_matchSystem.get(),
+                                        m_simulation.get()))
     {
         console.LogError("[RTS] Failed to initialize playable demo");
         return false;
@@ -192,6 +203,11 @@ void SparkGameRTSModule::OnUnload()
         m_demoPresentation->Shutdown();
         m_demoPresentation.reset();
     }
+    if (m_simulation)
+    {
+        m_simulation->Shutdown();
+        m_simulation.reset();
+    }
     if (m_engineSystems)
     {
         m_engineSystems->Shutdown();
@@ -242,13 +258,8 @@ void SparkGameRTSModule::OnUpdate(float deltaTime)
         return;
 
     m_demoPresentation->UpdateInput();
-    m_matchSystem->Update(deltaTime);
-    m_resourceSystem->Update(deltaTime);
-    m_buildingSystem->Update(deltaTime);
-    m_commandSystem->Update(deltaTime);
-    m_unitSystem->Update(deltaTime);
-    m_fogOfWarSystem->Update(deltaTime);
-    m_demoPresentation->RefreshVision();
+    // Frame time only decides how many whole fixed ticks run; the simulated outcome never depends on it.
+    m_simulation->Advance(deltaTime);
     if (m_engineSystems)
         m_engineSystems->Update(deltaTime);
 }
@@ -258,7 +269,8 @@ void SparkGameRTSModule::OnFixedUpdate(float fixedDeltaTime)
     if (!m_initialized || m_paused)
         return;
 
-    // Physics-rate updates would go here (unit collision, projectiles)
+    // The skirmish owns its own fixed tick (RTSSkirmishSimulation::TICK_SECONDS) so its outcome cannot change
+    // with the host's fixed-step rate, which differs between the client and dedicated-server loops.
     (void)fixedDeltaTime;
 }
 

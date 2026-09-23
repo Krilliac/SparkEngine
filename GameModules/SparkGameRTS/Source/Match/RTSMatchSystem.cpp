@@ -115,7 +115,17 @@ namespace RTS
 
     void RTSMatchSystem::EndMatch(RTSFaction winner)
     {
-        m_state = RTSMatchState::Victory;
+        // Victory/Defeat is reported from the local (non-AI) players' point of view.
+        bool hasLocalPlayer = false;
+        bool localPlayerWon = false;
+        for (const auto& player : m_players)
+        {
+            if (player.isAI)
+                continue;
+            hasLocalPlayer = true;
+            localPlayerWon = localPlayerWon || (player.faction == winner && !player.isEliminated);
+        }
+        m_state = hasLocalPlayer && !localPlayerWon ? RTSMatchState::Defeat : RTSMatchState::Victory;
         m_winner = winner;
         m_hasWinner = true;
 

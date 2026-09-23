@@ -166,8 +166,7 @@ namespace RTS
 
     bool RTSUnitSystem::RestoreState(const std::vector<UnitData>& units)
     {
-        std::unordered_map<uint32_t, UnitData> restored;
-        restored.reserve(units.size());
+        std::map<uint32_t, UnitData> restored;
         uint32_t nextId = 1;
 
         for (const UnitData& unit : units)
