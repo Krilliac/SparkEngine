@@ -107,6 +107,39 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("provision-previous-windows-msi.py", scripts)
         self.assertIn("--previous-package-manifest", scripts)
 
+    def test_v09_uses_only_the_explicit_bootstrap_qualifier_path(self):
+        build = self.workflow["jobs"]["build-windows"]
+        bootstrap = next(step for step in build["steps"]
+                         if step["name"].startswith("Qualify Windows v0.9.0 predecessor"))
+        self.assertEqual(
+            bootstrap["if"],
+            "needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version == '0.9.0'",
+        )
+        self.assertIn("qualify-windows-msi.py", bootstrap["run"])
+        self.assertNotIn("--previous-packages", bootstrap["run"])
+        self.assertNotIn("provision-previous-windows-msi.py", bootstrap["run"])
+
+        v1 = next(step for step in build["steps"]
+                  if step["name"] == "Qualify Windows stable MSI install upgrade rollback repair and uninstall")
+        self.assertEqual(
+            v1["if"],
+            "needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version != '0.9.0'",
+        )
+        self.assertIn("provision-previous-windows-msi.py", v1["run"])
+        self.assertIn("--previous-package-manifest", v1["run"])
+
+    def test_all_versioned_readiness_boundaries_select_the_matching_stage(self):
+        release = self.workflow["jobs"]["release"]
+        scripts = "\n".join(step.get("run", "") for step in release["steps"])
+        self.assertEqual(scripts.count("--require-predecessor-candidate"), 2)
+        self.assertEqual(scripts.count("--require-candidate-ready"), 2)
+        self.assertIn('needs.prepare.outputs.version }}" == "0.9.0"', scripts)
+
+        consumer = self.workflow["jobs"]["verify-stable-publication"]
+        consumer_scripts = "\n".join(step.get("run", "") for step in consumer["steps"])
+        self.assertIn("--require-predecessor-candidate", consumer_scripts)
+        self.assertIn("--require-candidate-ready", consumer_scripts)
+
 
 if __name__ == "__main__":
     unittest.main()

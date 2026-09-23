@@ -455,8 +455,31 @@ jobs:
           --report "${{ github.workspace }}/signature-verification/result.json"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+    - name: Qualify Windows v0.9.0 predecessor MSI bootstrap install repair and uninstall
+      if: needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version == '0.9.0'
+      shell: pwsh
+      # v0.9.0 is the one explicitly permitted bootstrap release: it has no
+      # older stable MSI. The qualifier's omitted predecessor arguments still
+      # exercises native install, package smoke, repair, and uninstall. Any
+      # other version must use the exact published N-1 path below.
+      run: |
+        $packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"
+        python .github/scripts/write-shipping-package-manifest.py `
+          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
+          --version "${{ needs.prepare.outputs.cmake_version }}" `
+          --commit-sha "${{ github.sha }}" --out $packageManifest
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python .github/scripts/qualify-windows-msi.py `
+          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
+          --version "${{ needs.prepare.outputs.cmake_version }}" `
+          --manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake" `
+          --package-manifest $packageManifest `
+          --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `
+          --source-sha "${{ github.sha }}"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
     - name: Qualify Windows stable MSI install upgrade rollback repair and uninstall
-      if: needs.prepare.outputs.is_versioned == 'true'
+      if: needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version != '0.9.0'
       shell: pwsh
       # Hosted Windows Server evidence is not Windows 11 certification. Stable
       # Publication requires an exact predecessor MSI+manifest pair. Resolve it
@@ -1018,7 +1041,12 @@ jobs:
       # path reference in the contract must resolve. The --allow-legacy-contract
       # waiver was retired once the contract validated strictly; never
       # reintroduce it to make a versioned publication green.
-      run: python3 tools/site-data/validate.py --require-candidate-ready
+      run: |
+        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+          python3 tools/site-data/validate.py --require-predecessor-candidate
+        else
+          python3 tools/site-data/validate.py --require-candidate-ready
+        fi
 
     - name: Freeze durable exact CI evidence release asset
       env:
@@ -2471,7 +2499,11 @@ jobs:
         # Re-read the release contract at the final stable publication boundary.
         # Candidate qualification preserves every technical gate without
         # claiming that publication and its independent verification are done.
-        python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-candidate-ready
+        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+          python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-predecessor-candidate
+        else
+          python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-candidate-ready
+        fi
         python3 "$GITHUB_WORKSPACE/.github/scripts/verify_release_environment.py"
         bash "$GITHUB_WORKSPACE/.github/scripts/verify-release-publication-boundary.sh" \
           publish-preflight
@@ -2781,7 +2813,11 @@ jobs:
         TARGET_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
-        python3 tools/site-data/validate.py --require-candidate-ready
+        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+          python3 tools/site-data/validate.py --require-predecessor-candidate
+        else
+          python3 tools/site-data/validate.py --require-candidate-ready
+        fi
         GITHUB_OUTPUT="$RUNNER_TEMP/consumer-exact-ci.out" \
           python3 .github/scripts/verify-exact-required-gate.py
 
