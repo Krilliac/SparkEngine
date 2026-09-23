@@ -173,7 +173,17 @@ namespace Terrafront
             if (load != LoadResult::Loaded)
             {
                 m_recoveryLatched = true;
-                if (load == LoadResult::Corrupt)
+                if (load == LoadResult::UnsupportedVersion)
+                {
+                    // Not corrupt: a newer build owns this file. Leave it
+                    // byte-for-byte intact and refuse to serve from it.
+                    m_status = TFDatabaseStatus::UnsupportedVersion;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                    "[TF] db %s was written by a newer schema (this build reads <= v%u); "
+                                    "refusing to open so a rollback cannot rewrite it",
+                                    SavePaths::Utf8ForLog(m_path).c_str(), kSchemaVersion);
+                }
+                else if (load == LoadResult::Corrupt)
                 {
                     m_status = TFDatabaseStatus::Corrupt;
                     std::filesystem::path backupPath = m_path;
@@ -245,6 +255,19 @@ namespace Terrafront
         }
         if (!root.IsObject())
             return LoadResult::Corrupt;
+
+        // Absent schemaVersion == legacy v0 (pre-DATA-120), which is the same
+        // row shape as v1 and upgrades on the next write. Anything newer may
+        // carry fields this build would drop, so it must not be loaded.
+        if (root.HasKey("schemaVersion"))
+        {
+            uint32_t schemaVersion = 0;
+            if (!ReadUnsigned(root["schemaVersion"], schemaVersion) || schemaVersion == 0)
+                return LoadResult::Corrupt;
+            if (schemaVersion > kSchemaVersion)
+                return LoadResult::UnsupportedVersion;
+        }
+
         if (!root["accounts"].IsArray() || !root["characters"].IsArray())
             return LoadResult::Corrupt;
 
@@ -442,6 +465,7 @@ namespace Terrafront
         namespace fs = std::filesystem;
 
         Spark::Json::Value root = Spark::Json::Value::MakeObject();
+        root["schemaVersion"] = Spark::Json::Value(static_cast<double>(kSchemaVersion));
         root["nextAccountId"] = Spark::Json::Value(static_cast<double>(m_nextAccountId));
         root["nextCharId"] = Spark::Json::Value(static_cast<double>(m_nextCharId));
 
@@ -704,25 +728,14 @@ namespace Terrafront
     bool TFDatabase::SaveCharacterProgress(uint64_t charId, uint32_t xp, uint16_t rank, uint32_t flux,
                                            int64_t lastPlayedMs)
     {
-        if (!m_open || rank == 0 || rank > kTFMaxRank || flux > kFluxWalletCap)
-            return false;
-        auto it = std::find_if(m_characters.begin(), m_characters.end(),
-                               [&](const TFCharacterRecord& c) { return c.id == charId; });
-        if (it == m_characters.end())
-            return false;
-        const TFCharacterRecord previous = *it;
-        it->xp = xp;
-        it->rank = rank;
-        it->flux = flux;
-        it->lastPlayedMs = lastPlayedMs;
-        if (!SaveToDisk())
-        {
-            *it = previous;
-            m_status = TFDatabaseStatus::WriteFailed;
-            return false;
-        }
-        m_status = TFDatabaseStatus::ReadyExisting;
-        return true;
+        TFCharacterUpdate update;
+        update.charId = charId;
+        update.writeProgress = true;
+        update.xp = xp;
+        update.rank = rank;
+        update.flux = flux;
+        update.lastPlayedMs = lastPlayedMs;
+        return CommitCharacterUpdates({update});
     }
 
     bool TFDatabase::SaveCharacterMeta(uint64_t charId, const std::vector<std::string>& unlocks,
@@ -730,32 +743,82 @@ namespace Terrafront
                                        const std::string& loadoutTool, const std::string& loadoutGrenade,
                                        const std::string& loadoutSuit, const std::vector<TFWeaponStatsRow>& stats)
     {
-        if (!m_open)
+        TFCharacterUpdate update;
+        update.charId = charId;
+        update.writeMeta = true;
+        update.unlocks = unlocks;
+        update.loadoutPrimary = loadoutPrimary;
+        update.loadoutSecondary = loadoutSecondary;
+        update.loadoutTool = loadoutTool;
+        update.loadoutGrenade = loadoutGrenade; // loadout-depth wave
+        update.loadoutSuit = loadoutSuit;
+        update.weaponStats = stats;
+        return CommitCharacterUpdates({update});
+    }
+
+    bool TFDatabase::CommitCharacterUpdates(const std::vector<TFCharacterUpdate>& updates)
+    {
+        if (!m_open || updates.empty())
             return false;
-        std::unordered_set<std::string> uniqueUnlocks;
-        for (const std::string& unlock : unlocks)
-            if (unlock.empty() || !uniqueUnlocks.insert(unlock).second)
+
+        // Validate every row before touching anything so a bad row late in the
+        // batch cannot leave earlier rows applied.
+        std::unordered_set<uint64_t> seenCharacters;
+        for (const TFCharacterUpdate& update : updates)
+        {
+            if (!update.writeProgress && !update.writeMeta)
                 return false;
-        std::unordered_set<std::string> uniqueWeapons;
-        for (const TFWeaponStatsRow& stat : stats)
-            if (stat.weaponKey.empty() || !uniqueWeapons.insert(stat.weaponKey).second)
+            if (!seenCharacters.insert(update.charId).second)
                 return false;
-        auto it = std::find_if(m_characters.begin(), m_characters.end(),
-                               [&](const TFCharacterRecord& c) { return c.id == charId; });
-        if (it == m_characters.end())
-            return false;
-        const TFCharacterRecord previous = *it;
-        it->unlocks = unlocks;
-        it->loadoutPrimary = loadoutPrimary;
-        it->loadoutSecondary = loadoutSecondary;
-        it->loadoutTool = loadoutTool;
-        it->loadoutGrenade = loadoutGrenade; // loadout-depth wave
-        it->loadoutSuit = loadoutSuit;
-        it->weaponStats = stats;
+            if (std::none_of(m_characters.begin(), m_characters.end(),
+                             [&](const TFCharacterRecord& c) { return c.id == update.charId; }))
+                return false;
+            if (update.writeProgress && (update.rank == 0 || update.rank > kTFMaxRank || update.flux > kFluxWalletCap))
+                return false;
+            if (update.writeMeta)
+            {
+                std::unordered_set<std::string> uniqueUnlocks;
+                for (const std::string& unlock : update.unlocks)
+                    if (unlock.empty() || !uniqueUnlocks.insert(unlock).second)
+                        return false;
+                std::unordered_set<std::string> uniqueWeapons;
+                for (const TFWeaponStatsRow& stat : update.weaponStats)
+                    if (stat.weaponKey.empty() || !uniqueWeapons.insert(stat.weaponKey).second)
+                        return false;
+            }
+        }
+
+        const std::vector<TFCharacterRecord> previous = m_characters;
+        for (const TFCharacterUpdate& update : updates)
+        {
+            TFCharacterRecord& row = *std::find_if(m_characters.begin(), m_characters.end(),
+                                                   [&](const TFCharacterRecord& c) { return c.id == update.charId; });
+            if (update.writeProgress)
+            {
+                row.xp = update.xp;
+                row.rank = update.rank;
+                row.flux = update.flux;
+                row.lastPlayedMs = update.lastPlayedMs;
+            }
+            if (update.writeMeta)
+            {
+                row.unlocks = update.unlocks;
+                row.loadoutPrimary = update.loadoutPrimary;
+                row.loadoutSecondary = update.loadoutSecondary;
+                row.loadoutTool = update.loadoutTool;
+                row.loadoutGrenade = update.loadoutGrenade;
+                row.loadoutSuit = update.loadoutSuit;
+                row.weaponStats = update.weaponStats;
+            }
+        }
+
         if (!SaveToDisk())
         {
-            *it = previous;
+            m_characters = previous;
             m_status = TFDatabaseStatus::WriteFailed;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] character commit of %zu row(s) failed to persist to %s; rolled back", updates.size(),
+                            SavePaths::Utf8ForLog(m_path).c_str());
             return false;
         }
         m_status = TFDatabaseStatus::ReadyExisting;

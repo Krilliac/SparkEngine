@@ -102,23 +102,92 @@ namespace Terrafront
         return PersistOne(it->second, db);
     }
 
-    bool TFPlayerMetaStore::PersistAllDirty(TFDatabase& db)
+    bool TFPlayerMetaStore::PersistAllDirty(TFDatabase& db, std::vector<TFCharacterUpdate> progressUpdates)
     {
+        // A closed db fails FindCharacter below, so dirty rows report failure
+        // while an empty sweep still succeeds.
         bool ok = true;
-        for (auto& entry : m_meta)
-            if (entry.second.dirty && entry.second.charId != 0 && !PersistOne(entry.second, db))
-                ok = false;
-        for (auto it = m_pendingByCharacter.begin(); it != m_pendingByCharacter.end();)
+        std::vector<TFCharacterUpdate> batch;
+        std::unordered_map<uint64_t, size_t> batchIndex; // charId -> slot in batch
+        auto slotFor = [&](uint64_t charId) -> TFCharacterUpdate*
         {
-            if (PersistOne(it->second, db))
-                it = m_pendingByCharacter.erase(it);
-            else
+            TFCharacterRecord existing;
+            if (!db.FindCharacter(charId, existing))
+                return nullptr;
+            auto [it, inserted] = batchIndex.try_emplace(charId, batch.size());
+            if (inserted)
+            {
+                batch.emplace_back();
+                batch.back().charId = charId;
+            }
+            return &batch[it->second];
+        };
+
+        for (TFCharacterUpdate& progress : progressUpdates)
+        {
+            TFCharacterUpdate* slot = slotFor(progress.charId);
+            if (!slot || slot->writeProgress)
             {
                 ok = false;
-                ++it;
+                continue;
             }
+            slot->writeProgress = true;
+            slot->xp = progress.xp;
+            slot->rank = progress.rank;
+            slot->flux = progress.flux;
+            slot->lastPlayedMs = progress.lastPlayedMs;
         }
+
+        std::vector<Meta*> included;
+        auto addMeta = [&](Meta& meta)
+        {
+            TFCharacterUpdate* slot = slotFor(meta.charId);
+            if (!slot || slot->writeMeta)
+            {
+                ok = false;
+                return;
+            }
+            AddMetaToUpdate(meta, *slot);
+            included.push_back(&meta);
+        };
+        for (auto& entry : m_meta)
+            if (entry.second.dirty && entry.second.charId != 0)
+                addMeta(entry.second);
+        for (auto& entry : m_pendingByCharacter)
+            if (entry.second.dirty && entry.second.charId != 0)
+                addMeta(entry.second);
+
+        if (batch.empty())
+            return ok;
+        if (!db.CommitCharacterUpdates(batch))
+            return false;
+
+        for (Meta* meta : included)
+            meta->dirty = false;
+        std::erase_if(m_pendingByCharacter, [](const auto& entry) { return !entry.second.dirty; });
         return ok;
+    }
+
+    void TFPlayerMetaStore::AddMetaToUpdate(const Meta& meta, TFCharacterUpdate& update)
+    {
+        // Sorted copies so the on-disk JSON is deterministic across runs
+        // (unordered containers would otherwise reshuffle every save).
+        update.writeMeta = true;
+        update.unlocks.assign(meta.unlocks.begin(), meta.unlocks.end());
+        std::sort(update.unlocks.begin(), update.unlocks.end());
+
+        update.loadoutPrimary = meta.loadout.primary;
+        update.loadoutSecondary = meta.loadout.secondary;
+        update.loadoutTool = meta.loadout.tool;
+        update.loadoutGrenade = meta.loadout.grenade;
+        update.loadoutSuit = meta.loadout.suit;
+
+        update.weaponStats.clear();
+        update.weaponStats.reserve(meta.stats.size());
+        for (const auto& [key, s] : meta.stats)
+            update.weaponStats.push_back(TFWeaponStatsRow{key, s.kills, s.shots, s.hits, s.headshots});
+        std::sort(update.weaponStats.begin(), update.weaponStats.end(),
+                  [](const TFWeaponStatsRow& a, const TFWeaponStatsRow& b) { return a.weaponKey < b.weaponKey; });
     }
 
     bool TFPlayerMetaStore::PersistOne(Meta& meta, TFDatabase& db)
@@ -126,20 +195,10 @@ namespace Terrafront
         if (!meta.dirty || meta.charId == 0 || !db.IsOpen())
             return false;
 
-        // Sorted copies so the on-disk JSON is deterministic across runs
-        // (unordered containers would otherwise reshuffle every save).
-        std::vector<std::string> unlocks(meta.unlocks.begin(), meta.unlocks.end());
-        std::sort(unlocks.begin(), unlocks.end());
-
-        std::vector<TFWeaponStatsRow> stats;
-        stats.reserve(meta.stats.size());
-        for (const auto& [key, s] : meta.stats)
-            stats.push_back(TFWeaponStatsRow{key, s.kills, s.shots, s.hits, s.headshots});
-        std::sort(stats.begin(), stats.end(),
-                  [](const TFWeaponStatsRow& a, const TFWeaponStatsRow& b) { return a.weaponKey < b.weaponKey; });
-
-        if (!db.SaveCharacterMeta(meta.charId, unlocks, meta.loadout.primary, meta.loadout.secondary, meta.loadout.tool,
-                                  meta.loadout.grenade, meta.loadout.suit, stats))
+        TFCharacterUpdate update;
+        update.charId = meta.charId;
+        AddMetaToUpdate(meta, update);
+        if (!db.CommitCharacterUpdates({update}))
             return false;
         meta.dirty = false;
         return true;

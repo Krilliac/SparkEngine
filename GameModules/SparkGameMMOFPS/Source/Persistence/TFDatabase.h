@@ -20,6 +20,13 @@
  * in-memory change if that write fails. Close() therefore only releases the
  * authority lock; a fresh TFDatabase instance that re-Opens the same path sees
  * every mutation that previously reported success.
+ *
+ * DATA-120: CommitCharacterUpdates applies several character rows (e.g. an
+ * unlock purchase's flux debit + unlock key, or a transfer between two
+ * characters) as ONE disk commit, all-or-nothing. The file carries a
+ * "schemaVersion"; files without it are the legacy v0 shape and upgrade on
+ * the next write, while a file from a newer schema fails closed so an older
+ * build can never load-and-rewrite it and silently drop the newer fields.
  */
 #pragma once
 
@@ -43,6 +50,7 @@ namespace Terrafront
         Corrupt,
         Locked,
         WriteFailed,
+        UnsupportedVersion, ///< file written by a newer schema; left untouched
     };
 
     struct TFAccountRecord
@@ -83,9 +91,30 @@ namespace Terrafront
         std::vector<TFWeaponStatsRow> weaponStats;
     };
 
+    /// One character's pending changes for TFDatabase::CommitCharacterUpdates.
+    /// writeProgress / writeMeta select which half of the row is replaced.
+    struct TFCharacterUpdate
+    {
+        uint64_t charId = 0;
+
+        bool writeProgress = false;
+        uint32_t xp = 0;
+        uint16_t rank = 1;
+        uint32_t flux = 0;
+        int64_t lastPlayedMs = 0;
+
+        bool writeMeta = false;
+        std::vector<std::string> unlocks;
+        std::string loadoutPrimary, loadoutSecondary, loadoutTool, loadoutGrenade, loadoutSuit;
+        std::vector<TFWeaponStatsRow> weaponStats;
+    };
+
     class TFDatabase
     {
       public:
+        /// On-disk schema written by this build. Files without the key are v0.
+        static constexpr uint32_t kSchemaVersion = 1;
+
         TFDatabase() = default;
         ~TFDatabase();
 
@@ -120,12 +149,18 @@ namespace Terrafront
                                const std::string& loadoutTool, const std::string& loadoutGrenade,
                                const std::string& loadoutSuit, const std::vector<TFWeaponStatsRow>& stats);
 
+        /// Apply every update in one atomic disk commit. Fails (and changes
+        /// nothing, in memory or on disk) if any row is invalid, names an
+        /// unknown character, repeats a character, or the write fails.
+        bool CommitCharacterUpdates(const std::vector<TFCharacterUpdate>& updates);
+
       private:
         enum class LoadResult : uint8_t
         {
             Loaded,
             Unreadable,
             Corrupt,
+            UnsupportedVersion,
         };
         LoadResult LoadFromDisk();
         bool SaveToDisk() const;
