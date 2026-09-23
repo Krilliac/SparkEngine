@@ -201,6 +201,7 @@ add_executable(SparkTests
     TestNullRHIDevice.cpp
     TestGraphicsInitFallback.cpp
     TestSoftwareRendering.cpp
+    TestRHI240OpenGLReal.cpp
     TestRenderCommandRing.cpp
     TestMultiISADispatch.cpp
     TestConstantBufferDiff.cpp
@@ -1405,6 +1406,27 @@ set_tests_properties(SparkEngineLoadTests PROPERTIES
     LABELS "load;slow"
     RUN_SERIAL TRUE
     TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
+
+# RHI-240: real OpenGL backend under KHR_debug (llvmpipe on Linux hosts). The
+# lane requires a GL context (SPARK_REQUIRE_OPENGL=1) so it cannot pass by
+# skipping; llvmpipe evidence is software-rasterizer only, not driver certification.
+if(SPARK_OPENGL_AVAILABLE AND NOT WIN32)
+    add_test(
+        NAME SparkOpenGLTests
+        COMMAND ${CMAKE_COMMAND}
+            -DSPARK_TEST_EXECUTABLE=$<TARGET_FILE:SparkTests>
+            -DSPARK_JUNIT_REPORT=${CMAKE_BINARY_DIR}/SparkTests-opengl-junit.xml
+            -DSPARK_TEST_LOG=${CMAKE_BINARY_DIR}/SparkTests-opengl.log
+            -DSPARK_TEST_OUTPUT=${CMAKE_BINARY_DIR}/SparkTests-opengl-output.log
+            -DSPARK_TEST_WARN_IS_ERROR=${SPARK_TESTS_WARN_IS_ERROR}
+            "-DSPARK_TEST_TIMEOUT_SECONDS=$<IF:$<CONFIG:Debug>,${SPARK_TEST_TIMEOUT_DEBUG},${SPARK_TEST_TIMEOUT_OPTIMIZED}>"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
+    )
+    set_tests_properties(SparkOpenGLTests PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLReal.cpp;SPARK_TEST_EXPECT_COUNT=11;SPARK_REQUIRE_OPENGL=1"
+        LABELS "opengl;llvmpipe"
+        TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
+endif()
 add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --quiet)
 set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=SaveMigration_"
