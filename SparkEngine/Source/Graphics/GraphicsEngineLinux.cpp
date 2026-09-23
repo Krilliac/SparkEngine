@@ -119,8 +119,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
     // Retain the white fallback so an empty material can restore slot 0.
     if (FAILED(CreateDefaultTexture()))
-        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                       "GraphicsEngine (Linux): default material texture unavailable");
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GraphicsEngine (Linux): default material texture unavailable");
 
     // Create subsystems
     m_textureSystem = std::make_unique<TextureSystem>();

@@ -405,8 +405,8 @@ TEST(FPSScene_FailedReloadPreservesLiveObjectIdentityAndRuntimeState)
     Microsoft::WRL::ComPtr<ID3D11Device> device;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
     D3D_FEATURE_LEVEL level{};
-    const HRESULT created = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0,
-                                               D3D11_SDK_VERSION, &device, &level, &context);
+    const HRESULT created = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION,
+                                              &device, &level, &context);
     ASSERT_TRUE(SUCCEEDED(created));
 
     GraphicsEngine graphics;

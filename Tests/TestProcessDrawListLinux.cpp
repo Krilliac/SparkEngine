@@ -61,7 +61,7 @@ namespace
             if (m_owned)
             {
                 auto& rhi = Spark::Graphics::Detail::GetRHI();
-            rhi.defaultTexture.reset();
+                rhi.defaultTexture.reset();
                 rhi.bridge.Shutdown();
                 rhi.initialized = false;
             }
@@ -228,8 +228,8 @@ TEST(ProcessDrawListLinux_DefaultMaterialRebindsAfterMissingMaterial)
 
     AssetPipeline pipeline;
     pipeline.Initialize(nullptr, nullptr);
-    auto* commandList = static_cast<Spark::RHI::NullCommandList*>(
-        Spark::Graphics::Detail::GetRHI().bridge.GetCommandList());
+    auto* commandList =
+        static_cast<Spark::RHI::NullCommandList*>(Spark::Graphics::Detail::GetRHI().bridge.GetCommandList());
     const uint32_t before = commandList->GetShaderResourceBindCount();
 
     // A failed explicit material must first select the fallback, and an empty

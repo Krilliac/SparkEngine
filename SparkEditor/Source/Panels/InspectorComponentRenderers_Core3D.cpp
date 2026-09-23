@@ -28,8 +28,8 @@ namespace SparkEditor
 
         bool ReadAssetDrop(const ImGuiPayload* payload, bool mesh, std::string& reference)
         {
-            if (!payload || !payload->IsDataType(kAssetDragPayload) || payload->Data == nullptr || payload->DataSize < 2 ||
-                payload->DataSize > 4096)
+            if (!payload || !payload->IsDataType(kAssetDragPayload) || payload->Data == nullptr ||
+                payload->DataSize < 2 || payload->DataSize > 4096)
                 return false;
 
             const auto* bytes = static_cast<const char*>(payload->Data);
@@ -217,13 +217,17 @@ namespace SparkEditor
                             history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
                                 [capturedScene, capturedID, newPath]()
                                 {
-                                    if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                                        if (MeshRenderer* data = c->GetData<MeshRenderer>()) data->meshAssetPath = newPath;
+                                    if (Component* c =
+                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                            data->meshAssetPath = newPath;
                                 },
                                 [capturedScene, capturedID, oldPath]()
                                 {
-                                    if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                                        if (MeshRenderer* data = c->GetData<MeshRenderer>()) data->meshAssetPath = oldPath;
+                                    if (Component* c =
+                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                            data->meshAssetPath = oldPath;
                                 },
                                 "Assign Mesh Asset"));
                         }
@@ -281,13 +285,17 @@ namespace SparkEditor
                             history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
                                 [capturedScene, capturedID, newPath]()
                                 {
-                                    if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                                        if (MeshRenderer* data = c->GetData<MeshRenderer>()) data->materialAssetPath = newPath;
+                                    if (Component* c =
+                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                            data->materialAssetPath = newPath;
                                 },
                                 [capturedScene, capturedID, oldPath]()
                                 {
-                                    if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                                        if (MeshRenderer* data = c->GetData<MeshRenderer>()) data->materialAssetPath = oldPath;
+                                    if (Component* c =
+                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                            data->materialAssetPath = oldPath;
                                 },
                                 "Assign Material Asset"));
                         }

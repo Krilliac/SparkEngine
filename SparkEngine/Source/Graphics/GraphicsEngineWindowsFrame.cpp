@@ -357,19 +357,18 @@ void GraphicsEngine::EndFrame()
                            << "Presented FPS: " << m_benchmarkPresentedFrames / elapsedSeconds << "\n"
                            << "Adapter: " << m_benchmarkAdapterIdentity << "\n"
                            << "CPU BeginFrame-to-Present: avg " << m_benchmarkCpuSamples.Mean() << " ms, min "
-                           << m_benchmarkCpuSamples.Min() << " ms, max " << m_benchmarkCpuSamples.Max()
-                           << " ms, p50 " << m_benchmarkCpuSamples.Percentile(0.50) << " ms, p95 "
+                           << m_benchmarkCpuSamples.Min() << " ms, max " << m_benchmarkCpuSamples.Max() << " ms, p50 "
+                           << m_benchmarkCpuSamples.Percentile(0.50) << " ms, p95 "
                            << m_benchmarkCpuSamples.Percentile(0.95) << " ms, p99 "
-                           << m_benchmarkCpuSamples.Percentile(0.99) << " ms (" << m_benchmarkCpuSamples.Count()
-                           << "/" << m_benchmarkCpuSamples.Capacity() << " samples, "
+                           << m_benchmarkCpuSamples.Percentile(0.99) << " ms (" << m_benchmarkCpuSamples.Count() << "/"
+                           << m_benchmarkCpuSamples.Capacity() << " samples, "
                            << (m_benchmarkCpuSamples.IsTruncated() ? "TRUNCATED" : "complete") << ")\n";
                     if (m_benchmarkGpuSamples.Count() > 0)
                         result << "GPU render interval: avg " << m_benchmarkGpuSamples.Mean() << " ms, p50 "
                                << m_benchmarkGpuSamples.Percentile(0.50) << " ms, p95 "
                                << m_benchmarkGpuSamples.Percentile(0.95) << " ms, p99 "
-                               << m_benchmarkGpuSamples.Percentile(0.99) << " ms ("
-                               << m_benchmarkGpuSamples.Count() << "/" << m_benchmarkGpuSamples.Capacity()
-                               << " valid D3D11 timestamp samples, "
+                               << m_benchmarkGpuSamples.Percentile(0.99) << " ms (" << m_benchmarkGpuSamples.Count()
+                               << "/" << m_benchmarkGpuSamples.Capacity() << " valid D3D11 timestamp samples, "
                                << (m_benchmarkGpuSamples.IsTruncated() ? "TRUNCATED" : "complete")
                                << "; two-frame collection lag)";
                     else

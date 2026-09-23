@@ -194,9 +194,8 @@ void AssetPipeline::BindMaterial(std::string_view materialPath)
     if (!rhi.defaultTexture)
     {
         constexpr uint32_t whitePixel = 0xFFFFFFFF;
-        rhi.defaultTexture = rhi.bridge.CreateTexture2D(
-            1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
-            Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
+        rhi.defaultTexture = rhi.bridge.CreateTexture2D(1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
+                                                        Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
     }
     auto bindDefault = [&]()
     {

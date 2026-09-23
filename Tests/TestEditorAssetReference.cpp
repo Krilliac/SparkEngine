@@ -25,6 +25,7 @@ TEST(EditorAssetReference_RejectsWrongTypeAndEmbeddedNul)
 {
     EXPECT_FALSE(IsValidEditorAssetReference("Assets/Textures/arena.png", EditorAssetKind::Mesh));
     EXPECT_FALSE(IsValidEditorAssetReference("Assets/Models/arena.obj", EditorAssetKind::Material));
-    const std::string embedded("Assets/Models/arena.obj\0/escape.obj", sizeof("Assets/Models/arena.obj\0/escape.obj") - 1);
+    const std::string embedded("Assets/Models/arena.obj\0/escape.obj",
+                               sizeof("Assets/Models/arena.obj\0/escape.obj") - 1);
     EXPECT_FALSE(IsValidEditorAssetReference(embedded, EditorAssetKind::Mesh));
 }

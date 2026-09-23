@@ -519,8 +519,8 @@ namespace Spark::Graphics
         }
 
         std::array<FrameData, kFrameLatency> m_frames;
-        std::unordered_map<std::string, float> m_passTimes;         ///< Most recent results
-        std::unordered_map<std::string, PassHistory> m_passHistory; ///< Rolling history
+        std::unordered_map<std::string, float> m_passTimes;          ///< Most recent results
+        std::unordered_map<std::string, PassHistory> m_passHistory;  ///< Rolling history
         std::unordered_map<std::string, uint64_t> m_passGenerations; ///< Reset epoch per pass
         uint32_t m_maxTimers = 0;
         uint32_t m_frameIndex = 0;

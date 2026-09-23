@@ -27,8 +27,9 @@ namespace SparkEditor
      */
     inline bool IsValidEditorAssetReference(std::string_view reference, EditorAssetKind kind)
     {
-        if (reference.size() < 8 || reference.substr(0, 7) != "Assets/" || reference.find('\0') != std::string_view::npos ||
-            reference.find('\\') != std::string_view::npos || reference.find(':') != std::string_view::npos)
+        if (reference.size() < 8 || reference.substr(0, 7) != "Assets/" ||
+            reference.find('\0') != std::string_view::npos || reference.find('\\') != std::string_view::npos ||
+            reference.find(':') != std::string_view::npos)
             return false;
 
         std::string_view path = reference.substr(7);
@@ -39,9 +40,8 @@ namespace SparkEditor
         while (segmentStart <= path.size())
         {
             const size_t separator = path.find('/', segmentStart);
-            const std::string_view segment = path.substr(segmentStart, separator == std::string_view::npos
-                                                                     ? std::string_view::npos
-                                                                     : separator - segmentStart);
+            const std::string_view segment = path.substr(
+                segmentStart, separator == std::string_view::npos ? std::string_view::npos : separator - segmentStart);
             if (segment.empty() || segment == "." || segment == "..")
                 return false;
             if (separator == std::string_view::npos)

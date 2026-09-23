@@ -471,8 +471,9 @@ bool Game::LoadScene(const std::string& scenePath)
         if (success)
         {
             std::error_code arenaIdentityError;
-            const bool isBuiltInArena = std::filesystem::equivalent(
-                trustedScenePath, Spark::FPSAssets::Root() / "Scenes" / "level1.scene", arenaIdentityError) &&
+            const bool isBuiltInArena =
+                std::filesystem::equivalent(trustedScenePath, Spark::FPSAssets::Root() / "Scenes" / "level1.scene",
+                                            arenaIdentityError) &&
                 !arenaIdentityError;
             BindSceneMaterialRoots();
             // A successful replacement discards objects from the old level.

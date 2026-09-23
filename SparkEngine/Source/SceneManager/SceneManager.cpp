@@ -213,7 +213,7 @@ namespace
         std::error_code ignored;
         std::filesystem::remove(path, ignored);
     }
-}
+} // namespace
 
 // Use logging macros from LogMacros.h (included transitively via headers)
 
@@ -274,8 +274,8 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
     // may retain a GameObject pointer and runtime state (health, physics,
     // component state, etc.) must survive a failed reload byte-for-byte.
     auto previousObjects = std::move(m_objects);
-    const auto restorePrevious = [this, &previousNodes, &previousMetadata, &previousFilePath, previousDirty,
-                                  &previousObjects]()
+    const auto restorePrevious =
+        [this, &previousNodes, &previousMetadata, &previousFilePath, previousDirty, &previousObjects]()
     {
         m_objects.clear();
         m_sceneNodes = previousNodes;
@@ -722,7 +722,8 @@ bool SceneManager::LoadJSON(const std::wstring& path)
             else if (line.find("# ambient:") == 0)
             {
                 std::istringstream as(line.substr(11));
-                if (!(as >> stagedMetadata.ambientLightR >> stagedMetadata.ambientLightG >> stagedMetadata.ambientLightB) ||
+                if (!(as >> stagedMetadata.ambientLightR >> stagedMetadata.ambientLightG >>
+                      stagedMetadata.ambientLightB) ||
                     !std::isfinite(stagedMetadata.ambientLightR) || !std::isfinite(stagedMetadata.ambientLightG) ||
                     !std::isfinite(stagedMetadata.ambientLightB))
                     return false;
@@ -833,11 +834,10 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
     for (const auto& node : nodes)
     {
         serialized << node.type << " " << std::quoted(node.name) << " " << std::fixed << std::setprecision(3)
-                   << node.position.x << " "
-             << node.position.y << " " << node.position.z << " " << node.rotation.x << " " << node.rotation.y << " "
-             << node.rotation.z << " " << node.scale.x << " " << node.scale.y << " " << node.scale.z << " "
-             << node.parentIndex << " " << std::quoted(node.modelPath) << " " << std::quoted(node.materialPath) << " "
-             << node.properties.size();
+                   << node.position.x << " " << node.position.y << " " << node.position.z << " " << node.rotation.x
+                   << " " << node.rotation.y << " " << node.rotation.z << " " << node.scale.x << " " << node.scale.y
+                   << " " << node.scale.z << " " << node.parentIndex << " " << std::quoted(node.modelPath) << " "
+                   << std::quoted(node.materialPath) << " " << node.properties.size();
         std::vector<std::pair<std::string, std::string>> properties(node.properties.begin(), node.properties.end());
         std::sort(properties.begin(), properties.end());
         for (const auto& [key, value] : properties)
@@ -853,8 +853,7 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
         return false;
     }
     std::error_code error;
-    if (!WriteDurableText(temporary, serialized.str(), error) ||
-        !ReplaceFileAtomically(temporary, destination, error))
+    if (!WriteDurableText(temporary, serialized.str(), error) || !ReplaceFileAtomically(temporary, destination, error))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot save scene atomically: " + path, L"ERROR");
         RemoveFileNoThrow(temporary);
@@ -1233,10 +1232,7 @@ bool SceneManager::LoadCustom(const std::wstring& path)
 
             std::unique_ptr<GameObject> obj;
 
-            auto finiteFloat = [&ls](float& value)
-            {
-                return bool(ls >> value) && std::isfinite(value);
-            };
+            auto finiteFloat = [&ls](float& value) { return bool(ls >> value) && std::isfinite(value); };
 
             if (type == "Cube")
             {
@@ -1256,7 +1252,8 @@ bool SceneManager::LoadCustom(const std::wstring& path)
             {
                 float radius = 0.5f;
                 int slices = 16, stacks = 16;
-                if (ls.peek() != EOF && (!finiteFloat(radius) || !(ls >> slices) || !(ls >> stacks) || slices <= 0 || stacks <= 0))
+                if (ls.peek() != EOF &&
+                    (!finiteFloat(radius) || !(ls >> slices) || !(ls >> stacks) || slices <= 0 || stacks <= 0))
                     return false;
                 obj = std::make_unique<SphereObject>(radius, slices, stacks);
             }

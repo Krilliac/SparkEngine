@@ -32,32 +32,32 @@
 
 namespace
 {
-std::string AdapterIdentity(ID3D11Device* device)
-{
-    if (!device)
-        return "unavailable";
-    Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
-    Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
-    DXGI_ADAPTER_DESC desc{};
-    if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dxgiDevice))) ||
-        FAILED(dxgiDevice->GetAdapter(&adapter)) || FAILED(adapter->GetDesc(&desc)))
-        return "unavailable";
-
-    const int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, desc.Description, -1, nullptr, 0,
-                                           nullptr, nullptr);
-    std::string name;
-    if (length > 1)
+    std::string AdapterIdentity(ID3D11Device* device)
     {
-        name.resize(static_cast<size_t>(length));
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, desc.Description, -1, name.data(), length, nullptr,
-                            nullptr);
-        name.resize(static_cast<size_t>(length - 1));
+        if (!device)
+            return "unavailable";
+        Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
+        Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
+        DXGI_ADAPTER_DESC desc{};
+        if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dxgiDevice))) || FAILED(dxgiDevice->GetAdapter(&adapter)) ||
+            FAILED(adapter->GetDesc(&desc)))
+            return "unavailable";
+
+        const int length =
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, desc.Description, -1, nullptr, 0, nullptr, nullptr);
+        std::string name;
+        if (length > 1)
+        {
+            name.resize(static_cast<size_t>(length));
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, desc.Description, -1, name.data(), length, nullptr,
+                                nullptr);
+            name.resize(static_cast<size_t>(length - 1));
+        }
+        std::ostringstream result;
+        result << (name.empty() ? "unknown" : name) << " (vendor=0x" << std::hex << desc.VendorId << ", device=0x"
+               << desc.DeviceId << ")";
+        return result.str();
     }
-    std::ostringstream result;
-    result << (name.empty() ? "unknown" : name) << " (vendor=0x" << std::hex << desc.VendorId << ", device=0x"
-           << desc.DeviceId << ")";
-    return result.str();
-}
 } // namespace
 
 // ============================================================================
