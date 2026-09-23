@@ -6190,7 +6190,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 41,
+        "stepCount": 42,
         "steps": [
           {
             "index": 0,
@@ -6554,6 +6554,18 @@
           },
           {
             "index": 30,
+            "name": "Verify authored FPS material coverage",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "51b7760d2528df36"
+          },
+          {
+            "index": 31,
             "name": "Validate module evidence manifest (declarative layer)",
             "id": "",
             "uses": "",
@@ -6565,7 +6577,7 @@
             "runDigest": "3207d199801cc28d"
           },
           {
-            "index": 31,
+            "index": 32,
             "name": "Run module evidence adversarial tests",
             "id": "",
             "uses": "",
@@ -6577,7 +6589,7 @@
             "runDigest": "1593673681e72374"
           },
           {
-            "index": 32,
+            "index": 33,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -6589,7 +6601,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 33,
+            "index": 34,
             "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
@@ -6601,7 +6613,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 34,
+            "index": 35,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -6613,7 +6625,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 35,
+            "index": 36,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -6625,7 +6637,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 36,
+            "index": 37,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6637,7 +6649,7 @@
             "runDigest": ""
           },
           {
-            "index": 37,
+            "index": 38,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -6649,7 +6661,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 38,
+            "index": 39,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -6664,7 +6676,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 39,
+            "index": 40,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6676,7 +6688,7 @@
             "runDigest": ""
           },
           {
-            "index": 40,
+            "index": 41,
             "name": "Controlled required-job failure probe",
             "id": "",
             "uses": "",
@@ -10736,7 +10748,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "1dfb48a05f412216"
+            "runDigest": "59f16023f1c92ac6"
           },
           {
             "index": 4,
@@ -15178,7 +15190,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 34,
+        "stepIndex": 35,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -15206,7 +15218,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 35,
+        "stepIndex": 36,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
