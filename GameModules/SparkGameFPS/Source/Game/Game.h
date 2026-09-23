@@ -599,6 +599,10 @@ class SPARK_GAME_API Game
 #endif // ENABLE_NETWORKING
 
   private:
+    // One strict, locale-independent parser for authored camera clipping in
+    // both startup and scene reload paths.
+    static bool ParseAuthoredFiniteFloat(const std::string& text, float& value);
+
     // Bind the trusted module project root after any scene load so authored
     // material paths remain functional for both startup and console reloads.
     void BindSceneMaterialRoots();

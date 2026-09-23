@@ -37,8 +37,6 @@
 #include "Engine/Networking/NetworkManager.h"
 #include <algorithm>
 #include <filesystem>
-#include <charconv>
-#include <cmath>
 
 #include "Utils/LogMacros.h"
 
@@ -409,19 +407,14 @@ void Game::RefreshAuthoredSceneRuntimeState()
         {
             m_camera->Console_SetRotation(authoredCamera->rotation.x, authoredCamera->rotation.y,
                                           authoredCamera->rotation.z);
-            auto parseFinite = [](const std::string& text, float& value)
-            {
-                const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
-                return result.ec == std::errc{} && result.ptr == text.data() + text.size() && std::isfinite(value);
-            };
             const auto nearProperty = authoredCamera->properties.find("nearPlane");
             const auto farProperty = authoredCamera->properties.find("farPlane");
             float nearPlane = 0.0f;
             float farPlane = 0.0f;
             if (nearProperty != authoredCamera->properties.end() && farProperty != authoredCamera->properties.end() &&
-                parseFinite(nearProperty->second, nearPlane) && parseFinite(farProperty->second, farPlane) &&
-                nearPlane >= 0.01f && nearPlane <= 10.0f && farPlane >= 100.0f && farPlane <= 10000.0f &&
-                nearPlane < farPlane)
+                ParseAuthoredFiniteFloat(nearProperty->second, nearPlane) &&
+                ParseAuthoredFiniteFloat(farProperty->second, farPlane) && nearPlane >= 0.01f && nearPlane <= 10.0f &&
+                farPlane >= 100.0f && farPlane <= 10000.0f && nearPlane < farPlane)
             {
                 m_camera->Console_SetClippingPlanes(nearPlane, farPlane);
             }

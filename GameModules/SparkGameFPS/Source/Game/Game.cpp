@@ -47,6 +47,19 @@
 #include "Utils/LogMacros.h"
 
 using namespace DirectX;
+
+bool Game::ParseAuthoredFiniteFloat(const std::string& text, float& value)
+{
+    // Keep the old from_chars contract without relying on the floating-point
+    // overload, which is unavailable on some libc++ toolchains.
+    if (text.empty() || text.front() == '+' || std::isspace(static_cast<unsigned char>(text.front())))
+        return false;
+    std::istringstream stream(text);
+    stream.imbue(std::locale::classic());
+    stream >> std::noskipws >> value;
+    return !stream.fail() && stream.peek() == std::char_traits<char>::eof() && std::isfinite(value);
+}
+
 /*-------------------------------------------------------------
   Ctor / Dtor
 --------------------------------------------------------------*/
@@ -147,24 +160,11 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         const auto farProperty = authoredCamera->properties.find("farPlane");
         if (nearProperty != authoredCamera->properties.end() && farProperty != authoredCamera->properties.end())
         {
-            auto parseFiniteFloat = [](const std::string& text, float& value)
-            {
-                // Keep the old from_chars contract: the complete token must
-                // be a finite number, with no leading/trailing whitespace or
-                // a leading plus sign. noskipws is required because formatted
-                // extraction otherwise silently accepts surrounding spaces.
-                if (text.empty() || text.front() == '+' || std::isspace(static_cast<unsigned char>(text.front())))
-                    return false;
-                std::istringstream stream(text);
-                stream.imbue(std::locale::classic());
-                stream >> std::noskipws >> value;
-                return !stream.fail() && stream.peek() == std::char_traits<char>::eof() && std::isfinite(value);
-            };
             float nearPlane = 0.0f;
             float farPlane = 0.0f;
-            if (parseFiniteFloat(nearProperty->second, nearPlane) && parseFiniteFloat(farProperty->second, farPlane) &&
-                nearPlane >= 0.01f && nearPlane <= 10.0f && farPlane >= 100.0f && farPlane <= 10000.0f &&
-                nearPlane < farPlane)
+            if (ParseAuthoredFiniteFloat(nearProperty->second, nearPlane) &&
+                ParseAuthoredFiniteFloat(farProperty->second, farPlane) && nearPlane >= 0.01f && nearPlane <= 10.0f &&
+                farPlane >= 100.0f && farPlane <= 10000.0f && nearPlane < farPlane)
             {
                 m_camera->Console_SetClippingPlanes(nearPlane, farPlane);
             }
