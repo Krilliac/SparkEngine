@@ -20,6 +20,7 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -137,7 +138,9 @@ namespace Spark
                     result.append(buf, static_cast<size_t>(n));
                     continue;
                 }
-                break; // EOF or error
+                if (n < 0 && errno == EINTR)
+                    continue; // A signal interrupted the read; the pipe is still open
+                break;        // EOF or error
             }
             return result;
         }
@@ -252,6 +255,23 @@ namespace Spark
             }
         }
 
+        // The child reports a failed chdir()/exec through this close-on-exec
+        // pipe. A successful exec closes the write end, so the parent reads EOF;
+        // a failure delivers the child's errno first. Without it, a missing
+        // executable "launches" successfully and only surfaces as exit code 127,
+        // unlike CreateProcess on Windows which fails Launch() outright.
+        int execErrorPipe[2] = {-1, -1};
+        if (auto r = makePipe(execErrorPipe, "exec status"); !r)
+        {
+            Impl::CloseFd(stdinPipe[0]);
+            Impl::CloseFd(stdinPipe[1]);
+            Impl::CloseFd(stdoutPipe[0]);
+            Impl::CloseFd(stdoutPipe[1]);
+            Impl::CloseFd(stderrPipe[0]);
+            Impl::CloseFd(stderrPipe[1]);
+            return std::unexpected(r.error());
+        }
+
         pid_t pid = fork();
         if (pid == -1)
         {
@@ -262,18 +282,41 @@ namespace Spark
             Impl::CloseFd(stdoutPipe[1]);
             Impl::CloseFd(stderrPipe[0]);
             Impl::CloseFd(stderrPipe[1]);
+            Impl::CloseFd(execErrorPipe[0]);
+            Impl::CloseFd(execErrorPipe[1]);
             return std::unexpected(err);
         }
 
         if (pid == 0)
         {
             // ---- Child process ----
+            // Only async-signal-safe calls from here on: the parent may be multithreaded.
+
+            const int errorFd = execErrorPipe[1];
+            auto reportFailureAndExit = [errorFd](int stage, int exitCode)
+            {
+                const int report[2] = {stage, errno};
+                (void)!write(errorFd, report, sizeof(report));
+                _exit(exitCode);
+            };
 
             if (m_detached)
-                setsid(); // Detach from parent's session
+            {
+                // Detach from the parent's session, then fork again so the
+                // launcher never owns the long-lived child. The intermediate
+                // exits immediately (the parent reaps it below) and the
+                // grandchild is re-parented to init, so no zombie accumulates
+                // in the launching process when the detached child exits.
+                setsid();
+                const pid_t grandchild = fork();
+                if (grandchild == -1)
+                    reportFailureAndExit(0, 127);
+                if (grandchild > 0)
+                    _exit(0);
+            }
 
             if (!m_workingDirectory.empty() && chdir(m_workingDirectory.c_str()) != 0)
-                _exit(126);
+                reportFailureAndExit(1, 126);
 
             // Redirect stdin/stdout/stderr via dup2.
             // Pipes are O_CLOEXEC so originals auto-close on exec;
@@ -306,7 +349,7 @@ namespace Spark
                 redirectFd(stderrPipe[1], STDERR_FILENO);
 
             execvp(m_executable.c_str(), const_cast<char* const*>(argv.data()));
-            _exit(127); // exec failed
+            reportFailureAndExit(2, 127); // exec failed
         }
 
         // ---- Parent process ----
@@ -315,6 +358,52 @@ namespace Spark
         Impl::CloseFd(stdinPipe[0]);
         Impl::CloseFd(stdoutPipe[1]);
         Impl::CloseFd(stderrPipe[1]);
+        Impl::CloseFd(execErrorPipe[1]);
+
+        // Blocks only until the (grand)child execs or fails, never for its lifetime.
+        int childReport[2] = {0, 0};
+        size_t reportBytes = 0;
+        while (reportBytes < sizeof(childReport))
+        {
+            const ssize_t n = read(execErrorPipe[0], reinterpret_cast<char*>(childReport) + reportBytes,
+                                   sizeof(childReport) - reportBytes);
+            if (n > 0)
+                reportBytes += static_cast<size_t>(n);
+            else if (n < 0 && errno == EINTR)
+                continue;
+            else
+                break;
+        }
+        Impl::CloseFd(execErrorPipe[0]);
+
+        if (m_detached)
+        {
+            // Reap the short-lived intermediate child; the grandchild is not ours.
+            int status = 0;
+            while (waitpid(pid, &status, 0) == -1 && errno == EINTR)
+            {
+            }
+        }
+
+        if (reportBytes == sizeof(childReport))
+        {
+            if (!m_detached)
+            {
+                int status = 0;
+                while (waitpid(pid, &status, 0) == -1 && errno == EINTR)
+                {
+                }
+            }
+            Impl::CloseFd(stdinPipe[1]);
+            Impl::CloseFd(stdoutPipe[0]);
+            Impl::CloseFd(stderrPipe[0]);
+
+            static constexpr const char* kStages[] = {"fork() of detached child", "chdir()", "exec()"};
+            const int stage = childReport[0] >= 0 && childReport[0] <= 2 ? childReport[0] : 2;
+            std::string err = std::string(kStages[stage]) + " failed for '" +
+                              (stage == 1 ? m_workingDirectory : m_executable) + "': " + strerror(childReport[1]);
+            return std::unexpected(err);
+        }
 
         Process proc;
         proc.m_impl = std::make_unique<Impl>();
@@ -415,6 +504,22 @@ namespace Spark
         if (!m_impl || m_impl->stdinWriteFd < 0)
             return;
 
+        // Writing to a pipe whose reader has exited raises SIGPIPE, whose
+        // default action terminates the *launching* process (the editor, a
+        // tool, the test runner). Block it on this thread for the duration of
+        // the write so the failure surfaces as EPIPE instead, then discard the
+        // SIGPIPE we generated so it is not delivered once the mask is restored.
+        sigset_t sigpipeMask;
+        sigemptyset(&sigpipeMask);
+        sigaddset(&sigpipeMask, SIGPIPE);
+        sigset_t pendingBefore;
+        sigemptyset(&pendingBefore);
+        sigpending(&pendingBefore);
+        const bool sigpipeAlreadyPending = sigismember(&pendingBefore, SIGPIPE) == 1;
+        sigset_t previousMask;
+        const bool masked = pthread_sigmask(SIG_BLOCK, &sigpipeMask, &previousMask) == 0;
+        bool brokenPipe = false;
+
         const char* cursor = data.data();
         size_t remaining = data.size();
         while (remaining > 0)
@@ -431,8 +536,28 @@ namespace Spark
                 continue;
 
             // EPIPE (child closed stdin) and any other write failure: stop writing.
+            brokenPipe = written < 0 && errno == EPIPE;
             break;
         }
+
+        if (brokenPipe && !sigpipeAlreadyPending)
+        {
+#if defined(__linux__)
+            const timespec noWait{};
+            while (sigtimedwait(&sigpipeMask, nullptr, &noWait) == -1 && errno == EINTR)
+            {
+            }
+#else
+            // macOS lacks sigtimedwait(); sigwait() is safe because the signal is pending.
+            sigset_t pendingNow;
+            sigemptyset(&pendingNow);
+            int consumed = 0;
+            if (sigpending(&pendingNow) == 0 && sigismember(&pendingNow, SIGPIPE) == 1)
+                sigwait(&sigpipeMask, &consumed);
+#endif
+        }
+        if (masked)
+            pthread_sigmask(SIG_SETMASK, &previousMask, nullptr);
     }
 
     void Process::CloseStdin()
