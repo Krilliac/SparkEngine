@@ -69,8 +69,8 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         self.assertIn("Import-PfxCertificate", block)
         self.assertIn("Get-PfxData", block)
         self.assertIn("$myThumbprintsBefore", block)
-        self.assertIn("$introducedMyThumbprints", block)
-        self.assertIn("Expected exactly one newly imported signing certificate", block)
+        self.assertIn("Pinned signer already exists in CurrentUser personal store", block)
+        self.assertIn("PFX must contain exactly the pinned signing certificate", block)
         self.assertIn("Cert:\\CurrentUser\\Root", block)
         self.assertIn("spark-signing-root-added.txt", block)
         self.assertIn("Export-Certificate", block)
@@ -83,6 +83,17 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         self.assertIn("Temporary PFX remains after cleanup", block)
         self.assertIn("Temporary certificate remains after cleanup", block)
         self.assertIn("-Confirm:$false", block)
+
+    def test_partial_pfx_import_cleanup_uses_prevalidated_pinned_identity(self) -> None:
+        signing = self.text.index("- name: Sign Windows stable outer installers")
+        block = self.text[signing:self.text.index("\n    - name:", signing + 10)]
+        self.assertLess(block.index("$pfxThumbprints.Count -ne 1"),
+                        block.index("Import-PfxCertificate"))
+        self.assertLess(block.index("$importAttempted = $true"),
+                        block.index("Import-PfxCertificate"))
+        cleanup = block[block.index("} finally {"):]
+        self.assertIn("if ($importAttempted)", cleanup)
+        self.assertIn("'Cert:\\CurrentUser\\My\\' + $env:SPARK_RELEASE_SIGNER_THUMBPRINT", cleanup)
 
 
 if __name__ == "__main__":

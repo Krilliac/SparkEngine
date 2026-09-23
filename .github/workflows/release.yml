@@ -359,26 +359,27 @@ jobs:
         $cerPath = Join-Path $env:RUNNER_TEMP ('spark-signing-' + [guid]::NewGuid().ToString('N') + '.cer')
         $rootMarker = Join-Path $env:RUNNER_TEMP 'spark-signing-root-added.txt'
         $cert = $null
-        $introducedMyThumbprints = @()
-        $myThumbprintsBefore = @()
+        $importAttempted = $false
         try {
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:SPARK_RELEASE_SIGNING_PFX_BASE64))
           $securePassword = ConvertTo-SecureString $env:SPARK_RELEASE_SIGNING_PFX_PASSWORD -AsPlainText -Force
           $pfxData = Get-PfxData -FilePath $pfxPath -Password $securePassword
           $pfxThumbprints = @($pfxData.EndEntityCertificates + $pfxData.OtherCertificates | ForEach-Object { $_.Thumbprint })
-          if ($pfxThumbprints.Count -eq 0 -or ($pfxThumbprints | Sort-Object -Unique).Count -ne $pfxThumbprints.Count) {
-            throw 'PFX certificate identity set is empty or ambiguous'
+          if ($pfxThumbprints.Count -ne 1 -or
+              $pfxThumbprints[0] -ne $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant()) {
+            throw 'PFX must contain exactly the pinned signing certificate'
           }
           $myThumbprintsBefore = @(Get-ChildItem -Path 'Cert:\CurrentUser\My' -ErrorAction Stop | ForEach-Object { $_.Thumbprint })
+          if ($env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant() -in $myThumbprintsBefore) {
+            throw 'Pinned signer already exists in CurrentUser personal store; refusing to replace it'
+          }
+          $importAttempted = $true
           $certificates = @(Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation 'Cert:\CurrentUser\My' -Password $securePassword)
-          $introducedMyThumbprints = @(Get-ChildItem -Path 'Cert:\CurrentUser\My' -ErrorAction Stop |
-            Where-Object { $_.Thumbprint -notin $myThumbprintsBefore } | ForEach-Object { $_.Thumbprint })
-          if ($certificates.Count -ne 1 -or $introducedMyThumbprints.Count -ne 1) {
-            throw "Expected exactly one newly imported signing certificate; PFX returned $($certificates.Count), store added $($introducedMyThumbprints.Count)"
+          if ($certificates.Count -ne 1) {
+            throw "Expected exactly one imported signing certificate; PFX returned $($certificates.Count)"
           }
           $cert = $certificates[0]
-          if ($null -eq $cert -or $cert.Thumbprint -ne $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant() -or
-              $pfxThumbprints.Count -ne 1 -or $pfxThumbprints[0] -ne $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant()) {
+          if ($null -eq $cert -or $cert.Thumbprint -ne $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant()) {
             throw 'Imported signing certificate thumbprint does not match the protected public thumbprint'
           }
           # Get-Command is empty on some hosted images; constrain fallback to
@@ -413,12 +414,12 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "signtool failed for $($target.Name)" }
           }
         } finally {
-          foreach ($introducedThumbprint in $introducedMyThumbprints) {
-            $introducedPath = 'Cert:\CurrentUser\My\' + $introducedThumbprint
+          if ($importAttempted) {
+            $introducedPath = 'Cert:\CurrentUser\My\' + $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant()
             if (Test-Path -LiteralPath $introducedPath) {
               Remove-Item -LiteralPath $introducedPath -Force -Confirm:$false -ErrorAction Stop
             }
-            if (Test-Path -LiteralPath $introducedPath) { throw "Imported certificate remains after cleanup: $introducedThumbprint" }
+            if (Test-Path -LiteralPath $introducedPath) { throw 'Imported signer remains after cleanup' }
           }
           if (Test-Path -LiteralPath $pfxPath) {
             Remove-Item -LiteralPath $pfxPath -Force -ErrorAction Stop
