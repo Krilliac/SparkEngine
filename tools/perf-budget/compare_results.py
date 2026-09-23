@@ -89,6 +89,44 @@ def _empty_report(errors: list[str], result_data: Any = None) -> ComparisonRepor
     )
 
 
+# Categories whose true value can never be zero: a frame, tick, or startup
+# always takes time, a live process always has resident memory, and a package
+# always has bytes. A zero here means the probe did not measure, and because
+# zero is below every lower_is_better budget it would otherwise read as a pass.
+POSITIVE_ONLY_CATEGORIES = frozenset({
+    "frame_time", "tick_time", "startup_time", "memory", "package_size",
+})
+
+# Smallest sample count for which a percentile is distinct from the extreme
+# sample: pN needs at least 1 / (1 - N) samples. Fewer samples make "p99"
+# just the single worst (or only) value, which cannot be gate evidence.
+MIN_SAMPLES_FOR_PERCENTILE = {
+    "p50": 2, "p90": 10, "p95": 20, "p99": 100, "p999": 1000,
+}
+
+
+def _measurement_integrity_errors(metric: dict[str, Any],
+                                  measurement: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    metric_id = metric["id"]
+    category = metric["category"]
+    if category in POSITIVE_ONLY_CATEGORIES and measurement["value"] <= 0:
+        errors.append(
+            f"measurement {metric_id!r} reports zero for {category}; a real "
+            f"{category} measurement is always positive, so zero means the "
+            "probe did not measure and cannot pass a budget"
+        )
+    percentile = metric["percentile"]
+    minimum = MIN_SAMPLES_FOR_PERCENTILE.get(percentile)
+    if minimum is not None and measurement["sampleCount"] < minimum:
+        errors.append(
+            f"measurement {metric_id!r} has sampleCount="
+            f"{measurement['sampleCount']} but {percentile} needs at least "
+            f"{minimum} samples to be distinct from a single sample"
+        )
+    return errors
+
+
 def _passes_budget(measured: float, budget: float, direction: str) -> bool:
     if direction == "lower_is_better":
         return measured <= budget
@@ -240,6 +278,11 @@ def compare(budget_dir: Path, result_data: Any, *,
                 f"unit mismatch for {metric_id}: result={measurement['unit']!r}, "
                 f"budget={metric['unit']!r}"
             )
+            continue
+
+        integrity_errors = _measurement_integrity_errors(metric, measurement)
+        if integrity_errors:
+            errors.extend(integrity_errors)
             continue
 
         status = metric["status"]
