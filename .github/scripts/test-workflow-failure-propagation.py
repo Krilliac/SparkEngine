@@ -411,13 +411,18 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
         indent=6,
     ):
         errors.append("stable-v1 publication gate must use the exact versioned-release condition")
-    # The --allow-legacy-contract waiver was retired once the contract validated
-    # strictly: the gate now runs the plain strict validator and --require-candidate-ready
-    # must stay on the command. Pinning the literal is deliberate -- a mismatch
-    # here is the gate telling you the command moved, and reintroducing any
-    # waiver flag fails this check instead of quietly weakening publication.
-    if run_command(readiness, indent=6) != "python3 tools/site-data/validate.py --require-candidate-ready":
-        errors.append("stable-v1 publication gate must run the exact readiness validator")
+    # The v0.9 bootstrap and ordinary v1 qualification are distinct stages.
+    # Pin both exact validators and the version branch so neither path can be
+    # weakened by a waiver, a swapped selector, or a successful no-op.
+    expected_readiness = " ".join((
+        'if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then',
+        "python3 tools/site-data/validate.py --require-predecessor-candidate",
+        "else",
+        "python3 tools/site-data/validate.py --require-candidate-ready",
+        "fi",
+    ))
+    if run_command(readiness, indent=6) != expected_readiness:
+        errors.append("stable-v1 publication gate must run the exact stage-specific readiness validators")
     if not exact_field(readiness, "shell", "bash", indent=6):
         errors.append("stable-v1 publication gate must use the exact bash shell contract")
     if re.search(
@@ -1648,6 +1653,24 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "suppressed validator": self.release.replace(
                 readiness,
                 suppress_run_command(readiness),
+                1,
+            ),
+            "predecessor validator bypass": self.release.replace(
+                readiness,
+                readiness.replace(
+                    "--require-predecessor-candidate",
+                    "--require-candidate-ready",
+                    1,
+                ),
+                1,
+            ),
+            "stable-v1 validator bypass": self.release.replace(
+                readiness,
+                readiness.replace(
+                    "--require-candidate-ready",
+                    "--require-predecessor-candidate",
+                    1,
+                ),
                 1,
             ),
             "shell suppresses validator": self.release.replace(
