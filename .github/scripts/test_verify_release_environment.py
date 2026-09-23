@@ -12,21 +12,25 @@ class EnvironmentTests(unittest.TestCase):
         self.environment = {
             "name": "stable-release",
             "can_admins_bypass": False,
-            "protection_rules": [{"type": "required_reviewers", "prevent_self_review": True,
+            "protection_rules": [{"type": "required_reviewers", "prevent_self_review": False,
                                   "reviewers": [{"type": "User", "reviewer": {"id": 1}}]}],
             "deployment_branch_policy": {"protected_branches": False, "custom_branch_policies": True},
         }
         self.policies = {"total_count": 1, "branch_policies": [{"name": "Working", "type": "branch"}]}
+        self.repository = {"name": "repo", "owner": {"login": "Krilliac", "id": 1}}
 
     def test_exact_protection_passes(self):
-        self.assertEqual(protection_errors(self.environment, self.policies), [])
+        self.assertEqual(protection_errors(self.environment, self.policies, self.repository), [])
 
     def test_verifier_fetches_only_the_expected_read_only_endpoints(self):
         runner = Mock(side_effect=[subprocess.CompletedProcess([], 0, json.dumps(value), "")
-                                   for value in (self.environment, self.policies)])
+                                   for value in (self.repository, self.environment, self.policies)])
         verify("owner/repo", runner=runner)
-        self.assertEqual(runner.call_args_list[0].args[0], ["gh", "api", "repos/owner/repo/environments/stable-release"])
-        self.assertEqual(runner.call_args_list[1].args[0], ["gh", "api", "repos/owner/repo/environments/stable-release/deployment-branch-policies?per_page=100"])
+        self.assertEqual([call.args[0] for call in runner.call_args_list], [
+            ["gh", "api", "repos/owner/repo"],
+            ["gh", "api", "repos/owner/repo/environments/stable-release"],
+            ["gh", "api", "repos/owner/repo/environments/stable-release/deployment-branch-policies?per_page=100"],
+        ])
 
     def test_duplicate_api_protection_fields_fail_closed(self):
         runner = Mock(return_value=subprocess.CompletedProcess([], 0, '{"name":"bad","name":"stable-release"}', ""))
@@ -41,14 +45,14 @@ class EnvironmentTests(unittest.TestCase):
             elif mutation == "reviewers":
                 environment["protection_rules"] = []
             elif mutation == "self":
-                environment["protection_rules"][0]["prevent_self_review"] = False
+                environment["protection_rules"][0]["prevent_self_review"] = True
             else:
                 environment["deployment_branch_policy"] = None
-            self.assertTrue(protection_errors(environment, self.policies), mutation)
+            self.assertTrue(protection_errors(environment, self.policies, self.repository), mutation)
 
     def test_wildcard_tag_and_extra_deployment_policy_fail(self):
         for policy in ({"name": "*", "type": "branch"}, {"name": "Working", "type": "tag"}):
-            self.assertTrue(protection_errors(self.environment, {"total_count": 1, "branch_policies": [policy]}))
+            self.assertTrue(protection_errors(self.environment, {"total_count": 1, "branch_policies": [policy]}, self.repository))
         self.policies["total_count"] = 101
         self.assertTrue(protection_errors(self.environment, self.policies))
 
@@ -60,12 +64,22 @@ class EnvironmentTests(unittest.TestCase):
 
     def test_malformed_protection_evidence_is_rejected(self):
         self.environment["protection_rules"] = None
-        self.assertTrue(protection_errors(self.environment, self.policies))
+        self.assertTrue(protection_errors(self.environment, self.policies, self.repository))
 
     def test_administrative_bypass_and_unknown_bypass_state_are_rejected(self):
         for value in (True, None, "false"):
             self.environment["can_admins_bypass"] = value
-            self.assertTrue(protection_errors(self.environment, self.policies), value)
+            self.assertTrue(protection_errors(self.environment, self.policies, self.repository), value)
+
+    def test_non_owner_reviewer_is_rejected(self):
+        environment = copy.deepcopy(self.environment)
+        environment["protection_rules"][0]["reviewers"][0]["reviewer"]["id"] = 2
+        self.assertTrue(protection_errors(environment, self.policies, self.repository))
+
+    def test_owner_only_identity_is_explicit(self):
+        repository = copy.deepcopy(self.repository)
+        repository["owner"]["login"] = "someone-else"
+        self.assertTrue(protection_errors(self.environment, self.policies, repository))
 
 
 if __name__ == "__main__":

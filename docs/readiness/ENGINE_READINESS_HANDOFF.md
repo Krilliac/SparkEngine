@@ -4929,7 +4929,7 @@ Technical rehearsal, qualification sign-off, and release approval must finish be
 3. Clean install, N-1 upgrade, uninstall, rollback, repair, and recovery drills pass
 4. Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance
 5. The profile-required-gates and release-approval jobs execute and block on failure; no planned rehearsal selector remains
-6. Named qualification sign-off is retained and the stable-release environment prevents self-review and administrative bypass
+6. Named qualification sign-off is retained and the stable-release environment enforces the owner-only required approval contract with administrative bypass disabled
 
 **Required commands**
 

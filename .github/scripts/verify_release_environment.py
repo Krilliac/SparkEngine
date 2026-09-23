@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 ENVIRONMENT = "stable-release"
+OWNER_ONLY_APPROVER = "Krilliac"
 
 
 def unique_object(pairs):
@@ -20,7 +21,7 @@ def unique_object(pairs):
     return result
 
 
-def protection_errors(environment, policies):
+def protection_errors(environment, policies, repository_metadata=None):
     errors = []
     if not isinstance(environment, dict) or environment.get("name") != ENVIRONMENT:
         return ["the stable-release environment does not exist or has the wrong identity"]
@@ -34,8 +35,8 @@ def protection_errors(environment, policies):
         errors.append("configure exactly one required-reviewers rule")
     else:
         rule = reviewers[0]
-        if rule.get("prevent_self_review") is not True:
-            errors.append("enable prevention of self-review")
+        if rule.get("prevent_self_review") is not False:
+            errors.append("owner-only stable release must explicitly allow the sole owner approver to self-approve")
         assigned = rule.get("reviewers")
         if not isinstance(assigned, list) or not assigned or any(
             not isinstance(entry, dict) or entry.get("type") not in {"User", "Team"}
@@ -44,6 +45,17 @@ def protection_errors(environment, policies):
             for entry in assigned or []
         ):
             errors.append("assign at least one real required reviewer")
+        elif len(assigned) != 1 or assigned[0].get("type") != "User":
+            errors.append("owner-only stable release must assign exactly one user reviewer")
+        else:
+            reviewer_id = assigned[0].get("reviewer", {}).get("id")
+            owner = repository_metadata.get("owner") if isinstance(repository_metadata, dict) else None
+            if not isinstance(owner, dict) or type(owner.get("id")) is not int or owner.get("id") <= 0:
+                errors.append("repository owner identity is required to bind the owner-only approver")
+            elif reviewer_id != owner["id"]:
+                errors.append("stable-release reviewer must be the repository owner")
+            if not isinstance(owner, dict) or owner.get("login") != OWNER_ONLY_APPROVER:
+                errors.append(f"stable-release owner-only approver must be {OWNER_ONLY_APPROVER}")
     if environment.get("deployment_branch_policy") != {"protected_branches": False, "custom_branch_policies": True}:
         errors.append("restrict deployment to the custom Working branch policy")
     entries = policies.get("branch_policies") if isinstance(policies, dict) else None
@@ -59,8 +71,10 @@ def verify(repository, *, runner=subprocess.run):
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("invalid repository identity")
     documents = []
-    for suffix in ("", "/deployment-branch-policies?per_page=100"):
-        response = runner(["gh", "api", f"repos/{repository}/environments/{ENVIRONMENT}{suffix}"],
+    for endpoint in (f"repos/{repository}",
+                     f"repos/{repository}/environments/{ENVIRONMENT}",
+                     f"repos/{repository}/environments/{ENVIRONMENT}/deployment-branch-policies?per_page=100"):
+        response = runner(["gh", "api", endpoint],
                           capture_output=True, text=True, timeout=30, check=False)
         if response.returncode:
             raise ValueError("cannot prove stable-release protection through the GitHub API; "
@@ -70,7 +84,7 @@ def verify(repository, *, runner=subprocess.run):
             documents.append(json.loads(response.stdout, object_pairs_hook=unique_object))
         except (TypeError, json.JSONDecodeError) as error:
             raise ValueError("GitHub returned invalid environment protection evidence") from error
-    errors = protection_errors(*documents)
+    errors = protection_errors(documents[1], documents[2], documents[0])
     if errors:
         raise ValueError("stable-release is not protected: " + "; ".join(errors))
 
@@ -81,4 +95,4 @@ if __name__ == "__main__":
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         print(f"release environment preflight failed: {error}", file=sys.stderr)
         sys.exit(1)
-    print("Verified stable-release required reviewers, self-review prevention, and exact Working policy")
+    print("Verified owner-only stable-release approval, disabled administrative bypass, and exact Working policy")

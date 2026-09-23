@@ -35,9 +35,14 @@ blocked ledger or substitutes fixture tests for real qualification evidence.
 ## Protected publication authority
 
 The repository owner must create the `stable-release` GitHub environment before
-dispatching a versioned build. Configure required reviewers with at least one
-real user or team, prevent self-review, and use a custom deployment policy with
-exactly one branch entry named `Working`. Do not allow wildcard or tag entries.
+dispatching a versioned build. This repository has one authorized human release
+provider, `Krilliac`, so the environment uses an explicit owner-only contract:
+configure exactly one required reviewer, the repository owner, and allow that
+owner to approve a release they initiated. The required environment approval is
+still mandatory; this is not an approval bypass and no second reviewer is
+invented. The read-only verifier proves the reviewer identity through the
+repository API. Use a custom deployment policy with exactly one branch entry
+named `Working`. Do not allow wildcard or tag entries.
 The controller runs from the current trusted `Working` commit, even when its
 publication target is a version tag. Keep the existing Working ruleset enforced.
 Disable administrative protection bypass in the environment's settings. The API
@@ -45,7 +50,8 @@ must prove `can_admins_bypass=false`; true, missing, or unrecognized values fail
 
 The workflow checks these API-visible protections before building, on entry to
 the publication job, and immediately before publishing. The publisher job itself
-is bound to `stable-release`, so GitHub applies the reviewer gate. Nightly uses
+is bound to `stable-release`, so GitHub applies the required owner approval gate.
+Administrative bypass remains disabled. Nightly uses
 the separate `nightly-release` environment and cannot qualify stable-v1.
 
 `verify_release_environment.py` only reads GitHub metadata. Its token needs
