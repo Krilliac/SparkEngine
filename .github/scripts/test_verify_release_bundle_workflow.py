@@ -67,6 +67,10 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         self.assertIn("SPARK_RELEASE_SIGNING_PFX_BASE64: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_BASE64 }}", block)
         self.assertIn("SPARK_RELEASE_SIGNING_PFX_PASSWORD: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_PASSWORD }}", block)
         self.assertIn("Import-PfxCertificate", block)
+        self.assertIn("Get-PfxData", block)
+        self.assertIn("$myThumbprintsBefore", block)
+        self.assertIn("$introducedMyThumbprints", block)
+        self.assertIn("Expected exactly one newly imported signing certificate", block)
         self.assertIn("Cert:\\CurrentUser\\Root", block)
         self.assertIn("spark-signing-root-added.txt", block)
         self.assertIn("Export-Certificate", block)
@@ -76,6 +80,8 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         self.assertIn("/td SHA256", block)
         self.assertIn("thumbprint does not match", block)
         self.assertIn("Remove-Item -LiteralPath $pfxPath", block)
+        self.assertIn("Temporary PFX remains after cleanup", block)
+        self.assertIn("Temporary certificate remains after cleanup", block)
         self.assertIn("-Confirm:$false", block)
 
 

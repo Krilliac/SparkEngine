@@ -359,13 +359,26 @@ jobs:
         $cerPath = Join-Path $env:RUNNER_TEMP ('spark-signing-' + [guid]::NewGuid().ToString('N') + '.cer')
         $rootMarker = Join-Path $env:RUNNER_TEMP 'spark-signing-root-added.txt'
         $cert = $null
+        $introducedMyThumbprints = @()
+        $myThumbprintsBefore = @()
         try {
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:SPARK_RELEASE_SIGNING_PFX_BASE64))
           $securePassword = ConvertTo-SecureString $env:SPARK_RELEASE_SIGNING_PFX_PASSWORD -AsPlainText -Force
+          $pfxData = Get-PfxData -FilePath $pfxPath -Password $securePassword
+          $pfxThumbprints = @($pfxData.EndEntityCertificates + $pfxData.OtherCertificates | ForEach-Object { $_.Thumbprint })
+          if ($pfxThumbprints.Count -eq 0 -or ($pfxThumbprints | Sort-Object -Unique).Count -ne $pfxThumbprints.Count) {
+            throw 'PFX certificate identity set is empty or ambiguous'
+          }
+          $myThumbprintsBefore = @(Get-ChildItem -Path 'Cert:\CurrentUser\My' -ErrorAction Stop | ForEach-Object { $_.Thumbprint })
           $certificates = @(Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation 'Cert:\CurrentUser\My' -Password $securePassword)
-          if ($certificates.Count -ne 1) { throw "Expected one signing certificate in PFX; found $($certificates.Count)" }
+          $introducedMyThumbprints = @(Get-ChildItem -Path 'Cert:\CurrentUser\My' -ErrorAction Stop |
+            Where-Object { $_.Thumbprint -notin $myThumbprintsBefore } | ForEach-Object { $_.Thumbprint })
+          if ($certificates.Count -ne 1 -or $introducedMyThumbprints.Count -ne 1) {
+            throw "Expected exactly one newly imported signing certificate; PFX returned $($certificates.Count), store added $($introducedMyThumbprints.Count)"
+          }
           $cert = $certificates[0]
-          if ($null -eq $cert -or $cert.Thumbprint -ne $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant()) {
+          if ($null -eq $cert -or $cert.Thumbprint -ne $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant() -or
+              $pfxThumbprints.Count -ne 1 -or $pfxThumbprints[0] -ne $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant()) {
             throw 'Imported signing certificate thumbprint does not match the protected public thumbprint'
           }
           # Get-Command is empty on some hosted images; constrain fallback to
@@ -387,8 +400,8 @@ jobs:
             Where-Object { $_.Thumbprint -eq $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant() })
           if ($existingRoot.Count -eq 0) {
             Export-Certificate -Cert $cert -FilePath $cerPath -Type CERT -Force | Out-Null
-            Import-Certificate -FilePath $cerPath -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
             Set-Content -LiteralPath $rootMarker -Value $env:SPARK_RELEASE_SIGNER_THUMBPRINT -NoNewline
+            Import-Certificate -FilePath $cerPath -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
           } elseif ($existingRoot.Count -ne 1) {
             throw 'Pinned signer has an ambiguous preexisting root-store identity'
           }
@@ -400,11 +413,21 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "signtool failed for $($target.Name)" }
           }
         } finally {
-          if ($null -ne $cert) {
-            Remove-Item -LiteralPath ('Cert:\CurrentUser\My\' + $cert.Thumbprint) -Force -Confirm:$false -ErrorAction SilentlyContinue
+          foreach ($introducedThumbprint in $introducedMyThumbprints) {
+            $introducedPath = 'Cert:\CurrentUser\My\' + $introducedThumbprint
+            if (Test-Path -LiteralPath $introducedPath) {
+              Remove-Item -LiteralPath $introducedPath -Force -Confirm:$false -ErrorAction Stop
+            }
+            if (Test-Path -LiteralPath $introducedPath) { throw "Imported certificate remains after cleanup: $introducedThumbprint" }
           }
-          Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue
-          Remove-Item -LiteralPath $cerPath -Force -ErrorAction SilentlyContinue
+          if (Test-Path -LiteralPath $pfxPath) {
+            Remove-Item -LiteralPath $pfxPath -Force -ErrorAction Stop
+            if (Test-Path -LiteralPath $pfxPath) { throw 'Temporary PFX remains after cleanup' }
+          }
+          if (Test-Path -LiteralPath $cerPath) {
+            Remove-Item -LiteralPath $cerPath -Force -ErrorAction Stop
+            if (Test-Path -LiteralPath $cerPath) { throw 'Temporary certificate remains after cleanup' }
+          }
         }
 
     # Owner prerequisite: sign the final CPack outputs with the project-pinned
@@ -570,7 +593,10 @@ jobs:
         if ($thumbprint -notmatch '^[0-9A-F]{40}$' -or $thumbprint -ne $env:SPARK_RELEASE_SIGNER_THUMBPRINT.ToUpperInvariant()) {
           throw 'Temporary signer trust marker does not match the protected thumbprint'
         }
-        Remove-Item -LiteralPath ('Cert:\CurrentUser\Root\' + $thumbprint) -Force -Confirm:$false -ErrorAction Stop
+        $rootPath = 'Cert:\CurrentUser\Root\' + $thumbprint
+        if (Test-Path -LiteralPath $rootPath) {
+          Remove-Item -LiteralPath $rootPath -Force -Confirm:$false -ErrorAction Stop
+        }
         if (Get-ChildItem -Path 'Cert:\CurrentUser\Root' -ErrorAction Stop | Where-Object { $_.Thumbprint -eq $thumbprint }) {
           throw 'Temporary signer root certificate remains after cleanup'
         }
