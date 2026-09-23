@@ -10,6 +10,9 @@
 #include <utility>
 #include <vector>
 
+// Defined in PortableGitCacheTests.cpp; returns the number of failed checks.
+int RunPortableGitCacheTests();
+
 namespace
 {
     std::vector<std::string> DecodeProcessRunnerCommand(std::string_view command)
@@ -155,6 +158,8 @@ int main(int argc, char* argv[])
                       "detached tag checkout incorrectly required git pull");
 
     std::filesystem::remove_all(testRoot, filesystemError);
+
+    failures += RunPortableGitCacheTests();
 
     if (failures == 0)
         std::cout << "SparkInstaller git process contract tests passed\n";

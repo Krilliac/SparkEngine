@@ -81,7 +81,7 @@ concerns outside the blocked `stable-v1` contract.
 
 | Platform | Behaviour when `git` is missing |
 |---|---|
-| Windows | Auto-downloads MinGit into `%LOCALAPPDATA%/SparkInstaller/cache/mingit` and uses it. The user's system PATH is never modified. |
+| Windows | Auto-downloads the SHA-256-pinned MinGit archive, extracts it into a unique staging directory under `%LOCALAPPDATA%/SparkInstaller/cache`, and only then renames it to `cache/mingit` with a hash activation marker. A cached `mingit` tree without a matching marker (for example after an interrupted extraction), or one that is a symlink/junction, is never used: it is renamed aside to `mingit.untrusted-*` (not deleted) and replaced by a fresh verified copy. The user's system PATH is never modified. |
 | Linux | Prints a short message instructing `apt`/`dnf`/`pacman` install and exits. |
 | macOS | Prints `xcode-select --install` instruction and exits. |
 

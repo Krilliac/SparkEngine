@@ -129,6 +129,7 @@ if(SPARKINSTALLER_BUILD_TESTS)
     enable_testing()
     add_executable(SparkInstallerGitTests
         tests/GitContractTests.cpp
+        tests/PortableGitCacheTests.cpp
         src/GitRunner.cpp
         src/GitBootstrap.cpp
     )
