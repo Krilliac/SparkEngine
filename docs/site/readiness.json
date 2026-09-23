@@ -1677,12 +1677,12 @@
     {
       "id": "G18",
       "completionPhase": "publication-finalization",
-      "name": "Predecessor release rehearsal and sign-off",
+      "name": "Predecessor immutable publication and independent acceptance",
       "area": "release",
       "state": "blocked",
       "blocking": true,
-      "summary": "The reviewed v0.9.0 predecessor has not completed its exact-SHA bootstrap rehearsal or protected sign-off.",
-      "acceptanceCriteria": ["Common qualification gates pass at the reviewed predecessor SHA", "Bootstrap recovery and retention evidence pass", "No N-1 upgrade result is substituted for predecessor evidence"],
+      "summary": "The reviewed v0.9.0 predecessor has not been signed, published immutably, and independently accepted.",
+      "acceptanceCriteria": ["REL-191 common qualification and bootstrap rehearsal pass at the reviewed predecessor SHA before publication", "Krilliac gives protected owner approval with administrative bypass disabled", "Published immutable assets are independently downloaded and verified without claiming N-1 upgrade coverage"],
       "evidence": [{"type": "workflow", "path": ".github/workflows/release.yml", "label": "Release workflow"}],
       "blockingWorkItemIds": ["REL-193"]
     }
