@@ -39,7 +39,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("verify_release_policy.py", str(self.workflow["jobs"]["prepare"]))
 
     def test_policy_secret_is_bound_only_to_steps_that_need_it(self):
-        helpers = ("guard_release_mutation.py", "verify_release_policy.py", "stage_release_draft.py",
+        helpers = ("guard_release_mutation.py", "verify_release_policy.py", "verify_v090_source_seal.py", "stage_release_draft.py",
                    "release-acceptance-gate.py", "recover_release_publication.py")
         recovery = yaml.safe_load((Path(__file__).parents[1] / "workflows/release-recovery.yml").read_text())
         count = 0
@@ -57,7 +57,7 @@ class WorkflowTests(unittest.TestCase):
                         self.assertIsNone(binding, step["name"])
                     if "uses" in step:
                         self.assertIsNone(binding, step["name"])
-        self.assertEqual(count, 18)
+        self.assertEqual(count, 19)
 
     def test_every_shell_release_write_is_guarded_and_staging_is_not_opaque(self):
         steps = self.workflow["jobs"]["release"]["steps"]
@@ -140,6 +140,22 @@ class WorkflowTests(unittest.TestCase):
         consumer_scripts = "\n".join(step.get("run", "") for step in consumer["steps"])
         self.assertIn("--require-predecessor-candidate", consumer_scripts)
         self.assertIn("--require-candidate-ready", consumer_scripts)
+
+    def test_v09_source_seal_is_checked_before_mutation_and_at_final_boundary(self):
+        release = self.workflow["jobs"]["release"]
+        steps = release["steps"]
+        seal = next(step for step in steps if step["name"] == "Verify v0.9.0 source seal before publication mutation")
+        self.assertEqual(
+            seal["if"],
+            "needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version == '0.9.0'",
+        )
+        self.assertEqual(seal["env"]["RELEASE_POLICY_READ_TOKEN"], "${{ secrets.RELEASE_POLICY_READ_TOKEN }}")
+        self.assertIn("verify_v090_source_seal.py", seal["run"])
+        first_mutation = next(index for index, step in enumerate(steps)
+                              if "guard_release_mutation.py" in step.get("run", "") or "git push" in step.get("run", ""))
+        self.assertLess(steps.index(seal), first_mutation)
+        stable = next(step for step in steps if step["name"] == "Publish complete stable versioned release")
+        self.assertIn("verify_v090_source_seal.py", stable["run"])
 
 
 if __name__ == "__main__":

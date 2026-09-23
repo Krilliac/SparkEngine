@@ -1028,6 +1028,29 @@ jobs:
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: python3 .github/scripts/verify_release_environment.py
 
+    - name: Verify v0.9.0 source seal before publication mutation
+      if: needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version == '0.9.0'
+      env:
+        RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        BASELINE_COMMIT="$(python3 - <<'PY'
+        import json
+        with open("docs/site/readiness.json", encoding="utf-8") as stream:
+            source = json.load(stream)["predecessorRelease"]["sourceCommitEvidence"]
+        value = source.get("baselineCommit")
+        if not isinstance(value, str):
+            raise SystemExit("v0.9.0 source seal has no baselineCommit")
+        print(value)
+        PY
+        )"
+        python3 .github/scripts/verify_v090_source_seal.py \
+          --repository "$GITHUB_REPOSITORY" \
+          --source-sha "${{ github.sha }}" \
+          --baseline-commit "$BASELINE_COMMIT" \
+          --report "$RUNNER_TEMP/v090-source-seal-pre-mutation.json"
+
     - name: Verify exact source commit passed Required CI Gate
       id: required-ci
       env:
@@ -2501,6 +2524,18 @@ jobs:
         # Candidate qualification preserves every technical gate without
         # claiming that publication and its independent verification are done.
         if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+          BASELINE_COMMIT="$(python3 - <<'PY'
+          import json
+          import os
+          with open(os.path.join(os.environ["GITHUB_WORKSPACE"], "docs/site/readiness.json"), encoding="utf-8") as stream:
+              print(json.load(stream)["predecessorRelease"]["sourceCommitEvidence"]["baselineCommit"])
+          PY
+          )"
+          python3 "$GITHUB_WORKSPACE/.github/scripts/verify_v090_source_seal.py" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-sha "${{ github.sha }}" \
+            --baseline-commit "$BASELINE_COMMIT" \
+            --report "$RUNNER_TEMP/v090-source-seal-final.json"
           python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-predecessor-candidate
         else
           python3 "$GITHUB_WORKSPACE/tools/site-data/validate.py" --require-candidate-ready

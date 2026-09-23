@@ -53,7 +53,7 @@ def predecessor_candidate():
     contract["readiness"]["predecessorRelease"] = {
         "id": "v0.9.0-predecessor", "profileId": "test-profile", "state": "candidate",
         "owner": "release-owner", "signOffEvidence": [{"label": "review", "path": "review.json"}],
-        "sourceCommitEvidence": {"commit": "0123456789abcdef0123456789abcdef01234567", "reviewPath": "review.json"},
+        "sourceCommitEvidence": {"baselineCommit": "0123456789abcdef0123456789abcdef01234567", "reviewPath": "review.json"},
         "requiredGateIds": ["technical", "mixed", "predecessor-publication"],
         "blockingWorkItemIds": ["build", "predecessor-publish"],
         "qualificationSubstitutions": {},
@@ -84,7 +84,7 @@ class ReleaseStageTests(unittest.TestCase):
 
     def test_predecessor_requires_real_reviewed_commit_evidence(self):
         contract = predecessor_candidate()
-        contract["readiness"]["predecessorRelease"]["sourceCommitEvidence"]["commit"] = "current-branch"
+        contract["readiness"]["predecessorRelease"]["sourceCommitEvidence"]["baselineCommit"] = "current-branch"
         self.assertTrue(predecessor_candidate_readiness_errors(contract))
 
     def test_predecessor_cannot_reuse_v1_finalizer_or_finish_publication(self):
@@ -121,7 +121,8 @@ class ReleaseStageTests(unittest.TestCase):
         stage["state"] = "candidate"
         stage["owner"] = "release-owner"
         stage["signOffEvidence"] = [{"label": "review", "path": "review.json"}]
-        stage["sourceCommitEvidence"]["commit"] = "0123456789abcdef0123456789abcdef01234567"
+        stage["sourceCommitEvidence"].pop("commit", None)
+        stage["sourceCommitEvidence"]["baselineCommit"] = "0123456789abcdef0123456789abcdef01234567"
         items = {item["id"]: item for item in contract["workItems"]}
         for item in items.values():
             item["status"] = "done"

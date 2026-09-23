@@ -206,8 +206,8 @@ def predecessor_candidate_readiness_errors(contract: dict[str, Any]) -> list[str
         errors.append("predecessorRelease.signOffEvidence: reviewed qualification evidence is required")
 
     source = stage.get("sourceCommitEvidence")
-    if (not isinstance(source, dict) or set(source) != {"commit", "reviewPath"}
-            or not isinstance(source.get("commit"), str) or not _COMMIT_RE.fullmatch(source["commit"])
+    if (not isinstance(source, dict) or set(source) != {"baselineCommit", "reviewPath"}
+            or not isinstance(source.get("baselineCommit"), str) or not _COMMIT_RE.fullmatch(source["baselineCommit"])
             or not isinstance(source.get("reviewPath"), str) or not source["reviewPath"].strip()):
         errors.append("predecessorRelease.sourceCommitEvidence: reviewed immutable source commit and reviewPath are required")
 
