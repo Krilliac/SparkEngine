@@ -1026,6 +1026,7 @@ target_sources(SparkTests PRIVATE
     TestFPSWeatherPort.cpp
     TestTemplateRuntimeReal.cpp
     TestUserDataPathsReal.cpp
+    TestHEAD220NullRHILifetimeReal.cpp
     TestSceneManagerUnicodeReal.cpp
     TestWeaponMechanicsReal.cpp
 )
@@ -1503,6 +1504,14 @@ add_test(
 set_tests_properties(NullRHIWindowsLifecycleParserContract PROPERTIES
     LABELS "nullrhi-headless;stable-v1;unit"
     TIMEOUT 10)
+
+# HEAD-220: NullRHIDevice live-resource accounting follows resource lifetime
+# (leak/soak signal for packaged headless runs).
+add_test(NAME NullRHIResourceLifetime COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
+set_tests_properties(NullRHIResourceLifetime PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=NullRHI_Lifetime_;SPARK_TEST_EXPECT_COUNT=6"
+    LABELS "nullrhi-headless;stable-v1;unit"
+    TIMEOUT 30)
 
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(NOT TARGET SparkEngine OR NOT TARGET SparkGameFPS)
