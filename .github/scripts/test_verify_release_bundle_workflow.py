@@ -67,12 +67,16 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         self.assertIn("SPARK_RELEASE_SIGNING_PFX_BASE64: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_BASE64 }}", block)
         self.assertIn("SPARK_RELEASE_SIGNING_PFX_PASSWORD: ${{ secrets.SPARK_RELEASE_SIGNING_PFX_PASSWORD }}", block)
         self.assertIn("Import-PfxCertificate", block)
-        self.assertIn("signtool.Source sign", block)
+        self.assertIn("Cert:\\CurrentUser\\Root", block)
+        self.assertIn("spark-signing-root-added.txt", block)
+        self.assertIn("Export-Certificate", block)
+        self.assertIn("$signtoolPath sign", block)
         self.assertIn("/fd SHA256", block)
         self.assertIn("/tr 'http://timestamp.digicert.com'", block)
         self.assertIn("/td SHA256", block)
         self.assertIn("thumbprint does not match", block)
         self.assertIn("Remove-Item -LiteralPath $pfxPath", block)
+        self.assertIn("-Confirm:$false", block)
 
 
 if __name__ == "__main__":
