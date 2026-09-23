@@ -17,21 +17,27 @@ Website: [sparkengine.dev](https://sparkengine.dev/)
 
 ## Getting Started
 
-Windows nightly artifacts are published as immutable, uniquely tagged
-prereleases for development evaluation. They are not a versioned release and do
-not certify `stable-v1`. Development artifacts may carry checksums and
-provenance attestations, but no versioned Shipping-configuration artifact has
-same-commit qualification across the required install, upgrade, rollback, and
-release gates. The historical `nightly` rolling release is preserved and is no
-longer overwritten; choose the newest timestamped nightly from the releases
-page below.
+The release workflow is being migrated to immutable, uniquely tagged nightly
+prereleases for development evaluation. Until the repository immutability policy
+and `nightly-release` environment are configured, no new immutable nightly can
+publish; the historical rolling `nightly` release remains available and is not
+overwritten. Once enabled, choose the newest `nightly-<run>-<attempt>-<sha>`
+prerelease from the releases page. Nightlies do not certify `stable-v1`.
+Development artifacts may carry checksums and provenance attestations, but no
+versioned Shipping-configuration artifact has same-commit qualification across
+the required install, upgrade, rollback, and release gates.
 "Release" in an asset name denotes the build configuration only. Debug builds
 include additional runtime diagnostics. The bootstrap installer clones and builds
 the selected engine revision locally.
 
-[![Browse immutable nightly builds](https://img.shields.io/badge/Download-Immutable_Nightly_Builds-2ea44f?style=for-the-badge&logo=github)](https://github.com/Krilliac/SparkEngine/releases)
+The planned stable Windows MSI uses a project-pinned self-signed certificate,
+not a publicly trusted code-signing certificate. Windows may show an untrusted
+or Unknown Publisher warning; verify the published checksum and certificate
+thumbprint before installing. No stable release is certified yet.
 
-[Current immutable nightly artifacts and checksums](https://github.com/Krilliac/SparkEngine/releases) ·
+[![Browse release builds](https://img.shields.io/badge/Browse-Release_Builds-2ea44f?style=for-the-badge&logo=github)](https://github.com/Krilliac/SparkEngine/releases)
+
+[Available artifacts and checksums](https://github.com/Krilliac/SparkEngine/releases) ·
 [installer documentation](SparkInstaller/README.md)
 
 **Build from source:**
@@ -208,7 +214,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 7,395 test definitions across 607 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 7,408 test definitions across 608 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
@@ -377,7 +383,7 @@ SparkEngine/
 ├── SparkEditor/Source/    65 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
-├── Tests/                 7,395 test definitions, 607 files
+├── Tests/                 7,408 test definitions, 608 files
 ├── wiki/                  198 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```

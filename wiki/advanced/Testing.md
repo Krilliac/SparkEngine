@@ -696,7 +696,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*607 test-bearing `.cpp`/`.mm` files, 7395 source-level test definitions*
+*608 test-bearing `.cpp`/`.mm` files, 7408 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -885,7 +885,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEngineSettingsEdgeCases` | 45 |
 | `TestEngineSettingsParser` | 28 |
 | `TestEngineSettingsReal` | 13 |
-| `TestEngineWiringReal` | 8 |
+| `TestEngineWiringReal` | 9 |
 | `TestEntityArchetype` | 5 |
 | `TestEntityEventBus` | 11 |
 | `TestEntityEventBusReal` | 6 |
@@ -958,7 +958,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 17 |
 | `TestGraphicsEngine` | 14 |
-| `TestGraphicsInitFallback` | 5 |
+| `TestGraphicsInitFallback` | 7 |
 | `TestGraphicsIntegration` | 33 |
 | `TestGraphicsStress` | 15 |
 | `TestGraphicsSubsystems` | 45 |
@@ -988,6 +988,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLagCompensationIntegration` | 4 |
 | `TestLauncherPaths` | 4 |
 | `TestLauncherProcess` | 4 |
+| `TestLegacyGameObjectMaterial` | 2 |
 | `TestLevelStreamingSystemPhaseAA` | 11 |
 | `TestLightManager` | 13 |
 | `TestLightmapBaker` | 9 |
@@ -1177,7 +1178,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkEngineCameraOwnership` | 1 |
 | `TestSparkError` | 6 |
 | `TestSparkGameARPG` | 5 |
-| `TestSparkGameFPSLoopReal` | 19 |
+| `TestSparkGameFPSLoopReal` | 27 |
 | `TestSparkGameFPSMirrorCompanionsReal` | 14 |
 | `TestSparkGamePlatformer` | 5 |
 | `TestSparkGameRPG` | 5 |
