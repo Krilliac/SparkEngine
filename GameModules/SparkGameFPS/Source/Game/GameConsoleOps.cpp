@@ -37,6 +37,8 @@
 #include "Engine/Networking/NetworkManager.h"
 #include <algorithm>
 #include <filesystem>
+#include <charconv>
+#include <cmath>
 
 #include "Utils/LogMacros.h"
 
@@ -376,6 +378,80 @@ void Game::RefreshGraphicsSettings()
 // ENHANCED SCENE MANAGEMENT METHODS - Full Implementation
 // ============================================================================
 
+void Game::RefreshAuthoredSceneRuntimeState()
+{
+    if (!m_sceneManager)
+        return;
+
+    const SceneNode* authoredCamera = nullptr;
+    for (int i = 0; i < m_sceneManager->GetNodeCount(); ++i)
+    {
+        const SceneNode* node = m_sceneManager->GetNode(i);
+        if (!node || node->type != "Camera")
+            continue;
+        const auto projection = node->properties.find("projection");
+        if (projection != node->properties.end() && projection->second != "perspective")
+            continue;
+        if (!authoredCamera)
+            authoredCamera = node;
+        const auto main = node->properties.find("isMain");
+        if (main != node->properties.end() && (main->second == "true" || main->second == "1"))
+        {
+            authoredCamera = node;
+            break;
+        }
+    }
+
+    if (m_camera)
+    {
+        m_camera->SetPosition(authoredCamera ? authoredCamera->position : DirectX::XMFLOAT3{0.0f, 2.0f, -20.0f});
+        if (authoredCamera)
+        {
+            m_camera->Console_SetRotation(authoredCamera->rotation.x, authoredCamera->rotation.y,
+                                          authoredCamera->rotation.z);
+            auto parseFinite = [](const std::string& text, float& value)
+            {
+                const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
+                return result.ec == std::errc{} && result.ptr == text.data() + text.size() && std::isfinite(value);
+            };
+            const auto nearProperty = authoredCamera->properties.find("nearPlane");
+            const auto farProperty = authoredCamera->properties.find("farPlane");
+            float nearPlane = 0.0f;
+            float farPlane = 0.0f;
+            if (nearProperty != authoredCamera->properties.end() && farProperty != authoredCamera->properties.end() &&
+                parseFinite(nearProperty->second, nearPlane) && parseFinite(farProperty->second, farPlane) &&
+                nearPlane >= 0.01f && nearPlane <= 10.0f && farPlane >= 100.0f && farPlane <= 10000.0f &&
+                nearPlane < farPlane)
+            {
+                m_camera->Console_SetClippingPlanes(nearPlane, farPlane);
+            }
+        }
+        if (m_player)
+            m_player->SetPosition(m_camera->GetPosition());
+    }
+
+    // Rebuild authored spawn bindings while preserving the existing player,
+    // score, and event subscriptions.  InitializeRespawnAndVehicles creates a
+    // fresh spawn state and reinstalls the player's death callback.
+    if (m_respawnSystem)
+        InitializeRespawnAndVehicles();
+
+    if (m_waveSpawner)
+    {
+        std::vector<DirectX::XMFLOAT3> waveSpawns;
+        for (int i = 0; i < m_sceneManager->GetNodeCount(); ++i)
+        {
+            const SceneNode* node = m_sceneManager->GetNode(i);
+            if (!node || node->type != "SpawnPoint")
+                continue;
+            const auto tag = node->properties.find("tag");
+            if (tag != node->properties.end() && tag->second == "wave_spawn")
+                waveSpawns.push_back(node->position);
+        }
+        m_waveSpawner->Initialize(waveSpawns);
+    }
+}
+
 bool Game::LoadScene(const std::string& scenePath)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Loading scene via console integration", L"INFO");
@@ -405,6 +481,7 @@ bool Game::LoadScene(const std::string& scenePath)
             // Clear existing game objects if loading a new scene
             m_enemies.clear();
             m_gameObjects.clear();
+            RefreshAuthoredSceneRuntimeState();
 
             std::wstring loadMsg = L"Scene loaded successfully: " + wScenePath;
             LOG_TO_CONSOLE_IMMEDIATE(loadMsg, L"SUCCESS");

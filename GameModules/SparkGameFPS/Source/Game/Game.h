@@ -603,6 +603,11 @@ class SPARK_GAME_API Game
     // material paths remain functional for both startup and console reloads.
     void BindSceneMaterialRoots();
 
+    // Re-apply authored camera, respawn, and wave-spawn state after a console
+    // scene reload.  Startup performs the same bindings while constructing the
+    // systems; reloads must not leave those systems pointing at the old scene.
+    void RefreshAuthoredSceneRuntimeState();
+
     /**
      * @brief Update the camera based on input and game state
      * @param dt Delta time for frame-rate independent movement
