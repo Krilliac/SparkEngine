@@ -1357,8 +1357,11 @@ add_test(
         "-DSPARK_TEST_TIMEOUT_SECONDS=$<IF:$<CONFIG:Debug>,${SPARK_TEST_TIMEOUT_DEBUG},${SPARK_TEST_TIMEOUT_OPTIMIZED}>"
         -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
 )
+# The main suite holds both unit and Integration_* families, so the documented
+# `ctest -L unit` and `ctest -L integration` selectors must both reach it.
 set_tests_properties(SparkEngineTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_EXCLUDE=${SPARK_TEST_LOAD_EXCLUDE}"
+    LABELS "sparktests;unit;integration"
     TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
 
 add_test(
@@ -1643,6 +1646,9 @@ add_test(
         -DSPARK_TEMPLATE_ROOT=${CMAKE_SOURCE_DIR}/Templates
         -P ${CMAKE_SOURCE_DIR}/cmake/VerifyTemplateAssets.cmake
 )
+set_tests_properties(SparkTemplateAssets PROPERTIES
+    LABELS "template;asset;unit"
+    TIMEOUT 60)
 add_test(
     NAME SparkVersionSingleSource
     COMMAND ${CMAKE_COMMAND}
@@ -1659,6 +1665,9 @@ add_test(
         -DSPARK_TEMPLATE_ROOT=${CMAKE_SOURCE_DIR}/Templates
         -P ${CMAKE_SOURCE_DIR}/cmake/VerifyTemplateServiceConfigs.cmake
 )
+set_tests_properties(SparkTemplateServiceConfigs PROPERTIES
+    LABELS "template;config;unit"
+    TIMEOUT 60)
 add_test(
     NAME SparkTemplateServiceConfigValidatorTests
     COMMAND ${CMAKE_COMMAND}
@@ -1668,6 +1677,9 @@ add_test(
         -DSPARK_BINARY_ROOT=${CMAKE_BINARY_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/TestTemplateServiceConfigValidator.cmake
 )
+set_tests_properties(SparkTemplateServiceConfigValidatorTests PROPERTIES
+    LABELS "template;config;unit"
+    TIMEOUT 120)
 add_test(
     NAME SparkPackageModuleSidecarValidatorTests
     COMMAND ${CMAKE_COMMAND}
@@ -2082,6 +2094,19 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_SOURCE_DIR}/Tools/validate_template_runtime_sheets.py
             ${CMAKE_SOURCE_DIR}/Templates
     )
+    set_tests_properties(SparkTemplateRuntimeSheets PROPERTIES
+        LABELS "template;static;python"
+        TIMEOUT 60)
+
+    # CI-110: CTest applies no timeout to a test without TIMEOUT (this project
+    # never includes CTest.cmake), so one hang would stall the run instead of
+    # failing. This gate keeps every registration above bounded and labelled.
+    add_test(
+        NAME SparkCTestTimeoutPolicy
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_validate_ctest_policy.py)
+    set_tests_properties(SparkCTestTimeoutPolicy PROPERTIES
+        LABELS "ci;test-policy;unit;python"
+        TIMEOUT 60)
     add_test(
         NAME SparkCliContract
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
