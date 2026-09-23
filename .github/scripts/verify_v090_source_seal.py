@@ -13,7 +13,19 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ENVIRONMENT = "stable-release"
 VARIABLE = "SPARKENGINE_V090_REVIEWED_SHA"
 ALLOWED_PREFIXES = ("docs/readiness/work-items/",)
-ALLOWED_FILES = {"docs/site/readiness.json"}
+ALLOWED_FILES = {
+    "docs/site/readiness.json",
+    "docs/readiness/ENGINE_READINESS_HANDOFF.md",
+}
+
+
+def _unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        result[key] = value
+    return result
 
 
 def validate_seal(source_sha: str, baseline_commit: str, parents: list[str], changed_paths: list[str], reviewed_sha: str) -> dict:
@@ -52,8 +64,8 @@ def _api_variable(repository: str, token: str, *, runner=subprocess.run) -> str:
     if response.returncode:
         raise ValueError("cannot read the protected stable-release source seal")
     try:
-        payload = json.loads(response.stdout)
-    except (TypeError, json.JSONDecodeError) as error:
+        payload = json.loads(response.stdout, object_pairs_hook=_unique_object)
+    except (TypeError, ValueError) as error:
         raise ValueError("GitHub returned invalid source-seal evidence") from error
     if not isinstance(payload, dict) or set(payload) - {"name", "value", "created_at", "updated_at"}:
         raise ValueError("GitHub returned an unexpected source-seal variable shape")

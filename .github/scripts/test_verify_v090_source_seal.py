@@ -3,7 +3,7 @@ import subprocess
 import unittest
 from unittest.mock import Mock
 
-from verify_v090_source_seal import validate_seal, verify
+from verify_v090_source_seal import _api_variable, validate_seal, verify
 
 
 SOURCE = "a" * 40
@@ -32,6 +32,13 @@ class SourceSealTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "non-readiness"):
             validate_seal(SOURCE, BASELINE, [BASELINE], ["CMakeLists.txt"], SOURCE)
 
+    def test_generated_handoff_is_allowed_seal_metadata(self):
+        evidence = validate_seal(
+            SOURCE, BASELINE, [BASELINE],
+            ["docs/readiness/ENGINE_READINESS_HANDOFF.md"], SOURCE,
+        )
+        self.assertIn("docs/readiness/ENGINE_READINESS_HANDOFF.md", evidence["changed_paths"])
+
     def test_environment_variable_is_read_from_protected_endpoint(self):
         api = Mock(return_value=subprocess.CompletedProcess([], 0, json.dumps({"name": "SPARKENGINE_V090_REVIEWED_SHA", "value": SOURCE}), ""))
         git = Mock(side_effect=[
@@ -51,6 +58,15 @@ class SourceSealTests(unittest.TestCase):
         ])
         with self.assertRaisesRegex(ValueError, "protected stable-release source seal"):
             verify("owner/repo", SOURCE, BASELINE, token="secret", runner=api, git_runner=git)
+
+    def test_duplicate_environment_variable_fields_fail_closed(self):
+        response = (
+            '{"name":"SPARKENGINE_V090_REVIEWED_SHA","value":"' + SOURCE
+            + '","value":"' + ("c" * 40) + '"}'
+        )
+        api = Mock(return_value=subprocess.CompletedProcess([], 0, response, ""))
+        with self.assertRaisesRegex(ValueError, "invalid source-seal evidence"):
+            _api_variable("owner/repo", "secret", runner=api)
 
 
 if __name__ == "__main__":

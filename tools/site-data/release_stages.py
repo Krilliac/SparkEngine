@@ -209,7 +209,7 @@ def predecessor_candidate_readiness_errors(contract: dict[str, Any]) -> list[str
     if (not isinstance(source, dict) or set(source) != {"baselineCommit", "reviewPath"}
             or not isinstance(source.get("baselineCommit"), str) or not _COMMIT_RE.fullmatch(source["baselineCommit"])
             or not isinstance(source.get("reviewPath"), str) or not source["reviewPath"].strip()):
-        errors.append("predecessorRelease.sourceCommitEvidence: reviewed immutable source commit and reviewPath are required")
+        errors.append("predecessorRelease.sourceCommitEvidence: reviewed baseline commit and reviewPath are required")
 
     substitutions = stage.get("qualificationSubstitutions")
     if not isinstance(substitutions, dict):

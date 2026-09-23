@@ -21,7 +21,7 @@
     "owner": "unassigned",
     "signOffEvidence": [],
     "sourceCommitEvidence": {
-      "commit": "",
+      "baselineCommit": "",
       "reviewPath": "docs/readiness/ENGINE_READINESS_HANDOFF.md"
     },
     "requiredGateIds": ["G00", "G01", "G02", "G03", "G04", "G05", "G06", "G07", "G08", "G09", "G10", "G13", "G14", "G15", "G16", "G18"],
