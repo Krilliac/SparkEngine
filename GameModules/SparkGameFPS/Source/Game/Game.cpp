@@ -36,7 +36,10 @@
 #include "Console/AdvancedConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
 #include "Audio/MusicManager.h"
+#include <charconv>
+#include <cmath>
 #include <filesystem>
+#include <format>
 
 // Centralized logging macros (previously defined locally with inconsistent rate limits)
 #include "Utils/LogMacros.h"
@@ -97,11 +100,74 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     ASSERT_MSG(aspect > 0.0f, "Invalid aspect ratio");
 
     m_camera->Initialize(aspect);
-    // The legacy .scene loader does not apply [Camera] to this game camera.
-    // Match the authored North_Spawn instead: z=-5 puts the lens directly
-    // against the center building's back wall and paints a solid frame.
-    m_camera->SetPosition({0.0f, 2.0f, -20.0f});
-    LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized at north arena spawn", L"INFO");
+    const SceneNode* authoredCamera = nullptr;
+    if (sceneLoaded)
+    {
+        for (int i = 0; i < m_sceneManager->GetNodeCount(); ++i)
+        {
+            const SceneNode* node = m_sceneManager->GetNode(i);
+            if (!node || node->type != "Camera")
+                continue;
+            const auto projection = node->properties.find("projection");
+            if (projection != node->properties.end() && projection->second != "perspective")
+            {
+                LOG_TO_CONSOLE_IMMEDIATE(L"Unsupported authored camera projection; keeping perspective fallback",
+                                         L"WARNING");
+                continue;
+            }
+            if (!authoredCamera)
+                authoredCamera = node;
+            const auto main = node->properties.find("isMain");
+            if (main != node->properties.end() && (main->second == "true" || main->second == "1"))
+            {
+                authoredCamera = node;
+                break;
+            }
+        }
+    }
+    // Preserve the verified visible fallback when older scenes have no camera.
+    m_camera->SetPosition(authoredCamera ? authoredCamera->position : XMFLOAT3{0.0f, 2.0f, -20.0f});
+    if (authoredCamera)
+    {
+        m_camera->Console_SetRotation(authoredCamera->rotation.x, authoredCamera->rotation.y,
+                                      authoredCamera->rotation.z);
+
+        const auto nearProperty = authoredCamera->properties.find("nearPlane");
+        const auto farProperty = authoredCamera->properties.find("farPlane");
+        if (nearProperty != authoredCamera->properties.end() && farProperty != authoredCamera->properties.end())
+        {
+            auto parseFiniteFloat = [](const std::string& text, float& value)
+            {
+                const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
+                return result.ec == std::errc{} && result.ptr == text.data() + text.size() && std::isfinite(value);
+            };
+            float nearPlane = 0.0f;
+            float farPlane = 0.0f;
+            if (parseFiniteFloat(nearProperty->second, nearPlane) && parseFiniteFloat(farProperty->second, farPlane) &&
+                nearPlane >= 0.01f && nearPlane <= 10.0f && farPlane >= 100.0f && farPlane <= 10000.0f &&
+                nearPlane < farPlane)
+            {
+                m_camera->Console_SetClippingPlanes(nearPlane, farPlane);
+            }
+            else
+            {
+                LOG_TO_CONSOLE_IMMEDIATE(L"Invalid authored camera clipping; keeping camera defaults", L"WARNING");
+            }
+        }
+
+        const auto cameraState = m_camera->Console_GetState();
+        LOG_TO_CONSOLE_IMMEDIATE(
+            std::format(L"Camera authored state: rotation ({:.1f}, {:.1f}, {:.1f}) near/far ({:.2f}, {:.1f})",
+                        cameraState.rotation.x, cameraState.rotation.y, cameraState.rotation.z, cameraState.nearPlane,
+                        cameraState.farPlane),
+            L"INFO");
+    }
+    const XMFLOAT3 cameraPosition = m_camera->GetPosition();
+    const std::wstring cameraSource = authoredCamera ? L"authored scene" : L"fallback";
+    LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized from " + cameraSource + L" at (" + std::to_wstring(cameraPosition.x) +
+                                 L", " + std::to_wstring(cameraPosition.y) + L", " + std::to_wstring(cameraPosition.z) +
+                                 L")",
+                             L"INFO");
 
     /* Class System -----------------------------------------*/
     m_classSystem = std::make_unique<Spark::ClassSystem>();
@@ -142,6 +208,10 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
         return hr;
     }
+    // Player movement/physics owns the camera position after the first tick.
+    // Start both from the authored camera so a locked or skipped movement tick
+    // cannot snap the view back to the player's constructor origin.
+    m_player->SetPosition(m_camera->GetPosition());
 
     // Set graphics engine for weapon rendering shader setup
     m_player->SetGraphicsEngine(m_graphics);

@@ -16,6 +16,7 @@
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <limits>
 #include <sstream>
 
 namespace Spark
@@ -78,7 +79,7 @@ namespace Spark
     RespawnPoint RespawnSystem::GetBestSpawnPoint(int teamID) const
     {
         const RespawnPoint* best = nullptr;
-        int bestPriority = -999999;
+        int bestPriority = std::numeric_limits<int>::min();
 
         for (const auto& point : m_spawnPoints)
         {
@@ -86,7 +87,7 @@ namespace Spark
                 continue;
             if (teamID >= 0 && point.teamID >= 0 && point.teamID != teamID)
                 continue;
-            if (point.priority > bestPriority)
+            if (!best || point.priority > bestPriority)
             {
                 bestPriority = point.priority;
                 best = &point;

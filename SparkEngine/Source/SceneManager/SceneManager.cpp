@@ -24,6 +24,7 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
+#include <cmath>
 
 using DirectX::XMFLOAT3;
 
@@ -103,7 +104,9 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
     {
         m_currentFilePath = filepath;
         m_dirty = false;
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene loaded: " + std::to_wstring(m_objects.size()) + L" objects, " +
+        const auto instantiated =
+            std::count_if(m_objects.begin(), m_objects.end(), [](const auto& object) { return object != nullptr; });
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene loaded: " + std::to_wstring(instantiated) + L" objects, " +
                                      std::to_wstring(m_sceneNodes.size()) + L" nodes",
                                  L"SUCCESS");
 
@@ -541,12 +544,28 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
 void SceneManager::InstantiateNodes()
 {
     if (!m_graphics || !m_graphics->GetDevice() || !m_graphics->GetContext())
+    {
+        // Data-only scenes still preserve the documented node/object index
+        // relationship; mesh slots remain null until a graphics device exists.
+        m_objects.clear();
+        m_objects.resize(m_sceneNodes.size());
         return;
+    }
 
     for (const auto& node : m_sceneNodes)
     {
         if (node.type.empty())
+        {
+            m_objects.push_back(nullptr);
             continue;
+        }
+
+        // These authored scene entries carry game data, not renderable meshes.
+        if (node.type == "Camera" || node.type == "SpawnPoint")
+        {
+            m_objects.push_back(nullptr);
+            continue;
+        }
 
         std::unique_ptr<GameObject> obj;
 
@@ -639,15 +658,29 @@ static bool ParseFloat3(const std::string& str, DirectX::XMFLOAT3& out)
     return bool(ss >> out.x >> out.y >> out.z);
 }
 
+// Data-only camera/spawn locations must not silently become the origin when
+// authored coordinates are malformed. Keep the permissive parser above for
+// legacy geometry and metadata compatibility (including trailing annotations).
+static bool ParseFiniteFloat3(const std::string& str, DirectX::XMFLOAT3& out)
+{
+    std::string s = str;
+    for (char& c : s)
+        if (c == ',')
+            c = ' ';
+    std::istringstream ss(s);
+    DirectX::XMFLOAT3 parsed{};
+    if (!(ss >> parsed.x >> parsed.y >> parsed.z))
+        return false;
+    ss >> std::ws;
+    if (!ss.eof() || !std::isfinite(parsed.x) || !std::isfinite(parsed.y) || !std::isfinite(parsed.z))
+        return false;
+    out = parsed;
+    return true;
+}
+
 bool SceneManager::LoadCustom(const std::wstring& path)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager::LoadCustom called. path=" + path, L"OPERATION");
-    if (!m_graphics || !m_graphics->GetDevice() || !m_graphics->GetContext())
-    {
-        SPARK_REQUIRE_MSG(Spark::LogCategory::Scene, false, "SceneManager: Graphics device/context is null");
-        return false;
-    }
-
     Clear();
 
     std::ifstream file(WideToNarrow(path));
@@ -661,7 +694,8 @@ bool SceneManager::LoadCustom(const std::wstring& path)
     std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
-    bool isINIFormat = (content.contains("[Scene]") || content.contains("[Object]"));
+    bool isINIFormat = (content.contains("[Scene]") || content.contains("[Object]") || content.contains("[Camera]") ||
+                        content.contains("[SpawnPoint]"));
 
     if (isINIFormat)
     {
@@ -671,17 +705,28 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         std::string currentSection;
         SceneNode currentNode;
         bool hasNode = false;
+        bool hasPosition = false;
+        bool validDataTransform = true;
 
         auto flushNode = [&]()
         {
             if (hasNode && !currentNode.type.empty())
             {
-                if (currentNode.name.empty())
-                    currentNode.name = currentNode.type + "_" + std::to_string(m_sceneNodes.size());
-                AddNode(currentNode);
+                const bool dataNode = currentNode.type == "Camera" || currentNode.type == "SpawnPoint";
+                const auto tag = currentNode.properties.find("tag");
+                const bool missingSpawnTag =
+                    currentNode.type == "SpawnPoint" && (tag == currentNode.properties.end() || tag->second.empty());
+                if ((!dataNode || (hasPosition && validDataTransform)) && !missingSpawnTag)
+                {
+                    if (currentNode.name.empty())
+                        currentNode.name = currentNode.type + "_" + std::to_string(m_sceneNodes.size());
+                    AddNode(currentNode);
+                }
             }
             currentNode = SceneNode{};
             hasNode = false;
+            hasPosition = false;
+            validDataTransform = true;
         };
 
         while (std::getline(ss, line))
@@ -698,8 +743,13 @@ bool SceneManager::LoadCustom(const std::wstring& path)
                 flushNode();
                 currentSection = line.substr(1, line.size() - 2);
 
-                if (currentSection == "Object" || currentSection == "Terrain" || currentSection == "SpawnPoint")
+                if (currentSection == "Object" || currentSection == "Terrain" || currentSection == "SpawnPoint" ||
+                    currentSection == "Camera")
+                {
                     hasNode = true;
+                    if (currentSection == "SpawnPoint" || currentSection == "Camera")
+                        currentNode.type = currentSection;
+                }
                 continue;
             }
 
@@ -730,15 +780,31 @@ bool SceneManager::LoadCustom(const std::wstring& path)
             else if (hasNode)
             {
                 if (key == "type")
-                    currentNode.type = value;
+                {
+                    if (currentSection == "Camera" || currentSection == "SpawnPoint")
+                        currentNode.properties[key] = value;
+                    else
+                        currentNode.type = value;
+                }
                 else if (key == "name")
                     currentNode.name = value;
                 else if (key == "model")
                     currentNode.modelPath = value;
                 else if (key == "position")
-                    ParseFloat3(value, currentNode.position);
+                {
+                    hasPosition = true;
+                    if (currentSection == "Camera" || currentSection == "SpawnPoint")
+                        validDataTransform = ParseFiniteFloat3(value, currentNode.position) && validDataTransform;
+                    else
+                        ParseFloat3(value, currentNode.position);
+                }
                 else if (key == "rotation")
-                    ParseFloat3(value, currentNode.rotation);
+                {
+                    if (currentSection == "Camera" || currentSection == "SpawnPoint")
+                        validDataTransform = ParseFiniteFloat3(value, currentNode.rotation) && validDataTransform;
+                    else
+                        ParseFloat3(value, currentNode.rotation);
+                }
                 else if (key == "scale")
                     ParseFloat3(value, currentNode.scale);
                 else if (key == "material")
@@ -754,6 +820,12 @@ bool SceneManager::LoadCustom(const std::wstring& path)
     else
     {
         // Legacy space-delimited format: Type X Y Z [params...]
+        if (!m_graphics || !m_graphics->GetDevice() || !m_graphics->GetContext())
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Legacy object format requires a graphics device/context",
+                                     L"ERROR");
+            return false;
+        }
         std::istringstream ss(content);
         std::string line;
         int lineNum = 0;

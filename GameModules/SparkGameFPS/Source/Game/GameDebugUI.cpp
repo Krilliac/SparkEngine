@@ -5,6 +5,7 @@
 
 #include "Game.h"
 
+#include "Camera/SparkEngineCamera.h"
 #include "Player.h"
 #include "ProgressionSystem.h"
 #include "WaveSpawner.h"
@@ -87,6 +88,15 @@ std::string Game::GetStatusString() const
                << m_player->GetShield() << '\n';
         status << "Weapon: " << WeaponTypeToString(m_player->GetCurrentWeaponType()) << " | Ammo "
                << m_player->GetCurrentAmmo() << '\n';
+    }
+
+    if (m_camera && m_player)
+    {
+        const auto camera = m_camera->GetPosition();
+        const auto player = m_player->GetPosition();
+        status << std::fixed << std::setprecision(1);
+        status << "Camera/Player XZ: (" << camera.x << ", " << camera.z << ") / (" << player.x << ", " << player.z
+               << ")\n";
     }
 
     if (m_progression)

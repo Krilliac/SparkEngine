@@ -167,6 +167,10 @@ class SceneManager
      *
      * @note This call is synchronous and may stall the main thread for large scenes.
      *       Use `LoadSceneAsync()` for seamless transitions.
+     * @note A headless graphics engine can load INI/JSON scene data without a D3D
+     *       device. `GetObjects()` then has one null slot per parsed node; load
+     *       success means data parsed, not that renderable meshes were created.
+     *       The older space-delimited object format still requires a device.
      */
     bool LoadScene(const std::wstring& filepath);
 

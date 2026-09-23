@@ -1568,6 +1568,21 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         RUN_SERIAL TRUE
         TIMEOUT 120)
 
+    # Copy the built FPS runtime to a fresh package-like directory, edit only
+    # its copied scene, and inspect post-update game/wave state plus a
+    # rendered frame. This catches hard-coded camera/spawn fallbacks.
+    add_test(
+        NAME FPSAuthoredScene_PackageLayoutEdit
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_PACKAGE_BIN=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/fps-authored/$<CONFIG>"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyFPSAuthoredScene.cmake)
+    set_tests_properties(FPSAuthoredScene_PackageLayoutEdit PROPERTIES
+        LABELS "module;fps;d3d11;scene;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 180)
+
     # MOD-310 selector contracts. Each entry invokes a real production-source
     # or installed-package test; these are bounded evidence slices, not a
     # declaration that the full FPS module is public-SDK compliant or released.
@@ -1575,7 +1590,7 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         NAME FPSSinglePlayerSlice_RespawnProductionSource
         COMMAND $<TARGET_FILE:SparkTests> --quiet --warn-is-error)
     set_tests_properties(FPSSinglePlayerSlice_RespawnProductionSource PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME=FPSRespawn_;SPARK_TEST_EXPECT_COUNT=4"
+        ENVIRONMENT "SPARK_TEST_NAME=FPSRespawn_;SPARK_TEST_EXPECT_COUNT=5"
         LABELS "module;stable-v1;fps;production-source"
         RUN_SERIAL TRUE
         TIMEOUT 30)
