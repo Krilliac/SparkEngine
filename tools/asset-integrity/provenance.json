@@ -1,0 +1,297 @@
+{
+  "version": 1,
+  "root": "Assets",
+  "licenses": {
+    "CC0-1.0": {
+      "name": "Creative Commons Zero v1.0 Universal"
+    },
+    "LicenseRef-SparkOpenLicense-1.0": {
+      "name": "Spark Open License 1.0"
+    },
+    "NOASSERTION": {
+      "name": "No license asserted by any tracked record"
+    }
+  },
+  "rules": [
+    {
+      "id": "default-placeholder-generator",
+      "license": "CC0-1.0",
+      "provenance": "Procedural placeholder output of tools/generate_default_assets.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound",
+      "evidence": [
+        "tools/generate_default_assets.py",
+        "Assets/README.md"
+      ],
+      "files": {
+        "Audio/ambient_wind.wav": "5bfc870dc202942f781447c5ab999cb29c08ce2018058e12a14582f7652e22b7",
+        "Audio/damage.wav": "1c769e43c5e3aaae974ff2ab038a7369c3406c16eff9e5e11ad5305735209435",
+        "Audio/death.wav": "4015e0e68cfb1b02fe0c065ebce3781708593f137f5092ab12aa3bb40f3101ea",
+        "Audio/explosion.wav": "6467c26c81fd91b0f601f453355df14398238e9061aae0dfac8208c96ea9abaf",
+        "Audio/footstep.wav": "ad4e568224f556fffa772ac56f738ac3c967cc1dd87b74551758e5146bf357fe",
+        "Audio/gunshot.wav": "d2e470c993787bd3255362d231f2a0ff7f5026e93d119ef5e83584dc78f4c0e5",
+        "Audio/hit_marker.wav": "aa41a6aaab1356cab7593a62c970dbac534c4d811de5f31e96d3d203c906efc2",
+        "Audio/jump.wav": "914e837a53bf0166c2e1b1a1bcbc6c0292abf775706bc97c866fce0dfc39b569",
+        "Audio/land.wav": "464a014d98533ab1fb23b6f8c03d549b2c2c651d05f666bab40b3b6c4a40862c",
+        "Audio/music_combat.wav": "1dd1c46b7408a1a4baaf6e40c855036cde02e8ae8d187f4e8bf232ca9081c2e3",
+        "Audio/pickup.wav": "32d85049633906353028a21377fa835a91a79e643a5e78fe33d0fcb0239c1911",
+        "Audio/reload.wav": "53a822e717ccf821b58a7a7a242483ff196a730e34502d18c5050144c044db02",
+        "Audio/ui_click.wav": "2415c6041ecfb425e98bac961acfdc88ad2cd4ecb11cc9c405637a1c53cd24bd",
+        "Audio/ui_hover.wav": "d8885b3e0ec7034edfd4826a2892f5d106456478ac78c28cc6ea09f6581b0c75",
+        "Materials/Concrete.json": "1dab64caa39cc84c73a350c33d4e69b62bca779824e083f88f93e5e38103d84a",
+        "Materials/Default.json": "b787d0417e4271eca40c2db8d7742e12c0200a9bb9b87dfc9a8640e23a9f51ef",
+        "Materials/Metal.json": "d7df87e3337b585b46a8ff0e00f4e724e37a2053bbdb433a35ebeb476c491d18",
+        "Materials/Terrain_Dirt.json": "72c1cbbe847233c13f22d4639a94331a58fdc32037a67db9dc746b0a41db7731",
+        "Materials/Terrain_Grass.json": "efb5bc39dc3a0a187effed9e73c3a13b46014bfd5d7ebc3ae9b8df4d29ea2cce",
+        "Materials/Wood.json": "fa0c6d460fa86fbf8c74f0b8ca3ba098f68cf99a2050a4c3f0046ab924ac520c",
+        "Scenes/Default.scene": "c6449eb813493aced40574d240ab6f907e7c38aa99150acc8ea839dad6fde891",
+        "Textures/Decals/blood_splatter.png": "ea711ea0b8195a5a0992baf42bd5acf4d19412ad6de63a7c12b1e78ab10d160b",
+        "Textures/Decals/bullet_hole.png": "bc59b4c3b15698a1c5859c92ccffc72f351c3abc70aaaca9f9e2431d91593c36",
+        "Textures/Decals/bullet_hole_normal.png": "9a7e229f63aef2d35623775b549b82d57770665f6de3204b7fd35dd9b90aedb1",
+        "Textures/Decals/scorch_mark.png": "aa0aa4da7a5bbc299d7a4229abfd3b1c1d8dda7e48f6ff61f805366ce50ee605",
+        "Textures/Default/black.png": "1fc5ddbe6ba5683582371cf28957311ce2f7b3ed6e5af5d464d433c5092d93b3",
+        "Textures/Default/checkerboard.png": "332a6b79b6ceaece48e3efc55400e675a8591741f43432840da0d6534f827d37",
+        "Textures/Default/grid.png": "92fc184a50357be019eb06ca77eb982be24c54adad17642bf5cca6f0d3b37461",
+        "Textures/Default/noise.png": "9ddaacdd74f54a4df8a110dae51484482a2f342d764080fc30ed8e7dd5a9ede3",
+        "Textures/Default/normal_flat.png": "87bbe7914db93a5d76335901d7a8bd3e277f17d52ea75913c92ec55e84b6d005",
+        "Textures/Default/uv_test.png": "60a0e2a22a9961bbe0cc2059ac0ba8bfca8d32606faddb6476fd9ccad98182e9",
+        "Textures/Default/white.png": "033363320406e259c9dbeeac58907310aca2bd2fb64bcc9510abb302c40dff1f",
+        "Textures/Sky/sky_gradient.png": "6e345dd626062ee51a4af20643e9747cbf90decc4e6c48b4fd098cae3409fa5c",
+        "Textures/Terrain/dirt.png": "43cf80db5cc12989f9433a26ea9885af6d2ffd5bec69d886edef07257acf5dfc",
+        "Textures/Terrain/grass.png": "493195b52ca96ccc07ce904b48d5628c5861dccb471685822fc2f8740d9f04a2",
+        "Textures/Terrain/rock.png": "693d3447ab8f4d786abb63ce9f7c98313376d59fabd0b78d973d179c5206b800",
+        "Textures/Terrain/sand.png": "d7f0f9c69ea4e8b97331ba0f695917ef0975058a1be8158909d49cac878fb61d",
+        "Textures/Terrain/snow.png": "88c0ab47b49546c098f65fbeaaa89b906a6c91009ce8af28cc660e08e2e46179",
+        "Textures/concrete_diffuse.png": "7f5cb89adfa45f5055bcf15d7f5e6724736fdf388b4a36f242fd24b8a25ba6d1",
+        "Textures/concrete_normal.png": "9a7e229f63aef2d35623775b549b82d57770665f6de3204b7fd35dd9b90aedb1",
+        "Textures/loading_bg.png": "08e0fb60b5b1142c84f6d52420bb14e3e9e40ba299f8bcbc7183b93e18be7384",
+        "Textures/metal_diffuse.png": "ad42cdaeda6996e16c4f078ce0661732ff590aced54cbc1d31855c7fc83285fb",
+        "Textures/wood_diffuse.png": "4f2da47164fc0f20d47389664d68f45124ed9f548b566163dba66bc8c43fbe83"
+      }
+    },
+    {
+      "id": "mmo-legacy-generator",
+      "license": "CC0-1.0",
+      "provenance": "Procedural legacy MMO texture/audio output of tools/generate_mmo_assets.py, which retains CC0 for these outputs; bytes reproduce exactly and are hash-bound",
+      "evidence": [
+        "tools/generate_mmo_assets.py"
+      ],
+      "files": {
+        "Audio/MMO/ambient_arena.wav": "11702c05bd202ec17c6bc266195c38557222aa900adca7d59adbfed4d52a5830",
+        "Audio/MMO/ambient_dungeon.wav": "a8432af040d74c595a4d61d5a400aeda0a7b00d36708c29bc5471bed99b0daf7",
+        "Audio/MMO/ambient_town.wav": "c119e43106a1cafb228c9f22835438a720f056deb6e5217f1b506d2c7aca3af8",
+        "Audio/MMO/ambient_wilderness.wav": "6fbe4da21feb129755b2a68e0c77e4f39373aa4b5872bce1fa989c0ae2137997",
+        "Audio/MMO/boss_ability_warn.wav": "cdd3c6bf774d6d9e6b04a5f4186a7ec2afa8446a2daf9c0391fb8205a64c4217",
+        "Audio/MMO/boss_defeated.wav": "8ccada4e58dbfbfb8b9b439ba0705367a43070cfaeac94563abf8e6dcdcc954f",
+        "Audio/MMO/boss_phase_change.wav": "613f9f6dc9f9b1eb7d5ba31523a6d291882987333c2660e3b9e006bfd0cabdaf",
+        "Audio/MMO/boss_roar.wav": "3fdd695ebddfd62477a2e1b427f3e1b4f0c69f355555b50109fa3f16b2d2fbe0",
+        "Audio/MMO/combat_block.wav": "ad4e568224f556fffa772ac56f738ac3c967cc1dd87b74551758e5146bf357fe",
+        "Audio/MMO/combat_crit.wav": "0dcc063c14d6f748cfb58e975125247b223ff823ebfab464030fcadcc4b37277",
+        "Audio/MMO/combat_death.wav": "9d1d8af11db2f35c31007ff6e013bfefde8ac78ad4cdc20c7e2c458893a16bd8",
+        "Audio/MMO/combat_heal.wav": "606576277da1d9b47aab356d767063afed22959d431065a384fd4005916a9c51",
+        "Audio/MMO/combat_magic_cast.wav": "b520d1cb25fff8d615e793f7ae8afeba5e4e9e20021419f939a21c54b06d11c5",
+        "Audio/MMO/combat_respawn.wav": "afcc4f6029778a6af009968ff5908fd34d12655e61f239ec9c24de2ceb1365f5",
+        "Audio/MMO/combat_sword_hit.wav": "d2e470c993787bd3255362d231f2a0ff7f5026e93d119ef5e83584dc78f4c0e5",
+        "Audio/MMO/music_boss.wav": "7a0c52d1eca212d89d250e2f1d0fe14eb12920b44d662f391194cdea77452506",
+        "Audio/MMO/music_combat.wav": "d0c928dfb7482b698f65a444cc699f9e5126c15334488f5032059cd9126ac9e5",
+        "Audio/MMO/music_dungeon.wav": "be9b3c98f4ddd76e3d2c51285cb4b5fa8aa7a34513f59773cac11e37ec703273",
+        "Audio/MMO/music_town.wav": "989437bdd8ad35a84d19320be3d5019f83d5d7b027fc5f490a024ec103c055d6",
+        "Audio/MMO/music_victory.wav": "8ccada4e58dbfbfb8b9b439ba0705367a43070cfaeac94563abf8e6dcdcc954f",
+        "Audio/MMO/ui_achievement.wav": "c45d757b17160ebaad4ae2a88b12127d73f7a5b6fedd9e8031f768d607fda324",
+        "Audio/MMO/ui_chat_msg.wav": "55ebcf595aaa003de46d7f8e2ba8de89cb7c4c7337e2e2d95b682a273a4ddb7e",
+        "Audio/MMO/ui_craft_complete.wav": "b4210b565b1d37ecc1ca486912ecfe7c456d4777b1cc95201a8c79dc7bb009e0",
+        "Audio/MMO/ui_craft_start.wav": "162a06c02e9daa96277b775b0bc5e5817885d868c429d2746922706fb08fb714",
+        "Audio/MMO/ui_equip.wav": "b09cc21d0f10ad46e728443607ffa5c7ffbc9f0a87f3f190bdfc53d8ca220a2e",
+        "Audio/MMO/ui_error.wav": "8b4ca4dd6ab9c6e520472560ff48afb66536b993cb69639ea3a1603c3cde881a",
+        "Audio/MMO/ui_inventory_open.wav": "ed058a4d4fda5a2ca30af91b13849237cc819ab7a9c76e9b49d9e088899cf6d0",
+        "Audio/MMO/ui_levelup.wav": "513432b3d8c1aaa284e0d130f49b8f27fac50db1ca0f7c281e1cec5e28c64085",
+        "Audio/MMO/ui_login.wav": "c45d757b17160ebaad4ae2a88b12127d73f7a5b6fedd9e8031f768d607fda324",
+        "Audio/MMO/ui_quest_complete.wav": "94684314c34baa33facee9fdf396e46fb36bccec9767bce99e33d1af177cc7ad",
+        "Audio/MMO/ui_success.wav": "c9fa27c1d631b0367427f9d0706a102b3b32c26712e572368ca68590930ec858",
+        "Audio/MMO/ui_trade_complete.wav": "e3264c3bb6c075d5e7a54ac6617295a4577c2fae604acc386c686bb19c4a3f14",
+        "MMO/asset_manifest.json": "603e6c0c3c3af5d1e6bda1ce2426a74e4dd45d3ae4fd67362792382e29fbe37d",
+        "Textures/MMO/UI/bar_bg.png": "89411d6954cb45196d14d701bfdb1ffa2f9f7ecbd1444dec0793b20ec1826c96",
+        "Textures/MMO/UI/button_hover.png": "76b9b2d62c2fda6007da2771c6f4bd14815c4319ab9387dc8bd388fcb2dedae7",
+        "Textures/MMO/UI/button_normal.png": "5c01b83477935073577aaaef05fb0cf9f67f9403e2b4cd0de63ffd31a61b0b98",
+        "Textures/MMO/UI/button_pressed.png": "d38be235f946c4dc812047507d355325d67df188346fb03072b4116686d6b77f",
+        "Textures/MMO/UI/chat_area.png": "ce1c566c7428eb57c494580cfe976e74fd4b59b80a0716443090b15c16faa4ad",
+        "Textures/MMO/UI/chat_global.png": "0a4587e2ae94c6ce6e53c2bf8cdb388e28933984e5a009457da0409576f46f1c",
+        "Textures/MMO/UI/chat_party.png": "a8002402c29f1fb37b08e20c59e092a797b073cdfc206d5c8b798de55f0298d2",
+        "Textures/MMO/UI/chat_whisper.png": "085ce97bf4acfa442319251122d7b4cd6fb7d7aa7fe3328cfba8a48e08802c13",
+        "Textures/MMO/UI/health_bar.png": "5a9cf032bfce7098a031c3e2856f58ad26a57e3537027bfcd851b6ae36e99404",
+        "Textures/MMO/UI/icon_dwarf.png": "cc23793f5f41bc97c337ba1b5828a0492994eb3e34c3a9f71a8d40dbc95b0944",
+        "Textures/MMO/UI/icon_elf.png": "1c7afd4c56f6c6ded2db75aa4df903db47100f1623228dde234749248474b8ff",
+        "Textures/MMO/UI/icon_engineer.png": "ca3efd269f27e1b6d4f4c1911b340e87908b42a7f7bdd6f520324881ef5cc951",
+        "Textures/MMO/UI/icon_healer.png": "5775fcd41c3e07fb572bde6ab9ae53ef2b1a3a9a02d27291a83ab8d0e52cc773",
+        "Textures/MMO/UI/icon_human.png": "7e5db2605df2814642ed5dfcbe3777148d1bde866971045be1437a77bfc46906",
+        "Textures/MMO/UI/icon_mage.png": "3f679f0b4aa9cb0af1072cff58c6ac2b0f7b55fd35d5e2d87f0ddcd4045399dd",
+        "Textures/MMO/UI/icon_orc.png": "9f753e5769857dedbb7f206d55c091a714f4c4196a841f2011e2e13f9b9bc891",
+        "Textures/MMO/UI/icon_ranger.png": "4378f5900ad832c3ffd36f4369ff87289e2c3892b70edba06b3c363dab1105dd",
+        "Textures/MMO/UI/icon_warrior.png": "e62366097a4efe949e54261d51dde29e3b787482e5cc6a59aa7fcb954aee297d",
+        "Textures/MMO/UI/mana_bar.png": "6d7a318d084e4e961dba66085f93d4c646df1bc4db140527ca68a6cfc490dd33",
+        "Textures/MMO/UI/minimap_frame.png": "951d20083ec94378673498bc4e48f3dade4a754e20e5970f1284bfb955e6788c",
+        "Textures/MMO/UI/panel_bg.png": "9efaa7b745e4773131aa4ba8efc79d3c81d9798e1e5e4ea78658aea85fbdca68",
+        "Textures/MMO/UI/panel_border.png": "be3c4ba1c1b2e8d4cd4b44a972a2e8546a0997d105519db20a5c2e0959b25487",
+        "Textures/MMO/UI/rarity_common.png": "88926bb39c531d90be674f04d59480286406d12736e5a1f526a2176bc7b3c9c6",
+        "Textures/MMO/UI/rarity_epic.png": "ac1c962323889f5343826e7f1c3fba12de7048bdbdcd9fbc5040991092fd4d70",
+        "Textures/MMO/UI/rarity_legendary.png": "f2779a1d52bc12eb189d05459b6d41f447e8e2767d082dbb55437f4fa99c0d32",
+        "Textures/MMO/UI/rarity_rare.png": "9d87f4f8726a2d2000c3245fb6ad7c24b50a89579a3672a1c4deec64d3349be8",
+        "Textures/MMO/UI/rarity_uncommon.png": "b86be73d3df7783e4ec82a60d4f3ec53c1cceeed40e91e5f7e970f58301f810e",
+        "Textures/MMO/UI/stamina_bar.png": "5b9a4670e6d01067dd260107631b09df26f5137be64e5b5e0531232141a92cc6",
+        "Textures/MMO/UI/tooltip_bg.png": "4eecfac37dc1fab704e77d470508e92e87e439c1027a2cbc81dc4d3b6bd7db1f",
+        "Textures/MMO/UI/xp_bar.png": "0c41c911046d3237b80a1e3690c97259098a1f5f16410958b050e2aab8ca22c8",
+        "Textures/MMO/cobblestone_diffuse.png": "65ed2681f31695d6d476e54cc121252816f629a6e2834520b7a9e1054ab5d2fc",
+        "Textures/MMO/cobblestone_normal.png": "896d5608bccc40827fd84c5444d64080cccc93ea42487fd521644d854a48311a",
+        "Textures/MMO/dungeon_stone_diffuse.png": "93c1f4ff7275ce25f6267078e5e9cdafa782fcd8b33d86f26d5d1321761e7a19",
+        "Textures/MMO/dungeon_stone_normal.png": "896d5608bccc40827fd84c5444d64080cccc93ea42487fd521644d854a48311a",
+        "Textures/MMO/fabric_diffuse.png": "0158dae06c3330c04a3201de94b4f7fb8e3fe821d7114ab004e5f9b228dace1a",
+        "Textures/MMO/foliage_diffuse.png": "6317542424d56644436084311192ffc1bcc62d7a751bacb940c0e3bfe7652869",
+        "Textures/MMO/npc_guard_diffuse.png": "edbbd1ead695c99e4398f2c07a99282024dbc9be22a881753bf8a4fd7a84ce77",
+        "Textures/MMO/stone_diffuse.png": "5a6879c8c8b01a63581461b8532271433400fe10d92a0bb750fc86324247ae9c",
+        "Textures/MMO/stone_normal.png": "896d5608bccc40827fd84c5444d64080cccc93ea42487fd521644d854a48311a",
+        "Textures/Terrain/grass_diffuse.png": "550711ab372d7e41ff4825023b06c9900c164a55ad2e3a7cb08173165704aeaa",
+        "Textures/Terrain/rock_diffuse.png": "54b0b1985da3638fedb4b5f00002433822cae063faa40482cfdd97c3e5e99124",
+        "Textures/Terrain/sand_diffuse.png": "61767790478a6090d57bc770a15b0d870b5d0123273e03d2e8a93ad88efb3101"
+      }
+    },
+    {
+      "id": "mmo-blender-props",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export from Art/Blender/MMO/props.blend via tools/blender/author_mmo_props.py; hash-bound by Art/Blender/MMO/provenance.json",
+      "evidence": [
+        "Art/Blender/MMO/provenance.json",
+        "Art/Blender/MMO/props.blend",
+        "tools/blender/author_mmo_props.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/MMO/provenance.json",
+          "format": "blender-provenance"
+        }
+      ]
+    },
+    {
+      "id": "starter-model-pipeline",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original starter/module-kit model from Tools/model_pipeline/generate_starter_models.py; hash-bound by Assets/Models/Generated/starter_assets_manifest.json",
+      "evidence": [
+        "Tools/model_pipeline/generate_starter_models.py",
+        "Assets/Models/Generated/starter_assets_manifest.json",
+        "Assets/Models/ModuleKits/README.md",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Assets/Models/Generated/starter_assets_manifest.json",
+          "format": "starter-model-manifest"
+        }
+      ]
+    },
+    {
+      "id": "engine-branding",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original SparkEngine startup splash and wordmark produced by Assets/Engine/Branding/generate_splash.py",
+      "evidence": [
+        "Assets/Engine/Branding/README.md",
+        "Assets/Engine/Branding/generate_splash.py",
+        "LICENSE"
+      ],
+      "prefixes": [
+        "Engine/Branding/"
+      ]
+    },
+    {
+      "id": "terrafront-cc0-import",
+      "license": "CC0-1.0",
+      "provenance": "Third-party CC0 import recorded per file in Assets/MMOFPS/asset_manifest.json",
+      "evidence": [
+        "Assets/MMOFPS/asset_manifest.json",
+        "Assets/MMOFPS/ATTRIBUTION.md"
+      ],
+      "records": [
+        {
+          "path": "Assets/MMOFPS/asset_manifest.json",
+          "format": "terrafront-asset-manifest",
+          "exclude": [
+            "Audio/MMOFPS/ambient/combat_distant.wav",
+            "Audio/MMOFPS/ambient/wind_loop.wav",
+            "Audio/MMOFPS/vehicles/apc_loop.wav",
+            "Audio/MMOFPS/vehicles/explosion.wav",
+            "Audio/MMOFPS/vehicles/quad_loop.wav",
+            "Audio/MMOFPS/vehicles/tank_loop.wav",
+            "Audio/MMOFPS/vehicles/vtol_loop.wav",
+            "Audio/MMOFPS/weapons/reload_bolt.wav",
+            "Audio/MMOFPS/weapons/reload_energy.wav",
+            "Audio/MMOFPS/weapons/reload_heavy.wav",
+            "Audio/MMOFPS/weapons/reload_mag.wav",
+            "Audio/MMOFPS/weapons/reload_shell.wav",
+            "Models/MMOFPS/vehicles/apc.obj",
+            "Models/MMOFPS/vehicles/quad.obj",
+            "Models/MMOFPS/vehicles/tank.obj",
+            "Models/MMOFPS/vehicles/vtol.obj",
+            "Textures/MMOFPS/terrain/grass_color.png",
+            "Textures/MMOFPS/terrain/grass_normal.png",
+            "Textures/MMOFPS/terrain/grass_roughness.png",
+            "Textures/MMOFPS/terrain/gravel_color.png",
+            "Textures/MMOFPS/terrain/gravel_normal.png",
+            "Textures/MMOFPS/terrain/gravel_roughness.png",
+            "Textures/MMOFPS/terrain/rock_color.png",
+            "Textures/MMOFPS/terrain/rock_normal.png",
+            "Textures/MMOFPS/terrain/rock_roughness.png",
+            "Textures/MMOFPS/terrain/sand_color.png",
+            "Textures/MMOFPS/terrain/sand_normal.png",
+            "Textures/MMOFPS/terrain/sand_roughness.png"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repository-authored",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-authored scene, data, script, model, or documentation file covered by the repository LICENSE",
+      "evidence": [
+        "LICENSE"
+      ],
+      "files": {
+        "MMOFPS/ATTRIBUTION.md": "65318dd2c40c9003642cba3e0a56b91263817aa3dfa480bdd6a3a53ab134426b",
+        "MMOFPS/asset_manifest.json": "a73a7cc5b2e91edc5d67e7dd58eb8e4affcbbfd37582a62ed0ac514aa4f581bf",
+        "Materials/Arena_CenterBuilding.json": "cec075631416fa25358777c3b4602bbd9c5656383e58a8827cc2927a0775322f",
+        "Models/Generated/starter_assets_manifest.json": "5d1524e49cedf4bc2214b506e0a7fe1331d7cafe1fb823a14fd48d4fb2f6e298",
+        "Models/MMOFPS/weapons/README_charm_mounts.md": "17849f97b8ecc3b01c5ba315af052ae1f2256b79f6f4c262ac57b8200b0b7bb6",
+        "Models/ModuleKits/README.md": "ce5c8d2372ff37e1244addb777eaceef057ffae8bbff77071f98f7292fdda011",
+        "Models/barrier.obj": "a5573c4421fe56d9775f231344556757668dd12e5dc1880d217ed49b516561f4",
+        "Models/building_small.obj": "e9997aad88f8fad2cece4d070fb87ddb8f7253f5d423c3c539f5a907e58450de",
+        "Models/character.obj": "74f1446c12fea14821e29b6b5d972cb577dd9757bef24cc7c5c89b1fa364bc18",
+        "Models/crate.obj": "9d3d46a4991c0751736d4a6b848e2ad02b1ac2bdf1561ae2ba280169c24b721a",
+        "Models/lmg.obj": "1e8cbd5b7a66073667e1164e45b6f38ae96adb1130973b2880bb1c3656b23d19",
+        "Models/pistol.obj": "286fe4bdc5bbbb053a91362afb54f8bb01db4e756fed60a6281515c90fe6af5f",
+        "Models/rifle.obj": "9363a679c8f54c68eea6d7776424148b019131f167256387ba548cc54694d5a0",
+        "Models/shotgun.obj": "08b1a1c292da945b3b4ee76c943c04d6f051256450bf726f0c7003c4d65bbf79",
+        "Models/sniper.obj": "3381d14528a3c981861ca842dd5092f706d5417e22e0d0dbae048610dd959463",
+        "Models/target.obj": "3312ede718e6833d249da79f879b7d5ce56a6ea37e6d8541f7960e47909fc335",
+        "Models/turret.obj": "cc0b56e148a3467123effaa2556ab3fd148e76a9f379da54cd298ab0adff332a",
+        "Models/watchtower.obj": "5138037853a1df0d2286d7d7af899c887ef59f3eb6d9b1aae9a03b1c3b89f1da",
+        "README.md": "00322d8896a84fd626483b89021ac4d4a89ccc55e3445c40a32b8ae806a7578b",
+        "Scripts/PlayerController.as": "670822d61f49a1bd5932275afd2ad536acd01341f0052524a9927de7cf73ea34"
+      },
+      "prefixes": [
+        "MMOFPS/Data/",
+        "Materials/MMO/",
+        "Scenes/"
+      ]
+    },
+    {
+      "id": "terrafront-unrecorded",
+      "license": "NOASSERTION",
+      "provenance": "TERRAFRONT content with no tracked per-file origin or license record; most was added or overwritten by procedural art-pass commit fc80587d6, whose commit message alone claims CC0-clean output",
+      "evidence": [],
+      "gap": "RDY-020",
+      "prefixes": [
+        "Audio/MMOFPS/",
+        "Materials/MMOFPS/",
+        "Models/MMOFPS/",
+        "Textures/Decals/MMOFPS/",
+        "Textures/MMOFPS/"
+      ]
+    }
+  ]
+}

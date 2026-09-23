@@ -450,7 +450,7 @@ class ManifestValidationTests(unittest.TestCase):
                 vai._read_bounded_json(path, limit=4)
 
     def test_generation_is_deterministic_and_refuses_every_scan_error(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as policy_dir:
             root = Path(directory)
             (root / "b").write_bytes(b"b")
             (root / "a").write_bytes(b"a")
@@ -459,9 +459,25 @@ class ManifestValidationTests(unittest.TestCase):
             self.assertEqual(errors_one, [])
             self.assertEqual(errors_two, [])
             self.assertEqual(vai.manifest_bytes(one), vai.manifest_bytes(two))
-            args = argparse.Namespace(root=str(root), output=None)
+            # The CLI always emits schema v2, so it needs a policy claiming every file.
+            policy = Path(policy_dir) / "provenance.json"
+            policy.write_text(json.dumps({
+                "version": 1,
+                "root": root.name,
+                "licenses": {"NOASSERTION": {"name": "No license asserted"}},
+                "rules": [{
+                    "id": "fixture",
+                    "license": "NOASSERTION",
+                    "provenance": "Test fixture bytes",
+                    "evidence": [],
+                    "gap": "RDY-020",
+                    "files": {"a": digest(b"a"), "b": digest(b"b")},
+                }],
+            }), encoding="utf-8")
+            args = argparse.Namespace(root=str(root), output=None, provenance=str(policy))
             self.assertEqual(vai.cmd_generate(args), 0)
             first_bytes = (root / vai.MANIFEST_FILENAME).read_bytes()
+            self.assertEqual(json.loads(first_bytes)["version"], vai.MANIFEST_SCHEMA_VERSION)
             self.assertEqual(vai.cmd_generate(args), 0)
             self.assertEqual((root / vai.MANIFEST_FILENAME).read_bytes(), first_bytes)
 
