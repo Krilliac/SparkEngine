@@ -24,6 +24,7 @@ namespace
     }
 } // namespace
 #else
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/select.h>
 #include <termios.h>
@@ -40,28 +41,34 @@ static constexpr const char* ANSI_GREEN_BOLD = "\033[1;32m";
 static constexpr const char* ANSI_YELLOW = "\033[33m";
 static constexpr const char* ANSI_CYAN = "\033[36m";
 
-static bool LinuxKbhit()
+// In engine-pipe mode stdin is the engine's log pipe, not the keyboard, so the
+// keyboard helpers take the terminal descriptor explicitly (see PipeKeyboardThreadFunc).
+static bool LinuxKbhit(int fd)
 {
     struct timeval tv = {0, 0};
     fd_set fds;
     FD_ZERO(&fds);
-    FD_SET(STDIN_FILENO, &fds);
-    return select(STDIN_FILENO + 1, &fds, nullptr, nullptr, &tv) > 0;
+    FD_SET(fd, &fds);
+    return select(fd + 1, &fds, nullptr, nullptr, &tv) > 0;
 }
 
-static char LinuxGetch()
+static char LinuxGetch(int fd)
 {
     char ch = 0;
     struct termios oldt, newt;
-    tcgetattr(STDIN_FILENO, &oldt);
-    newt = oldt;
-    newt.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-    if (read(STDIN_FILENO, &ch, 1) < 0)
+    const bool isTerminal = tcgetattr(fd, &oldt) == 0;
+    if (isTerminal)
+    {
+        newt = oldt;
+        newt.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(fd, TCSANOW, &newt);
+    }
+    if (read(fd, &ch, 1) < 0)
     {
         ch = 0;
     }
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    if (isTerminal)
+        tcsetattr(fd, TCSANOW, &oldt);
     return ch;
 }
 
@@ -218,7 +225,8 @@ void ConsoleApp::PollPipeModeInput(std::string& input, int& noInputCounter, bool
     WriteConsoleW(hConsoleOut, L"> ", 2, NULL, NULL);
     SetConsoleTextAttribute(hConsoleOut, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 #else
-    std::cout << ANSI_GREEN_BOLD << "> " << ANSI_RESET << std::flush;
+    // stderr: a prompt on stdout would prefix the next forwarded command with "> ".
+    std::cerr << ANSI_GREEN_BOLD << "> " << ANSI_RESET << std::flush;
 #endif
 
     // Just sleep and let the keyboard thread and ReadEngineInput thread do their work
@@ -281,6 +289,18 @@ void ConsoleApp::PollStandaloneInput(std::string& input)
 
 void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& keyboardThreadRunning)
 {
+#ifndef SPARK_PLATFORM_WINDOWS
+    // stdin carries the engine's log stream in pipe mode; reading keys from it
+    // would steal log bytes and forward whole log lines back to the engine as
+    // commands. Read the controlling terminal instead, and accept no keyboard
+    // input when there is none (headless, CI, or a detached engine).
+    const int keyboardFd = open("/dev/tty", O_RDONLY | O_NOCTTY | O_CLOEXEC);
+    if (keyboardFd < 0)
+    {
+        PrintLog(L"No controlling terminal: keyboard input is disabled in engine-pipe mode.");
+        return;
+    }
+#endif
     while (keyboardThreadRunning && m_running)
     {
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -288,9 +308,9 @@ void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& k
         {
             char ch = _getch();
 #else
-        if (LinuxKbhit())
+        if (LinuxKbhit(keyboardFd))
         {
-            char ch = LinuxGetch();
+            char ch = LinuxGetch(keyboardFd);
 #endif
             if (ch == '\r' || ch == '\n')
             {
@@ -313,7 +333,7 @@ void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& k
                 HANDLE hConsoleOut = DisplayHandle();
                 WriteConsoleW(hConsoleOut, L"\n", 1, NULL, NULL);
 #else
-                std::cout << std::endl;
+                std::cerr << std::endl;
 #endif
             }
             else if (ch == '\b' || ch == 127)
@@ -327,6 +347,9 @@ void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& k
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+#ifndef SPARK_PLATFORM_WINDOWS
+    close(keyboardFd);
+#endif
 }
 
 void ConsoleApp::Run()
@@ -564,7 +587,7 @@ void ConsoleApp::HandleBackspaceKey(std::string& input)
         HANDLE hOut = DisplayHandle();
         WriteConsoleW(hOut, L"\b \b", 3, NULL, NULL);
 #else
-        std::cout << "\b \b" << std::flush;
+        std::cerr << "\b \b" << std::flush; // Display only: stdout carries commands.
 #endif
     }
 }
@@ -577,7 +600,7 @@ void ConsoleApp::HandlePrintableChar(std::string& input, char ch)
     wchar_t wch = static_cast<wchar_t>(ch);
     WriteConsoleW(hOut, &wch, 1, NULL, NULL);
 #else
-    std::cout << ch << std::flush;
+    std::cerr << ch << std::flush; // Display only: stdout carries commands.
 #endif
 }
 
@@ -662,7 +685,7 @@ void ConsoleApp::PrintDuplicateSkipNotice(int skippedCount)
     std::stringstream skipMsg;
     skipMsg << "[" << std::put_time(std::localtime(&time_t), "%H:%M:%S") << "] ENGINE: (Skipped " << skippedCount
             << " duplicate messages)";
-    std::cout << ANSI_YELLOW << skipMsg.str() << ANSI_RESET << std::endl;
+    std::cerr << ANSI_YELLOW << skipMsg.str() << ANSI_RESET << std::endl;
 #endif
 }
 
@@ -716,7 +739,9 @@ void ConsoleApp::PrintEngineLog(const std::wstring& msg)
     std::string narrowMsg(msg.begin(), msg.end());
     std::stringstream fullMsg;
     fullMsg << "[" << std::put_time(std::localtime(&time_t), "%H:%M:%S") << "] ENGINE: " << narrowMsg;
-    std::cout << ANSI_YELLOW << fullMsg.str() << ANSI_RESET << std::endl;
+    // stderr: echoing engine logs on stdout sent every log line back to the
+    // engine as a command, which logged "Unknown command", which was echoed...
+    std::cerr << ANSI_YELLOW << fullMsg.str() << ANSI_RESET << std::endl;
 #endif
 }
 
@@ -743,7 +768,12 @@ void ConsoleApp::PrintResult(const std::string& result)
 
         SetConsoleTextAttribute(hConsoleOut, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 #else
-        std::cout << ANSI_CYAN << result << ANSI_RESET << std::endl;
+        // Batch mode reports results on stdout (its CLI contract); interactive
+        // results are display text and must stay off the engine command channel.
+        if (m_batchMode)
+            std::cout << result << std::endl;
+        else
+            std::cerr << ANSI_CYAN << result << ANSI_RESET << std::endl;
 #endif
     }
 }
