@@ -1551,6 +1551,11 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertIn('#include "Utils/JsonUtils.h"', production)
         self.assertIn('extern "C" int SparkFuzzParseJson', production)
 
+    def test_crash_manifest_fuzzer_links_the_production_auto_issue_symbols(self) -> None:
+        cmake = (REPO_ROOT / "Tests" / "Fuzz" / "CMakeLists.txt").read_text(encoding="utf-8")
+        target = cmake.split("add_executable(SparkFuzzCrashManifest", 1)[1].split(")", 1)[0]
+        self.assertIn("SparkCrashReporter/src/CrashAutoIssues.cpp", target)
+
     def test_fuzz_job_keeps_libfuzzer_and_harness_on_libstdcxx(self) -> None:
         workflow = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
         block = check_fuzz_policy._job_block(workflow, check_fuzz_policy.FUZZ_JOB)

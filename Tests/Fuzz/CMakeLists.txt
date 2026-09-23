@@ -104,6 +104,7 @@ add_executable(SparkFuzzCrashManifest
     FuzzCrashManifest.cpp
     FuzzCrashManifestProduction.cpp
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkCrashReporter/src/CrashReporterApp.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkCrashReporter/src/CrashAutoIssues.cpp"
 )
 target_include_directories(SparkFuzzCrashManifest PRIVATE
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkCrashReporter/src"
