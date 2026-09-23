@@ -570,6 +570,7 @@ add_executable(SparkTests
     TestGameModuleMMO.cpp
     TestGameModuleRPG.cpp
     TestGameModuleRacing.cpp
+    TestMOD380RacingCompleteRaceReal.cpp
     TestGameModulePlatformerARPG.cpp
     # TERRAFRONT (SparkGameMMOFPS) — header-only wire protocol, standalone
     # rule math, and validation of the real Assets/MMOFPS/Data tables.

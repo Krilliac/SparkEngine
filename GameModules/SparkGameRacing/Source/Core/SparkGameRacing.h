@@ -61,10 +61,8 @@ class SparkGameRacingModule : public Spark::IModule
   private:
     void RegisterConsoleCommands();
     void SetupDefaultRaceRoster();
-    void SyncRaceAndTrackState();
+    void StepRace(float deltaTime);
     void UpdatePresentationState();
-    void ApplyPlayerInput(float deltaTime);
-    void ApplyAIDriverInputs(float deltaTime);
 
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};
