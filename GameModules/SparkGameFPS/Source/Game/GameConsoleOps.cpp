@@ -394,6 +394,7 @@ bool Game::LoadScene(const std::string& scenePath)
 
         if (success)
         {
+            BindSceneMaterialRoots();
             // Clear existing game objects if loading a new scene
             m_enemies.clear();
             m_gameObjects.clear();

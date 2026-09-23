@@ -599,6 +599,10 @@ class SPARK_GAME_API Game
 #endif // ENABLE_NETWORKING
 
   private:
+    // Bind the trusted module project root after any scene load so authored
+    // material paths remain functional for both startup and console reloads.
+    void BindSceneMaterialRoots();
+
     /**
      * @brief Update the camera based on input and game state
      * @param dt Delta time for frame-rate independent movement
