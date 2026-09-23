@@ -1572,8 +1572,9 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         TIMEOUT 120)
 
     # Copy the built FPS runtime to a fresh package-like directory, edit only
-    # its copied scene, and inspect post-update game/wave state plus a
-    # rendered frame. This catches hard-coded camera/spawn fallbacks.
+    # its copied scene, and inspect post-update game/wave state plus rendered
+    # frames. Fresh-process and same-process material edits also catch stale
+    # FPS material cache entries without trusting a synthetic scene preview.
     add_test(
         NAME FPSAuthoredScene_PackageLayoutEdit
         COMMAND ${CMAKE_COMMAND}
@@ -1584,7 +1585,7 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     set_tests_properties(FPSAuthoredScene_PackageLayoutEdit PROPERTIES
         LABELS "module;fps;d3d11;scene;integration"
         RUN_SERIAL TRUE
-        TIMEOUT 180)
+        TIMEOUT 300)
 
     # MOD-310 selector contracts. Each entry invokes a real production-source
     # or installed-package test; these are bounded evidence slices, not a

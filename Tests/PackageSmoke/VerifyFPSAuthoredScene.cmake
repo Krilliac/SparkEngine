@@ -233,4 +233,41 @@ if(NOT _material_visual_result EQUAL 0)
 endif()
 string(STRIP "${_material_visual_stdout}" _material_visual_summary)
 message(STATUS "${_material_visual_summary}")
+
+# A second fresh process proves startup material loading above. The documented
+# scene_load command must also refresh a changed material inside one live FPS
+# process; otherwise it leaves users looking at stale textures until restart.
+file(WRITE "${_center_material}" "${_material_json}")
+find_program(_spark_python NAMES python python3 REQUIRED)
+set(_live_root "${_run_root}/live-reload")
+execute_process(
+    COMMAND "${_spark_python}"
+        "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/RunFPSLiveMaterialReload.py"
+        --package-bin "${_run_root}/bin"
+        --work-root "${_live_root}"
+    RESULT_VARIABLE _live_result
+    OUTPUT_VARIABLE _live_stdout
+    ERROR_VARIABLE _live_stderr
+    TIMEOUT 75
+    ENCODING UTF-8)
+file(WRITE "${_run_root}/live-reload-runner.stdout.log" "${_live_stdout}")
+file(WRITE "${_run_root}/live-reload-runner.stderr.log" "${_live_stderr}")
+if(NOT _live_result EQUAL 0)
+    message(FATAL_ERROR "FPS installed same-process material reload failed: ${_live_stderr}; logs: ${_run_root}")
+endif()
+execute_process(
+    COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+        -NoProfile -NonInteractive -File
+        "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CompareFPSMaterialFrames.ps1"
+        -BaselineImage "${_live_root}/live-before.png"
+        -VariantImage "${_live_root}/live-after.png"
+    RESULT_VARIABLE _live_visual_result
+    OUTPUT_VARIABLE _live_visual_stdout
+    ERROR_VARIABLE _live_visual_stderr
+    TIMEOUT 30)
+if(NOT _live_visual_result EQUAL 0)
+    message(FATAL_ERROR "FPS scene_load kept stale material pixels: ${_live_visual_stderr}; logs: ${_run_root}")
+endif()
+string(STRIP "${_live_visual_stdout}" _live_visual_summary)
+message(STATUS "Same-process scene_load: ${_live_visual_summary}")
 message(STATUS "FPS package-layout runtime honored edited scene camera and spawns; logs: ${_run_root}")

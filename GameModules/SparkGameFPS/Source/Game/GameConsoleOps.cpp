@@ -492,6 +492,10 @@ bool Game::LoadScene(const std::string& scenePath)
                 }
                 BindSceneMaterialRoots();
             }
+            // Invalidate only after the replacement scene and its procedural
+            // layer have their trusted roots bound, so the next render parses
+            // each newly referenced material from disk.
+            InvalidateSceneBasicMaterials();
             RefreshAuthoredSceneRuntimeState();
 
             std::wstring loadMsg = L"Scene loaded successfully: " + wScenePath;

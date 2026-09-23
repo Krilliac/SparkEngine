@@ -42,6 +42,7 @@
 #include <format>
 #include <locale>
 #include <sstream>
+#include <unordered_set>
 
 // Centralized logging macros (previously defined locally with inconsistent rate limits)
 #include "Utils/LogMacros.h"
@@ -333,6 +334,33 @@ void Game::BindSceneMaterialRoots()
     LOG_TO_CONSOLE_IMMEDIATE(L"Scene and procedural material roots bound for " + std::to_wstring(materialRootsBound) +
                                  L" renderable objects",
                              L"INFO");
+}
+
+void Game::InvalidateSceneBasicMaterials()
+{
+    if (!m_graphics || !m_sceneManager)
+        return;
+
+    const std::filesystem::path projectRoot = Spark::FPSAssets::Root().parent_path();
+    const std::u8string projectRootU8 = projectRoot.u8string();
+    const std::string projectRootUtf8(reinterpret_cast<const char*>(projectRootU8.data()), projectRootU8.size());
+    if (projectRootUtf8.empty())
+        return;
+
+    std::unordered_set<std::string> materialPaths;
+    for (const auto& object : m_sceneManager->GetObjects())
+    {
+        if (object && !object->GetMaterialPath().empty())
+            materialPaths.insert(object->GetMaterialPath());
+    }
+    for (const auto& object : m_gameObjects)
+    {
+        if (object && !object->GetMaterialPath().empty())
+            materialPaths.insert(object->GetMaterialPath());
+    }
+
+    for (const auto& materialPath : materialPaths)
+        m_graphics->InvalidateBasicMaterial(materialPath, projectRootUtf8);
 }
 
 /*-------------------------------------------------------------
