@@ -13,11 +13,14 @@ guidelines and information for contributors.
 3. **Build** the project:
    ```bash
    cmake --preset linux-gcc-release
-   cmake --build build --config Release
+   cmake --build --preset linux-gcc-release
    ```
+   The preset writes to `build/linux-gcc-release/` (`binaryDir` is
+   `${sourceDir}/build/${presetName}`). On Windows, build through `build.ps1`
+   or the `windows-*` presets.
 4. **Run tests**:
    ```bash
-   cd build && ctest --output-on-failure --no-tests=error
+   ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error
    ```
 
 ## Code Standards
@@ -37,13 +40,18 @@ See `.clang-format` for the full style configuration.
 1. **Rebase** onto latest `Working` before submitting
 2. **Run pre-commit checks**:
    ```bash
-   # Format check
-   find SparkEngine/Source SparkEditor/Source -name '*.h' -o -name '*.cpp' | \
-     head -50 | xargs clang-format --dry-run --Werror
+   # Format check: every C++ file changed since Working, over CI's check-format
+   # roots (see wiki/development/Clang-Format.md). Never truncate the list.
+   git diff --name-only --diff-filter=ACMR origin/Working -- \
+       SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+       SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
+       SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+     | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
+     | xargs -r clang-format --dry-run --Werror
 
    # Build + test
-   cmake --build build --config Release
-   cd build && ctest --output-on-failure --no-tests=error
+   cmake --build --preset linux-gcc-release
+   ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error
 
    # Documentation
    docs/update-all-docs.sh
@@ -64,8 +72,8 @@ See `.clang-format` for the full style configuration.
    dispatch: `gh workflow run build.yml --ref Working -f simulate_required_job_failure=true`; it must produce a failed
    `validate-ci-tools` job and a failed `Required CI Gate`, and must never be
    treated as release evidence.
-5. **Keep PRs focused** — one feature or fix per PR
-6. **Write clear commit messages** explaining the "why"
+6. **Keep PRs focused** — one feature or fix per PR
+7. **Write clear commit messages** explaining the "why"
 
 ## Architecture Guidelines
 
@@ -86,7 +94,8 @@ See `.clang-format` for the full style configuration.
 
 ## Reporting Issues
 
-- Use [GitHub Issues](https://github.com/krilliac/sparkengine/issues)
+- Use [GitHub Issues](https://github.com/Krilliac/SparkEngine/issues)
+- Report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not in a public issue
 - Include steps to reproduce, expected vs actual behavior
 - Include build configuration (compiler, OS, CMake preset)
 
