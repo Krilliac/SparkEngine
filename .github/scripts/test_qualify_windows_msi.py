@@ -120,6 +120,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                     "Status": "Valid", "SignatureType": "Authenticode",
                     "SignerThumbprint": PREVIOUS_SIGNER_THUMBPRINT,
                     "SignerSubject": "CN=Generated Fixture",
+                    "SignerIssuer": "CN=Generated Fixture", "TrustModel": "self-signed",
+                    "PublisherWarning": "Unknown Publisher may be shown.",
                     "TimestampThumbprint": "C" * 40, "TimestampSubject": "CN=Timestamp Fixture",
                 }
                 evidence.update(signature_changes or {})

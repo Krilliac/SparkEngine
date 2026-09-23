@@ -22,6 +22,25 @@ PREFIX = "SparkEngine-1.2.3-Windows-AMD64-MinSizeRel-Runtime"
 
 
 class SignatureTests(unittest.TestCase):
+    def test_self_signed_contract_rejects_ca_evidence_and_policy_drift(self):
+        signature = {
+            "Status": "Valid", "SignatureType": "Authenticode",
+            "SignerThumbprint": THUMBPRINT, "SignerSubject": "CN=Fixture",
+            "SignerIssuer": "CN=Fixture", "TrustModel": "self-signed",
+            "PublisherWarning": "Unknown Publisher may be shown.",
+            "TimestampThumbprint": "C" * 40, "TimestampSubject": "CN=Timestamp",
+        }
+        for mutation in (
+            {"TrustModel": "ca"},
+            {"SignerIssuer": "CN=Different Publisher"},
+            {"PublisherWarning": ""},
+        ):
+            with self.subTest(mutation=mutation):
+                candidate = dict(signature)
+                candidate.update(mutation)
+                with self.assertRaises(ValueError):
+                    MODULE._validate_signature_evidence(candidate, THUMBPRINT, "fixture.msi")
+
     def test_orchestration_rejects_invalid_packages_and_signature_evidence(self):
         self.assertIsNotNone(MODULE, "Production signature verifier is required")
         for case in ("valid", "unsigned", "unsigned_msi", "untrusted", "hash_mismatch", "expired", "catalog", "wrong_signer",
@@ -54,6 +73,8 @@ class SignatureTests(unittest.TestCase):
                     artifact = Path(kwargs["env"]["SPARK_SIGNATURE_PATH"])
                     evidence = {"Status": "Valid", "SignatureType": "Authenticode",
                                 "SignerThumbprint": THUMBPRINT, "SignerSubject": "CN=Fixture",
+                                "SignerIssuer": "CN=Fixture", "TrustModel": "self-signed",
+                                "PublisherWarning": "Unknown Publisher may be shown.",
                                 "TimestampThumbprint": "C" * 40, "TimestampSubject": "CN=Timestamp"}
                     changes = {"unsigned": {"Status": "NotSigned"}, "untrusted": {"Status": "NotTrusted"},
                                "hash_mismatch": {"Status": "HashMismatch"}, "expired": {"Status": "UnknownError"},
@@ -82,7 +103,8 @@ class SignatureTests(unittest.TestCase):
                     self.assertEqual(data["artifacts"][0]["sha256"], hashlib.sha256(exe.read_bytes()).hexdigest())
                     with mock.patch.dict(
                         os.environ,
-                        {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT},
+                        {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT,
+                         "SPARK_RELEASE_TRUST_MODEL": "self-signed"},
                         clear=False,
                     ):
                         self.assertEqual(MODULE.check_hashes(packages, "1.2.3", SOURCE, report), 0)
@@ -106,6 +128,8 @@ class SignatureTests(unittest.TestCase):
                 "SignatureType": "Authenticode",
                 "SignerThumbprint": THUMBPRINT,
                 "SignerSubject": "CN=Fixture",
+                "SignerIssuer": "CN=Fixture", "TrustModel": "self-signed",
+                "PublisherWarning": "Unknown Publisher may be shown.",
                 "TimestampThumbprint": "C" * 40,
                 "TimestampSubject": "CN=Timestamp",
             }
@@ -132,7 +156,8 @@ class SignatureTests(unittest.TestCase):
             )
             with mock.patch.dict(
                 os.environ,
-                {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT},
+                {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT,
+                 "SPARK_RELEASE_TRUST_MODEL": "self-signed"},
                 clear=False,
             ):
                 for mutate in mutations:
@@ -159,7 +184,8 @@ class SignatureTests(unittest.TestCase):
                 '{"Status":"NotSigned","Status":"Valid",'
                 '"SignatureType":"Authenticode",'
                 f'"SignerThumbprint":"{THUMBPRINT}",'
-                '"SignerSubject":"CN=Fixture",'
+                '"SignerSubject":"CN=Fixture","SignerIssuer":"CN=Fixture",'
+                '"TrustModel":"self-signed","PublisherWarning":"Unknown Publisher may be shown.",'
                 '"TimestampThumbprint":"' + "C" * 40 + '",'
                 '"TimestampSubject":"CN=Timestamp"}'
             )
@@ -190,6 +216,8 @@ class SignatureTests(unittest.TestCase):
                 "SignatureType": "Authenticode",
                 "SignerThumbprint": THUMBPRINT,
                 "SignerSubject": "CN=Fixture",
+                "SignerIssuer": "CN=Fixture", "TrustModel": "self-signed",
+                "PublisherWarning": "Unknown Publisher may be shown.",
                 "TimestampThumbprint": "C" * 40,
                 "TimestampSubject": "CN=Timestamp",
             }
@@ -212,7 +240,8 @@ class SignatureTests(unittest.TestCase):
             )
             with mock.patch.dict(
                 os.environ,
-                {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT},
+                {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT,
+                 "SPARK_RELEASE_TRUST_MODEL": "self-signed"},
                 clear=False,
             ):
                 self.assertNotEqual(
@@ -243,6 +272,8 @@ class SignatureTests(unittest.TestCase):
                 "SignatureType": "Authenticode",
                 "SignerThumbprint": THUMBPRINT,
                 "SignerSubject": "CN=Fixture",
+                "SignerIssuer": "CN=Fixture", "TrustModel": "self-signed",
+                "PublisherWarning": "Unknown Publisher may be shown.",
                 "TimestampThumbprint": "C" * 40,
                 "TimestampSubject": "CN=Timestamp",
             }
@@ -277,7 +308,8 @@ class SignatureTests(unittest.TestCase):
             report.symlink_to(valid_report)
             with mock.patch.dict(
                 os.environ,
-                {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT},
+                {"SPARK_RELEASE_SIGNER_THUMBPRINT": THUMBPRINT,
+                 "SPARK_RELEASE_TRUST_MODEL": "self-signed"},
                 clear=False,
             ):
                 self.assertNotEqual(
@@ -321,7 +353,8 @@ class SignatureTests(unittest.TestCase):
                     evidence = json.loads(result.stdout)
                     self.assertIsInstance(evidence, dict)
                     self.assertEqual(set(evidence), {"Status", "SignatureType", "SignerThumbprint",
-                                                    "SignerSubject", "TimestampThumbprint", "TimestampSubject"})
+                                                    "SignerSubject", "SignerIssuer", "TrustModel",
+                                                    "PublisherWarning", "TimestampThumbprint", "TimestampSubject"})
                     self.assertIsInstance(evidence["Status"], str)
                     self.assertTrue(evidence["Status"])
                     self.assertNotEqual(evidence["Status"], "Valid")

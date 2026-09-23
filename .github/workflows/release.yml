@@ -335,13 +335,16 @@ jobs:
           exit $cpackExitCode
         }
 
-    # Owner prerequisite: sign the final CPack outputs and provision the public
-    # publisher certificate thumbprint. Missing signing/configuration fails closed.
+    # Owner prerequisite: sign the final CPack outputs with the project-pinned
+    # self-signed Authenticode certificate and provision its public thumbprint.
+    # The release runner must trust that certificate; end users may see the
+    # explicitly disclosed Windows "Unknown Publisher" warning.
     - name: Verify Windows stable outer installer signatures
       if: needs.prepare.outputs.is_versioned == 'true'
       shell: pwsh
       env:
         SPARK_RELEASE_SIGNER_THUMBPRINT: ${{ vars.SPARK_RELEASE_SIGNER_THUMBPRINT }}
+        SPARK_RELEASE_TRUST_MODEL: ${{ vars.SPARK_RELEASE_TRUST_MODEL }}
       run: |
         python .github/scripts/verify-windows-package-signatures.py `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
@@ -474,6 +477,7 @@ jobs:
       shell: pwsh
       env:
         SPARK_RELEASE_SIGNER_THUMBPRINT: ${{ vars.SPARK_RELEASE_SIGNER_THUMBPRINT }}
+        SPARK_RELEASE_TRUST_MODEL: ${{ vars.SPARK_RELEASE_TRUST_MODEL }}
       run: |
         python .github/scripts/verify-windows-package-signatures.py --check-hashes `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `

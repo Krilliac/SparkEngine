@@ -50,6 +50,14 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
                       invocation)
         self.assertIn("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }", invocation)
 
+    def test_windows_authenticode_gate_requires_explicit_self_signed_policy(self) -> None:
+        start = self.text.index("- name: Verify Windows stable outer installer signatures")
+        block = self.text[start:self.text.index("\n    - name:", start + 10)]
+        self.assertIn("SPARK_RELEASE_SIGNER_THUMBPRINT", block)
+        self.assertIn("SPARK_RELEASE_TRUST_MODEL", block)
+        self.assertIn("SPARK_RELEASE_TRUST_MODEL: ${{ vars.SPARK_RELEASE_TRUST_MODEL }}", block)
+        self.assertIn("self-signed", self.text[start - 500:start])
+
 
 if __name__ == "__main__":
     unittest.main()
