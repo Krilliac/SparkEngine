@@ -4,8 +4,8 @@
  *
  * Implements the SparkGameRacingModule class and exports the CreateModule/
  * DestroyModule factory functions for the engine's ModuleManager. The
- * race-flow orchestration helpers (SetupDefaultRaceRoster /
- * SyncRaceAndTrackState / ApplyAIDriverInputs) live in MainRaceFlow.cpp,
+ * race-flow orchestration (SetupDefaultRaceRoster / StepRace /
+ * UpdatePresentationState) lives in MainRaceFlow.cpp,
  * split per the repo file-size rule (MainFrame pattern — same class,
  * feature-owned translation units).
  */
@@ -222,12 +222,7 @@ void SparkGameRacingModule::OnUpdate(float deltaTime)
 
     m_engineSystems->Update(deltaTime);
     m_trackSystem->Update(deltaTime);
-    m_raceManager->Update(deltaTime);
-    SyncRaceAndTrackState();
-    m_aiDriver->Update(deltaTime);
-    ApplyPlayerInput(deltaTime);
-    ApplyAIDriverInputs(deltaTime);
-    m_vehicleSystem->Update(deltaTime);
+    StepRace(deltaTime);
     UpdatePresentationState();
     m_cameraSystem->Update(deltaTime);
     m_hudSystem->Update(deltaTime);

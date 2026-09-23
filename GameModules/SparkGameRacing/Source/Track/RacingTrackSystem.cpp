@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -66,19 +67,16 @@ namespace Racing
         if (m_currentTrack.waypoints.empty())
             return SurfaceType::Asphalt;
 
-        // Find the nearest waypoint and return its surface type
-        uint32_t nearest = GetNearestWaypoint(x, z);
-        const auto& wp = m_currentTrack.waypoints[nearest];
-
-        // Check if the position is within the track width
-        float dx = x - wp.x;
-        float dz = z - wp.z;
-        float dist = std::sqrt(dx * dx + dz * dz);
-
-        if (dist > wp.width)
+        // Measure against the centerline segment, not the nearest waypoint vertex: waypoints are tens of
+        // meters apart, so a car on the centerline between two of them is still on the track.
+        const TrackProjection projection = ProjectOntoTrack(x, z);
+        const TrackWaypoint& from = m_currentTrack.waypoints[projection.segment];
+        const TrackWaypoint& to = GetWaypoint(projection.segment + 1);
+        const float width = from.width + (to.width - from.width) * projection.t;
+        if (projection.lateralDistance > width)
             return SurfaceType::Grass; // Off-track
 
-        return wp.surface;
+        return projection.t < 0.5f ? from.surface : to.surface;
     }
 
     int RacingTrackSystem::CheckCheckpoint(float x, float z) const
@@ -135,6 +133,98 @@ namespace Racing
         if (m_currentTrack.waypoints.empty())
             return empty;
         return m_currentTrack.waypoints[index % m_currentTrack.waypoints.size()];
+    }
+
+    uint32_t RacingTrackSystem::GetSegmentCount() const
+    {
+        const auto waypointCount = static_cast<uint32_t>(m_currentTrack.waypoints.size());
+        if (waypointCount < 2)
+            return 0;
+        return m_currentTrack.layout == TrackLayout::PointToPoint ? waypointCount - 1 : waypointCount;
+    }
+
+    TrackProjection RacingTrackSystem::ProjectOntoTrack(float x, float z, std::optional<float> heading) const
+    {
+        TrackProjection best{};
+        const uint32_t segmentCount = GetSegmentCount();
+        if (segmentCount == 0)
+        {
+            if (!m_currentTrack.waypoints.empty())
+                best.lateralDistance = std::hypot(x - m_currentTrack.waypoints[0].x, z - m_currentTrack.waypoints[0].z);
+            return best;
+        }
+
+        // Where segments overlap (a figure-8 crossing), prefer the one running the way the car is facing.
+        constexpr float kHeadingTieBreakMeters = 10.0f;
+        const float headingX = heading ? std::sin(*heading) : 0.0f;
+        const float headingZ = heading ? std::cos(*heading) : 0.0f;
+        float bestScore = std::numeric_limits<float>::max();
+
+        for (uint32_t segment = 0; segment < segmentCount; ++segment)
+        {
+            const TrackWaypoint& from = m_currentTrack.waypoints[segment];
+            const TrackWaypoint& to = GetWaypoint(segment + 1);
+            const float segX = to.x - from.x;
+            const float segZ = to.z - from.z;
+            const float lengthSq = segX * segX + segZ * segZ;
+            if (lengthSq <= 0.0f)
+                continue;
+
+            const float t = std::clamp(((x - from.x) * segX + (z - from.z) * segZ) / lengthSq, 0.0f, 1.0f);
+            const float lateral = std::hypot(x - (from.x + segX * t), z - (from.z + segZ * t));
+            const float alignment = heading ? (segX * headingX + segZ * headingZ) / std::sqrt(lengthSq) : 1.0f;
+            const float score = lateral + (1.0f - alignment) * kHeadingTieBreakMeters;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best.segment = segment;
+                best.t = t;
+                best.lateralDistance = lateral;
+            }
+        }
+        return best;
+    }
+
+    void RacingTrackSystem::GetPointAhead(const TrackProjection& from, float distance, float& outX, float& outZ) const
+    {
+        const uint32_t segmentCount = GetSegmentCount();
+        if (segmentCount == 0)
+        {
+            const TrackWaypoint& only = GetWaypoint(0);
+            outX = only.x;
+            outZ = only.z;
+            return;
+        }
+
+        uint32_t segment = std::min(from.segment, segmentCount - 1);
+        float t = std::clamp(from.t, 0.0f, 1.0f);
+        float remaining = std::max(distance, 0.0f);
+
+        // Walk at most one full lap so degenerate zero-length tracks cannot loop forever.
+        for (uint32_t walked = 0; walked <= segmentCount; ++walked)
+        {
+            const TrackWaypoint& a = m_currentTrack.waypoints[segment];
+            const TrackWaypoint& b = GetWaypoint(segment + 1);
+            const float length = std::hypot(b.x - a.x, b.z - a.z);
+            const float left = length * (1.0f - t);
+            if (remaining <= left && length > 0.0f)
+            {
+                const float endT = t + remaining / length;
+                outX = a.x + (b.x - a.x) * endT;
+                outZ = a.z + (b.z - a.z) * endT;
+                return;
+            }
+
+            remaining -= left;
+            t = 0.0f;
+            if (segment + 1 >= segmentCount && m_currentTrack.layout == TrackLayout::PointToPoint)
+                break; // Hold the target on the finish rather than wrapping back to the start.
+            segment = (segment + 1) % segmentCount;
+        }
+
+        const TrackWaypoint& end = GetWaypoint(segment + 1);
+        outX = end.x;
+        outZ = end.z;
     }
 
     std::string RacingTrackSystem::GetTrackListString() const
@@ -248,10 +338,11 @@ namespace Racing
         track.waypoints[5].surface = SurfaceType::Dirt;
         track.waypoints[6].surface = SurfaceType::Gravel;
 
-        // Checkpoints at start, middle, and end
+        // Checkpoints at the start, the midpoint, and the finish at the final waypoint
+        const auto lastWaypoint = static_cast<uint32_t>(track.waypoints.size() - 1);
         for (uint32_t i = 0; i < 3; ++i)
         {
-            uint32_t wpIdx = i * (static_cast<uint32_t>(track.waypoints.size()) / 3);
+            const uint32_t wpIdx = (i * lastWaypoint) / 2;
             Checkpoint cp{};
             cp.index = i;
             cp.x = track.waypoints[wpIdx].x;
@@ -272,37 +363,24 @@ namespace Racing
         track.layout = TrackLayout::Figure8;
         track.totalLaps = 5;
 
-        // Two circles that cross at the center
-        constexpr int halfPoints = 12;
-        constexpr float radius = 80.0f;
-        constexpr float offsetX = 80.0f;
+        // Lemniscate of Gerono: one continuous line that crosses itself at the origin, so the lap runs
+        // start/finish -> left lobe -> back through the crossing -> right lobe -> start/finish.
+        constexpr int numPoints = 32;
+        constexpr float halfLength = 160.0f;
         constexpr float pi = 3.14159265f;
 
-        // Left loop
-        for (int i = 0; i < halfPoints; ++i)
+        for (int i = 0; i < numPoints; ++i)
         {
-            float angle = (static_cast<float>(i) / halfPoints) * 2.0f * pi;
+            const float t = (static_cast<float>(i) / numPoints) * 2.0f * pi;
             TrackWaypoint wp{};
-            wp.x = -offsetX + std::cos(angle) * radius;
-            wp.z = std::sin(angle) * radius;
+            wp.x = -halfLength * std::sin(t);
+            wp.z = halfLength * std::sin(t) * std::cos(t);
             wp.width = 12.0f;
             wp.surface = SurfaceType::Asphalt;
             track.waypoints.push_back(wp);
         }
 
-        // Right loop
-        for (int i = 0; i < halfPoints; ++i)
-        {
-            float angle = (static_cast<float>(i) / halfPoints) * 2.0f * pi;
-            TrackWaypoint wp{};
-            wp.x = offsetX + std::cos(angle) * radius;
-            wp.z = std::sin(angle) * radius;
-            wp.width = 12.0f;
-            wp.surface = SurfaceType::Asphalt;
-            track.waypoints.push_back(wp);
-        }
-
-        // Checkpoints at crossing point and far ends
+        // Checkpoints at the crossing (start/finish) and the far end of each lobe, in driving order
         Checkpoint cpCenter{};
         cpCenter.index = 0;
         cpCenter.x = 0.0f;
@@ -313,14 +391,14 @@ namespace Racing
 
         Checkpoint cpLeft{};
         cpLeft.index = 1;
-        cpLeft.x = -offsetX - radius;
+        cpLeft.x = -halfLength;
         cpLeft.z = 0.0f;
         cpLeft.radius = 15.0f;
         track.checkpoints.push_back(cpLeft);
 
         Checkpoint cpRight{};
         cpRight.index = 2;
-        cpRight.x = offsetX + radius;
+        cpRight.x = halfLength;
         cpRight.z = 0.0f;
         cpRight.radius = 15.0f;
         track.checkpoints.push_back(cpRight);
