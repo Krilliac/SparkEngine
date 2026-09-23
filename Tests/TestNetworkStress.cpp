@@ -819,10 +819,18 @@ TEST(NetworkStress_InterleavedTraffic)
                        attackSender.SendTo(garbage.data(), garbage.size(), port);
 
                        nm.Update(0.016f);
+                       // UDP delivery is asynchronous even for loopback. On
+                       // macOS the datagram can become readable just after
+                       // this update, so leave a bounded opportunity for the
+                       // socket queue to drain before the next round.
+                       std::this_thread::sleep_for(std::chrono::milliseconds(1));
                    }
 
-                   for (int frame = 0; frame < 10; ++frame)
+                   for (int frame = 0; frame < 100 && nm.GetClients().empty(); ++frame)
+                   {
                        nm.Update(0.016f);
+                       std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                   }
 
                    // Valid clients should have connected; garbage should be rejected
                    EXPECT_GT(static_cast<int>(nm.GetClients().size()), 0);

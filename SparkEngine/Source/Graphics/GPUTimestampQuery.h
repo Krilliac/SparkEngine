@@ -66,6 +66,9 @@ namespace Spark::Graphics
         static constexpr uint32_t kFrameLatency = 2;  ///< Frames of latency before results are available
         static constexpr uint32_t kHistorySize = 120; ///< Rolling history frames per pass
 
+        /// The slot being reused at frame N contains frame N - kFrameLatency.
+        static constexpr uint32_t FrameSlot(uint32_t frameIndex) noexcept { return frameIndex % kFrameLatency; }
+
         GPUTimestampQuery() = default;
         ~GPUTimestampQuery() { Shutdown(); }
 
@@ -170,14 +173,14 @@ namespace Spark::Graphics
             }
 
             // Collect results from the oldest buffered frame (N-2)
-            uint32_t readFrame = (m_frameIndex + 1) % kFrameLatency;
+            uint32_t readFrame = FrameSlot(m_frameIndex);
             if (m_frameIndex >= kFrameLatency)
             {
                 CollectResults(context, readFrame);
             }
 
             // Start current frame's disjoint query
-            uint32_t writeFrame = m_frameIndex % kFrameLatency;
+            uint32_t writeFrame = FrameSlot(m_frameIndex);
             auto& frameData = m_frames[writeFrame];
             frameData.activeCount = 0;
 
@@ -294,6 +297,31 @@ namespace Spark::Graphics
             }
 
             return sum / static_cast<float>(count);
+        }
+
+        /// Number of completed valid samples retained for a named pass.
+        uint32_t GetPassSampleCount(const char* name) const
+        {
+            if (!name)
+                return 0;
+            const auto it = m_passHistory.find(name);
+            return it == m_passHistory.end() ? 0 : it->second.count;
+        }
+
+        /**
+         * @brief Drop all completed samples for one named pass.
+         *
+         * Benchmark consumers use this at the first frame of a run so a
+         * result cannot accidentally reuse history from an earlier run. The
+         * in-flight D3D11 query slots remain untouched; their results still
+         * obey the normal two-frame latency when they are collected.
+         */
+        void ResetPassHistory(const char* name)
+        {
+            if (!name)
+                return;
+            m_passTimes.erase(name);
+            m_passHistory.erase(name);
         }
 
         /**

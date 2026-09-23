@@ -407,6 +407,7 @@ add_executable(SparkTests
     TestNeuralRadianceCache.cpp
     TestNeuralPostProcessing.cpp
     TestGPUProfiler.cpp
+    TestVRAMTelemetry.cpp
     TestShaderHotReloadCompilation.cpp
     TestShaderHotReloadPhaseU.cpp
     TestShaderDiskCachePhaseV.cpp

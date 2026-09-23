@@ -50,6 +50,11 @@ using Spark::Graphics::PostProcessingPipeline;
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
+namespace
+{
+    constexpr const char* kBenchmarkGpuPass = "gfx_benchmark_frame";
+} // namespace
+
 // Centralized logging macros
 #include "../Utils/LogMacros.h"
 
@@ -81,6 +86,20 @@ void GraphicsEngine::BeginFrame()
     m_sortedDrawList.clear();
     m_constantBufferRing.BeginFrame(m_context.Get());
     m_gpuTimestampQuery.BeginFrame(m_context.Get());
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        if (m_benchmarkActive)
+        {
+            if (m_benchmarkGpuHistoryResetFrames < Spark::Graphics::GPUTimestampQuery::kFrameLatency)
+            {
+                m_gpuTimestampQuery.ResetPassHistory(kBenchmarkGpuPass);
+                ++m_benchmarkGpuHistoryResetFrames;
+            }
+            m_benchmarkGpuTimerId = m_gpuTimestampQuery.BeginTimestamp(m_context.Get(), kBenchmarkGpuPass);
+        }
+        else
+            m_benchmarkGpuTimerId = UINT32_MAX;
+    }
     if (m_shadowAtlas)
         m_shadowAtlas->BeginFrame();
 
@@ -202,6 +221,11 @@ void GraphicsEngine::EndFrame()
             }
         }
         m_constantBufferRing.EndFrame();
+        if (m_benchmarkGpuTimerId != UINT32_MAX)
+        {
+            m_gpuTimestampQuery.EndTimestamp(m_context.Get(), m_benchmarkGpuTimerId);
+            m_benchmarkGpuTimerId = UINT32_MAX;
+        }
         m_gpuTimestampQuery.EndFrame(m_context.Get());
         m_renderTargetPool.Tick();
         if (m_shadowAtlas)
@@ -325,14 +349,23 @@ void GraphicsEngine::EndFrame()
                 if (elapsedSeconds >= m_benchmarkSeconds)
                 {
                     std::ostringstream result;
+                    constexpr uint32_t kReportedGpuSamples = 60;
+                    const float gpuMs =
+                        m_gpuTimestampQuery.GetAveragePassTimeMs(kBenchmarkGpuPass, kReportedGpuSamples);
+                    const uint32_t gpuSamples =
+                        (std::min)(kReportedGpuSamples, m_gpuTimestampQuery.GetPassSampleCount(kBenchmarkGpuPass));
                     result << "=== Graphics Benchmark (actual presents) ===\n"
                            << "Elapsed wall time: " << elapsedSeconds << " s\n"
                            << "Presented frames: " << m_benchmarkPresentedFrames << "\n"
                            << "Presented FPS: " << m_benchmarkPresentedFrames / elapsedSeconds << "\n"
                            << "CPU BeginFrame-to-Present: avg "
                            << m_benchmarkCpuTotalMs / static_cast<double>(m_benchmarkPresentedFrames) << " ms, min "
-                           << m_benchmarkCpuMinMs << " ms, max " << m_benchmarkCpuMaxMs << " ms\n"
-                           << "GPU frame time: unavailable (not measured by gfx_benchmark)";
+                           << m_benchmarkCpuMinMs << " ms, max " << m_benchmarkCpuMaxMs << " ms\n";
+                    if (gpuMs > 0.0f && gpuSamples > 0)
+                        result << "GPU render interval: avg " << gpuMs << " ms (" << gpuSamples
+                               << " valid D3D11 timestamp samples; two-frame collection lag)";
+                    else
+                        result << "GPU render interval: unavailable (D3D11 timestamp query returned no valid samples)";
                     benchmarkResult = result.str();
                     m_benchmarkActive = false;
                 }

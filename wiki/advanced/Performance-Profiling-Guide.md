@@ -97,10 +97,15 @@ float shadowMs = profiler.GetGPUSectionTime("ShadowPass");
 On the Windows D3D11 game path, `gfx_benchmark <seconds>` (1-300) observes
 actual successful swap-chain presents while normal gameplay continues. The
 command returns a start acknowledgement; the final console entry reports the
-successful present count, elapsed wall-clock FPS, and CPU time from
-`BeginFrame()` through `Present()`. It does **not** measure GPU frame time or
-GPU throughput and labels that value unavailable. If rendering stops before
-the requested interval, the result is explicitly incomplete.
+successful present count, elapsed wall-clock FPS, CPU time from
+`BeginFrame()` through `Present()`, and (on D3D11 when timestamp results are
+valid) the average GPU render interval from up to 60 valid D3D11 timestamp
+samples, collected two frames after submission. This interval ends before the
+pre-Present overlay and swap-chain `Present()`; it is not GPU wall-clock frame
+time. The result labels GPU timing unavailable when the driver/device returns
+no valid samples.
+If rendering stops before the requested interval, the result is explicitly
+incomplete.
 
 Compare runs only with the same scene/workload, VSync state, resolution,
 graphics settings, backend, and hardware; the wall-clock Present-call rate

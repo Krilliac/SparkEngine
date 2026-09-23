@@ -160,7 +160,22 @@ def read_manifest(root: Path, producer_pid: int) -> tuple[str, dict]:
     if not isinstance(manifest, dict) or manifest.get("enginePID") != str(producer_pid):
         raise CaptureError("manifest does not identify the producer process")
     if any(not isinstance(manifest.get(key), str) or not manifest[key] for key in ("logFile", "dumpFile")):
-        raise CaptureError("real producer must emit both log and dump references")
+        diagnostic = ""
+        if not manifest.get("dumpFile") and isinstance(manifest.get("logFile"), str):
+            try:
+                with SecureRoot(root) as pinned:
+                    log_data, _ = pinned.read_file(manifest["logFile"], max_bytes=MAX_ARTIFACT_BYTES,
+                                                   deadline=time.monotonic() + 15)
+                for line in log_data.decode("utf-8", errors="replace").splitlines():
+                    if line.startswith("Minidump capture failed (Win32="):
+                        diagnostic = f"; {line[:160]}"
+                        break
+                    if line == "Minidump probe failed after writer reported success":
+                        diagnostic = "; Minidump probe failed after writer reported success"
+                        break
+            except (FilesystemPolicyError, OSError, UnicodeError):
+                diagnostic = "; dump diagnostic unavailable"
+        raise CaptureError("real producer must emit both log and dump references" + diagnostic)
     if (manifest.get("screenshotFile") != "" or manifest.get("zipFile") != ""
             or manifest.get("requireConsent") is not False
             or manifest.get("promptUserDescription") is not False

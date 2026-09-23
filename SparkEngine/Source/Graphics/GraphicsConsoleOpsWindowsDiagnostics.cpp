@@ -13,6 +13,7 @@
 
 #include "GraphicsEngine.h"
 #include "TextureSystem.h"
+#include "VRAMBudgetMonitor.h"
 #include "AssetPipeline.h"
 #include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
@@ -219,6 +220,18 @@ std::string GraphicsEngine::Console_GetSystemInfo() const
     // Add memory usage
     size_t vramUsage = Console_GetVRAMUsage();
     ss << "VRAM Usage: " << (vramUsage / 1024 / 1024) << " MB\n";
+    if (!m_vramBudgetMonitor || !m_vramBudgetMonitor->IsCurrentUsageValid())
+    {
+        ss << "VRAM Telemetry: unavailable (DXGI sample not valid)\n";
+    }
+    else if (m_vramBudgetMonitor->GetCurrentUsage() == 0)
+    {
+        ss << "VRAM Telemetry: valid DXGI sample reported zero; engine estimate fallback may apply\n";
+    }
+    else
+    {
+        ss << "VRAM Telemetry: valid DXGI sample\n";
+    }
 
     return ss.str();
 }
@@ -240,6 +253,7 @@ std::string GraphicsEngine::Console_Benchmark(int seconds)
     m_benchmarkCpuTotalMs = 0.0;
     m_benchmarkCpuMinMs = 0.0;
     m_benchmarkCpuMaxMs = 0.0;
+    m_benchmarkGpuHistoryResetFrames = 0;
     return "Benchmark started: sampling actual presented frames for " + std::to_string(seconds) +
            " second(s); result will be logged after the interval";
 }
@@ -325,16 +339,27 @@ size_t GraphicsEngine::Console_GetVRAMUsage() const
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Retrieving VRAM usage via console", L"INFO");
 
-    // Calculate total VRAM usage from tracked memory
-    size_t totalUsage = m_textureMemoryUsage + m_bufferMemoryUsage;
+    // The DXGI adapter query is the authoritative live usage source on
+    // Windows. The legacy counters below are only an engine estimate and are
+    // not populated for every D3D11 resource path.
+    size_t estimatedUsage = m_textureMemoryUsage + m_bufferMemoryUsage;
+    bool liveAdapterUsage = false;
+    size_t liveUsage = 0;
+    if (m_vramBudgetMonitor && m_vramBudgetMonitor->IsQuerySupported() && m_vramBudgetMonitor->IsCurrentUsageValid())
+    {
+        liveUsage = m_vramBudgetMonitor->GetCurrentUsage();
+        liveAdapterUsage = true;
+    }
 
-    // Add advanced system memory usage if available
-    if (m_textureSystem)
+    // The estimate remains a fallback when live telemetry is unavailable or
+    // reports zero despite known engine-owned GPU resources.  The latter is
+    // observed with some WDDM/driver combinations during early presentation.
+    if ((!liveAdapterUsage || liveUsage == 0) && m_textureSystem)
     {
         try
         {
             auto textureMetrics = m_textureSystem->Console_GetMetrics();
-            totalUsage = textureMetrics.totalMemoryUsage + m_bufferMemoryUsage;
+            estimatedUsage = textureMetrics.totalMemoryUsage + m_bufferMemoryUsage;
         }
         catch (const std::exception& e)
         {
@@ -347,9 +372,16 @@ size_t GraphicsEngine::Console_GetVRAMUsage() const
         }
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"VRAM usage retrieved: " + std::to_wstring(totalUsage / 1024 / 1024) + L" MB", L"INFO");
+    const auto reading = SelectVRAMUsage(liveUsage, liveAdapterUsage, estimatedUsage);
+    const wchar_t* source =
+        reading.fromLiveQuery
+            ? L"DXGI adapter query"
+            : (reading.liveQueryReportedZero ? L"engine estimate (DXGI reported zero)" : L"engine estimate");
+    LOG_TO_CONSOLE_IMMEDIATE(L"VRAM usage retrieved from " + std::wstring(source) + L": " +
+                                 std::to_wstring(reading.bytes / 1024 / 1024) + L" MB",
+                             L"INFO");
 
-    return totalUsage;
+    return reading.bytes;
 }
 
 void GraphicsEngine::Console_ResetDevice()

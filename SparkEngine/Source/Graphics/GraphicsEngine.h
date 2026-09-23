@@ -1048,6 +1048,8 @@ class GraphicsEngine
     double m_benchmarkCpuTotalMs = 0.0;
     double m_benchmarkCpuMinMs = 0.0;
     double m_benchmarkCpuMaxMs = 0.0;
+    uint32_t m_benchmarkGpuTimerId = UINT32_MAX;
+    uint32_t m_benchmarkGpuHistoryResetFrames = 0;
 
     ComPtr<ID3D11Query> m_disjointQuery;
     ComPtr<ID3D11Query> m_timestampStartQuery;

@@ -787,7 +787,7 @@ extern ID3D11DeviceContext* GetD3DContext();
 // Forward declarations
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep);
 static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, CrashReportDelivery delivery);
-static bool WriteMiniDump(const std::wstring& path, EXCEPTION_POINTERS* ep);
+static bool WriteMiniDump(const std::wstring& path, EXCEPTION_POINTERS* ep, DWORD* failureError = nullptr);
 static std::wstring MakeTimeStamp();
 static std::wstring SymStackTrace(EXCEPTION_POINTERS* ep);
 static std::wstring SystemInfo();
@@ -1051,7 +1051,8 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     std::wstring logFile = prefix + reportSuffix + L".log";
     std::wstring shot = prefix + reportSuffix + L".png";
 
-    const bool dumpReady = WriteMiniDump(dump, ep);
+    DWORD dumpError = ERROR_SUCCESS;
+    const bool dumpReady = WriteMiniDump(dump, ep, &dumpError);
 
     std::wstringstream log;
     log << L"================================================================\n";
@@ -1072,6 +1073,17 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     else
     {
         log << L"*** CRASH DETECTED ***\n\n";
+    }
+
+    // Keep a bounded, path-free reason in the producer-owned log when the
+    // Windows dump API rejects the request.  The manifest intentionally
+    // carries an empty dumpFile in that case; this diagnostic lets the
+    // isolated security test distinguish an OS/API failure from a packaging
+    // or probe failure without exposing the artifact path.
+    if (!dumpReady)
+    {
+        log << L"Minidump capture failed (Win32=" << dumpError << L", HRESULT=0x" << std::hex
+            << static_cast<unsigned long>(HRESULT_FROM_WIN32(dumpError)) << std::dec << L")\n\n";
     }
 
     if (ep->ExceptionRecord)
@@ -1133,6 +1145,15 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     if (g_cfg.captureAllThreads)
         log << ThreadStacksBounded(threadStacksTimedOut);
 
+    // Probe the writer's result before the log is finalized.  A successful
+    // MiniDumpWriteDump call can still leave an unusable artifact if the
+    // pinned-root consumer cannot reopen it; keep that failure distinct from
+    // the API failure above while preserving the fail-closed empty manifest
+    // field.
+    PinnedFile dumpProbe = dumpReady ? OpenPinnedInputFile(WideToUtf8(dump)) : PinnedFile{};
+    if (dumpReady && !dumpProbe.stream)
+        log << L"Minidump probe failed after writer reported success\n\n";
+
     // Skipped after a thread-stacks timeout: the console-process IPC can block
     // on the same suspended threads the wedged helper left behind.
     if (!threadStacksTimedOut)
@@ -1167,7 +1188,8 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
         // of zombieing (the historical failure mode this watchdog exists for).
         if (logReady)
         {
-            WriteCrashManifest(reportId, dumpReady ? WideToUtf8(dump) : std::string{}, WideToUtf8(logFile), "", "",
+            WriteCrashManifest(reportId, dumpProbe.stream ? WideToUtf8(dump) : std::string{}, WideToUtf8(logFile), "",
+                               "",
                                assertMsg ? "Assertion Failure (thread-stack capture timed out)"
                                          : "Crash Detected (thread-stack capture timed out)");
         }
@@ -1181,7 +1203,6 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     const bool screenshotWritten =
         delivery == CrashReportDelivery::Interactive && g_cfg.captureScreenshot && SaveScreenshot(shot);
 
-    PinnedFile dumpProbe = dumpReady ? OpenPinnedInputFile(WideToUtf8(dump)) : PinnedFile{};
     PinnedFile logProbe = logReady ? OpenPinnedInputFile(WideToUtf8(logFile)) : PinnedFile{};
     PinnedFile screenshotProbe = screenshotWritten ? OpenPinnedInputFile(WideToUtf8(shot)) : PinnedFile{};
     const bool screenshotAvailable = screenshotProbe.stream != nullptr;
@@ -1209,12 +1230,18 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     }
 }
 
-static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep)
+static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWORD* failureError)
 {
+    if (failureError)
+        *failureError = ERROR_SUCCESS;
     HANDLE h =
         CreateFileW(file.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE)
+    {
+        if (failureError)
+            *failureError = GetLastError();
         return false;
+    }
 
     MINIDUMP_EXCEPTION_INFORMATION info{GetCurrentThreadId(), ep, TRUE};
     MINIDUMP_TYPE dumpType = MiniDumpNormal;
@@ -1223,10 +1250,14 @@ static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep)
         dumpType =
             static_cast<MINIDUMP_TYPE>(MiniDumpWithFullMemory | MiniDumpWithHandleData | MiniDumpWithUnloadedModules);
     }
-    const bool written =
-        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), h, dumpType, &info, nullptr, nullptr) != FALSE;
+    SetLastError(ERROR_SUCCESS);
+    const BOOL result =
+        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), h, dumpType, &info, nullptr, nullptr);
+    const DWORD error = result ? ERROR_SUCCESS : GetLastError();
     CloseHandle(h);
-    return written;
+    if (failureError)
+        *failureError = error;
+    return result != FALSE;
 }
 
 static std::wstring MakeTimeStamp()

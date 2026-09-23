@@ -70,6 +70,24 @@ class CrashCaptureDriverTests(unittest.TestCase):
             with self.assertRaises(driver.CaptureError, msg=str(change)):
                 driver.read_manifest(self.root, 123)
 
+    def test_manifest_reports_bounded_dump_failure_diagnostic(self):
+        path = self.write_manifest(dumpFile="")
+        (self.root / "crash.log").write_text(
+            "prefix\nMinidump capture failed (Win32=5, HRESULT=0x80070005)\n" + "x" * 10000,
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(driver.CaptureError, r"Win32=5, HRESULT=0x80070005"):
+            driver.read_manifest(self.root, 123)
+        self.assertEqual(path.name, "crash_manifest_0123456789abcdef.json")
+
+    def test_manifest_reports_post_write_probe_failure(self):
+        self.write_manifest(dumpFile="")
+        (self.root / "crash.log").write_text(
+            "Minidump probe failed after writer reported success\n", encoding="utf-8"
+        )
+        with self.assertRaisesRegex(driver.CaptureError, r"Minidump probe failed after writer reported success"):
+            driver.read_manifest(self.root, 123)
+
     def test_empty_or_ambiguous_capture_cannot_pass(self):
         with self.assertRaises(driver.CaptureError):
             driver.read_manifest(self.root, 123)
