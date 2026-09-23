@@ -338,6 +338,7 @@ add_executable(SparkTests
     TestMaterialSystemReal.cpp
     TestAssetPipelineReal.cpp
     TestMMOAssetImport.cpp
+    TestENG220ObjImportReal.cpp
     TestAbilitySystemReal.cpp
     TestAchievementSystemReal.cpp
     TestConstantBufferDiffReal.cpp
