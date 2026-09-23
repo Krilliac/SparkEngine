@@ -324,7 +324,7 @@
 | `FreezeState` | enum | Tests | [TestFreezeDetector.cpp:L23](../../Tests/TestFreezeDetector.cpp#L23) |  |
 | `Frontend` | enum | SparkInstaller | [InstallerContext.h:L16](../../SparkInstaller/src/InstallerContext.h#L16) |  |
 | `GameModeType` | enum | GameModules | [GameModeTypes.h:L20](../../GameModules/SparkGameFPS/Source/Game/GameModeTypes.h#L20) | Available game mode types |
-| `GameModeType` | enum | SparkEngine | [DedicatedServer.h:L50](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L50) | Game mode identifiers matching FPSToolsPanel definitions |
+| `GameModeType` | enum | SparkEngine | [DedicatedServer.h:L52](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L52) | Game mode identifiers matching FPSToolsPanel definitions |
 | `GameModeType` | enum | Tests | [TestDedicatedServer.cpp:L27](../../Tests/TestDedicatedServer.cpp#L27) |  |
 | `GamepadAxis` | enum | SparkEngine | [InputEnums.h:L65](../../SparkEngine/Source/Enums/InputEnums.h#L65) | Gamepad axes |
 | `GamepadAxis` | enum | SparkSDK | [InputTypes.h:L71](../../SparkSDK/Include/Spark/InputTypes.h#L71) | Gamepad axis identifiers |
