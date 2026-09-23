@@ -351,6 +351,37 @@ TEST(FPSScene_CameraAndSpawnOnlyINIStillLoadsAsSceneData)
     RemoveTree(temp);
 }
 
+TEST(FPSScene_FailedReloadPreservesPreviousLiveScene)
+{
+    const std::filesystem::path temp = MakeTempDir("reload_rollback");
+    const std::filesystem::path valid = temp / "valid.scene";
+    const std::filesystem::path malformed = temp / "malformed.scene";
+    {
+        std::ofstream file(valid);
+        file << "[Scene]\nname=Stable\n[Object]\ntype=plane\nname=Floor\nposition=1,2,3\n";
+    }
+    {
+        std::ofstream file(malformed);
+        file << "[Scene]\nname=Broken\n[Camera]\nname=BrokenCamera\nposition=not-a-transform\n";
+    }
+
+    GraphicsEngine graphics;
+    InputManager input;
+    SceneManager scene(&graphics, &input);
+    ASSERT_TRUE(scene.LoadScene(valid.wstring()));
+    ASSERT_TRUE(scene.FindNode("Floor") >= 0);
+    const int nodeCount = scene.GetNodeCount();
+    const std::wstring currentPath = scene.GetCurrentFilePath();
+
+    EXPECT_FALSE(scene.LoadScene(malformed.wstring()));
+    EXPECT_EQ(scene.GetNodeCount(), nodeCount);
+    EXPECT_TRUE(scene.FindNode("Floor") >= 0);
+    EXPECT_TRUE(scene.GetCurrentFilePath() == currentPath);
+    EXPECT_EQ(scene.GetMetadata().sceneName, std::string("Stable"));
+
+    RemoveTree(temp);
+}
+
 TEST(FPSRespawn_LowestIntegerPriorityStillSelectsAuthoredSpawn)
 {
     RespawnSystem respawn;

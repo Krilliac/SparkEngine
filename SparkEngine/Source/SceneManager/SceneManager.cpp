@@ -83,6 +83,30 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
 
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager::LoadScene called. filepath=" + filepath, L"OPERATION");
 
+    // Loading formats currently clear the live graph before parsing. Keep a
+    // value snapshot so a malformed or unreadable replacement cannot leave the
+    // running editor/game with an empty half-scene. Objects are recreated from
+    // the restored nodes below; this is intentionally synchronous and bounded
+    // to the existing scene-load path.
+    const auto previousNodes = m_sceneNodes;
+    const auto previousMetadata = m_metadata;
+    const auto previousFilePath = m_currentFilePath;
+    const bool previousDirty = m_dirty;
+    const auto restorePrevious = [this, &previousNodes, &previousMetadata, &previousFilePath, previousDirty]()
+    {
+        m_sceneNodes = previousNodes;
+        m_metadata = previousMetadata;
+        m_currentFilePath = previousFilePath;
+        m_dirty = previousDirty;
+        m_nodeNameIndex.clear();
+        for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
+        {
+            if (!m_sceneNodes[i].name.empty())
+                m_nodeNameIndex[m_sceneNodes[i].name] = i;
+        }
+        InstantiateNodes();
+    };
+
     auto ext = std::filesystem::path(filepath).extension();
     bool loaded = false;
 
@@ -99,6 +123,9 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
         LOG_TO_CONSOLE_IMMEDIATE(L"Scene file extension not recognized: " + filepath, L"WARNING");
         return false;
     }
+
+    if (!loaded)
+        restorePrevious();
 
     if (loaded)
     {
