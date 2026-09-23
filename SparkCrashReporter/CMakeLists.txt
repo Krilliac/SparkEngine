@@ -69,6 +69,7 @@ if(REPORTER_SOURCES)
             src/CrashAutoIssues.cpp
             src/CrashAutoIssues.h
         )
+        add_dependencies(SparkCrashReporterProductionTimeoutTests SparkCrashReporterFakeGh)
         target_include_directories(SparkCrashReporterProductionTimeoutTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
         target_compile_definitions(SparkCrashReporterProductionTimeoutTests PRIVATE
             SPARK_CRASH_REPORTER_VERSION="${PROJECT_VERSION}"
