@@ -97,13 +97,20 @@ CI job: `check-supply-chain` in `.github/workflows/build.yml`
 
 **Outstanding (SEC-110 remains open/blocking):**
 
-- SBOM generation and release provenance
+- Retained success evidence for release SBOM and provenance: `release.yml`
+  defines an SPDX SBOM step and a build-provenance attestation, but no
+  versioned release has exercised them, and publisher identity and consumer
+  verification evidence remain open
 - Vulnerability-scanner integration
 - Required secret-scanning enforcement
 - CodeQL coverage for every shipped product
-- A formal severity-exception schema with owner and expiry
 - SPDX allowlist enforcement and policy for third-party code outside
-  `ThirdParty/`
+  `ThirdParty/` (for example, the editor fonts under `SparkEditor/Fonts/` have
+  no license file on disk; see `THIRD_PARTY_NOTICES`)
+
+The reviewed-exception schema (named owner, justification, and expiry for each
+`supply-chain.lock` exception) is implemented and enforced by the checker; see
+[`ThirdParty/POLICY.md`](ThirdParty/POLICY.md#reviewed-exceptions).
 
 ## Credit
 
