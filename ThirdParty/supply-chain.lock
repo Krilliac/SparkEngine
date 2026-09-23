@@ -364,5 +364,73 @@
     "microsoft/setup-msbuild": [
       "30375c66a4eea26614e0d39710365f22f8b0af57"
     ]
+  },
+  "license_policy": {
+    "dependencies": {
+      "AngelScript": {
+        "declared": "zlib",
+        "spdx": "Zlib"
+      },
+      "Dear ImGui": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "EnTT": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "Jolt Physics": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "RecastNavigation": {
+        "declared": "zlib",
+        "spdx": "Zlib"
+      },
+      "SDL2": {
+        "declared": "zlib",
+        "spdx": "Zlib"
+      },
+      "VulkanMemoryAllocator": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "cgltf": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "glad": {
+        "declared": "MIT and Apache-2.0",
+        "spdx": "MIT AND Apache-2.0"
+      },
+      "miniaudio": {
+        "declared": "Public Domain / MIT-0",
+        "spdx": "Unlicense OR MIT-0"
+      },
+      "miniz": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "nlohmann/json": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "stb_image": {
+        "declared": "Public Domain / MIT",
+        "spdx": "MIT OR Unlicense"
+      },
+      "tinyexr": {
+        "declared": "BSD-3-Clause",
+        "spdx": "BSD-3-Clause"
+      },
+      "tinyobjloader": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "zstd": {
+        "declared": "BSD-3-Clause (library, upstream tools are dual-licensed)",
+        "spdx": "BSD-3-Clause"
+      }
+    }
   }
 }

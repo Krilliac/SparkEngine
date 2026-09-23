@@ -132,6 +132,29 @@ EXCEPTION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
 EXCEPTION_SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{1,127}$")
 EXCEPTION_PLACEHOLDER_OWNERS = frozenset({"", "none", "n/a", "tbd", "todo", "unknown", "unassigned"})
 
+# ── License policy (SEC-110) ──────────────────────────────────────────
+# The allow-list lives here, in reviewed code, and deliberately not in the
+# lockfile it polices: a dependency change must not be able to approve its own
+# license in the same data file.  Every identifier named anywhere in a
+# dependency's SPDX expression must be on this list -- including each arm of an
+# OR -- so an expression cannot carry an unreviewed license behind a
+# disjunction.  Identifiers match exactly (no case folding).  Widening the list
+# is a human policy decision (ThirdParty/POLICY.md).
+ALLOWED_SPDX_LICENSES = frozenset({
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "MIT",
+    "MIT-0",
+    "Unlicense",
+    "Zlib",
+})
+LICENSE_POLICY_KEYS = frozenset({"dependencies"})
+LICENSE_POLICY_RECORD_FIELDS = frozenset({"declared", "spdx"})
+MAX_SPDX_EXPRESSION_CHARS = 512
+MAX_LICENSE_DECLARATION_CHARS = 512
+SPDX_ID_RE = re.compile(r"^(?:LicenseRef-)?[A-Za-z0-9][A-Za-z0-9.+-]*$")
+SPDX_OPERATORS = frozenset({"AND", "OR"})
+
 
 def _fatal(msg: str) -> None:
     """Abort with exit 2 — the checker itself could not complete."""
@@ -666,6 +689,201 @@ def validate_lockfile_schema(data: dict[str, Any]) -> None:
             date.fromisoformat(expires)
         except ValueError:
             _fatal(f"{label}.expires: invalid ISO date: {expires!r}")
+
+
+    _validate_license_policy_schema(data)
+
+
+def _validate_license_policy_schema(data: dict[str, Any]) -> None:
+    """Shape of the optional reviewed SPDX mapping.  Absent means empty."""
+    if "license_policy" not in data:
+        return
+    policy = data["license_policy"]
+    if not isinstance(policy, dict):
+        _fatal("license_policy must be an object")
+    unknown = sorted(policy.keys() - LICENSE_POLICY_KEYS)
+    missing = sorted(LICENSE_POLICY_KEYS - policy.keys())
+    if unknown or missing:
+        _fatal(
+            f"license_policy: invalid fields; missing={missing}, unknown={unknown} "
+            "(the SPDX allow-list is defined by the checker, not the lockfile)"
+        )
+    records = policy["dependencies"]
+    if not isinstance(records, dict):
+        _fatal("license_policy.dependencies must be an object")
+    if len(records) > MAX_MANIFEST_ENTRIES:
+        _fatal(f"license_policy.dependencies exceeds MAX_MANIFEST_ENTRIES ({MAX_MANIFEST_ENTRIES})")
+    for name, record in records.items():
+        label = f"license_policy.dependencies[{name!r}]"
+        if not isinstance(name, str) or not name.strip() or len(name) > 256:
+            _fatal(f"{label}: invalid dependency name")
+        if not isinstance(record, dict):
+            _fatal(f"{label}: entry must be an object")
+        unknown = sorted(record.keys() - LICENSE_POLICY_RECORD_FIELDS)
+        missing = sorted(LICENSE_POLICY_RECORD_FIELDS - record.keys())
+        if unknown or missing:
+            _fatal(f"{label}: invalid fields; missing={missing}, unknown={unknown}")
+        for key, limit in (("declared", MAX_LICENSE_DECLARATION_CHARS),
+                           ("spdx", MAX_SPDX_EXPRESSION_CHARS)):
+            value = record[key]
+            if not isinstance(value, str) or not value.strip() or len(value) > limit:
+                _fatal(f"{label}.{key}: expected a non-empty string of at most {limit} characters")
+
+
+def parse_spdx_expression(expression: str) -> list[str]:
+    """Parse an SPDX license expression; return its identifiers in order.
+
+    Supported grammar (a deliberate subset of SPDX 2.3 Annex D):
+
+        expr := term ("OR" term)*
+        term := atom ("AND" atom)*
+        atom := "(" expr ")" | license-id
+
+    ``WITH`` exception clauses are rejected rather than half-understood: an
+    exception changes what the license permits, and no dependency needs one
+    today.  Anything that is not exactly this grammar -- prose, lowercase
+    operators, dangling operators, juxtaposed identifiers -- raises ValueError.
+    """
+    if not isinstance(expression, str):
+        raise ValueError("license expression must be a string")
+    if len(expression) > MAX_SPDX_EXPRESSION_CHARS:
+        raise ValueError(
+            f"license expression exceeds {MAX_SPDX_EXPRESSION_CHARS} characters"
+        )
+    tokens = re.findall(r"\(|\)|[^\s()]+", expression)
+    if not tokens:
+        raise ValueError("license expression is empty")
+
+    leaves: list[str] = []
+    position = 0
+
+    def peek() -> str | None:
+        return tokens[position] if position < len(tokens) else None
+
+    def take() -> str:
+        nonlocal position
+        token = tokens[position]
+        position += 1
+        return token
+
+    def atom(depth: int) -> None:
+        if depth > MAX_JSON_DEPTH:
+            raise ValueError("license expression nests too deeply")
+        token = peek()
+        if token is None:
+            raise ValueError("license expression ends where a license was expected")
+        if token == "(":
+            take()
+            expr(depth + 1)
+            if peek() != ")":
+                raise ValueError("unbalanced parenthesis in license expression")
+            take()
+            return
+        if token == "WITH":
+            raise ValueError("WITH exception clauses are not supported by this policy")
+        if token in SPDX_OPERATORS or token == ")":
+            raise ValueError(f"unexpected {token!r} where a license was expected")
+        if not SPDX_ID_RE.fullmatch(token):
+            raise ValueError(f"{token!r} is not an SPDX license identifier")
+        leaves.append(take())
+
+    def term(depth: int) -> None:
+        atom(depth)
+        while peek() == "AND":
+            take()
+            atom(depth)
+
+    def expr(depth: int) -> None:
+        term(depth)
+        while peek() == "OR":
+            take()
+            term(depth)
+
+    expr(0)
+    if position != len(tokens):
+        token = tokens[position]
+        if token == "WITH":
+            raise ValueError("WITH exception clauses are not supported by this policy")
+        raise ValueError(f"unexpected {token!r} after a complete license expression")
+    return leaves
+
+
+def check_license_policy(
+    lockfile: dict[str, Any],
+    entries: list[list[str]],
+    result: CheckResult,
+) -> list[dict[str, str]]:
+    """Resolve every dependency to an SPDX expression on the allow-list.
+
+    Resolution order: a reviewed ``license_policy.dependencies`` record for the
+    dependency name, which must pin the manifest's declared license string
+    exactly; otherwise the manifest's license field itself, which must then be
+    a well-formed SPDX expression.  Returns the resolved inventory sorted by
+    dependency name so the machine-readable output is deterministic.
+    """
+    records = lockfile.get("license_policy", {}).get("dependencies", {})
+    resolved: dict[str, str] = {}
+    seen: set[str] = set()
+
+    for fields in entries:
+        if len(fields) != MANIFEST_FIELD_COUNT:
+            continue  # reported by manifest reconciliation
+        name = fields[F_NAME].strip()
+        declared = fields[F_LICENSE].strip()
+        if not name or name in seen or not declared:
+            continue  # reported by manifest reconciliation
+        seen.add(name)
+
+        record = records.get(name)
+        if record is not None:
+            if record["declared"] != declared:
+                result.error(
+                    "license", f"{LOCKFILE_REL}:license_policy.dependencies[{name!r}]",
+                    f"dependency {name!r} declared license changed from "
+                    f"{record['declared']!r} to {declared!r} in {MANIFEST_REL}; "
+                    "re-review the SPDX mapping against the license text",
+                )
+                continue
+            expression = record["spdx"]
+            origin = f"{LOCKFILE_REL}:license_policy.dependencies[{name!r}].spdx"
+        else:
+            expression = declared
+            origin = f"{MANIFEST_REL}:{name}"
+
+        try:
+            identifiers = parse_spdx_expression(expression)
+        except ValueError as exc:
+            hint = (
+                "" if record is not None else
+                f"; record a reviewed SPDX mapping under license_policy in {LOCKFILE_REL}"
+            )
+            result.error(
+                "license", origin,
+                f"dependency {name!r} license {expression!r} is not an SPDX "
+                f"expression ({exc}){hint}",
+            )
+            continue
+
+        rejected = [i for i in identifiers if i not in ALLOWED_SPDX_LICENSES]
+        if rejected:
+            result.error(
+                "license", origin,
+                f"dependency {name!r} license {', '.join(repr(i) for i in rejected)} "
+                f"is not on the license allow-list "
+                f"({', '.join(sorted(ALLOWED_SPDX_LICENSES))})",
+            )
+            continue
+        resolved[name] = expression
+
+    for name in sorted(records):
+        if name not in seen:
+            result.error(
+                "license", f"{LOCKFILE_REL}:license_policy.dependencies[{name!r}]",
+                f"license mapping for {name!r} has no dependencies.lock entry — "
+                "remove the stale mapping",
+            )
+
+    return [{"name": name, "spdx": resolved[name]} for name in sorted(resolved)]
 
 
 def check_exception_expiry(lockfile: dict[str, Any], result: CheckResult) -> None:
@@ -1780,6 +1998,14 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
         "sentinel_files": sentinels,
         "action_pins": action_pins,
     }
+    # The reviewed SPDX mapping is a human decision, never derived: carry it
+    # through unchanged so a refresh cannot erase or invent license verdicts.
+    if "license_policy" in existing:
+        lockfile_data["license_policy"] = {
+            "dependencies": dict(sorted(
+                existing["license_policy"]["dependencies"].items()
+            )),
+        }
 
     _write_atomic(lockpath, json.dumps(lockfile_data, indent=2) + "\n")
     return lockfile_data
@@ -1915,7 +2141,9 @@ def _write_atomic(target: Path, content: str) -> None:
 
 # ── Verification driver ───────────────────────────────────────────────
 
-def run_all_checks(root: Path, root_resolved: Path) -> tuple[CheckResult, dict[str, Any]]:
+def run_all_checks(
+    root: Path, root_resolved: Path
+) -> tuple[CheckResult, dict[str, Any], list[dict[str, str]]]:
     lockfile = load_lockfile(root, root_resolved)
     result = CheckResult()
 
@@ -1932,10 +2160,16 @@ def run_all_checks(root: Path, root_resolved: Path) -> tuple[CheckResult, dict[s
     check_gitmodules_consistency(modules, lockfile, result)
     entries = export_manifest_entries(root, root_resolved)
     check_manifest_reconciliation(root, lockfile, entries, modules, result)
-    return result, lockfile
+    licenses = check_license_policy(lockfile, entries, result)
+    return result, lockfile, licenses
 
 
-def _emit_json(result: CheckResult, lockfile: dict[str, Any], extra: dict[str, Any]) -> None:
+def _emit_json(
+    result: CheckResult,
+    lockfile: dict[str, Any],
+    licenses: list[dict[str, str]],
+    extra: dict[str, Any],
+) -> None:
     payload = {
         "passed": result.passed,
         "violation_count": len(result.violations),
@@ -1943,6 +2177,8 @@ def _emit_json(result: CheckResult, lockfile: dict[str, Any], extra: dict[str, A
         "submodule_count": len(lockfile.get("submodule_gitlinks", {})),
         "tree_digest_count": len(lockfile.get("tree_digests", {})),
         "action_pin_count": len(lockfile.get("action_pins", {})),
+        "allowed_spdx_licenses": sorted(ALLOWED_SPDX_LICENSES),
+        "dependency_licenses": licenses,
         "violations": [
             {
                 "category": v.category,
@@ -1958,7 +2194,9 @@ def _emit_json(result: CheckResult, lockfile: dict[str, Any], extra: dict[str, A
     print()
 
 
-def _emit_text(result: CheckResult, lockfile: dict[str, Any]) -> None:
+def _emit_text(
+    result: CheckResult, lockfile: dict[str, Any], licenses: list[dict[str, str]]
+) -> None:
     RED, GREEN, YELLOW, NC = "\033[0;31m", "\033[0;32m", "\033[1;33m", "\033[0m"
     errors = [v for v in result.violations if v.severity == "error"]
     warnings = [v for v in result.violations if v.severity == "warning"]
@@ -1982,7 +2220,8 @@ def _emit_text(result: CheckResult, lockfile: dict[str, Any]) -> None:
             f"({len(lockfile['sentinel_files'])} sentinel files, "
             f"{len(lockfile['submodule_gitlinks'])} submodules, "
             f"{len(lockfile['tree_digests'])} tree digests, "
-            f"{len(lockfile['action_pins'])} pinned actions)"
+            f"{len(lockfile['action_pins'])} pinned actions, "
+            f"{len(licenses)} allow-listed dependency licenses)"
         )
     else:
         print(
@@ -2020,12 +2259,12 @@ def main() -> int:
 
     # An update that is not verified is an update that reports success without
     # establishing anything. The exit code below is the verification's.
-    result, lockfile = run_all_checks(root, root_resolved)
+    result, lockfile, licenses = run_all_checks(root, root_resolved)
 
     if args.json:
-        _emit_json(result, lockfile, extra)
+        _emit_json(result, lockfile, licenses, extra)
     else:
-        _emit_text(result, lockfile)
+        _emit_text(result, lockfile, licenses)
     return 0 if result.passed else 1
 
 
