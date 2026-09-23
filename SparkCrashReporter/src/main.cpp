@@ -77,7 +77,8 @@ int main(int argc, char* argv[])
             return 2;
         }
         std::cout << "Automatic GitHub Issues enabled. Issues are public. Only reporter version, platform, "
-                     "and an opaque incident ID are sent; no logs, dumps, screenshots, paths, or descriptions. "
+                     "a known crash class (or Unknown), and an opaque incident ID are sent; no logs, dumps, "
+                     "screenshots, paths, or descriptions. "
                      "Run --disable-auto-issues to revoke this opt-in. Existing authenticated gh is required.\n";
         return 0;
     }

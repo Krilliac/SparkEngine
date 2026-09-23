@@ -47,6 +47,25 @@ namespace SparkCrashReporter
 #endif
         constexpr size_t kMaxOutput = 1024;
 
+        std::string_view SafeCrashClass(std::string_view title)
+        {
+            // These are fixed titles emitted by CrashHandler. A manifest is
+            // untrusted input, so never publish any other title verbatim.
+            constexpr std::array known = {
+                std::string_view{"Crash Detected"},
+                std::string_view{"Assertion Failure"},
+                std::string_view{"Unattended Failure (watchdog)"},
+                std::string_view{"Crash Detected (thread-stack capture timed out)"},
+                std::string_view{"Assertion Failure (thread-stack capture timed out)"},
+                std::string_view{"SIGSEGV"},
+                std::string_view{"SIGABRT"},
+                std::string_view{"SIGFPE"},
+                std::string_view{"Crash"},
+            };
+            const auto match = std::find(known.begin(), known.end(), title);
+            return match == known.end() ? "Unknown" : *match;
+        }
+
         fs::path ConfigRoot()
         {
 #ifdef _WIN32
@@ -599,7 +618,8 @@ namespace SparkCrashReporter
 #endif
         const std::string body = "Automatic SparkEngine crash notification.\n\n"
                                  "Reporter version: " SPARK_CRASH_REPORTER_VERSION "\nPlatform: " +
-                                 std::string(platform) + "\nIncident: " + incidentId +
+                                 std::string(platform) + "\nCrash class: " +
+                                 std::string(SafeCrashClass(manifest.crashTitle)) + "\nIncident: " + incidentId +
                                  "\n\nNo crash log, dump, screenshot, file path, command line, or personal data "
                                  "was attached. A playtester may add sanitized reproduction steps manually.";
         return {true, gh, cwd, body, {}};
