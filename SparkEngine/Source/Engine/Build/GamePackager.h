@@ -241,7 +241,10 @@ namespace Spark::Build
                 return result;
             }
 
-            // 8. Copy files
+            // 8. Copy files. Every collected file is part of the package, so any
+            // copy failure makes the package incomplete: collect all of them and
+            // fail rather than publishing a partial directory as a success.
+            std::vector<std::string> copyFailures;
             for (const auto& entry : manifest)
             {
                 std::filesystem::path destPath = outDir / entry.relativePath;
@@ -251,7 +254,8 @@ namespace Spark::Build
                                            std::filesystem::copy_options::overwrite_existing, ec);
                 if (ec)
                 {
-                    result.warnings.push_back("Failed to copy: " + entry.sourcePath + " (" + ec.message() + ")");
+                    copyFailures.push_back(entry.sourcePath + " (" + ec.message() + ")");
+                    ec.clear();
                     continue;
                 }
 
@@ -261,6 +265,24 @@ namespace Spark::Build
 
             auto endTime = std::chrono::steady_clock::now();
             result.durationSeconds = std::chrono::duration<double>(endTime - startTime).count();
+
+            if (!copyFailures.empty())
+            {
+                result.errorMessage = "Failed to copy " + std::to_string(copyFailures.size()) + " file(s): ";
+                for (size_t i = 0; i < copyFailures.size(); ++i)
+                {
+                    if (i > 0)
+                        result.errorMessage += "; ";
+                    result.errorMessage += copyFailures[i];
+                }
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
+                // Counts are kept for diagnostics, but an incomplete package has
+                // no publishable output and does not count as a built package.
+                result.success = false;
+                m_lastResult = result;
+                return result;
+            }
+
             result.outputPath = outDir.string();
             result.success = (result.filesCopied > 0) && result.errorMessage.empty();
 

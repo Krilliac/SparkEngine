@@ -368,6 +368,7 @@ add_executable(SparkTests
     TestVisualScriptCompiler.cpp
     TestEntityPresetManager.cpp
     TestGamePackager.cpp
+    TestASSET220GamePackagerReal.cpp
     TestAssetValidator.cpp
     TestAssetMigration.cpp
     TestAccessibility.cpp
