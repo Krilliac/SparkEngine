@@ -892,5 +892,110 @@ class TestFinalAuditClosure(unittest.TestCase):
                             for error in errors))
 
 
+def _metric_of(category: str, unit: str, percentile: str | None,
+               *, budget: float = 16.0,
+               metric_id: str | None = None) -> dict[str, Any]:
+    metric = _metric(metric_id or f"test.{category}", budget=budget)
+    metric["category"] = category
+    metric["unit"] = unit
+    metric["percentile"] = percentile
+    return metric
+
+
+def _compare_single(metric: dict[str, Any], value: float,
+                    sample_count: int) -> Any:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        _write_suite(root, budget=_budget([metric]))
+        return compare(root, _result([{
+            "metricId": metric["id"],
+            "value": value,
+            "unit": metric["unit"],
+            "sampleCount": sample_count,
+        }]), expected_sha=RESULT_SHA)
+
+
+class TestMeasurementIntegrity(unittest.TestCase):
+    """A broken measurement must never read as a within-budget pass.
+
+    A frame, tick, startup, memory, or package-size probe that silently
+    failed reports 0, and 0 is below every lower_is_better budget. Likewise
+    a "p99" computed from one sample is just that sample. Both are the
+    reassuring value a stopped check fabricates, so both must fail closed.
+    """
+
+    PHYSICALLY_POSITIVE = (
+        ("frame_time", "ms", "p50"),
+        ("tick_time", "ms", "p50"),
+        ("startup_time", "ms", None),
+        ("memory", "megabytes", None),
+        ("package_size", "megabytes", None),
+    )
+
+    def test_zero_measurement_fails_for_physically_positive_metrics(self) -> None:
+        for category, unit, percentile in self.PHYSICALLY_POSITIVE:
+            with self.subTest(category=category):
+                report = _compare_single(
+                    _metric_of(category, unit, percentile), 0.0, 1000,
+                )
+                self.assertFalse(report.passed)
+                self.assertTrue(
+                    any("zero" in error and category in error
+                        for error in report.errors),
+                    report.errors,
+                )
+
+    def test_positive_measurement_still_passes(self) -> None:
+        for category, unit, percentile in self.PHYSICALLY_POSITIVE:
+            with self.subTest(category=category):
+                report = _compare_single(
+                    _metric_of(category, unit, percentile), 1.5, 1000,
+                )
+                self.assertTrue(report.passed, report.errors)
+
+    def test_zero_soak_crash_count_is_a_legitimate_pass(self) -> None:
+        metric = _metric_of("soak", "count", None, budget=0.0)
+        report = _compare_single(metric, 0.0, 1)
+        self.assertTrue(report.passed, report.errors)
+
+    def test_percentile_requires_enough_samples_to_exist(self) -> None:
+        minimums = {"p50": 2, "p90": 10, "p95": 20, "p99": 100, "p999": 1000}
+        for percentile, minimum in minimums.items():
+            metric = _metric_of(
+                "frame_time", "ms", percentile,
+                metric_id=f"test.frame_time.{percentile}",
+            )
+            with self.subTest(percentile=percentile, samples=minimum - 1):
+                report = _compare_single(metric, 10.0, minimum - 1)
+                self.assertFalse(report.passed)
+                self.assertTrue(
+                    any("sampleCount" in error and percentile in error
+                        for error in report.errors),
+                    report.errors,
+                )
+            with self.subTest(percentile=percentile, samples=minimum):
+                report = _compare_single(metric, 10.0, minimum)
+                self.assertTrue(report.passed, report.errors)
+
+    def test_cli_rejects_zero_frame_time_on_certified_hardware(self) -> None:
+        metric = _metric_of("frame_time", "ms", "p50")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_suite(root, budget=_budget([metric]))
+            result_path = root / "result.json"
+            result_path.write_text(json.dumps(_result([{
+                "metricId": metric["id"],
+                "value": 0,
+                "unit": "ms",
+                "sampleCount": 1000,
+            }])), encoding="utf-8")
+            with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                code = compare_main([
+                    str(root), str(result_path), "--expected-sha", RESULT_SHA,
+                ])
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
