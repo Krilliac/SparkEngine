@@ -81,6 +81,44 @@ CLANG_TIDY_SOURCE_ROOTS = (
     "GameModules",
 )
 
+# Every failure suppression (``|| true``, ``|| :``, ``|| echo``, ``|| exit 0``)
+# inside a required job, keyed by exact (job, step, stripped run line). Only
+# cache statistics, cache hygiene, fallback selection, and failure-only
+# reporting lines belong here. A suppression on a line that produces gate
+# evidence (a scan, test, count, or validator) must be fixed, never listed.
+REVIEWED_REQUIRED_JOB_SUPPRESSIONS = frozenset({
+    ("check-format", "Check formatting", "BASE_SHA=$(git rev-parse HEAD^ 2>/dev/null || true)"),
+    ("check-format", "Extract check-format error summary", "check-format-output.log || true"),
+    ("build-linux-asan", "Configure CMake (ASan + UBSan + LSan)", 'command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"'),
+    ("build-linux-asan", "Print ccache stats", 'command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"'),
+    ("build-linux-tsan", "Configure CMake (TSan)", 'command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"'),
+    ("build-linux-tsan", "Print ccache stats", 'command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"'),
+    ("build-windows-vs2022", "Print sccache stats", 'sccache --show-stats 2>&1 | tee sccache-stats.txt || echo "::warning::sccache --show-stats failed"'),
+    ("build-windows-vs2022", "Print sccache stats", 'sccache --stop-server || echo "::warning::sccache --stop-server failed"'),
+    ("build-linux-gcc", "Configure CMake", 'command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"'),
+    ("build-linux-gcc", "Build all targets", "find build -name '*.pch' -delete 2>/dev/null || true"),
+    ("build-linux-gcc", "Print ccache stats", 'command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"'),
+    ("build-linux-clang", "Configure CMake", 'command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"'),
+    ("build-linux-clang", "Build all targets", "find build -name '*.pch' -delete 2>/dev/null || true"),
+    ("build-linux-clang", "Build all targets", "find build -name 'lib*.a' -delete 2>/dev/null || true"),
+    ("build-linux-clang", "Print ccache stats", 'command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"'),
+    ("coverage", "Configure", 'command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"'),
+    ("coverage", "Print ccache stats", 'command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"'),
+    ("clang-tidy", "Run clang-tidy", "warn_count=$(grep -cE ':\\s*(warning|error):' clang-tidy-output.log || true)"),
+    ("clang-tidy", "Extract clang-tidy error summary", "clang-tidy-output.log || true"),
+})
+FAILURE_SUPPRESSION = re.compile(r"\|\|\s*(?:true\b|:(?=\s|$|\))|echo\b|exit\s+0\b)")
+
+# C/C++ suffixes check-format must route to clang-format. Objective-C++
+# (.mm) is Metal-only platform code and is deliberately outside the gate.
+FORMAT_ROOTS = (
+    "SparkEngine/Source", "GameModules", "SparkEditor/Source", "SparkConsole/src",
+    "SparkShaderCompiler/src", "SparkBuild/src", "SparkInstaller/src", "SparkDaemon/src",
+    "SparkServer/src", "SparkGateway/src", "SparkCooker/src", "SparkWorker/src",
+    "SparkAutomation/src", "SparkLauncher/src", "Tests",
+)
+CXX_SOURCE_SUFFIXES = frozenset({".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".c", ".cc", ".cpp", ".cxx"})
+
 sys.path.insert(0, str(REPO_ROOT / "Tools"))
 
 from buildmatrix.workflow import WorkflowError, parse_workflow_yaml  # noqa: E402
@@ -1089,6 +1127,62 @@ def required_workflow_errors(workflow: str) -> list[str]:
     return errors
 
 
+def required_job_bypass_errors(document: dict) -> list[str]:
+    """Reject step-level error bypasses and unreviewed suppressions in required jobs.
+
+    A step-level ``continue-on-error`` lets its job report ``success`` to the
+    Required CI Gate after the step failed, and an unreviewed ``|| true`` turns
+    a failed scan into a reassuring value. Both are invisible to the gate's
+    ``needs.*.result`` check, so they must be rejected structurally.
+    """
+
+    errors: list[str] = []
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    seen: set[tuple[str, str, str]] = set()
+    for job_id in REQUIRED_CI_JOBS:
+        job = jobs.get(job_id)
+        if not isinstance(job, dict):
+            errors.append(f"required job {job_id} is missing")
+            continue
+        steps = job.get("steps")
+        if not isinstance(steps, list) or not steps:
+            errors.append(f"required job {job_id} has no steps")
+            continue
+        for index, step in enumerate(steps):
+            if not isinstance(step, dict):
+                errors.append(f"{job_id} step #{index} is not a mapping")
+                continue
+            name = str(step.get("name") or step.get("uses") or f"#{index}")
+            if "continue-on-error" in step:
+                errors.append(f"{job_id} step {name!r} declares continue-on-error")
+            run = step.get("run")
+            if not isinstance(run, str):
+                continue
+            for line in run.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("#") or not FAILURE_SUPPRESSION.search(stripped):
+                    continue
+                key = (job_id, name, stripped)
+                seen.add(key)
+                if key not in REVIEWED_REQUIRED_JOB_SUPPRESSIONS:
+                    errors.append(f"{job_id} step {name!r} suppresses a failure without review: {stripped}")
+    for stale in sorted(REVIEWED_REQUIRED_JOB_SUPPRESSIONS - seen):
+        errors.append(f"reviewed suppression no longer exists; remove it from the allowlist: {stale}")
+    return errors
+
+
+def format_filter_suffixes(workflow: str) -> set[str]:
+    """Return the file suffixes routed to clang-format by the check-format case arm."""
+
+    step = named_step(yaml_section(workflow, "check-format", indent=2), "Check formatting")
+    arms = re.findall(r"(?m)^\s+((?:\*\.[A-Za-z0-9]+\|?)+)\)\s*$", step)
+    if len(arms) != 1:
+        raise AssertionError(f"check-format must have exactly one source-suffix case arm, found {arms}")
+    return {"." + part.split(".", 1)[1] for part in arms[0].split("|") if part}
+
+
 class WorkflowFailurePropagationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1120,6 +1214,138 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             threshold,
         )
         self.assertRegex(threshold, r"(?m)^\s+exit 1$")
+
+    def _run_todo_count(self, *, roots: tuple[str, ...], markers: int, failing_grep: bool = False) -> tuple[int, str]:
+        document = parse_workflow_yaml(self.build)
+        steps = document["jobs"]["todo-count"]["steps"]
+        matches = [step for step in steps if step.get("name") == "Count TODO/FIXME/HACK comments"]
+        self.assertEqual(len(matches), 1)
+        script = matches[0]["run"]
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp) / "workspace"
+            for root in roots:
+                (workspace / root).mkdir(parents=True)
+            if roots:
+                source = workspace / roots[0] / "Markers.cpp"
+                source.write_text("".join(f"// TODO marker {n}\n" for n in range(markers)), encoding="utf-8")
+            script_path = Path(temp) / "todo-count.sh"
+            script_path.write_text(script, encoding="utf-8", newline="\n")
+            output = Path(temp) / "github-output"
+            output.write_text("", encoding="utf-8")
+            env = dict(os.environ, GITHUB_OUTPUT=output.as_posix())
+            # A shell function shadows grep on every host; a PATH shim does
+            # not, because Git for Windows' bash launcher re-prepends usr/bin.
+            prelude = (
+                'grep() { echo "grep: simulated read error" >&2; return 2; }; '
+                if failing_grep else ""
+            )
+            result = subprocess.run(
+                [bash_executable(), "-c", prelude + '. "$0"', script_path.as_posix()],
+                cwd=workspace,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            return result.returncode, output.read_text(encoding="utf-8") + result.stdout + result.stderr
+
+    def test_todo_count_scan_failure_cannot_report_zero_markers(self) -> None:
+        roots = ("SparkEngine/Source", "SparkEditor/Source", "GameModules")
+
+        status, log = self._run_todo_count(roots=roots, markers=0)
+        self.assertEqual(status, 0, log)
+        self.assertIn("count=0", log)
+
+        status, log = self._run_todo_count(roots=roots, markers=3)
+        self.assertEqual(status, 0, log)
+        self.assertIn("count=3", log)
+
+        status, log = self._run_todo_count(roots=roots, markers=21)
+        self.assertNotEqual(status, 0, log)
+
+        # A missing source root once made grep exit 2, which `|| true`
+        # converted into a clean zero count.
+        status, log = self._run_todo_count(roots=roots[:2], markers=0)
+        self.assertNotEqual(status, 0, log)
+        self.assertNotIn("count=0", log)
+
+        status, log = self._run_todo_count(roots=roots, markers=0, failing_grep=True)
+        self.assertNotEqual(status, 0, log)
+        self.assertNotIn("count=0", log)
+
+    def test_required_jobs_have_no_step_bypass_or_unreviewed_suppression(self) -> None:
+        self.assertEqual(required_job_bypass_errors(parse_workflow_yaml(self.build)), [])
+
+    def test_required_job_bypass_detector_rejects_hostile_mutations(self) -> None:
+        import copy
+
+        baseline = parse_workflow_yaml(self.build)
+
+        def run_tests_step(document: dict) -> dict:
+            steps = document["jobs"]["build-linux-gcc"]["steps"]
+            return next(step for step in steps if step.get("name") == "Run Tests")
+
+        advisory = copy.deepcopy(baseline)
+        run_tests_step(advisory)["continue-on-error"] = True
+        self.assertIn(
+            "build-linux-gcc step 'Run Tests' declares continue-on-error",
+            required_job_bypass_errors(advisory),
+        )
+
+        # Even an explicit false is rejected: the key is a toggle away from a bypass.
+        explicit_false = copy.deepcopy(baseline)
+        run_tests_step(explicit_false)["continue-on-error"] = False
+        self.assertTrue(required_job_bypass_errors(explicit_false))
+
+        for suffix in (" || true", " || :", ' || echo "ignored"', " || exit 0"):
+            with self.subTest(suffix=suffix):
+                suppressed = copy.deepcopy(baseline)
+                step = run_tests_step(suppressed)
+                step["run"] = step["run"].replace(
+                    "--output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+                    "--output-junit ctest-junit.xml 2>&1 | tee test-results.log" + suffix,
+                )
+                self.assertNotEqual(step["run"], run_tests_step(baseline)["run"])
+                self.assertTrue(
+                    any("suppresses a failure without review" in error for error in required_job_bypass_errors(suppressed))
+                )
+
+        # Reverting the todo-count scan to the old swallowed-grep form is rejected.
+        legacy = copy.deepcopy(baseline)
+        todo = next(step for step in legacy["jobs"]["todo-count"]["steps"] if step.get("name") == "Count TODO/FIXME/HACK comments")
+        todo["run"] += "\ngrep -rn 'TODO' SparkEngine/Source > todo-list.log || true\n"
+        self.assertTrue(
+            any(error.startswith("todo-count step") for error in required_job_bypass_errors(legacy))
+        )
+
+        # A reviewed line cannot be silently moved into an evidence step.
+        moved = copy.deepcopy(baseline)
+        step = run_tests_step(moved)
+        step["run"] += "\nfind build -name '*.pch' -delete 2>/dev/null || true\n"
+        self.assertTrue(
+            any("'Run Tests' suppresses a failure without review" in error for error in required_job_bypass_errors(moved))
+        )
+
+    def test_check_format_routes_every_tracked_cxx_suffix(self) -> None:
+        step = named_step(yaml_section(self.build, "check-format", indent=2), "Check formatting")
+        roots_match = re.search(r"(?m)^\s+FORMAT_ROOTS=\((?P<roots>[^)]*)\)\s*$", step)
+        self.assertIsNotNone(roots_match)
+        assert roots_match is not None
+        self.assertEqual(tuple(roots_match.group("roots").split()), FORMAT_ROOTS)
+
+        routed = format_filter_suffixes(self.build)
+        present: dict[str, str] = {}
+        for root in FORMAT_ROOTS:
+            for directory, _dirs, files in os.walk(REPO_ROOT / root):
+                if "Metal" in Path(directory).relative_to(REPO_ROOT).parts:
+                    continue
+                for file_name in files:
+                    suffix = Path(file_name).suffix.lower()
+                    if suffix in CXX_SOURCE_SUFFIXES:
+                        present.setdefault(suffix, str(Path(directory, file_name).relative_to(REPO_ROOT)))
+        self.assertIn(".cpp", present)
+        missing = {suffix: example for suffix, example in present.items() if suffix not in routed}
+        self.assertEqual(missing, {}, "check-format silently skips tracked C/C++ sources")
 
     def test_clang_tidy_inventory_covers_all_shipped_source_roots(self) -> None:
         block = self.build[self.build.index("\n  clang-tidy:\n"):]

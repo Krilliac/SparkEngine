@@ -379,7 +379,7 @@ jobs:
           case "$source" in
             .clang-format) FORMAT_CONFIG_CHANGED=true ;;
             */Metal/*) ;;
-            *.h|*.hpp|*.cpp)
+            *.h|*.hpp|*.inl|*.cpp)
               if [[ -f "$source" ]]; then
                 FORMAT_SOURCES+=("$source")
               fi
@@ -3395,8 +3395,25 @@ jobs:
       - name: Count TODO/FIXME/HACK comments
         id: todo-count-run
         run: |
-          grep -rn 'TODO\|FIXME\|HACK\|XXX' SparkEngine/Source SparkEditor/Source GameModules \
-            --include='*.h' --include='*.cpp' > todo-list.log || true
+          set -euo pipefail
+          todo_roots=(SparkEngine/Source SparkEditor/Source GameModules)
+          for root in "${todo_roots[@]}"; do
+            if [ ! -d "$root" ]; then
+              echo "::error::TODO/FIXME source root is missing: $root"
+              exit 1
+            fi
+          done
+          # grep exits 1 when nothing matched (a real zero count). Any higher
+          # status is a failed scan and must not be reported as zero markers.
+          set +e
+          grep -rn 'TODO\|FIXME\|HACK\|XXX' "${todo_roots[@]}" \
+            --include='*.h' --include='*.cpp' > todo-list.log
+          grep_status=$?
+          set -e
+          if [ "$grep_status" -gt 1 ]; then
+            echo "::error::TODO/FIXME scan failed (grep exit $grep_status)"
+            exit "$grep_status"
+          fi
           count=$(wc -l < todo-list.log)
           echo "Found $count TODO/FIXME/HACK/XXX comments"
           echo "count=$count" >> "$GITHUB_OUTPUT"
