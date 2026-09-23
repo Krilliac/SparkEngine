@@ -116,6 +116,37 @@ if(REPORTER_SOURCES)
         add_test(NAME SparkCrashReporter.ManifestCompatibility
                  COMMAND SparkCrashReporterManifestTests $<TARGET_FILE:SparkCrashReporterFakeGh>)
 
+        # OPS-100: an unanswered or non-explicit consent prompt transmits nothing.
+        add_executable(SparkCrashReporterConsentTests
+            tests/CrashReporterConsentTests.cpp
+            src/CrashReporterApp.cpp
+            src/CrashReporterApp.h
+            src/CrashAutoIssues.cpp
+            src/CrashAutoIssues.h
+        )
+        add_dependencies(SparkCrashReporterConsentTests SparkCrashReporterFakeGh)
+        target_include_directories(SparkCrashReporterConsentTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_compile_definitions(SparkCrashReporterConsentTests PRIVATE
+            _CRT_SECURE_NO_WARNINGS
+            SPARK_CRASH_REPORTER_VERSION="${PROJECT_VERSION}"
+            SPARK_AUTO_ISSUE_TEST_TIMEOUT_MS=400
+        )
+        if(WIN32)
+            target_compile_definitions(SparkCrashReporterConsentTests PRIVATE
+                WIN32_LEAN_AND_MEAN
+                NOMINMAX
+                SPARK_PLATFORM_WINDOWS
+            )
+            target_link_libraries(SparkCrashReporterConsentTests PRIVATE kernel32 user32 advapi32 bcrypt)
+        else()
+            target_link_libraries(SparkCrashReporterConsentTests PRIVATE Threads::Threads)
+        endif()
+        add_test(NAME SparkCrashReporter.CrashReporter_Consent
+                 COMMAND SparkCrashReporterConsentTests $<TARGET_FILE:SparkCrashReporterFakeGh>)
+        set_tests_properties(SparkCrashReporter.CrashReporter_Consent PROPERTIES
+                             TIMEOUT 30
+                             LABELS "crash-security;security;unit")
+
         add_test(NAME SparkCrashReporter.ExecutableSmoke
                  COMMAND ${CMAKE_COMMAND}
                          -DREPORTER=$<TARGET_FILE:SparkCrashReporter>
