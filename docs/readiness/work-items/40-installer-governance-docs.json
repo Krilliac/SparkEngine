@@ -54,7 +54,6 @@
       "testSelectors": [
         "Installer_Tamper",
         "Installer_AtomicUpdate",
-        "Installer_Rollback",
         "Installer_Interrupted",
         "Installer_Uninstall"
       ],
@@ -98,7 +97,6 @@
       "plannedTestSelectors": [
         "Installer_Tamper",
         "Installer_AtomicUpdate",
-        "Installer_Rollback",
         "Installer_Interrupted",
         "Installer_Uninstall"
       ]

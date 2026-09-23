@@ -318,7 +318,7 @@ def predecessor_candidate_readiness_errors(contract: dict[str, Any]) -> list[str
     for gate_id in stage_gates or []:
         gate = gates.get(gate_id, {})
         blockers = set(gate.get("blockingWorkItemIds", []))
-        required_items.update(_dependencies(items, blockers))
+        required_items.update(_dependencies(items, blockers, excluded))
         expected = "at-risk" if blockers & stage_finalizer_ids else "passing"
         if gate.get("state") != expected:
             errors.append(f"predecessorRelease: gate {gate_id} must be {expected}")

@@ -107,6 +107,34 @@ class ReleaseStageTests(unittest.TestCase):
             "profileApplicability": {"test-profile": "outside"}, "predecessorOnly": True,
         })
         self.assertTrue(predecessor_candidate_readiness_errors(contract))
+
+    def test_actual_ledger_predecessor_can_pass_without_marking_v1_n_minus_one_done(self):
+        contract = load_contract()
+        contract = copy.deepcopy(contract)
+        readiness = contract["readiness"]
+        stage = readiness["predecessorRelease"]
+        readiness["globalRelease"]["state"] = "candidate"
+        profile = readiness["releaseProfiles"][0]
+        profile["state"] = "candidate"
+        profile["owner"] = "release-owner"
+        profile["signOffEvidence"] = [{"label": "review", "path": "review.json"}]
+        stage["state"] = "candidate"
+        stage["owner"] = "release-owner"
+        stage["signOffEvidence"] = [{"label": "review", "path": "review.json"}]
+        stage["sourceCommitEvidence"]["commit"] = "0123456789abcdef0123456789abcdef01234567"
+        items = {item["id"]: item for item in contract["workItems"]}
+        for item in items.values():
+            item["status"] = "done"
+            item["plannedCiJobs"] = []
+            item["plannedTestSelectors"] = []
+        # The predecessor has explicit equivalents, while the v1 N-1 and
+        # publication items remain unfinished and must not be silently promoted.
+        for source_id in ("INST-131", "REL-192", "REL-200"):
+            items[source_id]["status"] = "open" if source_id != "REL-200" else "blocked"
+        items["REL-193"]["status"] = "in-progress"
+        for gate in readiness["gates"]:
+            gate["state"] = "at-risk" if gate["id"] == "G18" else "passing"
+        self.assertEqual(predecessor_candidate_readiness_errors(contract), [])
         contract = predecessor_candidate()
         contract["workItems"][-1]["status"] = "done"
         self.assertTrue(predecessor_candidate_readiness_errors(contract))
