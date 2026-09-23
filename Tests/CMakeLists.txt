@@ -1006,6 +1006,7 @@ target_sources(SparkTests PRIVATE
     TestEditorRecovery.cpp
     TestEngineWiringReal.cpp
     TestD3D11DeviceContractsReal.cpp
+    TestRHI210D3D11GoldenReal.cpp
     TestEditorGizmoTransformReal.cpp
     TestEditorProjectMaterializationReal.cpp
     TestEditorUndoHierarchyReal.cpp
@@ -1430,6 +1431,23 @@ foreach(_remote_debug_epoch_selector IN ITEMS
         RUN_SERIAL TRUE
         TIMEOUT 30)
 endforeach()
+
+# RHI-210: D3D11 golden-frame and render-target resource contracts. Exact
+# counts so a filter that silently selects nothing (or a skip) cannot pass.
+if(WIN32)
+    add_test(NAME D3D11_Golden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11_Golden PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=D3D11_Golden_;SPARK_TEST_EXPECT_COUNT=2"
+        LABELS "d3d11-golden;d3d11;stable-v1"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+    add_test(NAME D3D11_Resource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11_Resource PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=D3D11_Resource_;SPARK_TEST_EXPECT_COUNT=2"
+        LABELS "d3d11-stress;d3d11;stable-v1"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
 
 add_test(
     NAME ModuleProfileLifecycleParserContract
