@@ -262,6 +262,7 @@ add_executable(SparkTests
     TestScriptSandbox.cpp
     TestPacketValidator.cpp
     TestPacketValidatorReal.cpp
+    TestNET100TransportReal.cpp
     TestLogger.cpp
     TestProfiler.cpp
     TestStackTrace.cpp
