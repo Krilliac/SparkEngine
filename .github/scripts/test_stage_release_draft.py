@@ -1,6 +1,7 @@
 """Run staging/guard behavior with only the GitHub process boundary simulated."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -61,7 +62,10 @@ class DraftStagingTests(unittest.TestCase):
     def invoke(self, expected_id=0):
         def guarded(command, repository, is_versioned, **kwargs):
             return guarded_run(command, repository, is_versioned, runner=self.run_process,
-                               policy_check=lambda repo, channel: validate_policy(self.policy, channel), **kwargs)
+                               policy_check=lambda repo, channel: validate_policy(
+                                   self.policy, channel,
+                                   immutable=os.environ.get("RELEASE_IMMUTABLE") == "true"
+                                   if "RELEASE_IMMUTABLE" in os.environ else None), **kwargs)
         with patch("stage_release_draft.subprocess.run", side_effect=self.run_process), \
              patch("stage_release_draft.guarded_run", side_effect=guarded):
             return stage(repository="owner/repo", tag=self.record["tag_name"], source_sha="a" * 40,
@@ -97,13 +101,20 @@ class DraftStagingTests(unittest.TestCase):
 
     def test_nightly_replacement_checks_policy_before_delete_and_upload(self):
         self.versioned = False
-        self.policy["enabled"] = False
-        self.record.update(tag_name="nightly", prerelease=True)
+        self.policy["enabled"] = True
+        self.record.update(tag_name="nightly-123-1-aaaaaaaaaaaa", prerelease=True)
         self.assets = [{"id": 9, "name": "a.zip", "state": "uploaded", "size": 5, "digest": "sha256:" + "b" * 64}]
-        self.flip_after = 2  # Metadata PATCH and exact asset DELETE, then policy changes.
-        with self.assertRaisesRegex(ValueError, "rolling nightly"):
-            self.invoke(expected_id=7)
-        self.assertEqual([method for method, _ in self.writes], ["PATCH", "DELETE"])
+        old = os.environ.get("RELEASE_IMMUTABLE")
+        os.environ["RELEASE_IMMUTABLE"] = "true"
+        try:
+            self.flip_after = 0  # Immutable policy is checked before any replacement.
+            self.assertEqual(self.invoke(expected_id=7), 7)
+        finally:
+            if old is None:
+                os.environ.pop("RELEASE_IMMUTABLE", None)
+            else:
+                os.environ["RELEASE_IMMUTABLE"] = old
+        self.assertEqual([method for method, _ in self.writes], ["PATCH", "DELETE", "POST", "POST"])
 
     def test_invalid_local_inventory_is_rejected_before_mutation(self):
         self.inventory.write_text("../outside.zip\n")

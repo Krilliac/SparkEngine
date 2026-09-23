@@ -129,7 +129,14 @@ jobs:
           echo "cmake_version=${TAG#v}" >> "$GITHUB_OUTPUT"
           echo "is_versioned=true" >> "$GITHUB_OUTPUT"
         else
-          echo "tag=nightly" >> "$GITHUB_OUTPUT"
+          if [[ ! "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]*$ ||
+                ! "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]*$ ||
+                ! "${GITHUB_SHA:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "Immutable nightly identity requires the authenticated run ID, attempt, and 40-hex source SHA." >&2
+            exit 1
+          fi
+          NIGHTLY_TAG="nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:12}"
+          echo "tag=$NIGHTLY_TAG" >> "$GITHUB_OUTPUT"
           echo "version=nightly" >> "$GITHUB_OUTPUT"
           echo "cmake_version=$DEFAULT_VERSION" >> "$GITHUB_OUTPUT"
           echo "is_versioned=false" >> "$GITHUB_OUTPUT"
@@ -150,8 +157,8 @@ jobs:
         REQUESTED_CONFIGS: ${{ github.event.client_payload.build_configs || 'both' }}
       run: |
         set -euo pipefail
-        # Every rolling nightly publishes both configurations so direct Debug
-        # and Release links always identify assets from one exact source SHA.
+        # Every immutable nightly publishes both configurations so the newest
+        # prerelease always contains a complete Debug and Release asset set.
         # Only versioned releases may honor an explicit single-config choice.
         if [[ ! "$REQUESTED_CONFIGS" =~ ^(both|release|debug)$ ]]; then
           echo "build_configs must be one of both, release, or debug; got: $REQUESTED_CONFIGS" >&2
@@ -338,7 +345,7 @@ jobs:
 
     # Stable signing is performed only after the protected stable-release
     # environment has authorized this job. The PFX is provisioned externally;
-    # it is never committed, uploaded, or exposed to rolling nightly builds.
+    # it is never committed, uploaded, or exposed to nightly builds.
     - name: Sign Windows stable outer installers
       if: needs.prepare.outputs.is_versioned == 'true'
       shell: pwsh
@@ -961,6 +968,9 @@ jobs:
     environment: ${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}
     env:
       IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+      # Stable and uniquely tagged nightly releases are both immutable. The
+      # legacy `nightly` release is preserved and is never mutated.
+      RELEASE_IMMUTABLE: 'true'
     permissions:
       actions: read
       attestations: write
@@ -1211,19 +1221,18 @@ jobs:
           fi
         done
 
-        # A rolling release is public only when every README direct-download
-        # target is present. This blocks a one-config/manual run or a missing
-        # package from publishing a mixed or incomplete nightly.
+        # An immutable nightly is public only when both configuration aliases
+        # are present. Direct links cannot target a moving `nightly` tag;
+        # README points users at the releases page, where the newest immutable
+        # prerelease and its exact assets are discoverable.
         if [[ "${{ needs.prepare.outputs.is_versioned }}" == "false" ]]; then
-          mapfile -t readme_nightly_assets < <(
-            grep -oE 'releases/download/nightly/[^) ]+' README.md \
-              | sed 's#^.*/##' \
-              | sort -u
+          readme_nightly_assets=(
+            "SparkEngine-Windows-x64-Debug.zip"
+            "SparkEngine-Windows-x64-Debug-Installer.exe"
+            "SparkEngine-Windows-x64-Release.zip"
+            "SparkEngine-Windows-x64-Release-Installer.exe"
+            "SparkInstaller-Windows-x64.exe"
           )
-          if (( ${#readme_nightly_assets[@]} == 0 )); then
-            echo "README declares no nightly direct-download assets." >&2
-            exit 1
-          fi
           for required_asset in "${readme_nightly_assets[@]}"; do
             if [[ ! -f "$required_asset" ]]; then
               echo "Missing README nightly asset: $required_asset" >&2
@@ -1521,7 +1530,7 @@ jobs:
         echo "pending_commit=$PENDING_COMMIT" >> "$GITHUB_OUTPUT"
 
     - name: Reverify exact public nightly snapshot before hiding
-      if: needs.prepare.outputs.is_versioned == 'false' && steps.release-inspect.outputs.target_exists == 'true' && steps.release-inspect.outputs.target_is_draft == 'false'
+      if: false
       env:
         GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
@@ -1538,7 +1547,9 @@ jobs:
           --data-file "$GITHUB_WORKSPACE/badge-repository/.github/badges/downloads-data.json"
 
     - name: Hide and verify existing nightly release
-      if: needs.prepare.outputs.is_versioned == 'false' && steps.release-inspect.outputs.target_exists == 'true'
+      # Retained as a documented migration tombstone; immutable nightlies
+      # never execute this legacy hide/redraft path.
+      if: needs.prepare.outputs.is_versioned == 'false' && steps.release-inspect.outputs.target_exists == 'true' && false
       env:
         RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
@@ -2093,7 +2104,7 @@ jobs:
           Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           Built on: ${{ steps.run-start.outputs.started_at }}
 
-          > **Stable-v1 releases** contain Windows x64 Shipping packages built with the authoritative `windows-shipping` preset and validated separately in Release. Immutable stable and rolling-nightly publication currently require incompatible repository policies; see the documented release-stage limitations.
+          > **Stable-v1 releases** contain Windows x64 Shipping packages built with the authoritative `windows-shipping` preset and validated separately in Release. Stable releases and uniquely tagged nightly prereleases are immutable; the historical `nightly` release is never modified.
 
           ### Downloads
 
@@ -2106,7 +2117,7 @@ jobs:
       env:
         RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
-        RELEASE_TAG: nightly
+        RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         EXPECTED_RELEASE_ID: ${{ steps.release-freeze.outputs.target_release_id }}
         RELEASE_TITLE: "Nightly Build (${{ steps.sha.outputs.short }})${{ steps.suffix.outputs.label }}"
         RELEASE_BODY: |
@@ -2116,7 +2127,7 @@ jobs:
           Built on: ${{ steps.run-start.outputs.started_at }}
           Branch: `${{ github.ref_name }}`
 
-          > **Rolling nightly builds** require mutable repository release policy. Immutable stable publication requires a separate policy decision; the two channels are not jointly operational under the current design.
+          > **Nightly builds are immutable prereleases.** Each run has a unique tag and remains available in the releases list; the historical `nightly` rolling release is not modified.
 
           ${{ steps.assets.outputs.table }}
       run: python3 .github/scripts/stage_release_draft.py
@@ -2206,28 +2217,32 @@ jobs:
         TARGET_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
-        if [[ "$RELEASE_TAG" != "nightly" ]]; then
-          echo "Refusing to force-move non-nightly tag: $RELEASE_TAG" >&2
+        if [[ ! "$RELEASE_TAG" =~ ^nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}$ ]]; then
+          echo "Refusing to create malformed immutable nightly tag: $RELEASE_TAG" >&2
           exit 1
         fi
 
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
         TARGET_COMMIT="$(git rev-parse "${TARGET_SHA}^{commit}")"
         REMOTE_TAG_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
-          ls-remote --refs origin refs/tags/nightly | awk 'NR == 1 { print $1 }')"
-        git tag --force nightly "$TARGET_COMMIT"
-        python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
-          --force-with-lease="refs/tags/nightly:${REMOTE_TAG_OBJECT}" origin \
-          refs/tags/nightly:refs/tags/nightly
+          ls-remote --refs origin "refs/tags/${RELEASE_TAG}" | awk 'NR == 1 { print $1 }')"
+        if [[ -n "$REMOTE_TAG_OBJECT" ]]; then
+          git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" fetch --no-tags origin \
+            "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+        else
+          git tag "$RELEASE_TAG" "$TARGET_COMMIT"
+          python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push origin \
+            "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+        fi
         git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
           fetch --force --no-tags origin \
-          +refs/tags/nightly:refs/tags/nightly
-        BOUND_COMMIT="$(git rev-parse refs/tags/nightly^{commit})"
+          "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+        BOUND_COMMIT="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
         if [[ "$BOUND_COMMIT" != "$TARGET_COMMIT" ]]; then
-          echo "Release tag nightly resolves to ${BOUND_COMMIT}, expected ${TARGET_COMMIT}." >&2
+          echo "Release tag ${RELEASE_TAG} resolves to ${BOUND_COMMIT}, expected ${TARGET_COMMIT}." >&2
           exit 1
         fi
-        echo "Release tag nightly is bound to ${BOUND_COMMIT}."
+        echo "Immutable nightly tag ${RELEASE_TAG} is bound to ${BOUND_COMMIT}."
 
     - name: Verify release tag immediately before publication
       env:

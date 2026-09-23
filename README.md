@@ -17,22 +17,21 @@ Website: [sparkengine.dev](https://sparkengine.dev/)
 
 ## Getting Started
 
-Rolling Windows artifacts may be published for development evaluation. They are
-not a versioned release and do not certify `stable-v1`. Development artifacts may
-carry checksums and provenance attestations, but no versioned Shipping-configuration
-artifact has same-commit qualification across the required install, upgrade,
-rollback, and release gates.
+Windows nightly artifacts are published as immutable, uniquely tagged
+prereleases for development evaluation. They are not a versioned release and do
+not certify `stable-v1`. Development artifacts may carry checksums and
+provenance attestations, but no versioned Shipping-configuration artifact has
+same-commit qualification across the required install, upgrade, rollback, and
+release gates. The historical `nightly` rolling release is preserved and is no
+longer overwritten; choose the newest timestamped nightly from the releases
+page below.
 "Release" in an asset name denotes the build configuration only. Debug builds
 include additional runtime diagnostics. The bootstrap installer clones and builds
 the selected engine revision locally.
 
-[![Windows Release Installer](https://img.shields.io/badge/Download-Windows_Release_Installer-2ea44f?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Release-Installer.exe)
-[![Windows Release ZIP](https://img.shields.io/badge/Download-Windows_Release_ZIP-0969da?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Release.zip)
-[![Windows Debug Installer](https://img.shields.io/badge/Download-Windows_Debug_Installer-8a2be2?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Debug-Installer.exe)
-[![Windows Debug ZIP](https://img.shields.io/badge/Download-Windows_Debug_ZIP-6f42c1?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Debug.zip)
-[![Bootstrap Installer](https://img.shields.io/badge/Download-Windows_Bootstrap_Installer-f97316?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkInstaller-Windows-x64.exe)
+[![Browse immutable nightly builds](https://img.shields.io/badge/Download-Immutable_Nightly_Builds-2ea44f?style=for-the-badge&logo=github)](https://github.com/Krilliac/SparkEngine/releases)
 
-[Current rolling artifacts and checksums](https://github.com/Krilliac/SparkEngine/releases/tag/nightly) ·
+[Current immutable nightly artifacts and checksums](https://github.com/Krilliac/SparkEngine/releases) ·
 [installer documentation](SparkInstaller/README.md)
 
 **Build from source:**

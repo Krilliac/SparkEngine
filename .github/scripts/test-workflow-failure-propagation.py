@@ -2262,11 +2262,12 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 completed = subprocess.run(
                     [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
                     env={**os.environ, "EVENT_NAME": event, "INPUT_RELEASE_TAG": tag,
-                         "GITHUB_OUTPUT": str(output)},
+                         "GITHUB_OUTPUT": str(output), "GITHUB_RUN_ID": "123",
+                         "GITHUB_RUN_ATTEMPT": "1", "GITHUB_SHA": "a" * 40},
                 )
                 self.assertEqual(completed.returncode, 0, completed.stderr)
                 self.assertEqual(dict(line.split("=", 1) for line in output.read_text().splitlines()),
-                                 {"tag": "nightly", "version": "nightly", "cmake_version": "1.2.3",
+                                 {"tag": "nightly-123-1-aaaaaaaaaaaa", "version": "nightly", "cmake_version": "1.2.3",
                                   "is_versioned": "false"})
 
     def test_release_concurrency_uses_only_supported_github_schema(self) -> None:

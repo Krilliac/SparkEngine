@@ -107,6 +107,7 @@ def verify_release_asset_boundary(
     release_tag: str,
     is_versioned: bool,
     expected_draft: bool,
+    immutable_channel: bool | None = None,
 ) -> None:
     """Verify raw GitHub metadata against durable state and exact local bytes."""
 
@@ -131,7 +132,7 @@ def verify_release_asset_boundary(
     _require(release.get("tag_name") == release_tag, "release tag differs from the durable target")
     _require(release.get("draft") is expected_draft, "release draft visibility is not exact")
     _require(release.get("prerelease") is (not is_versioned), "release channel is not exact")
-    expected_immutable = is_versioned and not expected_draft
+    expected_immutable = (is_versioned if immutable_channel is None else immutable_channel) and not expected_draft
     _require(release.get("immutable") is expected_immutable,
              "release immutability does not match the channel and publication phase")
 
@@ -259,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--release-id", type=int, required=True)
     parser.add_argument("--release-tag", required=True)
     parser.add_argument("--is-versioned", type=_parse_boolean, required=True)
+    parser.add_argument("--immutable-channel", type=_parse_boolean, default=None)
     parser.add_argument("--expected-draft", type=_parse_boolean, required=True)
     args = parser.parse_args(argv)
     try:
@@ -272,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
             release_id=args.release_id,
             release_tag=args.release_tag,
             is_versioned=args.is_versioned,
+            immutable_channel=args.immutable_channel,
             expected_draft=args.expected_draft,
         )
     except BoundaryError as exc:

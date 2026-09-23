@@ -124,4 +124,5 @@ python3 -I "$GITHUB_WORKSPACE/.github/scripts/verify_release_asset_boundary.py" 
   --release-id "$RELEASE_ID" \
   --release-tag "$RELEASE_TAG" \
   --is-versioned "$IS_VERSIONED" \
+  --immutable-channel "${RELEASE_IMMUTABLE:-false}" \
   --expected-draft "$expected_draft"

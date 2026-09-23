@@ -21,6 +21,7 @@ API_VERSION = "2026-03-10"
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 VERSION_TAG_RE = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+")
+IMMUTABLE_NIGHTLY_TAG_RE = re.compile(r"nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}")
 
 
 class RecoveryError(RuntimeError):
@@ -82,6 +83,10 @@ def resolve_durable_recovery_target(
     if is_versioned:
         if VERSION_TAG_RE.fullmatch(release_tag) is None:
             raise RecoveryError("matching versioned operation has a malformed release tag")
+    elif IMMUTABLE_NIGHTLY_TAG_RE.fullmatch(release_tag):
+        # Unique nightly releases are immutable once published. Recovery must
+        # never attempt the legacy hide/redraft mutation against them.
+        return None
     elif release_tag != "nightly":
         raise RecoveryError("matching nightly operation does not target the nightly tag")
     prepared_public = getattr(pending, "target_draft_at_prepare", None) is False

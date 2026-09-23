@@ -13,6 +13,9 @@ from guard_release_mutation import guarded_run
 from verify_release_environment import unique_object
 
 
+NIGHTLY_TAG_RE = re.compile(r"nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}")
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -66,7 +69,8 @@ def stage(*, repository, tag, source_sha, is_versioned, expected_id, title, body
     require(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository), "invalid repository")
     require(re.fullmatch(r"[0-9a-f]{40}", source_sha), "invalid source SHA")
     require((is_versioned and re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag))
-            or (not is_versioned and tag == "nightly"), "invalid channel tag")
+            or (not is_versioned and NIGHTLY_TAG_RE.fullmatch(tag)),
+            "invalid channel tag; rolling nightly tags must be unique immutable tags")
     require(type(expected_id) is int and expected_id >= 0, "invalid frozen release id")
     require(assets_file.stat().st_size <= 32768, "asset inventory is too large")
     names = assets_file.read_text(encoding="utf-8").splitlines()

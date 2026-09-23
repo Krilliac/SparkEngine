@@ -32,6 +32,7 @@ BUILD_WORKFLOW_NAME = "Build SparkEngine"
 BUILD_WORKFLOW_PATH = ".github/workflows/build.yml"
 WORKING_BRANCH = "Working"
 VERSION_TAG_PATTERN = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+")
+NIGHTLY_TAG_PATTERN = re.compile(r"nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}")
 
 
 class GateError(Exception):
@@ -145,8 +146,8 @@ def _validate_release_tag(release_tag: str, is_versioned: bool) -> None:
     if is_versioned:
         if VERSION_TAG_PATTERN.fullmatch(release_tag) is None:
             raise GateError("versioned release tag must have the form vMAJOR.MINOR.PATCH")
-    elif release_tag != "nightly":
-        raise GateError("nightly publication must use the nightly release tag")
+    elif NIGHTLY_TAG_PATTERN.fullmatch(release_tag) is None:
+        raise GateError("nightly publication must use a unique immutable nightly tag")
 
 
 def _fetch_release_assets(
@@ -539,6 +540,7 @@ def acceptance_gate(
     """Run every pre-publication check, then PATCH draft=false in one step."""
 
     _validate_release_tag(release_tag, is_versioned)
+    immutable_channel = is_versioned or os.environ.get("RELEASE_IMMUTABLE") == "true"
     expected_names = _read_expected_assets(expected_assets_file)
     expected_digests = _read_expected_digests(expected_digests_file, expected_names)
 
@@ -565,7 +567,7 @@ def acceptance_gate(
         patch_body["make_latest"] = "false"
         patch_body["prerelease"] = True
 
-    verify_release_policy(api_url, token, repository, is_versioned)
+    verify_release_policy(api_url, token, repository, immutable_channel)
     published = _patch_json(
         f"{api_url}/repos/{repository}/releases/{release_id}",
         token,
@@ -579,7 +581,7 @@ def acceptance_gate(
             repository,
             release_id,
             release_tag,
-            is_versioned,
+            immutable_channel,
             published,
             expected_names,
             expected_digests,
@@ -601,6 +603,10 @@ def acceptance_gate(
                             and exact_mutable_stable(confirmed, release_id, release_tag, draft=True)):
                         raise GateError(f"stable publication failed ({publication_error}); proven mutable target was quarantined as draft") from publication_error
             raise GateError(f"stable publication validation failed ({publication_error}); immutable or ambiguous target preserved for owner investigation") from publication_error
+        if immutable_channel:
+            raise GateError(
+                f"post-PATCH publication validation failed ({publication_error}); immutable target preserved for owner investigation"
+            ) from publication_error
         try:
             verify_release_policy(api_url, token, repository, False)
             redrafted = _patch_json(

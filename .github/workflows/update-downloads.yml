@@ -256,6 +256,54 @@ jobs:
           printf -v "$output_variable" '%s' "$count"
         }
 
+        # Immutable nightlies do not have a stable tag. Select the newest
+        # published, uniquely tagged prerelease from the bounded release
+        # inventory; never follow or rewrite the historical `nightly` tag.
+        fetch_latest_nightly() {
+          local output_variable="$1"
+          local inventory="$API_TEMP/nightly-releases.json"
+          local selected="$API_TEMP/nightly.json"
+          local headers="$API_TEMP/nightly-releases.headers"
+          local status=""
+          api_get "releases?per_page=100" "$inventory" "$headers" status
+          if test "$status" = 404; then
+            printf -v "$output_variable" '0'
+            return 0
+          fi
+          if ! jq -e '
+              type == "array" and
+              (map(select(.draft == false and .prerelease == true and
+                          (.tag_name | type) == "string" and
+                          (.tag_name | test("^nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}$"))))
+               | sort_by(.published_at) | last) != null
+            ' "$inventory" >/dev/null; then
+            echo "GitHub API returned no valid immutable nightly release; preserving existing badges." >&2
+            return 1
+          fi
+          jq -e 'map(select(.draft == false and .prerelease == true and
+                    (.tag_name | type) == "string" and
+                    (.tag_name | test("^nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}$"))))
+                 | sort_by(.published_at) | last' "$inventory" > "$selected"
+          fetch_downloads_from_file "$selected" "nightly" "$output_variable"
+        }
+
+        fetch_downloads_from_file() {
+          local body="$1"
+          local label="$2"
+          local output_variable="$3"
+          local count
+          if ! jq -e 'type == "object" and .draft == false and .prerelease == true' "$body" >/dev/null; then
+            echo "GitHub API returned a non-published nightly payload; preserving existing badges." >&2
+            return 1
+          fi
+          if ! count="$(jq -er 'if (.assets | type) != "array" then error("release response has no assets array") else ([.assets[].download_count] | if all(.[]; (type == "number") and . >= 0 and floor == .) then add // 0 else error("invalid download_count") end) end' "$body")"; then
+            echo "GitHub API returned an invalid $label release payload; preserving existing badges." >&2
+            return 1
+          fi
+          case "$count" in ''|*[!0-9]*) return 1;; esac
+          printf -v "$output_variable" '%s' "$count"
+        }
+
         # Format an integer with thousands separators. Falls back to the raw
         # number if the locale-aware printf is unavailable.
         format_count() {
@@ -275,7 +323,7 @@ jobs:
 
         NIGHTLY_DL=""
         STABLE_DL=""
-        fetch_downloads "releases/tags/nightly" "nightly" NIGHTLY_DL
+        fetch_latest_nightly NIGHTLY_DL
         fetch_downloads "releases/latest" "stable" STABLE_DL
 
         NIGHTLY_FMT=$(format_count "$NIGHTLY_DL")

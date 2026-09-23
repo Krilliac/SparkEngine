@@ -19,6 +19,12 @@ class ReleasePolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_policy(policy, False)
 
+    def test_immutable_nightly_policy_is_required_when_explicitly_selected(self):
+        immutable = {"enabled": True, "enforced_by_owner": False}
+        validate_policy(immutable, False, immutable=True)
+        with self.assertRaisesRegex(ValueError, "immutable publication"):
+            validate_policy({"enabled": False, "enforced_by_owner": False}, False, immutable=True)
+
     def test_policy_authority_uses_separate_read_token_without_changing_mutation_token(self):
         runner = Mock(return_value=subprocess.CompletedProcess([], 0, json.dumps({"enabled": True}), ""))
         with patch.dict(os.environ, {"GH_TOKEN": "generated-write-fixture", "RELEASE_POLICY_READ_TOKEN": "generated-read-fixture"}):

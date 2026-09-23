@@ -2626,19 +2626,9 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
     def test_readme_nightly_downloads_are_required_before_staging(self):
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         readme = README.read_text(encoding="utf-8")
-        assets = set(
-            re.findall(r"releases/download/nightly/([^\s)]+)", readme)
-        )
-        self.assertEqual(
-            assets,
-            {
-                "SparkEngine-Windows-x64-Release-Installer.exe",
-                "SparkEngine-Windows-x64-Release.zip",
-                "SparkEngine-Windows-x64-Debug-Installer.exe",
-                "SparkEngine-Windows-x64-Debug.zip",
-                "SparkInstaller-Windows-x64.exe",
-            },
-        )
+        self.assertNotRegex(readme, r"releases/download/nightly/")
+        self.assertIn("releases)", readme)
+        self.assertIn("RELEASE_TAG: ${{ needs.prepare.outputs.tag }}", workflow)
         collect = workflow.index("    - name: Collect release assets")
         stage = workflow.index("    - name: Stage nightly rolling release as draft")
         collect_step = workflow[collect:stage]
@@ -2788,7 +2778,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         self.assertIn("TARGET_SHA: ${{ github.sha }}", publication_gate_step)
 
         nightly_step = text[stage:checkpoint]
-        self.assertIn("RELEASE_TAG: nightly", nightly_step)
+        self.assertIn("RELEASE_TAG: ${{ needs.prepare.outputs.tag }}", nightly_step)
         self.assertIn("stage_release_draft.py", nightly_step)
         staging_source = (RELEASE_WORKFLOW.parents[1] / "scripts/stage_release_draft.py").read_text(encoding="utf-8")
         self.assertIn('"prerelease": not is_versioned', staging_source)

@@ -25,6 +25,7 @@ MAX_RELEASES = 500
 MAX_ASSET_PAGES = 100
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 VERSION_TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
+NIGHTLY_TAG_RE = re.compile(r"^nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 OPERATION_RE = re.compile(r"^[0-9]+:[0-9]+$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-fA-F]{64}$")
@@ -246,8 +247,8 @@ def _validate_tag(tag: Any, is_versioned: bool, label: str) -> str:
     if is_versioned:
         if not VERSION_TAG_RE.fullmatch(tag):
             raise CounterError(f"{label} must have the form vMAJOR.MINOR.PATCH")
-    elif tag != "nightly":
-        raise CounterError(f"{label} must be nightly for a rolling publication")
+    elif tag != "nightly" and NIGHTLY_TAG_RE.fullmatch(tag) is None:
+        raise CounterError(f"{label} must be nightly or a unique immutable nightly tag")
     return tag
 
 
