@@ -149,8 +149,6 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestEventSystem.cpp",
         "Tests/TestExtendedSystems.cpp",
         "Tests/TestFPSComponents.cpp",
-        "Tests/TestFPSGameplayIntegration.cpp",
-        "Tests/TestFPSMultiplayer.cpp",
         "Tests/TestFaultIsolation.cpp",
         "Tests/TestFixtures.cpp",
         "Tests/TestFormationSystem.cpp",
@@ -164,7 +162,6 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestGPUSkinning.cpp",
         "Tests/TestGPUStallProfiler.cpp",
         "Tests/TestGameMode.cpp",
-        "Tests/TestGameModeReal.cpp",
         "Tests/TestGameObjectTransforms.cpp",
         "Tests/TestGamepadInputProcessing.cpp",
         "Tests/TestGameplayExtensionRegistry.cpp",
@@ -187,7 +184,6 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestMeshLOD.cpp",
         "Tests/TestMeshShaderPipeline.cpp",
         "Tests/TestModuleDependency.cpp",
-        "Tests/TestModuleDiscovery.cpp",
         "Tests/TestMovementSystem.cpp",
         "Tests/TestMultiISADispatch.cpp",
         "Tests/TestNavMesh.cpp",
@@ -237,26 +233,14 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestSparkGameRTS.cpp",
         "Tests/TestSparkGameRacing.cpp",
         "Tests/TestSparkGatewayCoordinator.cpp",
-        "Tests/TestSparkServerApplication.cpp",
         "Tests/TestSpatialGrid.cpp",
         "Tests/TestSplineMath.cpp",
         "Tests/TestSprite2DComponents.cpp",
         "Tests/TestSteeringBehaviors.cpp",
         "Tests/TestStringPool.cpp",
         "Tests/TestSubsystemConsoleCommands.cpp",
-        "Tests/TestTFAbilityWire.cpp",
         "Tests/TestTFCaptureMath.cpp",
-        "Tests/TestTFChatRules.cpp",
         "Tests/TestTFDamageModel.cpp",
-        "Tests/TestTFDeathRecapWire.cpp",
-        "Tests/TestTFFixedStep.cpp",
-        "Tests/TestTFNetProtocolLayout.cpp",
-        "Tests/TestTFOnboarding.cpp",
-        "Tests/TestTFOutfitStore.cpp",
-        "Tests/TestTFRedeployRules.cpp",
-        "Tests/TestTFSecondaryMotion.cpp",
-        "Tests/TestTFServerValidation.cpp",
-        "Tests/TestTFSocialStore.cpp",
         "Tests/TestTacticalPointSystem.cpp",
         "Tests/TestTemporalEffects.cpp",
         "Tests/TestTerrainRenderer.cpp",
@@ -301,6 +285,11 @@ def resolves_to_production(include: str, root: Path) -> bool:
             return True
         # Includes are also written relative to the repository root.
         if normalized.startswith(production_root + "/") and (root / normalized).is_file():
+            return True
+    # Game-module tests include module headers relative to the module's own include
+    # root (e.g. "Persistence/TFDatabase.h" -> GameModules/SparkGameMMOFPS/Source/...).
+    for module_source in sorted((root / "GameModules").glob("*/Source")):
+        if (module_source / normalized).is_file():
             return True
     return False
 

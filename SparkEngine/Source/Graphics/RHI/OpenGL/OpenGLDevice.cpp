@@ -27,6 +27,10 @@
 #include <cstring>
 #include <sstream>
 
+#if defined(__APPLE__)
+#include <dlfcn.h>
+#endif
+
 namespace Spark
 {
     namespace RHI
@@ -36,6 +40,19 @@ namespace Spark
 
             namespace
             {
+                /// @brief The backend uses GL 4.5 core entry points (DSA, KHR_debug, glGetTextureSubImage)
+                ///        unconditionally. A context below 4.5 (e.g. Windows' GDI Generic GL 1.1 on a
+                ///        GPU-less host) leaves those pointers null, so treat it as "no usable GL".
+                bool HasRequiredGLVersion()
+                {
+                    if (GLAD_GL_VERSION_4_5)
+                        return true;
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "OpenGL 4.5 core is required but the current context provides %d.%d",
+                                    GLVersion.major, GLVersion.minor);
+                    return false;
+                }
+
                 GLenum ConvertCompareOp(RHICompareOp op)
                 {
                     switch (op)
@@ -1063,6 +1080,8 @@ namespace Spark
                         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GLAD loader failed");
                         return false;
                     }
+                    if (!HasRequiredGLVersion())
+                        return false; // host owns the context; leave it alone
                     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL %s (GLSL %s) — Renderer: %s",
                                    reinterpret_cast<const char*>(glGetString(GL_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
@@ -1210,6 +1229,8 @@ namespace Spark
                         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GLAD loader failed");
                         return false;
                     }
+                    if (!HasRequiredGLVersion())
+                        return false; // host owns the context; leave it alone
                     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL %s (GLSL %s) — Renderer: %s",
                                    reinterpret_cast<const char*>(glGetString(GL_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
@@ -1428,10 +1449,31 @@ namespace Spark
                 m_wglWindow = bootstrapWindow;
                 m_wglDC = bootstrapDC;
                 m_wglContext = bootstrapContext;
+#elif defined(__APPLE__)
+                // There is no headless CGL bootstrap on macOS. Without a current context Apple's GL
+                // dispatch dereferences null inside glGetString (so gladLoadGL crashes instead of
+                // failing); require the host (SDL2) to have made a context current first. CGL is
+                // resolved at runtime from the framework GLAD dlopens, so no extra link dependency.
+                bool hasCurrentCglContext = false;
+                if (void* openGLFramework =
+                        dlopen("/System/Library/Frameworks/OpenGL.framework/OpenGL", RTLD_LAZY | RTLD_LOCAL))
+                {
+                    using CGLGetCurrentContextFn = void* (*)();
+                    auto cglGetCurrentContext =
+                        reinterpret_cast<CGLGetCurrentContextFn>(dlsym(openGLFramework, "CGLGetCurrentContext"));
+                    hasCurrentCglContext = cglGetCurrentContext && cglGetCurrentContext() != nullptr;
+                    dlclose(openGLFramework);
+                }
+                if (!hasCurrentCglContext)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "GLDevice: no current CGL context (macOS has no headless GL bootstrap)");
+                    return false;
+                }
 #endif
 
                 // GLAD can now load OpenGL function pointers from the current context
-                if (!gladLoadGL())
+                if (!gladLoadGL() || !HasRequiredGLVersion())
                 {
                     SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "gladLoadGL failed — no valid GL context");
 #if defined(__linux__) && defined(SPARK_EGL_SUPPORT)

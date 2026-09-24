@@ -101,6 +101,14 @@ namespace
     // Skips (or fails under SPARK_REQUIRE_OPENGL=1) when no GL context exists.
     void RequireGL(GLTestDevice& gl)
     {
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+        // The system libEGL/Mesa cannot be MSan-instrumented, so its writes look uninitialized and
+        // MSan aborts inside eglGetDisplay. Real-GL coverage runs in the gcc/clang/ASan lanes.
+        // Checked before SPARK_REQUIRE_OPENGL so that setting cannot force the path under MSan.
+        SKIP_TEST("MemorySanitizer: system libEGL/Mesa is uninstrumented");
+#endif
+#endif
         if (gl.Start())
             return;
         const char* required = std::getenv("SPARK_REQUIRE_OPENGL");

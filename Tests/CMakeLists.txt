@@ -1410,7 +1410,9 @@ set_tests_properties(SparkEngineLoadTests PROPERTIES
 # RHI-240: real OpenGL backend under KHR_debug (llvmpipe on Linux hosts). The
 # lane requires a GL context (SPARK_REQUIRE_OPENGL=1) so it cannot pass by
 # skipping; llvmpipe evidence is software-rasterizer only, not driver certification.
-if(SPARK_OPENGL_AVAILABLE AND NOT WIN32)
+# The dedicated real-GL lane needs Mesa (EGL/llvmpipe or GLX) and a 4.5 core context: Linux only.
+# macOS caps at GL 4.1 core without KHR_debug/DSA and has no headless context bootstrap.
+if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(
         NAME SparkOpenGLTests
         COMMAND ${CMAKE_COMMAND}
