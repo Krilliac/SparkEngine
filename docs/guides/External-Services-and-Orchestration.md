@@ -64,6 +64,15 @@ run. The editor's Dedicated Server panel builds these arguments from package
 metadata, displays health, and stops through the sentinel rather than killing a
 healthy process.
 
+Each health snapshot carries the build identity (`version`, full `commit`,
+`treeState`), tick-work percentiles (`tickP50Us`/`tickP95Us`/`tickP99Us`/
+`tickMaxUs` over `tickSamples`), and `rssBytes`. A stop request first publishes
+`draining: true` with `ready: false` while the process is still live, then
+`stopping: true` during teardown; route traffic away on `ready: false` rather
+than waiting for exit. See
+[Dedicated Server](../../wiki/subsystems/Dedicated-Server.md#operator-health-snapshot)
+for the field reference.
+
 To expose an area-control endpoint to the MMO gateway, also provide a unique
 `--control-endpoint`, an owner-only `--gateway-key-file`, and optionally a
 `--control-state-file`. The server persists session epoch/phase fences so a

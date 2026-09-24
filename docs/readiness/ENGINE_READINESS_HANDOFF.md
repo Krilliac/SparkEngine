@@ -2939,11 +2939,12 @@ Profiling utilities and local chaos scripts do not substitute for externally con
 ```bash
 ctest --test-dir build/linux-gcc-release -L server-soak --output-on-failure --no-tests=error
 ctest --test-dir build/linux-gcc-release -L recovery-drill --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L observability --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
 
-- Test selectors: `Server_Load`, `Server_Soak`, `Server_Chaos`, `Server_Health`, `Server_BackupRestore`
+- Test selectors: `Server_Load`, `Server_Soak`, `Server_Chaos`, `Server_Health_*`, `Server_BackupRestore`
 - Required CI jobs: `server-soak`, `load-test`, `recovery-drill`, `observability-canary`
 - Performance / reliability budgets:
   - Versioned actor/client/tick/memory/bandwidth/persistence p95 and p99 budgets

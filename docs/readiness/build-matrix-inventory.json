@@ -1395,7 +1395,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1926,
+      "line": 1936,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -3216,7 +3216,17 @@
       "target": "SparkServer",
       "kind": "executable",
       "file": "SparkServer/CMakeLists.txt",
-      "line": 41,
+      "line": 70,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkServerBuildIdentity",
+      "kind": "utility",
+      "file": "SparkServer/CMakeLists.txt",
+      "line": 29,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -5154,8 +5164,26 @@
       "declarations": [
         {
           "file": "SparkServer/CMakeLists.txt",
-          "line": 41,
+          "line": 70,
           "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkServerBuildIdentity",
+      "kind": "utility",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "SparkServer/CMakeLists.txt",
+          "line": 29,
+          "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
           "resolved": true

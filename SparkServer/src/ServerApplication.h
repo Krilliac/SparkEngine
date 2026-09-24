@@ -6,6 +6,7 @@
 #pragma once
 
 #include "Engine/Networking/DedicatedServer.h"
+#include "ServerHealth.h"
 
 #include <atomic>
 #include <chrono>
@@ -47,7 +48,10 @@ namespace Spark::Server
         std::string controlEndpoint;
         std::chrono::milliseconds statusInterval{5000};
         std::optional<std::chrono::milliseconds> runFor;
+        /** Identity published in health; the executable supplies its build stamp. */
+        BuildIdentity build;
         bool showHelp = false;
+        bool showVersion = false;
     };
 
     struct ParseResult
@@ -58,20 +62,6 @@ namespace Spark::Server
 
     [[nodiscard]] ParseResult ParseServerOptions(std::span<const std::string_view> arguments);
     [[nodiscard]] std::string_view ServerHelpText();
-
-    struct ServerHealth
-    {
-        bool live = false;
-        bool ready = false;
-        bool stopping = false;
-        uint16_t port = 0;
-        uint32_t players = 0;
-        uint64_t ticks = 0;
-        size_t loadedModules = 0;
-        std::string gameModule;
-        std::string currentMap;
-        std::string lastError;
-    };
 
     /** Owns one server-only process lifecycle. Loaded game logic remains in a dynamic module. */
     class ServerApplication
@@ -87,7 +77,10 @@ namespace Spark::Server
         [[nodiscard]] bool Start();
         /** [startup thread] Run module updates until a stop is requested. */
         [[nodiscard]] int Run();
-        /** [any thread, atomic] Ask the main loop to stop at its next boundary. */
+        /**
+         * [any thread, atomic] Ask the main loop to stop at its next boundary. The loop first publishes a
+         * draining snapshot (ready=false) so a supervisor can route traffic away before teardown begins.
+         */
         void RequestStop() noexcept;
         /** [startup thread] Shut down modules before releasing server/context resources. */
         [[nodiscard]] bool Stop();
@@ -105,7 +98,9 @@ namespace Spark::Server
         ServerOptions m_options;
         std::atomic<bool> m_stopRequested{false};
         std::atomic<bool> m_started{false};
+        std::atomic<bool> m_draining{false};
         std::atomic<bool> m_stopping{false};
+        TickLatencyHistogram m_tickLatency;
         mutable std::mutex m_errorMutex;
         std::string m_lastError;
         std::unique_ptr<World> m_world;

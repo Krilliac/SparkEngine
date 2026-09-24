@@ -805,13 +805,14 @@
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -L server-soak --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-gcc-release -L recovery-drill --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L recovery-drill --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -L observability --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Server_Load",
         "Server_Soak",
         "Server_Chaos",
-        "Server_Health",
+        "Server_Health_*",
         "Server_BackupRestore"
       ],
       "requiredCiJobs": [
@@ -858,7 +859,6 @@
         "Server_Load",
         "Server_Soak",
         "Server_Chaos",
-        "Server_Health",
         "Server_BackupRestore"
       ]
     },

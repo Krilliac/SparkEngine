@@ -201,9 +201,33 @@ enum class GameModeType : uint8_t
 // 7. Preflight module shutdown, stop services, unload modules, and reset the context.
 ```
 
+### Operator Health Snapshot
+
+`SparkServer` prints one compact JSON object per line to stdout at startup,
+every `--status-interval-ms`, and on each lifecycle transition, and atomically
+replaces `--health-file` with the same object when one is given
+(`SparkServer/src/ServerHealth.{h,cpp}`).
+
+| Field | Meaning |
+|-------|---------|
+| `live` / `ready` | Process lifecycle started / accepting work (server bound, Game module initialized, gateway control ready when configured) |
+| `draining` | A stop was requested (signal, `--stop-file`, `--run-for-ms`). Published with `ready=false` **before** teardown, and the loop keeps ticking while a module vetoes shutdown, so a supervisor can route traffic away |
+| `stopping` | Teardown in progress |
+| `port`, `players`, `ticks`, `loadedModules`, `gameModule`, `map`, `error` | Listener and module status |
+| `version` | `SPARK_ENGINE_VERSION` |
+| `commit` | Full commit hash of the compiled checkout, stamped into the `SparkServer` executable on every build by `SparkServer/cmake/SparkServerBuildIdentity.cmake` (only `main.cpp` consumes it, so libraries and tests do not relink when HEAD moves); `unknown` without git metadata unless the `SPARK_BUILD_COMMIT` cache variable supplies it (that variable is only a fallback: when git can report HEAD, git wins and a differing override produces a build-time warning). `SparkServer --version` prints the same identity |
+| `treeState` | `clean`, `dirty` (tracked files differ from `commit`), or `unknown` |
+| `tickSamples`, `tickP50Us`, `tickP95Us`, `tickP99Us`, `tickMaxUs` | Tick work time (excluding the frame-budget sleep) since `Start()`, from a bounded 16-bucket histogram. Percentiles are the containing bucket's upper bound clamped to the observed max, so they never under-report |
+| `rssBytes` | Process resident set (`/proc/self/statm`, `GetProcessMemoryInfo`, or Mach `task_info`); `null` if the platform query fails |
+
+Consumers must ignore unknown fields. `ctest -L observability` runs the
+`SparkServerVersion` stamp check and the `Server_Health_*` tests, including
+the draining-before-stopping ordering. This is the health surface only: SLOs,
+alerts, soak/load runs, and a runbook remain open under `OPS-110`.
+
 ### Using DedicatedServer Class
 
-The `DedicatedServer` class provides a higher-level API with tick loop management, map rotation, trusted local administration commands, and LAN discovery. It does **not** currently expose a remote RCON transport:
+The `DedicatedServer` class provides a higher-level API with tick loop management, map rotation, trusted local administration commands, and LAN discovery. Remote RCON is **permanently unavailable in stable-v1** (OD-05); there is no remote administration transport:
 
 ```cpp
 #include "Engine/Networking/DedicatedServer.h"

@@ -45,7 +45,7 @@ PRODUCTION_ROOTS = (
     "SparkEngine/Source",
     "SparkEditor/Source",
     "SparkSDK/Include",
-    "SparkServer/Source",
+    "SparkServer/src",
     "SparkDaemon/src",
     "GameModules",
     "Templates",

@@ -1255,7 +1255,7 @@ set_target_properties(SparkTests PROPERTIES
 # Standalone process cores remain independently testable while their thin
 # executable entry points are covered by --help CTests in each subtree.
 if(TARGET SparkServerCore)
-    target_sources(SparkTests PRIVATE TestSparkServerApplication.cpp)
+    target_sources(SparkTests PRIVATE TestSparkServerApplication.cpp TestSparkServerHealth.cpp)
     target_link_libraries(SparkTests PRIVATE SparkServerCore)
     if(NOT WIN32)
         # SparkServerCore carries SparkEngineLib as WHOLE_ARCHIVE while other
@@ -1489,6 +1489,16 @@ set_tests_properties(PersistenceSecretsAtRest PROPERTIES
     LABELS "persistence;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 60)
+
+# OPS-110: SparkServer operator health (build identity, tick percentiles, RSS, drain ordering).
+if(TARGET SparkServerCore)
+    add_test(NAME ServerHealth COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(ServerHealth PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=Server_Health_;SPARK_TEST_EXPECT_COUNT=6"
+        LABELS "server;observability"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
 
 add_test(NAME LifecyclePartialInit COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(LifecyclePartialInit PROPERTIES

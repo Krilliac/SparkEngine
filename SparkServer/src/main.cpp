@@ -5,6 +5,9 @@
 
 #include "ServerApplication.h"
 
+// Regenerated on every build by SparkServer/cmake/SparkServerBuildIdentity.cmake.
+#include "SparkServerBuildIdentity.h"
+
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -68,6 +71,13 @@ int main(int argc, char** argv)
     if (parsed.options->showHelp)
     {
         std::cout << Spark::Server::ServerHelpText();
+        return 0;
+    }
+    parsed.options->build = {SPARK_SERVER_BUILD_VERSION, SPARK_SERVER_BUILD_COMMIT, SPARK_SERVER_BUILD_TREE_STATE};
+    if (parsed.options->showVersion)
+    {
+        std::cout << "SparkServer " << parsed.options->build.version << ' ' << parsed.options->build.commit << " ("
+                  << parsed.options->build.treeState << ")\n";
         return 0;
     }
 

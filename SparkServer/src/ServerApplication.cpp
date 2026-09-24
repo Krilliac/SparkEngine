@@ -29,8 +29,6 @@
 #include <charconv>
 #include <cctype>
 #include <cmath>
-#include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <locale>
@@ -82,39 +80,6 @@ namespace Spark::Server
                 start = comma + 1;
             }
             return result;
-        }
-
-        std::string EscapeJson(std::string_view value)
-        {
-            std::ostringstream stream;
-            for (const unsigned char character : value)
-            {
-                switch (character)
-                {
-                case '"':
-                    stream << "\\\"";
-                    break;
-                case '\\':
-                    stream << "\\\\";
-                    break;
-                case '\n':
-                    stream << "\\n";
-                    break;
-                case '\r':
-                    stream << "\\r";
-                    break;
-                case '\t':
-                    stream << "\\t";
-                    break;
-                default:
-                    if (character < 0x20)
-                        stream << "\\u" << std::hex << std::setw(4) << std::setfill('0')
-                               << static_cast<unsigned int>(character) << std::dec;
-                    else
-                        stream << static_cast<char>(character);
-                }
-            }
-            return stream.str();
         }
 
         std::string LowerAscii(std::string_view value)
@@ -300,6 +265,7 @@ namespace Spark::Server
                "  --control-state-file <path> Persist handoff fencing epochs\n"
                "  --status-interval-ms <ms>    Health/status cadence\n"
                "  --run-for-ms <ms>            Bounded run for smoke automation\n"
+               "  --version                    Print the build version, commit, and tree state\n"
                "  --help                       Print this help\n";
     }
 
@@ -343,6 +309,8 @@ namespace Spark::Server
             const std::string_view argument = arguments[index];
             if (argument == "--help" || argument == "-h")
                 options.showHelp = true;
+            else if (argument == "--version")
+                options.showVersion = true;
             else if (argument == "--config")
                 ++index;
             else if (argument == "--module" || argument == "--manifest" || argument == "--health-file" ||
@@ -436,11 +404,13 @@ namespace Spark::Server
                 return {{}, "Unknown argument: " + std::string(argument)};
         }
 
+        // Help and version requests print and exit without hosting a module.
+        const bool informationalOnly = options.showHelp || options.showVersion;
         if (!options.modulePath.empty() && !options.manifestPath.empty())
             return {{}, "Select either --module or --manifest, not both"};
-        if (!options.showHelp && options.modulePath.empty() && options.manifestPath.empty())
+        if (!informationalOnly && options.modulePath.empty() && options.manifestPath.empty())
             return {{}, "A dynamic game module is required (--module or --manifest)"};
-        if (!options.showHelp && (options.controlEndpoint.empty() != options.gatewayKeyFile.empty()))
+        if (!informationalOnly && (options.controlEndpoint.empty() != options.gatewayKeyFile.empty()))
             return {{}, "--control-endpoint and --gateway-key-file must be supplied together"};
         options.server.enableLanBroadcast = requestedLanBroadcast.value_or(false);
         // Gateway-owned area servers are always local processes. Freeze that
@@ -464,7 +434,7 @@ namespace Spark::Server
             options.controlStateFile = "Temp/spark-area-control-epochs.txt";
         if (options.server.mapRotation.empty())
             return {{}, "At least one non-empty map is required"};
-        if (!options.showHelp && !options.server.endpointPolicy.IsValid())
+        if (!informationalOnly && !options.server.endpointPolicy.IsValid())
             return {{},
                     "Network bind request rejected: " +
                         std::string(Net::NetworkEndpointPolicyErrorText(options.server.endpointPolicy.Error()))};
@@ -629,6 +599,8 @@ namespace Spark::Server
                 return false;
             }
         }
+        m_tickLatency.Reset();
+        m_draining.store(false, std::memory_order_release);
         m_started.store(true, std::memory_order_release);
         PublishHealth();
         return true;
@@ -644,7 +616,6 @@ namespace Spark::Server
         auto lastTick = startedAt;
         const auto frameBudget = std::chrono::duration<float>(1.0f / m_options.server.tickRate);
         auto& runtime = GetEngineRuntime();
-        bool draining = false;
         while (true)
         {
             const auto tickStart = std::chrono::steady_clock::now();
@@ -656,12 +627,10 @@ namespace Spark::Server
             }
             if (m_stopRequested.load(std::memory_order_acquire))
             {
-                if (!draining)
-                {
-                    draining = true;
-                    m_stopping.store(true, std::memory_order_release);
+                // Publish ready=false before any teardown so a supervisor can
+                // drain; the loop keeps ticking while a module vetoes shutdown.
+                if (!m_draining.exchange(true, std::memory_order_acq_rel))
                     PublishHealth();
-                }
                 if (m_modules->CanShutdownAll())
                     break;
             }
@@ -686,6 +655,7 @@ namespace Spark::Server
                 RequestStop();
 
             const auto elapsed = std::chrono::steady_clock::now() - tickStart;
+            m_tickLatency.Record(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed));
             if (elapsed < frameBudget)
                 std::this_thread::sleep_for(frameBudget - elapsed);
         }
@@ -727,6 +697,7 @@ namespace Spark::Server
         runtime.eventBus.reset();
         runtime.timer.reset();
         m_started.store(false, std::memory_order_release);
+        m_draining.store(false, std::memory_order_release);
         m_stopping.store(false, std::memory_order_release);
         // A stop request remains sticky throughout startup and teardown. Clear
         // it only after the lifecycle has fully stopped so a later explicit
@@ -741,10 +712,11 @@ namespace Spark::Server
     {
         ServerHealth health;
         health.live = m_started.load(std::memory_order_acquire);
+        health.draining = m_draining.load(std::memory_order_acquire);
         health.stopping = m_stopping.load(std::memory_order_acquire);
         const std::string initializedGame = m_modules ? m_modules->GetInitializedGameModuleName() : std::string{};
-        health.ready = health.live && !health.stopping && m_server && m_server->IsRunning() && m_modules &&
-                       !initializedGame.empty() &&
+        health.ready = health.live && !health.draining && !health.stopping && m_server && m_server->IsRunning() &&
+                       m_modules && !initializedGame.empty() &&
                        (m_options.controlEndpoint.empty() || (m_controlService && m_controlService->IsReady()));
         health.port = m_options.server.port;
         if (m_modules)
@@ -759,6 +731,9 @@ namespace Spark::Server
             health.ticks = stats.totalTicksProcessed;
             health.currentMap = stats.currentMap;
         }
+        health.build = m_options.build;
+        health.tickLatency = m_tickLatency.Summarize();
+        health.residentSetBytes = QueryResidentSetBytes();
         std::lock_guard lock(m_errorMutex);
         health.lastError = m_lastError;
         return health;
@@ -766,54 +741,15 @@ namespace Spark::Server
 
     std::string ServerApplication::GetHealthJson() const
     {
-        const ServerHealth health = GetHealth();
-        std::ostringstream stream;
-        stream << "{\"live\":" << (health.live ? "true" : "false") << ",\"ready\":" << (health.ready ? "true" : "false")
-               << ",\"stopping\":" << (health.stopping ? "true" : "false") << ",\"port\":" << health.port
-               << ",\"players\":" << health.players << ",\"ticks\":" << health.ticks
-               << ",\"loadedModules\":" << health.loadedModules << ",\"gameModule\":\"" << EscapeJson(health.gameModule)
-               << "\",\"map\":\"" << EscapeJson(health.currentMap) << "\",\"error\":\"" << EscapeJson(health.lastError)
-               << "\"}";
-        return stream.str();
+        return FormatHealthJson(GetHealth());
     }
 
     void ServerApplication::PublishHealth() const
     {
         const std::string json = GetHealthJson();
         std::cout << json << '\n';
-        if (m_options.healthFile.empty())
-            return;
-
-        std::error_code error;
-        const std::filesystem::path parent = m_options.healthFile.parent_path();
-        if (!parent.empty())
-            std::filesystem::create_directories(parent, error);
-        const std::filesystem::path temporary = m_options.healthFile.string() + ".tmp";
-        bool wrote = false;
-        {
-            std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-            output << json << '\n';
-            output.flush();
-            wrote = output.good();
-        }
-        if (!wrote)
-        {
-            // A snapshot that could not be staged must never destroy the
-            // previous one: a readiness watchdog reads a missing health file as
-            // a hard failure, which is strictly worse than a stale-but-valid one.
-            std::filesystem::remove(temporary, error);
-            return;
-        }
-        std::filesystem::rename(temporary, m_options.healthFile, error);
-        if (error)
-        {
-            error.clear();
-            std::filesystem::remove(m_options.healthFile, error);
-            error.clear();
-            std::filesystem::rename(temporary, m_options.healthFile, error);
-            if (error)
-                std::filesystem::remove(temporary, error);
-        }
+        if (!m_options.healthFile.empty())
+            WriteHealthFile(m_options.healthFile, json);
     }
 
     void ServerApplication::SetError(std::string message)
