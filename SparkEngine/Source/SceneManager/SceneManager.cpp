@@ -26,8 +26,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cerrno>
+#include <cstring>
 #include <atomic>
 #include <optional>
+#include <memory>
 #include <system_error>
 
 #if defined(_WIN32)
@@ -37,6 +39,7 @@
 #include <Windows.h>
 #else
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -231,6 +234,292 @@ namespace
         std::error_code ignored;
         std::filesystem::remove(path, ignored);
     }
+
+    // ------------------------------------------------------------------
+    // Root-confined save (SaveSceneWithinRoot)
+    //
+    // The destination is never re-resolved by path after it is validated.
+    // Each directory below the trusted root is opened one component at a
+    // time and kept open; the temporary file is created exclusively inside
+    // that held directory and renamed over the destination there. POSIX
+    // pins the directory with an fd (openat + O_NOFOLLOW); Windows pins
+    // every component with a handle that denies FILE_SHARE_DELETE, so no
+    // component can be renamed or replaced until the save finishes.
+    // ------------------------------------------------------------------
+
+    bool IsConfinedRelativeScenePath(const std::filesystem::path& relative)
+    {
+        if (relative.empty() || relative.has_root_name() || relative.has_root_directory())
+            return false;
+        for (const auto& component : relative)
+        {
+            if (component.empty() || component == "." || component == "..")
+                return false;
+        }
+        const auto extension = relative.extension();
+        return (extension == ".scene" || extension == ".json") && !relative.stem().empty();
+    }
+
+    std::filesystem::path MakeTemporaryName(const std::filesystem::path& leaf, uint64_t serial)
+    {
+        std::filesystem::path name = leaf;
+        name += ".tmp." + std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id())) + "." +
+                std::to_string(serial);
+        return name;
+    }
+
+#if defined(_WIN32)
+    struct HandleCloser
+    {
+        void operator()(HANDLE handle) const
+        {
+            if (handle && handle != INVALID_HANDLE_VALUE)
+                ::CloseHandle(handle);
+        }
+    };
+    using UniqueHandle = std::unique_ptr<void, HandleCloser>;
+
+    // Opens a directory without following a reparse point in its last
+    // component and without FILE_SHARE_DELETE, which pins it: while the
+    // handle is open the directory cannot be renamed, deleted or replaced.
+    UniqueHandle OpenPinnedDirectory(const std::filesystem::path& path, bool allowReparse)
+    {
+        const DWORD flags = FILE_FLAG_BACKUP_SEMANTICS | (allowReparse ? 0 : FILE_FLAG_OPEN_REPARSE_POINT);
+        UniqueHandle handle(::CreateFileW(path.c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, flags, nullptr));
+        if (handle.get() == INVALID_HANDLE_VALUE)
+            return UniqueHandle(nullptr);
+        BY_HANDLE_FILE_INFORMATION info{};
+        if (!::GetFileInformationByHandle(handle.get(), &info) || !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+            (!allowReparse && (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)))
+            return UniqueHandle(nullptr);
+        return handle;
+    }
+
+    std::wstring FinalPath(HANDLE handle)
+    {
+        std::wstring buffer(512, L'\0');
+        for (;;)
+        {
+            const DWORD length = ::GetFinalPathNameByHandleW(handle, buffer.data(), static_cast<DWORD>(buffer.size()),
+                                                             FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
+            if (length == 0)
+                return {};
+            if (length < buffer.size())
+            {
+                buffer.resize(length);
+                return buffer;
+            }
+            buffer.resize(length + 1);
+        }
+    }
+
+    bool EqualsIgnoringCase(const std::wstring& left, const std::wstring& right)
+    {
+        return ::CompareStringOrdinal(left.c_str(), static_cast<int>(left.size()), right.c_str(),
+                                      static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
+    }
+
+    bool SaveTextWithinRoot(const std::filesystem::path& root, const std::filesystem::path& relative,
+                            const std::string& text)
+    {
+        // The root itself is trusted configuration; it is pinned but may be
+        // reached through a link. Everything below it must be a plain directory.
+        std::vector<UniqueHandle> pins;
+        pins.push_back(OpenPinnedDirectory(root, /*allowReparse=*/true));
+        if (!pins.back())
+            return false;
+        const std::wstring rootFinal = FinalPath(pins.back().get());
+
+        std::filesystem::path directory = root;
+        const std::filesystem::path leaf = relative.filename();
+        for (const auto& component : relative.parent_path())
+        {
+            directory /= component;
+            pins.push_back(OpenPinnedDirectory(directory, /*allowReparse=*/false));
+            if (!pins.back())
+                return false;
+        }
+        const std::wstring directoryFinal = FinalPath(pins.back().get());
+        if (rootFinal.empty() || directoryFinal.empty() ||
+            (directoryFinal != rootFinal && directoryFinal.rfind(rootFinal + L"\\", 0) != 0))
+            return false;
+
+        // An existing destination must be a plain file, not a link or directory.
+        const std::filesystem::path destination = directory / leaf;
+        const DWORD existing = ::GetFileAttributesW(destination.c_str());
+        if (existing != INVALID_FILE_ATTRIBUTES &&
+            (existing & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)))
+            return false;
+
+        static std::atomic<uint64_t> sequence{0};
+        UniqueHandle file(nullptr);
+        for (int attempt = 0; attempt < 64 && !file; ++attempt)
+        {
+            const auto temporary = directory / MakeTemporaryName(leaf, sequence.fetch_add(1));
+            HANDLE created = ::CreateFileW(temporary.c_str(), GENERIC_WRITE | DELETE, 0, nullptr, CREATE_NEW,
+                                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+            if (created != INVALID_HANDLE_VALUE)
+                file.reset(created);
+            else if (::GetLastError() != ERROR_FILE_EXISTS)
+                return false;
+        }
+        if (!file)
+            return false;
+
+        const auto discard = [&file]
+        {
+            FILE_DISPOSITION_INFO disposition{TRUE};
+            ::SetFileInformationByHandle(file.get(), FileDispositionInfo, &disposition, sizeof(disposition));
+        };
+
+        size_t written = 0;
+        while (written < text.size())
+        {
+            DWORD chunk = 0;
+            const DWORD request = static_cast<DWORD>(std::min<size_t>(text.size() - written, 1u << 20));
+            if (!::WriteFile(file.get(), text.data() + written, request, &chunk, nullptr) || chunk == 0)
+            {
+                discard();
+                return false;
+            }
+            written += chunk;
+        }
+        if (!::FlushFileBuffers(file.get()))
+        {
+            discard();
+            return false;
+        }
+
+        // Rename by handle into the pinned directory, replacing the old file.
+        const std::wstring target = destination.wstring();
+        std::vector<unsigned char> buffer(sizeof(FILE_RENAME_INFO) + target.size() * sizeof(wchar_t));
+        auto* renameInfo = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
+        renameInfo->ReplaceIfExists = TRUE;
+        renameInfo->RootDirectory = nullptr;
+        renameInfo->FileNameLength = static_cast<DWORD>(target.size() * sizeof(wchar_t));
+        std::memcpy(renameInfo->FileName, target.data(), target.size() * sizeof(wchar_t));
+        if (!::SetFileInformationByHandle(file.get(), FileRenameInfo, renameInfo, static_cast<DWORD>(buffer.size())))
+        {
+            discard();
+            return false;
+        }
+        ::FlushFileBuffers(file.get());
+
+        // Re-verify where the bytes actually live now.
+        const std::wstring fileFinal = FinalPath(file.get());
+        const size_t split = fileFinal.find_last_of(L'\\');
+        if (split == std::wstring::npos || fileFinal.substr(0, split) != directoryFinal ||
+            !EqualsIgnoringCase(fileFinal.substr(split + 1), leaf.wstring()))
+        {
+            discard();
+            return false;
+        }
+        return true;
+    }
+#else
+    struct FdCloser
+    {
+        int fd = -1;
+        ~FdCloser()
+        {
+            if (fd >= 0)
+                ::close(fd);
+        }
+    };
+
+    // Walks `relative`'s directories from an open root fd, refusing any
+    // symlink component. Returns -1 on failure; the caller owns the fd.
+    int OpenDirectoryBelow(int rootFd, const std::filesystem::path& relativeDirectory)
+    {
+        int current = ::dup(rootFd);
+        for (const auto& component : relativeDirectory)
+        {
+            if (current < 0)
+                return -1;
+            const int next = ::openat(current, component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+            ::close(current);
+            current = next;
+        }
+        return current;
+    }
+
+    bool SameInode(int left, int right)
+    {
+        struct stat a = {};
+        struct stat b = {};
+        return ::fstat(left, &a) == 0 && ::fstat(right, &b) == 0 && a.st_dev == b.st_dev && a.st_ino == b.st_ino;
+    }
+
+    bool SaveTextWithinRoot(const std::filesystem::path& root, const std::filesystem::path& relative,
+                            const std::string& text)
+    {
+        // The root itself is trusted configuration; everything below it is
+        // reached only through held directory fds with O_NOFOLLOW.
+        FdCloser rootFd{::open(root.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+        if (rootFd.fd < 0)
+            return false;
+        FdCloser directory{OpenDirectoryBelow(rootFd.fd, relative.parent_path())};
+        if (directory.fd < 0)
+            return false;
+
+        // An existing destination must be a plain file, not a link or directory.
+        const std::string leaf = relative.filename().string();
+        struct stat existing = {};
+        if (::fstatat(directory.fd, leaf.c_str(), &existing, AT_SYMLINK_NOFOLLOW) == 0 && !S_ISREG(existing.st_mode))
+            return false;
+
+        static std::atomic<uint64_t> sequence{0};
+        std::string temporary;
+        FdCloser file;
+        for (int attempt = 0; attempt < 64 && file.fd < 0; ++attempt)
+        {
+            temporary = MakeTemporaryName(leaf, sequence.fetch_add(1)).string();
+            file.fd =
+                ::openat(directory.fd, temporary.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
+            if (file.fd < 0 && errno != EEXIST)
+                return false;
+        }
+        if (file.fd < 0)
+            return false;
+
+        size_t written = 0;
+        while (written < text.size())
+        {
+            const ssize_t chunk = ::write(file.fd, text.data() + written, text.size() - written);
+            if (chunk < 0 && errno == EINTR)
+                continue;
+            if (chunk <= 0)
+            {
+                ::unlinkat(directory.fd, temporary.c_str(), 0);
+                return false;
+            }
+            written += static_cast<size_t>(chunk);
+        }
+        if (::fsync(file.fd) != 0 || ::renameat(directory.fd, temporary.c_str(), directory.fd, leaf.c_str()) != 0)
+        {
+            ::unlinkat(directory.fd, temporary.c_str(), 0);
+            return false;
+        }
+        ::fsync(directory.fd); // best effort, as in ReplaceFileAtomically
+
+        // Re-verify after the rename: the name now refers to our file, and
+        // the held directory is still the one reached from the root.
+        struct stat placed = {};
+        struct stat ours = {};
+        FdCloser recheck{OpenDirectoryBelow(rootFd.fd, relative.parent_path())};
+        const bool inPlace = ::fstatat(directory.fd, leaf.c_str(), &placed, AT_SYMLINK_NOFOLLOW) == 0 &&
+                             ::fstat(file.fd, &ours) == 0 && placed.st_dev == ours.st_dev &&
+                             placed.st_ino == ours.st_ino;
+        if (!inPlace || recheck.fd < 0 || !SameInode(recheck.fd, directory.fd))
+        {
+            if (inPlace)
+                ::unlinkat(directory.fd, leaf.c_str(), 0);
+            return false;
+        }
+        return true;
+    }
+#endif
 } // namespace
 
 // Use logging macros from LogMacros.h (included transitively via headers)
@@ -386,6 +675,50 @@ bool SceneManager::SaveScene(const std::wstring& filepath) const
         m_dirty = false;
     }
     return saved;
+}
+
+bool SceneManager::SaveSceneWithinRoot(const std::filesystem::path& root,
+                                       const std::filesystem::path& relativePath) const
+{
+    SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+    const std::filesystem::path destination = root / relativePath;
+    if (root.empty() || !IsConfinedRelativeScenePath(relativePath))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Scene save path rejected: " + relativePath.wstring(), L"ERROR");
+        return false;
+    }
+
+    std::string text;
+    if (!SerializeSceneText(text, destination.wstring()))
+        return false;
+
+    bool saved = false;
+    try
+    {
+        saved = SaveTextWithinRoot(root, relativePath, text);
+    }
+    catch (const std::exception&)
+    {
+        saved = false;
+    }
+    if (!saved)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Scene save refused or failed (missing directory, link component, "
+                                 L"or I/O error): " +
+                                     destination.wstring(),
+                                 L"ERROR");
+        return false;
+    }
+
+    if (m_fileCache)
+    {
+        if (const auto narrowPath = NarrowPathIfRoundTrips(destination.wstring()))
+            m_fileCache->Invalidate(*narrowPath);
+    }
+    m_currentFilePath = destination.wstring();
+    m_dirty = false;
+    LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: " + std::to_wstring(m_sceneNodes.size()) + L" nodes", L"SUCCESS");
+    return true;
 }
 
 void SceneManager::LoadSceneAsync(const std::wstring& filepath, SceneLoadCallback callback)
@@ -809,7 +1142,7 @@ bool SceneManager::LoadJSON(const std::wstring& path)
     return true;
 }
 
-bool SceneManager::SaveJSON(const std::wstring& path) const
+bool SceneManager::SerializeSceneText(std::string& text, const std::wstring& pathForLog) const
 {
     std::vector<SceneNode> nodes;
     nodes.reserve(m_sceneNodes.size());
@@ -837,7 +1170,7 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
         !std::isfinite(m_metadata.ambientLightR) || !std::isfinite(m_metadata.ambientLightG) ||
         !std::isfinite(m_metadata.ambientLightB))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot save malformed scene hierarchy: " + path, L"ERROR");
+        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot save malformed scene hierarchy: " + pathForLog, L"ERROR");
         return false;
     }
 
@@ -865,6 +1198,15 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
             serialized << " " << std::quoted(key) << " " << std::quoted(value);
         serialized << "\n";
     }
+    text = serialized.str();
+    return true;
+}
+
+bool SceneManager::SaveJSON(const std::wstring& path) const
+{
+    std::string text;
+    if (!SerializeSceneText(text, path))
+        return false;
 
     const std::filesystem::path destination(path);
     const std::filesystem::path temporary = MakeUniqueTemporaryPath(destination);
@@ -874,7 +1216,7 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
         return false;
     }
     std::error_code error;
-    if (!WriteDurableText(temporary, serialized.str(), error) || !ReplaceFileAtomically(temporary, destination, error))
+    if (!WriteDurableText(temporary, text, error) || !ReplaceFileAtomically(temporary, destination, error))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot save scene atomically: " + path, L"ERROR");
         RemoveFileNoThrow(temporary);

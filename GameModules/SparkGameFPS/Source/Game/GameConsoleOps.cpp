@@ -37,6 +37,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #include <algorithm>
 #include <filesystem>
+#include <string_view>
 
 #include "Utils/LogMacros.h"
 
@@ -528,15 +529,43 @@ bool Game::SaveScene(const std::string& scenePath)
         return false;
     }
 
-    std::wstring wScenePath(scenePath.begin(), scenePath.end());
-    bool saved = m_sceneManager->SaveScene(wScenePath);
+    // Accept the same spellings as scene_load ("x.scene", "Scenes/x.scene",
+    // "Assets/Scenes/x.scene") and write only below the trusted FPS scene
+    // directory. SaveSceneWithinRoot rejects absolute paths, traversal and any
+    // symlink/junction component, and is race-free against a component being
+    // swapped mid-save. Only .scene is accepted so scene_load can reload it.
+    if (scenePath.empty() || scenePath.size() > 4096 || scenePath.find('\0') != std::string::npos)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save rejected: malformed scene path", L"ERROR");
+        return false;
+    }
+    std::string normalized = scenePath;
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    for (const std::string_view prefix : {std::string_view("Assets/Scenes/"), std::string_view("Scenes/")})
+    {
+        if (normalized.starts_with(prefix))
+        {
+            normalized.erase(0, prefix.size());
+            break;
+        }
+    }
+    const std::filesystem::path relative(
+        std::u8string(reinterpret_cast<const char8_t*>(normalized.data()), normalized.size()));
+    const std::wstring wScenePath = relative.wstring();
+    if (relative.extension() != ".scene")
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save rejected (expected a relative .scene path): " + wScenePath, L"ERROR");
+        return false;
+    }
+
+    const bool saved = m_sceneManager->SaveSceneWithinRoot(Spark::FPSAssets::Root() / "Scenes", relative);
     if (saved)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: " + wScenePath, L"SUCCESS");
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: Scenes/" + wScenePath, L"SUCCESS");
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save failed: " + wScenePath, L"ERROR");
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save failed or was refused: " + wScenePath, L"ERROR");
     }
     return saved;
 }
