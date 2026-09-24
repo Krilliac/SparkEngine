@@ -5,10 +5,11 @@ on:
   # pull_request trigger only. Listing them under push queued the whole
   # matrix twice per push (push + pull_request) and nothing downstream
   # consumed the push copy: every workflow_run consumer filters to Working.
+  # 'claude/**' bases let PRs stacked on a release branch get the same CI.
   push:
     branches: [ main, develop, Working, 'release/**' ]
   pull_request:
-    branches: [ main, develop, Working ]
+    branches: [ main, develop, Working, 'claude/**' ]
   workflow_dispatch:
     inputs:
       simulate_required_job_failure:

@@ -6080,7 +6080,8 @@
           "branches": [
             "main",
             "develop",
-            "Working"
+            "Working",
+            "claude/**"
           ]
         },
         "pathFiltered": false
