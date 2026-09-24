@@ -28,7 +28,7 @@ from common import (
     load_json,
     read_bytes_stable,
 )
-from contract_selectors import resolve_ci_job, resolve_test_selector
+from contract_selectors import cmake_preset_index, preset_references, resolve_ci_job, resolve_test_selector
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
                             predecessor_candidate_readiness_errors)
@@ -187,6 +187,16 @@ FUTURE_ACCEPTANCE_PATHS = {
     "wiki/subsystems/Scripting.md",
 }
 GENERATED_PATHS = {"docs/readiness/ENGINE_READINESS_HANDOFF.md"}
+
+# CMake presets a work item deliberately introduces, keyed to that owning item.
+# Only the owner's configure/build commands may name one, and never a CTest
+# test tree: an unwritten preset cannot prove it builds tests. The list prunes
+# itself (Validator.validate_work_item_presets): an entry whose preset now
+# exists, whose owner is done or missing, or that the owner no longer
+# references is an error.
+PLANNED_CMAKE_PRESETS = {
+    "macos-shipping": "PLT-220",
+}
 
 WORK_ITEM_REQUIRED_KEYS = {
     "id", "title", "priority", "status", "blocking", "wave", "area", "owner",
@@ -1397,10 +1407,96 @@ class Validator:
                 f"schemaVersion must be {SCHEMA_VERSION}",
             )
 
+    def validate_work_item_presets(
+        self,
+        identifier: str,
+        commands: list[Any],
+        location: str,
+        planned_uses: dict[str, set[str]],
+    ) -> None:
+        """Resolve every preset and build tree a work item's commands name.
+
+        A ``--preset`` must exist in its CMake family, a ``build/<dir>`` tree
+        must be some configure preset's binaryDir, and a CTest run must target a
+        configure preset that builds tests. A preset that sets BUILD_TESTS=OFF
+        is accepted for CTest only when the same item configures that preset
+        with -DBUILD_TESTS=ON.
+        """
+        index = cmake_preset_index()
+        references = [
+            (command_index, reference)
+            for command_index, command in enumerate(commands)
+            if isinstance(command, str)
+            for reference in preset_references(command)
+        ]
+        test_enabled = {
+            reference.name
+            for _, reference in references
+            if reference.kind == "configure" and reference.enables_tests
+        }
+        for command_index, reference in references:
+            command_location = f"{location}.commands[{command_index}]"
+            preset_name = reference.name
+            if reference.kind == "binaryDir":
+                preset_name = reference.name.split("/", 1)[1]
+                if reference.name not in index.binary_dirs:
+                    if self._planned_preset_allowed(identifier, preset_name, reference.tool, planned_uses):
+                        continue
+                    self.error(
+                        command_location,
+                        f"build tree {reference.name!r} is not the binaryDir of any configure preset "
+                        "in CMakePresets.json",
+                    )
+                    continue
+            elif not index.exists(reference.kind, preset_name):
+                if reference.kind in {"configure", "build"} and self._planned_preset_allowed(
+                    identifier, preset_name, reference.tool, planned_uses
+                ):
+                    continue
+                self.error(
+                    command_location,
+                    f"--preset {preset_name!r} names no {reference.kind} preset in CMakePresets.json",
+                )
+                continue
+            if reference.tool != "ctest":
+                continue
+            configure_name = index.configure_for(reference)
+            if configure_name is None:
+                self.error(command_location, f"CTest target {reference.name!r} resolves to no configure preset")
+            elif not index.builds_tests(configure_name) and configure_name not in test_enabled:
+                self.error(
+                    command_location,
+                    f"CTest runs against configure preset {configure_name!r}, which sets BUILD_TESTS=OFF; "
+                    "use a validation preset or configure it with -DBUILD_TESTS=ON in this work item",
+                )
+
+    @staticmethod
+    def _planned_preset_allowed(
+        identifier: str, preset_name: str, tool: str, planned_uses: dict[str, set[str]]
+    ) -> bool:
+        if tool != "cmake" or PLANNED_CMAKE_PRESETS.get(preset_name) != identifier:
+            return False
+        planned_uses.setdefault(preset_name, set()).add(identifier)
+        return True
+
+    def validate_planned_presets(self, by_id: dict[Any, dict[str, Any]], planned_uses: dict[str, set[str]]) -> None:
+        index = cmake_preset_index()
+        for preset_name, owner in sorted(PLANNED_CMAKE_PRESETS.items()):
+            entry_location = f"PLANNED_CMAKE_PRESETS[{preset_name!r}]"
+            if index.exists("configure", preset_name) or index.exists("build", preset_name):
+                self.error(entry_location, "preset now exists in CMakePresets.json; remove the planned entry")
+            elif owner not in by_id:
+                self.error(entry_location, f"owner {owner} is not a work item")
+            elif by_id[owner].get("status") == "done":
+                self.error(entry_location, f"owner {owner} is done, so the planned preset must exist or be removed")
+            elif owner not in planned_uses.get(preset_name, set()):
+                self.error(entry_location, f"owner {owner} no longer references this preset; remove the entry")
+
     def validate_work_items(self) -> set[str]:
         items = self.contract["workItems"]
         item_ids = self.unique_ids(items, "workItems")
         by_id = {item.get("id"): item for item in items}
+        planned_preset_uses: dict[str, set[str]] = {}
         for item in items:
             identifier = item.get("id", "?")
             location = f"workItems.{identifier}"
@@ -1458,6 +1554,8 @@ class Validator:
                                 "executable CTest commands must include --no-tests=error "
                                 "unless they are --show-only=json-v1 discovery commands",
                             )
+            if isinstance(commands, list):
+                self.validate_work_item_presets(identifier, commands, location, planned_preset_uses)
             for dependency in item.get("dependencies", []):
                 self.require(dependency in item_ids, location, f"unknown dependency {dependency}")
                 self.require(dependency != identifier, location, "cannot depend on itself")
@@ -1473,6 +1571,7 @@ class Validator:
                 for index, target_path in enumerate(item.get(key, [])):
                     self.require_path(target_path, f"{location}.{key}[{index}]", allow_future=allow_future)
             self.validate_selectors(item, location)
+        self.validate_planned_presets(by_id, planned_preset_uses)
 
         visiting: set[str] = set()
         visited: set[str] = set()

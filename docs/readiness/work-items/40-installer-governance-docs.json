@@ -49,7 +49,7 @@
         "Experimental platform installers remain owned by their platform work"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Installer_Tamper",
@@ -117,7 +117,7 @@
       "entryPoints": ["SparkInstaller/src/Installer.cpp", ".github/scripts/qualify-windows-msi.py"],
       "implementationScope": ["Verify the greatest-lower immutable signed MSI and shipping manifest", "Exercise upgrade, rollback, interruption, and external user-data retention on Windows 11 x64"],
       "acceptanceCriteria": ["A real published signed predecessor is selected by exact tag, commit, digest, and asset identity", "Upgrade and rollback pass on a clean supported Windows host", "Failure or interruption never replaces the working install"],
-      "commands": ["ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error"],
+      "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
       "testSelectors": ["Installer_Upgrade", "Installer_Rollback", "Installer_Interrupted"],
       "requiredCiJobs": ["installer-windows"],
       "performanceBudgets": [],
@@ -147,7 +147,7 @@
       "entryPoints": ["SparkInstaller/src/Installer.cpp"],
       "implementationScope": ["Exercise bootstrap activation and recovery with no predecessor input", "Retain user data across repair and uninstall"],
       "acceptanceCriteria": ["Fresh predecessor installation and interrupted activation recover without replacing user data", "Repair and uninstall pass with no N-1 claim", "Evidence is bound to the reviewed v0.9.0 source commit"],
-      "commands": ["ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error"],
+      "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
       "testSelectors": ["Installer_Tamper", "Installer_AtomicUpdate", "Installer_Interrupted", "Installer_Uninstall"],
       "requiredCiJobs": ["installer-windows"],
       "performanceBudgets": [],

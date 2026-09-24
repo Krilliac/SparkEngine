@@ -10,7 +10,7 @@
       "wave": 0,
       "area": "governance",
       "owner": "unassigned",
-      "rationale": "Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim.",
+      "rationale": "Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim. 2026-09-24 local progress: validate.py now resolves every work-item --preset against its CMakePresets.json family and every build/<dir> tree against a configure preset binaryDir (inheritance resolved through Tools/buildmatrix/inventory.py), and rejects CTest runs against a preset that sets BUILD_TESTS=OFF unless the same item configures it with -DBUILD_TESTS=ON; 51 commands were moved to test-building presets (windows-release, linux-gcc-release, ci-linux-asan/tsan, macos-metal) or given -DBUILD_TESTS=ON, and macos-shipping is a self-pruning planned preset owned by PLT-220.",
       "dependencies": [],
       "parallelWith": [
         "CI-100",
@@ -269,7 +269,7 @@
         "python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json --root Assets",
         "python3 tools/site-data/validate.py --assets",
         "python3 Tests/Tools/test_asset_integrity.py",
-        "ctest --test-dir build/windows-shipping -L profile-package --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L profile-package --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "AssetManifest_*",
@@ -471,9 +471,9 @@
         "Linux sanitizer evidence never promotes the Windows 11 stable-v1 certification row by itself"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping --show-only=json-v1",
-        "ctest --test-dir build/linux-shipping -L unit --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-shipping -L integration --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release --show-only=json-v1",
+        "ctest --test-dir build/linux-gcc-release -L unit --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -L integration --output-on-failure --no-tests=error",
         "SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml"
       ],
       "testSelectors": [

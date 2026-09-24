@@ -409,6 +409,150 @@ class WorkItemApplicabilityTests(ContractTestCase):
                 )
 
 
+class WorkItemPresetResolutionTests(ContractTestCase):
+    """Work-item commands must name presets and build trees CMakePresets.json defines."""
+
+    def preset_errors(self, identifier: str, commands: list[str]) -> list[str]:
+        validator = site_data_validate.Validator(self.mutable)
+        uses: dict[str, set[str]] = {}
+        validator.validate_work_item_presets(identifier, commands, f"workItems.{identifier}", uses)
+        return validator.errors
+
+    def test_live_work_item_commands_resolve(self) -> None:
+        for item in self.contract["workItems"]:
+            with self.subTest(work_item=item["id"]):
+                self.assertEqual(self.preset_errors(item["id"], item["commands"]), [])
+
+    def test_ctest_against_tests_off_preset_is_rejected(self) -> None:
+        for command in (
+            "ctest --test-dir build/windows-shipping -L profile-package --output-on-failure --no-tests=error",
+            "ctest --test-dir build/linux-shipping -L unit --output-on-failure --no-tests=error",
+            "ctest --test-dir=build/minimal/Tests --output-on-failure --no-tests=error",
+            '"C:/Program Files/CMake/bin/ctest.exe" --test-dir build/windows-shipping --no-tests=error',
+            "ctest --show-only=json-v1 && ctest --test-dir build/linux-shipping --no-tests=error",
+        ):
+            with self.subTest(command=command):
+                errors = self.preset_errors("RDY-020", [command])
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn("sets BUILD_TESTS=OFF", errors[0])
+
+    def test_tests_off_preset_is_excused_only_by_same_item_configure(self) -> None:
+        run = "ctest --test-dir build/windows-shipping -C MinSizeRel -L module-profile --no-tests=error"
+        self.assertEqual(
+            self.preset_errors("PLT-200", ["cmake --preset windows-shipping -DBUILD_TESTS=ON", run]), []
+        )
+        self.assertEqual(
+            self.preset_errors("PLT-200", ["cmake --preset windows-shipping -D BUILD_TESTS:BOOL=TRUE", run]), []
+        )
+        for configure in (
+            "cmake --preset windows-shipping",
+            "cmake --preset windows-shipping -DBUILD_TESTS=OFF",
+            "cmake --preset windows-release -DBUILD_TESTS=ON",
+        ):
+            with self.subTest(configure=configure):
+                errors = self.preset_errors("PLT-200", [configure, run])
+                self.assertTrue(any("sets BUILD_TESTS=OFF" in error for error in errors), errors)
+
+        rdy_010 = self.items_of(self.mutable)["RDY-010"]
+        rdy_010["commands"] = [
+            " ".join(token for token in command.split(" ") if token != "-DBUILD_TESTS=ON")
+            for command in rdy_010["commands"]
+        ]
+        self.assert_rejected(self.mutable, "sets BUILD_TESTS=OFF")
+
+    def test_unknown_presets_and_build_trees_are_rejected(self) -> None:
+        cases = (
+            ("cmake --preset linux-asan", "--preset 'linux-asan' names no configure preset"),
+            ("cmake --build --preset linux-asan", "--preset 'linux-asan' names no build preset"),
+            ("ctest --preset linux-gcc-release --no-tests=error", "--preset 'linux-gcc-release' names no test preset"),
+            ("ctest --test-dir build/linux-asan -L lifecycle --no-tests=error", "build tree 'build/linux-asan'"),
+            ("cmake --build build/linux-tsan", "build tree 'build/linux-tsan'"),
+            ("cmake --install build/nope --prefix /tmp/x", "build tree 'build/nope'"),
+            ("cmake -LAH -N build/nope", "build tree 'build/nope'"),
+            ("cmake --build ./build/nope/sub", "build tree 'build/nope'"),
+        )
+        for command, fragment in cases:
+            with self.subTest(command=command):
+                errors = self.preset_errors("LIFE-200", [command])
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(fragment, errors[0])
+
+    def test_existing_presets_resolve_through_inheritance(self) -> None:
+        self.assertEqual(
+            self.preset_errors(
+                "LIFE-200",
+                [
+                    "ctest --test-dir build/ci-linux-asan -L lifecycle --output-on-failure --no-tests=error",
+                    "ctest --preset default --no-tests=error",
+                    "cmake --build --preset windows-shipping --config MinSizeRel",
+                    "cmake --install build/linux-shipping --prefix /tmp/spark-install",
+                    "ctest --test-dir /tmp/spark-consumer --no-tests=error",
+                ],
+            ),
+            [],
+        )
+        index = contract_selectors.cmake_preset_index()
+        self.assertTrue(index.builds_tests("ci-linux-asan"))
+        self.assertFalse(index.builds_tests("windows-shipping"))
+
+    def test_inherited_tests_off_is_resolved(self) -> None:
+        presets = {
+            "configurePresets": [
+                {"name": "base", "hidden": True, "binaryDir": "${sourceDir}/build/${presetName}",
+                 "cacheVariables": {"BUILD_TESTS": "ON"}},
+                {"name": "off", "hidden": True, "cacheVariables": {"BUILD_TESTS": {"type": "BOOL", "value": "OFF"}}},
+                {"name": "child", "inherits": ["off", "base"]},
+                {"name": "reset", "inherits": "child", "cacheVariables": {"BUILD_TESTS": None}},
+                {"name": "plain", "inherits": "base"},
+            ],
+            "testPresets": [{"name": "child-tests", "configurePreset": "child"}],
+        }
+        index = contract_selectors.CMakePresetIndex(presets)
+        self.assertEqual(index.binary_dirs["build/child"], "child")
+        self.assertNotIn("build/base", index.binary_dirs)
+        self.assertFalse(index.builds_tests("child"), "earlier inherits entry must win")
+        self.assertTrue(index.builds_tests("reset"), "null unsets back to the option default")
+        self.assertTrue(index.builds_tests("plain"))
+        self.assertEqual(
+            index.configure_for(contract_selectors.PresetReference("ctest", "test", "child-tests")), "child"
+        )
+
+    def test_planned_preset_is_owner_scoped_and_prunes_itself(self) -> None:
+        self.assertEqual(
+            self.preset_errors("PLT-220", ["cmake --preset macos-shipping", "cmake --build build/macos-shipping"]),
+            [],
+        )
+        for identifier, command in (
+            ("RHI-220", "cmake --preset macos-shipping"),
+            ("PLT-220", "ctest --test-dir build/macos-shipping -L metal --no-tests=error"),
+        ):
+            with self.subTest(identifier=identifier, command=command):
+                self.assertEqual(len(self.preset_errors(identifier, [command])), 1)
+
+        items = self.items_of(self.mutable)
+        cases = (
+            ({"linux-gcc-release": "PLT-220"}, "preset now exists in CMakePresets.json"),
+            ({"macos-shipping": "NOPE-000"}, "owner NOPE-000 is not a work item"),
+            ({"macos-shipping": "RHI-220"}, "owner RHI-220 no longer references this preset"),
+        )
+        for planned, fragment in cases:
+            with self.subTest(planned=planned):
+                validator = site_data_validate.Validator(self.mutable)
+                with mock.patch.object(site_data_validate, "PLANNED_CMAKE_PRESETS", planned):
+                    validator.validate_planned_presets(items, {"macos-shipping": {"PLT-220"}})
+                self.assertTrue(any(fragment in error for error in validator.errors), validator.errors)
+
+        done = copy.deepcopy(items)
+        done["PLT-220"]["status"] = "done"
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_planned_presets(done, {"macos-shipping": {"PLT-220"}})
+        self.assertTrue(any("owner PLT-220 is done" in error for error in validator.errors), validator.errors)
+
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_planned_presets(items, {"macos-shipping": {"PLT-220"}})
+        self.assertEqual(validator.errors, [])
+
+
 class LegalContractConsistencyTests(ContractTestCase):
     """GOV-400 legal data stays explicit while its policy work is open."""
 

@@ -45,6 +45,21 @@ catalog; a reference from a `done` item does not count. When a path lands,
 delete its entry in the same change. A work item marked `done` never resolves a
 reference through that list.
 
+Work-item `commands` are resolved against `CMakePresets.json`, using the
+inheritance resolver in `Tools/buildmatrix/inventory.py`. `cmake --preset X`
+must name a configure preset, `cmake --build --preset X` a build preset, and
+`ctest --preset X` a test preset. Every `build/<dir>` tree passed to cmake or
+ctest must be a configure preset's binaryDir. A ctest run must target a preset
+that builds tests. A preset whose resolved `BUILD_TESTS` is false, such as
+`windows-shipping` or `linux-shipping`, is accepted only when the same item
+configures that preset with `-DBUILD_TESTS=ON` (as RDY-010 and PLT-200 do).
+Otherwise the run belongs on a validation preset such as `windows-release`
+(`-C Release`), `linux-gcc-release`, or `ci-linux-asan`. A preset an item will
+add is declared in `PLANNED_CMAKE_PRESETS` in `validate.py` and keyed to its
+owning item. Only that owner's cmake commands may name it, and never a ctest
+tree. The entry is an error once the preset exists, the owner is `done`, or the
+owner stops naming it.
+
 Hand-written counts are governed too. `validate.py` scans every file in
 `REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES` for a number followed (within two words)
 by tests, files, panels, modules, subsystems, backends, lines or nodes, including

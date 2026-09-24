@@ -47,9 +47,9 @@
         "Runtime dependency closure is recorded"
       ],
       "commands": [
-        "cmake --preset windows-shipping",
+        "cmake --preset windows-shipping -DBUILD_TESTS=ON",
         "cmake --build build/windows-shipping --config MinSizeRel",
-        "ctest --test-dir build/windows-shipping -L certification --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-shipping -C MinSizeRel -L certification --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "WindowsCertification_*"
@@ -175,7 +175,7 @@
         "Package has no repository/toolchain dependency at runtime"
       ],
       "commands": [
-        "cmake --preset linux-shipping",
+        "cmake --preset linux-shipping -DBUILD_TESTS=ON",
         "cmake --build build/linux-shipping",
         "ctest --test-dir build/linux-shipping -L certification --output-on-failure --no-tests=error"
       ],
@@ -580,8 +580,8 @@
         "Packaged scene passes on every supported Windows row"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L d3d11-golden --output-on-failure --no-tests=error",
-        "ctest --test-dir build/windows-shipping -L d3d11-stress --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L d3d11-golden --output-on-failure --no-tests=error",
+        "ctest --test-dir build/windows-release -C Release -L d3d11-stress --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "D3D11_Golden_*",
@@ -672,7 +672,7 @@
         "Unsupported features fail explicitly"
       ],
       "commands": [
-        "ctest --test-dir build/macos-shipping -L metal --output-on-failure --no-tests=error"
+        "ctest --test-dir build/macos-metal -L metal --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Metal_*"
@@ -757,7 +757,7 @@
         "Packaged scene passes supported GPUs/drivers"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L d3d12 --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L d3d12 --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "D3D12_*"
@@ -844,7 +844,7 @@
         "Packaged supported rows pass"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L vulkan --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L vulkan --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "VulkanParity_*",
@@ -928,7 +928,7 @@
         "Packaged scenes pass"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L opengl --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L opengl --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "OpenGL_*",
@@ -1014,7 +1014,7 @@
         "Experimental backend parity remains owned by RHI-220, RHI-225, RHI-230, and RHI-240"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L gltf-d3d11 --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L gltf-d3d11 --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "GLTF_Skinning_*",
@@ -1107,7 +1107,7 @@
         "Production network administration, fleet telemetry, backups, and incident drills remain owned by G12 and OPS-110"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L nullrhi-headless --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L nullrhi-headless --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "NullRHI_Windows_*",
@@ -1201,8 +1201,8 @@
         "Shutdown completes within budget"
       ],
       "commands": [
-        "ctest --test-dir build/linux-asan -L lifecycle --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-tsan -L lifecycle --output-on-failure --no-tests=error"
+        "ctest --test-dir build/ci-linux-asan -L lifecycle --output-on-failure --no-tests=error",
+        "ctest --test-dir build/ci-linux-tsan -L lifecycle --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "EngineLifecycle_*",
@@ -1294,7 +1294,7 @@
         "Failed operations remain atomic and recoverable"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L editor-integration --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L editor-integration --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "EditorUndo_*",
@@ -1491,7 +1491,7 @@
         "Breaking changes emit actionable diagnostics"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L compatibility --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L compatibility --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "SaveMigration_*",
@@ -1683,7 +1683,7 @@
         "Graph-to-packaged-runtime gameplay loop passes"
       ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L scripting-integration --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L scripting-integration --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "ScriptLifecycle_*",

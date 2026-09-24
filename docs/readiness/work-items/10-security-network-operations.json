@@ -41,7 +41,7 @@
       ],
       "commands": [
         "rg -n \"RCON|rconPassword|ExecuteCommand\" SparkEngine/Source/Engine/Networking",
-        "ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -R RemoteAdmin --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "RemoteAdmin_AnonymousDenied",
@@ -377,7 +377,7 @@
       ],
       "commands": [
         "rg -n \"mt19937|FNV|XOR|placeholder for DTLS|placeholder for AES|char pass\" SparkEngine/Source GameModules/SparkGameMMOFPS",
-        "ctest --test-dir build/linux-shipping -L network-security --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L network-security --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Transport_Tamper",
@@ -482,7 +482,7 @@
       ],
       "commands": [
         "python3 tools/site-data/validate.py --capability services.production",
-        "ctest --test-dir build/linux-shipping -L online-services --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "OnlineServices_Contract",
@@ -573,8 +573,8 @@
         "Backup restore is regularly rehearsed"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L persistence --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-shipping -R BackupRestore --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L persistence --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -R BackupRestore --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Persistence_Transaction",
@@ -669,8 +669,8 @@
         "Endpoint outage recovers within documented spool/drop bounds"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L crash-security --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-shipping -R TelemetrySpool --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L crash-security --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -R TelemetrySpool --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "CrashManifest_PathEscape",
@@ -802,8 +802,8 @@
         "Telemetry is externally consumable and exact-SHA labeled"
       ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L server-soak --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-shipping -L recovery-drill --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L server-soak --output-on-failure --no-tests=error",
+        "ctest --test-dir build/linux-gcc-release -L recovery-drill --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Server_Load",
@@ -917,9 +917,9 @@
       "commands": [
         "python3 -m unittest Tests.Tools.test_perf_budget Tests.Tools.test_perf_budget_adversarial Tests.Tools.test_perf_budget_hardening -v",
         "python3 tools/perf-budget/validate_budget.py perf-budgets/v1",
-        "ctest --test-dir build/windows-shipping -L benchmark --output-on-failure --no-tests=error",
-        "ctest --test-dir build/windows-shipping -L golden --output-on-failure --no-tests=error",
-        "ctest --test-dir build/windows-shipping -L nullrhi-soak --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L benchmark --output-on-failure --no-tests=error",
+        "ctest --test-dir build/windows-release -C Release -L golden --output-on-failure --no-tests=error",
+        "ctest --test-dir build/windows-release -C Release -L nullrhi-soak --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "Benchmark_*",

@@ -369,7 +369,7 @@ Scores are evidence pointers, not percentages: `0` absent/dead, `1` data-model/m
 **Priority:** P0 · **Status:** in-progress · **Wave:** 0 · **Area:** governance · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim.
+Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim. 2026-09-24 local progress: validate.py now resolves every work-item --preset against its CMakePresets.json family and every build/<dir> tree against a configure preset binaryDir (inheritance resolved through Tools/buildmatrix/inventory.py), and rejects CTest runs against a preset that sets BUILD_TESTS=OFF unless the same item configures it with -DBUILD_TESTS=ON; 51 commands were moved to test-building presets (windows-release, linux-gcc-release, ci-linux-asan/tsan, macos-metal) or given -DBUILD_TESTS=ON, and macos-shipping is a self-pruning planned preset owned by PLT-220.
 
 **Dependency contract**
 
@@ -618,7 +618,7 @@ python3 tools/asset-integrity/verify_asset_integrity.py check-all
 python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json --root Assets
 python3 tools/site-data/validate.py --assets
 python3 Tests/Tools/test_asset_integrity.py
-ctest --test-dir build/windows-shipping -L profile-package --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L profile-package --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -878,9 +878,9 @@ One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping --show-only=json-v1
-ctest --test-dir build/linux-shipping -L unit --output-on-failure --no-tests=error
-ctest --test-dir build/linux-shipping -L integration --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release --show-only=json-v1
+ctest --test-dir build/linux-gcc-release -L unit --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L integration --output-on-failure --no-tests=error
 SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml
 ```
 
@@ -1317,7 +1317,7 @@ Dedicated-server chat no longer dispatches RCON: messages are broadcast only, an
 
 ```bash
 rg -n "RCON|rconPassword|ExecuteCommand" SparkEngine/Source/Engine/Networking
-ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -R RemoteAdmin --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1572,8 +1572,8 @@ Crash manifests are now transport-free, pinned to a private artifact root, and h
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L crash-security --output-on-failure --no-tests=error
-ctest --test-dir build/linux-shipping -R TelemetrySpool --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L crash-security --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -R TelemetrySpool --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1654,9 +1654,9 @@ Windows is the intended primary host but lacks one blocking clean-machine Shippi
 **Required commands**
 
 ```bash
-cmake --preset windows-shipping
+cmake --preset windows-shipping -DBUILD_TESTS=ON
 cmake --build build/windows-shipping --config MinSizeRel
-ctest --test-dir build/windows-shipping -L certification --output-on-failure --no-tests=error
+ctest --test-dir build/windows-shipping -C MinSizeRel -L certification --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1732,8 +1732,8 @@ D3D11 is the deepest renderer but lacks a same-commit packaged golden-scene/pass
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L d3d11-golden --output-on-failure --no-tests=error
-ctest --test-dir build/windows-shipping -L d3d11-stress --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L d3d11-golden --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L d3d11-stress --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1809,7 +1809,7 @@ NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS mod
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L nullrhi-headless --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L nullrhi-headless --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1887,8 +1887,8 @@ A fully ready engine needs deterministic initialization/teardown and safe partia
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-asan -L lifecycle --output-on-failure --no-tests=error
-ctest --test-dir build/linux-tsan -L lifecycle --output-on-failure --no-tests=error
+ctest --test-dir build/ci-linux-asan -L lifecycle --output-on-failure --no-tests=error
+ctest --test-dir build/ci-linux-tsan -L lifecycle --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -1962,7 +1962,7 @@ Hierarchy and inspector can mutate World outside the command stack; rotate/scale
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L editor-integration --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L editor-integration --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2128,7 +2128,7 @@ The published installer configuration and public GUI claims diverge; prerequisit
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2208,7 +2208,7 @@ A release engine must preserve or explicitly migrate user projects and game stat
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L compatibility --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L compatibility --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2381,9 +2381,9 @@ Profiler and benchmark scaffolding exists, but no representative regression budg
 ```bash
 python3 -m unittest Tests.Tools.test_perf_budget Tests.Tools.test_perf_budget_adversarial Tests.Tools.test_perf_budget_hardening -v
 python3 tools/perf-budget/validate_budget.py perf-budgets/v1
-ctest --test-dir build/windows-shipping -L benchmark --output-on-failure --no-tests=error
-ctest --test-dir build/windows-shipping -L golden --output-on-failure --no-tests=error
-ctest --test-dir build/windows-shipping -L nullrhi-soak --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L benchmark --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L golden --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L nullrhi-soak --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2460,7 +2460,7 @@ Script objects/methods are cached, but entity identity and production start/upda
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L scripting-integration --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L scripting-integration --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2545,7 +2545,7 @@ MMOFPS authentication fields can carry plaintext credentials, while engine netwo
 
 ```bash
 rg -n "mt19937|FNV|XOR|placeholder for DTLS|placeholder for AES|char pass" SparkEngine/Source GameModules/SparkGameMMOFPS
-ctest --test-dir build/linux-shipping -L network-security --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L network-security --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2625,7 +2625,7 @@ Engine networking and reference modules do not provide turnkey identity, matchma
 
 ```bash
 python3 tools/site-data/validate.py --capability services.production
-ctest --test-dir build/linux-shipping -L online-services --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2700,8 +2700,8 @@ MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic o
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L persistence --output-on-failure --no-tests=error
-ctest --test-dir build/linux-shipping -R BackupRestore --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L persistence --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -R BackupRestore --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2780,7 +2780,7 @@ Current chaos/listen-host/screenshot paths do not prove two independent client p
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -R TerrafrontMultiClient --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -R TerrafrontMultiClient --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2857,8 +2857,8 @@ Shared save storage, client scene/collision reload, topology-driven migration, t
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -R TerrafrontMigration --output-on-failure --no-tests=error
-ctest --test-dir build/linux-shipping -R TerrafrontRestart --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -R TerrafrontMigration --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -R TerrafrontRestart --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -2935,8 +2935,8 @@ Profiling utilities and local chaos scripts do not substitute for externally con
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L server-soak --output-on-failure --no-tests=error
-ctest --test-dir build/linux-shipping -L recovery-drill --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L server-soak --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L recovery-drill --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3016,7 +3016,7 @@ Every discovered module needs a truthful manifest, while stable-v1 needs a small
 
 ```bash
 python3 tools/site-data/validate.py --modules
-ctest --test-dir build/windows-shipping -L module-kit --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L module-kit --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3091,7 +3091,7 @@ SparkGame has real lifecycle, ECS spawn, EventBus, weather, time of day, and qui
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R SparkGameShowcase --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R SparkGameShowcase --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3164,8 +3164,8 @@ FPS has a local arena, input, combat, rendering, and AI foundation, but it is no
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R FPSSinglePlayerSlice --output-on-failure --no-tests=error
-ctest --test-dir build/windows-shipping -R FPSPackage --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R FPSSinglePlayerSlice --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R FPSPackage --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3241,7 +3241,7 @@ MMO account storage is in-memory with demo hashing, scene paths mismatch the tre
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -R MMOIntegratedWorld --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -R MMOIntegratedWorld --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3314,7 +3314,7 @@ ARPG is mostly in-memory/debug state without integrated input, ECS world, assets
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R ARPGDungeon --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R ARPGDungeon --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3386,7 +3386,7 @@ Player input is documentation-only, collision assumes y=0, render/animation path
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R PlatformerCompletion --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R PlatformerCompletion --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3457,7 +3457,7 @@ RPG has broad in-memory models but no integrated input, entities, rendered scene
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R RPGQuestSlice --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R RPGQuestSlice --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3530,7 +3530,7 @@ Player, wildlife, events, and settlements are internal/prototype structures; sce
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R OpenWorldTraversal --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R OpenWorldTraversal --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3603,7 +3603,7 @@ Selection/commands, movement/pathfinding, fog updates, fixed update, persistence
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R RTSSkirmish --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R RTSSkirmish --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3676,7 +3676,7 @@ No real player input path exists; vehicles use custom fixed-step kinematic math,
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R RacingCompleteRace --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R RacingCompleteRace --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3748,7 +3748,7 @@ The module compiles/spawns surfaces but runtime lifecycle is disconnected, Attac
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R VisualScriptGameplay --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R VisualScriptGameplay --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3819,7 +3819,7 @@ Modules outside every declared release profile still need honest real-source lif
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L experimental-modules --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L experimental-modules --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3888,7 +3888,7 @@ Prototype modules need reusable controller, ECS, camera, render, save, HUD, AI, 
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L prototype-module-kit --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L prototype-module-kit --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -3957,7 +3957,7 @@ SparkGameFPS multiplayer currently ignores address and port and fabricates conne
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -R FPSLAN --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R FPSLAN --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4032,7 +4032,7 @@ Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a c
 **Required commands**
 
 ```bash
-cmake --preset linux-shipping
+cmake --preset linux-shipping -DBUILD_TESTS=ON
 cmake --build build/linux-shipping
 ctest --test-dir build/linux-shipping -L certification --output-on-failure --no-tests=error
 ```
@@ -4390,7 +4390,7 @@ Metal is incomplete and cannot support current broad backend framing.
 **Required commands**
 
 ```bash
-ctest --test-dir build/macos-shipping -L metal --output-on-failure --no-tests=error
+ctest --test-dir build/macos-metal -L metal --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4462,7 +4462,7 @@ D3D12 has modern feature depth without certification against the primary rendere
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L d3d12 --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L d3d12 --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4536,7 +4536,7 @@ Vulkan's deterministic reference route and parity milestones do not yet prove fu
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L vulkan --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L vulkan --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4607,7 +4607,7 @@ OpenGL provides useful portability and llvmpipe execution without production vis
 **Required commands**
 
 ```bash
-ctest --test-dir build/linux-shipping -L opengl --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -L opengl --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4681,7 +4681,7 @@ The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L gltf-d3d11 --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L gltf-d3d11 --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -4934,7 +4934,7 @@ N-1 upgrade and rollback are distinct from fresh-install correctness and cannot 
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
@@ -5002,7 +5002,7 @@ The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence
 **Required commands**
 
 ```bash
-ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
