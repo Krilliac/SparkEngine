@@ -27,6 +27,7 @@
 #include "Persistence/TFDatabase.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -87,6 +88,10 @@ namespace Terrafront
             TFLoadout loadout;
             std::unordered_map<std::string, TFWeaponAggStats> stats; ///< by weapons.json key
             bool dirty = false;
+            /// Set while parked after a failed disconnect flush: the database
+            /// row revision these values were computed from (TF-120); nullopt
+            /// when parked without a database.
+            std::optional<uint64_t> parkedBaseRevision;
         };
 
         Meta& Ensure(PlayerId player) { return m_meta[player]; }
@@ -109,6 +114,9 @@ namespace Terrafront
         /// Overwrite (not merge) this player's runtime meta from the durable
         /// character record — same replace semantics and call site as
         /// TFProgressionSystem::ServerLoadCharacter's xp/rank/flux seeding.
+        /// A row parked by a failed disconnect flush is re-adopted instead,
+        /// unless another authority committed the character since the parked
+        /// values' baseline (rec.revision moved); then it is discarded.
         void SeedFromRecord(PlayerId player, const TFCharacterRecord& rec);
 
         /// Persist one player's meta through db.SaveCharacterMeta if it is dirty
@@ -122,7 +130,10 @@ namespace Terrafront
         /// xp/rank/flux rows in ONE TFDatabase commit, so an unlock purchase's
         /// flux debit and unlock key can never land separately. Rows whose
         /// character no longer exists are left dirty and reported as failure
-        /// without blocking the rest of the batch.
+        /// without blocking the rest of the batch. TF-120: a row rejected with
+        /// TFDatabaseStatus::Conflict is dropped and the rest commit; a
+        /// conflicted disconnected (parked) row is discarded, a conflicted
+        /// in-world row stays dirty. Either way the call reports failure.
         bool PersistAllDirty(TFDatabase& db, std::vector<TFCharacterUpdate> progressUpdates);
 
         /// Debug UI iteration only.

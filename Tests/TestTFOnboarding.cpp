@@ -713,8 +713,11 @@ TEST(TFDatabase_MissingPrimaryWithRecoveryBackupFailsClosed)
     fs::remove(backup);
 }
 
-TEST(TFDatabase_ExclusivePersistenceLockRejectsSecondAuthority)
+TEST(TFDatabase_SharedRootSecondAuthorityOpensAndSeesCommits)
 {
+    // TF-120: the lock is transaction-scoped, so a second continent authority
+    // on the same TF_SAVE_ROOT opens the store and reads the first one's rows.
+    // TestTF120SharedSaveRoot.cpp covers conflicts, crashes and lock timeouts.
     namespace fs = std::filesystem;
     const fs::path path = fs::path("Saves") / "test_tfdb_exclusive_lock.db";
     fs::remove(path);
@@ -722,10 +725,13 @@ TEST(TFDatabase_ExclusivePersistenceLockRejectsSecondAuthority)
     TFDatabase first;
     TFDatabase second;
     EXPECT_TRUE(first.Open(path));
-    EXPECT_FALSE(second.Open(path));
-    EXPECT_TRUE(second.LastStatus() == TFDatabaseStatus::Locked);
-    EXPECT_TRUE(first.Close());
     EXPECT_TRUE(second.Open(path));
+    TFAccountRecord created;
+    EXPECT_TRUE(first.CreateAccount("shared_root", "salt", "hash", created));
+    TFAccountRecord loaded;
+    EXPECT_TRUE(second.FindAccountByUsername("shared_root", loaded));
+    EXPECT_EQ(loaded.id, created.id);
+    EXPECT_TRUE(first.Close());
     EXPECT_TRUE(second.Close());
 
     fs::remove(path);

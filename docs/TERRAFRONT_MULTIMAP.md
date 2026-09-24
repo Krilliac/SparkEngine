@@ -2,11 +2,13 @@
 
 **Status:** the redirect handshake is shipped
 and server-authoritative, but production multi-continent hosting is **not yet
-complete**. Global account, outfit, and social JSON stores deliberately take
-lifetime-exclusive authority locks. Two servers cannot safely share one
-`TF_SAVE_ROOT` until those stores move behind a transactional coordinator or
-multi-process database. Do not present the hop button as proof that shared
-character state works across live continent processes.
+complete**. The account/character store (`terrafront.db`, `TFDatabase`) is
+transaction-scoped (TF-120): several authorities may open it, and stale
+character writes are rejected. The outfit and social JSON stores still take
+lifetime-exclusive authority locks, so a second server on the same
+`TF_SAVE_ROOT` still fails closed at startup. Two servers cannot share one
+root until those stores are converted too. Do not present the hop button as
+proof that shared character state works across live continent processes.
 
 ## 1. The question
 
@@ -167,9 +169,27 @@ Read the full chain: `TFServerSim::EnsureAuthorityDatabaseOpen()` →
   Without a shared account store, "travel to Veyra Highlands" logs the
   player into a brand-new, empty account on that server — no characters, no
   progress, indistinguishable from playing on an unrelated server. However,
-  the current global JSON stores use lifetime-exclusive authority locks. A
-  second live authority pointed at the same root fails closed during startup
-  rather than risking last-writer-wins corruption. Territory and session
+  only `terrafront.db` is transaction-scoped today. `TFDatabase` takes its
+  `<file>.lock` per call, not per process: each call reloads the committed
+  file, applies the change to it, writes it atomically, and releases the lock.
+  Creates, deletes and login touches are re-applied to the fresh state.
+  Absolute character writes (progress/meta) are checked against the row
+  revision this process acquired at enter-world (`AcquireCharacter`), and a
+  row changed by another authority is rejected with `Conflict` instead of
+  being overwritten. The meta/progress sweep (`TFPlayerMetaStore::
+  PersistAllDirty`) drops a conflicted row and commits the rest, so one stale
+  character never blocks other players' saves: a conflicted row parked after a
+  failed disconnect flush is discarded with an error (the character now lives
+  on the authority that wrote it), and a conflicted in-world row stays dirty
+  and keeps failing the save (two authorities hold the character). A parked
+  row whose player re-enters this continent is re-adopted only if the
+  committed row revision still matches its baseline; otherwise it is
+  discarded the same way.
+  `Tests/TestTF120SharedSaveRoot.cpp` covers two instances, the conflicted
+  sweep, spawned peer processes, and a peer killed mid-transaction. `outfits.json` and the
+  social store still use lifetime-exclusive locks, so a second live authority
+  pointed at the same root still fails closed during startup rather than
+  risking last-writer-wins corruption. Territory and session
   progression are now isolated as `terrafront_territory.<continent-key>.json`
   and `terrafront_state.<continent-key>.json`; each document repeats and
   validates its stable continent key. Legacy territory migrates only when its
@@ -255,10 +275,13 @@ These live in files this lane doesn't own (contended or simply out of the
 this up next:
 
 1. **Multi-process global persistence** — root selection is centralized and
-   world/session state is continent-qualified. Global JSON stores are protected
-   by lifetime-exclusive locks, so unsafe concurrent writers fail closed. A
-   transactional coordinator/database remains required before two continent
-   authorities may share accounts, outfits, and social state.
+   world/session state is continent-qualified. The account/character store is
+   transaction-scoped with per-row revision checks (TF-120). The outfit and
+   social stores are still protected by lifetime-exclusive locks, so unsafe
+   concurrent writers fail closed. Their rank/membership policy runs against
+   an in-memory snapshot and needs the same per-call reload-and-revalidate
+   treatment before two continent authorities may share outfits and social
+   state.
 
 2. **PARTIALLY FIXED (follow-up pass).** `TFClientNet::Disconnect()` doesn't
    touch the socket. It resets TF-level client state (`m_connected`,

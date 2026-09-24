@@ -607,6 +607,8 @@ add_executable(SparkTests
     TestTFOnboarding.cpp
     # DATA-120 atomic multi-row character commits + schema versioning (TFDatabase above)
     TestDATA120PersistenceReal.cpp
+    # TF-120 transaction-scoped locking: shared TF_SAVE_ROOT across authorities
+    TestTF120SharedSaveRoot.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFPlayerMeta.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp"

@@ -9,12 +9,15 @@
  */
 #pragma once
 
+#include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <system_error>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 
 #ifdef _WIN32
@@ -31,14 +34,15 @@
 namespace Terrafront::SavePaths
 {
     /**
-     * Non-blocking, process-wide ownership guard for one persistence file.
+     * Process-wide exclusive ownership guard for one persistence file.
      *
-     * The lock is held for the lifetime of an opened store, not merely around
-     * the final rename. That deliberately serializes each store's initial read,
-     * all in-memory mutations, and every commit, preventing a second authority
-     * process from loading a stale snapshot and later replacing newer data.
-     * The small `.lock` file is persistent; ownership is the OS handle/lock, so
-     * a crashed process releases it automatically without stale-lock cleanup.
+     * Ownership is the OS handle/lock on a small persistent `<target>.lock`
+     * file, so a crashed process releases it automatically without stale-lock
+     * cleanup. Locks conflict between processes and between two guards in the
+     * same process. Stores use it transaction-scoped (TFDatabase: lock,
+     * reload, validate, apply, atomic write, unlock) so several authority
+     * processes can share one TF_SAVE_ROOT, or lifetime-scoped where a store
+     * still assumes a single authority (TFOutfitStore, TFSocialSystem).
      */
     class ExclusiveFileLock
     {
@@ -92,6 +96,26 @@ namespace Terrafront::SavePaths
             return true;
         }
 
+        /**
+         * Acquire the lock, waiting up to `timeout` while another owner holds
+         * it. Errors other than contention fail immediately. On timeout `ec`
+         * carries the contention error from the last attempt.
+         */
+        bool Lock(const std::filesystem::path& target, std::chrono::milliseconds timeout, std::error_code& ec) noexcept
+        {
+            const auto deadline = std::chrono::steady_clock::now() + timeout;
+            auto backoff = std::chrono::milliseconds(1);
+            for (;;)
+            {
+                if (TryLock(target, ec))
+                    return true;
+                if (!IsContention(ec) || std::chrono::steady_clock::now() >= deadline)
+                    return false;
+                std::this_thread::sleep_for(backoff);
+                backoff = std::min(backoff * 2, std::chrono::milliseconds(16));
+            }
+        }
+
         void Unlock() noexcept
         {
 #ifdef _WIN32
@@ -121,6 +145,16 @@ namespace Terrafront::SavePaths
         }
 
       private:
+        static bool IsContention(const std::error_code& ec) noexcept
+        {
+#ifdef _WIN32
+            return ec.category() == std::system_category() &&
+                   (ec.value() == ERROR_SHARING_VIOLATION || ec.value() == ERROR_LOCK_VIOLATION);
+#else
+            return ec.category() == std::generic_category() && (ec.value() == EWOULDBLOCK || ec.value() == EAGAIN);
+#endif
+        }
+
         std::filesystem::path m_lockPath;
 #ifdef _WIN32
         HANDLE m_handle = INVALID_HANDLE_VALUE;
