@@ -1087,8 +1087,14 @@ void AngelScriptEngine::RegisterEngineAPI()
 void AngelScriptEngine::RegisterMathTypes()
 {
     // Register a lightweight Vector3 value type for script use.
+    // ALLFLOATS tells the native calling convention that XMFLOAT3 is returned
+    // in XMM registers on x86-64 System V (Linux/macOS GCC/Clang). Without it
+    // every native function returning Vector3 by value (getPosition,
+    // getRotation) fails PrepareEngine there, so no script module can build.
+    // Platforms that return small structs through memory ignore the flag.
     m_engine->RegisterObjectType("Vector3", sizeof(DirectX::XMFLOAT3),
-                                 asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<DirectX::XMFLOAT3>());
+                                 asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_ALLFLOATS |
+                                     asGetTypeTraits<DirectX::XMFLOAT3>());
     m_engine->RegisterObjectProperty("Vector3", "float x", asOFFSET(DirectX::XMFLOAT3, x));
     m_engine->RegisterObjectProperty("Vector3", "float y", asOFFSET(DirectX::XMFLOAT3, y));
     m_engine->RegisterObjectProperty("Vector3", "float z", asOFFSET(DirectX::XMFLOAT3, z));
