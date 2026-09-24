@@ -1426,6 +1426,27 @@ if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLReal.cpp;SPARK_TEST_EXPECT_COUNT=11;SPARK_REQUIRE_OPENGL=1"
         LABELS "opengl;llvmpipe"
         TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
+
+    # RHI-240: the production SDL2 host must honor SPARK_RHI_BACKEND=opengl
+    # (initialize OpenGL, never NullRHI) and must exit non-zero when that
+    # explicit request cannot be met. Uses DISPLAY or wraps itself in xvfb-run;
+    # having neither fails the lane rather than skipping it.
+    if(SPARK_PACKAGE_HAS_SDL2 AND TARGET SparkEngine)
+        find_program(SPARK_XVFB_RUN_EXECUTABLE xvfb-run)
+        add_dependencies(SparkTests SparkEngine)
+        add_test(
+            NAME SparkEngineExplicitOpenGLStartup
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+                "-DSPARK_WORKING_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/opengl-explicit-startup"
+                "-DSPARK_XVFB_RUN=${SPARK_XVFB_RUN_EXECUTABLE}"
+                -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkOpenGLExplicitStartup.cmake
+        )
+        set_tests_properties(SparkEngineExplicitOpenGLStartup PROPERTIES
+            LABELS "opengl;llvmpipe;linux;sdl2;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 240)
+    endif()
 endif()
 add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --quiet)
 set_tests_properties(SparkSaveCompatibilityTests PROPERTIES

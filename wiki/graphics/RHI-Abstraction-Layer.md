@@ -122,6 +122,20 @@ requires feature level 11_0 (Shader Model 5.0); adapters below that floor are
 rejected. That resilience mechanism is not release certification for the fallback
 backend or host.
 
+**Explicit requests fail closed (Linux/macOS SDL2 host).** When `SPARK_RHI_BACKEND`
+names a GPU backend (`opengl`, `vulkan`, ...), `RunSDL2Windowed` compares the
+backend graphics actually came up on with `RHIFactory::GetRequestedBackendOverride()`.
+Any mismatch — `NullRHIDevice` after a lost window, or another backend picked by the
+bridge's failover loop — logs `SPARK_RHI_BACKEND explicitly requested <X> but graphics
+came up on <Y> — refusing to start` and exits non-zero before subsystems start.
+`null`/`auto`/unset keep the normal selection and headless behavior. SDL2 is forced
+onto EGL (`SDL_HINT_VIDEO_X11_FORCE_EGL`) only in `SPARK_EGL_SUPPORT` builds, whose
+`GLDevice` reuses a host EGL context; GLX builds keep SDL2's GLX context (forcing EGL
+on a host without libEGL made `SDL_CreateWindow` fail and the OpenGL request silently
+land on NullRHI). The SDL2 window requests the same 4.5 core context `GLDevice`
+requires. `SparkEngineExplicitOpenGLStartup` (CTest label `opengl`) runs the real
+executable under `DISPLAY` or `xvfb-run` and checks both outcomes.
+
 ### NullRHIDevice Selection and Bridge Failover
 
 When `GraphicsBackend::None` is selected, `RHIFactory::CreateDevice()` returns a
