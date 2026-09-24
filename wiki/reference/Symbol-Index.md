@@ -3255,7 +3255,7 @@
 | `BuildTriangleList` | function | Tests | [TestAutoLODPerformance.cpp:L33](../../Tests/TestAutoLODPerformance.cpp#L33) |  |
 | `BuildType` | enum | SparkBuild | [Config.h:L34](../../SparkBuild/src/Config.h#L34) |  |
 | `BuildTypeToString` | function | SparkBuild | [Config.cpp:L100](../../SparkBuild/src/Config.cpp#L100) |  |
-| `BuildTypeToString` | function | SparkBuild | [Config.cpp:L598](../../SparkBuild/src/Config.cpp#L598) |  |
+| `BuildTypeToString` | function | SparkBuild | [Config.cpp:L602](../../SparkBuild/src/Config.cpp#L602) |  |
 | `BuildTypeToString` | function | SparkBuild | [Config.h:L75](../../SparkBuild/src/Config.h#L75) |  |
 | `BuildUnlockTable` | function | GameModules | [ProgressionSystem.h:L150](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L150) |  |
 | `BuildViewRay` | function | GameModules | [TFWeaponSystem.h:L179](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h#L179) |  |
@@ -5197,17 +5197,17 @@
 | `ConfigManager::ApplyPresetAllOff` | method | SparkBuild | [Config.cpp:L329](../../SparkBuild/src/Config.cpp#L329) |  |
 | `ConfigManager::ApplyPresetAllOn` | method | SparkBuild | [Config.cpp:L323](../../SparkBuild/src/Config.cpp#L323) |  |
 | `ConfigManager::ApplyPresetDefaults` | method | SparkBuild | [Config.cpp:L335](../../SparkBuild/src/Config.cpp#L335) |  |
-| `ConfigManager::ApplyPresetDevelopment` | method | SparkBuild | [Config.cpp:L403](../../SparkBuild/src/Config.cpp#L403) |  |
+| `ConfigManager::ApplyPresetDevelopment` | method | SparkBuild | [Config.cpp:L407](../../SparkBuild/src/Config.cpp#L407) |  |
 | `ConfigManager::ApplyPresetLinuxFriendly` | method | SparkBuild | [Config.cpp:L361](../../SparkBuild/src/Config.cpp#L361) |  |
 | `ConfigManager::ApplyPresetMinimal` | method | SparkBuild | [Config.cpp:L341](../../SparkBuild/src/Config.cpp#L341) |  |
 | `ConfigManager::ApplyPresetShipping` | method | SparkBuild | [Config.cpp:L374](../../SparkBuild/src/Config.cpp#L374) |  |
-| `ConfigManager::BuildCMakeBuildCommand` | method | SparkBuild | [Config.cpp:L664](../../SparkBuild/src/Config.cpp#L664) |  |
-| `ConfigManager::BuildCMakeConfigureCommand` | method | SparkBuild | [Config.cpp:L612](../../SparkBuild/src/Config.cpp#L612) |  |
-| `ConfigManager::DetectCMakePresets` | method | SparkBuild | [Config.cpp:L721](../../SparkBuild/src/Config.cpp#L721) |  |
-| `ConfigManager::GetDefaultIniPath` | method | SparkBuild | [Config.cpp:L684](../../SparkBuild/src/Config.cpp#L684) |  |
+| `ConfigManager::BuildCMakeBuildCommand` | method | SparkBuild | [Config.cpp:L668](../../SparkBuild/src/Config.cpp#L668) |  |
+| `ConfigManager::BuildCMakeConfigureCommand` | method | SparkBuild | [Config.cpp:L616](../../SparkBuild/src/Config.cpp#L616) |  |
+| `ConfigManager::DetectCMakePresets` | method | SparkBuild | [Config.cpp:L725](../../SparkBuild/src/Config.cpp#L725) |  |
+| `ConfigManager::GetDefaultIniPath` | method | SparkBuild | [Config.cpp:L688](../../SparkBuild/src/Config.cpp#L688) |  |
 | `ConfigManager::InitDefaults` | method | SparkBuild | [Config.cpp:L176](../../SparkBuild/src/Config.cpp#L176) |  |
-| `ConfigManager::Load` | method | SparkBuild | [Config.cpp:L435](../../SparkBuild/src/Config.cpp#L435) |  |
-| `ConfigManager::Save` | method | SparkBuild | [Config.cpp:L555](../../SparkBuild/src/Config.cpp#L555) |  |
+| `ConfigManager::Load` | method | SparkBuild | [Config.cpp:L439](../../SparkBuild/src/Config.cpp#L439) |  |
+| `ConfigManager::Save` | method | SparkBuild | [Config.cpp:L559](../../SparkBuild/src/Config.cpp#L559) |  |
 | `ConfigParser` | class | SparkEngine | [ConfigParser.h:L57](../../SparkEngine/Source/Utils/ConfigParser.h#L57) |  |
 | `ConfigParser::Load` | method | SparkEngine | [ConfigParser.cpp:L13](../../SparkEngine/Source/Utils/ConfigParser.cpp#L13) |  |
 | `ConfigParser::Save` | method | SparkEngine | [ConfigParser.cpp:L25](../../SparkEngine/Source/Utils/ConfigParser.cpp#L25) |  |
@@ -5984,7 +5984,7 @@
 | `ContainsPlayer` | function | GameModules | [VehicleSystem.h:L201](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h#L201) | Check if a specific player is in this vehicle |
 | `ContainsPoint` | function | SparkEditor | [LevelStreamingTypes.h:L104](../../SparkEditor/Source/LevelStreaming/LevelStreamingTypes.h#L104) | Check if point is within tile bounds |
 | `ContainsPoint` | function | SparkEditor | [LevelStreamingTypes.h:L146](../../SparkEditor/Source/LevelStreaming/LevelStreamingTypes.h#L146) | Check if point is inside volume |
-| `content` | function | SparkBuild | [Config.cpp:L736](../../SparkBuild/src/Config.cpp#L736) |  |
+| `content` | function | SparkBuild | [Config.cpp:L740](../../SparkBuild/src/Config.cpp#L740) |  |
 | `content` | function | SparkEditor | [EditorUI.cpp:L1939](../../SparkEditor/Source/Core/EditorUI.cpp#L1939) |  |
 | `content` | function | SparkEditor | [ProjectManager.cpp:L1537](../../SparkEditor/Source/Core/ProjectManager.cpp#L1537) |  |
 | `content` | function | SparkEditor | [BuildPipeline.cpp:L478](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L478) |  |
@@ -10686,9 +10686,9 @@
 | `file` | function | GameModules | [OWPersistence.inl:L131](../../GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl#L131) |  |
 | `file` | function | GameModules | [OWPersistence.inl:L219](../../GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl#L219) |  |
 | `file` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L711](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L711) |  |
-| `file` | function | SparkBuild | [Config.cpp:L437](../../SparkBuild/src/Config.cpp#L437) |  |
-| `file` | function | SparkBuild | [Config.cpp:L564](../../SparkBuild/src/Config.cpp#L564) |  |
-| `file` | function | SparkBuild | [Config.cpp:L732](../../SparkBuild/src/Config.cpp#L732) |  |
+| `file` | function | SparkBuild | [Config.cpp:L441](../../SparkBuild/src/Config.cpp#L441) |  |
+| `file` | function | SparkBuild | [Config.cpp:L568](../../SparkBuild/src/Config.cpp#L568) |  |
+| `file` | function | SparkBuild | [Config.cpp:L736](../../SparkBuild/src/Config.cpp#L736) |  |
 | `file` | function | SparkBuild | [DownloadSecurity.cpp:L160](../../SparkBuild/src/DownloadSecurity.cpp#L160) |  |
 | `file` | function | SparkBuild | [DownloaderTests.cpp:L110](../../SparkBuild/tests/DownloaderTests.cpp#L110) |  |
 | `file` | function | SparkBuild | [DownloaderTests.cpp:L118](../../SparkBuild/tests/DownloaderTests.cpp#L118) |  |
@@ -27871,7 +27871,7 @@
 | `PassTypeToString` | function | SparkEngine | [RenderGraph.h:L1343](../../SparkEngine/Source/Graphics/RenderGraph.h#L1343) |  |
 | `PasswordBuffer` | alias | Tests | [TestMMOCredentialSecurity.cpp:L13](../../Tests/TestMMOCredentialSecurity.cpp#L13) |  |
 | `path` | function | GameModules | [GameConsoleOps.cpp:L661](../../GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp#L661) |  |
-| `path` | function | SparkBuild | [Config.cpp:L690](../../SparkBuild/src/Config.cpp#L690) |  |
+| `path` | function | SparkBuild | [Config.cpp:L694](../../SparkBuild/src/Config.cpp#L694) |  |
 | `path` | function | SparkBuild | [Downloader.cpp:L296](../../SparkBuild/src/Downloader.cpp#L296) |  |
 | `path` | function | SparkCrashReporter | [CrashReporterConsentTests.cpp:L219](../../SparkCrashReporter/tests/CrashReporterConsentTests.cpp#L219) |  |
 | `path` | function | SparkCrashReporter | [CrashReporterManifestTests.cpp:L729](../../SparkCrashReporter/tests/CrashReporterManifestTests.cpp#L729) |  |
@@ -44586,7 +44586,7 @@
 | `TriggerVolume` | struct | SparkEngine | [ProximityTriggerSystem.h:L54](../../SparkEngine/Source/Engine/World/ProximityTriggerSystem.h#L54) | A spatial volume that fires callbacks on entity enter/exit. |
 | `TriggerVolumeComponent` | struct | SparkEngine | [VolumeComponents.h:L30](../../SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h#L30) | Spatial trigger that fires events when entities enter or exit. |
 | `TriggerVolumeData` | struct | SparkEditor | [SceneFileTypes.h:L527](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L527) | Trigger volume scene data (sphere or AABB proximity trigger) |
-| `Trim` | function | SparkBuild | [Config.cpp:L426](../../SparkBuild/src/Config.cpp#L426) |  |
+| `Trim` | function | SparkBuild | [Config.cpp:L430](../../SparkBuild/src/Config.cpp#L430) |  |
 | `Trim` | function | SparkEngine | [StartupSplash.cpp:L49](../../SparkEngine/Source/Core/StartupSplash.cpp#L49) |  |
 | `Trim` | function | SparkEngine | [EntityArchetypeLoader.cpp:L28](../../SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp#L28) |  |
 | `Trim` | function | SparkEngine | [ConfigParser.h:L347](../../SparkEngine/Source/Utils/ConfigParser.h#L347) |  |
