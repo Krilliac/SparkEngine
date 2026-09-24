@@ -53,11 +53,14 @@ namespace
                     id, message);
     }
 
-    // Drains glGetError so errors are counted even if debug output were dropped.
+    // Drains glGetError so errors are counted even if debug output were dropped. A context
+    // holds at most one flag per error code, so a sane driver drains in a handful of calls;
+    // the bound turns a missing/lost context (glGetError never clearing) into failures
+    // instead of a hang.
     int DrainGLErrors()
     {
         int count = 0;
-        while (glGetError() != GL_NO_ERROR)
+        while (count < 32 && glGetError() != GL_NO_ERROR)
             ++count;
         return count;
     }
@@ -73,6 +76,10 @@ namespace
             desc.applicationName = "RHI240";
             if (!device.Initialize(desc))
                 return false;
+            // Every GL call below needs the device's context to still be current after
+            // Initialize (it once was torn down on Windows, making each call a silent no-op).
+            if (glGetString(GL_VERSION) == nullptr)
+                throw std::runtime_error("GLDevice::Initialize returned true but left no current GL context");
 
             glEnable(GL_DEBUG_OUTPUT);
             glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);

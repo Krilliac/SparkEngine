@@ -106,6 +106,7 @@ namespace Spark
                 // Freeing a command buffer (or its descriptor sets) while the queue still executes it is
                 // undefined; a deferred list is routinely destroyed right after ExecuteCommandList.
                 WaitForCompletion();
+                ReleaseDescriptorSets();
                 if (m_commandBuffer != VK_NULL_HANDLE)
                 {
                     vkFreeCommandBuffers(m_device, m_commandPool, 1, &m_commandBuffer);
@@ -135,6 +136,17 @@ namespace Spark
                     }
                     m_pending = false;
                 }
+                // The sets belong to the recording that references them. While that recording is still
+                // being built or is executable-but-unsubmitted (PrepareSubmit waits on the *previous*
+                // submission right before vkQueueSubmit), freeing them invalidates the command buffer:
+                // VUID-vkQueueSubmit-pCommandBuffers-00070 "VkDescriptorSet ... was destroyed or updated
+                // without UPDATE_AFTER_BIND". Only drivers without push descriptors take this pool path.
+                if (!m_isRecording && !m_executable)
+                    ReleaseDescriptorSets();
+            }
+
+            void VulkanCommandList::ReleaseDescriptorSets()
+            {
                 if (!m_liveDescriptorSets.empty())
                 {
                     vkFreeDescriptorSets(m_device, m_descriptorPool, static_cast<uint32_t>(m_liveDescriptorSets.size()),
@@ -146,8 +158,10 @@ namespace Spark
             void VulkanCommandList::Begin()
             {
                 // Re-recording a command buffer that is still pending is invalid (the immediate list is reused
-                // every frame), so drain its previous submission first.
+                // every frame), so drain its previous submission first. Any recording still held is discarded
+                // by vkBeginCommandBuffer, so its descriptor sets go with it.
                 WaitForCompletion();
+                ReleaseDescriptorSets();
 
                 VkCommandBufferBeginInfo beginInfo = {};
                 beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -181,6 +195,7 @@ namespace Spark
             void VulkanCommandList::Reset()
             {
                 WaitForCompletion();
+                ReleaseDescriptorSets();
                 vkResetCommandBuffer(m_commandBuffer, 0);
                 m_isRecording = false;
                 m_executable = false;

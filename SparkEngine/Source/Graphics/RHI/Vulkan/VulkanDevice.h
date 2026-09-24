@@ -386,6 +386,7 @@ namespace Spark
                 void WaitForCompletion();
 
               private:
+                void ReleaseDescriptorSets(); ///< Frees pool sets of a completed/discarded recording
                 void ResumeRendering();
                 void SuspendRendering();
                 void FlushBindings();
