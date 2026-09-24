@@ -38,17 +38,17 @@
 | `AbilityID` | alias | SparkEngine | [AbilitySystem.h:L51](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L51) |  |
 | `AbilityID` | alias | Tests | [TestAbilitySystem.cpp:L18](../../Tests/TestAbilitySystem.cpp#L18) |  |
 | `AbilityID` | alias | Tests | [TestGameplayStress.cpp:L327](../../Tests/TestGameplayStress.cpp#L327) |  |
-| `AccS` | alias | SparkEngine | [EngineSettings.cpp:L470](../../SparkEngine/Source/Core/EngineSettings.cpp#L470) |  |
+| `AccS` | alias | SparkEngine | [EngineSettings.cpp:L462](../../SparkEngine/Source/Core/EngineSettings.cpp#L462) |  |
 | `ActionFunc` | alias | SparkEngine | [BehaviorTreeNodes.h:L333](../../SparkEngine/Source/Engine/AI/BehaviorTreeNodes.h#L333) | Leaf node that executes a custom user-supplied function each tick. |
 | `ActionParam` | alias | SparkEngine | [EventResponseSystem.h:L120](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L120) |  |
 | `ActionParam` | alias | Tests | [TestEventResponseSystem.cpp:L69](../../Tests/TestEventResponseSystem.cpp#L69) |  |
 | `AddFn` | alias | SparkEngine | [Reflection.h:L294](../../SparkEngine/Source/Core/Reflection.h#L294) | Function signatures for runtime component operations on a World. |
 | `AdvHookHandler` | alias | Tests | [TestAdversarialEngine.cpp:L1354](../../Tests/TestAdversarialEngine.cpp#L1354) |  |
 | `AeadNonce` | alias | SparkEngine | [NetworkEncryption.h:L60](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L60) |  |
-| `AES` | alias | SparkEngine | [EngineSettings.cpp:L309](../../SparkEngine/Source/Core/EngineSettings.cpp#L309) |  |
+| `AES` | alias | SparkEngine | [EngineSettings.cpp:L312](../../SparkEngine/Source/Core/EngineSettings.cpp#L312) |  |
 | `AgentID` | alias | Tests | [TestCollisionAvoidance.cpp:L13](../../Tests/TestCollisionAvoidance.cpp#L13) |  |
 | `AimSent` | alias | GameModules | [TFVehicleSystem.h:L149](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L149) |  |
-| `AIS` | alias | SparkEngine | [EngineSettings.cpp:L156](../../SparkEngine/Source/Core/EngineSettings.cpp#L156) |  |
+| `AIS` | alias | SparkEngine | [EngineSettings.cpp:L159](../../SparkEngine/Source/Core/EngineSettings.cpp#L159) |  |
 | `AL_BUFFER` | macro | SparkEngine | [OpenALAudioEngine.cpp:L47](../../SparkEngine/Source/Audio/OpenALAudioEngine.cpp#L47) |  |
 | `AL_DISTANCE_MODEL` | macro | SparkEngine | [OpenALAudioEngine.cpp:L55](../../SparkEngine/Source/Audio/OpenALAudioEngine.cpp#L55) |  |
 | `AL_DOPPLER_FACTOR` | macro | SparkEngine | [OpenALAudioEngine.cpp:L57](../../SparkEngine/Source/Audio/OpenALAudioEngine.cpp#L57) |  |
@@ -85,7 +85,7 @@
 | `AnimationHandle` | alias | SparkEngine | [OpaqueHandle.h:L109](../../SparkEngine/Source/Utils/OpaqueHandle.h#L109) | Handle to an AnimationInstance managed by the AnimationUpdateSystem. |
 | `AnimationSystem` | alias | SparkEngine | [AnimationSystem.h:L554](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L554) | Type alias so EngineContext/EngineSetup can reference "AnimationSystem" |
 | `AnimationSystem` | alias | SparkSDK | [IEngineContext.h:L41](../../SparkSDK/Include/Spark/IEngineContext.h#L41) |  |
-| `AnimS` | alias | SparkEngine | [EngineSettings.cpp:L356](../../SparkEngine/Source/Core/EngineSettings.cpp#L356) |  |
+| `AnimS` | alias | SparkEngine | [EngineSettings.cpp:L359](../../SparkEngine/Source/Core/EngineSettings.cpp#L359) |  |
 | `APIENTRY` | macro | SparkEngine | [PlatformTypes.h:L201](../../SparkEngine/Source/Core/PlatformTypes.h#L201) |  |
 | `ARCH_SET_GS` | macro | tools | [gvisor-wine-shim.c:L134](../../tools/gvisor-wine-shim.c#L134) |  |
 | `AreaID` | alias | SparkEngine | [AreaServerTypes.h:L34](../../SparkEngine/Source/Engine/Networking/AreaServerTypes.h#L34) |  |
@@ -101,7 +101,7 @@
 | `AreaStateChangedCallback` | alias | Tests | [TestSeamlessAreaManager.cpp:L57](../../Tests/TestSeamlessAreaManager.cpp#L57) |  |
 | `AreaTransitionCallback` | alias | GameModules | [MMOPlayerSystem.h:L111](../../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.h#L111) |  |
 | `ArrayType` | alias | SparkEngine | [JsonUtils.h:L98](../../SparkEngine/Source/Utils/JsonUtils.h#L98) | A JSON value that can be null, bool, number, string, array, or object. |
-| `AS` | alias | SparkEngine | [EngineSettings.cpp:L42](../../SparkEngine/Source/Core/EngineSettings.cpp#L42) |  |
+| `AS` | alias | SparkEngine | [EngineSettings.cpp:L45](../../SparkEngine/Source/Core/EngineSettings.cpp#L45) |  |
 | `ASSERT` | macro | SparkEngine | [Assert.h:L199](../../SparkEngine/Source/Utils/Assert.h#L199) | Debug-only assertion — evaluates @p expr and aborts if false |
 | `ASSERT` | macro | SparkEngine | [Assert.h:L201](../../SparkEngine/Source/Utils/Assert.h#L201) | Debug-only assertion — evaluates @p expr and aborts if false |
 | `ASSERT_ALWAYS` | macro | SparkEngine | [Assert.h:L238](../../SparkEngine/Source/Utils/Assert.h#L238) | Always-on assertion with a printf-style diagnostic message |
@@ -149,7 +149,7 @@
 | `Callback` | alias | SparkEngine | [ScopedTimer.h:L47](../../SparkEngine/Source/Utils/ScopedTimer.h#L47) | Measures elapsed time from construction to destruction. |
 | `CallbackHandle` | alias | SparkEngine | [ScheduledCallback.h:L50](../../SparkEngine/Source/Utils/ScheduledCallback.h#L50) | Manages time-delayed and repeating callbacks. |
 | `CallbackHandle` | alias | Tests | [TestScheduledCallback.cpp:L13](../../Tests/TestScheduledCallback.cpp#L13) |  |
-| `CamS` | alias | SparkEngine | [EngineSettings.cpp:L77](../../SparkEngine/Source/Core/EngineSettings.cpp#L77) |  |
+| `CamS` | alias | SparkEngine | [EngineSettings.cpp:L80](../../SparkEngine/Source/Core/EngineSettings.cpp#L80) |  |
 | `CellId` | alias | SparkEngine | [PortalCulling.h:L51](../../SparkEngine/Source/Graphics/PortalCulling.h#L51) | Unique identifier for a cell in the portal graph. |
 | `CellId` | alias | Tests | [TestPortalCulling.cpp:L17](../../Tests/TestPortalCulling.cpp#L17) |  |
 | `CellVisitor` | alias | SparkEngine | [SpatialGrid.h:L92](../../SparkEngine/Source/Engine/World/SpatialGrid.h#L92) |  |
@@ -180,7 +180,7 @@
 | `CommandArgs` | alias | SparkConsole | [CommandRegistry.h:L20](../../SparkConsole/src/CommandRegistry.h#L20) |  |
 | `CommandHandler` | alias | SparkConsole | [CommandRegistry.h:L23](../../SparkConsole/src/CommandRegistry.h#L23) |  |
 | `CommandHandler` | alias | SparkEditor | [EditorConsoleBridge.h:L57](../../SparkEditor/Source/Utils/EditorConsoleBridge.h#L57) |  |
-| `CommandHandler` | alias | SparkEngine | [RemoteDebugSystem.h:L245](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L245) | Command handler callback: receives a command, returns a response |
+| `CommandHandler` | alias | SparkEngine | [RemoteDebugSystem.h:L247](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L247) | Command handler callback: receives a command, returns a response |
 | `CommandHandler` | alias | SparkEngine | [ConsoleProcessManager.h:L157](../../SparkEngine/Source/Utils/ConsoleProcessManager.h#L157) | Simple command registry for console commands |
 | `CommandHandler` | alias | SparkEngine | [SparkConsole.h:L78](../../SparkEngine/Source/Utils/SparkConsole.h#L78) |  |
 | `CommandHandler` | alias | Tests | [TestSubsystemConsoleCommands.cpp:L107](../../Tests/TestSubsystemConsoleCommands.cpp#L107) |  |
@@ -207,8 +207,8 @@
 | `CreateModuleFn` | alias | SparkSDK | [IModule.h:L185](../../SparkSDK/Include/Spark/IModule.h#L185) |  |
 | `CreateProjectRequestHandler` | alias | SparkEditor | [ProjectBrowserPanel.h:L55](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L55) |  |
 | `CrossAreaHandler` | alias | SparkEngine | [AreaServer.h:L193](../../SparkEngine/Source/Engine/Networking/AreaServer.h#L193) | Register handler for cross-area messages |
-| `CRS` | alias | SparkEngine | [EngineSettings.cpp:L368](../../SparkEngine/Source/Core/EngineSettings.cpp#L368) |  |
-| `CS` | alias | SparkEngine | [EngineSettings.cpp:L88](../../SparkEngine/Source/Core/EngineSettings.cpp#L88) |  |
+| `CRS` | alias | SparkEngine | [EngineSettings.cpp:L371](../../SparkEngine/Source/Core/EngineSettings.cpp#L371) |  |
+| `CS` | alias | SparkEngine | [EngineSettings.cpp:L91](../../SparkEngine/Source/Core/EngineSettings.cpp#L91) |  |
 | `CustomConditionEvaluator` | alias | SparkEngine | [ConditionSystem.h:L102](../../SparkEngine/Source/Engine/Gameplay/ConditionSystem.h#L102) |  |
 | `CustomConditionEvaluator` | alias | Tests | [TestConditionSystem.cpp:L65](../../Tests/TestConditionSystem.cpp#L65) |  |
 | `CustomStateValidator` | alias | SparkEngine | [SaveSystem.h:L414](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L414) |  |
@@ -256,20 +256,20 @@
 | `DebugHookHandler` | alias | SparkEngine | [DebugHookManager.h:L275](../../SparkEngine/Source/Utils/DebugHookManager.h#L275) | Callback signature for debug hook handlers. |
 | `DebugTraceCallback` | alias | SparkEngine | [AngelScriptEngine.h:L615](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h#L615) | Callback type for debug trace messages (editor hooks into this) |
 | `DecalExpiredCallback` | alias | SparkEngine | [ECSystems.h:L532](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L532) | Callback invoked when a decal expires. |
-| `DecS` | alias | SparkEngine | [EngineSettings.cpp:L589](../../SparkEngine/Source/Core/EngineSettings.cpp#L589) |  |
+| `DecS` | alias | SparkEngine | [EngineSettings.cpp:L581](../../SparkEngine/Source/Core/EngineSettings.cpp#L581) |  |
 | `DEFINE_ENUM_UTILS` | macro | SparkEngine | [EnumUtils.h:L119](../../SparkEngine/Source/Enums/EnumUtils.h#L119) | Macro to help define enum utility specializations |
 | `DEFINE_GENERATOR` | macro | Tests | [TestMovementSystem.cpp:L46](../../Tests/TestMovementSystem.cpp#L46) |  |
 | `DeserializeFunc` | alias | SparkEngine | [SaveSystem.h:L186](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L186) | Function signature for component deserialization. |
 | `DestroyGameModuleFn` | alias | SparkEngine | [IGameModule.h:L92](../../SparkEngine/Source/Core/IGameModule.h#L92) | Function signature for destroying the game module |
 | `DestroyGameModuleFn` | alias | SparkEngine | [ModuleManager.h:L38](../../SparkEngine/Source/Core/ModuleManager.h#L38) |  |
 | `DestroyModuleFn` | alias | SparkSDK | [IModule.h:L186](../../SparkSDK/Include/Spark/IModule.h#L186) |  |
-| `DestS` | alias | SparkEngine | [EngineSettings.cpp:L505](../../SparkEngine/Source/Core/EngineSettings.cpp#L505) |  |
+| `DestS` | alias | SparkEngine | [EngineSettings.cpp:L497](../../SparkEngine/Source/Core/EngineSettings.cpp#L497) |  |
 | `Digest` | alias | SparkEngine | [PasswordHash.cpp:L22](../../SparkEngine/Source/Utils/PasswordHash.cpp#L22) |  |
 | `DiscoveryCallback` | alias | GameModules | [OWExplorationSystem.h:L73](../../GameModules/SparkGameOpenWorld/Source/Exploration/OWExplorationSystem.h#L73) | Exploration and discovery tracking system |
-| `DlgS` | alias | SparkEngine | [EngineSettings.cpp:L516](../../SparkEngine/Source/Core/EngineSettings.cpp#L516) |  |
+| `DlgS` | alias | SparkEngine | [EngineSettings.cpp:L508](../../SparkEngine/Source/Core/EngineSettings.cpp#L508) |  |
 | `DownloadProgressCallback` | alias | SparkBuild | [Downloader.h:L10](../../SparkBuild/src/Downloader.h#L10) |  |
-| `DQS` | alias | SparkEngine | [EngineSettings.cpp:L285](../../SparkEngine/Source/Core/EngineSettings.cpp#L285) |  |
-| `DS` | alias | SparkEngine | [EngineSettings.cpp:L229](../../SparkEngine/Source/Core/EngineSettings.cpp#L229) |  |
+| `DQS` | alias | SparkEngine | [EngineSettings.cpp:L288](../../SparkEngine/Source/Core/EngineSettings.cpp#L288) |  |
+| `DS` | alias | SparkEngine | [EngineSettings.cpp:L232](../../SparkEngine/Source/Core/EngineSettings.cpp#L232) |  |
 | `DWORD` | alias | SparkEngine | [PlatformTypes.h:L34](../../SparkEngine/Source/Core/PlatformTypes.h#L34) |  |
 | `DXGI_ERROR_DEVICE_REMOVED` | macro | SparkEngine | [PlatformTypes.h:L89](../../SparkEngine/Source/Core/PlatformTypes.h#L89) |  |
 | `DXGI_ERROR_DEVICE_RESET` | macro | SparkEngine | [PlatformTypes.h:L92](../../SparkEngine/Source/Core/PlatformTypes.h#L92) |  |
@@ -344,7 +344,7 @@
 | `error_type` | alias | SparkEngine | [Expected.h:L92](../../SparkEngine/Source/Utils/Expected.h#L92) |  |
 | `ErrorCallback` | alias | SparkEngine | [ScriptHotReload.h:L72](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L72) |  |
 | `ErrorCallback` | alias | Tests | [TestScriptHotReload.cpp:L45](../../Tests/TestScriptHotReload.cpp#L45) |  |
-| `ES` | alias | SparkEngine | [EngineSettings.cpp:L189](../../SparkEngine/Source/Core/EngineSettings.cpp#L189) |  |
+| `ES` | alias | SparkEngine | [EngineSettings.cpp:L192](../../SparkEngine/Source/Core/EngineSettings.cpp#L192) |  |
 | `EventCallback` | alias | SparkEngine | [Sequencer.h:L254](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h#L254) |  |
 | `EventEntityID` | alias | SparkEngine | [EntityEventBus.h:L46](../../SparkEngine/Source/Utils/EntityEventBus.h#L46) | Entity identifier for event addressing (matches EnTT entity or network ID) |
 | `ExecuteCallback` | alias | SparkEngine | [RenderGraphPass.h:L44](../../SparkEngine/Source/Graphics/RenderGraphPass.h#L44) |  |
@@ -406,7 +406,7 @@
 | `FuncT` | alias | Tests | [TestMultiISADispatch.cpp:L98](../../Tests/TestMultiISADispatch.cpp#L98) |  |
 | `FuncT` | alias | Tests | [TestMultiISADispatch.cpp:L125](../../Tests/TestMultiISADispatch.cpp#L125) |  |
 | `GameplayTagId` | alias | SparkEngine | [GameplayTags.h:L50](../../SparkEngine/Source/Engine/Gameplay/GameplayTags.h#L50) | Unique identifier for a registered gameplay tag |
-| `GameS` | alias | SparkEngine | [EngineSettings.cpp:L53](../../SparkEngine/Source/Core/EngineSettings.cpp#L53) |  |
+| `GameS` | alias | SparkEngine | [EngineSettings.cpp:L56](../../SparkEngine/Source/Core/EngineSettings.cpp#L56) |  |
 | `GET_X_LPARAM` | macro | SparkEngine | [PlatformTypes.h:L195](../../SparkEngine/Source/Core/PlatformTypes.h#L195) |  |
 | `GET_Y_LPARAM` | macro | SparkEngine | [PlatformTypes.h:L196](../../SparkEngine/Source/Core/PlatformTypes.h#L196) |  |
 | `GetCurrentThreadId` | macro | SparkEngine | [PlatformAudioStubs.h:L364](../../SparkEngine/Source/Core/PlatformAudioStubs.h#L364) |  |
@@ -417,11 +417,11 @@
 | `GLX_CONTEXT_MAJOR_VERSION_ARB` | macro | SparkEngine | [OpenGLDevice.h:L53](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L53) |  |
 | `GLX_CONTEXT_MINOR_VERSION_ARB` | macro | SparkEngine | [OpenGLDevice.h:L54](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L54) |  |
 | `GLX_CONTEXT_PROFILE_MASK_ARB` | macro | SparkEngine | [OpenGLDevice.h:L55](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L55) |  |
-| `GMS` | alias | SparkEngine | [EngineSettings.cpp:L319](../../SparkEngine/Source/Core/EngineSettings.cpp#L319) |  |
+| `GMS` | alias | SparkEngine | [EngineSettings.cpp:L322](../../SparkEngine/Source/Core/EngineSettings.cpp#L322) |  |
 | `GPU_MARKER` | macro | SparkEngine | [GPUDebugMarkers.h:L378](../../SparkEngine/Source/Graphics/GPUDebugMarkers.h#L378) | Place an instant GPU marker |
 | `GPU_SCOPED_EVENT` | macro | SparkEngine | [GPUDebugMarkers.h:L375](../../SparkEngine/Source/Graphics/GPUDebugMarkers.h#L375) | Create a scoped GPU event that lasts for the enclosing block |
 | `GroupID` | alias | Tests | [TestGroupAI.cpp:L16](../../Tests/TestGroupAI.cpp#L16) |  |
-| `GS` | alias | SparkEngine | [EngineSettings.cpp:L25](../../SparkEngine/Source/Core/EngineSettings.cpp#L25) |  |
+| `GS` | alias | SparkEngine | [EngineSettings.cpp:L28](../../SparkEngine/Source/Core/EngineSettings.cpp#L28) |  |
 | `H` | alias | Tests | [TestRHIHandlePoolPhaseX.cpp:L55](../../Tests/TestRHIHandlePoolPhaseX.cpp#L55) |  |
 | `HACCEL` | alias | SparkEngine | [PlatformTypes.h:L123](../../SparkEngine/Source/Core/PlatformTypes.h#L123) |  |
 | `HANDLE` | alias | SparkEngine | [PlatformTypes.h:L48](../../SparkEngine/Source/Core/PlatformTypes.h#L48) |  |
@@ -645,7 +645,7 @@
 | `KeyStateProvider` | alias | SparkEngine | [InputActionSystem.h:L116](../../SparkEngine/Source/Input/InputActionSystem.h#L116) | Callback for action state queries (used by external key state provider) |
 | `KillcamMirror` | alias | GameModules | [TFDamageSystem.h:L230](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.h#L230) |  |
 | `KillcamNotifyFn` | alias | GameModules | [TFDeathRecap.h:L80](../../GameModules/SparkGameMMOFPS/Source/UI/TFDeathRecap.h#L80) |  |
-| `LanBroadcastSocketFactory` | alias | SparkEngine | [DedicatedServer.h:L191](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L191) | Immutable state consumed by one LAN broadcast iteration. |
+| `LanBroadcastSocketFactory` | alias | SparkEngine | [DedicatedServer.h:L193](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L193) | Immutable state consumed by one LAN broadcast iteration. |
 | `LayerEvalFunc` | alias | SparkEngine | [CpuNeuralInference.cpp:L32](../../SparkEngine/Source/Graphics/Neural/CpuNeuralInference.cpp#L32) |  |
 | `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1511](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1511) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L102](../../Tests/TestTypeTraits.cpp#L102) |  |
@@ -653,7 +653,7 @@
 | `LoadCompletionCallback` | alias | SparkEngine | [DirectStorageLoader.h:L66](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L66) | Callback invoked when a load completes |
 | `LocalShotHook` | alias | GameModules | [TFWeaponSystem.h:L104](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h#L104) |  |
 | `LockChangedCallback` | alias | SparkEditor | [CollaborativeEditSession.h:L162](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L162) |  |
-| `LocS` | alias | SparkEngine | [EngineSettings.cpp:L537](../../SparkEngine/Source/Core/EngineSettings.cpp#L537) |  |
+| `LocS` | alias | SparkEngine | [EngineSettings.cpp:L529](../../SparkEngine/Source/Core/EngineSettings.cpp#L529) |  |
 | `LOG_ERROR` | macro | SparkEngine | [D3D12Device.cpp:L40](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp#L40) |  |
 | `LOG_INFO` | macro | SparkEngine | [D3D12Device.cpp:L42](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp#L42) |  |
 | `LOG_TO_CONSOLE` | macro | GameModules | [Player.cpp:L54](../../GameModules/SparkGameFPS/Source/Game/Player.cpp#L54) |  |
@@ -695,14 +695,14 @@
 | `MB_ICONERROR` | macro | SparkEngine | [PlatformTypes.h:L312](../../SparkEngine/Source/Core/PlatformTypes.h#L312) |  |
 | `MB_OK` | macro | SparkEngine | [PlatformTypes.h:L315](../../SparkEngine/Source/Core/PlatformTypes.h#L315) |  |
 | `MB_YESNO` | macro | SparkEngine | [PlatformTypes.h:L318](../../SparkEngine/Source/Core/PlatformTypes.h#L318) |  |
-| `MBS` | alias | SparkEngine | [EngineSettings.cpp:L271](../../SparkEngine/Source/Core/EngineSettings.cpp#L271) |  |
-| `MemS` | alias | SparkEngine | [EngineSettings.cpp:L598](../../SparkEngine/Source/Core/EngineSettings.cpp#L598) |  |
+| `MBS` | alias | SparkEngine | [EngineSettings.cpp:L274](../../SparkEngine/Source/Core/EngineSettings.cpp#L274) |  |
+| `MemS` | alias | SparkEngine | [EngineSettings.cpp:L590](../../SparkEngine/Source/Core/EngineSettings.cpp#L590) |  |
 | `MessageCallback` | alias | SparkEditor | [ExternalConsoleIntegration.h:L37](../../SparkEditor/Source/Integration/ExternalConsoleIntegration.h#L37) |  |
 | `MessageHandler` | alias | SparkEngine | [INetworkRuntime.h:L22](../../SparkEngine/Source/Engine/Networking/INetworkRuntime.h#L22) | DedicatedServer-facing networking runtime abstraction. |
 | `MessageHandler` | alias | SparkEngine | [NetworkManager.h:L459](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L459) |  |
 | `MessageHandler` | alias | Tests | [TestNetworkManagerOrchestration.cpp:L95](../../Tests/TestNetworkManagerOrchestration.cpp#L95) |  |
 | `MirrorRec` | alias | GameModules | [TFVehicleSystem.h:L147](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L147) |  |
-| `ModS` | alias | SparkEngine | [EngineSettings.cpp:L527](../../SparkEngine/Source/Core/EngineSettings.cpp#L527) |  |
+| `ModS` | alias | SparkEngine | [EngineSettings.cpp:L519](../../SparkEngine/Source/Core/EngineSettings.cpp#L519) |  |
 | `ModuleReloadCallback` | alias | SparkEngine | [ModuleHotReload.h:L41](../../SparkEngine/Source/Core/ModuleHotReload.h#L41) |  |
 | `NativeSocket` | alias | SparkEditor | [CollaborativeEditSession.cpp:L40](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L40) |  |
 | `NativeSocket` | alias | SparkEditor | [CollaborativeEditSession.cpp:L52](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp#L52) |  |
@@ -739,14 +739,14 @@
 | `NOMINMAX` | macro | SparkSDK | [ModuleDllMain.h:L38](../../SparkSDK/Include/Spark/ModuleDllMain.h#L38) |  |
 | `NotifyCallback` | alias | SparkEngine | [AnimNotify.h:L142](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L142) | Manages animation notifies across all clips |
 | `NotifyReboundFn` | alias | SparkEngine | [Reflection.h:L300](../../SparkEngine/Source/Core/Reflection.h#L300) |  |
-| `NS` | alias | SparkEngine | [EngineSettings.cpp:L211](../../SparkEngine/Source/Core/EngineSettings.cpp#L211) |  |
-| `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L227](../../SparkEngine/Source/Utils/CrashHandler.cpp#L227) |  |
-| `NtSetInformationFileFn` | alias | SparkEngine | [CrashHandler.cpp:L619](../../SparkEngine/Source/Utils/CrashHandler.cpp#L619) |  |
+| `NS` | alias | SparkEngine | [EngineSettings.cpp:L214](../../SparkEngine/Source/Core/EngineSettings.cpp#L214) |  |
+| `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L215](../../SparkEngine/Source/Utils/CrashHandler.cpp#L215) |  |
+| `NtSetInformationFileFn` | alias | SparkEngine | [CrashHandler.cpp:L607](../../SparkEngine/Source/Utils/CrashHandler.cpp#L607) |  |
 | `ObjectID` | alias | SparkEditor | [SceneFileTypes.h:L38](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L38) | Unique identifier for scene objects |
 | `ObjectKeys` | alias | GameModules | [TFSocialSystemStore.cpp:L43](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp#L43) |  |
 | `ObjectType` | alias | SparkEngine | [JsonUtils.h:L99](../../SparkEngine/Source/Utils/JsonUtils.h#L99) | A JSON value that can be null, bool, number, string, array, or object. |
 | `ObstacleHandle` | alias | SparkEngine | [NavMeshObstacles.h:L85](../../SparkEngine/Source/Engine/AI/NavMeshObstacles.h#L85) | Opaque handle identifying a tracked obstacle. |
-| `OLS` | alias | SparkEngine | [EngineSettings.cpp:L609](../../SparkEngine/Source/Core/EngineSettings.cpp#L609) |  |
+| `OLS` | alias | SparkEngine | [EngineSettings.cpp:L601](../../SparkEngine/Source/Core/EngineSettings.cpp#L601) |  |
 | `One` | alias | Tests | [TestTypeTraits.cpp:L88](../../Tests/TestTypeTraits.cpp#L88) |  |
 | `OpenProjectRequestHandler` | alias | SparkEditor | [ProjectBrowserPanel.h:L54](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h#L54) |  |
 | `OriginRebasedCallback` | alias | SparkEngine | [WorldOriginSystem.h:L58](../../SparkEngine/Source/Engine/World/WorldOriginSystem.h#L58) | Callback invoked when the world origin is rebased |
@@ -765,7 +765,7 @@
 | `Panel` | alias | Tests | [TestGameViewPanel.cpp:L68](../../Tests/TestGameViewPanel.cpp#L68) |  |
 | `ParamValue` | alias | SparkEngine | [MaterialDefinition.h:L95](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L95) | A typed parameter value (matches ParamType) |
 | `ParticleHandle` | alias | SparkEngine | [OpaqueHandle.h:L106](../../SparkEngine/Source/Utils/OpaqueHandle.h#L106) | Handle to a ParticleEmitter managed by the ParticleSystem. |
-| `PartS` | alias | SparkEngine | [EngineSettings.cpp:L578](../../SparkEngine/Source/Core/EngineSettings.cpp#L578) |  |
+| `PartS` | alias | SparkEngine | [EngineSettings.cpp:L570](../../SparkEngine/Source/Core/EngineSettings.cpp#L570) |  |
 | `PassSetupFn` | alias | SparkEngine | [RenderPipeline.h:L135](../../SparkEngine/Source/Graphics/RenderPipeline.h#L135) | Register a custom render pass. |
 | `PasswordBuffer` | alias | Tests | [TestMMOCredentialSecurity.cpp:L13](../../Tests/TestMMOCredentialSecurity.cpp#L13) |  |
 | `PawnInfo` | alias | GameModules | [TFPlayerSystem.h:L42](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystem.h#L42) |  |
@@ -777,8 +777,8 @@
 | `PeerID` | alias | SparkEditor | [CollaborativeEditSession.h:L69](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L69) |  |
 | `PerceptionEntityID` | alias | SparkEngine | [PerceptionSystem.h:L85](../../SparkEngine/Source/Engine/AI/PerceptionSystem.h#L85) |  |
 | `PerceptionEntityID` | alias | Tests | [TestPerceptionSystemMath.cpp:L50](../../Tests/TestPerceptionSystemMath.cpp#L50) |  |
-| `PerfS` | alias | SparkEngine | [EngineSettings.cpp:L435](../../SparkEngine/Source/Core/EngineSettings.cpp#L435) |  |
-| `PersS` | alias | SparkEngine | [EngineSettings.cpp:L568](../../SparkEngine/Source/Core/EngineSettings.cpp#L568) |  |
+| `PerfS` | alias | SparkEngine | [EngineSettings.cpp:L427](../../SparkEngine/Source/Core/EngineSettings.cpp#L427) |  |
+| `PersS` | alias | SparkEngine | [EngineSettings.cpp:L560](../../SparkEngine/Source/Core/EngineSettings.cpp#L560) |  |
 | `PF` | alias | Tests | [Test_graphics_rhi.cpp:L127](../../Tests/harden/Test_graphics_rhi.cpp#L127) |  |
 | `PF` | alias | Tests | [Test_graphics_rhi.cpp:L141](../../Tests/harden/Test_graphics_rhi.cpp#L141) |  |
 | `PF` | alias | Tests | [Test_graphics_rhi.cpp:L151](../../Tests/harden/Test_graphics_rhi.cpp#L151) |  |
@@ -789,14 +789,14 @@
 | `PlayerId` | alias | GameModules | [TFTypes.h:L63](../../GameModules/SparkGameMMOFPS/Source/Core/TFTypes.h#L63) |  |
 | `PlayModeCallback` | alias | SparkEngine | [PlayModeTypes.h:L181](../../SparkEngine/Source/Engine/Editor/PlayModeTypes.h#L181) |  |
 | `PlayModeErrorCallback` | alias | SparkEngine | [PlayModeTypes.h:L182](../../SparkEngine/Source/Engine/Editor/PlayModeTypes.h#L182) |  |
-| `PlS` | alias | SparkEngine | [EngineSettings.cpp:L171](../../SparkEngine/Source/Core/EngineSettings.cpp#L171) |  |
+| `PlS` | alias | SparkEngine | [EngineSettings.cpp:L174](../../SparkEngine/Source/Core/EngineSettings.cpp#L174) |  |
 | `PluginInitFn` | alias | SparkEngine | [PluginRegistry.h:L22](../../SparkEngine/Source/Core/PluginRegistry.h#L22) | Plugin lifecycle function types |
 | `PluginShutdownFn` | alias | SparkEngine | [PluginRegistry.h:L24](../../SparkEngine/Source/Core/PluginRegistry.h#L24) | Plugin lifecycle function types |
 | `PluginUpdateFn` | alias | SparkEngine | [PluginRegistry.h:L23](../../SparkEngine/Source/Core/PluginRegistry.h#L23) | Plugin lifecycle function types |
 | `PointID` | alias | Tests | [TestTacticalPointSystem.cpp:L14](../../Tests/TestTacticalPointSystem.cpp#L14) |  |
 | `popen` | macro | SparkEditor | [VersionControlRender.cpp:L15](../../SparkEditor/Source/VersionControl/VersionControlRender.cpp#L15) |  |
 | `PortableGitPopulator` | alias | SparkInstaller | [GitBootstrap.h:L19](../../SparkInstaller/src/GitBootstrap.h#L19) |  |
-| `PPS` | alias | SparkEngine | [EngineSettings.cpp:L126](../../SparkEngine/Source/Core/EngineSettings.cpp#L126) |  |
+| `PPS` | alias | SparkEngine | [EngineSettings.cpp:L129](../../SparkEngine/Source/Core/EngineSettings.cpp#L129) |  |
 | `PQEntry` | alias | Tests | [TestNavMesh.cpp:L296](../../Tests/TestNavMesh.cpp#L296) |  |
 | `PrefabPropertyValue` | alias | SparkEditor | [PrefabAsset.h:L32](../../SparkEditor/Source/Prefabs/PrefabAsset.h#L32) | Property value type for serialized component properties |
 | `PreparedStatementID` | alias | SparkEngine | [AsyncDatabase.h:L76](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L76) |  |
@@ -804,7 +804,7 @@
 | `PrePresentHook` | alias | SparkEngine | [GraphicsEngine.h:L1198](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1198) |  |
 | `PressureCallback` | alias | SparkEngine | [MemoryMonitor.h:L199](../../SparkEngine/Source/Utils/MemoryMonitor.h#L199) | Callback invoked when memory health transitions to Critical or Warning |
 | `PressureCallback` | alias | Tests | [TestSelfRecovery.cpp:L125](../../Tests/TestSelfRecovery.cpp#L125) |  |
-| `private` | macro | Tests | [TestGatewayAreaControl.cpp:L32](../../Tests/TestGatewayAreaControl.cpp#L32) |  |
+| `private` | macro | Tests | [TestGatewayAreaControl.cpp:L35](../../Tests/TestGatewayAreaControl.cpp#L35) |  |
 | `PROCESS_QUERY_INFORMATION` | macro | SparkEngine | [PlatformAudioStubs.h:L361](../../SparkEngine/Source/Core/PlatformAudioStubs.h#L361) |  |
 | `PROFILE_BEGIN` | macro | SparkEngine | [Profiler.h:L339](../../SparkEngine/Source/Utils/Profiler.h#L339) |  |
 | `PROFILE_BEGIN` | macro | SparkEngine | [Profiler.h:L351](../../SparkEngine/Source/Utils/Profiler.h#L351) |  |
@@ -826,7 +826,7 @@
 | `ProjectileExpiredCallback` | alias | SparkEngine | [ECSystems.h:L594](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L594) | Callback invoked when a projectile expires or impacts. |
 | `PropertyValue` | alias | SparkEditor | [EditorCommand.h:L73](../../SparkEditor/Source/UndoRedo/EditorCommand.h#L73) | Property value variant type for generic property changes |
 | `PropertyValue` | alias | Tests | [TestEditorCommands.cpp:L23](../../Tests/TestEditorCommands.cpp#L23) |  |
-| `PS` | alias | SparkEngine | [EngineSettings.cpp:L63](../../SparkEngine/Source/Core/EngineSettings.cpp#L63) |  |
+| `PS` | alias | SparkEngine | [EngineSettings.cpp:L66](../../SparkEngine/Source/Core/EngineSettings.cpp#L66) |  |
 | `Query` | alias | Tests | [TestGPUProfiler.cpp:L146](../../Tests/TestGPUProfiler.cpp#L146) |  |
 | `QueryValue` | alias | SparkEngine | [AsyncDatabase.h:L39](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L39) | A single value returned from a query column. |
 | `QueueType` | alias | SparkEngine | [EventSystem.h:L410](../../SparkEngine/Source/Engine/Events/EventSystem.h#L410) |  |
@@ -843,7 +843,7 @@
 | `RENDER_REFLECTED_COMPONENT` | macro | SparkEditor | [InspectorComponentRenderers_ReflectedInternal.h:L40](../../SparkEditor/Source/Panels/InspectorComponentRenderers_ReflectedInternal.h#L40) |  |
 | `RenderCompleteCallback` | alias | SparkEngine | [MovieRenderPipeline.h:L202](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L202) | Offline-render job-state prototype (singleton); no pixel output. |
 | `RenderingPipeline` | alias | SparkEngine | [GraphicsEngineTypes.h:L32](../../SparkEngine/Source/Graphics/GraphicsEngineTypes.h#L32) | Legacy alias - use RenderPath directly for new code |
-| `RepS` | alias | SparkEngine | [EngineSettings.cpp:L557](../../SparkEngine/Source/Core/EngineSettings.cpp#L557) |  |
+| `RepS` | alias | SparkEngine | [EngineSettings.cpp:L549](../../SparkEngine/Source/Core/EngineSettings.cpp#L549) |  |
 | `ResourceResolver` | alias | SparkEngine | [DynamicPluginHost.h:L23](../../SparkEngine/Source/Core/DynamicPluginHost.h#L23) |  |
 | `ResponseCallback` | alias | SparkEngine | [DynamicResponseSystem.h:L68](../../SparkEngine/Source/Engine/Dialogue/DynamicResponseSystem.h#L68) | Callback for custom response actions. |
 | `RetirementSnapshotProbe` | alias | SparkEngine | [Components.h:L97](../../SparkEngine/Source/Engine/ECS/Components.h#L97) |  |
@@ -853,18 +853,18 @@
 | `RHISamplerHandle` | alias | SparkEngine | [RHITypes.h:L453](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L453) |  |
 | `RHIShaderHandle` | alias | SparkEngine | [RHITypes.h:L452](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L452) |  |
 | `RHITextureHandle` | alias | SparkEngine | [RHITypes.h:L451](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L451) |  |
-| `RS` | alias | SparkEngine | [EngineSettings.cpp:L102](../../SparkEngine/Source/Core/EngineSettings.cpp#L102) |  |
-| `RtlDllShutdownInProgressFn` | alias | SparkEngine | [CrashHandler.cpp:L818](../../SparkEngine/Source/Utils/CrashHandler.cpp#L818) |  |
+| `RS` | alias | SparkEngine | [EngineSettings.cpp:L105](../../SparkEngine/Source/Core/EngineSettings.cpp#L105) |  |
+| `RtlDllShutdownInProgressFn` | alias | SparkEngine | [CrashHandler.cpp:L806](../../SparkEngine/Source/Utils/CrashHandler.cpp#L806) |  |
 | `S_FALSE` | macro | SparkEngine | [PlatformTypes.h:L62](../../SparkEngine/Source/Core/PlatformTypes.h#L62) |  |
 | `S_OK` | macro | SparkEngine | [PlatformTypes.h:L59](../../SparkEngine/Source/Core/PlatformTypes.h#L59) |  |
 | `SamplerHandle` | alias | SparkEngine | [RHIHandlePool.h:L100](../../SparkEngine/Source/Graphics/RHI/RHIHandlePool.h#L100) |  |
 | `SamplerPool` | alias | SparkEngine | [NullRHIDevice.h:L182](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L182) | Simultaneously live objects tracked per resource type. |
-| `SaveS` | alias | SparkEngine | [EngineSettings.cpp:L546](../../SparkEngine/Source/Core/EngineSettings.cpp#L546) |  |
+| `SaveS` | alias | SparkEngine | [EngineSettings.cpp:L538](../../SparkEngine/Source/Core/EngineSettings.cpp#L538) |  |
 | `SceneChangedCallback` | alias | SparkEditor | [IntegrationTypes.h:L160](../../SparkEditor/Source/Integration/IntegrationTypes.h#L160) | Callback function types |
 | `SceneChangedCallback` | alias | SparkEditor | [SparkEngineIntegration.h:L170](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L170) | Callback function types |
 | `SceneLoadCallback` | alias | SparkEngine | [SceneManagerTypes.h:L229](../../SparkEngine/Source/SceneManager/SceneManagerTypes.h#L229) |  |
 | `SceneManifest` | alias | Tests | [TestAreaAssetLoader.cpp:L23](../../Tests/TestAreaAssetLoader.cpp#L23) |  |
-| `ScrS` | alias | SparkEngine | [EngineSettings.cpp:L344](../../SparkEngine/Source/Core/EngineSettings.cpp#L344) |  |
+| `ScrS` | alias | SparkEngine | [EngineSettings.cpp:L347](../../SparkEngine/Source/Core/EngineSettings.cpp#L347) |  |
 | `SDL_GLContext` | alias | SparkEditor | [EditorApplication.h:L24](../../SparkEditor/Source/Core/EditorApplication.h#L24) |  |
 | `SE_LOG_CRITICAL` | macro | SparkEditor | [EditorLogger.h:L282](../../SparkEditor/Source/Core/EditorLogger.h#L282) |  |
 | `SE_LOG_CRITICAL_F` | macro | SparkEditor | [EditorLogger.h:L302](../../SparkEditor/Source/Core/EditorLogger.h#L302) |  |
@@ -888,7 +888,7 @@
 | `SerializeFunc` | alias | SparkEngine | [SaveSystem.h:L177](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h#L177) | Function signature for component serialization. |
 | `SessionKey` | alias | SparkEngine | [NetworkEncryption.h:L59](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L59) |  |
 | `SessionKey` | alias | Tests | [TestNetworkEncryption.cpp:L27](../../Tests/TestNetworkEncryption.cpp#L27) |  |
-| `SettingsChangedCallback` | alias | SparkEngine | [EngineSettings.h:L1072](../../SparkEngine/Source/Core/EngineSettings.h#L1072) |  |
+| `SettingsChangedCallback` | alias | SparkEngine | [EngineSettings.h:L1065](../../SparkEngine/Source/Core/EngineSettings.h#L1065) |  |
 | `SettingsChangedCallback` | alias | Tests | [TestEngineSettingsParser.cpp:L164](../../Tests/TestEngineSettingsParser.cpp#L164) |  |
 | `SetupCallback` | alias | SparkEngine | [RenderGraphPass.h:L43](../../SparkEngine/Source/Graphics/RenderGraphPass.h#L43) |  |
 | `Sha256Digest` | alias | GameModules | [TFCrypto.h:L29](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.h#L29) |  |
@@ -1198,7 +1198,7 @@
 | `SPARK_REFLECT_TYPE_BASE` | macro | SparkEngine | [Reflection.h:L471](../../SparkEngine/Source/Core/Reflection.h#L471) | Begin type reflection with a base class. |
 | `SPARK_REFLECT_VERSION` | macro | SparkEngine | [Reflection.h:L562](../../SparkEngine/Source/Core/Reflection.h#L562) | Set the schema version for the current type registration. |
 | `SPARK_REGISTER_COMPONENT` | macro | SparkEngine | [ComponentReflection.cpp:L319](../../SparkEngine/Source/Core/ComponentReflection.cpp#L319) |  |
-| `SPARK_REMOTE_DEBUG_TESTING` | macro | Tests | [TestRemoteDebugSystem.cpp:L15](../../Tests/TestRemoteDebugSystem.cpp#L15) |  |
+| `SPARK_REMOTE_DEBUG_TESTING` | macro | Tests | [TestRemoteDebugSystem.cpp:L16](../../Tests/TestRemoteDebugSystem.cpp#L16) |  |
 | `SPARK_REMOTE_DEBUG_TESTING` | macro | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L17](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L17) |  |
 | `SPARK_REQUIRE` | macro | SparkEngine | [Validate.h:L303](../../SparkEngine/Source/Utils/Validate.h#L303) | Precondition check: logs fatal error and aborts if expr is false |
 | `SPARK_REQUIRE_MSG` | macro | SparkEngine | [Validate.h:L318](../../SparkEngine/Source/Utils/Validate.h#L318) | Precondition check with a diagnostic message |
@@ -1286,15 +1286,15 @@
 | `SparkPluginResult` | alias | SparkSDK | [PluginABI.h:L40](../../SparkSDK/Include/Spark/PluginABI.h#L40) |  |
 | `SparkPluginTask` | alias | SparkSDK | [PluginABI.h:L36](../../SparkSDK/Include/Spark/PluginABI.h#L36) |  |
 | `SquadId` | alias | GameModules | [TFTypes.h:L67](../../GameModules/SparkGameMMOFPS/Source/Core/TFTypes.h#L67) |  |
-| `SSAOSet` | alias | SparkEngine | [EngineSettings.cpp:L146](../../SparkEngine/Source/Core/EngineSettings.cpp#L146) |  |
+| `SSAOSet` | alias | SparkEngine | [EngineSettings.cpp:L149](../../SparkEngine/Source/Core/EngineSettings.cpp#L149) |  |
 | `sscanf_s` | macro | SparkEngine | [PlatformTypes.h:L251](../../SparkEngine/Source/Core/PlatformTypes.h#L251) |  |
-| `SSRS` | alias | SparkEngine | [EngineSettings.cpp:L237](../../SparkEngine/Source/Core/EngineSettings.cpp#L237) |  |
+| `SSRS` | alias | SparkEngine | [EngineSettings.cpp:L240](../../SparkEngine/Source/Core/EngineSettings.cpp#L240) |  |
 | `State` | alias | SparkDaemon | [OrchestratorMain.cpp:L19](../../SparkDaemon/src/OrchestratorMain.cpp#L19) |  |
 | `StateCheckFn` | alias | SparkEngine | [InvalidStateDetector.h:L66](../../SparkEngine/Source/Utils/InvalidStateDetector.h#L66) |  |
 | `StatLookupFn` | alias | GameModules | [RPGDialogueSystem.h:L86](../../GameModules/SparkGameRPG/Source/Dialogue/RPGDialogueSystem.h#L86) | Callback for stat lookups during skill checks |
 | `Status` | macro | SparkEngine | [OpenGLDevice.h:L43](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L43) |  |
 | `Stored` | alias | SparkEditor | [SceneFileTypes.h:L1135](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L1135) |  |
-| `StrS` | alias | SparkEngine | [EngineSettings.cpp:L423](../../SparkEngine/Source/Core/EngineSettings.cpp#L423) |  |
+| `StrS` | alias | SparkEngine | [EngineSettings.cpp:L415](../../SparkEngine/Source/Core/EngineSettings.cpp#L415) |  |
 | `SubscriptionID` | alias | SparkEngine | [EventSystem.h:L58](../../SparkEngine/Source/Engine/Events/EventSystem.h#L58) | Legacy subscription ID type for code that uses manual unsubscription. |
 | `SubscriptionID` | alias | Tests | [TestEventSystem.cpp:L17](../../Tests/TestEventSystem.cpp#L17) |  |
 | `SUCCEEDED` | macro | SparkEngine | [PlatformTypes.h:L96](../../SparkEngine/Source/Core/PlatformTypes.h#L96) |  |
@@ -1310,7 +1310,7 @@
 | `T` | alias | SparkEngine | [EventResponseSystem.cpp:L727](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L727) |  |
 | `T` | alias | SparkEngine | [AsyncDatabase.cpp:L308](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp#L308) |  |
 | `T` | alias | SparkEngine | [JsonUtils.h:L128](../../SparkEngine/Source/Utils/JsonUtils.h#L128) |  |
-| `TAAS` | alias | SparkEngine | [EngineSettings.cpp:L256](../../SparkEngine/Source/Core/EngineSettings.cpp#L256) |  |
+| `TAAS` | alias | SparkEngine | [EngineSettings.cpp:L259](../../SparkEngine/Source/Core/EngineSettings.cpp#L259) |  |
 | `TerrainID` | alias | Tests | [TestTerrainRenderer.cpp:L13](../../Tests/TestTerrainRenderer.cpp#L13) |  |
 | `TEST` | macro | Tests | [TestFramework.h:L150](../../Tests/TestFramework.h#L150) |  |
 | `TEST_F` | macro | Tests | [TestFramework.h:L157](../../Tests/TestFramework.h#L157) |  |
@@ -1328,7 +1328,7 @@
 | `TimePoint` | alias | Tests | [TestScriptHotReload.cpp:L17](../../Tests/TestScriptHotReload.cpp#L17) |  |
 | `TimerCallback` | alias | SparkEngine | [TimerManager.h:L63](../../SparkEngine/Source/Utils/TimerManager.h#L63) | Callback type for timer expiration |
 | `TINYOBJLOADER_IMPLEMENTATION` | macro | SparkEngine | [TinyObjImpl.cpp:L13](../../SparkEngine/Source/Utils/TinyObjImpl.cpp#L13) |  |
-| `TODS` | alias | SparkEngine | [EngineSettings.cpp:L412](../../SparkEngine/Source/Core/EngineSettings.cpp#L412) |  |
+| `TODS` | alias | SparkEngine | [EngineSettings.cpp:L404](../../SparkEngine/Source/Core/EngineSettings.cpp#L404) |  |
 | `Token` | alias | SparkEngine | [NetworkSecurity.h:L51](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L51) |  |
 | `TriggerCallback` | alias | SparkEngine | [ProximityTriggerSystem.h:L36](../../SparkEngine/Source/Engine/World/ProximityTriggerSystem.h#L36) | Callback signature invoked when an entity enters or exits a trigger. |
 | `TriggerCaptureFn` | alias | SparkEditor | [PerformanceProfiler.cpp:L909](../../SparkEditor/Source/Profiler/PerformanceProfiler.cpp#L909) |  |
@@ -1348,7 +1348,7 @@
 | `UIFloatBinding` | alias | SparkEngine | [UIFactory.h:L91](../../SparkEngine/Source/Engine/UI/UIFactory.h#L91) |  |
 | `UIIntBinding` | alias | SparkEngine | [UIFactory.h:L94](../../SparkEngine/Source/Engine/UI/UIFactory.h#L94) |  |
 | `UINT` | alias | SparkEngine | [PlatformTypes.h:L35](../../SparkEngine/Source/Core/PlatformTypes.h#L35) |  |
-| `UIS` | alias | SparkEngine | [EngineSettings.cpp:L456](../../SparkEngine/Source/Core/EngineSettings.cpp#L456) |  |
+| `UIS` | alias | SparkEngine | [EngineSettings.cpp:L448](../../SparkEngine/Source/Core/EngineSettings.cpp#L448) |  |
 | `UIStringBinding` | alias | SparkEngine | [UIFactory.h:L92](../../SparkEngine/Source/Engine/UI/UIFactory.h#L92) |  |
 | `ULONG` | alias | SparkEngine | [PlatformTypes.h:L38](../../SparkEngine/Source/Core/PlatformTypes.h#L38) |  |
 | `Underlying` | alias | SparkEngine | [BitFlags.h:L100](../../SparkEngine/Source/Utils/BitFlags.h#L100) |  |
@@ -1419,8 +1419,8 @@
 | `VK_USE_PLATFORM_WIN32_KHR` | macro | SparkEngine | [VulkanDevice.h:L34](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L34) |  |
 | `VK_USE_PLATFORM_XCB_KHR` | macro | SparkEngine | [VulkanDevice.h:L36](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L36) |  |
 | `VK_USE_PLATFORM_XLIB_KHR` | macro | SparkEngine | [VulkanDevice.h:L38](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L38) |  |
-| `VolS` | alias | SparkEngine | [EngineSettings.cpp:L247](../../SparkEngine/Source/Core/EngineSettings.cpp#L247) |  |
-| `VRS` | alias | SparkEngine | [EngineSettings.cpp:L488](../../SparkEngine/Source/Core/EngineSettings.cpp#L488) |  |
+| `VolS` | alias | SparkEngine | [EngineSettings.cpp:L250](../../SparkEngine/Source/Core/EngineSettings.cpp#L250) |  |
+| `VRS` | alias | SparkEngine | [EngineSettings.cpp:L480](../../SparkEngine/Source/Core/EngineSettings.cpp#L480) |  |
 | `WaterID` | alias | Tests | [TestWaterRenderer.cpp:L13](../../Tests/TestWaterRenderer.cpp#L13) |  |
 | `WAVE_FORMAT_IEEE_FLOAT` | macro | SparkEngine | [PlatformTypes.h:L425](../../SparkEngine/Source/Core/PlatformTypes.h#L425) |  |
 | `WAVE_FORMAT_PCM` | macro | SparkEngine | [PlatformTypes.h:L422](../../SparkEngine/Source/Core/PlatformTypes.h#L422) |  |
@@ -1487,8 +1487,8 @@
 | `WORD` | alias | SparkEngine | [PlatformTypes.h:L33](../../SparkEngine/Source/Core/PlatformTypes.h#L33) |  |
 | `WPARAM` | alias | SparkEngine | [PlatformTypes.h:L127](../../SparkEngine/Source/Core/PlatformTypes.h#L127) |  |
 | `WreckRec` | alias | GameModules | [TFVehicleSystem.h:L150](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L150) |  |
-| `WrldS` | alias | SparkEngine | [EngineSettings.cpp:L447](../../SparkEngine/Source/Core/EngineSettings.cpp#L447) |  |
-| `WthS` | alias | SparkEngine | [EngineSettings.cpp:L391](../../SparkEngine/Source/Core/EngineSettings.cpp#L391) |  |
+| `WrldS` | alias | SparkEngine | [EngineSettings.cpp:L439](../../SparkEngine/Source/Core/EngineSettings.cpp#L439) |  |
+| `WthS` | alias | SparkEngine | [EngineSettings.cpp:L383](../../SparkEngine/Source/Core/EngineSettings.cpp#L383) |  |
 | `XAUDIO2_DEFAULT_PROCESSOR` | macro | SparkEngine | [PlatformAudioStubs.h:L38](../../SparkEngine/Source/Core/PlatformAudioStubs.h#L38) |  |
 | `XAUDIO2_END_OF_STREAM` | macro | SparkEngine | [PlatformAudioStubs.h:L41](../../SparkEngine/Source/Core/PlatformAudioStubs.h#L41) |  |
 | `XAUDIO2_LOOP_INFINITE` | macro | SparkEngine | [PlatformAudioStubs.h:L44](../../SparkEngine/Source/Core/PlatformAudioStubs.h#L44) |  |
