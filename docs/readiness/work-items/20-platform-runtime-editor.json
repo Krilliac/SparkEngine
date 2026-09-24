@@ -884,10 +884,7 @@
         "vulkan-lavapipe",
         "vulkan-hardware"
       ],
-      "plannedTestSelectors": [
-        "VulkanGolden_*",
-        "VulkanValidation_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "RHI-240",
@@ -971,10 +968,7 @@
         "opengl-hardware",
         "opengl-llvmpipe"
       ],
-      "plannedTestSelectors": [
-        "OpenGL_*",
-        "ShaderTranslation_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "ENG-220",

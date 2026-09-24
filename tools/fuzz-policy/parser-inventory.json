@@ -1885,6 +1885,22 @@
         "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
         "ticket": "SEC-120"
       }
+    },
+    {
+      "id": "vulkan-spirv-module-header",
+      "description": "SPIR-V bytecode header and word-count validation before Vulkan shader-module creation.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp"
+      ],
+      "formats": [
+        ".spv"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
     }
   ],
   "deferred_candidates": [
