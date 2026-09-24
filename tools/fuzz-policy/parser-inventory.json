@@ -3468,11 +3468,20 @@
       ]
     },
     {
-      "source_file": "SparkEngine/Source/Utils/GoldenImageTest.h",
+      "source_file": "SparkEngine/Source/Utils/GoldenImageManifest.h",
       "classification": "developer-tooling",
-      "justification": "Header-only golden-image test harness: LoadPNG reads repository reference images and is reached only from Tests/ and the test-only CompareWithGolden path; no shipped runtime path calls it.",
+      "justification": "Golden-image test harness: GoldenManifest::Load reads the repository-reviewed Tests/GoldenImages/manifest.json through ParseBounded (1 MiB, depth 8) with strict field validation, reached only from Tests/ and the test-only CompareWithGolden path; no shipped runtime path calls it.",
       "detected_by": [
-        "stdio-binary-read"
+        "parser-like-filename",
+        "stream-slurp"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/GoldenImagePng.h",
+      "classification": "developer-tooling",
+      "justification": "Golden-image test harness: ReadRGBA decodes repository reference PNGs (size-capped, CRC-checked, 8-bit RGB/RGBA only, exact inflated size) and is reached only from Tests/ and the test-only CompareWithGolden path; no shipped runtime path calls it.",
+      "detected_by": [
+        "stream-slurp"
       ]
     },
     {

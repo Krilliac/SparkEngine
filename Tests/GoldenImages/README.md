@@ -1,74 +1,128 @@
 # Golden Image Regression Tests
 
-This directory holds reference ("golden") screenshots used by
-`Utils/GoldenImageTest.h` to detect visual regressions.
+This directory holds reference ("golden") screenshots and the
+reviewed-threshold manifest that `Utils/GoldenImageTest.h` uses to
+detect visual regressions.
 
 ## Directory layout
 
 ```
-Tests/GoldenImages/     ← reference images committed to git
-Tests/Output/           ← run-time captures and diffs (not committed)
+Tests/GoldenImages/manifest.json          ← reviewed thresholds + baseline hashes (committed)
+Tests/GoldenImages/<backendRow>/<scene>.png ← reference images (committed)
+Tests/Output/                             ← run-time captures and diffs (not committed)
 ```
 
-When a test compares against a missing reference, it records the
-result as "no baseline" rather than failing. Use
-`GoldenImageTestRunner::CaptureGolden("scene-name")` once to create
-the baseline, then commit the generated `.png` file.
+Backend rows are `d3d11-warp`, `d3d11-hw`, `opengl-llvmpipe` and
+`vulkan-lavapipe`. A scene has one baseline per row it is certified on.
+
+No baselines are committed yet: `manifest.json` has an empty `entries`
+list, so every comparison currently fails closed. Baselines land with
+the backend golden slices of RHI-210 (D3D11) and the OpenGL/Vulkan
+golden work, each rendered on its real row and reviewed.
+
+## Fail-closed rules
+
+`GoldenImageTestRunner::CompareWithGolden` never skips. It returns
+`matched == false` with a `failureReason` when:
+
+- the configured `backendRow` is not one of the rows above, or the scene
+  id is not 1-128 characters of `[A-Za-z0-9_-]`;
+- `manifest.json` is missing, is not valid JSON, has the wrong
+  `schemaVersion`, or has any invalid entry (the whole manifest is
+  rejected, not just the entry);
+- the manifest has no entry for the scene on the configured row;
+- the baseline PNG is missing, or its SHA-256 differs from the reviewed
+  `baselineSha256`;
+- the baseline does not decode as a PNG (the pre-2026-09 raw-RGBA
+  layout is rejected), no capture is set, or the capture size differs.
+
+`RunAllComparisons` compares every manifest entry for the configured
+row and returns a single failed result when there are none.
+
+## Manifest schema
+
+```json
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "scene": "TriangleClear",
+      "backendRow": "vulkan-lavapipe",
+      "software": true,
+      "perPixelThreshold": 10,
+      "tolerancePercent": 0.5,
+      "reviewer": "reviewer name",
+      "baselineSha256": "<64 lowercase hex characters>"
+    }
+  ]
+}
+```
+
+Every field is required and unknown keys are rejected, so a misspelled
+threshold cannot silently fall back to a default.
+
+- `software` must be `true` for `d3d11-warp`, `opengl-llvmpipe` and
+  `vulkan-lavapipe`, and `false` for `d3d11-hw`.
+- `perPixelThreshold` — Euclidean RGB distance (0-441.68) below which a
+  pixel counts as matching.
+- `tolerancePercent` — maximum percent (0-100) of differing pixels.
+- `baselineSha256` — `sha256sum` of the committed baseline PNG.
+
+Thresholds come only from the manifest; `GoldenImageConfig` has no
+threshold fields. Different GPUs and drivers produce slightly
+different floating-point output on the same render, which is why
+thresholds are reviewed per row rather than shared.
 
 ## Image format
 
-Files use the raw-RGBA on-disk layout from
-`Utils/GoldenImageTest.h::SavePNG` — a 4-byte little-endian `width`,
-a 4-byte `height`, followed by `width * height * 4` bytes of RGBA
-pixel data. The file extension is `.png` for tooling convenience
-even though the contents are raw. A future sweep can swap the
-encoder for a real PNG without touching the test API.
+Baselines, captures and diffs are real 8-bit RGBA PNG files
+(`Utils/GoldenImagePng.h`). They are encoded with the vendored miniz PNG
+writer, the same one `Graphics/ScreenCapture.h` uses. The reader accepts only
+8-bit RGB/RGBA non-interlaced PNGs with valid chunk CRCs and rejects
+everything else, including the pre-2026-09 raw-RGBA layout.
+`file Tests/GoldenImages/<row>/<scene>.png` reports `PNG image data`.
 
-## Tolerances
+The bundled `ThirdParty/Utils/stb` headers are API stubs whose
+`stbi_write_png` / `stbi_load` always fail, so they are not used here.
 
-Configurable on the `GoldenImageConfig` struct:
+## Adding or updating a baseline
 
-- `perPixelThreshold` — Euclidean channel distance below which a
-  pixel counts as matching. Default 10 (0-255 range).
-- `tolerancePercent` — maximum percent of differing pixels before the
-  comparison fails. Default 0.5%.
+1. Render the scene on the target row and write the capture with
+   `GoldenImageTestRunner::CaptureGolden("<scene>")` (writes
+   `<goldenImageDir>/<backendRow>/<scene>.png`), or copy the actual frame
+   the failed comparison left in `Tests/Output/<backendRow>_<scene>.png`.
+2. Inspect the image. Choose thresholds and record them, your name as
+   `reviewer`, and `sha256sum <row>/<scene>.png` as `baselineSha256` in
+   `manifest.json`.
+3. Commit the PNG and the manifest change together. The PR description
+   must explain the visual change.
 
-Different GPUs and driver versions produce slightly different
-floating-point output on the same render — these tolerances absorb
-the per-vendor variation without hiding real regressions.
+Until step 2 is done the hash check fails, so a new capture cannot pass
+without review.
 
-## Workflow for Metal RT tests
+## Failure output
 
-Live-device RT tests on the macOS CI row write captures to
-`Tests/Output/`. When the comparison fails, the workflow uploads
-the full `Tests/Output/` directory as an artifact named
-`rt-goldens-<run-id>` so reviewers can download:
+When a comparison fails on pixels, the runner writes to `outputDir`:
 
-- `<scene>.png` — the actual captured frame (raw RGBA layout)
-- `<scene>_diff.png` — red = diverged, dim green = matched
+- `<backendRow>_<scene>.png` — the actual captured frame;
+- `<backendRow>_<scene>_diff.png` — red = diverged (brighter = larger
+  distance), dim green = matched.
 
-To update a baseline after an intentional rendering change:
+Live-device RT tests on the macOS CI row upload `Tests/Output/` as an
+artifact named `rt-goldens-<run-id>`.
 
-1. Run the test locally, capture the new output.
-2. Copy `Tests/Output/<scene>.png` over
-   `Tests/GoldenImages/<scene>.png`.
-3. Commit the reference image alongside the code change. PR
-   description must explain the visual change.
+## Blank-frame check
 
-## Adding a new RT scene reference
+`GoldenImageTestRunner::AnalyzeFrame` and `FrameHasRenderedContent`
+reject a uniform frame (fewer than two colours, or one colour covering
+more than a given share). The D3D11 golden tests use them, and the
+OpenGL and Vulkan golden tests should use the same functions rather
+than a local copy.
+
+## Metal captures
 
 Metal-side capture uses
 `Spark::RHI::Metal::ReadbackTextureRGBA8(mtlTexture, width, height)`
-from `Graphics/RHI/Metal/MetalTextureReadback.h`. Plumb the returned
-bytes into a custom `IGoldenImageCapture` implementation, or write
-them directly via `GoldenImageTestRunner::SavePNG` in one-shot
-capture utilities.
-
-## Why raw RGBA, not real PNG
-
-The framework is header-only to keep the test harness portable and
-zero-dependency. A real PNG encoder would pull in `libpng` or
-`stb_image_write`, both of which raise the complexity floor for
-contributors trying to run a single test. If reference image size
-starts mattering, revisit this trade-off — a 1920×1080 golden is
-about 8 MB raw versus roughly 1 MB compressed.
+from `Graphics/RHI/Metal/MetalTextureReadback.h`, wrapped by
+`MetalGoldenImageCapture` as an `IGoldenImageCapture`. Metal is not a
+manifest backend row yet.
