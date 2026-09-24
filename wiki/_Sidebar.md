@@ -209,6 +209,7 @@
 - [Jolt Physics Integration](advanced/Jolt-Physics-Integration.md)
 - [GPU/CPU Separation Plan](advanced/GPU-CPU-Separation-Plan.md)
 - [Daemon Services Architecture](advanced/Daemon-Services-Architecture.md)
+- [Online Service Boundary](advanced/Online-Service-Boundary.md)
 - [Reflection & Polymorphism Refactoring Plan](advanced/Reflection-Polymorphism-Refactoring-Plan.md)
 - [SparkBuild In-Tree](advanced/SparkBuild-In-Tree.md)
 - [Wine No-JobSystem Breakthrough](advanced/Wine-No-JobSystem-Breakthrough.md)

@@ -8,16 +8,18 @@ Unified online platform integration with pluggable backends for authentication, 
 
 The Online Services system provides a single abstract interface (`IOnlinePlatform`) that encapsulates all platform-specific online functionality. Games code against this interface and never reference Steam, Epic, or console APIs directly. At runtime, the `OnlineServiceManager` singleton holds one active platform implementation.
 
-The default platform is `NullOnlinePlatform`, which is fully functional offline -- it stores leaderboards in memory, achievements as a set, and cloud saves to local storage. This means single-player games work out of the box without any SDK dependencies, and developers can test online flows without network connectivity.
+The default platform is `NullOnlinePlatform`, which works offline and keeps everything in process memory: leaderboards, achievements, sessions, friends, and "cloud" save slots. Nothing is written to disk, and nothing survives when the process exits. Single-player games run without any SDK dependencies, and developers can test online flows without a network connection.
 
-Adding a new platform requires implementing the `IOnlinePlatform` interface and passing it to `OnlineServiceManager::SetPlatform()`. Stub classes for Steam, Epic, and Console are included with detailed integration guides in their documentation comments.
+Adding a new platform requires implementing the `IOnlinePlatform` interface and passing it to `OnlineServiceManager::SetPlatform()`. The Steam, Epic, and Console classes are compile-only stubs. They report no capabilities, and every call fails.
+
+**Service boundary (OD-08):** this interface is an integration point, not a hosted service. SparkEngine ships no hosted identity, matchmaking, fleet, entitlement, billing, leaderboard, or cloud-save service. The game or the platform holder provides them. See [Online Service Boundary](../advanced/Online-Service-Boundary.md).
 
 ## Architecture
 
 ```
 OnlineServiceManager (singleton)
   +-- IOnlinePlatform* (active platform pointer)
-        |-- NullOnlinePlatform   (default -- fully functional offline)
+        |-- NullOnlinePlatform   (default -- offline, in-memory)
         |-- SteamPlatform        (stub -- requires Steamworks SDK)
         |-- EpicPlatform         (stub -- requires EOS SDK)
         +-- ConsolePlatform      (stub -- requires NDA + dev kits)
@@ -28,7 +30,7 @@ OnlineServiceManager (singleton)
 | Class | Description |
 |-------|-------------|
 | `IOnlinePlatform` | Abstract interface defining all online service methods |
-| `NullOnlinePlatform` | Fully functional offline implementation (default) |
+| `NullOnlinePlatform` | Offline, in-memory implementation (default) |
 | `SteamPlatform` | Stub for Steamworks SDK integration |
 | `EpicPlatform` | Stub for Epic Online Services (EOS) SDK integration |
 | `ConsolePlatform` | Stub for PlayStation/Xbox/Switch (NDA-protected SDKs) |
@@ -101,18 +103,16 @@ public:
 | `FindSessions() / CreateSession() / JoinSession()` | Matchmaking |
 | `SubmitScore() / QueryScores()` | Leaderboards |
 | `UnlockAchievement() / SetAchievementProgress()` | Achievements |
-| `SaveToCloud() / LoadFromCloud()` | Cloud saves |
+| `SaveToCloud() / LoadFromCloud()` | Cloud-save slots (in memory on the Null platform) |
 | `GetFriendsList() / SetPresence() / InviteToSession()` | Social features |
 
 ## Configuration
 
-| Setting | Description |
-|---------|-------------|
-| `-DENABLE_STEAM=ON` | Enable Steam SDK (requires `ThirdParty/Steamworks/`) |
-| `-DENABLE_EOS=ON` | Enable Epic Online Services SDK (requires `ThirdParty/EOS/`) |
+There are no build options for platform SDKs. The repository does not include or link the Steamworks, EOS, or console SDKs, and CMake has no `ENABLE_STEAM` or `ENABLE_EOS` option. A platform integration is written in the game or an integration layer, against the vendor SDK and backend that the product licenses.
 
 ## Related Systems
 
+- [Online Service Boundary](../advanced/Online-Service-Boundary.md) -- what the engine provides and what a product must provide
 - [Networking](../subsystems/Networking.md) -- UDP transport for gameplay networking
 - [Save System](Save-System.md) -- Local save/load persistence
 - [Gameplay Systems](Gameplay-Systems.md) -- Inventory, quests, achievements

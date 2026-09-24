@@ -743,13 +743,19 @@
       "release": "blocked",
       "summary": "SparkEngine does not provide a turnkey production identity, matchmaking, fleet, transactional persistence, abuse, billing, or incident-operations service layer.",
       "limitations": [
-        "Local and reference implementations are not a production control plane"
+        "Local and reference implementations are not a production control plane",
+        "The engine ships no hosted online services; identity, matchmaking, fleet, entitlement and billing are product-owned (OD-08)"
       ],
       "evidence": [
         {
           "type": "document",
           "path": "wiki/gameplay-tools/Online-Services.md",
           "label": "Online-services documentation"
+        },
+        {
+          "type": "document",
+          "path": "wiki/advanced/Online-Service-Boundary.md",
+          "label": "Online-service boundary contract (OD-08)"
         }
       ],
       "requiredGateIds": [
@@ -763,7 +769,8 @@
         "OPS-110"
       ],
       "documentation": [
-        "wiki/gameplay-tools/Online-Services.md"
+        "wiki/gameplay-tools/Online-Services.md",
+        "wiki/advanced/Online-Service-Boundary.md"
       ],
       "website": {
         "icon": "server",

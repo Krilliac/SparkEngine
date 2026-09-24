@@ -619,6 +619,67 @@ class LegalPublicWordingTests(ContractTestCase):
         self.assertEqual([], errors)
 
 
+class OnlineServiceBoundaryTests(unittest.TestCase):
+    """OD-08 / NET-110: public surfaces never claim hosted online services."""
+
+    def claims(self, text: str) -> list[str]:
+        return site_data_validate.hosted_online_service_claim_errors({"page.md": text})
+
+    def test_hosted_service_claims_are_rejected(self) -> None:
+        for text in (
+            "SparkEngine provides hosted matchmaking for every game.",
+            "Built-in leaderboards and managed cloud saves out of the box.",
+            "| Hosted identity | Included |",
+            "The engine operates a billing service for store purchases.",
+            "SparkEngine offers an entitlement backend.",
+            "Turnkey online services let you ship multiplayer today.",
+        ):
+            with self.subTest(text=text):
+                errors = self.claims(text)
+                self.assertEqual(1, len(errors), errors)
+                self.assertIn("page.md:1: claims hosted online services", errors[0])
+                self.assertIn("OD-08", errors[0])
+
+    def test_negated_boundary_statements_are_allowed(self) -> None:
+        for text in (
+            "The engine ships no hosted online services.",
+            "SparkEngine does not provide hosted matchmaking, fleet, or billing.",
+            "Identity, matchmaking, fleet, entitlement and billing services are out of engine scope.",
+            "| Hosted leaderboards | Not provided; the product owns them |",
+            "SparkDaemon is not a managed fleet.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual([], self.claims(text))
+
+    def test_negation_in_another_sentence_does_not_excuse_a_claim(self) -> None:
+        errors = self.claims("Accounts are not stored in plaintext. SparkEngine hosts an identity service.")
+        self.assertEqual(1, len(errors), errors)
+
+    def test_engine_interfaces_are_not_service_claims(self) -> None:
+        text = (
+            "IOnlinePlatform is an integration point. NullOnlinePlatform keeps cloud-save slots in memory. "
+            "SparkGateway authenticates admission credentials issued by the product."
+        )
+        self.assertEqual([], self.claims(text))
+
+    def test_non_text_surface_is_rejected(self) -> None:
+        errors = site_data_validate.hosted_online_service_claim_errors({"page.md": None})  # type: ignore[dict-item]
+        self.assertEqual(["page.md: online-service wording source must be text"], errors)
+
+    def test_repository_surfaces_carry_no_hosted_service_claim(self) -> None:
+        surfaces: dict[str, str] = {}
+        for surface in sorted(
+            site_data_validate.REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES
+            | site_data_validate.ONLINE_SERVICE_BOUNDARY_SURFACES
+        ):
+            path = site_data_validate.REPO_ROOT / surface
+            if path.is_file():
+                surfaces[surface] = path.read_text(encoding="utf-8", errors="replace")
+        for surface in site_data_validate.ONLINE_SERVICE_BOUNDARY_SURFACES:
+            self.assertIn(surface, surfaces)
+        self.assertEqual([], site_data_validate.hosted_online_service_claim_errors(surfaces))
+
+
 class TransitiveDependencyTests(ContractTestCase):
     """Frozen case 4: profile dependency closure is transitive and diagnostic."""
 

@@ -2593,7 +2593,7 @@ ctest --test-dir build/linux-gcc-release -L network-security --output-on-failure
 **Priority:** P1 · **Status:** open · **Wave:** 3 · **Area:** services · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-Engine networking and reference modules do not provide turnkey identity, matchmaking, fleet, secrets, abuse, moderation, entitlement, billing, or incident control-plane services. Owner decision OD-08 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): identity, matchmaking, fleet, entitlement and billing services are out of engine scope; the engine ships no hosted online services. This item owns documenting that service boundary and stays open until the boundary documentation and its checks land.
+Engine networking and reference modules do not provide turnkey identity, matchmaking, fleet, secrets, abuse, moderation, entitlement, billing, or incident control-plane services. Owner decision OD-08 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): identity, matchmaking, fleet, entitlement and billing services are out of engine scope; the engine ships no hosted online services. This item owns documenting that service boundary. 2026-09-24 progress: wiki/advanced/Online-Service-Boundary.md (in wiki/_Sidebar.md) is the service-boundary contract: it lists what the engine provides (UDP transport, the IGatewayAuthenticator/KeyFileAuthenticator admission hook, sensitive-handler and PBKDF2 helpers, the SparkServer/SparkGateway/SparkDaemon/SparkCollabServer processes, and the IOnlinePlatform interface with its in-memory NullOnlinePlatform and compile-only platform stubs), what it does not provide (identity, matchmaking, fleet, entitlement, billing, hosted player data, operations), and the trust boundaries between them. wiki/gameplay-tools/Online-Services.md no longer claims nonexistent ENABLE_STEAM/ENABLE_EOS options or local-storage cloud saves. tools/site-data/validate.py now rejects (hosted_online_service_claim_errors) any non-negated claim of hosted, managed, or turnkey online services on every governed public claim surface, the two online-service pages, and docs/site/readiness.json; Tests/Tools/test_site_data_contract.py OnlineServiceBoundaryTests covers claims, negations, cross-sentence negation, and the live repository surfaces. Still open: the versioned API contract and deployment diagram in docs/specs/online-services.md, deterministic local adapters with the OnlineServices_Contract/OnlineServices_Degraded/SessionCompatibility_* tests under the online-services ctest label, safe and observable failure of production adapters, and the service-contract and network-integration CI jobs.
 
 **Dependency contract**
 
@@ -2606,6 +2606,8 @@ Engine networking and reference modules do not provide turnkey identity, matchma
 - `SparkEngine/Source/Engine/OnlineServices`
 - `SparkDaemon`
 - `SparkEngine/Source/Engine/Networking`
+- `wiki/advanced/Online-Service-Boundary.md`
+- `tools/site-data/validate.py`
 
 **Entry points**
 
@@ -2632,6 +2634,7 @@ Engine networking and reference modules do not provide turnkey identity, matchma
 ```bash
 python3 tools/site-data/validate.py --capability services.production
 ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure --no-tests=error
+python3 -m unittest Tests.Tools.test_site_data_contract -k OnlineServiceBoundary -v
 ```
 
 **Automated evidence**
@@ -2646,6 +2649,7 @@ ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure 
 - Documentation:
   - `wiki/gameplay-tools/Online-Services.md`
   - `docs/specs/online-services.md`
+  - `wiki/advanced/Online-Service-Boundary.md`
 - Readiness contract:
   - G12
 - Website impact:

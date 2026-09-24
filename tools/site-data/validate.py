@@ -303,6 +303,63 @@ def legal_public_wording_errors(
     return errors
 
 
+# OD-08 (NET-110): identity, matchmaking, fleet, entitlement and billing services
+# are out of engine scope and the engine ships no hosted online services. These
+# surfaces describe online features directly, in addition to every governed
+# public claim surface.
+ONLINE_SERVICE_BOUNDARY_SURFACES = {
+    "docs/site/readiness.json",
+    "wiki/advanced/Online-Service-Boundary.md",
+    "wiki/gameplay-tools/Online-Services.md",
+}
+_HOSTED_SERVICE_NOUN = (
+    r"(?:online\s+services?|backend(?:\s+services?)?|identity(?:\s+services?)?|accounts?(?:\s+services?)?"
+    r"|login\s+services?|matchmak(?:ing|er)(?:\s+services?)?|lobby\s+services?|(?:server\s+)?fleets?"
+    r"|entitlements?(?:\s+services?)?|billing|payments?|leaderboards?|cloud[\s-]+saves?"
+    r"|player\s+data|live\s+services?)"
+)
+HOSTED_ONLINE_SERVICE_CLAIM = re.compile(
+    r"\b(?:hosted|managed|turnkey|cloud-hosted|built-in|out-of-the-box)\s+" + _HOSTED_SERVICE_NOUN + r"\b"
+    r"|\b(?:SparkEngine|the\s+engine)\s+(?:provides|ships|includes|offers|hosts|operates|runs)\s+"
+    r"(?:an?\s+|its\s+own\s+)?(?:hosted\s+)?(?:identity|account|login|matchmaking|lobby|fleet|entitlement"
+    r"|billing|payment|leaderboard|cloud[\s-]+save|online)\s+(?:services?|servers?|backends?)\b",
+    re.IGNORECASE,
+)
+# A sentence or table row that negates the claim ("ships no hosted
+# matchmaking", "is not a hosted service") documents the boundary instead.
+_SERVICE_CLAIM_NEGATION = re.compile(
+    r"\b(?:no|not|never|none|without|nothing|neither|nor|isn't|aren't|doesn't|don't|won't|cannot"
+    r"|out\s+of\s+(?:engine\s+)?scope|outside)\b",
+    re.IGNORECASE,
+)
+_SERVICE_CLAIM_SENTENCE_SPLIT = re.compile(r"[.;!?](?=\s|$)")
+
+
+def hosted_online_service_claim_errors(surfaces: dict[str, str]) -> list[str]:
+    """Reject public claims that SparkEngine hosts or operates online services (OD-08).
+
+    The check is per sentence, or per row for a Markdown table row: a sentence
+    or row that also carries a negation documents the boundary and is allowed.
+    """
+
+    errors: list[str] = []
+    for location, text in sorted(surfaces.items()):
+        if not isinstance(text, str):
+            errors.append(f"{location}: online-service wording source must be text")
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            is_table_row = line.lstrip().startswith("|")
+            for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+                match = HOSTED_ONLINE_SERVICE_CLAIM.search(unit)
+                if match is None or _SERVICE_CLAIM_NEGATION.search(unit):
+                    continue
+                errors.append(
+                    f"{location}:{number}: claims hosted online services ({match.group(0)!r}); "
+                    "the engine ships none (OD-08, wiki/advanced/Online-Service-Boundary.md)"
+                )
+    return errors
+
+
 def build_matrix_evidence_errors(
     inventory: Any, report: Any, profile: dict[str, Any] | None
 ) -> list[str]:
@@ -2382,6 +2439,18 @@ class Validator:
             public_numeric_claim_errors(texts, entries, source_metric_values, managed_numeric_claim_patterns())
         )
 
+    def validate_online_service_boundary(self) -> None:
+        """No governed public surface may claim hosted online services (OD-08, NET-110)."""
+        texts: dict[str, str] = {}
+        for surface in sorted(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES | ONLINE_SERVICE_BOUNDARY_SURFACES):
+            path = REPO_ROOT / surface
+            if surface in ONLINE_SERVICE_BOUNDARY_SURFACES:
+                self.require(path.is_file(), f"onlineServiceBoundary.{surface}", "boundary surface must exist")
+            if path.is_file():
+                texts[surface] = path.read_text(encoding="utf-8", errors="replace")
+        for violation in hosted_online_service_claim_errors(texts):
+            self.error("onlineServiceBoundary", violation)
+
     def validate_build_matrix_evidence(self) -> None:
         """The build-matrix configuration evidence is part of the contract, not beside it.
 
@@ -2908,6 +2977,7 @@ class Validator:
         self.validate_future_acceptance_paths()
         self.validate_build_matrix_evidence()
         self.validate_public_numeric_claims()
+        self.validate_online_service_boundary()
         self.validate_legal(strict_public_wording=legal)
         if assets:
             self.validate_asset_surface()
