@@ -352,6 +352,20 @@ void SparkGameModule::RegisterGameConsoleCommands()
         "scene_load <level.scene|Scenes/level.scene>");
 
     console.RegisterCommand(
+        "scene_save",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() != 1)
+                return "Usage: scene_save <level.scene|Scenes/level.scene>";
+            if (!game)
+                return "Game not available";
+            return game->SaveScene(args.front()) ? "Scene saved: " + args.front()
+                                                 : "Scene save failed: " + args.front();
+        },
+        "Save the live scene inside the trusted FPS Assets/Scenes directory", "Scene",
+        "scene_save <level.scene|Scenes/level.scene>");
+
+    console.RegisterCommand(
         "game_timescale",
         [game](const std::vector<std::string>& args) -> std::string
         {
