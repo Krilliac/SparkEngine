@@ -416,10 +416,10 @@ namespace
             return false;
         }
 
-        const Spark::ModuleCompatibilityStatus status = Spark::CheckModuleCompatibility(&descriptor);
-        if (status != Spark::ModuleCompatibilityStatus::Compatible)
+        std::string rejection = DescribeModuleCompatibilityRejection(&descriptor);
+        if (!rejection.empty())
         {
-            error = Spark::ModuleCompatibilityStatusName(status);
+            error = std::move(rejection);
             return false;
         }
 
@@ -604,6 +604,76 @@ namespace
     }
 #endif
 } // namespace
+
+std::string DescribeModuleCompatibilityRejection(const SparkModuleCompatibilityDescriptor* descriptor)
+{
+    const Spark::ModuleCompatibilityStatus status = Spark::CheckModuleCompatibility(descriptor);
+    if (status == Spark::ModuleCompatibilityStatus::Compatible)
+        return {};
+
+    constexpr std::string_view kExactMatchPolicy =
+        "stable-v1 module ABI is exact-match only (N-1 modules are not loaded); rebuild the module against this "
+        "host's Spark SDK and toolchain";
+    const SparkModuleCompatibilityDescriptor& expected = Spark::kExpectedModuleCompatibility;
+    const std::string_view reason = Spark::ModuleCompatibilityStatusName(status);
+
+    if (status == Spark::ModuleCompatibilityStatus::MissingDescriptor)
+    {
+        return std::format("{}: host expects descriptor format {}, module declares none; {}", reason,
+                           expected.descriptorVersion, kExactMatchPolicy);
+    }
+
+    // CheckModuleCompatibility only rejects DescriptorTooSmall after reading
+    // structSize, so no field past it is inspected for a truncated descriptor.
+    if (status == Spark::ModuleCompatibilityStatus::DescriptorTooSmall)
+    {
+        return std::format("{}: field 'struct_size' host expects at least {}, module declares {}; {}", reason,
+                           expected.structSize, descriptor->structSize, kExactMatchPolicy);
+    }
+
+    // Every remaining status names one exact-match field. The field names are
+    // the .sparkabi sidecar keys so a diagnostic can be compared with the file.
+    struct FieldDiagnostic
+    {
+        Spark::ModuleCompatibilityStatus status;
+        std::string_view sidecarKey;
+        uint32_t SparkModuleCompatibilityDescriptor::*member;
+    };
+    constexpr std::array<FieldDiagnostic, 10> kFields = {{
+        {Spark::ModuleCompatibilityStatus::BadMagic, "magic", &SparkModuleCompatibilityDescriptor::magic},
+        {Spark::ModuleCompatibilityStatus::DescriptorVersionMismatch, "format",
+         &SparkModuleCompatibilityDescriptor::descriptorVersion},
+        {Spark::ModuleCompatibilityStatus::SDKVersionMismatch, "sdk_version",
+         &SparkModuleCompatibilityDescriptor::sdkVersion},
+        {Spark::ModuleCompatibilityStatus::RuntimeABIVersionMismatch, "runtime_abi_version",
+         &SparkModuleCompatibilityDescriptor::runtimeABIVersion},
+        {Spark::ModuleCompatibilityStatus::CompilerFamilyMismatch, "compiler_family",
+         &SparkModuleCompatibilityDescriptor::compilerFamily},
+        {Spark::ModuleCompatibilityStatus::CompilerABIVersionMismatch, "compiler_abi_version",
+         &SparkModuleCompatibilityDescriptor::compilerABIVersion},
+        {Spark::ModuleCompatibilityStatus::CxxLanguageLevelMismatch, "cxx_language_level",
+         &SparkModuleCompatibilityDescriptor::cxxLanguageLevel},
+        {Spark::ModuleCompatibilityStatus::RuntimeLibraryMismatch, "runtime_library",
+         &SparkModuleCompatibilityDescriptor::runtimeLibrary},
+        {Spark::ModuleCompatibilityStatus::IteratorDebugLevelMismatch, "iterator_debug_level",
+         &SparkModuleCompatibilityDescriptor::iteratorDebugLevel},
+        {Spark::ModuleCompatibilityStatus::PointerSizeMismatch, "pointer_size",
+         &SparkModuleCompatibilityDescriptor::pointerSize},
+    }};
+
+    for (const FieldDiagnostic& field : kFields)
+    {
+        if (field.status == status)
+        {
+            return std::format("{}: field '{}' host expects {}, module declares {}; {}", reason, field.sidecarKey,
+                               expected.*field.member, descriptor->*field.member, kExactMatchPolicy);
+        }
+    }
+
+    // A status added to ModuleABI.h without a field entry above still fails
+    // closed; it only loses the per-field detail.
+    return std::format("{}; {}", reason, kExactMatchPolicy);
+}
 
 void ModuleManager::SetImGuiInjection(void* context, void* allocFn, void* freeFn, void* userData)
 {
@@ -810,14 +880,12 @@ bool ModuleManager::LoadModule(const std::string& path)
         return failLoad(message);
     }
 
-    const SparkModuleCompatibilityDescriptor* compatibility = compatibilityFn();
-    const Spark::ModuleCompatibilityStatus compatibilityStatus = Spark::CheckModuleCompatibility(compatibility);
-    if (compatibilityStatus != Spark::ModuleCompatibilityStatus::Compatible)
+    const std::string compatibilityRejection = DescribeModuleCompatibilityRejection(compatibilityFn());
+    if (!compatibilityRejection.empty())
     {
         const std::string message =
-            std::format("Module '{}' rejected before injection/factory: {}. Rebuild it with the same "
-                        "Spark SDK, compiler ABI, C++ mode, architecture, and runtime configuration.",
-                        path, Spark::ModuleCompatibilityStatusName(compatibilityStatus));
+            std::format("Module '{}' in-image compatibility descriptor rejected before injection/factory: {}", path,
+                        compatibilityRejection);
         CloseModuleLibrary(handle);
         return failLoad(message);
     }
@@ -899,11 +967,15 @@ bool ModuleManager::LoadModule(const std::string& path)
 
         auto info = instance->GetModuleInfo();
 
-        // SDK version compatibility check
+        // Defense in depth: the sidecar and in-image descriptor already pinned
+        // sdk_version before OS load, so this only fires for a module whose
+        // hand-written ModuleInfo contradicts its own compatibility descriptor.
         if (!Spark::IsSDKCompatible(info.sdkVersion))
         {
-            const std::string message = std::format("Module '{}' SDK version mismatch (module={}, engine={})",
-                                                    info.name, info.sdkVersion, SPARK_SDK_VERSION);
+            const std::string message =
+                std::format("Module '{}' ('{}') rejected: ModuleInfo field 'sdkVersion' host expects {}, module "
+                            "declares {}; stable-v1 module ABI is exact-match only (N-1 modules are not loaded)",
+                            info.name, path, SPARK_SDK_VERSION, info.sdkVersion);
             destroyFn(instance);
 #ifdef _WIN32
             FreeLibrary(static_cast<HMODULE>(handle));

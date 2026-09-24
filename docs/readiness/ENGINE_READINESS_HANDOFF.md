@@ -2249,7 +2249,7 @@ ctest --test-dir build/linux-shipping -L compatibility --output-on-failure --no-
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** sdk · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior. 2026-09-12 progress: SparkGameModule now rejects SDK headers with multiple or missing SPARK_SDK_VERSION definitions before deriving the module ABI sidecar, with a configure-level hostile-header regression. 2026-09-13 progress: the sdk install component now carries its legal materials, documentation, third-party notices, EmptyProject example, and a completeness CTest. 2026-09-21 further progress: the weather seam is module-owned and game-thread enforced, with the concrete dependency isolated to the Core adapter; six focused tests pass. The complete FPS DLL still has many private dependencies, so the public-SDK-only requirement remains open. The full installed-consumer and N-1 compatibility gates remain open.
+Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior. 2026-09-12 progress: SparkGameModule now rejects SDK headers with multiple or missing SPARK_SDK_VERSION definitions before deriving the module ABI sidecar, with a configure-level hostile-header regression. 2026-09-13 progress: the sdk install component now carries its legal materials, documentation, third-party notices, EmptyProject example, and a completeness CTest. 2026-09-21 further progress: the weather seam is module-owned and game-thread enforced, with the concrete dependency isolated to the Core adapter; six focused tests pass. The complete FPS DLL still has many private dependencies, so the public-SDK-only requirement remains open. 2026-09-24 progress (OD-02, exact-match module ABI, no N-1 loading): ModuleManager's .sparkabi sidecar gate (before OS load), in-image descriptor re-check (before injection/factory), and post-factory ModuleInfo SDK check now all fail closed with a diagnostic naming the mismatched field, the host's expected value, and the module's declared value; Tests/TestModuleABIDiagnostics.cpp drives each of the ten exact-match fields plus struct_size through the production LoadModule path with exact-message assertions, including an N-1 sdk_version rejection. Local Linux GCC evidence only; the installed-consumer gate and hosted module-compatibility CI remain open.
 
 **Dependency contract**
 
@@ -2275,13 +2275,13 @@ Dynamic modules and installed consumers need a declared version/ABI contract, co
 - Export correct CMake targets and transitive dependencies
 - Build/package external consumer and module
 - Validate compatibility at load with actionable errors
-- Test N-1 supported and incompatible fixtures
+- Test exact-match and incompatible (including N-1) fixtures; N-1 modules are rejected, not loaded or migrated (OD-02)
 - Publish API/reference and migration notes
 
 **Acceptance criteria**
 
 1. External consumer needs no source-tree include/lib
-2. Supported N-1 module loads or migrates
+2. Any module whose ABI descriptor differs from the host, including an N-1 module, is rejected before OS load with a diagnostic naming the field and both versions (OD-02)
 3. Incompatible module fails before executing code
 4. SDK package contains headers, targets, license, notices, docs, and examples
 

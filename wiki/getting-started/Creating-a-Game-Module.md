@@ -375,12 +375,15 @@ Module Discovery Flow
 ```
 Engine Startup
     │
+    ├── Validate <module>.sparkabi sidecar (exact match + binary SHA-256)
+    │   └── Mismatch? → Reject before OS load (no module code runs)
     ├── Load DLL/SO (platform LoadLibrary / dlopen)
-    ├── Resolve CreateModule() symbol
+    ├── Re-check in-image SparkGetModuleCompatibility() descriptor
+    │   └── Mismatch? → Unload, reject before injection/factory
     ├── Call CreateModule()          ← allocate module instance
-    ├── Call GetModuleInfo()         ← metadata, SDK version check
-    ├── Validate SDK version
-    │   └── Mismatch? → Log warning, skip module
+    ├── Call GetModuleInfo()         ← metadata
+    ├── Re-check ModuleInfo sdkVersion (defense in depth)
+    │   └── Mismatch? → DestroyModule(), unload, reject
     ├── Call OnLoad(context)         ← initialization
     │   └── Returns false? → Call DestroyModule(), skip
     │
@@ -538,7 +541,7 @@ Common causes of module load failures:
 |---------|-------|-----|
 | DLL not found | Wrong path in manifest | Check `spark.modules.json` path |
 | `CreateModule` symbol not found | Missing `SPARK_IMPLEMENT_MODULE` macro | Add macro to exactly one .cpp file |
-| SDK version mismatch | Module built with different SDK version | Rebuild module against current SDK |
+| `rejected before OS load: SDK ABI version mismatch: field 'sdk_version' host expects 4, module declares 3` | Module built against a different SDK (stable-v1 ABI is exact-match only; N-1 modules are not loaded) | Rebuild module against the host's SDK and toolchain; the named field says which descriptor value differs |
 | `OnLoad()` returns false | Initialization error in module code | Check module logs for details |
 | Missing DLL dependency | Module links against absent library | Use `dumpbin /dependents` (Windows) or `ldd` (Linux) |
 
@@ -568,7 +571,7 @@ module_reload <name># Hot-reload a module (development only)
 
 5. **Avoid global state** -- Keep all state inside your module class. Global variables in a DLL can cause issues with hot-reload and multiple module instances.
 
-6. **Match SDK versions** -- Always build your module against the same SDK version as the engine. The engine logs a warning on version mismatch.
+6. **Match SDK versions** -- Always build your module against the same SDK version and toolchain as the engine. The stable-v1 module ABI is exact-match only: any descriptor difference, including an N-1 SDK version, rejects the module before it is loaded, and the error names the field, the host's expected value, and the module's declared value.
 
 ## Next Steps
 

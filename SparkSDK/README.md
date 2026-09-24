@@ -66,8 +66,18 @@ that every engine subsystem or game module is stable on every platform.
 ## Compatibility diagnostics
 
 When a module is rejected, inspect the host's module-load diagnostic and the
-module's `.sparkabi` sidecar. The diagnostic identifies the failing descriptor
-field (for example SDK version, compiler ABI, runtime library, iterator-debug
-level, or pointer size). Recompile the module with the same supported toolchain
+module's `.sparkabi` sidecar. The stable-v1 module ABI is exact-match only;
+there is no N-1 load or migration path. The diagnostic names the failing
+sidecar field, the value the host expects, and the value the module declares,
+for example:
+
+```text
+Module 'libMyGame.so' rejected before OS load: SDK ABI version mismatch: field 'sdk_version' host expects 4, module declares 3; stable-v1 module ABI is exact-match only (N-1 modules are not loaded); rebuild the module against this host's Spark SDK and toolchain
+```
+
+The checked fields are `struct_size`, `magic`, `format`, `sdk_version`,
+`runtime_abi_version`, `compiler_family`, `compiler_abi_version`,
+`cxx_language_level`, `runtime_library`, `iterator_debug_level`, and
+`pointer_size`. Recompile the module with the same supported toolchain
 and SDK package; do not work around the check by copying private engine headers
 or libraries into the consumer project.

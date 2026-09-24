@@ -149,6 +149,7 @@ add_executable(SparkTests
     TestModuleDependency.cpp
     TestModuleDiscovery.cpp
     TestModuleABI.cpp
+    TestModuleABIDiagnostics.cpp
     TestPluginABI.cpp
     TestReflection.cpp
     TestPathCache.cpp
