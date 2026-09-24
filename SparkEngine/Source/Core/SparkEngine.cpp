@@ -167,8 +167,11 @@ void InitPhysics()
  * but before module loading (so modules can register console commands).
  * ConsoleProcessManager launches the SparkConsole.exe subprocess and owns the
  * stdin/stdout pipe used for command I/O.
+ *
+ * @return false when the engine lifecycle failed to initialize. Its stages have
+ *         already been rolled back; the caller must tear down and exit non-zero.
  */
-void InitConsole()
+bool InitConsole()
 {
     // Progress breadcrumbs via SPARK_LOG_INFO (routed through Logger's
     // stderr sink) rather than SimpleConsole::LogInfo (which only writes
@@ -200,7 +203,14 @@ void InitConsole()
     if (!g_minimalInit)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitDebugSystems");
-        InitDebugSystems();
+        if (!InitDebugSystems())
+        {
+            // No EngineStartEvent and no daemon wiring: nothing may observe a
+            // started engine whose lifecycle stages were just rolled back.
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "InitConsole: engine lifecycle initialization failed; startup aborted");
+            return false;
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitGameplaySystems");
         InitGameplaySystems();
 
@@ -226,6 +236,7 @@ void InitConsole()
 
     SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: complete");
     SPARK_DEBUG_HOOK(EnginePostInit, 0, 0.0f);
+    return true;
 }
 
 void ShutdownPhysics()
@@ -267,7 +278,7 @@ bool CanShutdownEngine()
     return !rt.moduleManager || rt.moduleManager->CanShutdownAll();
 }
 
-void ShutdownEngineAfterPreflight()
+bool ShutdownEngineAfterPreflight()
 {
     auto& rt = GetEngineRuntime();
 
@@ -301,8 +312,14 @@ void ShutdownEngineAfterPreflight()
         rt.moduleManager->ShutdownAllAfterPreflight();
     }
 
-    ShutdownGameplaySystems();
+    // A lifecycle teardown failure (a stage threw, or startup had already failed)
+    // does not stop the rest of teardown: modules and core services below must
+    // still be released. It is reported to the caller for the exit status.
+    const bool lifecycleTeardownClean = ShutdownGameplaySystems();
     ShutdownDebugSystems();
+    if (!lifecycleTeardownClean)
+        SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                        "Engine lifecycle teardown was not clean (a stage threw, or startup had failed)");
 
     if (rt.moduleManager)
     {
@@ -417,6 +434,7 @@ void ShutdownEngineAfterPreflight()
     SPARK_DEBUG_HOOK(EnginePostShutdown, GetGameplayFrameCount(), 0.0f);
     Spark::DebugHookManager::GetInstance().Clear();
 #endif
+    return lifecycleTeardownClean;
 }
 
 void ShutdownEngine()

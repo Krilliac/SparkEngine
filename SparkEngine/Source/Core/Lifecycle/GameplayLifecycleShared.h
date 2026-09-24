@@ -21,9 +21,18 @@ namespace Spark::Core::Lifecycle
     /// @return Path of the engine log file, or empty when no file could be opened.
     std::string InstallEngineLogSinksImpl();
 
-    void InitializeDebugSystemsImpl();
-    void InitializeNetworkingSystemsImpl();
-    void InitializeGameplaySystemsImpl();
+    /// Bring up logging and diagnostics. Detectors are optional, so this only
+    /// fails by throwing. @return true when diagnostics are ready.
+    bool InitializeDebugSystemsImpl();
+
+    /// Publish and start the network service. @return false only when the
+    /// EngineContext is missing; a network service that cannot start is logged
+    /// and tolerated (offline play stays valid).
+    bool InitializeNetworkingSystemsImpl();
+
+    /// Initialize every gameplay subsystem and the ECS phase pipeline.
+    /// @return false when the EngineContext is missing.
+    bool InitializeGameplaySystemsImpl();
 
     /// Register the canonical ECS phase systems (Physics -> Animation -> AI ->
     /// Audio -> Gameplay -> PreRender -> Render) into the lifecycle-owned

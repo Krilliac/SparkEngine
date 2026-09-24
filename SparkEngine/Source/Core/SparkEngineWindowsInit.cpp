@@ -203,7 +203,7 @@ static void LoadAndInitModules(LPWSTR lpCmdLine)
     GetEngineRuntime().moduleHotReload->Start();
 }
 
-void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
+bool InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
 {
     InitEngineContext();
     SPARK_HEARTBEAT();
@@ -312,7 +312,7 @@ void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         g_weatherSystem->SetEventBus(GetEngineRuntime().eventBus.get());
     }
 
-    InitConsole();
+    return InitConsole();
 }
 
 #endif // SPARK_PLATFORM_WINDOWS

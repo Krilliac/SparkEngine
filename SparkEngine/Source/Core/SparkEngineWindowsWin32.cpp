@@ -297,9 +297,10 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
         GetEngineRuntime().graphics->SetPrePresentHook(nullptr, nullptr);
     Spark::GameImGui::Shutdown();
 
-    ShutdownEngineAfterPreflight();
+    const bool teardownClean = ShutdownEngineAfterPreflight();
 
-    return static_cast<int>(msg.wParam);
+    const int exitCode = static_cast<int>(msg.wParam);
+    return (!teardownClean && exitCode == 0) ? 1 : exitCode;
 }
 
 // ===================================================================================

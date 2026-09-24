@@ -96,7 +96,14 @@ int RunHeadlessLinux(int argc, char* argv[])
     InitLinuxCoreSubsystems(/*registerGameplay=*/false);
     Spark::Cinematic::SequencerManager::GetInstance().SetAudioBackend(nullptr);
 
-    InitConsole();
+    if (!InitConsole())
+    {
+        // The lifecycle root already rolled its stages back. No module has been
+        // loaded yet, so the module preflight is vacuous: tear down and fail.
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "RunHeadlessLinux: engine lifecycle failed to initialize");
+        ShutdownLinuxAfterPreflight();
+        return 1;
+    }
 
     // Minimal-init mode skips module loading and all detector singletons.
     // See SparkEngine.cpp::g_minimalInit for the full rationale — on a
@@ -217,7 +224,8 @@ int RunHeadlessLinux(int argc, char* argv[])
             std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
     }
 
-    ShutdownLinuxAfterPreflight();
+    if (!ShutdownLinuxAfterPreflight() && exitCode == 0)
+        exitCode = 1;
     Spark::SimpleConsole::GetInstance().LogInfo("Headless server shut down cleanly.");
 
     // One machine-readable record after full teardown, consumed by
@@ -255,7 +263,13 @@ int RunNoSDL2Fallback(int argc, char* argv[])
     // Engine context, physics, core subsystems, gameplay subsystems
     InitLinuxCoreSubsystems(/*registerGameplay=*/true);
 
-    InitConsole();
+    if (!InitConsole())
+    {
+        // Lifecycle stages are already rolled back and no module is loaded yet.
+        noSdlConsole.LogError("Engine lifecycle failed to initialize; exiting with a failure status.");
+        ShutdownLinuxAfterPreflight();
+        return 1;
+    }
     Spark::SimpleConsole::GetInstance().LogWarning("No SDL2 - engine will exit after initialization.");
 
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
@@ -286,8 +300,7 @@ int RunNoSDL2Fallback(int argc, char* argv[])
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 
-    ShutdownLinuxAfterPreflight();
-    return 0;
+    return ShutdownLinuxAfterPreflight() ? 0 : 1;
 }
 #endif // !SPARK_SDL2_AVAILABLE
 

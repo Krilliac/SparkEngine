@@ -206,6 +206,8 @@ ctx->ShutdownAll();
 
 > **Not the production init path.** `EngineContext::InitializeAll`/`ShutdownAll` (the R1.2 dependency-ordered registry) is kept because `Tests/harden/Test_tests_enginecontext_real.cpp` and six other test files exercise it. The production order is `LifecycleCompositionRoot` (`Core/Lifecycle/`), whose `InitDebug` stage now sorts first (`LifecycleOrder::Diagnostics`); the gameplay lifecycle registers the engine-lifetime services on `EngineContext` and nulls them at shutdown.
 
+The `LifecycleCompositionRoot` fails closed (LIFE-200): a stage whose `Initialize()` returns false or throws aborts startup, the touched stages are torn down in reverse order (the teardown-only `Shutdown` stage included), and the root latches `Failed` so later update/shutdown calls are no-ops. `InitConsole()` returns false and every platform entry point exits non-zero; a stage that throws during shutdown is contained, the remaining stages still tear down, and the exit status is non-zero. Injected-failure coverage: `Tests/TestLifecycleCompositionRootFailure.cpp` (ctest `LifecycleCompositionRootFailure`, label `lifecycle`).
+
 #### Concrete EngineContext API Summary
 
 This table describes host-internal construction and teardown, not the public

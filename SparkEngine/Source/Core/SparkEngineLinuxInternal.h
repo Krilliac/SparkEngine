@@ -28,11 +28,11 @@ extern bool g_noJobSystem;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
-extern void InitConsole();
+extern bool InitConsole();
 extern void ShutdownPhysics();
 extern bool CanShutdownEngine();
 extern void ShutdownEngine();
-extern void ShutdownEngineAfterPreflight();
+extern bool ShutdownEngineAfterPreflight();
 extern void SetupCrashHandler();
 
 /// Set by SignalHandler (SparkEngineLinux.cpp) on SIGINT/SIGTERM; polled by every main loop.
@@ -48,7 +48,8 @@ void InitLinuxCoreSubsystems(bool registerGameplay);
 void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio);
 
 /// @brief Common shutdown sequence for all Linux startup paths.
-void ShutdownLinuxAfterPreflight();
+/// @return false when the engine lifecycle teardown was not clean (exit non-zero).
+bool ShutdownLinuxAfterPreflight();
 
 #ifdef SPARK_HEADLESS_SUPPORT
 /// @brief Run the engine in headless/dedicated server mode (Linux).

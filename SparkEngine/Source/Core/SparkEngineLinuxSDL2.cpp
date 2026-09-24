@@ -107,7 +107,7 @@ static HRESULT InitializeGraphicsForWindow(SDL_Window* window, void* nativeRende
  * @param argc Argument count from main().
  * @param argv Argument values from main().
  */
-static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
+static bool InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
 {
     auto& settings = EngineSettings::GetInstance();
 
@@ -154,7 +154,7 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
 
     // Complete debug/gameplay/daemon initialization and publish EngineStartEvent
     // only after modules and their host callbacks are live.
-    InitConsole();
+    return InitConsole();
 }
 
 /**
@@ -487,12 +487,20 @@ int RunSDL2Windowed(int argc, char* argv[])
         }
     }
 
-    InitializeSDL2Subsystems(window, argc, argv);
+    const bool lifecycleInitialized = InitializeSDL2Subsystems(window, argc, argv);
+    if (!lifecycleInitialized)
+    {
+        // The lifecycle root already rolled its stages back. Modules are loaded,
+        // so leave through the main loop's shutdown preflight (same idiom as a
+        // missing -require-game module) rather than tearing them down unchecked.
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Engine lifecycle failed to initialize; shutting down");
+        g_shutdownRequested.store(true, std::memory_order_relaxed);
+    }
     RunSDL2MainLoop(/*pollSdlEvents=*/sdlInitOk);
 
-    ShutdownLinuxAfterPreflight();
+    const bool teardownClean = ShutdownLinuxAfterPreflight();
     releaseSdlResources();
-    return 0;
+    return (lifecycleInitialized && teardownClean) ? 0 : EXIT_FAILURE;
 }
 
 #endif // SPARK_SDL2_AVAILABLE

@@ -17,9 +17,15 @@
 void LogMissingModuleWarnings();
 
 /**
- * @brief Initialize debug/diagnostic systems (Logger, ChromeTracing, MemoryDebugger, etc.)
+ * @brief Run the lifecycle composition root's initialize phase (debug, networking, gameplay)
+ *
+ * Fails closed: when any stage reports failure or throws, the stages already
+ * touched are rolled back in reverse order and the lifecycle latches Failed,
+ * so later UpdateGameplaySystems/ShutdownGameplaySystems calls are no-ops.
+ *
+ * @return true when every stage initialized; false means startup must abort
  */
-void InitDebugSystems();
+bool InitDebugSystems();
 
 /**
  * @brief Initialize all gameplay subsystems (AI, animation, physics integration, etc.)
@@ -50,8 +56,12 @@ void UpdateDebugSystems(float dt);
 
 /**
  * @brief Shut down all gameplay subsystems in reverse initialization order
+ *
+ * Stage exceptions are contained so every remaining stage still tears down.
+ *
+ * @return false when a stage threw or the lifecycle had already failed
  */
-void ShutdownGameplaySystems();
+bool ShutdownGameplaySystems();
 
 /**
  * @brief Shut down all debug/diagnostic systems

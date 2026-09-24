@@ -11,7 +11,7 @@ namespace Spark::Core::Lifecycle
         LifecycleThreadAffinity ThreadAffinity() const override { return LifecycleThreadAffinity::MainThread; }
         bool SupportsInitialize() const override { return true; }
 
-        void Initialize() override { InitializeGameplaySystemsImpl(); }
+        bool Initialize() override { return InitializeGameplaySystemsImpl(); }
     };
 
     std::unique_ptr<LifecycleStage> CreateInitGameplayStage()

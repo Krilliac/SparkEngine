@@ -562,8 +562,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     SPARK_HEARTBEAT();
 
     // Initialize all engine subsystems, load modules, register commands
-    InitializeWindowedSubsystems(hInstance, lpCmdLine);
+    const bool lifecycleInitialized = InitializeWindowedSubsystems(hInstance, lpCmdLine);
     ApplyRuntimeWindowCaption();
+
+    // A failed engine lifecycle has already rolled back its stages. Leave via the
+    // ordinary windowed teardown (module preflight + reverse-order cleanup) and
+    // report the failure instead of running a game on half-built systems.
+    if (!lifecycleInitialized)
+    {
+        Spark::SimpleConsole::GetInstance().LogError(
+            "Engine lifecycle failed to initialize; terminating with a failure status.");
+        PostQuitMessage(1);
+    }
 
     const size_t initializedModules =
         GetEngineRuntime().moduleManager ? GetEngineRuntime().moduleManager->GetInitializedModuleCount() : 0;
@@ -604,6 +614,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         }
     }
 
+    if (!lifecycleInitialized)
+        return 1;
     return requiredGameMissing ? 2 : loopExitCode;
 }
 

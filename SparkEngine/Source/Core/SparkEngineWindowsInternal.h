@@ -44,11 +44,11 @@ extern bool g_noJobSystem;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
-extern void InitConsole();
+extern bool InitConsole();
 extern void ShutdownPhysics();
 extern bool CanShutdownEngine();
 extern void ShutdownEngine();
-extern void ShutdownEngineAfterPreflight();
+extern bool ShutdownEngineAfterPreflight();
 extern void SetupCrashHandler();
 
 // Windows-specific globals (defined in SparkEngineWindows.cpp; g_hInst is
@@ -92,7 +92,8 @@ void DrawProjectSelectorPanel();
 void ConsumeProjectSelectorChoice();
 
 /// @brief Initialize windowed-mode subsystems, load modules, register commands.
-void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine);
+/// @return false when the engine lifecycle failed to initialize (exit non-zero).
+bool InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine);
 
 /// @brief Run the Win32 message pump and per-frame engine tick loop.
 int RunWindowedMainLoop(HINSTANCE hInstance);

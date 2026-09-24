@@ -406,13 +406,13 @@ void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
 /**
  * @brief Common shutdown sequence for all Linux startup paths.
  */
-void ShutdownLinuxAfterPreflight()
+bool ShutdownLinuxAfterPreflight()
 {
     // Every Linux loop reaches this function only after a successful
     // CanShutdownEngine checkpoint. Commit without a second fallible gate.
     GetEngineRuntime().moduleHotReload.reset();
     Spark::SimpleConsole::GetInstance().LogInfo("Shutting down...");
-    ShutdownEngineAfterPreflight();
+    return ShutdownEngineAfterPreflight();
 }
 
 #endif // !SPARK_PLATFORM_WINDOWS

@@ -267,7 +267,16 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
     SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: SaveSystem initialized");
 
-    InitConsole();
+    if (!InitConsole())
+    {
+        // The lifecycle root already rolled its stages back and no module has
+        // been loaded yet, so the module preflight is vacuous: tear down and fail.
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "RunHeadlessWindows: engine lifecycle failed to initialize");
+        GetEngineRuntime().moduleHotReload.reset();
+        ShutdownEngineAfterPreflight();
+        FreeConsole();
+        return 1;
+    }
     Spark::ConsoleProcessManager::GetInstance().SetShutdownRequestHandler(
         [] { g_shutdownRequested.store(true, std::memory_order_relaxed); });
     SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: InitConsole returned");
@@ -428,7 +437,7 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     // inside the crash handler.
     //
     console.LogInfo("Headless server shutting down...");
-    ShutdownEngineAfterPreflight();
+    const bool teardownClean = ShutdownEngineAfterPreflight();
 
     // Publish machine-readable records only after ordinary teardown has
     // destroyed the ModuleManager and NullRHI bridge. This proves the complete
@@ -457,6 +466,8 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     tickStats.EmitRecord(/*nullRhiActive=*/nullRhiFrameCount == frameCount, peakRssKib);
     if (!nullRhiShutdown && exitCode == 0)
         exitCode = 3;
+    if (!teardownClean && exitCode == 0)
+        exitCode = 1;
 
     // Only free the console if we successfully allocated one in
     // AllocHeadlessConsole. Calling FreeConsole on an inherited console
