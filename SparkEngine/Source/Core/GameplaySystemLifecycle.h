@@ -59,6 +59,6 @@ void ShutdownGameplaySystems();
 void ShutdownDebugSystems();
 
 /**
- * @brief Get the current gameplay frame counter (for debug hooks at shutdown)
+ * @brief Get the current gameplay frame counter (debug hooks at shutdown, fault records)
  */
 uint64_t GetGameplayFrameCount();

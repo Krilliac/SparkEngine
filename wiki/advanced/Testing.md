@@ -907,7 +907,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestDatablockRegistryPhaseHH` | 8 |
 | `TestDayNightCycle` | 10 |
 | `TestDeadlockDetector` | 8 |
-| `TestDebugHookManager` | 28 |
+| `TestDebugHookManager` | 29 |
 | `TestDebugTools` | 37 |
 | `TestDebugUtilities` | 28 |
 | `TestDecalSystem` | 7 |

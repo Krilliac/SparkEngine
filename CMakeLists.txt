@@ -2488,11 +2488,16 @@ endif()
 #   SPARK_BUILD_DEVELOPMENT — symbols + optimization, console/profiler included
 #   SPARK_BUILD_RELEASE     — optimized, optional console
 #   SPARK_BUILD_SHIPPING    — maximum optimization, no dev tools
+# Shipping also defines SPARK_SHIPPING, the switch the debug-hook and detector
+# headers (Utils/DebugHookManager.h, DeadlockDetector.h, HitchDetector.h, ...)
+# test to compile their instrumentation out. The two must travel together:
+# DebugHookManager.h refuses to compile SPARK_BUILD_SHIPPING without it.
 list(APPEND FEATURE_DEFINITIONS
     $<$<CONFIG:Debug>:SPARK_BUILD_DEBUG>
     $<$<CONFIG:RelWithDebInfo>:SPARK_BUILD_DEVELOPMENT>
     $<$<CONFIG:Release>:SPARK_BUILD_RELEASE>
     $<$<CONFIG:MinSizeRel>:SPARK_BUILD_SHIPPING>
+    $<$<CONFIG:MinSizeRel>:SPARK_SHIPPING=1>
 )
 
 # Apply feature definitions to the static library (inherited by exe and game DLL)

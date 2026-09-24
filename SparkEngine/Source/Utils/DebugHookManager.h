@@ -55,6 +55,13 @@
 #include <unordered_map>
 #include <vector>
 
+// The MinSizeRel (Shipping) configuration defines both SPARK_BUILD_SHIPPING and
+// SPARK_SHIPPING (root CMakeLists.txt). A target carrying only the former would
+// silently keep every debug hook and detector compiled in, so refuse it.
+#if defined(SPARK_BUILD_SHIPPING) && !defined(SPARK_SHIPPING)
+#error "SPARK_BUILD_SHIPPING requires SPARK_SHIPPING; link SparkEngineLib or define both for MinSizeRel"
+#endif
+
 // Debug hooks are active in Debug/Development builds, compiled out in Shipping
 #ifndef SPARK_SHIPPING
 #define SPARK_DEBUG_HOOKS_ENABLED 1

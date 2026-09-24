@@ -202,6 +202,16 @@ Install the crash handler early in application startup, before graphics or audio
 
 ---
 
+### Shipping configuration compiles the instrumentation out
+
+The MinSizeRel (Shipping) configuration defines both `SPARK_BUILD_SHIPPING` and `SPARK_SHIPPING=1` on `SparkEngineLib` as PUBLIC definitions (root `CMakeLists.txt`, per-configuration `FEATURE_DEFINITIONS`), so SparkEngine, SparkEditor, game modules and tests that link the library compile the same gates. Before BLD-100 only `SPARK_BUILD_SHIPPING` reached the engine, so every `SPARK_SHIPPING` gate below stayed compiled in to Shipping binaries.
+
+- `SPARK_DEBUG_HOOK*` (`DebugHookManager.h`, via `SPARK_DEBUG_HOOKS_ENABLED`), `SPARK_TRACKED_LOCK` (`DeadlockDetector.h`), `SPARK_CPU_*`, `SPARK_CACHE_*`, `SPARK_TRACK_IO_*`, `SPARK_TRACK_THREAD_*`/`SPARK_TRACK_MUTEX_*`, and the per-frame `SPARK_HITCH_UPDATE`, `SPARK_NET_HEALTH_UPDATE`, `SPARK_STATE_CHECK_UPDATE`, `SPARK_GPU_LEAK_UPDATE` and `SPARK_ASSET_STALL_UPDATE` compile to no-ops.
+- The engine's own direct `DebugHookManager` calls (enable at init, per-frame frame number, clear at shutdown, the `DiagDebugSystems` self-test) are gated on `SPARK_DEBUG_HOOKS_ENABLED`; `SubsystemFaultIsolator` records `GetGameplayFrameCount()` instead of the hook manager's copy. In a MinSizeRel tree no `SparkEngineLib` object other than `DebugHookManager.cpp.o` references a `DebugHookManager` symbol (Release: 14 objects). The class itself is still present in `SparkEngine` because the executable links `SparkEngineLib` with `--whole-archive`; it is unreferenced there.
+- Still open: the engine lifecycle calls `HitchDetector`, `AssetStallDetector`, `NetworkHealthMonitor`, `GPUResourceLeakDetector` and `InvalidStateDetector` directly (`Initialize`/`Update`/`Shutdown` in `GameplayLifecycleShared.cpp`, console-command registration in each platform entry point, and `ModuleManager` rule injection for `InvalidStateDetector`). Those calls do not go through the macros above, so the detectors still run in Shipping. Removing them changes the module-facing `EngineContext::GetInvalidStateDetector()` contract and needs its own change.
+- `DebugHookManager.h` fails the compile with `#error` if a translation unit sees `SPARK_BUILD_SHIPPING` without `SPARK_SHIPPING`; `Tests/Tools/test_build_shipping_contract.py` rejects any first-party CMake definition call that gives MinSizeRel the Shipping profile without the gate.
+- The gates only change macros and function bodies, never a class layout, so a module built in another configuration does not see a different object layout.
+
 ## MemoryDebugger
 
 `Spark::MemoryDebugger` is a debug-build allocation tracker that records every allocation with call-site information and reports leaks at shutdown. It is thread-safe and intended for Debug builds only (the Profiler's lightweight counters serve Release builds).

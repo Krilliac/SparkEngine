@@ -413,8 +413,10 @@ void ShutdownEngineAfterPreflight()
     rt.graphics.reset();
     rt.timer.reset();
 
+#if SPARK_DEBUG_HOOKS_ENABLED
     SPARK_DEBUG_HOOK(EnginePostShutdown, GetGameplayFrameCount(), 0.0f);
     Spark::DebugHookManager::GetInstance().Clear();
+#endif
 }
 
 void ShutdownEngine()

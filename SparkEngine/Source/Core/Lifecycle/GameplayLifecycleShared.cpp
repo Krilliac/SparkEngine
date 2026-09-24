@@ -345,9 +345,11 @@ namespace Spark::Core::Lifecycle
 
     void InitializeDebugSystemsImpl()
     {
+#if SPARK_DEBUG_HOOKS_ENABLED
         // Initialize the debug hook manager first so subsequent inits can be observed
         Spark::DebugHookManager::GetInstance().SetEnabled(true);
         SPARK_DEBUG_HOOK(EnginePreInit, 0, 0.0f);
+#endif
 
         // Initialize the unified Logger and install the engine's standard sink set
         // (stderr + rotating per-user log file + SparkConsole bridge). Platform entry
@@ -1332,9 +1334,11 @@ namespace Spark::Core::Lifecycle
             return;
 
         ++g_frameCounter;
+#if SPARK_DEBUG_HOOKS_ENABLED
         auto& debugHooks = Spark::DebugHookManager::GetInstance();
         debugHooks.SetFrameNumber(g_frameCounter);
         debugHooks.SetDeltaTime(dt);
+#endif
 
         // Update fault isolation auto-recovery (re-enables subsystems after cooldown)
         static float s_engineTime = 0.0f;

@@ -4,6 +4,7 @@
  */
 
 #include "FaultIsolation.h"
+#include "GameplaySystemLifecycle.h"
 #include "Utils/DebugHookManager.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
@@ -28,7 +29,7 @@ namespace Spark
         auto& record = m_records[name];
         record.faultCount++;
         record.lastError = error ? error : "unknown";
-        record.lastFaultFrame = DebugHookManager::GetInstance().GetFrameNumber();
+        record.lastFaultFrame = ::GetGameplayFrameCount();
 
         uint32_t maxRetries = record.maxRetries > 0 ? record.maxRetries : m_globalMaxRetries;
 
