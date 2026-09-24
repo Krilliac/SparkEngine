@@ -623,6 +623,68 @@ def release_acceptance_recovery_errors(workflow: str) -> list[str]:
     return errors
 
 
+CANONICAL_RELEASE_SBOM = "SparkEngine-SBOM.spdx.json"
+SBOM_ARGUMENT_RE = re.compile(r"""--sbom[ =]+("[^"]*"|'[^']*'|\S+)""")
+
+
+def release_sbom_name_errors(workflow: str) -> list[str]:
+    """Every consumer of the release SBOM must read the file sbom-action wrote.
+
+    The stable bundle verifiers, the signing tests and
+    verify_published_stable_release.py consume the published asset
+    CANONICAL_RELEASE_SBOM, so the anchore/sbom-action output-file must be that
+    name, and every ``--sbom`` argument and anchore/scan-action ``sbom`` input
+    in release.yml must name the same file (optionally under
+    $GITHUB_WORKSPACE).
+    """
+
+    try:
+        document = parse_workflow_yaml(workflow)
+    except WorkflowError as error:
+        return [f"release workflow is not safely parseable: {error}"]
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["release workflow must define a jobs mapping"]
+
+    def normalized(value: str) -> str:
+        value = value.strip().strip("\"'")
+        for prefix in ("$GITHUB_WORKSPACE/", "${GITHUB_WORKSPACE}/", "${{ github.workspace }}/"):
+            if value.startswith(prefix):
+                return value[len(prefix):]
+        return value
+
+    errors: list[str] = []
+    outputs: list[str] = []
+    consumers: list[tuple[str, str]] = []
+    for job_id, job in jobs.items():
+        steps = job.get("steps") if isinstance(job, dict) else None
+        for step in steps if isinstance(steps, list) else []:
+            if not isinstance(step, dict):
+                continue
+            label = f"{job_id}: {step.get('name', step.get('uses', '<unnamed step>'))}"
+            uses = str(step.get("uses", ""))
+            inputs = step.get("with") if isinstance(step.get("with"), dict) else {}
+            if uses.startswith("anchore/sbom-action@"):
+                outputs.append(str(inputs.get("output-file", "")))
+            if uses.startswith("anchore/scan-action@") and "sbom" in inputs:
+                consumers.append((label, normalized(str(inputs["sbom"]))))
+            run = step.get("run")
+            if isinstance(run, str):
+                for match in SBOM_ARGUMENT_RE.finditer(run):
+                    consumers.append((label, normalized(match.group(1))))
+
+    if outputs != [CANONICAL_RELEASE_SBOM]:
+        errors.append(
+            f"release.yml must generate exactly one SBOM with output-file {CANONICAL_RELEASE_SBOM}, found {outputs}"
+        )
+    if not consumers:
+        errors.append("release.yml has no SBOM consumer (--sbom argument or scan-action sbom input)")
+    for label, name in consumers:
+        if name != CANONICAL_RELEASE_SBOM:
+            errors.append(f"{label} reads SBOM {name!r}, but sbom-action writes {CANONICAL_RELEASE_SBOM!r}")
+    return errors
+
+
 def release_package_gate_errors(workflow: str) -> list[str]:
     """Reject advisory or error-suppressing release-package validation paths."""
 
@@ -2841,6 +2903,30 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn('EVENT_REF" != "refs/heads/Working', controller)
         self.assertIn('LOCAL_SHA" != "$WORKFLOW_SHA', controller)
         self.assertIn('LOCAL_SHA" != "$REMOTE_SHA', controller)
+
+    def test_release_sbom_output_matches_every_consumer(self) -> None:
+        self.assertEqual(release_sbom_name_errors(self.release), [])
+        consumer = (REPO_ROOT / ".github" / "scripts" / "verify_published_stable_release.py").read_text(encoding="utf-8")
+        self.assertIn(f'"{CANONICAL_RELEASE_SBOM}"', consumer)
+
+    def test_release_sbom_name_contract_rejects_drift(self) -> None:
+        output_line = f"        output-file: {CANONICAL_RELEASE_SBOM}\n"
+        bundle_argument = f'--sbom "$GITHUB_WORKSPACE/{CANONICAL_RELEASE_SBOM}"'
+        self.assertIn(output_line, self.release)
+        self.assertIn(bundle_argument, self.release)
+        mutations = {
+            "action writes another name": self.release.replace(
+                output_line, "        output-file: SparkEngine.spdx.json\n", 1),
+            "bundle verifier reads another name": self.release.replace(
+                bundle_argument, '--sbom "$GITHUB_WORKSPACE/SparkEngine.spdx.json"', 1),
+        }
+        if f"        sbom: {CANONICAL_RELEASE_SBOM}\n" in self.release:
+            mutations["scanner reads another name"] = self.release.replace(
+                f"        sbom: {CANONICAL_RELEASE_SBOM}\n", "        sbom: SparkEngine.spdx.json\n", 1)
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, self.release, label)
+                self.assertTrue(release_sbom_name_errors(mutated), label)
 
     def test_release_prepare_runs_supply_chain_policy_before_metadata(self) -> None:
         policy = named_step(self.release, "Supply-chain policy check")

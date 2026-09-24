@@ -1284,7 +1284,10 @@ jobs:
       with:
         path: release-assets
         format: spdx-json
-        output-file: SparkEngine.spdx.json
+        # One canonical SBOM file name: the stable bundle verifiers, the signing
+        # tests and verify_published_stable_release.py all consume this exact
+        # published asset (checked by test-workflow-failure-propagation.py).
+        output-file: SparkEngine-SBOM.spdx.json
         artifact-name: SparkEngine-SBOM.spdx.json
         upload-artifact: false
         upload-release-assets: false

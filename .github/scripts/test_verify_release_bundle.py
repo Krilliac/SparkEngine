@@ -23,7 +23,7 @@ class ReleaseBundleTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.names = ["SparkEngine-1.2.3-Windows.zip", "SparkEngine.spdx.json", "SparkEngine-Exact-CI-Evidence.json"]
+        self.names = ["SparkEngine-1.2.3-Windows.zip", "SparkEngine-SBOM.spdx.json", "SparkEngine-Exact-CI-Evidence.json"]
         (self.root / self.names[0]).write_bytes(b"package bytes\n")
         (self.root / self.names[1]).write_text(json.dumps({
             "spdxVersion": "SPDX-2.3", "SPDXID": "SPDXRef-DOCUMENT",
