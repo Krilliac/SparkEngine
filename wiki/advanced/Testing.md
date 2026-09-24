@@ -696,7 +696,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*621 test-bearing `.cpp`/`.mm` files, 7482 source-level test definitions*
+*632 test-bearing `.cpp`/`.mm` files, 7567 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -816,6 +816,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCrashReportUploader` | 12 |
 | `TestCrossSystemIntegration` | 4 |
 | `TestD3D11DeviceContractsReal` | 14 |
+| `TestDATA120PersistenceReal` | 5 |
 | `TestDXRSupport` | 13 |
 | `TestDaemonCodexFixes` | 4 |
 | `TestDaemonConcurrent` | 6 |
@@ -863,6 +864,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestECSystemSpecialized` | 27 |
 | `TestECSystemsReal` | 12 |
 | `TestEDT210InspectorEditCommitReal` | 8 |
+| `TestENG200ScriptFaultsReal` | 7 |
 | `TestENG220ObjImportReal` | 5 |
 | `TestEcsCameraConsole` | 1 |
 | `TestEditorAssetReference` | 3 |
@@ -1010,6 +1012,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMMOAssetImport` | 16 |
 | `TestMMOCredentialSecurity` | 3 |
 | `TestMOD310FPSSceneReloadRespawnReal` | 5 |
+| `TestMOD370SkirmishDeterminismReal` | 7 |
+| `TestMOD380RacingCompleteRaceReal` | 5 |
 | `TestMSanCanary` | 2 |
 | `TestMacOSPlatform` | 6 |
 | `TestMain` | 1 |
@@ -1040,6 +1044,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMovieRenderPipeline` | 11 |
 | `TestMultiISADispatch` | 7 |
 | `TestMusicManager` | 9 |
+| `TestNET100TransportReal` | 17 |
 | `TestNavMesh` | 11 |
 | `TestNavMeshLink` | 5 |
 | `TestNavMeshObstacles` | 7 |
@@ -1074,6 +1079,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestOnlineServices` | 10 |
 | `TestOpaqueHandle` | 7 |
 | `TestOpenWorldModule` | 61 |
+| `TestPLT210AngelScriptVector3Real` | 2 |
+| `TestPLT210ProcessPosixReal` | 7 |
+| `TestPLT210RuntimeProcessesReal` | 3 |
 | `TestPacketValidator` | 10 |
 | `TestPacketValidatorReal` | 3 |
 | `TestParallelCulling` | 5 |
@@ -1106,6 +1114,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 11 |
 | `TestRHI210D3D11GoldenReal` | 4 |
+| `TestRHI230VulkanValidationReal` | 16 |
+| `TestRHI240OpenGLReal` | 11 |
 | `TestRHIBridgeIntegration` | 19 |
 | `TestRHICapabilityParity` | 4 |
 | `TestRHIHandlePool` | 10 |
@@ -1145,6 +1155,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSceneManager` | 19 |
 | `TestSceneManagerUnicodeReal` | 1 |
 | `TestSceneRoundtrip` | 8 |
+| `TestSceneSaveConfinedReal` | 5 |
 | `TestSceneSerializer` | 13 |
 | `TestSceneSerializerReal` | 18 |
 | `TestSceneSnapshotSerializer` | 20 |
