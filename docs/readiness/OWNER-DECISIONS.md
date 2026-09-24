@@ -34,14 +34,23 @@ Approved by the project owner (Krilliac) in the release-readiness session on
 | OD-15 | MOD-380 | Ghost/replay persistence is out of scope for the Racing slice. | The Racing completion criteria do not require persisted ghosts or replays. |
 | OD-16 | TF-120 | TERRAFRONT map hops adopt the SparkGateway/SparkServer fenced handoff plane. Reconnect-based hops are not kept as the production path. | Multimap migration work targets the fenced handoff. |
 
+## 2026-09-24 delegated decisions
+
+The owner delegated the remaining questions below ("whatever and however is
+best for each item"). Each choice is made to fit the contracts already in the
+repository and is recorded with its reasoning so it can be revisited.
+
+| ID | Work item | Decision | Reasoning / consequence |
+|---|---|---|---|
+| OD-17 | REL-100 | **Stable:** release assets are immutable and kept permanently. Each stable release gets security and critical fixes until 6 months after the next stable release. **Nightly:** each uniquely tagged immutable nightly is kept for 30 days and is unsupported. **Experimental:** artifacts are kept for 14 days, always labeled experimental, and never presented as supported. CI build artifacts keep their existing 7- and 90-day retention. | The support window matches OD-03 (read N-1): a user on the previous stable can still load current data. Short, unsupported nightly and experimental windows keep storage bounded and stop them being mistaken for supported releases. |
+| OD-18 | REL-191 / REL-190 | In the v0.9.0 predecessor stage, REL-191 replaces REL-190 (added to `predecessorRelease.qualificationSubstitutions`). REL-190 stays required for the stable-v1 release candidate. | REL-191 already covers every common qualification gate and named sign-off without N-1 claims, and the contract already substitutes REL-192→REL-191 and INST-131→INST-132 there. Requiring REL-190 too would demand N-1 evidence the predecessor cannot have. |
+| OD-19 | REL-191 | The predecessor baseline is not picked by hand now. It is the first `Working` commit after the stable-v1 release branch merges at which every `predecessorRelease.requiredGateIds` gate has passing exact-SHA evidence. Krilliac is the predecessor owner; that SHA, its review, and the sign-off are recorded in `predecessorRelease` when it qualifies. | No commit qualifies today (every gate is blocked), so any SHA picked now would be a claim without evidence. A rule keeps the choice evidence-driven. |
+| OD-20 | MOD-330 | ARPG dungeon slice budgets: at most 48 simultaneously active monster actors, at most 256 live gameplay entities during combat (hero, monsters, projectiles, loot), 16.67 ms p95 frame time (60 fps) on the certified Windows D3D11 row, and at most 3.0 ms p95 game-thread time for ARPG gameplay systems (AI, combat, skills, loot). | These are target values. They are verified only when PERF-100's certified hardware row and baselines exist; until then they are `pending_measurement` and cannot be claimed as met. |
+| OD-21 | SEC-120 | The 149 deferred parser candidates are classified by evidence, one entry per file, using fixed rules: (1) code that parses bytes from outside the process (files a user or mod can supply, packages, network, save/scene/config files read at runtime) is an inventoried boundary and needs a fuzz target; (2) code that only parses data the engine itself generated in the same process, or build-time/developer tooling that never ships, is exempt with a written justification; (3) generic read/tokenize helpers are helper-exempt, and every parser that calls them is classified on its own. When in doubt, classify as a boundary. | Rules are fail-closed toward fuzzing. Classifications go through `tools/fuzz-policy/parser-inventory.json` with the reason recorded per file, reviewed like any other change. |
+| OD-22 | DATA-120 | Krilliac is the accountable owner for encryption at rest and database secrets. stable-v1 policy: no database secret or credential is committed or written to shipped config; secrets come from the environment or the OS credential store. Password material is stored only as salted PBKDF2 hashes, and session tokens are never persisted in plaintext. Encryption at rest for SQLite files relies on host full-disk encryption, documented as the operator's responsibility; no in-database encryption (e.g. SQLCipher) for stable-v1. | This keeps OD-07 (SQLite) without adding a new crypto dependency, and puts the one real requirement (no plaintext secrets or tokens) under test instead of promising database-level encryption. |
+
 ## Still open
 
-These need an explicit owner answer; "defaults OK" did not cover them because
-no default was proposed:
-
-- REL-100: retention and support periods for the stable, nightly and experimental channels.
-- REL-191: the exact v0.9.0 predecessor baseline commit, and whether REL-190 is required or replaced by REL-191 in the predecessor stage.
-- MOD-330: ARPG actor and frame budget values.
-- SEC-120: classification of the 149 deferred parser candidates (a drafted classification can be proposed for review).
-- DATA-120: owner for encryption at rest and database secrets.
-- All GOV-400 decisions D1-D8, named reviewers and sign-offs, and credentials that only the owner can provision (code signing, Apple Developer ID, release immutability, Sites deployment).
+- All GOV-400 decisions D1-D8.
+- Named independent reviewers and sign-offs (security, crypto, privacy/retention, performance budgets, module parity scores, release qualification).
+- Credentials and infrastructure only the owner can provision: code signing, Apple Developer ID, release immutability policy, Sites deployment, OSV vulnerability-data access, console agreements.
