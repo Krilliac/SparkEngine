@@ -923,7 +923,7 @@ SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** build · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product. 2026-09-12 progress: build-matrix parity now fails closed when a stable shipping/validation profile cannot resolve its matching CMake build preset or declares the wrong configuration; the reviewed inventory was regenerated for the current source tree. 2026-09-13 progress: parity now rejects conflicting cache overrides appended to a canonical preset, preserving the reviewed stable-v1 option contract. 2026-09-21 progress: hosted Shipping codemodel evidence confirmed that CMake object and interface libraries correctly have no standalone artifact identity; pending-authority validation now permits only those non-artifact kinds while retaining strict identities for executable and linkable products, with 14 authority, 201 parity, and 27 external-verifier tests green. Protected external-attestation evidence remains open.
+SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product. 2026-09-12 progress: build-matrix parity now fails closed when a stable shipping/validation profile cannot resolve its matching CMake build preset or declares the wrong configuration; the reviewed inventory was regenerated for the current source tree. 2026-09-13 progress: parity now rejects conflicting cache overrides appended to a canonical preset, preserving the reviewed stable-v1 option contract. 2026-09-21 progress: hosted Shipping codemodel evidence confirmed that CMake object and interface libraries correctly have no standalone artifact identity; pending-authority validation now permits only those non-artifact kinds while retaining strict identities for executable and linkable products, with 14 authority, 201 parity, and 27 external-verifier tests green. Protected external-attestation evidence remains open. 2026-09-24 progress: root CMake now ends with spark_reject_undeclared_options() (cmake/SparkOptionGuard.cmake), which fails configure on any untyped -D ENABLE_*/SPARK_*/BUILD_* entry nothing declared; SPARK_REQUIRE_WINDOWS_INSTALLERS is declared on every platform (SparkBuild passes it everywhere) and the SPARK_MODULE_CXX_LANGUAGE_ABI override is declared by SparkGameModule.cmake. BuildOptions_UnknownOptionRejected (Tests/Tools/test_build_option_guard.py, 9 cases incl. a preset audit) is green and a local linux-gcc-release configure rejects -DENABLE_TYPO_OPTION=ON; explicitly typed -DNAME:TYPE entries remain outside the guard and no Windows lane has exercised it yet.
 
 **Dependency contract**
 
@@ -957,6 +957,8 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 - `Tools/buildmatrix/verify_external_evidence.py`
 - `Tools/buildmatrix/workflow.py`
 - `Tests/Tools/test_build_matrix_parity.py`
+- `Tests/Tools/test_build_option_guard.py`
+- `cmake/SparkOptionGuard.cmake`
 - `Tests/Tools/test_build_matrix_pending_authority.py`
 - `Tests/Tools/test_build_matrix_external_verifier.py`
 - `docs/site/readiness.json`
@@ -998,6 +1000,7 @@ python3 Tools/buildmatrix/inventory.py --codemodel windows-shipping=build/window
 python3 Tools/buildmatrix/check_parity.py --inventory docs/readiness/build-matrix-inventory.json --baseline docs/readiness/build-matrix-parity-findings.json
 python3 Tools/buildmatrix/validate_pending_authority.py --inventory build-matrix-inventory.json --report build-matrix-parity-findings.json --output build-matrix-pending-authority.json
 python3 Tests/Tools/test_build_matrix_parity.py
+python3 Tests/Tools/test_build_option_guard.py
 python3 -m unittest Tests.Tools.test_build_matrix_pending_authority Tests.Tools.test_build_matrix_external_verifier
 cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON
 cmake --build build/windows-shipping --config MinSizeRel --clean-first

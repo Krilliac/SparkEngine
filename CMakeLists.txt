@@ -3392,12 +3392,17 @@ set(CPACK_PACKAGE_INSTALL_DIRECTORY "SparkEngine")
 # cpack runs every configured generator, so listing an absent one failed the
 # whole package run - including the archive - on any machine without both.
 set(CPACK_GENERATOR "ZIP")
+# The release pipeline must never silently drop an installer because its
+# toolchain was installed after configure, so it configures with
+# SPARK_REQUIRE_WINDOWS_INSTALLERS=ON and gets a hard failure instead. Declared
+# on every platform because SparkBuild passes every option it exposes; the
+# option-guard at the end of this file would otherwise reject it off Windows.
+option(SPARK_REQUIRE_WINDOWS_INSTALLERS
+    "Fail configuration when the NSIS or WiX toolchain is missing" OFF)
+if(SPARK_REQUIRE_WINDOWS_INSTALLERS AND NOT WIN32)
+    message(FATAL_ERROR "SPARK_REQUIRE_WINDOWS_INSTALLERS=ON requires a Windows configure (NSIS and WiX are Windows-only)")
+endif()
 if(WIN32)
-    # The release pipeline must never silently drop an installer because its
-    # toolchain was installed after configure, so it configures with
-    # SPARK_REQUIRE_WINDOWS_INSTALLERS=ON and gets a hard failure instead.
-    option(SPARK_REQUIRE_WINDOWS_INSTALLERS
-        "Fail configuration when the NSIS or WiX toolchain is missing" OFF)
     find_program(SPARK_MAKENSIS_EXECUTABLE NAMES makensis)
     if(SPARK_MAKENSIS_EXECUTABLE)
         list(APPEND CPACK_GENERATOR "NSIS")
@@ -3570,3 +3575,8 @@ if(MSVC AND CMAKE_GENERATOR MATCHES "Visual Studio")
     set(SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION "${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}" CACHE INTERNAL
         "Measured Visual Studio Windows SDK version for build provenance" FORCE)
 endif()
+
+# CI-120: fail on -D ENABLE_*/SPARK_*/BUILD_* names nothing declared. Must stay
+# last so every subdirectory has had the chance to declare its options.
+include("${CMAKE_SOURCE_DIR}/cmake/SparkOptionGuard.cmake")
+spark_reject_undeclared_options()

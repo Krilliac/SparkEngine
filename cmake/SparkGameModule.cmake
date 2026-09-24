@@ -233,3 +233,14 @@ function(spark_add_game_module TARGET_NAME)
     message(STATUS
         "spark_add_game_module: ${TARGET_NAME} configured with ${_spark_module_link_target}")
 endfunction()
+
+# An explicit, untyped -DSPARK_MODULE_CXX_LANGUAGE_ABI=<value> override (the
+# cross-compiling path in _spark_detect_cxx_language_abi) is read with
+# if(DEFINED) and would otherwise stay UNINITIALIZED in the cache. Declaring it
+# without FORCE keeps the value and marks it consumed for SparkOptionGuard.cmake.
+get_property(_spark_abi_cache_type CACHE SPARK_MODULE_CXX_LANGUAGE_ABI PROPERTY TYPE)
+if(_spark_abi_cache_type STREQUAL "UNINITIALIZED")
+    set(SPARK_MODULE_CXX_LANGUAGE_ABI "${SPARK_MODULE_CXX_LANGUAGE_ABI}" CACHE STRING
+        "Exact _MSVC_LANG/__cplusplus value for Spark module compatibility (explicit override)")
+endif()
+unset(_spark_abi_cache_type)

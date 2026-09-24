@@ -68,8 +68,25 @@ cmake -B build [options]
 ## Selected Root Build Options
 
 Only options declared and consumed by the current root `CMakeLists.txt` have a
-proven build effect. Setting an arbitrary `ENABLE_*` cache variable does not remove
-a subsystem. The table below intentionally avoids undocumented pseudo-options.
+proven build effect. The table below intentionally avoids undocumented pseudo-options.
+
+**Undeclared options fail configure (CI-120).** The last command of the root
+`CMakeLists.txt` is `spark_reject_undeclared_options()` from
+`cmake/SparkOptionGuard.cmake`. Any `ENABLE_*`, `SPARK_*` or `BUILD_*` cache entry
+that is still `UNINITIALIZED` after the whole tree has configured -- i.e. it was
+passed as an untyped `-DNAME=VALUE` (or a preset string value) and nothing ran
+`option()`/`set(... CACHE ...)` for it -- stops configure with a `FATAL_ERROR`
+listing each name and the `cmake -U NAME <build-dir>` command to drop it. A typo
+such as `-DENABLE_EDTIOR=OFF`, or an option that only exists on another platform,
+can therefore no longer configure "successfully" with the default feature set.
+Explicitly typed entries (`-DNAME:BOOL=ON`) look identical to declared ones and are
+not checked. Options that must be accepted on every platform are declared
+unconditionally: `SPARK_REQUIRE_WINDOWS_INSTALLERS` (SparkBuild passes it
+everywhere; `ON` off Windows is itself fatal) and the explicit
+`SPARK_MODULE_CXX_LANGUAGE_ABI` override (declared by `cmake/SparkGameModule.cmake`).
+`Tests/Tools/test_build_option_guard.py` (CTest `BuildOptions_UnknownOptionRejected`)
+configures a fixture project through the real module and audits every string
+cache variable in `CMakePresets.json` against the tree's declarations.
 
 | Option | Root default | Source-backed effect when disabled |
 |--------|--------------|------------------------------------|
@@ -87,9 +104,11 @@ a subsystem. The table below intentionally avoids undocumented pseudo-options.
 
 ### Reduced Development Preset
 
-The `minimal` preset currently disables networking and DXR. Several additional
-preset cache variables have no matching root option and are inert, so this is not
-a core-only build contract. Disable declared targets such as the editor explicitly
+The `minimal` preset disables networking, DXR, and the optional tool and module
+targets. Every preset cache variable is a declared root option (the option guard
+rejects anything else), but some declared options are themselves inert (for
+example `ENABLE_GRAPHICS`, see the table), so this is not a core-only build
+contract. Disable declared targets such as the editor explicitly
 when needed; `HEAD-220` tracks a true stripped/headless configuration.
 
 ```bash

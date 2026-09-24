@@ -625,16 +625,8 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3399,
-      "conditionFrames": [
-        {
-          "id": "CMakeLists.txt:3395",
-          "branch": 0,
-          "branches": [
-            "WIN32"
-          ]
-        }
-      ],
+      "line": 3400,
+      "conditionFrames": [],
       "definitionScope": []
     },
     {
@@ -1446,16 +1438,8 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3399,
-      "conditionFrames": [
-        {
-          "id": "CMakeLists.txt:3395",
-          "branch": 0,
-          "branches": [
-            "WIN32"
-          ]
-        }
-      ],
+      "line": 3400,
+      "conditionFrames": [],
       "definitionScope": []
     },
     {

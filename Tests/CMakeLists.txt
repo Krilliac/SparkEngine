@@ -2347,6 +2347,15 @@ if(Python3_Interpreter_FOUND)
         LABELS "release;security;unit;python"
         TIMEOUT 60)
 
+    # CI-120: the root option guard rejects undeclared -D ENABLE_*/SPARK_*/BUILD_*
+    # names (fixture configures of cmake/SparkOptionGuard.cmake + preset audit).
+    add_test(
+        NAME BuildOptions_UnknownOptionRejected
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_build_option_guard.py)
+    set_tests_properties(BuildOptions_UnknownOptionRejected PROPERTIES
+        LABELS "build-contract;ci;governance;unit;python"
+        TIMEOUT 120)
+
     add_test(
         NAME SparkNetworkBoundaryStatic
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/check_network_boundary.py)
