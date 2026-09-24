@@ -2541,5 +2541,167 @@
       }
     ],
     "firstUnblockedWorkItemId": "RDY-000"
-  }
+  },
+  "publicNumericClaims": [
+    {
+      "surface": "CHANGELOG.md",
+      "text": "Dear ImGui editor with 59 panels",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "CHANGELOG.md",
+      "text": "10 game modules",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "CHANGELOG.md",
+      "text": "3534 unit tests across 281 test files",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "CHANGELOG.md",
+      "text": "64 KB, depth 16, 4096 nodes",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Engine/Modding/ModSystemIO.cpp"
+    },
+    {
+      "surface": "CHANGELOG.md",
+      "text": "mirror queue is bounded at 4096 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Utils/ConsoleProcessManager.h"
+    },
+    {
+      "surface": "README.md",
+      "text": "64 node palette entries",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "visualScript.nodes"
+    },
+    {
+      "surface": "README.md",
+      "text": "34 node types",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Graphics/ShaderGraph/ShaderGraphCompiler.h"
+    },
+    {
+      "surface": "README.md",
+      "text": "11 in-tree game modules",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "README.md",
+      "text": "RHI (6 backends)",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Graphics/RHI"
+    },
+    {
+      "surface": "README.md",
+      "text": "11 in-tree module directories",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "docs/plans/FEATURE_ROADMAP.md",
+      "text": "34 node types",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Graphics/ShaderGraph/ShaderGraphCompiler.h"
+    },
+    {
+      "surface": "docs/plans/FEATURE_ROADMAP.md",
+      "text": "64 node palette entries",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "visualScript.nodes"
+    },
+    {
+      "surface": "docs/status/PROJECT_STATUS.md",
+      "text": "34 node types",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Graphics/ShaderGraph/ShaderGraphCompiler.h"
+    },
+    {
+      "surface": "docs/tooling/README.md",
+      "text": "11 in-tree module targets",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "wiki/advanced/Codebase-Health.md",
+      "text": "5 integration tests",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/advanced/Gameplay-Systems-Status.md",
+      "text": "~1,000+ lines",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/advanced/Gameplay-Systems-Status.md",
+      "text": "337 lines",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/advanced/Gameplay-Systems-Status.md",
+      "text": "7,343 lines",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/advanced/SparkGame-Module-Status.md",
+      "text": "11 in-tree module directories",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "wiki/advanced/SparkGame-Module-Status.md",
+      "text": "11 module directories",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "wiki/advanced/Testing.md",
+      "text": "4,965 production-source in 411 files, 2,268 mirror in 190 files",
+      "classification": "historical",
+      "owner": "unassigned"
+    },
+    {
+      "surface": "wiki/gameplay-tools/SparkConsole.md",
+      "text": "mirror queue is bounded at 4096 lines",
+      "classification": "static-fact",
+      "owner": "unassigned",
+      "evidencePath": "SparkEngine/Source/Utils/ConsoleProcessManager.h"
+    },
+    {
+      "surface": "wiki/getting-started/Architecture-Overview.md",
+      "text": "11 in-tree module directories",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    },
+    {
+      "surface": "wiki/getting-started/Game-Modules.md",
+      "text": "11 module targets",
+      "classification": "metric",
+      "owner": "unassigned",
+      "metricId": "modules.discovered"
+    }
+  ]
 }

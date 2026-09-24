@@ -45,6 +45,30 @@ catalog; a reference from a `done` item does not count. When a path lands,
 delete its entry in the same change. A work item marked `done` never resolves a
 reference through that list.
 
+Hand-written counts are governed too. `validate.py` scans every file in
+`REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES` for a number followed (within two words)
+by tests, files, panels, modules, subsystems, backends, lines or nodes, including
+`N+`, `~N` and `N/M` forms and phrases wrapped across lines. `<!-- AUTO:* -->`
+blocks, the fully generated `wiki/advanced/Codebase-Statistics.md`, and the
+`sed_replace` patterns of `docs/update-readme-badges.sh` are generator-owned and
+skipped. Each pattern is skipped only on the file(s) its own `sed_replace` call
+rewrites (the validator resolves `$readme`, loop variables, and arrays; an
+unresolvable target fails validation), so `N specialized panels` is managed on
+`README.md` but must be claimed on `wiki/getting-started/FAQ.md`. Every other hit
+must lie wholly inside the `text` of a `readiness.publicNumericClaims` entry for
+that `surface`; an entry `64 nodes` does not cover `~64 nodes`, `1/64 nodes` or
+`#64 nodes`:
+
+| `classification` | Extra field | Check |
+|------------------|-------------|-------|
+| `metric` | `metricId` | Exactly one claim, compared with the value `generate.py` measures from source; `N+` passes while the metric is at least `N`, and `~N` or `N/M` is refused |
+| `static-fact` | `evidencePath` | The cited path must exist (design constants such as the 4096-node mod JSON budget) |
+| `historical` | none | A dated audit or changelog record that is not re-measured |
+
+An entry whose text no longer occurs, or holds no claim, is an error, so
+rewording a page retires its entry in the same change. Prefer removing
+per-file line counts over registering them: they drift with every edit.
+
 CTest runs the whole contract suite as `site-data-contract`. The faster
 `readiness-cross-references` runs the strict live validation plus the dependency,
 promotion, selector, future-path, prose-reference and handoff cases. Both carry
@@ -230,6 +254,6 @@ Predecessor identity and source-lineage review updated 2026-09-22; see the
 [release API immutable field](https://docs.github.com/en/rest/releases/releases).
 Recheck live environment protection, approval history, signing authority, and
 exact-SHA run/artifact identities before each release.
-Contract reference rules added 2026-09-24 from
+Contract reference rules and the public numeric-claim ledger added 2026-09-24 from
 [`validate.py`](../../tools/site-data/validate.py) and
 [`test_site_data_contract.py`](../../Tests/Tools/test_site_data_contract.py).

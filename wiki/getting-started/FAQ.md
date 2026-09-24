@@ -136,7 +136,7 @@ separate metrics.
 The source tree includes 64 `*Panel.h` classes covering scene editing, asset
 management, physics, gameplay, audio, scripting, profiling, and more. This
 source-file inventory is not `stable-v1` editor certification and does not mean
-all classes are registered or shown by default. The 6 core panels shown by
+all classes are registered or shown by default. The core panels shown by
 default are:
 
 - **Scene View** — 3D viewport with gizmos

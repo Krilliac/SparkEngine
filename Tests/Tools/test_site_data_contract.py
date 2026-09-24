@@ -2409,6 +2409,214 @@ class ProseCrossReferenceTests(ContractTestCase):
         self.assertEqual([], self.prose_errors())
 
 
+class PublicNumericClaimTests(ContractTestCase):
+    """Hand-written counts on public surfaces must resolve to a metric or a reviewed entry."""
+
+    SURFACE = "README.md"
+
+    @staticmethod
+    def claim_errors(
+        texts: dict[str, str],
+        entries: Any,
+        metrics: dict[str, int | float] | None = None,
+        managed: dict[str, tuple[re.Pattern[str], ...]] | None = None,
+    ) -> list[str]:
+        return site_data_validate.public_numeric_claim_errors(
+            texts,
+            entries,
+            lambda: metrics or {},
+            managed or {},
+        )
+
+    @staticmethod
+    def entry(text: str, classification: str = "historical", **extra: str) -> dict[str, str]:
+        return {
+            "surface": PublicNumericClaimTests.SURFACE,
+            "text": text,
+            "classification": classification,
+            "owner": "unassigned",
+            **extra,
+        }
+
+    def test_current_public_surfaces_have_no_unclaimed_numbers(self) -> None:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_public_numeric_claims()
+        self.assertEqual(validator.errors, [])
+
+    def test_unclaimed_number_is_rejected(self) -> None:
+        errors = self.claim_errors({self.SURFACE: "The editor ships 12 panels.\n"}, [])
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("README.md:1", errors[0])
+        self.assertIn("unclaimed numeric claim '12 panels'", errors[0])
+
+    def test_wrapped_and_qualified_claims_are_detected(self) -> None:
+        errors = self.claim_errors(
+            {self.SURFACE: "Covers 50+ other\nsubsystems and ~1,326 lines and 2,504/2,509 tests.\n"},
+            [],
+        )
+        joined = "\n".join(errors)
+        self.assertIn("'50+ other\\nsubsystems'", joined)
+        self.assertIn("'~1,326 lines'", joined)
+        self.assertIn("'2,504/2,509 tests'", joined)
+        self.assertIn("README.md:1", joined)
+        self.assertIn("README.md:2", joined)
+
+    def test_product_versions_are_not_counts(self) -> None:
+        text = "Win32 + DirectX 11 ImGui backends; a DirectX 12 backend; version 1 files are rejected.\n"
+        self.assertEqual(self.claim_errors({self.SURFACE: text}, []), [])
+
+    def test_stale_metric_value_is_rejected(self) -> None:
+        text = "- 65 node palette entries\n"
+        entry = self.entry("65 node palette entries", "metric", metricId="visualScript.nodes")
+        errors = self.claim_errors({self.SURFACE: text}, [entry], {"visualScript.nodes": 64})
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("claims 65 but visualScript.nodes is 64", errors[0])
+        self.assertEqual(
+            self.claim_errors(
+                {self.SURFACE: "- 64 node palette entries\n"},
+                [self.entry("64 node palette entries", "metric", metricId="visualScript.nodes")],
+                {"visualScript.nodes": 64},
+            ),
+            [],
+        )
+
+    def test_lower_bound_metric_claim_tolerates_growth_only(self) -> None:
+        metrics = {"visualScript.nodes": 64}
+        accepted = self.entry("60+ nodes", "metric", metricId="visualScript.nodes")
+        self.assertEqual(self.claim_errors({self.SURFACE: "60+ nodes\n"}, [accepted], metrics), [])
+        rejected = self.entry("70+ nodes", "metric", metricId="visualScript.nodes")
+        errors = self.claim_errors({self.SURFACE: "70+ nodes\n"}, [rejected], metrics)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("claims at least 70 but visualScript.nodes is 64", errors[0])
+
+    def test_metric_claims_must_be_exact_single_and_measurable(self) -> None:
+        metrics = {"visualScript.nodes": 64}
+        cases = [
+            ("~64 nodes", "visualScript.nodes", "approximate"),
+            ("64 nodes and 64 files", "visualScript.nodes", "exactly one numeric claim"),
+            ("64 nodes", "tests.executed", "not measurable from the source tree"),
+            ("64 nodes", "made.up", "unknown metric"),
+        ]
+        for text, metric_id, fragment in cases:
+            with self.subTest(text=text, metric=metric_id):
+                entry = self.entry(text, "metric", metricId=metric_id)
+                errors = self.claim_errors({self.SURFACE: text + "\n"}, [entry], metrics)
+                self.assertTrue(any(fragment in error for error in errors), errors)
+
+    def test_claim_inside_auto_block_is_ignored(self) -> None:
+        text = "Intro.\n<!-- AUTO:stats -->\n| Tests | 9,999 tests |\n<!-- /AUTO:stats -->\nOutro.\n"
+        self.assertEqual(self.claim_errors({self.SURFACE: text}, []), [])
+        outside = text + "Also 7 panels.\n"
+        errors = self.claim_errors({self.SURFACE: outside}, [])
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("README.md:6", errors[0])
+
+    def test_unterminated_auto_block_is_rejected(self) -> None:
+        errors = self.claim_errors({self.SURFACE: "<!-- AUTO:stats -->\n| 9 tests |\n"}, [])
+        self.assertTrue(any("unterminated AUTO block 'stats'" in error for error in errors), errors)
+
+    def test_managed_line_is_exempt_only_on_its_managed_surface(self) -> None:
+        managed = site_data_validate.managed_numeric_claim_patterns()
+        text = "Tests: 7,564 test definitions across 631 files.\n"
+        self.assertEqual(self.claim_errors({self.SURFACE: text}, [], managed=managed), [])
+        errors = self.claim_errors({"wiki/Home.md": text}, [], managed=managed)
+        self.assertEqual(len(errors), 2, errors)
+
+    def test_managed_pattern_is_exempt_only_on_the_file_its_call_rewrites(self) -> None:
+        managed = site_data_validate.managed_numeric_claim_patterns()
+        text = "SparkEditor has 12 specialized panels today.\n"
+        self.assertEqual(self.claim_errors({"README.md": text}, [], managed=managed), [])
+        # The badge script rewrites FAQ.md, but only for the `*Panel.h` pattern.
+        errors = self.claim_errors({"wiki/getting-started/FAQ.md": text}, [], managed=managed)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'12 specialized panels'", errors[0])
+        self.assertEqual(
+            self.claim_errors({"wiki/getting-started/FAQ.md": "Ships 59 `*Panel.h` headers.\n"}, [], managed=managed),
+            [],
+        )
+        self.assertEqual(len(managed["wiki/getting-started/FAQ.md"]), 1)
+
+    def test_unresolvable_badge_script_target_fails_closed(self) -> None:
+        bindings = {"readme": ("$PROJECT_ROOT/README.md",)}
+        self.assertEqual(
+            site_data_validate._resolve_managed_claim_target("$readme", bindings),
+            ["README.md"],
+        )
+        for target in ("$unknown", "$PROJECT_ROOT/../outside.md", "/etc/$readme", "docs/$PROJECT_ROOT/x.md"):
+            with self.subTest(target=target):
+                with self.assertRaises(site_data_validate.SiteDataError):
+                    site_data_validate._resolve_managed_claim_target(target, bindings)
+
+    def test_entry_does_not_cover_qualified_or_overlapping_page_claims(self) -> None:
+        metrics = {"visualScript.nodes": 64}
+        entry = self.entry("64 nodes", "metric", metricId="visualScript.nodes")
+        self.assertEqual(self.claim_errors({self.SURFACE: "Has 64 nodes.\n"}, [entry], metrics), [])
+        for text in ("Has ~64 nodes.\n", "Has 1/64 nodes.\n", "Has #64 nodes\n", "Has 1+64 nodes\n"):
+            with self.subTest(text=text):
+                errors = self.claim_errors({self.SURFACE: text}, [entry], metrics)
+                self.assertTrue(any("does not occur in README.md" in error for error in errors), errors)
+        # A managed pattern that matches only part of a claim does not exempt the rest.
+        partial = {self.SURFACE: (re.compile(r"12 specialized panels"),)}
+        errors = self.claim_errors({self.SURFACE: "~12 specialized panels\n"}, [], managed=partial)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'~12 specialized panels'", errors[0])
+
+    def test_badge_script_patterns_are_parsed(self) -> None:
+        managed = site_data_validate.managed_numeric_claim_patterns()
+        self.assertIn("README.md", managed)
+        self.assertIn(".github/copilot-instructions.md", managed)
+        self.assertIn(".github/prompts/build-test.prompt.md", managed)
+        readme = "\n".join(pattern.pattern for pattern in managed["README.md"])
+        self.assertIn("panel", readme)
+        self.assertTrue(
+            any(
+                pattern.search("7,564 test definitions across 631 files")
+                for pattern in managed[".github/copilot-instructions.md"]
+            )
+        )
+
+    def test_entries_must_match_surface_text_and_claim_something(self) -> None:
+        text = "- 59 panels shipped in 0.1\n"
+        cases = [
+            (self.entry("61 panels"), "does not occur in README.md"),
+            (self.entry("shipped in"), "contains no numeric claim"),
+            (self.entry("59 panels", "rumor"), "classification must be one of"),
+            (self.entry("59 panels", "metric"), "metricId is required"),
+            (self.entry("59 panels", "static-fact"), "evidencePath is required"),
+            (self.entry("59 panels", metricId="editor.panels"), "unexpected field(s) ['metricId']"),
+            ({**self.entry("59 panels"), "owner": ""}, "owner must be a non-empty string"),
+            ({**self.entry("59 panels"), "surface": "wiki/Not-A-Surface.md"}, "not a governed public claim surface"),
+        ]
+        for entry, fragment in cases:
+            with self.subTest(fragment=fragment):
+                errors = self.claim_errors({self.SURFACE: text}, [entry])
+                self.assertTrue(any(fragment in error for error in errors), errors)
+        duplicate = self.claim_errors({self.SURFACE: text}, [self.entry("59 panels"), self.entry("59 panels")])
+        self.assertTrue(any("duplicate entry" in error for error in duplicate), duplicate)
+        self.assertTrue(
+            any("must be an array" in error for error in self.claim_errors({self.SURFACE: text}, {"not": "a list"}))
+        )
+
+    def test_entry_text_is_whitespace_insensitive_across_wrapped_lines(self) -> None:
+        text = "- Dear ImGui editor with 59\n  panels and collaborative editing\n"
+        self.assertEqual(self.claim_errors({self.SURFACE: text}, [self.entry("59 panels")]), [])
+
+    def test_removing_a_contract_entry_rejects_the_live_contract(self) -> None:
+        entries = self.mutable["readiness"]["publicNumericClaims"]
+        removed = next(entry for entry in entries if entry["classification"] == "metric")
+        entries.remove(removed)
+        self.assert_rejected(self.mutable, "unclaimed numeric claim")
+
+    def test_live_static_facts_cite_existing_evidence(self) -> None:
+        entry = next(
+            entry
+            for entry in self.mutable["readiness"]["publicNumericClaims"]
+            if entry["classification"] == "static-fact"
+        )
+        entry["evidencePath"] = "SparkEngine/Source/DoesNotExist.h"
+        self.assert_rejected(self.mutable, "referenced path does not exist: SparkEngine/Source/DoesNotExist.h")
+
+
 class PublishedMetricTests(unittest.TestCase):
     """One definition of the public source and test counts, bound to the commit."""
 

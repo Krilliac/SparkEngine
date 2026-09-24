@@ -383,7 +383,7 @@ SparkEngine/
 ├── docs/                     # API docs, gap analysis, roadmap
 ├── wiki/                     # Wiki documentation pages
 ├── cmake/                    # CMake helper modules
-└── CMakeLists.txt            # Main build configuration (1000+ lines)
+└── CMakeLists.txt            # Main build configuration
 ```
 
 ## Key Architectural Patterns

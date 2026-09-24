@@ -56,7 +56,7 @@ were not shipped as v1.0.0 and do not establish stable-v1 support or certificati
 - Mesh Shader Pipeline (meshlet clustering, amplification/mesh shaders)
 - Virtual Texturing (feedback-driven page streaming)
 - DXR 1.1 Ray Tracing (reflections, shadows, AO, GI, denoising)
-- Shader Graph (35+ nodes, HLSL generation)
+- Shader Graph (34 node types, HLSL generation)
 - Visual Scripting (64 node palette entries across 9 categories, compiles to AngelScript)
 - HeroEngine-inspired MMO networking (AreaServers, WorldServer, seamless migration)
 - 64 `*Panel.h` editor-class inventory; registration, operation coverage, and collaborative editing remain separately gated

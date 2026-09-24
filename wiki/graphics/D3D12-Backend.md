@@ -12,7 +12,7 @@ SparkEngine's D3D12 backend provides a modern, low-level graphics API implementa
 ## Architecture
 
 - **Namespace:** `Spark::RHI::D3D12`
-- **Files:** `Graphics/RHI/D3D12/D3D12Device.h` (773 lines), `D3D12Device.cpp` (1507 lines)
+- **Files:** `Graphics/RHI/D3D12/D3D12Device.h`, `D3D12Device.cpp`
 - **Guard:** `#ifdef _WIN32`
 
 ## Key Classes

@@ -669,7 +669,7 @@ Xvfb :99 -screen 0 1920x1080x24 -ac &
 # Set environment
 export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 MESA_GL_VERSION_OVERRIDE=3.3
 
-# Run automated test suite (21 tests)
+# Run the automated live-editor test suite
 python3 tools/test-editor-live.py build/bin/SparkEditor
 ```
 

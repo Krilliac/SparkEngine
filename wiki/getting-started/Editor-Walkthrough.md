@@ -19,7 +19,7 @@ The runtime hosts do not currently define an F1 editor-overlay toggle.
 
 ## Default Layout
 
-The current factory metadata marks 6 core panels visible by default:
+The core panels visible by default are:
 
 | Panel | Position | What it does |
 |-------|----------|--------------|

@@ -174,7 +174,7 @@ The active backend selection is XAudio2 on Windows or OpenAL on non-Windows host
 
 - **AngelScript** — hot-reload via file watcher, bindings for selected engine APIs, per-file module isolation, client/server context separation
 - **Visual scripting** — 64 node palette entries across 9 categories, compiles to AngelScript and uses the existing script runtime
-- **Shader Graph** — 35+ nodes, HLSL generation, live preview
+- **Shader Graph** — 34 node types, HLSL generation, live preview
 
 ### AI and Navigation
 
@@ -214,7 +214,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 7,564 test definitions across 631 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 7,564 test definitions across 631 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and the other engine subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error

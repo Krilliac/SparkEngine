@@ -58,7 +58,7 @@ The shader graph system bridges the gap between visual material editing and GPU 
 
 ## Node Types
 
-The `ShaderNodeType` enum defines 35+ node types across four categories.
+The `ShaderNodeType` enum defines 34 node types across four categories.
 
 ### Input Nodes
 

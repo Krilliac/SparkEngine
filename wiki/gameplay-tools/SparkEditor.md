@@ -249,7 +249,7 @@ messages are no longer mangled, and commit subjects no longer carry a trailing q
 - Export logs to txt or csv
 - Configurable scroll behavior (auto-scroll, pause on hover)
 
-**Source:** `SparkEditor/Source/Panels/ConsolePanel.cpp` (821 lines)
+**Source:** `SparkEditor/Source/Panels/ConsolePanel.cpp`
 
 ### Scene View
 
@@ -261,7 +261,7 @@ messages are no longer mangled, and commit subjects no longer carry a trailing q
 - Translate/rotate/scale gizmo rendering and interaction for selected entities (Windows path)
 - Click-to-select entities via raycasting
 
-**Source:** `SparkEditor/Source/Panels/SceneViewPanel.cpp` (404 lines)
+**Source:** `SparkEditor/Source/Panels/SceneViewPanel.cpp`
 
 ### State Preview Toolbar
 
@@ -284,7 +284,7 @@ workflow requires its own installed-package validation.
 - Camera mode switching (editor camera vs. game camera)
 - State-machine frame statistics overlay (not measured gameplay-system work)
 
-**Source:** `SparkEditor/Source/Panels/PlayModeToolbarPanel.cpp` (644 lines)
+**Source:** `SparkEditor/Source/Panels/PlayModeToolbarPanel.cpp`
 
 ### Build & Cook Panel
 
@@ -296,7 +296,7 @@ Build configuration and packaging pipeline.
 - Output directory configuration
 - Build log with error/warning highlights
 
-**Source:** `SparkEditor/Source/Panels/BuildCookPanel.cpp` (591 lines)
+**Source:** `SparkEditor/Source/Panels/BuildCookPanel.cpp`
 
 ### Workflow Panel
 
@@ -340,7 +340,7 @@ Real-time [EventBus](../subsystems/Event-System.md) inspector for debugging even
 - Event payload inspection
 - Pause/resume event capture
 
-**Source:** `SparkEditor/Source/Panels/EventMonitorPanel.cpp` (97 lines)
+**Source:** `SparkEditor/Source/Panels/EventMonitorPanel.cpp`
 
 ### Dialogue Editor Panel
 
@@ -351,7 +351,7 @@ Visual [dialogue tree](../subsystems/Dialogue-System.md) authoring tool.
 - Branching condition configuration
 - Preview dialogue flow in-editor
 
-**Source:** `SparkEditor/Source/Panels/DialogueEditorPanel.cpp` (175 lines)
+**Source:** `SparkEditor/Source/Panels/DialogueEditorPanel.cpp`
 
 ### FPS Tools Panel
 
@@ -363,7 +363,7 @@ Specialized tools for first-person shooter level design and balancing.
 - Combat simulation for balance testing
 - Level design helpers (cover analysis, sight lines)
 
-**Source:** `SparkEditor/Source/Panels/FPSToolsPanel.cpp` (630 lines)
+**Source:** `SparkEditor/Source/Panels/FPSToolsPanel.cpp`
 
 ### Scene Statistics Panel
 
@@ -410,7 +410,7 @@ Create, edit, and manage [prefab](../subsystems/Scene-Management.md) assets.
 - Create prefab from selected entities
 - Apply prefab changes to all instances
 
-**Source:** `SparkEditor/Source/Panels/PrefabEditorPanel.cpp` (393 lines)
+**Source:** `SparkEditor/Source/Panels/PrefabEditorPanel.cpp`
 
 ### Project Browser Panel
 
@@ -421,7 +421,7 @@ Project-level hub for opening, creating, and managing projects.
 - Existing project browser with folder navigation
 - Project settings quick-access
 
-**Source:** `SparkEditor/Source/Panels/ProjectBrowserPanel.cpp` (540 lines)
+**Source:** `SparkEditor/Source/Panels/ProjectBrowserPanel.cpp`
 
 ### Particle Editor Panel
 
@@ -433,7 +433,7 @@ Visual [particle system](../subsystems/Rendering-and-Graphics.md) authoring.
 - Physics integration (gravity, wind, collision)
 - Live preview in viewport
 
-**Source:** `SparkEditor/Source/Panels/ParticleEditorPanel.cpp` (147 lines)
+**Source:** `SparkEditor/Source/Panels/ParticleEditorPanel.cpp`
 
 ### Post-Processing (Inspector)
 
@@ -451,7 +451,7 @@ String table editor for [multi-language support](../subsystems/Localization.md).
 - Missing translation highlighting
 - Import/export CSV for translator workflows
 
-**Source:** `SparkEditor/Source/Panels/LocalizationPanel.cpp` (149 lines)
+**Source:** `SparkEditor/Source/Panels/LocalizationPanel.cpp`
 
 ### Save System Panel
 
@@ -485,7 +485,7 @@ the live lattice.
 - Tension parameter adjustment
 - Visual preview in scene view
 
-**Source:** `SparkEditor/Source/Panels/SplineEditorPanel.cpp` (140 lines)
+**Source:** `SparkEditor/Source/Panels/SplineEditorPanel.cpp`
 
 ### Weather & Fog Panel
 
@@ -508,7 +508,7 @@ Visual timeline of the [undo/redo](#undoredo-system) command stack.
 - Current position indicator
 - Saved state marker
 
-**Source:** `SparkEditor/Source/Panels/UndoHistoryPanel.cpp` (161 lines)
+**Source:** `SparkEditor/Source/Panels/UndoHistoryPanel.cpp`
 
 ### AI Editor Panel
 
@@ -519,7 +519,7 @@ Visual timeline of the [undo/redo](#undoredo-system) command stack.
 - Agent inspection with live blackboard values
 - Tree validation and error highlighting
 
-**Source:** `SparkEditor/Source/Panels/AIEditorPanel.cpp` (201 lines)
+**Source:** `SparkEditor/Source/Panels/AIEditorPanel.cpp`
 
 ### AI Debug Panel
 
@@ -532,7 +532,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - AI system statistics (agent counts by state, targets)
 - State filtering and configurable refresh rate
 
-**Source:** `SparkEditor/Source/Panels/AIDebugPanel.cpp` (290 lines)
+**Source:** `SparkEditor/Source/Panels/AIDebugPanel.cpp`
 
 ### 2D Panels
 
@@ -545,7 +545,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - Debug visualization: AABBs, contacts, grid
 - Interactive raycast testing tool
 
-**Source:** `SparkEditor/Source/Panels/Physics2DPanel.cpp` (308 lines)
+**Source:** `SparkEditor/Source/Panels/Physics2DPanel.cpp`
 
 #### Sprite Editor Panel
 
@@ -556,7 +556,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - Sorting layer and order assignment
 - Color tint and flip controls
 
-**Source:** `SparkEditor/Source/Panels/SpriteEditorPanel.cpp` (329 lines)
+**Source:** `SparkEditor/Source/Panels/SpriteEditorPanel.cpp`
 
 #### Sprite Animation Editor Panel
 
@@ -567,7 +567,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - Preview with play/pause/step controls
 - Onion skinning for animation reference
 
-**Source:** `SparkEditor/Source/Panels/SpriteAnimationEditorPanel.cpp` (534 lines)
+**Source:** `SparkEditor/Source/Panels/SpriteAnimationEditorPanel.cpp`
 
 #### Tilemap Editor Panel
 
@@ -579,7 +579,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - Zoom and pan viewport
 - Panel-local undo/redo commands; this does not establish complete editor-wide coverage
 
-**Source:** `SparkEditor/Source/Panels/TilemapEditorPanel.cpp` (540 lines)
+**Source:** `SparkEditor/Source/Panels/TilemapEditorPanel.cpp`
 
 ### Game View Panel
 

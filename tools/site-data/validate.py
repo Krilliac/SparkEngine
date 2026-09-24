@@ -973,6 +973,316 @@ def validate_public_claim_text(
     return violations
 
 
+# Hand-written counts on the governed public surfaces ("50+ other subsystems",
+# "2,509 tests") go stale silently, because no generator owns them. Every such
+# claim must either sit in generator-owned text or resolve to a reviewed
+# readiness.publicNumericClaims entry.
+PUBLIC_NUMERIC_CLAIM_NOUNS = (
+    "tests", "test", "files", "file", "panels", "panel", "modules", "module",
+    "subsystems", "subsystem", "backends", "backend", "lines", "line", "nodes", "node",
+)
+PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS = {
+    # Bound to a METRIC_IDS entry and compared with the value measured from source.
+    "metric": {"metricId"},
+    # A recorded past state (changelog entry, dated audit) that is not re-measured.
+    "historical": set(),
+    # A design constant or fixed inventory, justified by the cited source path.
+    "static-fact": {"evidencePath"},
+}
+PUBLIC_NUMERIC_CLAIM_REQUIRED_KEYS = {"surface", "text", "classification", "owner"}
+# Metrics that describe a CI execution or the generated docs bundle, not the
+# source tree, so a hand-written number cannot be checked against them here.
+UNMEASURABLE_CLAIM_METRICS = {"docs.authored", "tests.executed", "tests.failed", "tests.skipped"}
+# Fully regenerated pages; `docs/update-codebase-stats.sh check` owns their numbers.
+GENERATED_CLAIM_SURFACES = {"wiki/advanced/Codebase-Statistics.md"}
+# Regex-managed count lines are owned by this script and its `check` mode.
+MANAGED_CLAIM_SCRIPT = "docs/update-readme-badges.sh"
+_CLAIM_NUMBER = r"\d{1,3}(?:,\d{3})+|\d+"
+PUBLIC_NUMERIC_CLAIM_PATTERN = re.compile(
+    # Not the tail of an identifier, decimal, path, anchor, or ratio, and not a
+    # product version such as "DirectX 11" or "version 1".
+    r"(?<![\w.,/#$~-])(?<!DirectX )(?<!Direct3D )(?<!version )(?<!Windows )"
+    rf"(?P<approx>~)?(?P<value>{_CLAIM_NUMBER})(?P<plus>\+)?(?P<ratio>/(?:{_CLAIM_NUMBER})\+?)?"
+    r"[`*]{0,2}"
+    r"(?:\s+[A-Za-z][\w-]*){0,2}?\s+"
+    rf"(?:{'|'.join(PUBLIC_NUMERIC_CLAIM_NOUNS)})\b",
+    re.IGNORECASE,
+)
+_AUTO_BLOCK_OPEN = re.compile(r"<!--\s*AUTO:(?P<name>[\w-]+)\s*-->")
+
+
+def _mask_auto_blocks(text: str) -> tuple[str, list[str]]:
+    """Blank generator-owned AUTO blocks while keeping offsets and line numbers."""
+    errors: list[str] = []
+    masked = text
+    position = 0
+    while True:
+        opening = _AUTO_BLOCK_OPEN.search(masked, position)
+        if opening is None:
+            return masked, errors
+        name = opening.group("name")
+        closing = re.compile(rf"<!--\s*/AUTO:{re.escape(name)}\s*-->").search(masked, opening.end())
+        if closing is None:
+            line = masked.count("\n", 0, opening.start()) + 1
+            errors.append(f"{line}: unterminated AUTO block {name!r}")
+            return masked, errors
+        blanked = re.sub(r"[^\n]", " ", masked[opening.start():closing.end()])
+        masked = masked[:opening.start()] + blanked + masked[closing.end():]
+        position = closing.end()
+
+
+def _sed_pattern_to_regex(pattern: str) -> re.Pattern[str]:
+    """Translate the POSIX basic regular expressions used by sed_replace."""
+    parts: list[str] = []
+    index = 0
+    while index < len(pattern):
+        character = pattern[index]
+        if character == "[":
+            end = pattern.index("]", index + 1)
+            parts.append(pattern[index:end + 1])
+            index = end + 1
+            continue
+        if character in "*.":
+            parts.append(character)
+        elif character == "\\" and index + 1 < len(pattern):
+            index += 1
+            parts.append(re.escape(pattern[index]))
+        else:
+            parts.append(re.escape(character))
+        index += 1
+    return re.compile("".join(parts))
+
+
+_SHELL_VARIABLE = re.compile(r"\$(?:\{(\w+)\}|(\w+))")
+
+
+def _managed_claim_bindings(script: str) -> dict[str, tuple[str, ...]]:
+    """Collect the values each badge-script variable can hold.
+
+    Scalars (`local x="..."`), arrays (`local x=( ... )`), and loop variables
+    (`for x in "${array[@]}"`) are recorded. A name bound to two different value
+    sets is ambiguous, so resolving it later fails closed.
+    """
+    bindings: dict[str, set[tuple[str, ...]]] = {}
+
+    def bind(name: str, values: tuple[str, ...]) -> None:
+        bindings.setdefault(name, set()).add(values)
+
+    for match in re.finditer(r'^[ \t]*(?:local[ \t]+)?(\w+)="([^"]*)"[ \t]*$', script, re.MULTILINE):
+        bind(match.group(1), (match.group(2),))
+    arrays: dict[str, tuple[str, ...]] = {}
+    for match in re.finditer(r"^[ \t]*(?:local[ \t]+)?(\w+)=\(([^)]*)\)", script, re.MULTILINE):
+        items = tuple(item.strip("\"'") for item in match.group(2).split())
+        arrays[match.group(1)] = items
+        bind(match.group(1), items)
+    for match in re.finditer(r'\bfor[ \t]+(\w+)[ \t]+in[ \t]+"\$\{(\w+)\[@\]\}"', script):
+        if match.group(2) in arrays:
+            bind(match.group(1), arrays[match.group(2)])
+    return {
+        name: next(iter(value_sets)) if len(value_sets) == 1 else ()
+        for name, value_sets in bindings.items()
+    }
+
+
+def _resolve_managed_claim_target(target: str, bindings: dict[str, tuple[str, ...]]) -> list[str]:
+    """Expand a `sed_replace` target argument into repository-relative paths."""
+    resolved: list[str] = []
+    pending = [target]
+    for _ in range(16):
+        next_pending: list[str] = []
+        for value in pending:
+            if value.startswith("$PROJECT_ROOT/"):
+                value = value.removeprefix("$PROJECT_ROOT/")
+            variable = _SHELL_VARIABLE.search(value)
+            if variable is None:
+                resolved.append(value)
+                continue
+            name = variable.group(1) or variable.group(2)
+            # $PROJECT_ROOT is only meaningful as the leading prefix stripped above.
+            values = () if name == "PROJECT_ROOT" else bindings.get(name, ())
+            if not values:
+                raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT}: cannot resolve sed_replace target {target!r}")
+            next_pending.extend(value[:variable.start()] + option + value[variable.end():] for option in values)
+        if not next_pending:
+            break
+        pending = next_pending
+    else:
+        raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT}: sed_replace target {target!r} does not terminate")
+    for path in resolved:
+        if not path or path.startswith("/") or ".." in path.split("/"):
+            raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT}: sed_replace target {target!r} is not a repository path")
+    return resolved
+
+
+@functools.lru_cache(maxsize=1)
+def managed_numeric_claim_patterns() -> dict[str, tuple[re.Pattern[str], ...]]:
+    """Map each surface the badge script rewrites to the count patterns it owns.
+
+    The script is the single definition: each `sed_replace` pattern exempts its
+    matches only on the file(s) that call rewrites, so a managed sentence copied
+    onto another page -- even one the script rewrites for a different pattern --
+    does not inherit the exemption. An unresolvable target fails closed.
+    """
+    script = (REPO_ROOT / MANAGED_CLAIM_SCRIPT).read_text(encoding="utf-8")
+    bindings = _managed_claim_bindings(script)
+    managed: dict[str, list[re.Pattern[str]]] = {}
+    for match in re.finditer(r"\bsed_replace[ \t]+\"([^\"]*)\"[ \t]*\\[ \t]*\n\s*'([^']*)'", script):
+        pattern = _sed_pattern_to_regex(match.group(2))
+        for path in _resolve_managed_claim_target(match.group(1), bindings):
+            managed.setdefault(path, []).append(pattern)
+    if not managed:
+        raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT} declares no managed count patterns or files")
+    return {path: tuple(patterns) for path, patterns in sorted(managed.items())}
+
+
+@functools.lru_cache(maxsize=1)
+def source_metric_values() -> dict[str, int | float]:
+    """Metric values measured from the checked-out tree, as the generator publishes them."""
+    from generate import collect_metrics, module_statistics
+
+    return {
+        row["id"]: row["value"]
+        for row in collect_metrics(0, module_statistics())
+        if row["id"] not in UNMEASURABLE_CLAIM_METRICS
+    }
+
+
+def _claim_number(value: str) -> int:
+    return int(value.replace(",", ""))
+
+
+def public_numeric_claim_errors(
+    surface_texts: dict[str, str],
+    entries: Any,
+    metric_values: Any,
+    managed_patterns: dict[str, tuple[re.Pattern[str], ...]],
+) -> list[str]:
+    """Return errors for public numeric claims that no contract entry or generator owns.
+
+    ``metric_values`` is a callable returning the measured metric map; it is only
+    invoked when an entry binds a metric, so pure-text checks stay cheap.
+    """
+    errors: list[str] = []
+    location = "readiness.publicNumericClaims"
+    if not isinstance(entries, list):
+        return [f"{location}: must be an array of objects"]
+
+    valid_entries: list[tuple[int, dict[str, Any]]] = []
+    seen: set[tuple[str, str]] = set()
+    for index, entry in enumerate(entries):
+        entry_location = f"{location}[{index}]"
+        if not isinstance(entry, dict):
+            errors.append(f"{entry_location}: must be an object")
+            continue
+        classification = entry.get("classification")
+        if classification not in PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS:
+            errors.append(
+                f"{entry_location}: classification must be one of "
+                f"{sorted(PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS)}"
+            )
+            continue
+        extra_keys = PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS[classification]
+        missing = sorted((PUBLIC_NUMERIC_CLAIM_REQUIRED_KEYS | extra_keys) - set(entry))
+        unexpected = sorted(set(entry) - PUBLIC_NUMERIC_CLAIM_REQUIRED_KEYS - extra_keys)
+        for key in missing:
+            errors.append(f"{entry_location}: {key} is required for a {classification} claim")
+        if unexpected:
+            errors.append(f"{entry_location}: unexpected field(s) {unexpected} for a {classification} claim")
+        for key in ("surface", "text", "owner", *extra_keys):
+            if key in entry and (not isinstance(entry[key], str) or not entry[key].strip()):
+                errors.append(f"{entry_location}: {key} must be a non-empty string")
+        if missing or unexpected or any(
+            not isinstance(entry.get(key), str) or not entry[key].strip()
+            for key in ("surface", "text", "owner", *extra_keys)
+        ):
+            continue
+        surface = entry["surface"]
+        if surface not in REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES or surface in GENERATED_CLAIM_SURFACES:
+            errors.append(f"{entry_location}: {surface} is not a governed public claim surface")
+            continue
+        key = (surface, " ".join(entry["text"].split()))
+        if key in seen:
+            errors.append(f"{entry_location}: duplicate entry for {surface}: {entry['text']!r}")
+            continue
+        seen.add(key)
+        valid_entries.append((index, entry))
+
+    measured: dict[str, int | float] | None = None
+    covered: dict[str, list[tuple[int, int]]] = {}
+    for index, entry in valid_entries:
+        entry_location = f"{location}[{index}]"
+        surface = entry["surface"]
+        text = surface_texts.get(surface)
+        if text is None:
+            errors.append(f"{entry_location}: surface {surface} could not be read")
+            continue
+        claims = list(PUBLIC_NUMERIC_CLAIM_PATTERN.finditer(entry["text"]))
+        if not claims:
+            errors.append(f"{entry_location}: text {entry['text']!r} contains no numeric claim")
+            continue
+        phrase = r"\s+".join(re.escape(word) for word in entry["text"].split())
+        spans = [
+            (match.start(), match.end())
+            # The phrase must not be the tail of a larger number, approximation,
+            # ratio, anchor, or bound: "64 nodes" never covers "~64 nodes".
+            for match in re.finditer(rf"(?<![\w.,/#$~+-]){phrase}(?![\w])", text)
+        ]
+        if not spans:
+            errors.append(f"{entry_location}: text {entry['text']!r} does not occur in {surface}")
+            continue
+        covered.setdefault(surface, []).extend(spans)
+        if entry["classification"] != "metric":
+            continue
+        metric_id = entry["metricId"]
+        if metric_id not in METRIC_IDS:
+            errors.append(f"{entry_location}: unknown metric {metric_id}")
+            continue
+        if len(claims) != 1:
+            errors.append(f"{entry_location}: a metric entry must hold exactly one numeric claim")
+            continue
+        claim = claims[0]
+        if claim.group("approx") or claim.group("ratio"):
+            errors.append(
+                f"{entry_location}: approximate or ratio claims cannot bind {metric_id}; "
+                "state the exact value or an N+ lower bound"
+            )
+            continue
+        if measured is None:
+            measured = dict(metric_values())
+        if metric_id not in measured:
+            errors.append(f"{entry_location}: metric {metric_id} is not measurable from the source tree")
+            continue
+        actual = measured[metric_id]
+        claimed = _claim_number(claim.group("value"))
+        if claim.group("plus"):
+            if claimed > actual:
+                errors.append(
+                    f"{entry_location}: {surface} claims at least {claimed} but {metric_id} is {actual}"
+                )
+        elif claimed != actual:
+            errors.append(f"{entry_location}: {surface} claims {claimed} but {metric_id} is {actual}")
+
+    for surface in sorted(surface_texts):
+        if surface in GENERATED_CLAIM_SURFACES:
+            continue
+        masked, block_errors = _mask_auto_blocks(surface_texts[surface])
+        errors.extend(f"{surface}:{message}" for message in block_errors)
+        exempt = list(covered.get(surface, []))
+        for pattern in managed_patterns.get(surface, ()):
+            exempt.extend((match.start(), match.end()) for match in pattern.finditer(masked) if match.group(0))
+        for claim in PUBLIC_NUMERIC_CLAIM_PATTERN.finditer(masked):
+            # Only a claim wholly inside an owned span is exempt; an overlapping
+            # claim carries a qualifier or number the owner never reviewed.
+            if any(start <= claim.start() and claim.end() <= end for start, end in exempt):
+                continue
+            line = masked.count("\n", 0, claim.start()) + 1
+            errors.append(
+                f"{surface}:{line}: unclaimed numeric claim {claim.group(0)!r}; bind it to a metric "
+                "or add a reviewed readiness.publicNumericClaims entry"
+            )
+    return errors
+
+
 class Validator:
     def __init__(
         self,
@@ -1957,6 +2267,25 @@ class Validator:
             )
         return profile_ids
 
+    def validate_public_numeric_claims(self) -> None:
+        """Every hand-written count on a governed surface resolves to a contract entry."""
+        entries = self.contract["readiness"].get("publicNumericClaims")
+        if entries is None:
+            self.error("readiness.publicNumericClaims", "is required")
+            return
+        texts: dict[str, str] = {}
+        for surface in sorted(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES):
+            path = REPO_ROOT / surface
+            if path.is_file():
+                texts[surface] = path.read_text(encoding="utf-8", errors="replace")
+        if isinstance(entries, list):
+            for index, entry in enumerate(entries):
+                if isinstance(entry, dict) and entry.get("classification") == "static-fact" and "evidencePath" in entry:
+                    self.require_path(entry["evidencePath"], f"readiness.publicNumericClaims[{index}].evidencePath")
+        self.errors.extend(
+            public_numeric_claim_errors(texts, entries, source_metric_values, managed_numeric_claim_patterns())
+        )
+
     def validate_build_matrix_evidence(self) -> None:
         """The build-matrix configuration evidence is part of the contract, not beside it.
 
@@ -2403,6 +2732,7 @@ class Validator:
         self.validate_docs_catalog()
         self.validate_future_acceptance_paths()
         self.validate_build_matrix_evidence()
+        self.validate_public_numeric_claims()
         self.validate_legal(strict_public_wording=legal)
         if assets:
             self.validate_asset_surface()
