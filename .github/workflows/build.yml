@@ -232,6 +232,9 @@ jobs:
     - name: Test build-matrix inventory and parity
       run: python3 Tests/Tools/test_build_matrix_parity.py
 
+    - name: Test strict Shipping and reproducible-build contract
+      run: python3 Tests/Tools/test_build_shipping_contract.py
+
     - name: Generate and compare the deterministic build-matrix inventory
       run: |
         python3 Tools/buildmatrix/inventory.py \

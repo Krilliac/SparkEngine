@@ -6261,7 +6261,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 42,
+        "stepCount": 43,
         "steps": [
           {
             "index": 0,
@@ -6685,6 +6685,18 @@
           },
           {
             "index": 35,
+            "name": "Test strict Shipping and reproducible-build contract",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "f482dd9880b51693"
+          },
+          {
+            "index": 36,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -6696,7 +6708,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 36,
+            "index": 37,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -6708,7 +6720,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 37,
+            "index": 38,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6720,7 +6732,7 @@
             "runDigest": ""
           },
           {
-            "index": 38,
+            "index": 39,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -6732,7 +6744,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 39,
+            "index": 40,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -6747,7 +6759,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 40,
+            "index": 41,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6759,7 +6771,7 @@
             "runDigest": ""
           },
           {
-            "index": 41,
+            "index": 42,
             "name": "Controlled required-job failure probe",
             "id": "",
             "uses": "",
@@ -15263,7 +15275,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 35,
+        "stepIndex": 36,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -15291,7 +15303,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 36,
+        "stepIndex": 37,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
