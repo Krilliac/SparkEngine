@@ -1955,6 +1955,18 @@ set_tests_properties(ModuleDiscoveryProductionSourceContract PROPERTIES
     LABELS "module;module-profile;stable-v1;unit"
     TIMEOUT 30)
 
+# RDY-010: no stable-v1/module-profile CTest that runs SparkTests may select a
+# mirror-file or tautological TEST. Checks every platform branch of this file
+# statically and this configured tree's own CTest inventory, plus the mutations.
+add_test(
+    NAME TestSourceCensus_ProfileSelectors
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_source_census_profile.py)
+set_tests_properties(TestSourceCensus_ProfileSelectors PROPERTIES
+    ENVIRONMENT "SPARK_CENSUS_CTEST=${CMAKE_CTEST_COMMAND};SPARK_CENSUS_BUILD_DIR=${CMAKE_BINARY_DIR};SPARK_CENSUS_CONFIG=$<CONFIG>"
+    LABELS "module;readiness;unit;python"
+    TIMEOUT 180)
+
 # MOD-290: every discovered module's GameModules/<Name>/module.json must name
 # existing source, assets, registered tests with live TEST prefixes, a README,
 # and the parity N/A cells it declares; the mutations must each fail by name.

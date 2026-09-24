@@ -137,6 +137,28 @@ surfaced as `[ EMPTY ]`. The CI ratchet (`.github/test-count-ratchet.json`) boun
 `minimumProductionSourceTests` (4900) and `maximumEmpty` (25, a first ceiling that
 must be re-measured from the first Build run and ratcheted down).
 
+`--profile-selectors [CTEST_JSON]` (RDY-010) guards release-profile evidence.
+It takes every CTest labeled `stable-v1` or `module-profile` that runs
+SparkTests and resolves its `SPARK_TEST_NAME` / `SPARK_TEST_FILE` /
+`SPARK_TEST_EXCLUDE` filters to the `TEST`/`TEST_F` definitions they reach. It
+uses the same `strstr` semantics as `TestMain.cpp`. A file filter is matched
+against every spelling `__FILE__` can have, including absolute and backslashed
+paths. The check fails if a selector:
+
+- reaches a mirror file or a body that is only `EXPECT_TRUE(true)` /
+  `EXPECT_NO_CRASH`
+- runs the whole suite unfiltered
+- has no valid `SPARK_TEST_EXPECT_COUNT`, or a count larger than the
+  definitions it can see
+- cannot be resolved to a literal
+
+It always checks `Tests/CMakeLists.txt` statically, so Windows-only
+registrations are covered on every host. When given `ctest --show-only=json-v1`
+output, it checks that configured tree too. The Windows Release census step
+runs both, and CTest `TestSourceCensus_ProfileSelectors`
+(`Tests/Tools/test_source_census_profile.py`) runs both plus the mutations that
+must fail.
+
 ## Running Tests
 
 ### Build with Tests Enabled

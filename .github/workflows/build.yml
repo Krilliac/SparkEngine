@@ -1446,6 +1446,12 @@ jobs:
         python Tools/test_source_census.py --check \
           --json test-source-census.json \
           --minimum-production-tests "$MIN_PRODUCTION_TESTS"
+        # RDY-010: a stable-v1/module-profile selector must reach only
+        # production-source, non-tautological TESTs - in this configured
+        # Windows tree and in every platform branch of Tests/CMakeLists.txt.
+        ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
+          --show-only=json-v1 > build/ctest-profile-inventory.json
+        python Tools/test_source_census.py --profile-selectors build/ctest-profile-inventory.json
 
     # Named for the exact commit so a consumer (the site-data publish job) can ask
     # for the CTest report of this SHA and nothing else. generate.py publishes

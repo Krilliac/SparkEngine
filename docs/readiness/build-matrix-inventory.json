@@ -8341,7 +8341,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "7741b0414f585daa"
+            "runDigest": "dcf673dbd92d4a69"
           },
           {
             "index": 16,
@@ -11761,6 +11761,31 @@
       },
       {
         "job": "build-windows-vs2022",
+        "step": "Census of production-source vs mirror tests",
+        "stepIndex": 15,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "always() && matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Debug --no-tests=error  --show-only=json-v1 > build/ctest-profile-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Debug",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
         "step": "Enter Visual Studio 2022 developer environment (x64)",
         "stepIndex": 5,
         "matrix": {
@@ -11868,6 +11893,31 @@
         "testDir": "build",
         "noTestsAction": "error",
         "outputJUnit": "ctest-junit.xml",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
+        "step": "Census of production-source vs mirror tests",
+        "stepIndex": 15,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "always() && matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release --no-tests=error  --show-only=json-v1 > build/ctest-profile-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
         "commandIndex": 0
       },
       {
@@ -15082,6 +15132,31 @@
       },
       {
         "job": "build-windows-vs2022",
+        "step": "Census of production-source vs mirror tests",
+        "stepIndex": 15,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "always() && matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Debug --no-tests=error  --show-only=json-v1 > build/ctest-profile-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Debug",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
         "step": "Run Tests",
         "stepIndex": 13,
         "matrix": {
@@ -15103,6 +15178,31 @@
         "testDir": "build",
         "noTestsAction": "error",
         "outputJUnit": "ctest-junit.xml",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
+        "step": "Census of production-source vs mirror tests",
+        "stepIndex": 15,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "always() && matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release --no-tests=error  --show-only=json-v1 > build/ctest-profile-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
         "commandIndex": 0
       },
       {
@@ -15677,7 +15777,7 @@
       "pathFilteredEventCount": 0,
       "configureCount": 26,
       "buildCount": 27,
-      "testCount": 18,
+      "testCount": 20,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,
