@@ -248,7 +248,7 @@ jobs:
       run: bash tools/check-di-singletons.sh
 
     - name: Test asset integrity verifier
-      run: python3 -m unittest Tests.Tools.test_asset_integrity -v
+      run: python3 -m unittest Tests.Tools.test_asset_integrity Tests.Tools.test_asset_package_profile -v
 
     - name: Verify repository asset integrity baseline
       run: python3 tools/asset-integrity/verify_asset_integrity.py check-all --repo-root .
@@ -3646,7 +3646,7 @@ jobs:
   # ===========================================================================
   module-evidence:
     name: "Module evidence (RDY-010)"
-    needs: [build-linux-gcc, module-profile-lifecycle, module-profile-package-smoke]
+    needs: [build-linux-gcc, build-linux-asan, module-profile-lifecycle, module-profile-package-smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -3679,6 +3679,30 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: test-results-linux-gcc-Release
+
+      - name: Download exact ASan evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: test-results-linux-asan
+          path: build/module-evidence/sanitizer-asan
+
+      # The full published-evidence verifier (console/report/footer/stats
+      # agreement, exact provenance) runs before the manifest consumer, which
+      # then binds metadata.json + junit.xml to the FPS production selector.
+      - name: Verify downloaded ASan evidence
+        run: |
+          python3 .github/scripts/verify-sanitizer-evidence.py verify-published \
+            --evidence-dir "$GITHUB_WORKSPACE/build/module-evidence/sanitizer-asan" \
+            --stats "$GITHUB_WORKSPACE/build/module-evidence/sanitizer-asan/test-stats-linux-asan.json" \
+            --sanitizer asan \
+            --lane linux-asan \
+            --expected-sha "${{ github.sha }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --allow-prior-attempt \
+            --job build-linux-asan \
+            --minimum-tests 6900 \
+            --timeout-seconds 900
 
       - name: Download exact lifecycle evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -3725,6 +3749,8 @@ jobs:
             build/module-evidence/module-lifecycle.json
             build/module-evidence/module-lifecycle-SparkGameFPS.log
             build/module-evidence/package-smoke.log
+            build/module-evidence/sanitizer-asan/metadata.json
+            build/module-evidence/sanitizer-asan/junit.xml
             tools/module-evidence/evidence-gaps.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error

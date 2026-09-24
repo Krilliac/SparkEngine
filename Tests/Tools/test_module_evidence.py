@@ -23,6 +23,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -67,6 +68,95 @@ def package_smoke_record(module: str, commit_sha: str) -> str:
         "[package-smoke] backend=d3d11-warp result=PASS\n"
         "[package-smoke] exit_code=0\n"
         "[package-smoke] PASS\n"
+    )
+
+
+def sanitizer_junit(*, selector_case: str = "FPSRespawn_DeathRespawnReportsAuthoredSpawnRotation",
+                    selector_child: str = "",
+                    total: int | None = None) -> str:
+    """SparkTests-shaped ASan JUnit with one FPS production-source testcase.
+
+    ``total`` testcases are recorded (default: exactly the full-suite floor),
+    padded with passing non-FPS cases so only the selector case is relevant.
+    """
+    if total is None:
+        total = artifacts.SANITIZER_MIN_JUNIT_TESTCASES
+    filler = "".join(
+        f'    <testcase name="NullRHI_Filler_{index:05d}" time="0.001"/>\n'
+        for index in range(total - 1)
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<testsuites tests="{total}" failures="0" skipped="0" flaky="0" empty="0" time="1.5">\n'
+        f'  <testsuite name="SparkEngine" tests="{total}" failures="0" skipped="0" flaky="0" '
+        'empty="0" time="1.5">\n'
+        f"{filler}"
+        f'    <testcase name="{selector_case}" time="0.9">{selector_child}</testcase>\n'
+        '  </testsuite>\n'
+        '</testsuites>\n'
+    )
+
+
+def sanitizer_metadata(commit_sha: str, junit: bytes, **overrides: Any) -> dict[str, Any]:
+    """The clean metadata.json verify-sanitizer-evidence.py writes for one ASan run."""
+    document: dict[str, Any] = {
+        "schemaVersion": 2,
+        "provenance": {
+            "commitSha": commit_sha,
+            "runId": 1234,
+            "runAttempt": 1,
+            "job": "build-linux-asan",
+            "sanitizer": "asan",
+            "lane": "linux-asan",
+            "originEvidenceDirectory": f"spark-sanitizer-asan-{commit_sha}-1234-1-build-linux-asan",
+            "commandSha256": "c" * 64,
+        },
+        "selector": {"expected": "all", "verified": True},
+        "process": {
+            "exitCode": 0, "captureExitCode": 0, "timeoutSeconds": 900,
+            "timedOut": False, "captureOverflow": False,
+        },
+        "completion": {
+            "valid": True, "tests": junit.count(b"<testcase "), "failures": 0, "errors": 0, "skipped": 0,
+            "knownFlakyWarnings": 0, "flakyOutcomes": 0, "flakySkips": 0, "empty": 0,
+            "suiteNames": ["SparkEngine"], "shuffleSeed": 123,
+            "junitSha256": hashlib.sha256(junit).hexdigest(),
+            "reportSha256": "d" * 64, "consoleSha256": "e" * 64,
+        },
+        "signals": {
+            "sanitizerSignature": False, "runtimeEvidence": False, "testFailure": False,
+            "knownFlakyWarning": False, "crash": False, "infrastructure": False,
+        },
+        "runtimeLogs": [],
+        "scannerExitCodes": {
+            "sanitizerSignature": 1, "warning": 1, "testFailure": 1, "crash": 1,
+            "infrastructure": 1,
+        },
+        "classification": "clean",
+        "recommendedExitCode": 0,
+        "evidenceErrors": [],
+        "startedUnixNanoseconds": 1,
+        "completedUtc": "2026-09-24T00:00:00Z",
+    }
+    for dotted, value in overrides.items():
+        target = document
+        keys = dotted.split("__")
+        for key in keys[:-1]:
+            target = target[key]
+        target[keys[-1]] = value
+    return document
+
+
+def write_sanitizer_evidence(root: Path, commit_sha: str, *, junit: str | None = None,
+                             **overrides: Any) -> None:
+    """Lay out a downloaded test-results-linux-asan artifact under the repo."""
+    junit_bytes = (junit if junit is not None else sanitizer_junit()).encode("utf-8")
+    metadata_path = root / EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    (root / schema_mod.SANITIZER_REPORT_JUNIT).write_bytes(junit_bytes)
+    metadata_path.write_text(
+        json.dumps(sanitizer_metadata(commit_sha, junit_bytes, **overrides)),
+        encoding="utf-8",
     )
 
 
@@ -145,6 +235,7 @@ def build_fake_repo(root: Path) -> str:
     _git(root, "commit", "-q", "-m", "fixture")
     sha = _git(root, "rev-parse", "HEAD").stdout.strip()
     smoke_path.write_text(package_smoke_record(INCLUDED, sha), encoding="utf-8")
+    write_sanitizer_evidence(root, sha)
     return sha
 
 
@@ -164,7 +255,7 @@ def module_entry(name: str, *, included: bool) -> dict[str, Any]:
         entry["evidenceBindings"] = [
             {"type": t, "artifactPattern": EVIDENCE_PRODUCERS[t]["artifact"]}
             for t in ("cmake-target-index", "lifecycle-log", "junit-xml",
-                      "package-smoke-log")
+                      "package-smoke-log", "sanitizer-report")
         ]
     else:
         entry["evidenceBindings"] = []
@@ -3987,7 +4078,7 @@ class TestEvidenceBindings(FixtureCase):
         self.assertRejected(m, "B12")
 
     def test_B12b_each_required_evidence_type_is_individually_required(self) -> None:
-        for i in range(4):
+        for i in range(5):
             with self.subTest(dropped=i):
                 m = base_manifest()
                 del m["modules"][0]["evidenceBindings"][i]
@@ -4762,7 +4853,8 @@ class TestCIWiring(unittest.TestCase):
         """The Ubuntu release consumer waits for and reads exact lifecycle JSON."""
         block = self._job_block("module-evidence")
         self.assertIn(
-            "needs: [build-linux-gcc, module-profile-lifecycle, module-profile-package-smoke]",
+            "needs: [build-linux-gcc, build-linux-asan, module-profile-lifecycle, "
+            "module-profile-package-smoke]",
             block,
         )
         self.assertIn("module-profile-lifecycle-${{ github.sha }}", block)
@@ -4789,6 +4881,22 @@ class TestCIWiring(unittest.TestCase):
         needs = gate[gate.index("needs:"):gate.index("runs-on:")]
         self.assertIn("- module-profile-package-smoke", needs)
         self.assertIn('"module-profile-package-smoke"', gate)
+
+    def test_module_evidence_consumes_verified_asan_evidence(self) -> None:
+        """RDY-010: the ASan lane's real evidence directory is downloaded, fully
+        verified, and placed where the sanitizer-report binding reads it."""
+        block = self._job_block("module-evidence")
+        self.assertIn("build-linux-asan", block[:block.index("runs-on:")])
+        self.assertIn("name: test-results-linux-asan", block)
+        evidence_dir = str(Path(EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]).parent)
+        self.assertIn(f"path: {evidence_dir}", block)
+        verify = block.index("verify-sanitizer-evidence.py verify-published")
+        self.assertLess(block.index("name: test-results-linux-asan"), verify)
+        self.assertLess(verify, block.index("validate_manifest.py"))
+        for flag in ("--sanitizer asan", "--lane linux-asan", '--expected-sha "${{ github.sha }}"',
+                     "--job build-linux-asan", "--minimum-tests 6900"):
+            self.assertIn(flag, block[verify:])
+        self.assertNotIn("asan-ubsan-lsan-results.txt", self.workflow)
 
     def test_gate_consumes_really_produced_junit_evidence(self) -> None:
         block = self._job_block("module-evidence")
@@ -5607,12 +5715,6 @@ class TestArtifactSemanticValidation(FixtureCase):
         )
         self.assertTrue(len(errors) > 0, "whitespace-only log accepted")
 
-    def test_artifact_dispatcher_routes_correctly(self) -> None:
-        path = self._junit_xml(self.VALID_JUNIT)
-        self.assertEqual(artifacts.validate_artifact(path, "junit-xml", INCLUDED), [])
-        self.assertEqual(
-            artifacts.validate_artifact(path, "cmake-target-index", INCLUDED), [])
-
     def test_held_byte_dispatcher_routes_correctly(self) -> None:
         self.assertEqual(
             artifacts.validate_artifact_bytes(
@@ -5706,6 +5808,269 @@ class TestArtifactSemanticValidation(FixtureCase):
             any("recorded as a known evidence gap" in error for error in errors),
             errors,
         )
+
+
+
+class TestSanitizerReportEvidence(FixtureCase):
+    """RDY-010: ASan evidence is required, exact-revision and module-relevant."""
+
+    STALE_PATH = "build/asan-ubsan-lsan-results.txt"
+
+    def setUp(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha)
+        self.addCleanup(write_sanitizer_evidence, self.repo, self.sha)
+
+    def _metadata_path(self) -> Path:
+        return self.repo / EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]
+
+    def _junit_path(self) -> Path:
+        return self.repo / schema_mod.SANITIZER_REPORT_JUNIT
+
+    def _assert_rejected_with(self, needle: str, case: str) -> list[str]:
+        errors = self.assertRejected(base_manifest(), case)
+        self.assertTrue(any(needle in error for error in errors), errors)
+        return errors
+
+    def test_sanitizer_report_is_required_for_included_modules(self) -> None:
+        self.assertIn("sanitizer-report", schema_mod.REQUIRED_INCLUDED_EVIDENCE)
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"] = [
+            b for b in m["modules"][0]["evidenceBindings"] if b["type"] != "sanitizer-report"
+        ]
+        errors = self.assertRejected(m, "sanitizer-unbound")
+        self.assertTrue(any("sanitizer-report" in e for e in errors), errors)
+
+    def test_shipped_manifest_binds_fps_sanitizer_report(self) -> None:
+        manifest = load_manifest(REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
+        fps = next(m for m in manifest["modules"] if m["name"] == INCLUDED)
+        self.assertIn(
+            {"type": "sanitizer-report",
+             "artifactPattern": EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]},
+            fps["evidenceBindings"],
+        )
+
+    def test_producer_points_at_the_real_run_sanitizer_tests_layout(self) -> None:
+        artifact = EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]
+        self.assertEqual(Path(artifact).name, "metadata.json")
+        self.assertEqual(Path(schema_mod.SANITIZER_REPORT_JUNIT).name, "junit.xml")
+        self.assertEqual(Path(artifact).parent, Path(schema_mod.SANITIZER_REPORT_JUNIT).parent)
+        runner = (REPO_ROOT / ".github" / "scripts" / "run-sanitizer-tests.sh").read_text(
+            encoding="utf-8")
+        self.assertIn('junit_path="$evidence_dir/junit.xml"', runner)
+        self.assertIn('metadata_path="$evidence_dir/metadata.json"', runner)
+
+    def test_stale_results_txt_binding_is_rejected(self) -> None:
+        """No workflow writes build/asan-ubsan-lsan-results.txt."""
+        self.assertNotEqual(EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"], self.STALE_PATH)
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"][4]["artifactPattern"] = self.STALE_PATH
+        errors = self.assertRejected(m, "sanitizer-stale-path")
+        self.assertTrue(any("is not the output of" in e for e in errors), errors)
+        self.assertNotIn(self.STALE_PATH, (REPO_ROOT / "tools" / "module-evidence"
+                                           / "manifest.json").read_text(encoding="utf-8"))
+
+    def test_clean_exact_revision_asan_evidence_is_accepted(self) -> None:
+        self.assertAccepted(base_manifest())
+
+    @unittest.skipIf(os.name == "nt", "POSIX rooted artifact authority")
+    def test_clean_evidence_is_accepted_through_held_root_bytes(self) -> None:
+        with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
+            errors = ManifestValidator(
+                base_manifest(), self.repo,
+                target_index=target_index_for_revision(self.sha),
+                lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
+                expected_sha=self.sha,
+                root_authority=lease,
+            ).validate()
+        self.assertEqual(errors, [], errors)
+
+    @unittest.skipIf(os.name == "nt", "POSIX rooted artifact authority")
+    def test_rooted_consumer_rejects_wrong_sha(self) -> None:
+        write_sanitizer_evidence(self.repo, PACKAGE_SMOKE_TEST_SHA)
+        with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
+            errors = ManifestValidator(
+                base_manifest(), self.repo,
+                target_index=target_index_for_revision(self.sha),
+                lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
+                expected_sha=self.sha,
+                root_authority=lease,
+            ).validate()
+        self.assertTrue(any("does not match expected" in e for e in errors), errors)
+
+    def test_missing_metadata_is_rejected(self) -> None:
+        self._metadata_path().unlink()
+        self._assert_rejected_with("was not produced", "sanitizer-missing")
+
+    def test_missing_metadata_is_rejected_by_the_rooted_consumer(self) -> None:
+        if os.name == "nt":
+            self.skipTest("POSIX rooted artifact authority")
+        self._metadata_path().unlink()
+        with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
+            errors = ManifestValidator(
+                base_manifest(), self.repo,
+                target_index=target_index_for_revision(self.sha),
+                lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
+                expected_sha=self.sha,
+                root_authority=lease,
+            ).validate()
+        self.assertTrue(any("was not produced" in e for e in errors), errors)
+
+    def test_missing_sibling_junit_is_rejected(self) -> None:
+        self._junit_path().unlink()
+        self._assert_rejected_with("no sibling junit.xml", "sanitizer-no-junit")
+
+    def test_wrong_sha_metadata_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, PACKAGE_SMOKE_TEST_SHA)
+        self._assert_rejected_with("does not match expected", "sanitizer-wrong-sha")
+
+    def test_origin_directory_for_another_revision_is_rejected(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            provenance__originEvidenceDirectory=(
+                f"spark-sanitizer-asan-{PACKAGE_SMOKE_TEST_SHA}-1-1-build-linux-asan"),
+        )
+        self._assert_rejected_with("originEvidenceDirectory", "sanitizer-foreign-origin")
+
+    def test_unestablished_expected_sha_is_rejected(self) -> None:
+        errors = self.assertRejected(base_manifest(), "sanitizer-no-sha", expected_sha=None)
+        self.assertTrue(any("no expected sanitizer-report SHA" in e for e in errors), errors)
+
+    def test_selector_free_junit_is_rejected(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha, junit=sanitizer_junit(selector_case="WeaponMirror_Fires"))
+        self._assert_rejected_with("executed no passing FPSRespawn_", "sanitizer-no-selector")
+
+    def test_skipped_selector_does_not_count_as_executed(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            junit=sanitizer_junit(selector_child='<skipped message="not on this platform"/>'))
+        self._assert_rejected_with("executed no passing FPSRespawn_", "sanitizer-skipped-selector")
+
+    def test_empty_selector_does_not_count_as_executed(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            junit=sanitizer_junit(
+                selector_child='<properties><property name="empty" value="true"/></properties>'))
+        self._assert_rejected_with("executed no passing FPSRespawn_", "sanitizer-empty-selector")
+
+    def test_failed_selector_is_rejected(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            junit=sanitizer_junit(selector_child='<failure message="leak"/>'))
+        errors = self._assert_rejected_with(
+            "executed no passing FPSRespawn_", "sanitizer-failed-selector")
+        self.assertTrue(any("<failure>" in e for e in errors), errors)
+
+    def test_metadata_reporting_failures_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, completion__failures=1)
+        self._assert_rejected_with("completion failures", "sanitizer-failures")
+
+    def test_non_clean_classification_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, classification="sanitizer-finding")
+        self._assert_rejected_with("exact clean classification", "sanitizer-dirty")
+
+    def test_sanitizer_signal_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, signals__sanitizerSignature=True)
+        self._assert_rejected_with("signal sanitizerSignature", "sanitizer-signal")
+
+    def test_tsan_lane_cannot_stand_in_for_asan(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha, provenance__sanitizer="tsan", provenance__lane="linux-tsan")
+        self._assert_rejected_with("provenance sanitizer", "sanitizer-wrong-lane")
+
+    def test_swapped_junit_breaks_the_metadata_digest(self) -> None:
+        self._junit_path().write_text(
+            sanitizer_junit(selector_case="FPSRespawn_SubstitutedAfterTheRun"), encoding="utf-8")
+        self._assert_rejected_with("junitSha256 does not match", "sanitizer-swapped-junit")
+
+    def test_clean_run_below_the_full_suite_floor_is_rejected(self) -> None:
+        """A clean, self-consistent but filtered ASan run is not full-suite evidence."""
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            junit=sanitizer_junit(total=artifacts.SANITIZER_MIN_JUNIT_TESTCASES - 1))
+        self._assert_rejected_with("below the SparkTests floor", "sanitizer-below-floor")
+
+    def test_trivially_small_clean_run_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, junit=sanitizer_junit(total=4))
+        self._assert_rejected_with("records 4 testcases", "sanitizer-tiny-run")
+
+    def test_floor_matches_the_workflow_verify_published_floor(self) -> None:
+        """The consumer floor and the CI verify-published floor cannot drift apart."""
+        workflow = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        step = workflow.split("- name: Verify downloaded ASan evidence\n", 1)[1]
+        step = step.split("- name:", 1)[0]
+        self.assertIn("build/module-evidence/sanitizer-asan", step)
+        match = re.search(r"--minimum-tests (\d+)", step)
+        self.assertIsNotNone(match, step)
+        self.assertEqual(int(match.group(1)), artifacts.SANITIZER_MIN_JUNIT_TESTCASES)
+
+    def test_origin_directory_must_match_recorded_run_identity(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, provenance__runId=9999)
+        self._assert_rejected_with("originEvidenceDirectory", "sanitizer-run-mismatch")
+
+    def test_non_integer_run_attempt_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, provenance__runAttempt=True)
+        self._assert_rejected_with("runId and runAttempt", "sanitizer-bool-attempt")
+
+    def test_integer_one_is_not_boolean_true(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, completion__valid=1)
+        self._assert_rejected_with("completion is not valid", "sanitizer-truthy-valid")
+
+    def test_duplicate_metadata_keys_are_rejected(self) -> None:
+        path = self._metadata_path()
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text[:-1] + ', "classification": "clean"}', encoding="utf-8")
+        self._assert_rejected_with("not strict JSON", "sanitizer-duplicate-key")
+
+    def test_module_without_a_selector_fails_policy(self) -> None:
+        with mock.patch.dict(validate_manifest_mod.SANITIZER_MODULE_SELECTORS, clear=True):
+            errors = ManifestValidator(base_manifest(), self.repo, policy_only=True).validate()
+        self.assertTrue(any("sanitizer test selector" in e for e in errors), errors)
+
+    def test_present_sanitizer_evidence_trips_a_stale_declared_gap(self) -> None:
+        errors = self.assertRejected(
+            base_manifest(), "sanitizer-stale-gap",
+            declared_gaps={"sanitizer-report": "RDY-010"},
+        )
+        self.assertTrue(any("recorded as a known evidence gap" in e for e in errors), errors)
+
+    def test_selectors_resolve_only_to_registered_production_source_tests(self) -> None:
+        """A mirror file defining FPSRespawn_* would let a copy satisfy the gate."""
+        import importlib.util
+        import re
+        census_path = REPO_ROOT / "Tools" / "test_source_census.py"
+        spec = importlib.util.spec_from_file_location("spark_census_rdy010", census_path)
+        assert spec is not None and spec.loader is not None
+        census = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = census
+        spec.loader.exec_module(census)
+        cmake = (REPO_ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        manifest = load_manifest(REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
+        source_dirs = {m["name"]: m["sourceDirectory"] for m in manifest["modules"]}
+        for module, prefix in schema_mod.SANITIZER_MODULE_SELECTORS.items():
+            with self.subTest(module=module):
+                pattern = re.compile(rf"^\s*TEST(?:_F)?\s*\(\s*{re.escape(prefix)}\w*", re.M)
+                defining = [
+                    path for path in sorted((REPO_ROOT / "Tests").rglob("*.cpp"))
+                    if pattern.search(path.read_text(encoding="utf-8"))
+                ]
+                self.assertTrue(defining, f"no test defines a {prefix}* selector")
+                for path in defining:
+                    relative = path.relative_to(REPO_ROOT).as_posix()
+                    text = path.read_text(encoding="utf-8")
+                    self.assertEqual(
+                        census.classify(text, REPO_ROOT, relative), "production-source",
+                        f"{relative} defines {prefix}* but is a mirror",
+                    )
+                    self.assertRegex(cmake, rf"(?m)^\s*{re.escape(path.name)}\s*$")
+                    module_headers = [
+                        include for include, _ in census.INCLUDE_RE.findall(text)
+                        if include and (REPO_ROOT / source_dirs[module] / include).is_file()
+                    ]
+                    self.assertTrue(
+                        module_headers,
+                        f"{relative} includes no header from {source_dirs[module]}",
+                    )
 
 
 if __name__ == "__main__":

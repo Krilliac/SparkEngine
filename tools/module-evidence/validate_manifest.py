@@ -55,6 +55,8 @@ from schema import (
     REQUIRED_PROFILE_KEYS,
     REQUIRED_SEPARATION_KEYS,
     REQUIRED_TOP_LEVEL_KEYS,
+    SANITIZER_MODULE_SELECTORS,
+    SANITIZER_REPORT_JUNIT,
     SCHEMA_VERSION,
     VALID_LIBRARY_PLATFORMS,
     VALID_MODULE_KINDS,
@@ -580,6 +582,12 @@ class ManifestValidator:
                 f"{sorted(missing)} evidence — a shipped module must prove it "
                 f"builds, loads, tests and packages"
             )
+        if "sanitizer-report" in present and name not in SANITIZER_MODULE_SELECTORS:
+            self._err(
+                f"module {name!r} is included in profile {pid!r} but names no "
+                f"production-source sanitizer test selector — the whole-suite "
+                f"ASan run cannot show that the module's own code executed"
+            )
         if mod.get("packageSmokeOwner") is None:
             self._err(
                 f"module {name!r} is included in profile {pid!r} but declares no "
@@ -714,6 +722,45 @@ class ManifestValidator:
     # are verified by requiring the producer's artifact to actually be present.
     _STRUCTURALLY_CHECKED = frozenset({"cmake-target-index", "lifecycle-log"})
 
+    def _read_companion(self, relative: str) -> bytes | None:
+        """Read the second file of a two-file evidence type, or None if absent.
+
+        An absent companion is reported by the semantic check (the primary
+        artifact exists, so this is malformed evidence, not a gap); a present
+        but unsafe one is an authority failure.
+        """
+        if self.root_authority is not None:
+            try:
+                return self.root_authority.read_relative_bytes(
+                    relative, max_bytes=artifacts.MAX_ARTIFACT_BYTES,
+                )
+            except strict_json.NoFollowEvidenceMissing:
+                return None
+        path = self.repo_root / relative
+        if not path.is_file():
+            return None
+        if path.stat().st_size > artifacts.MAX_ARTIFACT_BYTES:
+            raise strict_json.NoFollowAuthorityError(
+                f"{relative} exceeds the {artifacts.MAX_ARTIFACT_BYTES} byte limit"
+            )
+        return path.read_bytes()
+
+    def _semantic_artifact_errors(self, name: Any, btype: str, pattern: str,
+                                  data: bytes) -> list[str]:
+        module_name = name if isinstance(name, str) else ""
+        companion: bytes | None = None
+        if btype == "sanitizer-report":
+            try:
+                companion = self._read_companion(SANITIZER_REPORT_JUNIT)
+            except strict_json.StrictJSONError as exc:
+                return [f"declared sanitizer-report JUnit {SANITIZER_REPORT_JUNIT!r} "
+                        f"authority rejected: {exc}"]
+        return artifacts.validate_artifact_bytes(
+            data, Path(pattern).name, btype, module_name,
+            expected_sha=self.expected_sha, companion=companion,
+            selector_prefix=SANITIZER_MODULE_SELECTORS.get(module_name),
+        )
+
     def _check_artifact_evidence(self) -> None:
         """Every other declared artifact must actually have been produced."""
         if self.policy_only:
@@ -729,58 +776,46 @@ class ManifestValidator:
                         or btype not in EVIDENCE_PRODUCERS
                         or not isinstance(pattern, str)):
                     continue
+                data: bytes | None = None
                 if self.root_authority is not None:
                     try:
                         data = self.root_authority.read_relative_bytes(
                             pattern, max_bytes=artifacts.MAX_ARTIFACT_BYTES,
                         )
                     except strict_json.NoFollowEvidenceMissing:
-                        producer = EVIDENCE_PRODUCERS[btype]
-                        self._record_gap(
-                            btype, False,
-                            f"module {name!r}: declared {btype} evidence "
-                            f"{pattern!r} was not produced. It is written by "
-                            f"{producer['producer']} in CI job {producer['ciJob']}; a "
-                            "binding to an artifact that does not exist proves nothing.",
-                        )
-                        continue
+                        data = None
                     except strict_json.StrictJSONError as exc:
                         self._err(
                             f"module {name!r}: declared {btype} evidence "
                             f"{pattern!r} authority rejected: {exc}"
                         )
                         continue
-                    if btype in self.declared_gaps:
-                        self._record_gap(btype, True, "")
-                        continue
-                    semantic_errors = artifacts.validate_artifact_bytes(
-                        data, Path(pattern).name, btype,
-                        name if isinstance(name, str) else "",
-                        expected_sha=self.expected_sha,
+                else:
+                    artifact_path = self.repo_root / pattern
+                    if artifact_path.is_file():
+                        if artifact_path.stat().st_size > artifacts.MAX_ARTIFACT_BYTES:
+                            self._err(
+                                f"module {name!r}: declared {btype} evidence "
+                                f"{pattern!r} exceeds the "
+                                f"{artifacts.MAX_ARTIFACT_BYTES} byte limit"
+                            )
+                            continue
+                        data = artifact_path.read_bytes()
+                if data is None:
+                    producer = EVIDENCE_PRODUCERS[btype]
+                    self._record_gap(
+                        btype, False,
+                        f"module {name!r}: declared {btype} evidence "
+                        f"{pattern!r} was not produced. It is written by "
+                        f"{producer['producer']} in CI job {producer['ciJob']}; a "
+                        "binding to an artifact that does not exist proves nothing.",
                     )
-                    for err in semantic_errors:
-                        self._err(f"module {name!r}: {err}")
                     continue
-                artifact_path = self.repo_root / pattern
-                if artifact_path.is_file():
-                    if btype in self.declared_gaps:
-                        self._record_gap(btype, True, "")
-                        continue
-                    semantic_errors = artifacts.validate_artifact(
-                        artifact_path, btype, name if isinstance(name, str) else "",
-                        expected_sha=self.expected_sha,
-                    )
-                    for err in semantic_errors:
-                        self._err(f"module {name!r}: {err}")
+                if btype in self.declared_gaps:
+                    self._record_gap(btype, True, "")
                     continue
-                producer = EVIDENCE_PRODUCERS[btype]
-                self._record_gap(
-                    btype, False,
-                    f"module {name!r}: declared {btype} evidence "
-                    f"{pattern!r} was not produced. It is written by "
-                    f"{producer['producer']} in CI job {producer['ciJob']}; a "
-                    f"binding to an artifact that does not exist proves nothing.",
-                )
+                for err in self._semantic_artifact_errors(name, btype, pattern, data):
+                    self._err(f"module {name!r}: {err}")
 
     def _check_lifecycle_evidence(self) -> None:
         if self.policy_only:

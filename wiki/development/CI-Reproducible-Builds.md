@@ -76,6 +76,8 @@ cd ..
 
 There is also a `ci-linux-asan` CMake preset that bundles these flags if you prefer `cmake --preset ci-linux-asan`.
 
+The `--output-file` name above is only a local convenience. CI does not write `asan-ubsan-lsan-results.txt`. It runs the suite through `.github/scripts/run-sanitizer-tests.sh`, which writes `junit.xml`, `metadata.json`, `console.txt`, `report.txt` and `process-footer.txt` into `$SANITIZER_EVIDENCE_DIR`, and uploads that directory as `test-results-linux-asan`. The `module-evidence` job (RDY-010) downloads it to `build/module-evidence/sanitizer-asan/` and runs `verify-sanitizer-evidence.py verify-published` on it. `tools/module-evidence/validate_manifest.py` then consumes it as SparkGameFPS's required `sanitizer-report` evidence: the metadata must name the exact commit, carry an origin directory that matches that commit and its recorded run id/attempt, be a clean run with zero failures, and match the `junit.xml` digest; the `junit.xml` must record at least the 6900-testcase SparkTests floor (`SANITIZER_MIN_JUNIT_TESTCASES`, pinned by a test to the step's `--minimum-tests`); and at least one `FPSRespawn_*` production-source test must have executed and passed. Only the preceding `verify-published` step binds the directory to the current workflow run id and attempt, so keep it ahead of the consumer.
+
 ## Linux GCC ThreadSanitizer — Debug (job `build-linux-tsan`)
 
 ```bash
@@ -219,7 +221,7 @@ This is a red control run and cannot qualify a release commit.
   - **Fixed a broken shell construct** in the ASan/TSan/MSan run lines: the source wrote `ENV=... cd build && ./bin/SparkTests` which applies the env var to `cd`, not to the test binary. Rewritten as `cd build` then the env-prefixed `./bin/SparkTests` run, matching how CI actually invokes it.
   - Aligned the LSan suppressions path to `../Tests/lsan_suppressions.txt` (relative to `build/`); verified `Tests/lsan_suppressions.txt` and `Tests/msan_ignorelist.txt` exist.
   - Removed the source's prior CTest-plus-`SparkTests` combo from the GCC/Clang jobs — CI runs `./bin/SparkTests` directly there; clarified where CTest actually runs (Windows/macOS matrix).
-  - Output filenames updated to match current CI (`asan-ubsan-lsan-results.txt`, etc.).
+  - Output filenames updated to match current CI (`asan-ubsan-lsan-results.txt`, etc.). Corrected 2026-09-24: CI's ASan evidence is the `run-sanitizer-tests.sh` directory (`junit.xml` + `metadata.json`), not a results `.txt` file.
   - Added the new `ci-linux-asan` / `ci-linux-tsan` presets as alternatives.
   - Noted MSan builds only the `SparkTests` target in CI; added `|| true` to match CI (2026-09-06: the recipe now builds the MSan-instrumented libc++ first and runs with `halt_on_error=1`, so the `|| true` was dropped again).
   - Added sccache/`continue-on-error` notes for the Windows jobs and the v145 VS 2026 variant.

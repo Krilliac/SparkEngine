@@ -6742,7 +6742,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "b1c686bd5499a5fd"
+            "runDigest": "c18e5af256707318"
           },
           {
             "index": 40,
@@ -10904,6 +10904,7 @@
         "timeoutMinutes": "absent",
         "needs": [
           "build-linux-gcc",
+          "build-linux-asan",
           "module-profile-lifecycle",
           "module-profile-package-smoke"
         ],
@@ -10916,7 +10917,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 10,
+        "stepCount": 12,
         "steps": [
           {
             "index": 0,
@@ -10980,7 +10981,7 @@
           },
           {
             "index": 5,
-            "name": "Download exact lifecycle evidence",
+            "name": "Download exact ASan evidence",
             "id": "",
             "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
             "shell": "",
@@ -10992,6 +10993,30 @@
           },
           {
             "index": 6,
+            "name": "Verify downloaded ASan evidence",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "afb9c3072264a1de"
+          },
+          {
+            "index": 7,
+            "name": "Download exact lifecycle evidence",
+            "id": "",
+            "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 8,
             "name": "Download exact package smoke evidence",
             "id": "",
             "uses": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
@@ -11003,7 +11028,7 @@
             "runDigest": ""
           },
           {
-            "index": 7,
+            "index": 9,
             "name": "Validate module evidence against produced artifacts",
             "id": "",
             "uses": "",
@@ -11017,7 +11042,7 @@
             "runDigest": "bae5b8361e8ddef4"
           },
           {
-            "index": 8,
+            "index": 10,
             "name": "Report local producer coverage and hosted-proof boundary",
             "id": "",
             "uses": "",
@@ -11029,7 +11054,7 @@
             "runDigest": "e01124b665f14012"
           },
           {
-            "index": 9,
+            "index": 11,
             "name": "Upload module evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
