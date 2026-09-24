@@ -159,6 +159,17 @@ See `SparkGame/CMakeLists.txt` for an in-tree example with platform libraries an
 optional dependencies (Jolt, Vulkan, OpenGL). It does not establish standalone
 installed-SDK support.
 
+Engine-private includes in prototype modules are ratcheted, not endorsed. For
+every module outside all release profiles, `module-content-inventory.json`
+publishes `privateEngineHeaders` (each `SparkEngine/Source` header the module
+includes), `privateEngineHeaderCount`, and `copiedInfrastructureFiles` (its
+copied `*EngineSystems.cpp` setup). `python3 tools/site-data/module_content.py
+--check` and the `PrototypeModuleKit_PrivateDependencyRatchet` CTest fail when a
+module gains an engine-private header its committed entry does not list, or when
+a removed include is not dropped from the list. Regenerate the inventory with
+`python3 tools/site-data/module_content.py` only when the new dependency is
+reviewed and intended.
+
 ## Module Lifecycle
 
 ```

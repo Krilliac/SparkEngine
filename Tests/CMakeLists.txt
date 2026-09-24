@@ -2124,6 +2124,17 @@ set_tests_properties(ModuleManifest_Contract PROPERTIES
     LABELS "module;module-kit;readiness;unit;python"
     TIMEOUT 120)
 
+# MOD-295: each prototype module's engine-private headers and copied
+# *EngineSystems.cpp files must match its committed module-content inventory
+# entry; the shared include resolver and the ratchet mutations must fail by name.
+add_test(
+    NAME PrototypeModuleKit_PrivateDependencyRatchet
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_module_private_dependencies.py)
+set_tests_properties(PrototypeModuleKit_PrivateDependencyRatchet PROPERTIES
+    LABELS "module;module-kit;prototype-module-kit;readiness;unit;python"
+    TIMEOUT 120)
+
 # MOD-290: per-module test registration is generated from each module's
 # module.json rather than hand-written. Every declared {prefix, count} selector
 # becomes ModuleManifest_<Module>_<Prefix>, which runs SparkTests filtered to

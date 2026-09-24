@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "modules": [
     {
       "name": "SparkGame",
@@ -16,7 +16,22 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "sharedRootDependencies": []
+      "sharedRootDependencies": [],
+      "privateEngineHeaders": [
+        "Engine/ECS/Components.h",
+        "Engine/ECS/Components/GameplayComponents.h",
+        "Engine/Events/EventSystem.h",
+        "Engine/Localization/LocalizationSystem.h",
+        "Engine/SaveSystem/SaveSystem.h",
+        "Engine/World/TimeOfDaySystem.h",
+        "Graphics/WeatherSystem.h",
+        "Utils/EventBus.h",
+        "Utils/InvalidStateDetector.h",
+        "Utils/LogMacros.h",
+        "Utils/SparkConsole.h"
+      ],
+      "privateEngineHeaderCount": 11,
+      "copiedInfrastructureFiles": []
     },
     {
       "name": "SparkGameARPG",
@@ -33,7 +48,32 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "sharedRootDependencies": []
+      "sharedRootDependencies": [],
+      "privateEngineHeaders": [
+        "Engine/AI/AISystem.h",
+        "Engine/AI/BehaviorTree.h",
+        "Engine/Animation/AnimationSystem.h",
+        "Engine/Coroutine/CoroutineScheduler.h",
+        "Engine/Destruction/DestructionSystem.h",
+        "Engine/ECS/Components.h",
+        "Engine/ECS/Components/AIComponents.h",
+        "Engine/ECS/Components/GameplayComponents.h",
+        "Engine/ECS/Components/PhysicsComponents.h",
+        "Engine/Events/EventSystem.h",
+        "Engine/Gameplay/AbilitySystem.h",
+        "Engine/SaveSystem/SaveSystem.h",
+        "Engine/Security/MemoryIntegrity.h",
+        "Graphics/WeatherSystem.h",
+        "Input/InputManager.h",
+        "Utils/EventBus.h",
+        "Utils/InvalidStateDetector.h",
+        "Utils/LogMacros.h",
+        "Utils/SparkConsole.h"
+      ],
+      "privateEngineHeaderCount": 19,
+      "copiedInfrastructureFiles": [
+        "GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.cpp"
+      ]
     },
     {
       "name": "SparkGameFPS",
@@ -84,7 +124,42 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "sharedRootDependencies": []
+      "sharedRootDependencies": [],
+      "privateEngineHeaders": [
+        "Engine/AI/AISystem.h",
+        "Engine/AI/BehaviorTree.h",
+        "Engine/AI/BehaviorTreeNodes.h",
+        "Engine/Cinematic/Sequencer.h",
+        "Engine/Dialogue/DialogueSystem.h",
+        "Engine/ECS/Components.h",
+        "Engine/ECS/Components/GameplayComponents.h",
+        "Engine/ECS/Components/NetworkComponents.h",
+        "Engine/Events/EventSystem.h",
+        "Engine/Localization/LocalizationSystem.h",
+        "Engine/Networking/AreaServer.h",
+        "Engine/Networking/NetworkManager.h",
+        "Engine/Networking/WorldServer.h",
+        "Engine/Persistence/AsyncDatabase.h",
+        "Engine/Security/MemoryIntegrity.h",
+        "Engine/Streaming/SeamlessAreaManager.h",
+        "Engine/World/SpatialGrid.h",
+        "Engine/World/TimeOfDaySystem.h",
+        "Engine/World/WorldOriginSystem.h",
+        "Graphics/WeatherSystem.h",
+        "Input/InputManager.h",
+        "Utils/ContainerUtils.h",
+        "Utils/EventBus.h",
+        "Utils/InvalidStateDetector.h",
+        "Utils/LogMacros.h",
+        "Utils/PasswordHash.h",
+        "Utils/SecureMemory.h",
+        "Utils/SecureRandom.h",
+        "Utils/SparkConsole.h"
+      ],
+      "privateEngineHeaderCount": 29,
+      "copiedInfrastructureFiles": [
+        "GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.cpp"
+      ]
     },
     {
       "name": "SparkGameMMOFPS",
@@ -101,7 +176,41 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "sharedRootDependencies": []
+      "sharedRootDependencies": [],
+      "privateEngineHeaders": [
+        "Audio/AudioEngine.h",
+        "Camera/SparkEngineCamera.h",
+        "Core/Platform.h",
+        "Engine/ECS/Components.h",
+        "Engine/Networking/AreaServer.h",
+        "Engine/Networking/ClientPrediction.h",
+        "Engine/Networking/IAreaSimulation.h",
+        "Engine/Networking/InterpolationBuffer.h",
+        "Engine/Networking/LagCompensation.h",
+        "Engine/Networking/NetworkBindPolicy.h",
+        "Engine/Networking/NetworkClientId.h",
+        "Engine/Networking/NetworkManager.h",
+        "Engine/Networking/WorldServer.h",
+        "Engine/World/TimeOfDaySystem.h",
+        "Engine/World/WorldOriginSystem.h",
+        "Game/GameObject.h",
+        "Game/PlaceholderMesh.h",
+        "Graphics/GraphicsEngine.h",
+        "Graphics/Mesh.h",
+        "Graphics/ProjectAssetPath.h",
+        "Graphics/WorldBasicRenderer.h",
+        "Input/InputManager.h",
+        "Physics/PhysicsSystem.h",
+        "SceneManager/SceneManager.h",
+        "Utils/ConsoleVariable.h",
+        "Utils/JsonUtils.h",
+        "Utils/LogMacros.h",
+        "Utils/ScopeGuard.h",
+        "Utils/SecureMemory.h",
+        "Utils/SparkConsole.h"
+      ],
+      "privateEngineHeaderCount": 30,
+      "copiedInfrastructureFiles": []
     },
     {
       "name": "SparkGameOpenWorld",
@@ -118,7 +227,31 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "sharedRootDependencies": []
+      "sharedRootDependencies": [],
+      "privateEngineHeaders": [
+        "Audio/MusicManager.h",
+        "Engine/AI/AISystem.h",
+        "Engine/AI/BehaviorTree.h",
+        "Engine/Cinematic/Sequencer.h",
+        "Engine/ECS/Components.h",
+        "Engine/ECS/Components/AIComponents.h",
+        "Engine/ECS/Components/GameplayComponents.h",
+        "Engine/Events/EventSystem.h",
+        "Engine/SaveSystem/SaveSystem.h",
+        "Engine/Streaming/SceneManifest.h",
+        "Engine/Streaming/SeamlessAreaManager.h",
+        "Engine/World/TimeOfDaySystem.h",
+        "Engine/World/WorldOriginSystem.h",
+        "Graphics/WeatherSystem.h",
+        "Utils/EventBus.h",
+        "Utils/InvalidStateDetector.h",
+        "Utils/LogMacros.h",
+        "Utils/SparkConsole.h"
+      ],
+      "privateEngineHeaderCount": 18,
+      "copiedInfrastructureFiles": [
+        "GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.cpp"
+      ]
     },
     {
       "name": "SparkGamePlatformer",
@@ -135,7 +268,28 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "sharedRootDependencies": []
+      "sharedRootDependencies": [],
+      "privateEngineHeaders": [
+        "Audio/MusicManager.h",
+        "Core/Platform.h",
+        "Engine/Destruction/DestructionSystem.h",
+        "Engine/ECS/Components.h",
+        "Engine/ECS/Components/GameplayComponents.h",
+        "Engine/ECS/Components/PhysicsComponents.h",
+        "Engine/Events/EventSystem.h",
+        "Engine/Localization/LocalizationSystem.h",
+        "Engine/Replay/ReplaySystem.h",
+        "Engine/SaveSystem/SaveSystem.h",
+        "Input/InputManager.h",
+        "Utils/EventBus.h",
+        "Utils/InvalidStateDetector.h",
+        "Utils/LogMacros.h",
+        "Utils/SparkConsole.h"
+      ],
+      "privateEngineHeaderCount": 15,
+      "copiedInfrastructureFiles": [
+        "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp"
+      ]
     },
     {
       "name": "SparkGameRacing",
@@ -152,7 +306,27 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "sharedRootDependencies": []
+      "sharedRootDependencies": [],
+      "privateEngineHeaders": [
+        "Audio/MusicManager.h",
+        "Engine/Destruction/DestructionSystem.h",
+        "Engine/ECS/Components.h",
+        "Engine/ECS/Components/GameplayComponents.h",
+        "Engine/ECS/Components/PhysicsComponents.h",
+        "Engine/Events/EventSystem.h",
+        "Engine/Replay/ReplaySystem.h",
+        "Engine/SaveSystem/SaveSystem.h",
+        "Graphics/WeatherSystem.h",
+        "Input/InputManager.h",
+        "Utils/EventBus.h",
+        "Utils/InvalidStateDetector.h",
+        "Utils/LogMacros.h",
+        "Utils/SparkConsole.h"
+      ],
+      "privateEngineHeaderCount": 14,
+      "copiedInfrastructureFiles": [
+        "GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp"
+      ]
     },
     {
       "name": "SparkGameRPG",
@@ -169,7 +343,32 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "sharedRootDependencies": []
+      "sharedRootDependencies": [],
+      "privateEngineHeaders": [
+        "Audio/MusicManager.h",
+        "Engine/AI/AISystem.h",
+        "Engine/AI/BehaviorTree.h",
+        "Engine/Cinematic/Sequencer.h",
+        "Engine/Dialogue/DialogueSystem.h",
+        "Engine/ECS/Components.h",
+        "Engine/ECS/Components/AIComponents.h",
+        "Engine/ECS/Components/GameplayComponents.h",
+        "Engine/Events/EventSystem.h",
+        "Engine/Gameplay/QuestSystem.h",
+        "Engine/SaveSystem/SaveSystem.h",
+        "Engine/Streaming/SeamlessAreaManager.h",
+        "Engine/World/TimeOfDaySystem.h",
+        "Engine/World/WorldOriginSystem.h",
+        "Graphics/WeatherSystem.h",
+        "Utils/EventBus.h",
+        "Utils/InvalidStateDetector.h",
+        "Utils/LogMacros.h",
+        "Utils/SparkConsole.h"
+      ],
+      "privateEngineHeaderCount": 19,
+      "copiedInfrastructureFiles": [
+        "GameModules/SparkGameRPG/Source/Core/RPGEngineSystems.cpp"
+      ]
     },
     {
       "name": "SparkGameRTS",
@@ -186,7 +385,30 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "sharedRootDependencies": []
+      "sharedRootDependencies": [],
+      "privateEngineHeaders": [
+        "Audio/MusicManager.h",
+        "Engine/AI/AISystem.h",
+        "Engine/AI/BehaviorTree.h",
+        "Engine/AI/NavMesh.h",
+        "Engine/Destruction/DestructionSystem.h",
+        "Engine/ECS/Components.h",
+        "Engine/ECS/Components/AIComponents.h",
+        "Engine/ECS/Components/GameplayComponents.h",
+        "Engine/Events/EventSystem.h",
+        "Engine/SaveSystem/SaveSystem.h",
+        "Engine/World/TimeOfDaySystem.h",
+        "Graphics/WeatherSystem.h",
+        "Input/InputManager.h",
+        "Utils/EventBus.h",
+        "Utils/InvalidStateDetector.h",
+        "Utils/LogMacros.h",
+        "Utils/SparkConsole.h"
+      ],
+      "privateEngineHeaderCount": 17,
+      "copiedInfrastructureFiles": [
+        "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
+      ]
     },
     {
       "name": "SparkGameVisualScript",
@@ -203,7 +425,18 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "sharedRootDependencies": []
+      "sharedRootDependencies": [],
+      "privateEngineHeaders": [
+        "Engine/ECS/Components.h",
+        "Engine/ECS/Components/CoreComponents.h",
+        "Engine/ECS/Components/GameplayComponents.h",
+        "Engine/Scripting/AngelScriptEngine.h",
+        "Utils/InvalidStateDetector.h",
+        "Utils/LogMacros.h",
+        "Utils/SparkConsole.h"
+      ],
+      "privateEngineHeaderCount": 7,
+      "copiedInfrastructureFiles": []
     }
   ],
   "fallbackSites": [

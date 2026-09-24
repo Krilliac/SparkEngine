@@ -376,9 +376,7 @@
       "plannedCiJobs": [
         "prototype-module-kit"
       ],
-      "plannedTestSelectors": [
-        "PrototypeModuleKit_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-300",

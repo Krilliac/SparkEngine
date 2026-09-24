@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 INVENTORY_RELATIVE = Path("GameModules/module-content-inventory.json")
 EVIDENCE_RELATIVE = Path("tools/module-evidence/manifest.json")
 PROFILE_STATES = {"required", "shared", "outside"}
@@ -139,6 +139,107 @@ def _root_dependency(repo_root: Path, relative: str, integrity: set[str], declar
     }
 
 
+# MOD-295 / MOD-310: the one include resolver shared by every module-boundary
+# ratchet. It mirrors the include search order the module CMakeLists declare
+# (target_include_directories: "Source", ENGINE_SOURCE_DIR, SPARK_SDK_INCLUDE_DIR):
+# a quoted include is looked up next to the including file first, an angle
+# include only on the declared directories. The first existing candidate wins and
+# is classified by where the resolved file actually lives, so a "../" escape into
+# SparkEngine/Source is still engine-private. Directives inside #if blocks are
+# counted too: the ratchet is conservative, never optimistic.
+INCLUDE_SOURCE_SUFFIXES = {".h", ".hpp", ".cpp", ".inl"}
+INCLUDE_DIRECTIVE_PATTERN = re.compile(r'^[ \t]*#[ \t]*include[ \t]*(?:"([^"\n]+)"|<([^>\n]+)>)', re.MULTILINE)
+ENGINE_PRIVATE_ROOT = Path("SparkEngine/Source")
+SDK_INCLUDE_ROOT = Path("SparkSDK/Include")
+COPIED_INFRASTRUCTURE_GLOB = "*EngineSystems.cpp"
+PRIVATE_DEPENDENCY_KEYS = ("privateEngineHeaders", "privateEngineHeaderCount", "copiedInfrastructureFiles")
+
+
+def _within(path: Path, root: Path) -> str | None:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return None
+
+
+def classify_module_includes(repo_root: Path, module_dir: Path) -> dict[str, Any]:
+    """Classify every include directive in ``module_dir/Source``.
+
+    Returns ``{"module": set, "sdk": set, "engine": set, "unresolved": list}``.
+    ``engine`` holds paths relative to SparkEngine/Source; ``unresolved`` holds
+    ``(file, spelling)`` for quoted includes that resolve nowhere. Angle includes
+    that resolve nowhere are toolchain or third-party headers and are ignored.
+    """
+    repo_root = repo_root.resolve()
+    source = module_dir.resolve() / "Source"
+    engine_root, sdk_root = repo_root / ENGINE_PRIVATE_ROOT, repo_root / SDK_INCLUDE_ROOT
+    declared = [source, engine_root, sdk_root]
+    result: dict[str, Any] = {"module": set(), "sdk": set(), "engine": set(), "unresolved": []}
+    if not source.is_dir():
+        return result
+    for path in sorted(source.rglob("*")):
+        if not path.is_file() or path.suffix not in INCLUDE_SOURCE_SUFFIXES:
+            continue
+        code, _ = _lex_cpp(path.read_text(encoding="utf-8", errors="replace"))
+        for match in INCLUDE_DIRECTIVE_PATTERN.finditer(code):
+            quoted, spelling = match.group(1) is not None, (match.group(1) or match.group(2)).strip()
+            candidates = ([path.parent] if quoted else []) + declared
+            resolved = next(
+                (Path(os.path.normpath(base / spelling)) for base in candidates if (base / spelling).is_file()), None
+            )
+            if resolved is None:
+                if quoted:
+                    result["unresolved"].append((path.relative_to(repo_root).as_posix(), spelling))
+                continue
+            engine = _within(resolved, engine_root)
+            if engine is not None:
+                result["engine"].add(engine)
+            elif _within(resolved, sdk_root) is not None:
+                result["sdk"].add(_within(resolved, sdk_root))
+            elif _within(resolved, module_dir.resolve()) is not None:
+                result["module"].add(_within(resolved, module_dir.resolve()))
+    return result
+
+
+def _is_prototype(applicability: dict[str, str]) -> bool:
+    """A prototype module is in no release profile (required or shared)."""
+    return bool(applicability) and all(state == "outside" for state in applicability.values())
+
+
+def _private_dependency_payload(module_dir: Path, repo_root: Path) -> dict[str, Any]:
+    headers = sorted(classify_module_includes(repo_root, module_dir)["engine"])
+    source = module_dir / "Source"
+    copied = sorted(path.relative_to(repo_root).as_posix() for path in source.rglob(COPIED_INFRASTRUCTURE_GLOB) if path.is_file()) if source.is_dir() else []
+    return {"privateEngineHeaders": headers, "privateEngineHeaderCount": len(headers), "copiedInfrastructureFiles": copied}
+
+
+def _validate_private_dependencies(
+    repo_root: Path, module_dir: Path, entry: dict[str, Any], location: str
+) -> list[tuple[str, str]]:
+    """Ratchet a prototype module's engine-private headers against its committed inventory entry."""
+    name = module_dir.name
+    findings: list[tuple[str, str]] = []
+    classified = classify_module_includes(repo_root, module_dir)
+    for relative, spelling in classified["unresolved"]:
+        findings.append((location, f"unclassifiable include in {relative}: \"{spelling}\" resolves to no module, SDK or engine file"))
+    measured = _private_dependency_payload(module_dir, repo_root)
+    committed = entry.get("privateEngineHeaders")
+    if not isinstance(committed, list) or not all(isinstance(value, str) for value in committed):
+        findings.append((location, f"privateEngineHeaders must be a list of strings for prototype module {name}"))
+        committed = []
+    elif committed != sorted(set(committed)):
+        findings.append((location, f"privateEngineHeaders must be sorted and unique for {name}"))
+    for header in sorted(set(measured["privateEngineHeaders"]) - set(committed)):
+        findings.append((location, f"{name} gained engine-private header not listed in its committed inventory: {header}"))
+    for header in sorted(set(committed) - set(measured["privateEngineHeaders"])):
+        findings.append((location, f"{name} no longer includes engine-private header {header}; shrink privateEngineHeaders"))
+    if entry.get("privateEngineHeaderCount") != len(committed):
+        findings.append((location, f"privateEngineHeaderCount for {name} must equal the listed header count {len(committed)}"))
+    if entry.get("copiedInfrastructureFiles") != measured["copiedInfrastructureFiles"]:
+        findings.append((location, f"copiedInfrastructureFiles drift for {name}: expected {measured['copiedInfrastructureFiles']!r}"))
+    return findings
+
+
 def _module_payload(module_dir: Path, repo_root: Path, applicability: dict[str, str]) -> dict[str, Any]:
     name = module_dir.name
     source, assets = module_dir / "Source", module_dir / "Assets"
@@ -155,7 +256,7 @@ def _module_payload(module_dir: Path, repo_root: Path, applicability: dict[str, 
         roots, local_state = [], "unclassified"
         declaration_parse_error = False
     integrity = _integrity_entries(repo_root)
-    return {
+    payload = {
         "name": name,
         "directory": module_dir.relative_to(repo_root).as_posix(),
         "cmakeLists": (module_dir / "CMakeLists.txt").is_file(),
@@ -170,6 +271,11 @@ def _module_payload(module_dir: Path, repo_root: Path, applicability: dict[str, 
         "profileApplicability": applicability,
         "sharedRootDependencies": [_root_dependency(repo_root, root, integrity, root in declarations if name == "SparkGameFPS" else False) for root in roots],
     }
+    # MOD-295 measures, and does not reduce, what prototype modules take from
+    # engine-private headers and copied *EngineSystems.cpp setup code.
+    if _is_prototype(applicability):
+        payload.update(_private_dependency_payload(module_dir, repo_root))
+    return payload
 
 
 def _contains_symlink(path: Path) -> bool:
@@ -261,8 +367,12 @@ def validate(repo_root: Path) -> list[tuple[str, str]]:
             continue
         expected = _module_payload(actual[name], repo_root, authoritative[name]["profileApplicability"])
         for key, value in expected.items():
-            if entry.get(key) != value:
+            if key not in PRIVATE_DEPENDENCY_KEYS and entry.get(key) != value:
                 findings.append((location, f"{key} drift for {name}: expected {value!r}"))
+        if _is_prototype(authoritative[name]["profileApplicability"]):
+            findings.extend(_validate_private_dependencies(repo_root, actual[name], entry, location))
+        elif any(key in entry for key in PRIVATE_DEPENDENCY_KEYS):
+            findings.append((location, f"private-dependency ratchet fields are published only for prototype modules: {name}"))
         if expected["assetsDirectory"] and expected["assetFileCount"] and not expected["assetManifest"]:
             findings.append((location, f"payload asset directory has no manifest for {name}"))
         if name == "SparkGameFPS":
