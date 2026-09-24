@@ -30,8 +30,8 @@ none of the hardware guidance is `stable-v1` certification.
 |---|---|---|
 | **Release candidate OS** | Windows 11 x64 (`stable-v1` target; blocked/uncertified) | Windows 11 x64 |
 | **Development floor** | Windows 10 x64 (outside the release profile) | Windows 10/11 SDK development path |
-| **CPU Architecture** | x86-64 | x86-64 with AVX2 |
-| **CPU Baseline** | x64 baseline | AVX2 only when `SPARK_NATIVE_ARCH=ON` (default OFF; distributed builds are not forced to AVX2) |
+| **CPU Architecture** | x86-64 | x86-64 |
+| **CPU Baseline** | x86-64 with SSE4.2 (`stable-v1` floor, OD-04) | AVX2 only for host-tuned `SPARK_NATIVE_ARCH=ON` builds, which are not distributable |
 | **GPU (Primary)** | D3D11 Feature Level 10.0 | D3D11 FL 11.1 |
 | **GPU (Optional)** | D3D12 FL 12.0 (Win10+) | D3D12 FL 12.0 with DXR Tier 1.1 |
 | **Compiler** | MSVC 19.36+ (VS 2022 17.6+, v143 toolset) | MSVC v143 / v145 |
@@ -114,6 +114,18 @@ game content. Assets, entities, and game logic pile on top.
 - **Physics threads:** Jolt uses the same formula, dynamically sized pool
   (`Physics/PhysicsSystem.cpp:385`).
 - **No hard cap** on frame work — scales with content.
+
+**Instruction-set floor (BLD-100 / OD-04).** The `stable-v1` CPU floor is
+x86-64 with SSE4.2 (the x86-64-v2 level: SSE4.1, SSE4.2, POPCNT). Unless
+`SPARK_NATIVE_ARCH=ON`, `cmake/SparkCpuFloor.cmake` builds vendored Jolt with
+`USE_AVX`, `USE_AVX2`, `USE_AVX512`, `USE_FMADD`, `USE_F16C`, `USE_LZCNT` and
+`USE_TZCNT` OFF. Jolt publishes its ISA flags `PUBLIC`, so before this change
+every target linking it (including `SparkEngineLib`) also compiled with
+`-mavx2 -mfma -mf16c -mlzcnt -mbmi`. Configuration now fails when any
+target or global flag selects an instruction set above the floor.
+`Tests/Tools/test_cpu_floor.py` covers this check, including the vendored Jolt
+configuration. No Shipping binary has yet been run on an SSE4.2-only CPU or
+emulator.
 
 Core-count guidance below is an unverified planning estimate. `PERF-100` remains
 open; no same-commit benchmark artifact establishes a release minimum.

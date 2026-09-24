@@ -963,15 +963,15 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "Jolt",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 1658,
+            "line": 1661,
             "conditionFrames": [
                 {"id": "CMakeLists.txt:1564", "branch": 0, "branches": ["JOLT_FOUND"]},
                 {
-                    "id": "CMakeLists.txt:1656",
+                    "id": "CMakeLists.txt:1659",
                     "branch": 0,
                     "branches": ["SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"],
                 },
-                {"id": "CMakeLists.txt:1657", "branch": 0, "branches": ["MSVC"]},
+                {"id": "CMakeLists.txt:1660", "branch": 0, "branches": ["MSVC"]},
             ],
             "definitionScope": [],
             "origin": "required-target-reference",

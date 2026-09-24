@@ -283,6 +283,9 @@ jobs:
     - name: Test strict Shipping and reproducible-build contract
       run: python3 Tests/Tools/test_build_shipping_contract.py
 
+    - name: Test the stable-v1 x86-64 SSE4.2 CPU floor (OD-04)
+      run: python3 Tests/Tools/test_cpu_floor.py
+
     - name: Generate and compare the deterministic build-matrix inventory
       run: |
         python3 Tools/buildmatrix/inventory.py \

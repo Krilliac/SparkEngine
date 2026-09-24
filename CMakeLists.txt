@@ -1594,6 +1594,9 @@ if(JOLT_FOUND)
 
     # Use dynamic CRT to match the rest of the engine (/MD instead of /MT)
     set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
+    # BLD-100 / OD-04: hold Jolt (and its PUBLIC ISA flags) to the SSE4.2 floor.
+    include("${CMAKE_SOURCE_DIR}/cmake/SparkCpuFloor.cmake")
+    spark_configure_jolt_cpu_floor()
 
     # Jolt GPU-accelerated physics (optional)
     # Jolt can offload certain physics workloads (hair simulation, compute tests)
@@ -3575,6 +3578,11 @@ if(MSVC AND CMAKE_GENERATOR MATCHES "Visual Studio")
     set(SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION "${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}" CACHE INTERNAL
         "Measured Visual Studio Windows SDK version for build provenance" FORCE)
 endif()
+
+# BLD-100 / OD-04: fail when any target or global flag selects an instruction
+# set above the stable-v1 x86-64 SSE4.2 CPU floor. Runs after every subdirectory.
+include("${CMAKE_SOURCE_DIR}/cmake/SparkCpuFloor.cmake")
+spark_assert_cpu_floor()
 
 # CI-120: fail on -D ENABLE_*/SPARK_*/BUILD_* names nothing declared. Must stay
 # last so every subdirectory has had the chance to declare its options.

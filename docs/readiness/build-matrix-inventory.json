@@ -598,7 +598,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2547,
+      "line": 2550,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -625,7 +625,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3400,
+      "line": 3403,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1378,7 +1378,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2547,
+      "line": 2550,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1438,7 +1438,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3400,
+      "line": 3403,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2090,10 +2090,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1687,
+      "line": 1690,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1673",
+          "id": "CMakeLists.txt:1676",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2128,7 +2128,7 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1658,
+      "line": 1661,
       "conditionFrames": [
         {
           "id": "CMakeLists.txt:1564",
@@ -2138,14 +2138,14 @@
           ]
         },
         {
-          "id": "CMakeLists.txt:1656",
+          "id": "CMakeLists.txt:1659",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1657",
+          "id": "CMakeLists.txt:1660",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2239,10 +2239,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1675,
+      "line": 1678,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1673",
+          "id": "CMakeLists.txt:1676",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -3190,7 +3190,7 @@
       "target": "SparkRuntimeShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1792,
+      "line": 1795,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3396,17 +3396,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2264,
+      "line": 2267,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2259",
+          "id": "CMakeLists.txt:2262",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2263",
+          "id": "CMakeLists.txt:2266",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -3758,7 +3758,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1687,
+          "line": 1690,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3812,7 +3812,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1658,
+          "line": 1661,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -3920,7 +3920,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1675,
+          "line": 1678,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5130,7 +5130,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1792,
+          "line": 1795,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -5440,7 +5440,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2264,
+          "line": 2267,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6274,7 +6274,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 56,
+        "stepCount": 57,
         "steps": [
           {
             "index": 0,
@@ -6866,6 +6866,18 @@
           },
           {
             "index": 49,
+            "name": "Test the stable-v1 x86-64 SSE4.2 CPU floor (OD-04)",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "5b9864acc47d8f75"
+          },
+          {
+            "index": 50,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -6877,7 +6889,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 50,
+            "index": 51,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -6889,7 +6901,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 51,
+            "index": 52,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6901,7 +6913,7 @@
             "runDigest": ""
           },
           {
-            "index": 52,
+            "index": 53,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -6913,7 +6925,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 53,
+            "index": 54,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -6928,7 +6940,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 54,
+            "index": 55,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6940,7 +6952,7 @@
             "runDigest": ""
           },
           {
-            "index": 55,
+            "index": 56,
             "name": "Controlled required-job failure probe",
             "id": "",
             "uses": "",
@@ -15829,7 +15841,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 49,
+        "stepIndex": 50,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -15857,7 +15869,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 50,
+        "stepIndex": 51,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
