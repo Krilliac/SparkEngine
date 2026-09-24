@@ -11,31 +11,31 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 323584 |
-| **SparkEditor/Source** | 103869 |
-| **GameModules** | 143131 |
+| **SparkEngine/Source** | 324185 |
+| **SparkEditor/Source** | 104078 |
+| **GameModules** | 143222 |
 | **External services** | 11305 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 188098 |
+| **Tests** | 189769 |
 | **SparkConsole/src** | 1770 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~789152** |
+| **Total C++ (excl. ThirdParty)** | **~792066** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1071 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1608 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1073 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1616 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 615 |
+| Test-bearing implementation files (.cpp/.mm) | 621 |
 | Wiki pages (.md) | 202 |
 
 ### Largest Top-Level Source Section
 
-Graphics contains 121981 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 122558 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -43,9 +43,9 @@ Graphics contains 121981 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121981 | 37.6% |
-| Engine (all subsystems) | 89836 | 27.7% |
-| Utils | 46304 | 14.3% |
+| Graphics | 122558 | 37.8% |
+| Engine (all subsystems) | 89860 | 27.7% |
+| Utils | 46304 | 14.2% |
 | Core | 30919 | 9.5% |
 | Physics | 10812 | 3.3% |
 | Audio | 6884 | 2.1% |
@@ -104,14 +104,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 103869 |
+| Total editor lines | 104078 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 615 |
-| TEST() definitions | 7450 |
+| Test files | 621 |
+| TEST() definitions | 7482 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -161,8 +161,8 @@ inventory is implementation evidence, not support certification.
 | `OpenGLDevice.cpp` | 2160 |
 | `ModuleManager.cpp` | 2107 |
 | `CrashHandler.cpp` | 2085 |
+| `D3D11Device.cpp` | 2079 |
 | `VulkanDevice.cpp` | 1991 |
-| `D3D11Device.cpp` | 1991 |
 | `EngineSettings.cpp` | 1849 |
 | `NetworkConnection.cpp` | 1680 |
 | `GameplayLifecycleShared.cpp` | 1648 |
