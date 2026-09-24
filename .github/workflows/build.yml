@@ -131,6 +131,9 @@ jobs:
     - name: Test flaky warning ownership and expiry policy
       run: python3 Tests/Tools/test_validate_test_warnings.py
 
+    - name: Test shared build-directory lock
+      run: python3 Tests/Tools/test_build_lock.py
+
     - name: Test required-job gate
       run: python3 .github/scripts/test-verify-required-jobs.py
 

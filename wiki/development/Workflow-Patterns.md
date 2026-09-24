@@ -35,6 +35,25 @@ Do not use a single Explore agent for a broad multi-area search — it will eith
 - Use read-only exploration agents for codebase research; reserve planning agents for architectural design work after exploration.
 - 3 agents maximum per parallel batch; quality over quantity.
 
+## Shared Build Directory — Serialize With `tools/build-lock.sh`
+
+When several agents (or scripts) share one build tree, route every configure and build through the lock wrapper instead of an ad-hoc `flock`:
+
+```bash
+tools/build-lock.sh -- cmake --build build/linux-gcc-release --target SparkTests -j4
+tools/build-lock.sh --timeout 600 -- cmake --preset linux-gcc-release -DBUILD_TESTS=ON
+tools/build-lock.sh --status          # who holds it, and is the holder still alive?
+```
+
+The lock defaults to `build/.spark-build.lock` (`--lock` / `SPARK_BUILD_LOCK` override it). What the wrapper guarantees, and why each matters:
+
+- **Bounded wait.** It gives up after `--timeout` seconds (default 1800, `SPARK_BUILD_LOCK_TIMEOUT`) with exit 75 and a holder report, instead of queueing forever.
+- **Holder record.** The holder writes pid, host, start time, cwd, and command into the lock file; waiters print it every `--report-every` seconds (default 60).
+- **No inherited descriptors.** The command runs with the lock fd closed (and in its own process group via `setsid` when available), so a daemon or detached helper it spawns cannot keep the lock after the wrapper exits.
+- **Orphan detection.** If the recorded holder is dead but processes still have the lock file open, it says so and lists them. It never kills anything.
+
+Do not guard a shared lock with a detached waiter that matches processes by command line (`pgrep -f` / `pkill -f`): the waiters' own command lines match the pattern. On 2026-09-24 such a helper inherited the build lock, waited for "no `cmake --build build/...` process", and deadlocked every queued build — including itself, since `pkill -f` on the same pattern also killed the invoking shell. Wait on a PID (`kill -0 $PID`) and hold locks only in the process that took them. Regression coverage: `Tests/Tools/test_build_lock.py` (CI job `validate-ci-tools`).
+
 ## Documentation Sync After Structural Changes
 
 After any change that adds, renames, or removes public headers, ECS components, systems, editor panels, or tests — run the doc scripts before committing. The fastest reliable option is the master script:
@@ -185,6 +204,7 @@ Skipping steps 4-5 means starting each session without accumulated knowledge. Sk
 
 - Original entry: `Effective SparkEngine Development Workflows`, last updated 2026-03-14.
 - Verified against codebase 2026-06-08.
+- 2026-09-24: added the shared-build-directory lock section (`tools/build-lock.sh`) after a parallel-agent build deadlock.
 - Updated / found stale:
   - Doc-sync section now leads with `docs/update-all-docs.sh` (the master script), which is the current recommended one-shot; the two-script combo is kept as a faster subset.
   - Pre-push step 5 changed to `docs/update-all-docs.sh` to match current `CLAUDE.md` pre-commit guidance (was two separate scripts).
