@@ -141,7 +141,7 @@
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a clean-machine package, driver, desktop/audio/input, and uninstall certification.",
+      "rationale": "Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a clean-machine package, driver, desktop/audio/input, and uninstall certification. Owner decision OD-10 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): the stable-v1 Linux support row is Ubuntu 24.04 LTS on x86-64 only. The decision fixes the row's scope; it does not certify it, and the clean-machine evidence above is still required.",
       "dependencies": [
         "BLD-100",
         "RDY-020",
@@ -202,7 +202,8 @@
         "Distribution and driver fragmentation"
       ],
       "outOfScope": [
-        "Unsupported distributions"
+        "Unsupported distributions",
+        "Distributions other than Ubuntu 24.04 LTS and non-x86-64 Linux, including ARM64, for stable-v1 (OD-10)"
       ],
       "definitionOfDone": [
         "Matrix is explicit",
@@ -228,7 +229,7 @@
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "macOS CI is nonblocking, platform-version claims conflict, no complete Metal path is certified, and no signed/notarized engine package exists.",
+      "rationale": "macOS CI is nonblocking, platform-version claims conflict, no complete Metal path is certified, and no signed/notarized engine package exists. Owner decision OD-11 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): macOS is deferred from stable-v1 and stays experimental; no macOS certification work is scheduled for stable-v1, and any later macOS support row is Apple Silicon only. The deferral leaves this item open, not done.",
       "dependencies": [
         "BLD-100",
         "RHI-220",
@@ -292,7 +293,9 @@
         "Signing/notarization credentials"
       ],
       "outOfScope": [
-        "Older macOS outside declared baseline"
+        "Older macOS outside declared baseline",
+        "macOS certification for stable-v1 (deferred by OD-11)",
+        "Intel macOS; any later macOS row is Apple Silicon only (OD-11)"
       ],
       "definitionOfDone": [
         "Native package is notarized",
@@ -319,7 +322,7 @@
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "Touch input and quality scaling are framework pieces, not an iOS/Android platform layer or deployment pipeline.",
+      "rationale": "Touch input and quality scaling are framework pieces, not an iOS/Android platform layer or deployment pipeline. Owner decision OD-12 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): mobile support is deferred from stable-v1 and no mobile platform work is scheduled for it. The deferral leaves this item open, not done.",
       "dependencies": [
         "RDY-000",
         "ENG-220"
@@ -373,7 +376,8 @@
         "Large platform-specific scope"
       ],
       "outOfScope": [
-        "Every mobile GPU/OS version"
+        "Every mobile GPU/OS version",
+        "Mobile platform work for stable-v1 (deferred by OD-12)"
       ],
       "definitionOfDone": [
         "Decision is explicit",
@@ -398,7 +402,7 @@
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "VR/OpenXR is a framework stub without runtime initialization, interaction, stereo, performance, or packaged headset proof.",
+      "rationale": "VR/OpenXR is a framework stub without runtime initialization, interaction, stereo, performance, or packaged headset proof. Owner decision OD-12 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): OpenXR/VR support is deferred from stable-v1 and no OpenXR platform work is scheduled for it. The deferral leaves this item open, not done.",
       "dependencies": [
         "RDY-000",
         "ENG-220"
@@ -455,7 +459,8 @@
         "Hardware lab and runtime fragmentation"
       ],
       "outOfScope": [
-        "Native vendor runtimes beyond declared OpenXR profiles"
+        "Native vendor runtimes beyond declared OpenXR profiles",
+        "OpenXR/VR platform work for stable-v1 (deferred by OD-12)"
       ],
       "definitionOfDone": [
         "Decision and device matrix exist",
@@ -482,7 +487,7 @@
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "Console support is planned and cannot be implemented or claimed without agreements, SDK access, dev kits, platform owners, and certification programs.",
+      "rationale": "Console support is planned and cannot be implemented or claimed without agreements, SDK access, dev kits, platform owners, and certification programs. Owner decision OD-12 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): console support is deferred from stable-v1 and no console platform work is scheduled for it. The item stays blocked on agreements, SDK access and dev kits.",
       "dependencies": [
         "RDY-000"
       ],
@@ -525,7 +530,8 @@
         "Disclosing confidential platform material"
       ],
       "outOfScope": [
-        "Unauthorized implementation"
+        "Unauthorized implementation",
+        "Console platform work for stable-v1 (deferred by OD-12)"
       ],
       "definitionOfDone": [
         "Claims are gated",
@@ -1648,7 +1654,7 @@
       "wave": 2,
       "area": "scripting",
       "owner": "unassigned",
-      "rationale": "Script objects/methods are cached, but entity identity and production start/update/collision dispatch are disconnected; multiple gameplay bindings are no-op or log-only, blocking VisualScript too.",
+      "rationale": "Script objects/methods are cached, but entity identity and production start/update/collision dispatch are disconnected; multiple gameplay bindings are no-op or log-only, blocking VisualScript too. Owner decision OD-13 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): this item is scheduled after the stable-v1 items and no stable-v1 capacity is assigned to it. It stays open until its own evidence exists.",
       "dependencies": [
         "RDY-010",
         "LIFE-200",
@@ -1715,7 +1721,8 @@
         "Unbounded scripts on simulation thread"
       ],
       "outOfScope": [
-        "Lua support unless separately contracted"
+        "Lua support unless separately contracted",
+        "Stable-v1 capacity; the item is scheduled after the stable-v1 items (OD-13)"
       ],
       "definitionOfDone": [
         "Lifecycle and bindings are real",

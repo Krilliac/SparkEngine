@@ -1119,7 +1119,7 @@ cmake --build build/windows-shipping --config MinSizeRel --clean-first
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Stable preparation now requires tag/default-version equality, one source version declaration, and exactly one matching versioned changelog heading, with executed rejection fixtures; the current Unreleased-only changelog intentionally does not satisfy this contract. 2026-09-12 progress: SparkConsole now receives the top-level version at configure time, rejects standalone builds without it, exposes --version/-v, and has a CTest contract that verifies the executable output. 2026-09-13 progress: SparkShaderCompiler, SparkCooker, SparkAutomation, and SparkCrashReporter now receive the authoritative CMake version and expose exact --version contracts; fresh Windows Shipping binaries pass the executable-level regression, and the required Shipping workflow runs it after build. 2026-09-14 progress: the shared executable-level regression now resolves the platform-native executable suffix, so macOS and Linux validate extensionless tool binaries while Windows retains the .exe contract; the Windows targeted CTest and Darwin suffix probe pass locally. Still open: complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy.
+CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Stable preparation now requires tag/default-version equality, one source version declaration, and exactly one matching versioned changelog heading, with executed rejection fixtures; the current Unreleased-only changelog intentionally does not satisfy this contract. 2026-09-12 progress: SparkConsole now receives the top-level version at configure time, rejects standalone builds without it, exposes --version/-v, and has a CTest contract that verifies the executable output. 2026-09-13 progress: SparkShaderCompiler, SparkCooker, SparkAutomation, and SparkCrashReporter now receive the authoritative CMake version and expose exact --version contracts; fresh Windows Shipping binaries pass the executable-level regression, and the required Shipping workflow runs it after build. 2026-09-14 progress: the shared executable-level regression now resolves the platform-native executable suffix, so macOS and Linux validate extensionless tool binaries while Windows retains the .exe contract; the Windows targeted CTest and Darwin suffix probe pass locally. Still open: complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy. Owner decision OD-17 (2026-09-24, docs/readiness/OWNER-DECISIONS.md) sets the channel retention and support semantics this item must enforce: stable release assets are immutable and kept permanently, and each stable release receives security and critical fixes until 6 months after the next stable release; each uniquely tagged immutable nightly is kept for 30 days and is unsupported; experimental artifacts are kept for 14 days, are always labeled experimental, and are never presented as supported; CI build artifacts keep their existing 7- and 90-day retention. This is recorded policy, not evidence: no stable release has been published, the unique-tag immutable nightly channel is not implemented, and the rolling-nightly/immutable-stable conflict remains a blocker here.
 
 **Dependency contract**
 
@@ -1179,6 +1179,7 @@ SparkLauncher --version
   - `CHANGELOG.md`
   - `SECURITY.md`
   - `README.md`
+  - `wiki/development/Release-Publication-Stages.md`
 - Readiness contract:
   - G05
   - G15
@@ -1192,6 +1193,7 @@ SparkLauncher --version
   - Existing 1.0.0 prose may need reclassification rather than retroactive tagging
 - Out of scope:
   - Cutting the final release
+  - Claiming that any stable, nightly, or experimental release is published or operated under the OD-17 windows before exact-SHA publication evidence exists
 
 **Definition of done**
 
@@ -2423,7 +2425,7 @@ ctest --test-dir build/windows-release -C Release -L nullrhi-soak --output-on-fa
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** scripting · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-Script objects/methods are cached, but entity identity and production start/update/collision dispatch are disconnected; multiple gameplay bindings are no-op or log-only, blocking VisualScript too.
+Script objects/methods are cached, but entity identity and production start/update/collision dispatch are disconnected; multiple gameplay bindings are no-op or log-only, blocking VisualScript too. Owner decision OD-13 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): this item is scheduled after the stable-v1 items and no stable-v1 capacity is assigned to it. It stays open until its own evidence exists.
 
 **Dependency contract**
 
@@ -2490,6 +2492,7 @@ ctest --test-dir build/windows-release -C Release -L scripting-integration --out
   - Unbounded scripts on simulation thread
 - Out of scope:
   - Lua support unless separately contracted
+  - Stable-v1 capacity; the item is scheduled after the stable-v1 items (OD-13)
 
 **Definition of done**
 
@@ -2588,7 +2591,7 @@ ctest --test-dir build/linux-gcc-release -L network-security --output-on-failure
 **Priority:** P1 · **Status:** open · **Wave:** 3 · **Area:** services · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-Engine networking and reference modules do not provide turnkey identity, matchmaking, fleet, secrets, abuse, moderation, entitlement, billing, or incident control-plane services.
+Engine networking and reference modules do not provide turnkey identity, matchmaking, fleet, secrets, abuse, moderation, entitlement, billing, or incident control-plane services. Owner decision OD-08 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): identity, matchmaking, fleet, entitlement and billing services are out of engine scope; the engine ships no hosted online services. This item owns documenting that service boundary and stays open until the boundary documentation and its checks land.
 
 **Dependency contract**
 
@@ -2652,6 +2655,7 @@ ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure 
   - Expanding engine scope into a hosted SaaS product
 - Out of scope:
   - Operating a public production service during engine release
+  - Engine-owned identity, matchmaking, fleet, entitlement or billing services; the engine ships no hosted online services (OD-08)
 
 **Definition of done**
 
@@ -2821,7 +2825,7 @@ ctest --test-dir build/linux-gcc-release -R TerrafrontMultiClient --output-on-fa
 **Priority:** P1 · **Status:** open · **Wave:** 3 · **Area:** modules · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-Shared save storage, client scene/collision reload, topology-driven migration, transactional handoff, restart recovery, and process-per-continent behavior remain incomplete or placeholder.
+Shared save storage, client scene/collision reload, topology-driven migration, transactional handoff, restart recovery, and process-per-continent behavior remain incomplete or placeholder. Owner decision OD-16 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): TERRAFRONT map hops adopt the SparkGateway/SparkServer fenced handoff plane; reconnect-based hops are not kept as the production path, so multimap migration work targets the fenced handoff.
 
 **Dependency contract**
 
@@ -2889,6 +2893,7 @@ ctest --test-dir build/linux-gcc-release -R TerrafrontRestart --output-on-failur
   - Migration split-brain and duplication
 - Out of scope:
   - Unlimited global scale
+  - Reconnect-based map hops as the production migration path (OD-16)
 
 **Definition of done**
 
@@ -3325,7 +3330,11 @@ ctest --test-dir build/windows-release -C Release -R ARPGDungeon --output-on-fai
 - Test selectors: `ARPGDungeon_*`, `ARPGBoss_*`
 - Required CI jobs: `module-ARPG`
 - Performance / reliability budgets:
-  - Dungeon actor/frame budgets
+  - OD-20 target, pending_measurement: at most 48 simultaneously active monster actors in the dungeon slice
+  - OD-20 target, pending_measurement: at most 256 live gameplay entities during combat (hero, monsters, projectiles, loot)
+  - OD-20 target, pending_measurement: 16.67 ms p95 frame time (60 fps) on the certified Windows D3D11 hardware row
+  - OD-20 target, pending_measurement: at most 3.0 ms p95 game-thread time for ARPG gameplay systems (AI, combat, skills, loot)
+  - OD-20 budgets are verified only against PERF-100's certified hardware row and accepted baselines; until those exist they cannot be claimed as met
 
 **Same-change updates**
 
@@ -3642,7 +3651,7 @@ ctest --test-dir build/windows-release -C Release -R RTSSkirmish --output-on-fai
 **Priority:** P1 · **Status:** open · **Wave:** 4 · **Area:** modules · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-No real player input path exists; vehicles use custom fixed-step kinematic math, tracks/checkpoints lack authored colliders, camera is internal state, HUD is editor ImGui, and music is missing.
+No real player input path exists; vehicles use custom fixed-step kinematic math, tracks/checkpoints lack authored colliders, camera is internal state, HUD is editor ImGui, and music is missing. Owner decision OD-15 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): ghost/replay persistence is out of scope for the Racing slice, and the Racing completion criteria do not require persisted ghosts or replays.
 
 **Dependency contract**
 
@@ -3704,6 +3713,7 @@ ctest --test-dir build/windows-release -C Release -R RacingCompleteRace --output
   - Custom kinematic path diverging from engine physics
 - Out of scope:
   - Online racing unless declared
+  - Ghost and replay persistence for the Racing slice (OD-15)
 
 **Definition of done**
 
@@ -3927,7 +3937,7 @@ ctest --test-dir build/linux-gcc-release -L prototype-module-kit --output-on-fai
 **Priority:** P1 · **Status:** open · **Wave:** 4 · **Area:** networking · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-SparkGameFPS multiplayer currently ignores address and port and fabricates connection state; optional LAN work must remain experimental and independent of the stable single-player slice.
+SparkGameFPS multiplayer currently ignores address and port and fabricates connection state; optional LAN work must remain experimental and independent of the stable single-player slice. Owner decision OD-14 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): FPS multiplayer consolidates onto the multiplayer primitives used by SparkGameMMOFPS instead of keeping a separate FPSMultiplayerSystem implementation; the duplicate is removed only after parity is proven.
 
 **Dependency contract**
 
@@ -3987,6 +3997,7 @@ ctest --test-dir build/windows-release -C Release -R FPSLAN --output-on-failure 
 - Out of scope:
   - Public service hosting
   - Stable-v1 release gating
+  - Keeping a separate FPSMultiplayerSystem transport implementation once shared-primitive parity is proven (OD-14)
 
 **Definition of done**
 
@@ -4000,7 +4011,7 @@ ctest --test-dir build/windows-release -C Release -R FPSLAN --output-on-failure 
 **Priority:** P1 · **Status:** open · **Wave:** 5 · **Area:** platform · **Owner:** unassigned · **Release-blocking:** no
 **Profile applicability:** `stable-v1`=outside
 
-Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a clean-machine package, driver, desktop/audio/input, and uninstall certification.
+Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a clean-machine package, driver, desktop/audio/input, and uninstall certification. Owner decision OD-10 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): the stable-v1 Linux support row is Ubuntu 24.04 LTS on x86-64 only. The decision fixes the row's scope; it does not certify it, and the clean-machine evidence above is still required.
 
 **Dependency contract**
 
@@ -4063,6 +4074,7 @@ ctest --test-dir build/linux-shipping -L certification --output-on-failure --no-
   - Distribution and driver fragmentation
 - Out of scope:
   - Unsupported distributions
+  - Distributions other than Ubuntu 24.04 LTS and non-x86-64 Linux, including ARM64, for stable-v1 (OD-10)
 
 **Definition of done**
 
@@ -4075,7 +4087,7 @@ ctest --test-dir build/linux-shipping -L certification --output-on-failure --no-
 **Priority:** P1 · **Status:** open · **Wave:** 5 · **Area:** platform · **Owner:** unassigned · **Release-blocking:** no
 **Profile applicability:** `stable-v1`=outside
 
-macOS CI is nonblocking, platform-version claims conflict, no complete Metal path is certified, and no signed/notarized engine package exists.
+macOS CI is nonblocking, platform-version claims conflict, no complete Metal path is certified, and no signed/notarized engine package exists. Owner decision OD-11 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): macOS is deferred from stable-v1 and stays experimental; no macOS certification work is scheduled for stable-v1, and any later macOS support row is Apple Silicon only. The deferral leaves this item open, not done.
 
 **Dependency contract**
 
@@ -4141,6 +4153,8 @@ spctl --assess SparkEngine.app
   - Signing/notarization credentials
 - Out of scope:
   - Older macOS outside declared baseline
+  - macOS certification for stable-v1 (deferred by OD-11)
+  - Intel macOS; any later macOS row is Apple Silicon only (OD-11)
 
 **Definition of done**
 
@@ -4153,7 +4167,7 @@ spctl --assess SparkEngine.app
 **Priority:** P2 · **Status:** open · **Wave:** 5 · **Area:** platform · **Owner:** unassigned · **Release-blocking:** no
 **Profile applicability:** `stable-v1`=outside
 
-Touch input and quality scaling are framework pieces, not an iOS/Android platform layer or deployment pipeline.
+Touch input and quality scaling are framework pieces, not an iOS/Android platform layer or deployment pipeline. Owner decision OD-12 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): mobile support is deferred from stable-v1 and no mobile platform work is scheduled for it. The deferral leaves this item open, not done.
 
 **Dependency contract**
 
@@ -4212,6 +4226,7 @@ python3 tools/site-data/validate.py --capability platform.mobile
   - Large platform-specific scope
 - Out of scope:
   - Every mobile GPU/OS version
+  - Mobile platform work for stable-v1 (deferred by OD-12)
 
 **Definition of done**
 
@@ -4223,7 +4238,7 @@ python3 tools/site-data/validate.py --capability platform.mobile
 **Priority:** P2 · **Status:** open · **Wave:** 5 · **Area:** platform · **Owner:** unassigned · **Release-blocking:** no
 **Profile applicability:** `stable-v1`=outside
 
-VR/OpenXR is a framework stub without runtime initialization, interaction, stereo, performance, or packaged headset proof.
+VR/OpenXR is a framework stub without runtime initialization, interaction, stereo, performance, or packaged headset proof. Owner decision OD-12 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): OpenXR/VR support is deferred from stable-v1 and no OpenXR platform work is scheduled for it. The deferral leaves this item open, not done.
 
 **Dependency contract**
 
@@ -4283,6 +4298,7 @@ python3 tools/site-data/validate.py --capability platform.vr
   - Hardware lab and runtime fragmentation
 - Out of scope:
   - Native vendor runtimes beyond declared OpenXR profiles
+  - OpenXR/VR platform work for stable-v1 (deferred by OD-12)
 
 **Definition of done**
 
@@ -4294,7 +4310,7 @@ python3 tools/site-data/validate.py --capability platform.vr
 **Priority:** P3 · **Status:** blocked · **Wave:** 5 · **Area:** platform · **Owner:** unassigned · **Release-blocking:** no
 **Profile applicability:** `stable-v1`=outside
 
-Console support is planned and cannot be implemented or claimed without agreements, SDK access, dev kits, platform owners, and certification programs.
+Console support is planned and cannot be implemented or claimed without agreements, SDK access, dev kits, platform owners, and certification programs. Owner decision OD-12 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): console support is deferred from stable-v1 and no console platform work is scheduled for it. The item stays blocked on agreements, SDK access and dev kits.
 
 **Dependency contract**
 
@@ -4348,6 +4364,7 @@ python3 tools/site-data/validate.py --capability platform.console
   - Disclosing confidential platform material
 - Out of scope:
   - Unauthorized implementation
+  - Console platform work for stable-v1 (deferred by OD-12)
 
 **Definition of done**
 
@@ -5121,10 +5138,10 @@ sha256sum -c SHA256SUMS
 
 ### REL-191 — Rehearse the predecessor release without N-1 upgrade claims
 
-**Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** release · **Owner:** Krilliac · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-The first signed predecessor needs the same exact-SHA release rehearsal, sign-off, and protected approval discipline as v1, but its rehearsal cannot invent an older stable release.
+The first signed predecessor needs the same exact-SHA release rehearsal, sign-off, and protected approval discipline as v1, but its rehearsal cannot invent an older stable release. Owner decisions OD-18 and OD-19 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): in the v0.9.0 predecessor stage this item substitutes for REL-190 (predecessorRelease.qualificationSubstitutions), while REL-190 stays required for the stable-v1 release candidate; Krilliac is the predecessor owner. The predecessor baseline is not picked by hand: it is the first Working commit after the stable-v1 release branch merges at which every predecessorRelease.requiredGateIds gate has passing exact-SHA evidence. Until such a commit exists, predecessorRelease.sourceCommitEvidence.baselineCommit stays empty and signOffEvidence stays empty; that SHA, its review, and the sign-off are recorded in predecessorRelease only when it qualifies.
 
 **Dependency contract**
 

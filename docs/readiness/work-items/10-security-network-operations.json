@@ -447,7 +447,7 @@
       "wave": 3,
       "area": "services",
       "owner": "unassigned",
-      "rationale": "Engine networking and reference modules do not provide turnkey identity, matchmaking, fleet, secrets, abuse, moderation, entitlement, billing, or incident control-plane services.",
+      "rationale": "Engine networking and reference modules do not provide turnkey identity, matchmaking, fleet, secrets, abuse, moderation, entitlement, billing, or incident control-plane services. Owner decision OD-08 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): identity, matchmaking, fleet, entitlement and billing services are out of engine scope; the engine ships no hosted online services. This item owns documenting that service boundary and stays open until the boundary documentation and its checks land.",
       "dependencies": [
         "NET-100",
         "SEC-100"
@@ -510,7 +510,8 @@
         "Expanding engine scope into a hosted SaaS product"
       ],
       "outOfScope": [
-        "Operating a public production service during engine release"
+        "Operating a public production service during engine release",
+        "Engine-owned identity, matchmaking, fleet, entitlement or billing services; the engine ships no hosted online services (OD-08)"
       ],
       "definitionOfDone": [
         "Boundaries are explicit",

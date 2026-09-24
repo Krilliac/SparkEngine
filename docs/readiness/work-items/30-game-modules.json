@@ -576,7 +576,7 @@
       "wave": 4,
       "area": "networking",
       "owner": "unassigned",
-      "rationale": "SparkGameFPS multiplayer currently ignores address and port and fabricates connection state; optional LAN work must remain experimental and independent of the stable single-player slice.",
+      "rationale": "SparkGameFPS multiplayer currently ignores address and port and fabricates connection state; optional LAN work must remain experimental and independent of the stable single-player slice. Owner decision OD-14 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): FPS multiplayer consolidates onto the multiplayer primitives used by SparkGameMMOFPS instead of keeping a separate FPSMultiplayerSystem implementation; the duplicate is removed only after parity is proven.",
       "dependencies": [
         "MOD-310",
         "NET-100"
@@ -631,7 +631,8 @@
       ],
       "outOfScope": [
         "Public service hosting",
-        "Stable-v1 release gating"
+        "Stable-v1 release gating",
+        "Keeping a separate FPSMultiplayerSystem transport implementation once shared-primitive parity is proven (OD-14)"
       ],
       "definitionOfDone": [
         "Independent LAN acceptance passes",
@@ -802,7 +803,11 @@
         "module-ARPG"
       ],
       "performanceBudgets": [
-        "Dungeon actor/frame budgets"
+        "OD-20 target, pending_measurement: at most 48 simultaneously active monster actors in the dungeon slice",
+        "OD-20 target, pending_measurement: at most 256 live gameplay entities during combat (hero, monsters, projectiles, loot)",
+        "OD-20 target, pending_measurement: 16.67 ms p95 frame time (60 fps) on the certified Windows D3D11 hardware row",
+        "OD-20 target, pending_measurement: at most 3.0 ms p95 game-thread time for ARPG gameplay systems (AI, combat, skills, loot)",
+        "OD-20 budgets are verified only against PERF-100's certified hardware row and accepted baselines; until those exist they cannot be claimed as met"
       ],
       "documentationUpdates": [
         "GameModules/SparkGameARPG/README.md"
@@ -1193,7 +1198,7 @@
       "wave": 4,
       "area": "modules",
       "owner": "unassigned",
-      "rationale": "No real player input path exists; vehicles use custom fixed-step kinematic math, tracks/checkpoints lack authored colliders, camera is internal state, HUD is editor ImGui, and music is missing.",
+      "rationale": "No real player input path exists; vehicles use custom fixed-step kinematic math, tracks/checkpoints lack authored colliders, camera is internal state, HUD is editor ImGui, and music is missing. Owner decision OD-15 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): ghost/replay persistence is out of scope for the Racing slice, and the Racing completion criteria do not require persisted ghosts or replays.",
       "dependencies": [
         "MOD-290"
       ],
@@ -1256,7 +1261,8 @@
         "Custom kinematic path diverging from engine physics"
       ],
       "outOfScope": [
-        "Online racing unless declared"
+        "Online racing unless declared",
+        "Ghost and replay persistence for the Racing slice (OD-15)"
       ],
       "definitionOfDone": [
         "Complete race/package/restart pass",
@@ -1463,7 +1469,7 @@
       "wave": 3,
       "area": "modules",
       "owner": "unassigned",
-      "rationale": "Shared save storage, client scene/collision reload, topology-driven migration, transactional handoff, restart recovery, and process-per-continent behavior remain incomplete or placeholder.",
+      "rationale": "Shared save storage, client scene/collision reload, topology-driven migration, transactional handoff, restart recovery, and process-per-continent behavior remain incomplete or placeholder. Owner decision OD-16 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): TERRAFRONT map hops adopt the SparkGateway/SparkServer fenced handoff plane; reconnect-based hops are not kept as the production path, so multimap migration work targets the fenced handoff.",
       "dependencies": [
         "TF-110",
         "DATA-120",
@@ -1527,7 +1533,8 @@
         "Migration split-brain and duplication"
       ],
       "outOfScope": [
-        "Unlimited global scale"
+        "Unlimited global scale",
+        "Reconnect-based map hops as the production migration path (OD-16)"
       ],
       "definitionOfDone": [
         "Migration/restart/crash/soak evidence passes"

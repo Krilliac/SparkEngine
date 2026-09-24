@@ -168,6 +168,24 @@ asset only after the durable download-counter preflight; the control asset is
 not a distributable or badge-ledger entry. All existing signature, checksum,
 SBOM, scan, exact-CI, source/tag, and package qualification gates still apply.
 
+## Channel retention and support policy
+
+Owner decision OD-17 ([owner decisions](../../docs/readiness/OWNER-DECISIONS.md),
+2026-09-24) sets the retention and support terms each channel must meet. REL-100
+owns enforcing them. They are policy targets; they do not mean any release has
+been published under them.
+
+| Channel | Retention | Support |
+|---|---|---|
+| Stable | Release assets are immutable and kept permanently | Security and critical fixes until 6 months after the next stable release |
+| Nightly | Each uniquely tagged immutable nightly is kept for 30 days | Unsupported |
+| Experimental | Artifacts are kept for 14 days | Unsupported; always labeled experimental |
+| CI build artifacts | Existing 7- and 90-day Actions retention | Not a release channel |
+
+The stable window lines up with OD-03 (saves and scenes read N-1): a user on the
+previous stable release can still load current data during its fix window.
+No stable-v1 release exists yet, so no stable support window is running.
+
 ## Immutable stable and rolling-nightly policy conflict
 
 Stable publication requires repository immutable releases enabled. All package,
@@ -197,7 +215,9 @@ The workflow never toggles the repository policy automatically.
 This remains a release blocker in REL-100 and REL-190. Both channels must not be
 described as operational together. A separately reviewed channel migration to
 unique immutable nightly tags or Actions artifacts, or an explicit owner-approved
-channel policy change, is required. That policy work is outside this change.
+channel policy change, is required. OD-17 picks the target: uniquely tagged,
+immutable nightlies kept for 30 days. The workflow has not been migrated to it,
+so the conflict and its REL-100/REL-190 blocker still stand.
 
 ## Independent verification and final readiness
 
@@ -279,6 +299,25 @@ its actual old-to-new upgrade/rollback transaction. The normal provisioner pins
 `v1.0.0` specifically to an immutable `v0.9.0` release; a different earlier
 version or a mutable release cannot substitute for it.
 
+### Predecessor owner, baseline rule, and REL-190 substitution
+
+Owner decisions OD-18 and OD-19 (2026-09-24) are recorded in
+`predecessorRelease` in `docs/site/readiness.json`:
+
+- In the v0.9.0 predecessor stage, REL-191 replaces REL-190 through
+  `qualificationSubstitutions`, next to the existing REL-192→REL-191 and
+  INST-131→INST-132 entries. REL-190 stays required for the stable-v1 release
+  candidate and remains in both blocking lists. REL-191 already covers every
+  common qualification gate and named sign-off without N-1 claims.
+- `owner` is `Krilliac`.
+- The baseline is not picked by hand. It is the first `Working` commit after
+  the stable-v1 release branch merges at which every
+  `predecessorRelease.requiredGateIds` gate has passing exact-SHA evidence.
+  Until then `sourceCommitEvidence.baselineCommit` and `signOffEvidence` stay
+  empty and the stage stays `blocked`; `--require-predecessor-candidate`
+  rejects the empty baseline. `test_release_stages.py` checks that these fields
+  stay empty while any required gate is not passing.
+
 ## Source & Freshness
 
 Implemented 2026-09-21. Sources: [readiness contract](../../docs/site/readiness.json),
@@ -291,6 +330,9 @@ Approval-event recording added 2026-09-24 against the
 [workflow-run review history API](https://docs.github.com/en/rest/actions/workflow-runs#get-the-review-history-for-a-workflow-run).
 Recheck live environment protection, approval history, signing authority, and
 exact-SHA run/artifact identities before each release.
+Channel retention/support policy (OD-17) and the predecessor owner, baseline
+rule, and REL-190 substitution (OD-18/OD-19) recorded 2026-09-24 from
+[owner decisions](../../docs/readiness/OWNER-DECISIONS.md).
 Contract reference rules and the public numeric-claim ledger added 2026-09-24 from
 [`validate.py`](../../tools/site-data/validate.py) and
 [`test_site_data_contract.py`](../../Tests/Tools/test_site_data_contract.py).
