@@ -19,6 +19,7 @@
 #include "Engine/ECS/Components.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
+#include <imgui_internal.h> // ImGui::GetActiveID — identifies the widget that owns an open edit gesture
 #include <iostream>
 #include <algorithm>
 #include <cstring>
@@ -62,8 +63,15 @@ namespace SparkEditor
 
     void InspectorPanel::Render()
     {
+        // EDT-210: which entity the World-backed path renders this frame. A
+        // pending field edit is settled against it after the panel is drawn,
+        // including frames where the panel is hidden or collapsed.
+        m_worldRenderedEntity = entt::null;
         if (!IsVisible())
+        {
+            SettlePendingWorldEdit();
             return;
+        }
 
         if (BeginPanel())
         {
@@ -110,10 +118,42 @@ namespace SparkEditor
             }
         }
         EndPanel();
+        SettlePendingWorldEdit();
+    }
+
+    InspectorPendingWorldEdit::CommitFn InspectorPanel::WorldEditCommitter()
+    {
+        return [this](const std::string& before, const std::string& description)
+        { return m_editorUI && m_editorUI->RecordAppliedDocumentMutation(before, description); };
+    }
+
+    void InspectorPanel::SettlePendingWorldEdit()
+    {
+        const void* document = m_editorUI ? static_cast<const void*>(m_editorUI->GetWorld()) : nullptr;
+        const uint64_t sequence = Spark::Editor::CommandHistory::GetInstance().GetEditSequence();
+        const ImGuiContext* context = ImGui::GetCurrentContext();
+        const uint32_t activeItem = context ? static_cast<uint32_t>(ImGui::GetActiveID()) : 0u;
+        if (m_pendingWorldEdit.Settle(document, m_worldRenderedEntity, activeItem, sequence, WorldEditCommitter()) ==
+            InspectorPendingWorldEdit::Outcome::Discarded)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                           "Inspector: dropped a stale field-edit baseline (document replaced or history moved)");
+        }
+    }
+
+    void InspectorPanel::FlushPendingWorldEdit()
+    {
+        const void* document = m_editorUI ? static_cast<const void*>(m_editorUI->GetWorld()) : nullptr;
+        m_pendingWorldEdit.Flush(document, Spark::Editor::CommandHistory::GetInstance().GetEditSequence(),
+                                 WorldEditCommitter());
     }
 
     void InspectorPanel::Shutdown()
     {
+        // EditorUI already captured the final recovery snapshot (which holds
+        // the applied field value) and is about to clear the history, so an
+        // unfinished gesture is dropped rather than recorded mid-teardown.
+        m_pendingWorldEdit.Discard();
         if (m_selectionMgrCallbackId != 0)
         {
             SelectionManager::GetInstance().RemoveCallback(m_selectionMgrCallbackId);
@@ -1261,11 +1301,11 @@ namespace SparkEditor
     void InspectorPanel::RenderWorldBackedInspector(::World* world, ::EntityID entity)
     {
         const uint32_t rawEntity = static_cast<uint32_t>(entity);
-        if (m_worldEditEntity != entity)
-        {
-            m_worldEditBaselines.clear();
-            m_worldEditEntity = entity;
-        }
+        // A gesture still open on a previously inspected entity (selection
+        // just moved) is recorded before this entity's fields can change.
+        if (m_pendingWorldEdit.HasPending() && m_pendingWorldEdit.PendingEntity() != entity)
+            SettlePendingWorldEdit();
+        m_worldRenderedEntity = entity;
 
         // Entity header — name (from NameComponent, if present) + raw id,
         // for context. Renaming ECS entities is out of scope for this unit.
@@ -1293,24 +1333,24 @@ namespace SparkEditor
                 if (comp && ti)
                 {
                     ImGui::Indent(4);
-                    const std::string editKey = std::to_string(rawEntity) + "|" + type;
-                    const std::string before = m_editorUI ? m_editorUI->CaptureDocumentSnapshot() : std::string{};
+                    // Only the first change of a gesture needs the pre-edit
+                    // snapshot; skip the serialization while one is pending.
+                    const std::string before = (m_editorUI && !m_pendingWorldEdit.HasPending())
+                                                   ? m_editorUI->CaptureDocumentSnapshot()
+                                                   : std::string{};
                     const bool changed = RenderReflectedFields(comp, ti->fields);
-                    if (changed && !before.empty() && !m_worldEditBaselines.contains(editKey))
-                        m_worldEditBaselines.emplace(editKey, before);
-
-                    auto baseline = m_worldEditBaselines.find(editKey);
-                    if (baseline != m_worldEditBaselines.end() && !ImGui::IsAnyItemActive())
+                    if (changed)
                     {
-                        if (m_editorUI)
-                            m_editorUI->RecordAppliedDocumentMutation(baseline->second, "Edit " + type);
-                        m_worldEditBaselines.erase(baseline);
+                        m_pendingWorldEdit.NoteChange(world, entity, before, "Edit " + type,
+                                                      static_cast<uint32_t>(ImGui::GetActiveID()),
+                                                      Spark::Editor::CommandHistory::GetInstance().GetEditSequence());
                     }
 
                     if (type != "NameComponent" && type != "Transform")
                     {
                         if (ImGui::SmallButton((ICON_FA_TRASH " Remove##" + type).c_str()))
                         {
+                            FlushPendingWorldEdit();
                             const std::string removeBefore =
                                 m_editorUI ? m_editorUI->CaptureDocumentSnapshot() : std::string{};
                             if (factory.RemoveComponent(type, world, rawEntity) && m_editorUI)
@@ -1369,6 +1409,7 @@ namespace SparkEditor
                 bool has = factory.HasComponent(type, world, rawEntity);
                 if (ImGui::MenuItem(type.c_str(), nullptr, false, !has))
                 {
+                    FlushPendingWorldEdit();
                     const std::string before = m_editorUI ? m_editorUI->CaptureDocumentSnapshot() : std::string{};
                     if (factory.AddComponent(type, world, rawEntity) && m_editorUI)
                         m_editorUI->RecordAppliedDocumentMutation(before, "Add " + type);
