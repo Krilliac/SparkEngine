@@ -137,6 +137,11 @@ jobs:
     - name: Test required-job gate
       run: python3 .github/scripts/test-verify-required-jobs.py
 
+    # Fixture mode only. Operators re-verify the live ruleset with
+    # python3 .github/scripts/verify-working-ruleset.py --live
+    - name: Test Working ruleset verifier
+      run: python3 .github/scripts/test-verify-working-ruleset.py
+
     - name: Test exact-commit release gate
       run: python3 .github/scripts/test-verify-exact-required-gate.py
 
@@ -210,6 +215,33 @@ jobs:
 
     - name: Verify every test source is registered
       run: bash tools/check-test-registration.sh
+
+    # The tools/validate-all.sh checks below fail this required job when they
+    # fail. test-workflow-failure-propagation.py maps every validate-all check
+    # to its required invocation (or an explicit advisory reason).
+    - name: Verify every header uses pragma once
+      run: bash tools/check-pragma-once.sh
+
+    - name: Verify every editor panel is registered
+      run: bash tools/check-editor-panels.sh
+
+    - name: Verify no deprecated submodules are referenced
+      run: bash tools/check-deprecated-submodules.sh
+
+    - name: Verify wiki pages match the sidebar
+      run: bash tools/check-wiki-nav.sh
+
+    - name: Verify initialized systems are wired in
+      run: bash tools/check-wiring.sh
+
+    - name: Verify header Doxygen coverage
+      run: bash tools/check-doxygen-coverage.sh check
+
+    - name: Verify cross-utilization boundaries
+      run: bash tools/check-cross-utilization.sh
+
+    - name: Verify DI singleton guardrails
+      run: bash tools/check-di-singletons.sh
 
     - name: Test asset integrity verifier
       run: python3 -m unittest Tests.Tools.test_asset_integrity -v
@@ -2411,9 +2443,14 @@ jobs:
   # ===========================================================================
   # Linux MinGW Cross-Compilation — Build Windows D3D11/D3D12 code on Linux
   # Runs the resulting .exe under Wine + DXVK + Lavapipe (software Vulkan)
+  # Experimental: manual dispatch only and advisory. It is not a required-ci-gate
+  # dependency; known Wine-only test failures are listed on the wiki page
+  # wiki/development/MinGW-Wine-Cross-Compilation.md.
   # ===========================================================================
   build-linux-mingw-wine:
+    name: "build-linux-mingw-wine (experimental)"
     if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository

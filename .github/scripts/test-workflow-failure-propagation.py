@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -63,6 +64,46 @@ REQUIRED_CI_JOBS = (
     "module-evidence",
 )
 REQUIRED_CI_JOBS_JSON = json.dumps(REQUIRED_CI_JOBS, separators=(",", ":"))
+MINGW_WINE_JOB = "build-linux-mingw-wine"
+
+# Every check tools/validate-all.sh runs must make CI red when it fails. Each
+# maps to the required job and the exact run line that invokes it (or its
+# direct equivalent: the .sh wrapper's exec target, or the CMake target that
+# runs the same checker). A check may instead be advisory only with a reason.
+VALIDATE_ALL = REPO_ROOT / "tools" / "validate-all.sh"
+VALIDATE_ALL_REQUIRED_INVOCATIONS = {
+    "check-pragma-once.sh": ("validate-ci-tools", "bash tools/check-pragma-once.sh"),
+    "check-editor-panels.sh": ("validate-ci-tools", "bash tools/check-editor-panels.sh"),
+    "check-test-registration.sh": ("validate-ci-tools", "bash tools/check-test-registration.sh"),
+    "check-deprecated-submodules.sh": ("validate-ci-tools", "bash tools/check-deprecated-submodules.sh"),
+    "check-thirdparty-manifest-sync.sh": (
+        "check-thirdparty-manifest",
+        "./tools/check-thirdparty-manifest-sync.sh --ci",
+    ),
+    # check-supply-chain.sh only execs this checker.
+    "check-supply-chain.sh": ("check-supply-chain", "python3 tools/check-supply-chain.py"),
+    # cmake/SparkFuzzPolicy.cmake runs check_fuzz_policy.py --ci, as the .sh does.
+    "check-fuzz-policy.sh": (
+        "fuzz-policy",
+        "cmake --build build/fuzz-policy --target check-fuzz-policy",
+    ),
+    "check-wiki-nav.sh": ("validate-ci-tools", "bash tools/check-wiki-nav.sh"),
+    "check-wiring.sh": ("validate-ci-tools", "bash tools/check-wiring.sh"),
+    "check-doxygen-coverage.sh": ("validate-ci-tools", "bash tools/check-doxygen-coverage.sh check"),
+    "check-cross-utilization.sh": ("validate-ci-tools", "bash tools/check-cross-utilization.sh"),
+    "check-di-singletons.sh": ("validate-ci-tools", "bash tools/check-di-singletons.sh"),
+    # The non-gated .sh runs this declarative validation plus the adversarial
+    # unit tests, which validate-ci-tools also runs as its own step.
+    "check-module-evidence.sh": (
+        "validate-ci-tools",
+        "python3 tools/module-evidence/validate_manifest.py --manifest tools/module-evidence/manifest.json"
+        " --repo-root . --policy-only",
+    ),
+}
+VALIDATE_ALL_ADVISORY_CHECKS = {
+    "check-bloat.sh": "size thresholds are guidance (CLAUDE.md); new-only mode is red on files awaiting review",
+    "check-wiki-quality.sh": "validate-all runs it with --warn-only by design",
+}
 
 CLANG_TIDY_SOURCE_ROOTS = (
     "SparkEngine/Source",
@@ -1173,6 +1214,111 @@ def required_job_bypass_errors(document: dict) -> list[str]:
     return errors
 
 
+def shell_is_errexit(shell: object) -> bool:
+    """True when a GitHub Actions ``shell:`` value stops on the first failing command.
+
+    The built-in ``bash`` and ``sh`` keywords expand to ``-eo pipefail`` / ``-e``;
+    a custom ``{0}`` template must carry an explicit short-option cluster with ``e``.
+    Any other built-in (pwsh, python, cmd) is not a bash errexit shell.
+    """
+
+    if not isinstance(shell, str):
+        return False
+    words = shell.split()
+    if words in (["bash"], ["sh"]):
+        return True
+    if "{0}" not in words or words[0].rsplit("/", 1)[-1] not in ("bash", "sh"):
+        return False
+    return any(re.fullmatch(r"-[a-zA-Z]*e[a-zA-Z]*", word) for word in words[1:])
+
+
+def validate_all_ci_coverage_errors(document: dict, validate_all: str) -> list[str]:
+    """Every validate-all check is invoked fail-closed by a required job, or is listed advisory."""
+
+    errors: list[str] = []
+    scripts = re.findall(r'(?m)^\s*run_check\s+"[^"]*"\s+"([^"]+)"', validate_all)
+    if not scripts:
+        return ["validate-all.sh declares no run_check invocations"]
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    for script in scripts:
+        if script in VALIDATE_ALL_ADVISORY_CHECKS:
+            continue
+        invocation = VALIDATE_ALL_REQUIRED_INVOCATIONS.get(script)
+        if invocation is None:
+            errors.append(f"{script} is neither invoked by a required job nor listed advisory")
+            continue
+        job_id, command = invocation
+        job = jobs.get(job_id)
+        if job_id not in REQUIRED_CI_JOBS or not isinstance(job, dict):
+            errors.append(f"{script} maps to {job_id}, which is not a required job")
+            continue
+        if "continue-on-error" in job:
+            errors.append(f"{script}: required job {job_id} declares continue-on-error")
+        invoking = [
+            step
+            for step in job.get("steps") or []
+            if isinstance(step, dict)
+            and isinstance(step.get("run"), str)
+            and any(line.strip() == command for line in step["run"].splitlines())
+        ]
+        if len(invoking) != 1:
+            errors.append(f"{script}: {job_id} has {len(invoking)} steps running exactly {command!r}")
+            continue
+        step = invoking[0]
+        for field in ("if", "continue-on-error"):
+            if field in step:
+                errors.append(f"{script}: {job_id} step {step.get('name')!r} declares {field}")
+        if re.search(r"(?m)^\s*set\s+\+e\b", step["run"]):
+            errors.append(f"{script}: {job_id} step {step.get('name')!r} disables errexit")
+        # The effective shell must abort on the first failing command, otherwise a
+        # multi-line run can mask the check's exit status behind a later line.
+        shell_sources = (
+            (f"step {step.get('name')!r}", step.get("shell")),
+            ("job defaults.run.shell", ((job.get("defaults") or {}).get("run") or {}).get("shell")),
+            ("workflow defaults.run.shell", ((document.get("defaults") or {}).get("run") or {}).get("shell")),
+        )
+        for origin, shell in shell_sources:
+            if shell is not None and not shell_is_errexit(shell):
+                errors.append(f"{script}: {job_id} {origin} uses shell {shell!r} without errexit")
+    for stale in sorted((set(VALIDATE_ALL_REQUIRED_INVOCATIONS) | set(VALIDATE_ALL_ADVISORY_CHECKS)) - set(scripts)):
+        errors.append(f"{stale} is no longer run by validate-all.sh; remove its CI coverage entry")
+    for overlap in sorted(set(VALIDATE_ALL_REQUIRED_INVOCATIONS) & set(VALIDATE_ALL_ADVISORY_CHECKS)):
+        errors.append(f"{overlap} is listed as both required and advisory")
+    return errors
+
+
+def experimental_mingw_lane_errors(document: dict) -> list[str]:
+    """Keep the MinGW/Wine lane manual, advisory, labeled experimental and out of the gate."""
+
+    errors: list[str] = []
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    lane = jobs.get(MINGW_WINE_JOB)
+    if not isinstance(lane, dict):
+        return [f"{MINGW_WINE_JOB} job is missing"]
+    if lane.get("if") != "github.event_name == 'workflow_dispatch'":
+        errors.append(f"{MINGW_WINE_JOB} is not workflow_dispatch-only")
+    if lane.get("continue-on-error") is not True:
+        errors.append(f"{MINGW_WINE_JOB} does not declare job-level continue-on-error: true")
+    if "experimental" not in str(lane.get("name") or ""):
+        errors.append(f"{MINGW_WINE_JOB} display name does not say experimental")
+    gate = jobs.get("required-ci-gate")
+    if not isinstance(gate, dict):
+        errors.append("required-ci-gate job is missing")
+        return errors
+    if MINGW_WINE_JOB in (gate.get("needs") or []):
+        errors.append(f"{MINGW_WINE_JOB} is a required-ci-gate dependency")
+    for step in gate.get("steps") or []:
+        env = step.get("env") if isinstance(step, dict) else None
+        inventory = env.get("EXPECTED_REQUIRED_JOBS_JSON") if isinstance(env, dict) else None
+        if isinstance(inventory, str) and MINGW_WINE_JOB in json.loads(inventory):
+            errors.append(f"{MINGW_WINE_JOB} is in EXPECTED_REQUIRED_JOBS_JSON")
+    return errors
+
+
 def format_filter_suffixes(workflow: str) -> set[str]:
     """Return the file suffixes routed to clang-format by the check-format case arm."""
 
@@ -1968,6 +2114,139 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("--runtime-env TSAN_OPTIONS", self.build)
         self.assertNotIn("--runtime-log-prefix", self.build)
         self.assertNotRegex(self.build, r"(?:ASAN|TSAN|MSAN)_OPTIONS:.*log_path=")
+
+    def test_every_validate_all_check_is_fail_closed_in_a_required_job(self) -> None:
+        validate_all = VALIDATE_ALL.read_text(encoding="utf-8")
+        self.assertEqual(validate_all_ci_coverage_errors(parse_workflow_yaml(self.build), validate_all), [])
+
+    def test_validate_all_ci_coverage_rejects_removed_or_suppressed_checks(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        validate_all = VALIDATE_ALL.read_text(encoding="utf-8")
+        command = VALIDATE_ALL_REQUIRED_INVOCATIONS["check-wiring.sh"][1]
+
+        def wiring_step(document):
+            return next(
+                step
+                for step in document["jobs"]["validate-ci-tools"]["steps"]
+                if isinstance(step.get("run"), str) and command in step["run"]
+            )
+
+        def mutate(change):
+            document = copy.deepcopy(baseline)
+            change(document)
+            return validate_all_ci_coverage_errors(document, validate_all)
+
+        cases = (
+            (
+                lambda document: document["jobs"]["validate-ci-tools"]["steps"].remove(wiring_step(document)),
+                "has 0 steps running exactly",
+            ),
+            (
+                lambda document: wiring_step(document).update({"run": command + " || true"}),
+                "has 0 steps running exactly",
+            ),
+            (lambda document: wiring_step(document).update({"continue-on-error": True}), "declares continue-on-error"),
+            (lambda document: wiring_step(document).update({"if": "false"}), "declares if"),
+            (
+                lambda document: wiring_step(document).update({"run": "set +e\n" + command}),
+                "disables errexit",
+            ),
+            (
+                lambda document: document["jobs"]["validate-ci-tools"].update({"continue-on-error": True}),
+                "declares continue-on-error",
+            ),
+            (
+                lambda document: wiring_step(document).update({"shell": "bash {0}", "run": command + "\ntrue"}),
+                "without errexit",
+            ),
+            (lambda document: wiring_step(document).update({"shell": "pwsh"}), "without errexit"),
+            (
+                lambda document: document["jobs"]["validate-ci-tools"].update(
+                    {"defaults": {"run": {"shell": "bash --noprofile --norc {0}"}}}
+                ),
+                "job defaults.run.shell uses shell",
+            ),
+            (
+                lambda document: document.update({"defaults": {"run": {"shell": "sh {0}"}}}),
+                "workflow defaults.run.shell uses shell",
+            ),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                errors = mutate(change)
+                self.assertTrue(any(message in error for error in errors), errors)
+
+        unlisted = validate_all.replace(
+            'run_check "System Wiring"',
+            'run_check "Unlisted Probe"               "check-unlisted-probe.sh"\nrun_check "System Wiring"',
+        )
+        self.assertIn(
+            "check-unlisted-probe.sh is neither invoked by a required job nor listed advisory",
+            validate_all_ci_coverage_errors(baseline, unlisted),
+        )
+        dropped = validate_all.replace('run_check "System Wiring"                "check-wiring.sh"\n', "")
+        self.assertNotEqual(dropped, validate_all)
+        self.assertIn(
+            "check-wiring.sh is no longer run by validate-all.sh; remove its CI coverage entry",
+            validate_all_ci_coverage_errors(baseline, dropped),
+        )
+
+    def test_errexit_shell_classification(self) -> None:
+        for shell in ("bash", "sh", "bash -eo pipefail {0}", "bash --noprofile --norc -e {0}", "/bin/sh -ex {0}"):
+            with self.subTest(shell=shell):
+                self.assertTrue(shell_is_errexit(shell))
+        for shell in ("bash {0}", "bash --noprofile --norc -o pipefail {0}", "pwsh", "python", "cmd", "", None):
+            with self.subTest(shell=shell):
+                self.assertFalse(shell_is_errexit(shell))
+
+    def test_mingw_wine_lane_is_manual_advisory_and_labeled_experimental(self) -> None:
+        self.assertEqual(experimental_mingw_lane_errors(parse_workflow_yaml(self.build)), [])
+
+    def test_mingw_wine_lane_contract_rejects_each_property_regression(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        self.assertNotIn(MINGW_WINE_JOB, REQUIRED_CI_JOBS)
+
+        def mutate(change):
+            document = copy.deepcopy(baseline)
+            change(document["jobs"])
+            return experimental_mingw_lane_errors(document)
+
+        cases = (
+            (lambda jobs: jobs[MINGW_WINE_JOB].pop("if", None), "is not workflow_dispatch-only"),
+            (lambda jobs: jobs[MINGW_WINE_JOB].update({"if": "always()"}), "is not workflow_dispatch-only"),
+            (lambda jobs: jobs[MINGW_WINE_JOB].pop("continue-on-error", None), "continue-on-error: true"),
+            (
+                lambda jobs: jobs[MINGW_WINE_JOB].update({"continue-on-error": False}),
+                "continue-on-error: true",
+            ),
+            (lambda jobs: jobs[MINGW_WINE_JOB].pop("name", None), "does not say experimental"),
+            (
+                lambda jobs: jobs[MINGW_WINE_JOB].update({"name": "build-linux-mingw-wine"}),
+                "does not say experimental",
+            ),
+            (
+                lambda jobs: jobs["required-ci-gate"]["needs"].append(MINGW_WINE_JOB),
+                "is a required-ci-gate dependency",
+            ),
+            (
+                lambda jobs: [
+                    step["env"].update(
+                        {
+                            "EXPECTED_REQUIRED_JOBS_JSON": json.dumps(
+                                [*REQUIRED_CI_JOBS, MINGW_WINE_JOB], separators=(",", ":")
+                            )
+                        }
+                    )
+                    for step in jobs["required-ci-gate"]["steps"]
+                    if isinstance(step.get("env"), dict) and "EXPECTED_REQUIRED_JOBS_JSON" in step["env"]
+                ],
+                "is in EXPECTED_REQUIRED_JOBS_JSON",
+            ),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                errors = mutate(change)
+                self.assertTrue(any(message in error for error in errors), errors)
 
     def test_msan_is_verified_but_remains_optional(self) -> None:
         msan_block = named_step(self.build, "Run Tests under MSan")

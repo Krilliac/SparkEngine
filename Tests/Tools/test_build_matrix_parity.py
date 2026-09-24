@@ -223,7 +223,7 @@ class RepositoryInventoryTests(unittest.TestCase):
         gating = {job["id"]: job["gating"] for job in workflow["jobs"]}
         self.assertEqual(gating["build-windows-vs2022"], "blocking")
         self.assertEqual(gating["build-linux-msan"], "advisory")
-        self.assertEqual(gating["build-linux-mingw-wine"], "conditional")
+        self.assertEqual(gating["build-linux-mingw-wine"], "advisory")
 
     def test_current_debt_is_blocking_not_baseline_masked(self) -> None:
         report = check_parity.build_report(copy.deepcopy(self.data))
