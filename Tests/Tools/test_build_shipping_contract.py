@@ -71,7 +71,8 @@ def sparkbuild_shipping_values(text: str) -> tuple[dict[str, bool], str]:
         raise AssertionError("ApplyPresetShipping no longer starts from ApplyPresetDefaults()")
     stripped = re.sub(r"//[^\n]*", "", body)
     block_re = re.compile(
-        r"if\s*\(((?:\s*\|\|\s*|\s*opt\.cmakeVar\s*==\s*\"[A-Za-z0-9_]+\")+)\s*\)\s*"
+        r"if\s*\(\s*(opt\.cmakeVar\s*==\s*\"[A-Za-z0-9_]+\""
+        r"(?:\s*\|\|\s*opt\.cmakeVar\s*==\s*\"[A-Za-z0-9_]+\")*)\s*\)\s*"
         r"\{\s*opt\.currentValue\s*=\s*(true|false)\s*;\s*\}"
     )
     values = dict(defaults)
