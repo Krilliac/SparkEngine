@@ -51,6 +51,13 @@ runtime coverage, and scheduled campaign evidence are not yet retained. See
 `wiki/advanced/Fuzz-Policy-and-Parser-Security.md` for the exact scope, reviewed
 exclusions, and closure blockers.
 
+Data at rest (owner decision OD-22, work item DATA-120): first-party persistence stores passwords only as salted
+PBKDF2 hashes, never persists session tokens, and reads no database credential from committed or shipped config;
+`Tests/TestDATA120SecretsAtRest.cpp` exercises those paths against real files. SparkEngine does not encrypt its
+database or save files. Operators who run a server are responsible for placing its save directory (and backups of it)
+on host full-disk-encrypted storage; see `wiki/gameplay-tools/Persistence-System.md`. A plaintext password, session
+token, or credential found in any first-party persisted file or shipped config is in scope as a vulnerability.
+
 The following are considered security vulnerabilities:
 
 - Memory safety bugs (buffer overflows, use-after-free, out-of-bounds access)

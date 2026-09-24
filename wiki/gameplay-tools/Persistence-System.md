@@ -342,6 +342,20 @@ Neither system depends on or communicates with the other. A game can use both si
 | `GetInt()`/`GetDouble()`/`GetString()` type mismatch | Throws `std::bad_variant_access` |
 | Column index out of range | `GetInt()`/`GetDouble()`/`GetString()` throw `std::out_of_range`; `IsNull()` returns true |
 
+## Secrets and Encryption at Rest (OD-22)
+
+Owner decision OD-22 (`docs/readiness/OWNER-DECISIONS.md`, work item DATA-120) sets the stable-v1 rules for anything these stores write:
+
+| Rule | How the tree meets it | Enforced by |
+|------|-----------------------|-------------|
+| Passwords are stored only as salted PBKDF2 hashes | TERRAFRONT `TFAccountSystem::Register` writes `pbkdf2-sha256$<iterations>$<saltHex>$<dkHex>` (150k iterations, 128-bit per-account salt) through `TFDatabase::CreateAccount`; the MMO account system uses `Spark::PasswordHash::Create` and keeps accounts in memory | `Persistence_Secrets_TFAccountStoreHoldsOnlySaltedPbkdf2Hashes` (row-column allowlist, no plaintext or hex-encoded password in the file, distinct salts for equal passwords, restart re-login from the hash alone) |
+| Session tokens are never persisted | TERRAFRONT sessions are an in-memory client-id -> account-id map; MMO bearer tokens live only in `MMOAccountSystem`'s session table. Neither the TERRAFRONT JSON store nor the MMO key-value store (`MMOPersistenceSystem` over `AsyncDatabasePool`) has a session column | `Persistence_Secrets_TFLoginAndSessionBindingPersistOnlyLoginTime`, `Persistence_Secrets_MMOKeyValueStoreNeverReceivesPasswordOrSessionToken` (structural guard: `MMOAccountSystem` has no persistence path; the test confirms the written store holds no password, hash, or token and that a restarted account system rejects the old token) |
+| No database secret in committed or shipped config | The only backend is the file-based `SQLiteConnection`; its "connection string" is a file path, and the TERRAFRONT store path comes from the `TF_SAVE_ROOT` environment variable (`TFSavePaths.h`). No persistence code reads a credential from a config file | `Persistence_Secrets_ShippedConfigCarriesNoDatabaseCredential` scans every config-like file under the trees the install rules ship config from (`SparkEngine/Resources/Config`, the runtime `Assets/` directories, and the `SparkServer/config` / `SparkGateway/config` operator examples installed to `share/SparkEngine/examples`); `Persistence_Secrets_CredentialScannerDetectsPlantedSecrets` proves the matcher catches planted keys and `user:password@` URLs |
+
+**Operator responsibility -- encryption at rest.** stable-v1 does not encrypt database files itself (no SQLCipher or in-database encryption). Account stores hold usernames, salts, and PBKDF2 hashes; character stores hold gameplay state. Operators running a server must put the save directory (`TF_SAVE_ROOT`, default `<working-directory>/Saves`, and `mmo_data.db`, and their `.tmp`, `.bak`, and `.corrupt-*` siblings) on a volume protected by host full-disk encryption (BitLocker, LUKS/dm-crypt, FileVault, or the cloud provider's encrypted block storage), restrict the directory to the server account, and treat backups of it as sensitive.
+
+**Adding a networked backend.** A future MySQL/PostgreSQL `IDatabaseConnection` must take its credential from the environment or the OS credential store at runtime, never from a shipped config file or source, and must not log the connection string (`AsyncDatabasePool` and `MMOPersistenceSystem` currently log the path they open, which is safe only because it is a file path).
+
 ## Implementing a New Backend
 
 To add a real SQLite, MySQL, or PostgreSQL backend:

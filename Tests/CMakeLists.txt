@@ -612,6 +612,11 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp"
+    # DATA-120 / OD-22: no plaintext password, session token, or DB credential
+    # at rest (TF account store above + MMO KV store + shipped config scan).
+    TestDATA120SecretsAtRest.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Reputation/MMOReputationSystem.cpp"
     # W7/W8 outfit persistence + secondary-motion chain math — both module
     # .cpps are deliberately minimal-dependency and link standalone into
     # SparkTests (the TFDatabase.cpp pattern above).
@@ -1475,6 +1480,15 @@ set_tests_properties(CrashSettingsCredentials PROPERTIES
     LABELS "crash-security;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 30)
+
+# DATA-120 (OD-22): no plaintext password, session token, or database credential
+# reaches a persistence store or a shipped config file.
+add_test(NAME PersistenceSecretsAtRest COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(PersistenceSecretsAtRest PROPERTIES
+    ENVIRONMENT "SPARK_TEST_FILE=TestDATA120SecretsAtRest.cpp;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "persistence;security;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 60)
 
 add_test(NAME LifecyclePartialInit COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(LifecyclePartialInit PROPERTIES

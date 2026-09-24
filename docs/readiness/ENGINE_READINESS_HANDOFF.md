@@ -2663,7 +2663,7 @@ ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure 
 **Priority:** P1 · **Status:** open · **Wave:** 3 · **Area:** persistence · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic ownership, schema migration, concurrent writes, backups, restore, or disaster recovery. 2026-09-05 progress: AsyncDatabase's key-value store no longer truncates the live file on every write, so the interrupted-write acceptance now also covers that store (Tests/TestSaveSystemRoundTripReal.cpp, AsyncDatabaseReal_*); MMO/MMOFPS module persistence is unchanged and the item stays open. 2026-09-13 progress: AsyncDatabase now explicitly durably flushes its completed sibling revision before atomic replacement on Windows and POSIX, with a production round-trip regression and a source policy contract; concurrent module writes, migrations, backup/restore, and disaster-recovery evidence remain open.
+MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic ownership, schema migration, concurrent writes, backups, restore, or disaster recovery. 2026-09-05 progress: AsyncDatabase's key-value store no longer truncates the live file on every write, so the interrupted-write acceptance now also covers that store (Tests/TestSaveSystemRoundTripReal.cpp, AsyncDatabaseReal_*); MMO/MMOFPS module persistence is unchanged and the item stays open. 2026-09-13 progress: AsyncDatabase now explicitly durably flushes its completed sibling revision before atomic replacement on Windows and POSIX, with a production round-trip regression and a source policy contract; concurrent module writes, migrations, backup/restore, and disaster-recovery evidence remain open. 2026-09-24 progress (OD-22): Tests/TestDATA120SecretsAtRest.cpp (Persistence_Secrets_*) drives the production TERRAFRONT account store (TFAccountSystem over TFDatabase) and the MMO AsyncDatabase key-value store (MMOPersistenceSystem) against real files, with a structural guard for the MMO account system (it has no persistence path; the written store holds no password, hash, or token and a restarted account system rejects the old token), and scans the shipped config trees (SparkEngine/Resources/Config, the runtime Assets directories, and the SparkServer/SparkGateway operator example configs), asserting that only salted PBKDF2 hashes are persisted (account-row column allowlist, distinct salts, restart re-login from the hash), that no plaintext or hex-encoded password or session token reaches either store, and that no credential-shaped key or user:password@ URL appears in shipped config; no violation was found, so no production fix was needed. Host full-disk encryption is documented as the operator responsibility in wiki/gameplay-tools/Persistence-System.md and SECURITY.md. This covers the secrets half of the encrypt-and-separate-secrets scope only; the transactional, migration, backup/restore, and recovery acceptance criteria remain open.
 
 **Dependency contract**
 
@@ -2702,11 +2702,12 @@ MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic o
 ```bash
 ctest --test-dir build/linux-gcc-release -L persistence --output-on-failure --no-tests=error
 ctest --test-dir build/linux-gcc-release -R BackupRestore --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -R PersistenceSecretsAtRest --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**
 
-- Test selectors: `Persistence_Transaction`, `Persistence_Idempotency`, `Persistence_Migration`, `Persistence_BackupRestore`, `AsyncDatabaseReal_*`
+- Test selectors: `Persistence_Transaction`, `Persistence_Idempotency`, `Persistence_Migration`, `Persistence_BackupRestore`, `Persistence_Secrets_*`, `AsyncDatabaseReal_*`
 - Required CI jobs: `persistence-integration`, `recovery-drill`
 - Performance / reliability budgets:
   - Persistence latency and queue depth fit the declared server tick/SLO budgets
