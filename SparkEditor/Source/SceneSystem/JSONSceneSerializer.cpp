@@ -1532,13 +1532,16 @@ namespace SparkEditor
         }
         const size_t versionFieldCount = static_cast<size_t>(std::count_if(
             root.objVal.begin(), root.objVal.end(), [](const JSONMember& member) { return member.key == "version"; }));
-        loadedScene.header.version = FieldUint32(root, "version", SCENE_FILE_VERSION);
-        if (versionFieldCount != 1 || loadedScene.header.version != SCENE_FILE_VERSION)
+        if (versionFieldCount != 1)
         {
-            result.errorMessage = "Scene file version is unsupported; legacy raw-memory scene payloads must be resaved "
-                                  "by a trusted build";
+            result.errorMessage = "Scene file must declare exactly one \"version\" field";
             return result;
         }
+        // Read N and N-1 (OD-03). HandleVersionCompatibility reports a versioned
+        // error for anything else and records the in-memory upgrade for N-1.
+        const uint32_t sourceVersion = FieldUint32(root, "version", 0);
+        if (!HandleVersionCompatibility(sourceVersion, loadedScene, result))
+            return result;
         loadedScene.header.objectCount = FieldUint32(root, "objectCount");
         loadedScene.header.componentCount = FieldUint32(root, "componentCount");
         loadedScene.header.assetReferenceCount = FieldUint32(root, "assetReferenceCount");
@@ -1697,6 +1700,18 @@ namespace SparkEditor
                 const JSONValue* data = Field(compVal, "data");
                 const bool markerOnly =
                     comp.type == ComponentType::TRANSFORM || comp.type == ComponentType::SPRITE_ANIMATOR;
+                if (sourceVersion < SCENE_FILE_VERSION && (data || !markerOnly))
+                {
+                    // v1 stored components as hex-encoded raw C++ object images
+                    // (including padding and pointer-bearing members). They have
+                    // no schema, so decoding them would trust arbitrary bytes.
+                    result.errorMessage = "Scene file version " + std::to_string(sourceVersion) + " component " +
+                                          ComponentTypeToString(comp.type) +
+                                          " carries a raw object-image payload that cannot be migrated to version " +
+                                          std::to_string(SCENE_FILE_VERSION) +
+                                          "; remove the component or recreate it, then resave";
+                    return result;
+                }
                 if (markerOnly)
                 {
                     if (data)
@@ -1903,11 +1918,6 @@ namespace SparkEditor
             return result;
         }
 
-        if (!HandleVersionCompatibility(loadedScene.header.version, loadedScene, result))
-        {
-            result.errorMessage = "Scene file version is not supported by this serializer";
-            return result;
-        }
         if (!ValidateScene(loadedScene, result))
         {
             result.errorMessage = "Scene data failed validation";

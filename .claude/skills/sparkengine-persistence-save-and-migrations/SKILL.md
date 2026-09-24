@@ -50,7 +50,7 @@ branch `claude/whole-nine-yards-20260823` (uncommitted changes ahead of `0e1fe7e
 
 | Layer | Files | Format | Owner code |
 |---|---|---|---|
-| World saves | `<saveDir>/*.spark_save` | Custom binary, `SPRK` magic, version 3 (reader window 1..3) | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.{h,cpp}` |
+| World saves | `<saveDir>/*.spark_save` | Custom binary, `SPRK` magic, version 4 (OD-03 reader window N-1..N = 3..4) | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.{h,cpp}` |
 | Engine async DB | one KV text file per `Open()` path | `#!spark-kv-v2` tab-delimited KV | `SparkEngine/Source/Engine/Persistence/AsyncDatabase.{h,cpp}` |
 | TERRAFRONT stores | accounts/characters DB, outfit store, `Saves/terrafront_state.json`, territory JSON | JSON via `Spark::Json` (`SparkEngine/Source/Utils/JsonUtils.h`) | `GameModules/SparkGameMMOFPS/Source/Persistence/`, `Source/Game/TFProgressionSystemPersist.cpp`, `Source/World/TFRegionSystemNet.cpp` |
 | MMO module | via AsyncDatabase (characters); accounts **in-memory only** | pseudo-SQL over KV | `GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp`, `Source/Account/MMOAccountSystem.cpp` |
@@ -87,17 +87,21 @@ release-blocking in the readiness handoff; local persistence must never be descr
 production-grade until their acceptance criteria (N-1 fixtures, rollback, forced-failure
 recovery, rehearsed backup restore) have evidence.
 
-## `.spark_save` on-disk format (version 3)
+## `.spark_save` on-disk format (version 4)
 
 Version constants live in `SaveSystem.{h,cpp}`'s companion header
-`SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h`: `kCurrentSaveVersion = 3`,
-`kOldestSupportedSaveVersion = 1`, so the reader accepts v1, v2 and v3 and `WriteToFile` refuses to
-emit anything but v3. Layout, in order:
+`SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h`: `kCurrentSaveVersion = 4`,
+`kOldestSupportedSaveVersion = kCurrentSaveVersion - 1` (owner decision OD-03: read N and N-1,
+write N), so the reader accepts v3 and v4, v1/v2 fail closed, and `WriteToFile` refuses to emit
+anything but v4. v4 = the v3 layout below plus a trailing little-endian CRC-32. Game modules
+version their own custom-state blocks with `Spark::ModulePersistedSchema`
+(`SparkSDK/Include/Spark/PersistedSchema.h`; SparkGameFPS's `FPSLocalProfile::kSchema`). Layout,
+in order:
 
 1. 4-byte magic `"SPRK"`.
 2. `uint32` format version.
 3. `uint32` metadata length + newline-delimited text block:
-   `saveName\n sceneName\n playerClass\n` then whitespace-separated
+   `saveName\n sceneName\n playerClass\n screenshotPath\n` then whitespace-separated
    `timestamp playTime playerHealth playerArmor posX posY posZ kills deaths`.
 4. `uint32` entity count; per entity: `uint16`-length-prefixed name, `uint16` component
    count; per component: prefixed type name, `uint16` property count, prefixed key/value
@@ -106,8 +110,7 @@ emit anything but v3. Layout, in order:
 
 **Hierarchy edges are not a new file section.** v3 encodes each parent link as the child's
 `Transform` component `parent` property, holding the parent's *index into the entity array*
-(`ParseTransformParentIndex`); v2 could not express an edge at all, so the v2->v3 in-memory
-migration treats every Transform it carries as a root.
+(`ParseTransformParentIndex`).
 
 **Which components are written.** `SerializeWorld` is registry-driven: every reflected type that owns
 both `ComponentFactory` operations and a serializer is written, replacing the old fixed 14-type
@@ -146,9 +149,9 @@ Reserved slots: `__quicksave`, `__autosave_0..N-1` (rotating, default 3).
 - **Bump `kCurrentSaveVersion`** whenever the binary layout changes, and decide explicitly whether
   `kOldestSupportedSaveVersion` moves with it. The load path rejects anything outside
   `[kOldestSupportedSaveVersion, kCurrentSaveVersion]`, and the migration loop
-  (`while (migrated.metadata.version < kCurrentSaveVersion)` in the load path) now carries real
-  in-memory upgrades: v1->v2 and v2->v3. Each future bump must add a step to that loop **and** be
-  reflected in `ReadMetadataOnly`'s version gate.
+  (`while (migrated.metadata.version < kCurrentSaveVersion)` in the load path) carries exactly one
+  real in-memory upgrade: v3->v4. OD-03 keeps the window at N-1..N, so a bump to v5 adds the v4->v5
+  step, deletes the v3->v4 step, and needs a real v4 fixture that migrates.
 - **Adding a field to an existing component**: no version bump needed — components are
   string-keyed property maps; deserializers use `SafeGetFloat/SafeGetUint32/SafeGetString`
   with defaults, so missing keys degrade to defaults. This is the additive-migration path.

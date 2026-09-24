@@ -82,7 +82,7 @@ namespace Spark
 
     void FPSLocalProfile::WriteTo(std::unordered_map<std::string, std::string>& customState) const
     {
-        customState[Key("version")] = std::to_string(kVersion);
+        WriteModuleSchemaVersion(kSchema, customState);
         customState[Key("level")] = std::to_string(progressionLevel);
         customState[Key("xp")] = std::to_string(progressionXP);
         customState[Key("class")] = std::to_string(playerClass);
@@ -99,14 +99,12 @@ namespace Spark
                                    std::string& outError)
     {
         FPSLocalProfile parsed;
-        if (!ReadField(customState, "version", parsed.version, outError))
+        uint32_t storedVersion = 0;
+        if (!CheckModuleSchemaVersion(kSchema, customState, storedVersion, outError))
             return false;
-        if (parsed.version > kVersion)
-        {
-            outError = "profile was written by a newer module (version " + std::to_string(parsed.version) +
-                       ", this build reads up to " + std::to_string(kVersion) + ")";
-            return false;
-        }
+        // Schema 1 is the first profile schema, so there is no earlier version to
+        // migrate yet; a future schema 2 converts a version-1 block here.
+        parsed.version = static_cast<int>(storedVersion);
 
         if (!ReadField(customState, "level", parsed.progressionLevel, outError) ||
             !ReadField(customState, "xp", parsed.progressionXP, outError) ||

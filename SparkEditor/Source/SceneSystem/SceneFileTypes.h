@@ -43,9 +43,19 @@ namespace SparkEditor
     constexpr ObjectID INVALID_OBJECT_ID = 0;
 
     /**
- * @brief Scene file format version for compatibility
+ * @brief Scene file format version written by this build (N)
  */
     constexpr uint32_t SCENE_FILE_VERSION = 2;
+
+    /**
+ * @brief Oldest scene file format version this build reads (N-1, per owner decision OD-03)
+ *
+ * Loaders accept exactly SCENE_FILE_OLDEST_READABLE_VERSION..SCENE_FILE_VERSION and
+ * migrate in memory; writers emit SCENE_FILE_VERSION only. v1 documents migrate
+ * structurally (header, objects, hierarchy, marker components, environment, camera,
+ * asset references); v1 raw object-image component payloads are never reinterpreted.
+ */
+    constexpr uint32_t SCENE_FILE_OLDEST_READABLE_VERSION = SCENE_FILE_VERSION - 1;
 
     /**
  * @brief Magic number for scene file identification

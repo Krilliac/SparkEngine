@@ -11,7 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-No post-candidate changes are listed yet.
+### Changed
+- Saves and SceneFile (dialect B) scenes follow owner decision OD-03: read the current and previous schema version, write only the current one. `.spark_save` readers accept v3 and v4 (v1/v2 files now fail closed with a versioned diagnostic); SceneFile JSON reads v2 and migrates v1 in memory from real v1 fixtures, while v1 raw object-image component payloads and any other version fail closed with a versioned error. The reflected-World scenes opened by the editor's File > Open (`Spark::LoadWorld`) still accept only version 1 and do not yet report a versioned diagnostic.
+
+### Added
+- `Spark/PersistedSchema.h` (public SDK): `ModulePersistedSchema` lets each game module declare the schema version of its save custom state, with the same read-N-and-N-1 rule; SparkGameFPS declares and uses it for its local profile.
 
 ## [0.9.0] - 2026-09-23
 

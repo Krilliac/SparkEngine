@@ -1473,6 +1473,14 @@ set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 30)
 
+# SAVE-230 / OD-03: SceneFile reads v2 (N) and v1 (N-1) from committed fixtures,
+# writes v2 only, and rejects older/newer versions with a versioned error.
+add_test(NAME SparkSceneCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
+set_tests_properties(SparkSceneCompatibilityTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=SceneMigration_;SPARK_TEST_EXPECT_COUNT=4"
+    LABELS "compatibility;scene;unit"
+    TIMEOUT 30)
+
 add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(TelemetrySpool PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=Telemetry_SpoolRecovery;SPARK_TEST_EXPECT_COUNT=8"
