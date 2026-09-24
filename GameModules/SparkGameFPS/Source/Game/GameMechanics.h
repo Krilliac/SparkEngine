@@ -25,6 +25,7 @@ using SparkEditor::DamageZoneType;
 
 class Player;
 class GameObject;
+class SceneManager;
 
 namespace Spark
 {
@@ -176,6 +177,35 @@ namespace Spark
      */
         RespawnPoint GetBestSpawnPoint(int teamID = -1) const;
 
+        /**
+     * @brief Collect a loaded scene's authored player spawns.
+     *
+     * Only `[SpawnPoint]` entries tagged `default` are player spawns (`wave_spawn`
+     * entries belong to the WaveSpawner). An entry whose `priority` is not a whole
+     * integer is skipped rather than silently defaulted. Position and rotation come
+     * from the SceneManager parser, which already rejects non-finite coordinates.
+     */
+        static std::vector<RespawnPoint> CollectAuthoredSpawnPoints(const ::SceneManager& scene);
+
+        /**
+     * @brief Replace only the spawn table, e.g. after a console scene_load.
+     *
+     * Score, kill history, a pending death and its countdown, and the respawn
+     * settings are live match state and are kept. An empty set reinstalls the
+     * built-in fallback so a previous scene's spawn can never linger.
+     * @return Number of authored points bound (capped at the spawn-point limit).
+     */
+        int BindSpawnPoints(const std::vector<RespawnPoint>& authored);
+
+        /**
+     * @brief The spawn point used by the most recent successful RespawnPlayer().
+     *
+     * PlayerRespawnEvent carries only a position, so the host reads the authored
+     * facing (rotation, degrees) from here when it handles the event.
+     */
+        const RespawnPoint& GetLastRespawnPoint() const { return m_lastRespawnPoint; }
+        bool HasLastRespawnPoint() const { return m_hasLastRespawnPoint; }
+
         // === Respawn Logic ===
 
         /**
@@ -241,7 +271,11 @@ namespace Spark
         std::string Console_GetKillHistory() const;
 
       private:
+        static RespawnPoint MakeFallbackSpawnPoint();
+
         std::vector<RespawnPoint> m_spawnPoints;
+        RespawnPoint m_lastRespawnPoint;
+        bool m_hasLastRespawnPoint = false;
         float m_respawnDelay = 5.0f;
         float m_respawnTimer = 0.0f;
         bool m_autoRespawn = true;

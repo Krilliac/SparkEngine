@@ -1023,6 +1023,7 @@ target_sources(SparkTests PRIVATE
     TestShadowPassReal.cpp
     TestSparkGameFPSLoopReal.cpp
     TestSparkGameFPSMirrorCompanionsReal.cpp
+    TestMOD310FPSSceneReloadRespawnReal.cpp
     TestFPSWeatherPort.cpp
     TestTemplateRuntimeReal.cpp
     TestUserDataPathsReal.cpp
@@ -1629,7 +1630,7 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         NAME FPSSinglePlayerSlice_RespawnProductionSource
         COMMAND $<TARGET_FILE:SparkTests> --quiet --warn-is-error)
     set_tests_properties(FPSSinglePlayerSlice_RespawnProductionSource PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME=FPSRespawn_;SPARK_TEST_EXPECT_COUNT=5"
+        ENVIRONMENT "SPARK_TEST_NAME=FPSRespawn_;SPARK_TEST_EXPECT_COUNT=10"
         LABELS "module;stable-v1;fps;production-source"
         RUN_SERIAL TRUE
         TIMEOUT 30)

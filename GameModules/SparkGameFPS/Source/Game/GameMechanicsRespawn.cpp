@@ -12,10 +12,12 @@
 
 #include "Core/Platform.h"
 #include "Engine/Events/EventSystem.h"
+#include "SceneManager/SceneManager.h"
 #include "Utils/EventBus.h"
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <charconv>
 #include <limits>
 #include <sstream>
 
@@ -30,18 +32,25 @@ namespace Spark
         m_respawnTimer = 0.0f;
         m_waitingForRespawn = false;
         m_missingBusReported = false;
+        m_lastRespawnPoint = RespawnPoint{};
+        m_hasLastRespawnPoint = false;
 
-        // Match the authored North_Spawn in Assets/Scenes/level1.scene. The
-        // legacy scene loader does not register [SpawnPoint] with this system;
-        // the old z=-5 default placed the first-person lens against the center
+        m_spawnPoints.push_back(MakeFallbackSpawnPoint());
+
+        return true;
+    }
+
+    RespawnPoint RespawnSystem::MakeFallbackSpawnPoint()
+    {
+        // Used only until BindSpawnPoints receives valid authored spawns. It
+        // matches the authored North_Spawn in Assets/Scenes/level1.scene; the
+        // old z=-5 default placed the first-person lens against the center
         // building's back wall on match start and after every death.
         RespawnPoint defaultSpawn;
         defaultSpawn.name = "Default Spawn";
         defaultSpawn.position = {0, 2, -20};
         defaultSpawn.isActive = true;
-        m_spawnPoints.push_back(defaultSpawn);
-
-        return true;
+        return defaultSpawn;
     }
 
     void RespawnSystem::Update(float deltaTime)
@@ -74,6 +83,57 @@ namespace Spark
         {
             m_spawnPoints.erase(m_spawnPoints.begin() + index);
         }
+    }
+
+    std::vector<RespawnPoint> RespawnSystem::CollectAuthoredSpawnPoints(const ::SceneManager& scene)
+    {
+        std::vector<RespawnPoint> spawns;
+        for (int i = 0; i < scene.GetNodeCount(); ++i)
+        {
+            const SceneNode* node = scene.GetNode(i);
+            if (!node || node->type != "SpawnPoint")
+                continue;
+            const auto tag = node->properties.find("tag");
+            if (tag == node->properties.end() || tag->second != "default")
+                continue;
+
+            int priority = 0;
+            if (const auto property = node->properties.find("priority"); property != node->properties.end())
+            {
+                const std::string& value = property->second;
+                const auto result = std::from_chars(value.data(), value.data() + value.size(), priority);
+                if (result.ec != std::errc{} || result.ptr != value.data() + value.size())
+                    continue;
+            }
+
+            RespawnPoint spawn;
+            spawn.name = node->name;
+            spawn.position = node->position;
+            spawn.rotation = node->rotation;
+            spawn.priority = priority;
+            spawns.push_back(spawn);
+        }
+        return spawns;
+    }
+
+    int RespawnSystem::BindSpawnPoints(const std::vector<RespawnPoint>& authored)
+    {
+        // Only the spawn table changes. Score, kill history, a pending death and
+        // its countdown, and the respawn settings are live match state that a
+        // scene_load must not discard: dropping a pending death strands the
+        // player dead, because only the published respawn revives it.
+        std::vector<RespawnPoint> bound;
+        for (const RespawnPoint& point : authored)
+        {
+            if (static_cast<int>(bound.size()) >= MAX_SPAWN_POINTS)
+                break;
+            bound.push_back(point);
+        }
+        const int boundCount = static_cast<int>(bound.size());
+        if (bound.empty())
+            bound.push_back(MakeFallbackSpawnPoint());
+        m_spawnPoints = std::move(bound);
+        return boundCount;
     }
 
     RespawnPoint RespawnSystem::GetBestSpawnPoint(int teamID) const
@@ -149,6 +209,10 @@ namespace Spark
 
         m_waitingForRespawn = false;
         m_respawnTimer = 0.0f;
+        // Record before publishing: subscribers run synchronously and read the
+        // authored facing from here (the event itself carries only a position).
+        m_lastRespawnPoint = spawn;
+        m_hasLastRespawnPoint = true;
 
         PlayerRespawnEvent event{};
         event.entityId = 0;
