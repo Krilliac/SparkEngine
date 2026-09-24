@@ -370,18 +370,16 @@ namespace Spark
     /**
      * @brief Number of virtual functions IEngineContext declares, destructor included.
      *
-     * A module calls the host's IEngineContext through this vtable, so appending a
-     * virtual is a binary-incompatible change: a module built against the longer
-     * interface calls past the end of an older host's vtable. IsSDKCompatible is
-     * exact equality and is the only thing standing between the two layouts, so the
-     * count is pinned to the SDK version below. When you add (or remove) a virtual
-     * here, update this count *and* bump SPARK_SDK_VERSION in Spark/Version.h.
+     * A module calls the host's IEngineContext through this vtable, so adding,
+     * removing or reordering a virtual is a binary-incompatible change: a module
+     * built against the longer interface calls past the end of an older host's
+     * vtable. IsSDKCompatible is exact equality and is the only thing standing
+     * between the two layouts. C++ cannot count a class's virtuals at compile time,
+     * so SparkSDK/Tools/sdk_abi_surface.py (ctest SparkSDKABISurface) extracts the
+     * real slot order from this header and fails when this count is stale or the
+     * vtable changed without a SPARK_SDK_VERSION bump re-pinned in
+     * SparkSDK/ABI/sdk-abi-surface.json.
      */
     inline constexpr uint32_t EngineContextVirtualCount = 90;
-
-    static_assert(EngineContextVirtualCount == 90 && SPARK_SDK_VERSION == 4,
-                  "IEngineContext's vtable layout changed: bump SPARK_SDK_VERSION and update "
-                  "EngineContextVirtualCount together, or an old host will accept a module that "
-                  "calls off the end of its vtable.");
 
 } // namespace Spark

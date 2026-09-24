@@ -26,6 +26,7 @@
 
 #include "IEngineContext.h"
 #include "Version.h"
+#include <cstddef>
 #include <cstdint>
 
 namespace Spark
@@ -73,6 +74,27 @@ namespace Spark
         /// opt in explicitly with ModuleKind::Addon.
         ModuleKind kind = ModuleKind::Game;
     };
+
+    // ModuleInfo crosses the DLL boundary by value (IModule::GetModuleInfo), so
+    // its layout is SDK ABI. These pins hold for SPARK_SDK_VERSION 4: changing
+    // the struct needs a SPARK_SDK_VERSION bump, and every bump re-pins this
+    // block and SparkSDK/ABI/sdk-abi-surface.json (SparkSDK/Tools/sdk_abi_surface.py).
+    static_assert(SPARK_SDK_VERSION == 4, "SPARK_SDK_VERSION changed: re-pin the ModuleInfo layout below");
+    static_assert(sizeof(ModuleKind) == 1, "ModuleKind is a uint8_t in the SDK ABI");
+    static_assert(offsetof(ModuleInfo, name) == 0, "ModuleInfo layout changed without an SDK bump");
+    static_assert(offsetof(ModuleInfo, version) == sizeof(void*), "ModuleInfo layout changed without an SDK bump");
+    static_assert(offsetof(ModuleInfo, sdkVersion) == 2 * sizeof(void*),
+                  "ModuleInfo layout changed without an SDK bump");
+    static_assert(offsetof(ModuleInfo, loadOrder) == 2 * sizeof(void*) + 4,
+                  "ModuleInfo layout changed without an SDK bump");
+    static_assert(offsetof(ModuleInfo, dependencies) == (sizeof(void*) == 8 ? 24 : 16),
+                  "ModuleInfo layout changed without an SDK bump");
+    static_assert(offsetof(ModuleInfo, dependencyCount) == (sizeof(void*) == 8 ? 32 : 20),
+                  "ModuleInfo layout changed without an SDK bump");
+    static_assert(offsetof(ModuleInfo, kind) == (sizeof(void*) == 8 ? 36 : 24),
+                  "ModuleInfo layout changed without an SDK bump");
+    static_assert(sizeof(ModuleInfo) == (sizeof(void*) == 8 ? 40 : 28),
+                  "ModuleInfo layout changed without an SDK bump");
 
     /**
      * @brief Interface that dynamically loaded modules implement

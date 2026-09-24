@@ -13,6 +13,7 @@
 
 #include "SparkExport.h"
 #include "Version.h"
+#include <cstddef>
 #include <cstdint>
 
 /** FourCC "SPRK", used to reject unrelated or malformed exports. */
@@ -83,8 +84,28 @@ struct SparkModuleCompatibilityDescriptor
     uint32_t reserved[5];
 };
 
+// The descriptor is read by hosts of other SDK versions (that is how an old host
+// rejects a new module with a diagnostic instead of a crash), and its fields are
+// mirrored field-for-field by the .sparkabi sidecar that cmake/SparkGameModule.cmake
+// derives from the macros above. Pinned for SPARK_SDK_VERSION 4 / descriptor v1;
+// an SDK bump re-pins this block with SparkSDK/ABI/sdk-abi-surface.json.
+static_assert(SPARK_SDK_VERSION == 4 && SPARK_MODULE_ABI_DESCRIPTOR_VERSION == 1u,
+              "SDK or descriptor version changed: re-pin the compatibility descriptor layout below");
 static_assert(sizeof(SparkModuleCompatibilityDescriptor) == SPARK_MODULE_ABI_DESCRIPTOR_SIZE,
               "Update the sidecar ABI writer when the compatibility descriptor changes");
+static_assert(SPARK_MODULE_ABI_DESCRIPTOR_SIZE == 64u, "Compatibility descriptor size changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, structSize) == 0, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, magic) == 4, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, descriptorVersion) == 8, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, sdkVersion) == 12, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, runtimeABIVersion) == 16, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, compilerFamily) == 20, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, compilerABIVersion) == 24, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, cxxLanguageLevel) == 28, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, runtimeLibrary) == 32, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, iteratorDebugLevel) == 36, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, pointerSize) == 40, "Descriptor layout changed");
+static_assert(offsetof(SparkModuleCompatibilityDescriptor, reserved) == 44, "Descriptor layout changed");
 
 /** Pure-C export signature resolved before any C++ module factory is called. */
 using SparkGetModuleCompatibilityFn = const SparkModuleCompatibilityDescriptor* (*)();
@@ -185,6 +206,58 @@ namespace Spark
             return "pointer size mismatch";
         }
         return "unknown compatibility error";
+    }
+
+    /** @brief The descriptor field a failed check compared, as both sides see it. */
+    struct ModuleCompatibilityMismatch
+    {
+        const char* field = nullptr; ///< .sparkabi sidecar key, or nullptr when there is no single field
+        uint32_t moduleValue = 0;    ///< Value the module advertised
+        uint32_t hostValue = 0;      ///< Value this host requires
+    };
+
+    /**
+     * @brief Name the field behind a CheckModuleCompatibility() failure and both values.
+     *
+     * Lets a host say "module sdk_version=5, host sdk_version=4" instead of just
+     * "SDK ABI version mismatch". Returns an empty mismatch (field == nullptr) for
+     * Compatible and MissingDescriptor.
+     */
+    inline constexpr ModuleCompatibilityMismatch GetModuleCompatibilityMismatch(
+        const SparkModuleCompatibilityDescriptor* descriptor, ModuleCompatibilityStatus status)
+    {
+        if (!descriptor)
+            return {};
+        const SparkModuleCompatibilityDescriptor& host = kExpectedModuleCompatibility;
+        switch (status)
+        {
+        case ModuleCompatibilityStatus::DescriptorTooSmall:
+            return {"struct_size", descriptor->structSize, host.structSize};
+        case ModuleCompatibilityStatus::BadMagic:
+            return {"magic", descriptor->magic, host.magic};
+        case ModuleCompatibilityStatus::DescriptorVersionMismatch:
+            return {"format", descriptor->descriptorVersion, host.descriptorVersion};
+        case ModuleCompatibilityStatus::SDKVersionMismatch:
+            return {"sdk_version", descriptor->sdkVersion, host.sdkVersion};
+        case ModuleCompatibilityStatus::RuntimeABIVersionMismatch:
+            return {"runtime_abi_version", descriptor->runtimeABIVersion, host.runtimeABIVersion};
+        case ModuleCompatibilityStatus::CompilerFamilyMismatch:
+            return {"compiler_family", descriptor->compilerFamily, host.compilerFamily};
+        case ModuleCompatibilityStatus::CompilerABIVersionMismatch:
+            return {"compiler_abi_version", descriptor->compilerABIVersion, host.compilerABIVersion};
+        case ModuleCompatibilityStatus::CxxLanguageLevelMismatch:
+            return {"cxx_language_level", descriptor->cxxLanguageLevel, host.cxxLanguageLevel};
+        case ModuleCompatibilityStatus::RuntimeLibraryMismatch:
+            return {"runtime_library", descriptor->runtimeLibrary, host.runtimeLibrary};
+        case ModuleCompatibilityStatus::IteratorDebugLevelMismatch:
+            return {"iterator_debug_level", descriptor->iteratorDebugLevel, host.iteratorDebugLevel};
+        case ModuleCompatibilityStatus::PointerSizeMismatch:
+            return {"pointer_size", descriptor->pointerSize, host.pointerSize};
+        case ModuleCompatibilityStatus::Compatible:
+        case ModuleCompatibilityStatus::MissingDescriptor:
+            break;
+        }
+        return {};
     }
 } // namespace Spark
 
