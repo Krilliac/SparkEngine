@@ -170,9 +170,11 @@ report_holder()
     openers="$(lock_file_openers)"
     if [ -n "$openers" ]; then
         log "processes with the lock file open:"
-        local pid
+        local pid description
         for pid in $openers; do
-            log "  $(describe_pid "$pid")"
+            # A short-lived opener (e.g. a compiler job) may exit between the scan and ps.
+            description="$(describe_pid "$pid")"
+            [ -n "$description" ] && log "  $description"
         done
     fi
 
