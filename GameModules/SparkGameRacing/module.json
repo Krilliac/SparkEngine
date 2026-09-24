@@ -13,8 +13,14 @@
       "Tests/TestMOD380RacingCompleteRaceReal.cpp"
     ],
     "prefixes": [
-      "Racing_",
-      "RacingCompleteRace_"
+      {
+        "prefix": "Racing_",
+        "count": 33
+      },
+      {
+        "prefix": "RacingCompleteRace_",
+        "count": 5
+      }
     ]
   },
   "docs": {

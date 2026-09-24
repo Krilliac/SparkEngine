@@ -41,12 +41,15 @@ GameModules/
 ```
 
 `module.json` names the module's CMake target, source directory, asset roots
-(or `"state": "none"` with a reason), the registered test sources and `TEST`
-name prefixes that cover it, its README, and any parity dimensions it declares
-N/A. Release-profile policy stays in `tools/module-evidence/manifest.json`.
+(or `"state": "none"` with a reason), the registered test sources and the
+`TEST` name prefixes that cover it (each with the exact number of tests it
+selects), its README, and any parity dimensions it declares N/A. Release-profile policy stays in `tools/module-evidence/manifest.json`.
 `python3 tools/site-data/validate.py --modules` and the `ModuleManifest_Contract`
 CTest fail when a discovered module has no manifest or any referenced path,
-test prefix, README, or N/A declaration does not hold. The field rules are in
+test prefix, test count, README, or N/A declaration does not hold.
+`Tests/CMakeLists.txt` also generates one `ModuleManifest_<Module>_<Prefix>`
+CTest (label `module-kit`) per declared prefix; it runs exactly that many
+tests or fails. The field rules are in
 [Creating a Game Module](../wiki/getting-started/Creating-a-Game-Module.md#gamemodulesnamemodulejson-in-tree-modules).
 
 ### 2. Implement `Spark::IModule`

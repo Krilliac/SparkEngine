@@ -49,25 +49,82 @@
       "Tests/TestTFSocialStore.cpp"
     ],
     "prefixes": [
-      "TFAbility_",
-      "TFChat_",
-      "TFData_",
-      "TFAssetPaths_",
-      "TFSavePaths_",
-      "TFDamage_",
-      "TFDeathRecap_",
-      "TerrafrontFixedStep_",
-      "TFNetProtocol_",
-      "TFRepProtocol_",
-      "TFAccountSystem_",
-      "TFCharacterSystem_",
-      "TFCrypto_",
-      "TFDatabase_",
-      "TFOutfitStore_",
-      "TFRedeploy_",
-      "TFSecondaryMotion_",
-      "TFServerValidation_",
-      "TFSocialStore_"
+      {
+        "prefix": "TFAbility_",
+        "count": 6
+      },
+      {
+        "prefix": "TFChat_",
+        "count": 11
+      },
+      {
+        "prefix": "TFData_",
+        "count": 21
+      },
+      {
+        "prefix": "TFAssetPaths_",
+        "count": 1
+      },
+      {
+        "prefix": "TFSavePaths_",
+        "count": 1
+      },
+      {
+        "prefix": "TFDamage_",
+        "count": 18
+      },
+      {
+        "prefix": "TFDeathRecap_",
+        "count": 5
+      },
+      {
+        "prefix": "TerrafrontFixedStep_",
+        "count": 1
+      },
+      {
+        "prefix": "TFNetProtocol_",
+        "count": 7
+      },
+      {
+        "prefix": "TFRepProtocol_",
+        "count": 4
+      },
+      {
+        "prefix": "TFAccountSystem_",
+        "count": 3
+      },
+      {
+        "prefix": "TFCharacterSystem_",
+        "count": 2
+      },
+      {
+        "prefix": "TFCrypto_",
+        "count": 4
+      },
+      {
+        "prefix": "TFDatabase_",
+        "count": 10
+      },
+      {
+        "prefix": "TFOutfitStore_",
+        "count": 16
+      },
+      {
+        "prefix": "TFRedeploy_",
+        "count": 7
+      },
+      {
+        "prefix": "TFSecondaryMotion_",
+        "count": 7
+      },
+      {
+        "prefix": "TFServerValidation_",
+        "count": 15
+      },
+      {
+        "prefix": "TFSocialStore_",
+        "count": 7
+      }
     ]
   },
   "docs": {

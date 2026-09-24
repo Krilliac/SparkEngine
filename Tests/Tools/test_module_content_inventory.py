@@ -78,7 +78,7 @@ class ModuleContentInventoryTests(unittest.TestCase):
                 {"directory": "Assets/Models", "manifest": "Assets/assets.integrity.json"},
                 {"directory": "Assets/Scenes", "manifest": "Assets/assets.integrity.json"},
             ]},
-            "tests": {"files": ["Tests/TestFixtureFPS.cpp"], "prefixes": ["FPSFixture_"]},
+            "tests": {"files": ["Tests/TestFixtureFPS.cpp"], "prefixes": [{"prefix": "FPSFixture_", "count": 1}]},
             "docs": {"readme": "GameModules/SparkGameFPS/README.md"},
             "parity": {"notApplicable": []},
         }), encoding="utf-8")

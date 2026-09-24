@@ -12,7 +12,10 @@
       "Tests/TestGameModulePlatformerARPG.cpp"
     ],
     "prefixes": [
-      "ARPG_"
+      {
+        "prefix": "ARPG_",
+        "count": 29
+      }
     ]
   },
   "docs": {

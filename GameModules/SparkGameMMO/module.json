@@ -35,8 +35,14 @@
       "Tests/harden/Test_gamemodules_mmochat_di.cpp"
     ],
     "prefixes": [
-      "MMO_",
-      "MMOCredentials_"
+      {
+        "prefix": "MMO_",
+        "count": 37
+      },
+      {
+        "prefix": "MMOCredentials_",
+        "count": 3
+      }
     ]
   },
   "docs": {

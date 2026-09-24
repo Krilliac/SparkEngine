@@ -12,8 +12,14 @@
       "Tests/TestOpenWorldModule.cpp"
     ],
     "prefixes": [
-      "OW_",
-      "Gated_OW"
+      {
+        "prefix": "OW_",
+        "count": 15
+      },
+      {
+        "prefix": "Gated_OW",
+        "count": 46
+      }
     ]
   },
   "docs": {

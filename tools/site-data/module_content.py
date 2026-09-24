@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -332,6 +333,68 @@ def _is_registered_test_source(cmake_text: str, relative: str) -> bool:
     return re.search(pattern, cmake_text, re.MULTILINE) is not None
 
 
+# SparkTests builds on Windows and on the POSIX hosts ("other"). A TEST( inside
+# a Windows-only preprocessor branch runs on one of them only, so a module
+# selector's count may differ by platform. Any other condition is assumed true.
+TEST_PLATFORMS = ("windows", "other")
+_WINDOWS_MACROS = r"(?:_WIN32|SPARK_PLATFORM_WINDOWS)"
+_IF_WINDOWS = re.compile(rf"^#\s*(?:ifdef\s+{_WINDOWS_MACROS}\b|if\s+defined\s*\(?\s*{_WINDOWS_MACROS}\s*\)?\s*$)")
+_IF_NOT_WINDOWS = re.compile(rf"^#\s*(?:ifndef\s+{_WINDOWS_MACROS}\b|if\s+!\s*defined\s*\(?\s*{_WINDOWS_MACROS}\s*\)?\s*$)")
+_IF_OTHER = re.compile(r"^#\s*if(?:n?def)?\b")
+
+
+def _test_definitions_by_platform(text: str) -> list[tuple[str, frozenset[str]]]:
+    """TEST( names in comment-stripped source, each with the platforms that compile it."""
+    everywhere = frozenset(TEST_PLATFORMS)
+    stack: list[frozenset[str]] = []
+    definitions: list[tuple[str, frozenset[str]]] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            if _IF_WINDOWS.match(stripped):
+                stack.append(frozenset({"windows"}))
+            elif _IF_NOT_WINDOWS.match(stripped):
+                stack.append(frozenset({"other"}))
+            elif _IF_OTHER.match(stripped):
+                stack.append(everywhere)
+            elif re.match(r"^#\s*else\b", stripped) and stack:
+                # Only a Windows split has a known complement; elif stays unknown.
+                stack[-1] = everywhere - stack[-1] if stack[-1] != everywhere else everywhere
+            elif re.match(r"^#\s*elif\b", stripped) and stack:
+                stack[-1] = everywhere
+            elif re.match(r"^#\s*endif\b", stripped) and stack:
+                stack.pop()
+            continue
+        active = everywhere.intersection(*stack) if stack else everywhere
+        for name in TEST_DEFINITION_PATTERN.findall(line):
+            definitions.append((name, active))
+    return definitions
+
+
+def _registered_test_names(repo_root: Path, cmake_text: str) -> list[tuple[str, frozenset[str]]]:
+    """Every TEST( defined by a Tests/ source that Tests/CMakeLists.txt registers, with its platforms."""
+    tests_root = repo_root / "Tests"
+    # Same token rule as _is_registered_test_source, tokenised once for ~700 sources.
+    registered = {
+        token.removeprefix("${CMAKE_CURRENT_SOURCE_DIR}/")
+        for token in re.split(r'[\s"()]+', cmake_text)
+        if token.endswith(".cpp")
+    }
+    names: list[tuple[str, frozenset[str]]] = []
+    # followlinks: the mutation tests mirror Tests/ subdirectories as symlinks.
+    for directory, subdirectories, files in os.walk(tests_root, followlinks=True):
+        subdirectories.sort()
+        for file_name in sorted(files):
+            if not file_name.endswith(".cpp"):
+                continue
+            source = Path(directory) / file_name
+            if source.relative_to(tests_root).as_posix() not in registered:
+                continue
+            text = _strip_cpp_comments(source.read_text(encoding="utf-8", errors="replace"))
+            names.extend(_test_definitions_by_platform(text))
+    return names
+
+
 def _manifest_path(repo_root: Path, value: Any, location: str, findings: list[tuple[str, str]], *, kind: str) -> Path | None:
     if not isinstance(value, str) or not value:
         findings.append((location, "path must be a non-empty string"))
@@ -445,15 +508,45 @@ def _validate_manifest_assets(repo_root: Path, module_dir: Path, assets: Any, lo
     return findings
 
 
-def _validate_manifest_tests(repo_root: Path, tests: Any, location: str) -> list[tuple[str, str]]:
+def _validate_selector_count(
+    prefix: str, count: Any, selected: dict[str, int], location: str
+) -> list[tuple[str, str]]:
+    """count is one positive integer, or {windows, other} when the platforms differ."""
+    def positive(value: Any) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+    if isinstance(count, dict):
+        if set(count) != set(TEST_PLATFORMS) or not all(positive(value) for value in count.values()):
+            return [(location, f"per-platform count must map exactly {list(TEST_PLATFORMS)} to positive integers")]
+        if len(set(count.values())) == 1:
+            return [(location, f"per-platform count for {prefix} is equal on every platform; declare one integer")]
+        declared = dict(count)
+    elif positive(count):
+        declared = {platform: count for platform in TEST_PLATFORMS}
+    else:
+        return [(location, f"count must be a positive integer: {count!r}")]
+    return [
+        (
+            location,
+            f"declared count {declared[platform]} for {prefix} disagrees with {selected[platform]} registered TEST( "
+            f"definitions whose name starts with it ({platform} build)",
+        )
+        for platform in TEST_PLATFORMS
+        if declared[platform] != selected[platform]
+    ]
+
+
+def _validate_manifest_tests(
+    repo_root: Path, tests: Any, location: str, registered_names: list[tuple[str, frozenset[str]]]
+) -> list[tuple[str, str]]:
     if not isinstance(tests, dict) or set(tests) != {"files", "prefixes"}:
         return [(location, "tests must contain exactly files and prefixes")]
     files, prefixes = tests["files"], tests["prefixes"]
     findings: list[tuple[str, str]] = []
     if not isinstance(files, list) or not files or len(files) != len(set(map(str, files))):
         return [(f"{location}.files", "must be a non-empty list of unique test source paths")]
-    if not isinstance(prefixes, list) or not prefixes or len(prefixes) != len(set(map(str, prefixes))):
-        return [(f"{location}.prefixes", "must be a non-empty list of unique TEST-name prefixes")]
+    if not isinstance(prefixes, list) or not prefixes:
+        return [(f"{location}.prefixes", "must be a non-empty list of {prefix, count} selectors")]
     cmake_path = repo_root / TESTS_CMAKE_RELATIVE
     cmake_text = _strip_cmake_comments(cmake_path.read_text(encoding="utf-8")) if cmake_path.is_file() else ""
     names_by_file: dict[str, list[str]] = {}
@@ -469,14 +562,34 @@ def _validate_manifest_tests(repo_root: Path, tests: Any, location: str) -> list
             findings.append((file_location, f"test source is not registered in {TESTS_CMAKE_RELATIVE.as_posix()}: {value}"))
         text = _strip_cpp_comments(source.read_text(encoding="utf-8", errors="replace"))
         names_by_file[value] = TEST_DEFINITION_PATTERN.findall(text)
-    valid_prefixes = []
-    for index, prefix in enumerate(prefixes):
+    valid_prefixes: list[str] = []
+    for index, entry in enumerate(prefixes):
+        entry_location = f"{location}.prefixes[{index}]"
+        if not isinstance(entry, dict) or set(entry) != {"prefix", "count"}:
+            findings.append((entry_location, "selector must contain exactly prefix and count"))
+            continue
+        prefix, count = entry["prefix"], entry["count"]
         if not isinstance(prefix, str) or not TEST_PREFIX_PATTERN.match(prefix):
-            findings.append((f"{location}.prefixes[{index}]", f"invalid TEST-name prefix: {prefix!r}"))
+            findings.append((entry_location, f"invalid TEST-name prefix: {prefix!r}"))
+            continue
+        if prefix in valid_prefixes:
+            findings.append((entry_location, f"duplicate TEST-name prefix: {prefix}"))
             continue
         valid_prefixes.append(prefix)
         if not any(name.startswith(prefix) for names in names_by_file.values() for name in names):
-            findings.append((f"{location}.prefixes[{index}]", f"test prefix matches no TEST( definition in the listed files: {prefix}"))
+            findings.append((entry_location, f"test prefix matches no TEST( definition in the listed files: {prefix}"))
+        # Tests/CMakeLists.txt turns each selector into a CTest that runs SparkTests
+        # with SPARK_TEST_NAME_PREFIX=<prefix> (an anchored filter over every
+        # compiled test) and SPARK_TEST_EXPECT_COUNT=<count>. Checking the same
+        # count here catches drift without a build; the CTest re-checks it on
+        # each platform.
+        selected = {
+            platform: sum(
+                1 for name, platforms in registered_names if name.startswith(prefix) and platform in platforms
+            )
+            for platform in TEST_PLATFORMS
+        }
+        findings.extend(_validate_selector_count(prefix, count, selected, entry_location))
     for value, names in names_by_file.items():
         if not any(name.startswith(prefix) for name in names for prefix in valid_prefixes):
             findings.append((location, f"listed test source defines no TEST( matching a declared prefix: {value}"))
@@ -522,6 +635,9 @@ def validate_module_manifests(
 ) -> list[tuple[str, str]]:
     """Validate GameModules/<Name>/module.json for every discovered module directory."""
     dimensions, scores, findings = _parity_rows(repo_root)
+    cmake_path = repo_root / TESTS_CMAKE_RELATIVE
+    cmake_text = _strip_cmake_comments(cmake_path.read_text(encoding="utf-8")) if cmake_path.is_file() else ""
+    registered_names = _registered_test_names(repo_root, cmake_text)
     for name in sorted(actual, key=str.casefold):
         module_dir = actual[name]
         path = module_dir / MODULE_MANIFEST_NAME
@@ -551,7 +667,7 @@ def validate_module_manifests(
                 findings.append((location, f"{key} disagrees with {EVIDENCE_RELATIVE.as_posix()}: expected {evidence.get(key)!r}"))
         _manifest_path(repo_root, manifest["sourceDirectory"], f"{location}.sourceDirectory", findings, kind="directory")
         findings.extend(_validate_manifest_assets(repo_root, module_dir, manifest["assets"], f"{location}.assets"))
-        findings.extend(_validate_manifest_tests(repo_root, manifest["tests"], f"{location}.tests"))
+        findings.extend(_validate_manifest_tests(repo_root, manifest["tests"], f"{location}.tests", registered_names))
         docs = manifest["docs"]
         readme = docs.get("readme") if isinstance(docs, dict) and set(docs) == {"readme"} else None
         expected_readme = f"{module_dir.relative_to(repo_root).as_posix()}/README.md"

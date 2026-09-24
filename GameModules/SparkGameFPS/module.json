@@ -26,17 +26,53 @@
       "Tests/TestFPSWeatherPort.cpp"
     ],
     "prefixes": [
-      "FPSAssets_",
-      "FPSLocalProfile_",
-      "FPSProgression_",
-      "FPSRespawn_",
-      "FPSScene_",
-      "FPSStateRules_",
-      "FPSInteg_",
-      "GameModeReal_",
-      "FPSMultiplayer_",
-      "FPSWeatherPort_",
-      "FPSWeatherIntegration_"
+      {
+        "prefix": "FPSAssets_",
+        "count": 6
+      },
+      {
+        "prefix": "FPSLocalProfile_",
+        "count": 7
+      },
+      {
+        "prefix": "FPSProgression_",
+        "count": 3
+      },
+      {
+        "prefix": "FPSRespawn_",
+        "count": 10
+      },
+      {
+        "prefix": "FPSScene_",
+        "count": {
+          "windows": 5,
+          "other": 4
+        }
+      },
+      {
+        "prefix": "FPSStateRules_",
+        "count": 3
+      },
+      {
+        "prefix": "FPSInteg_",
+        "count": 17
+      },
+      {
+        "prefix": "GameModeReal_",
+        "count": 11
+      },
+      {
+        "prefix": "FPSMultiplayer_",
+        "count": 11
+      },
+      {
+        "prefix": "FPSWeatherPort_",
+        "count": 4
+      },
+      {
+        "prefix": "FPSWeatherIntegration_",
+        "count": 2
+      }
     ]
   },
   "docs": {

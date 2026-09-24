@@ -12,7 +12,10 @@
       "Tests/TestModuleABI.cpp"
     ],
     "prefixes": [
-      "ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload"
+      {
+        "prefix": "ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload",
+        "count": 1
+      }
     ]
   },
   "docs": {

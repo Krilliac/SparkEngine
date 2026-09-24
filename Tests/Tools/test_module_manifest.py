@@ -147,10 +147,99 @@ class ManifestMutationTests(unittest.TestCase):
             {"dimension": "persistence", "reason": "Declared here only to prove the row disagreement is caught."}))
         self.assert_named_error("parity N/A cells disagree with declared notApplicable dimensions for SparkGameRTS")
 
+    def selector(self, name: str, prefix: str) -> dict:
+        path = self.manifest_path(name)
+        entries = json.loads(path.read_text(encoding="utf-8"))["tests"]["prefixes"]
+        return next(entry for entry in entries if entry["prefix"] == prefix)
+
+    def edit_selector(self, name: str, selected: str, /, **changes) -> None:
+        def mutate(manifest: dict) -> None:
+            for entry in manifest["tests"]["prefixes"]:
+                if entry["prefix"] == selected:
+                    entry.update(changes)
+        self.edit(name, mutate)
+
     def test_renamed_test_prefix_fails(self) -> None:
-        self.edit("SparkGameRTS", lambda manifest: manifest["tests"].update(
-            prefixes=["RTSRenamed_" if prefix == "RTS_" else prefix for prefix in manifest["tests"]["prefixes"]]))
+        self.edit_selector("SparkGameRTS", "RTS_", prefix="RTSRenamed_")
         self.assert_named_error("test prefix matches no TEST( definition in the listed files: RTSRenamed_")
+
+    def test_changed_declared_count_fails(self) -> None:
+        # Tests/CMakeLists.txt feeds this count to SPARK_TEST_EXPECT_COUNT; a
+        # manifest that drifts from the tree must fail without a build too.
+        declared = self.selector("SparkGameRTS", "RTS_")["count"]
+        self.edit_selector("SparkGameRTS", "RTS_", count=declared + 1)
+        self.assert_named_error(f"declared count {declared + 1} for RTS_ disagrees with {declared} registered TEST(")
+
+    def test_removed_test_definition_breaks_declared_count(self) -> None:
+        source = self.root / "Tests" / "TestModuleABI.cpp"
+        text = source.read_text(encoding="utf-8")
+        source.unlink()
+        name = "ModuleABI_AllValidationRuleOwnersReleaseCallbacksBeforeUnload"
+        source.write_text(text.replace(f"TEST({name})", "TEST(ModuleABI_RenamedForMutation)"), encoding="utf-8")
+        self.assert_named_error(f"declared count 1 for {name} disagrees with 0 registered TEST(")
+
+    def test_non_positive_or_missing_count_fails(self) -> None:
+        self.edit_selector("SparkGameRTS", "RTS_", count=0)
+        self.assert_named_error("count must be a positive integer: 0")
+        self.edit_selector("SparkGameRTS", "RTS_", count=True)
+        self.assert_named_error("count must be a positive integer: True")
+        self.edit("SparkGameRTS", lambda manifest: manifest["tests"].update(prefixes=["RTS_"]))
+        self.assert_named_error("selector must contain exactly prefix and count")
+
+    def test_selector_count_excludes_names_that_only_contain_the_prefix(self) -> None:
+        # "ARPG_Hero_Initialize" contains "RPG_". The generated CTest runs with the
+        # anchored SPARK_TEST_NAME_PREFIX, so a count that also includes the ARPG_
+        # family (the substring count) must be rejected, or renaming an RPG_ test
+        # while adding an ARPG_ test would leave the declared count unchanged.
+        cmake = module_content._strip_cmake_comments((ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8"))
+        names = [name for name, _ in module_content._registered_test_names(ROOT, cmake)]
+        anchored = sum(1 for name in names if name.startswith("RPG_"))
+        substring = sum(1 for name in names if "RPG_" in name)
+        self.assertGreater(substring, anchored, "the ARPG_ family must overlap RPG_ for this mutation to mean anything")
+        self.assertEqual(anchored, self.selector("SparkGameRPG", "RPG_")["count"])
+        self.edit_selector("SparkGameRPG", "RPG_", count=substring)
+        self.assert_named_error(f"declared count {substring} for RPG_ disagrees with {anchored} registered TEST(")
+
+    def test_generated_module_ctests_use_the_anchored_name_filter(self) -> None:
+        cmake = (ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn('"SPARK_TEST_NAME_PREFIX=${_spark_module_kit_prefix};', cmake)
+        self.assertNotIn('"SPARK_TEST_NAME=${_spark_module_kit_prefix};', cmake)
+        runner = (ROOT / "Tests" / "TestMain.cpp").read_text(encoding="utf-8")
+        self.assertIn('std::getenv("SPARK_TEST_NAME_PREFIX")', runner)
+
+    def test_windows_only_test_needs_a_per_platform_count(self) -> None:
+        # FPSScene_FailedReloadPreservesLiveObjectIdentityAndRuntimeState is
+        # compiled only under SPARK_PLATFORM_WINDOWS, so one integer cannot hold.
+        self.assertEqual({"windows": 5, "other": 4}, self.selector("SparkGameFPS", "FPSScene_")["count"])
+        self.edit_selector("SparkGameFPS", "FPSScene_", count=5)
+        self.assert_named_error("declared count 5 for FPSScene_ disagrees with 4 registered TEST( definitions "
+                                "whose name starts with it (other build)")
+        self.edit_selector("SparkGameFPS", "FPSScene_", count={"windows": 4, "other": 4})
+        self.assert_named_error("per-platform count for FPSScene_ is equal on every platform; declare one integer")
+        self.edit_selector("SparkGameFPS", "FPSScene_", count={"windows": 5, "linux": 4})
+        self.assert_named_error("per-platform count must map exactly ['windows', 'other'] to positive integers")
+
+    def test_preprocessor_platform_tracking(self) -> None:
+        source = "\n".join([
+            "#ifdef SPARK_PLATFORM_WINDOWS", "TEST(P_Windows)", "#else", "TEST(P_Other)", "#endif",
+            "#if !defined(_WIN32)", "#if SOME_FEATURE", "TEST(P_OtherNested)", "#endif", "#endif",
+            "#ifdef SOME_FEATURE", "TEST(P_Unknown)", "#else", "TEST(P_UnknownElse)", "#endif",
+            "TEST(P_Everywhere)",
+        ])
+        platforms = {name: set(active) for name, active in module_content._test_definitions_by_platform(source)}
+        self.assertEqual({
+            "P_Windows": {"windows"},
+            "P_Other": {"other"},
+            "P_OtherNested": {"other"},
+            "P_Unknown": {"windows", "other"},
+            "P_UnknownElse": {"windows", "other"},
+            "P_Everywhere": {"windows", "other"},
+        }, platforms)
+
+    def test_duplicate_selector_fails(self) -> None:
+        self.edit("SparkGameRTS", lambda manifest: manifest["tests"]["prefixes"].append(
+            dict(manifest["tests"]["prefixes"][0])))
+        self.assert_named_error("duplicate TEST-name prefix: RTS_")
 
     def test_missing_test_source_fails(self) -> None:
         self.edit("SparkGameRTS", lambda manifest: manifest["tests"]["files"].append("Tests/TestDoesNotExist.cpp"))

@@ -12,7 +12,10 @@
       "Tests/TestGameModuleRPG.cpp"
     ],
     "prefixes": [
-      "RPG_"
+      {
+        "prefix": "RPG_",
+        "count": 40
+      }
     ]
   },
   "docs": {

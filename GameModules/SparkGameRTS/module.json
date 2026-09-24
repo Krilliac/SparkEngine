@@ -13,8 +13,14 @@
       "Tests/TestMOD370SkirmishDeterminismReal.cpp"
     ],
     "prefixes": [
-      "RTS_",
-      "RTSSkirmish_"
+      {
+        "prefix": "RTS_",
+        "count": 44
+      },
+      {
+        "prefix": "RTSSkirmish_",
+        "count": 7
+      }
     ]
   },
   "docs": {

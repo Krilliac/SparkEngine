@@ -2124,6 +2124,72 @@ set_tests_properties(ModuleManifest_Contract PROPERTIES
     LABELS "module;module-kit;readiness;unit;python"
     TIMEOUT 120)
 
+# MOD-290: per-module test registration is generated from each module's
+# module.json rather than hand-written. Every declared {prefix, count} selector
+# becomes ModuleManifest_<Module>_<Prefix>, which runs SparkTests filtered to
+# names that start with that prefix (SPARK_TEST_NAME_PREFIX, so RPG_ does not
+# also select ARPG_*) and fails unless exactly `count` tests run, each asserting
+# something. A selector that names a missing, renamed or emptied test family
+# therefore fails ctest. The module sources these tests exercise compile into
+# SparkTests only when ImGui is available (see the feature-gated block above).
+if(TARGET imgui)
+    file(GLOB _spark_module_kit_cmake_files "${CMAKE_SOURCE_DIR}/GameModules/*/CMakeLists.txt")
+    foreach(_spark_module_kit_cmake IN LISTS _spark_module_kit_cmake_files)
+        get_filename_component(_spark_module_kit_dir "${_spark_module_kit_cmake}" DIRECTORY)
+        get_filename_component(_spark_module_kit_name "${_spark_module_kit_dir}" NAME)
+        set(_spark_module_kit_manifest "${_spark_module_kit_dir}/module.json")
+        if(NOT EXISTS "${_spark_module_kit_manifest}")
+            message(FATAL_ERROR
+                "MOD-290: game module ${_spark_module_kit_name} has no module.json; "
+                "see GameModules/README.md for the per-module manifest contract.")
+        endif()
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_spark_module_kit_manifest}")
+        file(READ "${_spark_module_kit_manifest}" _spark_module_kit_json)
+        string(JSON _spark_module_kit_selector_count LENGTH "${_spark_module_kit_json}" tests prefixes)
+        if(_spark_module_kit_selector_count EQUAL 0)
+            message(FATAL_ERROR "MOD-290: ${_spark_module_kit_manifest} declares no tests.prefixes selectors.")
+        endif()
+        math(EXPR _spark_module_kit_last "${_spark_module_kit_selector_count} - 1")
+        foreach(_spark_module_kit_index RANGE ${_spark_module_kit_last})
+            string(JSON _spark_module_kit_prefix GET "${_spark_module_kit_json}"
+                tests prefixes ${_spark_module_kit_index} prefix)
+            # count is one integer, or {windows, other} when a family has
+            # Windows-only (or non-Windows-only) TEST( definitions.
+            string(JSON _spark_module_kit_count_type TYPE "${_spark_module_kit_json}"
+                tests prefixes ${_spark_module_kit_index} count)
+            if(_spark_module_kit_count_type STREQUAL "OBJECT")
+                if(WIN32)
+                    set(_spark_module_kit_platform windows)
+                else()
+                    set(_spark_module_kit_platform other)
+                endif()
+                string(JSON _spark_module_kit_count GET "${_spark_module_kit_json}"
+                    tests prefixes ${_spark_module_kit_index} count ${_spark_module_kit_platform})
+            else()
+                string(JSON _spark_module_kit_count GET "${_spark_module_kit_json}"
+                    tests prefixes ${_spark_module_kit_index} count)
+            endif()
+            if(NOT _spark_module_kit_prefix MATCHES "^[A-Za-z][A-Za-z0-9_]*$" OR
+               NOT _spark_module_kit_count MATCHES "^[1-9][0-9]*$")
+                message(FATAL_ERROR
+                    "MOD-290: ${_spark_module_kit_manifest} tests.prefixes[${_spark_module_kit_index}] "
+                    "needs a TEST-name prefix and a positive count "
+                    "(got '${_spark_module_kit_prefix}', '${_spark_module_kit_count}').")
+            endif()
+            string(REGEX REPLACE "_+$" "" _spark_module_kit_suffix "${_spark_module_kit_prefix}")
+            set(_spark_module_kit_test "ModuleManifest_${_spark_module_kit_name}_${_spark_module_kit_suffix}")
+            add_test(NAME ${_spark_module_kit_test} COMMAND $<TARGET_FILE:SparkTests> --quiet --empty-is-error)
+            # RUN_SERIAL: several families open loopback UDP listeners or write
+            # save/database files under shared per-user roots.
+            set_tests_properties(${_spark_module_kit_test} PROPERTIES
+                ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_module_kit_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_module_kit_count}"
+                LABELS "module;module-kit;unit"
+                RUN_SERIAL TRUE
+                TIMEOUT 300)
+        endforeach()
+    endforeach()
+endif()
+
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkCrashReporter)
     add_dependencies(SparkTests SparkCrashReporter)
     add_test(
