@@ -55,8 +55,12 @@ typedef GLXContext (*PFNGLXCREATECONTEXTATTRIBSARBPROC)(Display*, GLXFBConfig, G
 #define GLX_CONTEXT_PROFILE_MASK_ARB 0x9126
 #define GLX_CONTEXT_CORE_PROFILE_BIT_ARB 0x00000001
 #endif
+// Guard each token separately: some GLX header sets (e.g. glxtokens.h without
+// glxext.h) define GLX_CONTEXT_FLAGS_ARB but not GLX_CONTEXT_DEBUG_BIT_ARB.
 #ifndef GLX_CONTEXT_FLAGS_ARB
 #define GLX_CONTEXT_FLAGS_ARB 0x2094
+#endif
+#ifndef GLX_CONTEXT_DEBUG_BIT_ARB
 #define GLX_CONTEXT_DEBUG_BIT_ARB 0x00000001
 #endif
 #ifndef GLX_ARB_get_proc_address
