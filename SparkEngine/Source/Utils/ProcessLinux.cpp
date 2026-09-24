@@ -348,6 +348,27 @@ namespace Spark
             else if (stderrPipe[1] >= 0)
                 redirectFd(stderrPipe[1], STDERR_FILENO);
 
+            // A detached child outlives its launcher, so it must not keep the
+            // launcher's stdio open. Otherwise a supervisor reading the
+            // launcher's stdout to EOF never sees EOF while the detached child
+            // (e.g. SparkCrashReporter watching the engine) runs, and a child
+            // that waits for the un-reaped launcher to disappear deadlocks it.
+            if (m_detached)
+            {
+                const int devNull = open("/dev/null", O_RDWR);
+                if (devNull >= 0)
+                {
+                    if (stdinPipe[0] < 0)
+                        dup2(devNull, STDIN_FILENO);
+                    if (stdoutPipe[1] < 0)
+                        dup2(devNull, STDOUT_FILENO);
+                    if (stderrPipe[1] < 0 && !(m_mergeStderrIntoStdout && stdoutPipe[1] >= 0))
+                        dup2(devNull, STDERR_FILENO);
+                    if (devNull > STDERR_FILENO)
+                        close(devNull);
+                }
+            }
+
             execvp(m_executable.c_str(), const_cast<char* const*>(argv.data()));
             reportFailureAndExit(2, 127); // exec failed
         }
