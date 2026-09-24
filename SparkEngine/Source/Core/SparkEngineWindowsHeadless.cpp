@@ -38,6 +38,7 @@
 #include "FaultIsolation.h"
 #include "FixedTimestepAccumulator.h"
 #include "GameplaySystemLifecycle.h"
+#include "HeadlessTickStats.h"
 #include "Graphics/RHI/RHIBridge.h"
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
@@ -64,6 +65,8 @@
 #include <thread>
 
 #ifdef SPARK_PLATFORM_WINDOWS
+#include <psapi.h> // K32GetProcessMemoryInfo for the peak-RSS record
+
 #ifdef SPARK_HEADLESS_SUPPORT
 
 // g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
@@ -334,6 +337,7 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     int frameCount = 0;
     int nullRhiFrameCount = 0;
     bool quitPosted = false;
+    Spark::HeadlessTickStats tickStats;
 
     while (true)
     {
@@ -408,7 +412,10 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         }
         ++frameCount;
 
+        // Record work time only: the loop sleeps to a fixed 60 Hz cadence, so
+        // wall-clock frame time would measure the sleep, not the engine.
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
+        tickStats.Record(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()));
         if (elapsed < TICK_INTERVAL)
             std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
     }
@@ -438,6 +445,16 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         static_cast<unsigned long long>(evidence.fixedUpdated), static_cast<unsigned long long>(evidence.rendered),
         static_cast<unsigned long long>(evidence.unloaded), static_cast<unsigned long long>(evidence.faults));
     std::fflush(stdout);
+    // Work-time distribution for tools/perf-budget/collect_headless_result.py.
+    // Every tick above ran on NullRHI: startup returns when it is unavailable.
+    // Peak working set of this process only (a new process never inherits the
+    // launcher's counters); 0 if the query fails, which the collector rejects.
+    // The K32 entry point lives in kernel32, so no psapi.lib link is needed.
+    PROCESS_MEMORY_COUNTERS memoryCounters{};
+    const uint64_t peakRssKib = K32GetProcessMemoryInfo(GetCurrentProcess(), &memoryCounters, sizeof(memoryCounters))
+                                    ? static_cast<uint64_t>(memoryCounters.PeakWorkingSetSize) / 1024u
+                                    : 0u;
+    tickStats.EmitRecord(/*nullRhiActive=*/nullRhiFrameCount == frameCount, peakRssKib);
     if (!nullRhiShutdown && exitCode == 0)
         exitCode = 3;
 

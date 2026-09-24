@@ -36,15 +36,39 @@
 #include "Utils/InvalidStateDetector.h"
 #include "Utils/Assert.h"
 #include "FixedTimestepAccumulator.h"
+#include "HeadlessTickStats.h"
 #include <chrono>
 #include <format>
+#include <fstream>
+#include <iterator>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <thread>
 
 #ifndef SPARK_PLATFORM_WINDOWS
 
 #ifdef SPARK_HEADLESS_SUPPORT
+/**
+ * @brief This process's own peak resident set in KiB, or 0 when not measurable.
+ *
+ * Linux reads `VmHWM` from /proc/self/status (reset by exec, so it excludes
+ * the launching harness). macOS has no equivalent exec-scoped counter wired
+ * here and reports 0, which the Linux-only perf collector never accepts.
+ */
+static uint64_t ReadOwnPeakRssKib()
+{
+#ifdef __linux__
+    std::ifstream status("/proc/self/status");
+    if (!status)
+        return 0;
+    const std::string text{std::istreambuf_iterator<char>(status), std::istreambuf_iterator<char>()};
+    return Spark::HeadlessTickStats::ParseVmHwmKib(text);
+#else
+    return 0;
+#endif
+}
+
 /**
  * @brief Run the engine in headless/dedicated server mode (Linux).
  *
@@ -54,6 +78,16 @@
 int RunHeadlessLinux(int argc, char* argv[])
 {
     Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Headless/Dedicated Server - Linux) ===");
+
+    // Parity with RunHeadlessWindows: a headless launch runs against an
+    // explicit NullRHI device owned by EngineRuntime (released by the shared
+    // ShutdownEngineAfterPreflight), so tick measurements are taken on the
+    // same no-render backend the linux-nullrhi-ci perf row names.
+    if (!GetEngineRuntime().InitializeHeadlessRhi())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Linux headless startup could not establish NullRHI");
+        return 1;
+    }
 
     GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
     GetEngineRuntime().timer = std::make_unique<Timer>();
@@ -113,6 +147,7 @@ int RunHeadlessLinux(int argc, char* argv[])
         console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
 
     int frameCount = 0;
+    Spark::HeadlessTickStats tickStats;
 
     while (true)
     {
@@ -139,6 +174,9 @@ int RunHeadlessLinux(int argc, char* argv[])
         float dt = GetEngineRuntime().timer ? GetEngineRuntime().timer->GetDeltaTime() : (1.0f / 60.0f);
 
         Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
+
+        if (GetEngineRuntime().headlessRhiBridge)
+            GetEngineRuntime().headlessRhiBridge->BeginFrame();
 
         SPARK_GUARDED_UPDATE("Modules", "Core", {
             if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules())
@@ -167,15 +205,25 @@ int RunHeadlessLinux(int argc, char* argv[])
             console.Update();
         });
 
+        if (GetEngineRuntime().headlessRhiBridge)
+            GetEngineRuntime().headlessRhiBridge->EndFrame();
         ++frameCount;
 
+        // Record work time only: the loop sleeps to a fixed 60 Hz cadence, so
+        // wall-clock frame time would measure the sleep, not the engine.
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
+        tickStats.Record(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()));
         if (elapsed < TICK_INTERVAL)
             std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
     }
 
     ShutdownLinuxAfterPreflight();
     Spark::SimpleConsole::GetInstance().LogInfo("Headless server shut down cleanly.");
+
+    // One machine-readable record after full teardown, consumed by
+    // tools/perf-budget/collect_headless_result.py. The loop always ran on
+    // NullRHI: startup returns above when the device cannot be established.
+    tickStats.EmitRecord(/*nullRhiActive=*/true, ReadOwnPeakRssKib());
     return exitCode;
 }
 #endif // SPARK_HEADLESS_SUPPORT

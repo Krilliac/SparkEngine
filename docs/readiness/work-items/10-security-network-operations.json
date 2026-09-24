@@ -981,7 +981,6 @@
         "soak-scheduled"
       ],
       "plannedTestSelectors": [
-        "Benchmark_*",
         "GoldenImage_*",
         "Soak_*"
       ]

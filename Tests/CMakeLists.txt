@@ -1054,6 +1054,7 @@ target_sources(SparkTests PRIVATE
     TestTemplateRuntimeReal.cpp
     TestUserDataPathsReal.cpp
     TestHEAD220NullRHILifetimeReal.cpp
+    TestHeadlessTickStats.cpp
     TestSceneManagerUnicodeReal.cpp
     TestSceneSaveConfinedReal.cpp
     TestWeaponMechanicsReal.cpp
@@ -1659,6 +1660,39 @@ set_tests_properties(NullRHIResourceLifetime PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=NullRHI_Lifetime_;SPARK_TEST_EXPECT_COUNT=6"
     LABELS "nullrhi-headless;stable-v1;unit"
     TIMEOUT 30)
+
+# PERF-100: the bounded tick work-time histogram both headless hosts feed, then
+# the producer end to end: the real headless host on NullRHI with the SparkGame
+# module, its SPARK_HEADLESS_TICK_STATS record (incl. self-read peak RSS), and a result JSON that
+# passes validate_result and stays NON-AUTHORITATIVE on the uncertified row.
+add_test(NAME HeadlessTickStats COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
+set_tests_properties(HeadlessTickStats PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=HeadlessTickStats_;SPARK_TEST_EXPECT_COUNT=7"
+    LABELS "benchmark;nullrhi-headless;unit"
+    TIMEOUT 30)
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME HeadlessTickCollector_Parser
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_collect_headless_result.py ParserTests CollectorGuardTests)
+    set_tests_properties(HeadlessTickCollector_Parser PROPERTIES
+        LABELS "benchmark;perf-budget;unit;python"
+        TIMEOUT 60)
+    if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
+       TARGET SparkEngine AND TARGET SparkGame)
+        add_dependencies(SparkTests SparkEngine SparkGame)
+        add_test(
+            NAME Benchmark_HeadlessTickLoop
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_collect_headless_result.py HeadlessTickLoopBenchmark)
+        set_tests_properties(Benchmark_HeadlessTickLoop PROPERTIES
+            ENVIRONMENT "SPARK_HEADLESS_ENGINE=$<TARGET_FILE:SparkEngine>;SPARK_HEADLESS_MODULE=$<TARGET_FILE:SparkGame>"
+            LABELS "benchmark;nullrhi-headless;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 180)
+    endif()
+endif()
 
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(NOT TARGET SparkEngine OR NOT TARGET SparkGameFPS)
