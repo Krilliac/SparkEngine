@@ -115,6 +115,11 @@ if(REPORTER_SOURCES)
 
         add_test(NAME SparkCrashReporter.ManifestCompatibility
                  COMMAND SparkCrashReporterManifestTests $<TARGET_FILE:SparkCrashReporterFakeGh>)
+        # OPS-100: path, identity, size, transport-field and read-only defenses belong
+        # to the crash-security selection on every platform, not only consent.
+        set_tests_properties(SparkCrashReporter.ManifestCompatibility PROPERTIES
+                             TIMEOUT 60
+                             LABELS "crash-security;security;unit")
 
         # OPS-100: an unanswered or non-explicit consent prompt transmits nothing.
         add_executable(SparkCrashReporterConsentTests

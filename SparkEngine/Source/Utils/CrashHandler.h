@@ -1,6 +1,6 @@
 /**
  * @file CrashHandler.h
- * @brief Unhandled-exception crash handler with process-dump generation and upload
+ * @brief Unhandled-exception crash handler with local process-dump generation
  * @author Spark Engine Team
  * @date 2025
  *
@@ -12,7 +12,9 @@
  * - Capture a screenshot of the last rendered frame
  * - Collect system information (OS version, GPU, memory, etc.)
  * - Dump all thread call stacks for multi-threaded diagnosis
- * - Optionally compress and upload the crash report to a remote server
+ * - Publish a local manifest and hand it to the read-only SparkCrashReporter
+ *
+ * The engine never uploads a report and accepts no transport credentials.
  *
  * The crash handler also integrates with the Assert system (see Assert.h):
  * when an assertion fails, TriggerCrashHandler() is called, which can either
@@ -23,7 +25,6 @@
  * @code
  *   CrashConfig cfg;
  *   cfg.dumpPrefix = L"SparkEngine";
- *   cfg.uploadURL  = "https://crashes.example.com/upload";
  *   InstallCrashHandler(cfg);
  * @endcode
  *
@@ -40,47 +41,20 @@
  * @brief Configuration options for the crash handling system
  *
  * Controls what data is captured when a crash occurs and how the crash
- * report is processed (local storage, compression, upload).
+ * report is presented. Reports stay local; there is no transport configuration.
  */
 struct CrashConfig
 {
     std::wstring dumpPrefix = L"GameEngineCrash"; ///< Filename prefix for generated process-dump files
-    std::string uploadURL = "";                   ///< Remote URL to upload crash reports (empty = no upload)
     bool captureScreenshot = true;                ///< Whether to capture a screenshot at crash time
     bool captureSystemInfo = true;                ///< Whether to collect OS/GPU/memory information
     bool captureAllThreads = true;                ///< Whether to dump call stacks for all threads
-    bool captureFullMemoryDump = false;           ///< Opt-in; allowed only without configured automatic transport
-    bool zipBeforeUpload = true;                  ///< Whether to compress the report before uploading
+    bool captureFullMemoryDump = false;           ///< Opt-in full-memory dump; always kept local
     bool triggerCrashOnAssert = false;            ///< Whether assertion failures should generate a full crash report
-    int connectTimeoutSeconds = 5;                ///< HTTP connection timeout for crash report uploads
-
-    // GitHub Issue upload — creates an issue on the repo's Issues tab with the
-    // crash log embedded as text and the zip/dump uploaded as a release asset
-    // linked from the issue body. Requires NETWORKING_ENABLED.
-    std::string githubRepo = "";               ///< GitHub repo in "owner/repo" format (empty = disabled)
-    std::string githubToken = "";              ///< GitHub personal access token (PAT) with repo/issues scope
-    std::string githubLabels = "crash-report"; ///< Comma-separated labels to apply to the created issue
-    bool githubAttachDump = true;              ///< Whether to upload the zip/dump as a release asset and link it
-
-    // Upload configuration — supports multiple backends
-    // The uploadURL is auto-detected by prefix:
-    //   "https://api.github.com/..."  or githubRepo set → GitHub Issues (direct API, needs token)
-    //   "https://dropbox.com/..." or "dbx://..."        → Dropbox shared upload link
-    //   "ftp://..." or "ftps://..."                      → FTP/FTPS upload
-    //   Any other "https://..." or "http://..."          → Generic HTTP POST (multipart)
-    // The proxyURL is a dedicated crash relay that holds credentials server-side.
-    std::string proxyURL = "";          ///< Crash report proxy endpoint (release builds, empty = disabled)
-    bool enableCrashReporting = true;   ///< Master switch for crash report uploading
-    bool requireConsent = true;         ///< Show a consent dialog before uploading (default for releases)
-    bool headlessMode = false;          ///< Skip all dialog boxes (CI/testing/headless — auto-consent)
-    bool promptUserDescription = true;  ///< Show "what were you doing" text input after crash
-    bool allowScreenshotRefusal = true; ///< Let users refuse screenshots in consent dialog
-
-    // Email backend (smtp:// URL)
-    std::string smtpUser = "";                               ///< SMTP username
-    std::string smtpPass = "";                               ///< SMTP password
-    std::string emailTo = "";                                ///< Recipient email
-    std::string emailFrom = "crashreporter@sparkengine.dev"; ///< Sender address
+    bool requireConsent = true;                   ///< Ask before a screenshot is packaged with the report
+    bool headlessMode = false;                    ///< Skip all dialog boxes and the reporter (CI/testing/headless)
+    bool promptUserDescription = true;            ///< Show "what were you doing" text input after crash
+    bool allowScreenshotRefusal = true;           ///< Let users refuse screenshots in consent dialog
 
     // Populated at crash time by user input (not configured in settings)
     std::string userDescription = ""; ///< User-provided crash description (filled at crash time)

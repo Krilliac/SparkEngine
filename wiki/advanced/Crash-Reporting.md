@@ -12,6 +12,8 @@ Ready manifests use `crash_manifest_<16 lowercase hex>.json`. The reporter bound
 
 Legacy transport fields (`uploadURL`, proxy, GitHub, SMTP, and email fields) are parse-only compatibility input. They are discarded and must not be written into new manifests. `requireConsent: false` also does **not** authorize network delivery. `artifactRoot` and pinned identities are in-memory trust state and must not be serialized.
 
+The engine side accepts no transport configuration at all. `CrashConfig` and `[CrashReporting]` have no upload URL, relay URL, GitHub token/repository, SMTP credential, or e-mail field, and `SetupCrashHandler` reads no credential environment variables. The former in-process uploader (`CrashReportUploader.cpp`) was deleted because nothing called it. `EngineSettings::Load` drops the retired `[CrashReporting]` keys (`UploadURL`, `ProxyURL`, `GitHubRepo`, `GitHubToken`, `GitHubLabels`, `AttachDump`, `TimeoutSeconds`, `SmtpUser`, `SmtpPass`, `EmailTo`, `EmailFrom`, in any letter case) from `settings.ini` and `settings.local.ini`, so a later `Save()` cannot write a stale secret back. Regressions: `CrashSettings_RetiredTransportCredentialsAreDroppedOnLoadAndNeverWritten` (C++) and the source/settings policy checks in `Tests/Tools/test_ops100_crash_security.py`.
+
 ## Offline validation
 
 The repository includes read-only tools under `tools/ops`:

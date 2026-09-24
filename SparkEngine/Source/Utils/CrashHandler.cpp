@@ -9,11 +9,6 @@
 #include "Utils/StackTrace.h"
 #include "Validate.h"
 
-// Only include CURL when libcurl is available (detected by CMake)
-#ifdef SPARK_HAS_CURL
-#include <curl/curl.h>
-#endif
-
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -79,22 +74,15 @@ static std::atomic<std::uint64_t> g_reportSequence{0};
 static volatile sig_atomic_t g_inSignalHandler = 0;
 #endif
 
-// Keep the producer marker local to the crash handler now that the legacy
-// uploader is no longer part of this process. The standalone uploader retains
-// its own parser-compatible copy for offline tooling.
+// Every faulting-thread frame line the stack-trace producers write starts with
+// this marker, so a reader of the crash log can tell the faulting stack apart
+// from the unmarked per-thread stacks written by ThreadStacks().
 static constexpr const char* kStackFrameMarker = "FRAME ";
 static constexpr const wchar_t* kStackFrameMarkerW = L"FRAME ";
 
 static void AssignCrashConfig(const CrashConfig& cfg)
 {
     g_cfg = cfg;
-    if (g_cfg.captureFullMemoryDump && !Spark::CrashHandlerDetail::CanCaptureFullMemoryDump(
-                                           true, g_cfg.githubToken, g_cfg.smtpPass, g_cfg.uploadURL, g_cfg.proxyURL))
-    {
-        g_cfg.captureFullMemoryDump = false;
-        SPARK_LOG_WARN(Spark::LogCategory::Core,
-                       "CrashHandler: full-memory dump disabled because automatic transport configuration is present");
-    }
 }
 
 
@@ -905,10 +893,6 @@ void InstallCrashHandler(const CrashConfig& cfg)
             Spark::LogCategory::Core,
             "CrashHandler: failed to create private crash-artifact directory; filesystem artifacts disabled");
     }
-
-#ifdef SPARK_HAS_CURL
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-#endif
 
     // Teardown detection (see block comment above): resolve the ntdll probe up
     // front so the crash path never calls GetProcAddress, and set our own flag
@@ -1908,10 +1892,6 @@ void InstallCrashHandler(const CrashConfig& cfg)
             Spark::LogCategory::Core,
             "CrashHandler: failed to create private crash-artifact directory; filesystem artifacts disabled");
     }
-
-#ifdef SPARK_HAS_CURL
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-#endif
 
     // Install signal handlers for common crash signals
     struct sigaction sa;

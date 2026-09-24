@@ -168,20 +168,13 @@ The `CrashHandler` system installs platform-specific unhandled-exception handler
 
 ```cpp
 CrashConfig cfg;
-cfg.dumpPrefix          = L"SparkEngine";                        // Minidump filename prefix
-cfg.uploadURL           = "https://crashes.example.com/upload";  // Remote upload URL (empty = disabled)
+cfg.dumpPrefix          = L"SparkEngine"; // Minidump filename prefix
 cfg.captureScreenshot   = true;   // Capture last rendered frame
 cfg.captureSystemInfo   = true;   // Collect OS, GPU, memory info
 cfg.captureAllThreads   = true;   // Dump all thread call stacks
-cfg.zipBeforeUpload     = true;   // Compress report before sending
+cfg.captureFullMemoryDump = false; // Opt-in, local-only full-memory dump
 cfg.triggerCrashOnAssert = false; // Whether Assert::Fail generates a full crash report
-cfg.connectTimeoutSeconds = 5;    // HTTP timeout for uploads
-
-// Optional: create a GitHub Issue with the crash report
-cfg.githubRepo   = "owner/repo";
-cfg.githubToken  = "ghp_...";
-cfg.githubLabels = "crash-report";
-cfg.githubAttachDump = true;
+cfg.headlessMode        = false;  // true = no dialogs (CI/servers)
 
 InstallCrashHandler(cfg);
 ```
@@ -196,10 +189,8 @@ InstallCrashHandler(cfg);
 
 ### Shipped behavior (2026-09 sweep)
 
-- Reports uploaded off the machine are **redacted**: user-profile paths collapse to `%USERPROFILE%`, `%LOCALAPPDATA%`, `%TEMP%`, and the machine name is masked before the account name it usually contains (`JANE-DESKTOP` -> `<machine>` before `jane` -> `<user>`). The local copy keeps full paths.
-- Uploads are bounded: 30 s per request, a 512 B / 15 s stall cut-off, and a 32 MB attachment cap.
-- Repeated crashes deduplicate onto one GitHub issue because the stack hash parses the engine's own frame format.
-- The redaction rules are **derived or the upload is refused**: when `USERPROFILE`/`LOCALAPPDATA`/`USERNAME` are absent (services, session 0, sanitized launchers) the context falls back to `SHGetFolderPathW`/`GetUserNameW`/`GetComputerNameW`, and if it is still empty the report stays local rather than going to a public tracker. Substitutions run longest token first, so the machine name is replaced before the account name it contains.
+- **The engine never uploads a crash report.** The in-process GitHub/SMTP/FTP/Dropbox/HTTP/relay uploader and every credential-bearing setting (`UploadURL`, `ProxyURL`, `GitHub*`, `Smtp*`, `Email*`, and the `SPARK_GITHUB_TOKEN`/`SPARK_SMTP_PASS`/`SPARK_CRASH_UPLOAD_URL` environment overrides) were removed for OPS-100. Stale keys in an existing `settings.ini` or `settings.local.ini` are dropped on load and never written back. The handler writes local artifacts and launches the read-only `SparkCrashReporter` (see [Crash Reporting](Crash-Reporting.md)).
+- Faulting-thread frame lines in the crash log start with `FRAME `; the per-thread stacks written by `ThreadStacks()` are unmarked, so a reader can tell the faulting stack apart.
 - **One report per process.** `HandleCrashInternal` carries a once-guard, so an assertion that reaches both `TriggerCrashHandler` and `TriggerCrashReport` writes a single dump/log/manifest; any later trigger in the same process is ignored (a note goes to `OutputDebugString`).
 - `TriggerCrashReportUnattended()` (`CrashReportDelivery::ArtifactOnly`) writes dump/log/manifest with **no screenshot, no consent or description dialog and no in-process upload**. The freeze watchdog uses it so `terminateOnFreeze` really terminates; delivery of that report is left to the crash reporter or the next launch's pending-manifest sweep.
 - The crash path never blocks on the shared DbgHelp symbol lock: `SymStackTrace()` and `ThreadStacks()` both use a 500 ms bounded try-lock. When the lock is held elsewhere the report carries unsymbolized raw addresses (`*** STACK TRACE (unsymbolized: DbgHelp busy ...)`) and a `Skipped: DbgHelp busy` note in place of the other thread stacks — resolve those against the minidump.

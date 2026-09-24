@@ -1357,7 +1357,6 @@ endif()
 if(NOT MINIZ_FOUND)
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandler\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashHandlerHelpers\\.cpp$")
-    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Utils/CrashReportUploader\\.cpp$")
     message(WARNING "MINIZ not found — using CrashHandlerStub.cpp fallback (no crash dump compression)")
 else()
     # When the real CrashHandler is built, exclude the stub

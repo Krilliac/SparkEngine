@@ -1,12 +1,11 @@
-// TestCrashHandlerGatingReal.cpp - Real crash-path helpers: the stack hash the
-// uploader actually calls, the redaction applied before transport, the ungated
-// crash-report entry point, and the shipping-build watchdog gate.
+// TestCrashHandlerGatingReal.cpp - Real crash-path helpers: the redaction applied
+// to crash artifacts, the ungated crash-report entry point, and the
+// shipping-build watchdog gate.
 
 #include "TestFramework.h"
 #include "Core/Platform.h"
 #include "Utils/CrashHandler.h"
 #include "Utils/CrashHandlerSupport.h"
-#include "Utils/CrashReportUploader.h"
 #include "Utils/FreezeDetector.h"
 
 #include <algorithm>
@@ -16,49 +15,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
-// =============================================================================
-// utils-05 — the hash must recognise the format the engine itself writes
-// =============================================================================
-
-namespace
-{
-    /// Byte-for-byte the shape CrashHandler::SymStackTrace() produces.
-    std::string MakeEngineStackTrace(const std::string& topSymbol)
-    {
-        return std::string("*** STACK TRACE ***\n") + "  " + kStackFrameMarker + topSymbol + " +0x42\n" + "  " +
-               kStackFrameMarker + "Spark::GraphicsEngine::Present +0x1a\n" + "  " + kStackFrameMarker +
-               "Spark::Engine::Run +0xff\n";
-    }
-} // namespace
-
-TEST(CrashHash_EngineStackTraceFormatProducesAHash)
-{
-    const std::string hash = ComputeStackHash(MakeEngineStackTrace("Spark::Renderer::Draw"));
-    EXPECT_FALSE(hash.empty());
-    EXPECT_EQ(hash.size(), static_cast<size_t>(8));
-}
-
-TEST(CrashHash_EngineStackTraceHashIsStableAndDiscriminating)
-{
-    const std::string first = ComputeStackHash(MakeEngineStackTrace("Spark::Renderer::Draw"));
-    const std::string second = ComputeStackHash(MakeEngineStackTrace("Spark::Renderer::Draw"));
-    const std::string other = ComputeStackHash(MakeEngineStackTrace("Spark::Physics::Step"));
-    EXPECT_EQ(first, second);
-    EXPECT_FALSE(other.empty());
-    EXPECT_NE(first, other);
-}
-
-TEST(CrashHash_ThreadStackSectionDoesNotFeedTheHash)
-{
-    // ThreadStacks() deliberately writes unmarked lines: only the faulting
-    // thread's stack may decide which issue a crash is deduplicated onto.
-    const std::string threadStacksOnly = "*** THREAD STACKS ***\n"
-                                         "\nThread 0x1234\n"
-                                         " Spark::Worker::Wait +0x10\n"
-                                         " Spark::JobSystem::Run +0x20\n";
-    EXPECT_TRUE(ComputeStackHash(threadStacksOnly).empty());
-}
 
 // =============================================================================
 // utils-08 — no profile path or account name may leave the machine
@@ -259,8 +215,6 @@ TEST(CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot)
     config.captureScreenshot = false; // no swap chain in the test process
     config.captureSystemInfo = false; // no DXGI enumeration
     config.captureAllThreads = false; // no suspending the test runner's threads
-    config.zipBeforeUpload = false;
-    config.enableCrashReporting = false; // never upload from a test
     config.requireConsent = false;
     config.headlessMode = true; // no dialogs
     config.promptUserDescription = false;

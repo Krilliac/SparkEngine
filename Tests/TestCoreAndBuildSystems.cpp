@@ -453,10 +453,10 @@ TEST(CrashConfig_DefaultConstruction)
     EXPECT_TRUE(cfg.captureScreenshot);
     EXPECT_TRUE(cfg.captureSystemInfo);
     EXPECT_TRUE(cfg.captureAllThreads);
-    EXPECT_TRUE(cfg.zipBeforeUpload);
+    EXPECT_FALSE(cfg.captureFullMemoryDump);
     EXPECT_FALSE(cfg.triggerCrashOnAssert);
-    EXPECT_EQ(cfg.connectTimeoutSeconds, 5);
-    EXPECT_TRUE(cfg.uploadURL.empty());
+    EXPECT_TRUE(cfg.requireConsent);
+    EXPECT_FALSE(cfg.headlessMode);
 }
 
 TEST(CrashHandler_SetAssertBehavior)
@@ -472,9 +472,9 @@ TEST(CrashConfig_CustomSettings)
     cfg.dumpPrefix = L"TestDump";
     cfg.captureScreenshot = false;
     cfg.triggerCrashOnAssert = true;
-    cfg.connectTimeoutSeconds = 10;
+    cfg.headlessMode = true;
 
     EXPECT_FALSE(cfg.captureScreenshot);
     EXPECT_TRUE(cfg.triggerCrashOnAssert);
-    EXPECT_EQ(cfg.connectTimeoutSeconds, 10);
+    EXPECT_TRUE(cfg.headlessMode);
 }

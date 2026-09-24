@@ -44,13 +44,6 @@ namespace Spark::CrashHandlerDetail
         return pendingCount < kMaxPendingCrashManifests;
     }
 
-
-    /** @brief A read-only reporter is useful only when the engine will not upload and can show UI. */
-    inline bool ShouldLaunchReadOnlyReporter(bool enableCrashReporting, bool headlessMode)
-    {
-        return !enableCrashReporting && !headlessMode;
-    }
-
     /** @brief Validate the fixed-width lowercase hexadecimal report identifier. */
     inline bool IsCrashReportId(std::string_view reportId)
     {
@@ -100,20 +93,6 @@ namespace Spark::CrashHandlerDetail
 #else
         return path.string();
 #endif
-    }
-
-    /**
-     * @brief Permit full-memory capture only when no automatic transport is configured.
-     *
-     * Endpoint paths can themselves be bearer capabilities even without URL
-     * user-info, queries, or fragments. Because a full dump retains the entire
-     * crash configuration, keep it local rather than attempting to infer which
-     * transport URLs contain reusable authority.
-     */
-    inline bool CanCaptureFullMemoryDump(bool requested, std::string_view githubToken, std::string_view smtpPassword,
-                                         std::string_view uploadURL, std::string_view proxyURL)
-    {
-        return requested && githubToken.empty() && smtpPassword.empty() && uploadURL.empty() && proxyURL.empty();
     }
 
     /**

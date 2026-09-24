@@ -498,8 +498,9 @@ int g_windowHeightOverride = 0;
 /**
  * @brief Configure and install the crash handler from EngineSettings + env vars.
  *
- * Settings are read from [CrashReporting] in settings.ini, with env var overrides:
- *   SPARK_GITHUB_REPO, SPARK_GITHUB_TOKEN, SPARK_CRASH_PROXY_URL, SPARK_CRASH_UPLOAD_URL
+ * Settings are read from [CrashReporting] in settings.ini. Environment overrides:
+ *   SPARK_CRASH_ON_ASSERT=1, SPARK_CRASH_HEADLESS=1, and CI detection (headless).
+ * Crash reports stay local; no transport endpoint or credential is accepted.
  */
 void SetupCrashHandler()
 {
@@ -510,55 +511,17 @@ void SetupCrashHandler()
     crashCfg.captureScreenshot = cr.captureScreenshot;
     crashCfg.captureSystemInfo = cr.captureSystemInfo;
     crashCfg.captureAllThreads = cr.captureAllThreads;
-    crashCfg.zipBeforeUpload = true;
     // Off by default: a surviving developer assertion should not manufacture a
     // crash report. SPARK_CRASH_ON_ASSERT=1 opts a run in, which is what the
     // release-assert and freeze-watchdog gates need so a fatal VERIFY or a
     // watchdog kill leaves a dump behind instead of only a log line.
     const char* envAssertCrash = std::getenv("SPARK_CRASH_ON_ASSERT");
     crashCfg.triggerCrashOnAssert = envAssertCrash != nullptr && std::string_view(envAssertCrash) == "1";
-    crashCfg.connectTimeoutSeconds = cr.timeoutSeconds;
-    crashCfg.enableCrashReporting = cr.enabled;
     crashCfg.requireConsent = cr.requireConsent;
     crashCfg.headlessMode = cr.headlessMode;
     crashCfg.promptUserDescription = cr.promptUserDescription;
     crashCfg.allowScreenshotRefusal = cr.allowScreenshotRefusal;
-    crashCfg.githubLabels = cr.githubLabels;
-    crashCfg.githubAttachDump = cr.attachDump;
-    crashCfg.smtpUser = cr.smtpUser;
-    crashCfg.smtpPass = cr.smtpPass;
-    crashCfg.emailTo = cr.emailTo;
-    crashCfg.emailFrom = cr.emailFrom;
 
-    // Settings file / local override values
-    crashCfg.uploadURL = cr.uploadURL;
-    crashCfg.proxyURL = cr.proxyURL;
-    crashCfg.githubRepo = cr.githubRepo;
-    crashCfg.githubToken = cr.githubToken;
-
-    // Env var overrides (take precedence over settings file / local override)
-    const char* envRepo = std::getenv("SPARK_GITHUB_REPO");
-    const char* envToken = std::getenv("SPARK_GITHUB_TOKEN");
-    if (envRepo && envToken)
-    {
-        crashCfg.githubRepo = envRepo;
-        crashCfg.githubToken = envToken;
-    }
-    const char* envProxy = std::getenv("SPARK_CRASH_PROXY_URL");
-    if (envProxy)
-        crashCfg.proxyURL = envProxy;
-    const char* envUpload = std::getenv("SPARK_CRASH_UPLOAD_URL");
-    if (envUpload)
-        crashCfg.uploadURL = envUpload;
-    const char* envSmtpUser = std::getenv("SPARK_SMTP_USER");
-    if (envSmtpUser)
-        crashCfg.smtpUser = envSmtpUser;
-    const char* envSmtpPass = std::getenv("SPARK_SMTP_PASS");
-    if (envSmtpPass)
-        crashCfg.smtpPass = envSmtpPass;
-    const char* envEmailTo = std::getenv("SPARK_CRASH_EMAIL_TO");
-    if (envEmailTo)
-        crashCfg.emailTo = envEmailTo;
     const char* envHeadless = std::getenv("SPARK_CRASH_HEADLESS");
     if (envHeadless && std::string(envHeadless) == "1")
         crashCfg.headlessMode = true;

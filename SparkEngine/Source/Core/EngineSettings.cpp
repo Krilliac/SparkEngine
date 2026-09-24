@@ -9,12 +9,15 @@
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 #include <system_error>
 
 // ============================================================================
@@ -372,20 +375,9 @@ SPARK_REFLECT_FIELD(CRS, requireConsent, "RequireConsent")
 SPARK_REFLECT_FIELD(CRS, headlessMode, "HeadlessMode")
 SPARK_REFLECT_FIELD(CRS, promptUserDescription, "PromptUserDescription")
 SPARK_REFLECT_FIELD(CRS, allowScreenshotRefusal, "AllowScreenshotRefusal")
-SPARK_REFLECT_FIELD(CRS, uploadURL, "UploadURL")
-SPARK_REFLECT_FIELD(CRS, proxyURL, "ProxyURL")
-SPARK_REFLECT_FIELD(CRS, githubRepo, "GithubRepo")
-SPARK_REFLECT_FIELD(CRS, githubToken, "GithubToken")
-SPARK_REFLECT_FIELD(CRS, githubLabels, "GithubLabels")
-SPARK_REFLECT_FIELD(CRS, attachDump, "AttachDump")
 SPARK_REFLECT_FIELD(CRS, captureScreenshot, "CaptureScreenshot")
 SPARK_REFLECT_FIELD(CRS, captureSystemInfo, "CaptureSystemInfo")
 SPARK_REFLECT_FIELD(CRS, captureAllThreads, "CaptureAllThreads")
-SPARK_REFLECT_FIELD(CRS, timeoutSeconds, "TimeoutSeconds")
-SPARK_REFLECT_FIELD(CRS, smtpUser, "SmtpUser")
-SPARK_REFLECT_FIELD(CRS, smtpPass, "SmtpPass")
-SPARK_REFLECT_FIELD(CRS, emailTo, "EmailTo")
-SPARK_REFLECT_FIELD(CRS, emailFrom, "EmailFrom")
 SPARK_REFLECT_END(CRS)
 
 using WthS = EngineSettings::WeatherSettings;
@@ -685,6 +677,37 @@ namespace
             default:
                 break;
             }
+        }
+    }
+
+    /**
+     * Drop [CrashReporting] keys left over from the removed in-process crash uploader.
+     *
+     * They held reusable credentials (GitHub PAT, SMTP password) and capability URLs.
+     * Nothing reads them any more, but ConfigParser keeps unknown keys, so without this
+     * a later Save() would copy a secret from settings.local.ini into settings.ini.
+     * Matching ignores letter case because shipped files spelled them "GitHubToken"
+     * while the reflection layer used "GithubToken".
+     */
+    void RemoveRetiredCrashTransportKeys(Spark::ConfigParser& cfg)
+    {
+        static constexpr std::array<std::string_view, 11> kRetiredKeys = {
+            "uploadurl",      "proxyurl", "githubrepo", "githubtoken", "githublabels", "attachdump",
+            "timeoutseconds", "smtpuser", "smtppass",   "emailto",     "emailfrom"};
+
+        const std::string section = "CrashReporting";
+        for (const std::string& key : cfg.GetKeys(section))
+        {
+            const std::string lowered = Spark::StringUtils::ToLower(key);
+            if (std::find(kRetiredKeys.begin(), kRetiredKeys.end(), lowered) == kRetiredKeys.end())
+                continue;
+
+            // Name the key, never the value.
+            if (!cfg.GetString(section, key, "").empty())
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "Ignoring retired [CrashReporting] %s: the engine no longer uploads crash reports",
+                               key.c_str());
+            cfg.RemoveKey(section, key);
         }
     }
 
@@ -1128,6 +1151,7 @@ bool EngineSettings::Load(const std::string& path)
             }
         }
 
+        RemoveRetiredCrashTransportKeys(staged.m_config);
         staged.ReadFromConfig();
     }
     else

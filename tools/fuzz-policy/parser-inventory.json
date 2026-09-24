@@ -2885,20 +2885,6 @@
       "expires": "2027-02-24"
     },
     {
-      "source_file": "SparkEngine/Source/Utils/CrashReportUploader.cpp",
-      "reason": "Detected by getline-loop, json-string-scrape, parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Utils/CrashReportUploader.h",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
       "source_file": "SparkEngine/Source/Utils/FileUtils.h",
       "reason": "Generic read primitive, not itself a grammar; owner must decide helper-exempt vs inventoried boundary.",
       "owner": "sec-120-parser-triage",
