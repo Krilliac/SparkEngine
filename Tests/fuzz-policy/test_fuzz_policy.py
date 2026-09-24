@@ -157,6 +157,7 @@ class PolicyFixture:
                 }
             ],
             "deferred_candidates": [],
+            "exempt_candidates": [],
         }
         self.corpus = {"schema_version": 1, "corpora": []}
         self.write_inventory()
@@ -645,6 +646,142 @@ class TestDeferralPolicy(FixtureTestCase):
         self.fixture.write_inventory()
         with self.assertPolicyError("stale deferred parser candidates: src/Other.cpp"):
             parser_inventory.build_inventory_report(self.root)
+
+
+class TestExemptionPolicy(FixtureTestCase):
+    """OD-21 per-file classifications for detected candidates that are not boundaries."""
+
+    JUSTIFICATION = "Only forwards the path to the inventoried example parser entry point."
+
+    def setUp(self) -> None:
+        super().setUp()
+        (self.root / "src" / "Caller.cpp").write_text("bool ok = LoadFromFile(path);\n", encoding="utf-8")
+
+    def _exempt(self, **overrides) -> None:
+        entry = {
+            "source_file": "src/Caller.cpp",
+            "classification": "delegating-call-site",
+            "justification": self.JUSTIFICATION,
+            "detected_by": ["parse-entry"],
+            "delegates_to": ["example-parser"],
+        }
+        entry.update(overrides)
+        entry = {key: value for key, value in entry.items() if value is not None}
+        self.fixture.inventory["exempt_candidates"] = [entry]
+        self.fixture.write_inventory()
+
+    def test_classified_exemption_is_accepted_and_counted(self) -> None:
+        self._exempt()
+        report = parser_inventory.build_inventory_report(self.root)
+        self.assertEqual(report["exempt_candidate_count"], 1)
+        self.assertEqual(report["exempt_by_classification"]["delegating-call-site"], 1)
+        self.assertEqual(report["unclassified_candidate_count"], 0)
+
+    def test_every_od21_classification_is_reported(self) -> None:
+        self._exempt(classification="helper", delegates_to=None)
+        report = parser_inventory.build_inventory_report(self.root)
+        self.assertEqual(sorted(report["exempt_by_classification"]), sorted(parser_inventory.EXEMPT_CLASSIFICATIONS))
+        self.assertEqual(report["exempt_by_classification"]["helper"], 1)
+
+    def test_unknown_classification_is_rejected(self) -> None:
+        self._exempt(classification="trusted", delegates_to=None)
+        with self.assertPolicyError("is not an OD-21 classification"):
+            self.fixture.load()
+
+    def test_boilerplate_justification_is_rejected(self) -> None:
+        self._exempt(justification="fine")
+        with self.assertPolicyError("must explain the classification"):
+            self.fixture.load()
+
+    def test_delegation_must_name_its_parser(self) -> None:
+        self._exempt(delegates_to=None)
+        with self.assertPolicyError("delegates_to is required for a delegating-call-site"):
+            self.fixture.load()
+
+    def test_delegation_to_an_unknown_parser_is_rejected(self) -> None:
+        self._exempt(delegates_to=["ghost-parser"])
+        with self.assertPolicyError("unknown: ghost-parser"):
+            self.fixture.load()
+
+    def test_delegation_may_name_an_excluded_subtree(self) -> None:
+        (self.root / "src" / "net").mkdir()
+        (self.root / "src" / "net" / "Wire.cpp").write_text("json::parse(x);\n", encoding="utf-8")
+        self.fixture.inventory["scope"]["excluded_subtrees"] = [
+            {
+                "path": "src/net",
+                "reason": "Packet campaign owned by NET-100.",
+                "ticket": "NET-100",
+                "owner": "net-100-protocol-campaign",
+                "expires": FUTURE,
+                "hidden_candidate_count": 1,
+            }
+        ]
+        self._exempt(delegates_to=["src/net"])
+        report = parser_inventory.build_inventory_report(self.root)
+        self.assertEqual(report["exempt_candidate_count"], 1)
+
+    def test_delegates_to_is_forbidden_on_other_classifications(self) -> None:
+        self._exempt(classification="not-a-parser")
+        with self.assertPolicyError("delegates_to is only allowed for a delegating-call-site"):
+            self.fixture.load()
+
+    def test_unknown_detector_name_is_rejected(self) -> None:
+        self._exempt(detected_by=["made-up"])
+        with self.assertPolicyError("names unknown detectors: made-up"):
+            self.fixture.load()
+
+    def test_new_detector_hit_reopens_the_review(self) -> None:
+        self._exempt()
+        (self.root / "src" / "Caller.cpp").write_text(
+            "bool ok = LoadFromFile(path);\nauto doc = json::parse(text);\n", encoding="utf-8"
+        )
+        with self.assertPolicyError("was reviewed against detectors .* re-review it"):
+            parser_inventory.build_inventory_report(self.root)
+
+    def test_stale_exemption_fails_closed(self) -> None:
+        self._exempt()
+        (self.root / "src" / "Caller.cpp").write_text("int nothing = 0;\n", encoding="utf-8")
+        with self.assertPolicyError("stale exempt parser candidates: src/Caller.cpp"):
+            parser_inventory.build_inventory_report(self.root)
+
+    def test_exemption_cannot_also_be_an_inventoried_parser(self) -> None:
+        self._exempt(source_file="src/ExampleParser.cpp", classification="helper", delegates_to=None)
+        with self.assertPolicyError("exempt sources cannot also be inventoried as a parser"):
+            self.fixture.load()
+
+    def test_exemption_cannot_also_be_deferred(self) -> None:
+        self._exempt()
+        self.fixture.inventory["deferred_candidates"] = [
+            {
+                "source_file": "src/Caller.cpp",
+                "reason": "Detected by parse-entry; awaiting classification.",
+                "owner": "sec-120-parser-triage",
+                "ticket": "SEC-120",
+                "expires": FUTURE,
+            }
+        ]
+        self.fixture.write_inventory()
+        with self.assertPolicyError("exempt sources cannot also be deferred"):
+            self.fixture.load()
+
+    def test_duplicate_exemptions_are_rejected(self) -> None:
+        self._exempt()
+        self.fixture.inventory["exempt_candidates"].append(dict(self.fixture.inventory["exempt_candidates"][0]))
+        self.fixture.write_inventory()
+        with self.assertPolicyError("exempt_candidates contains duplicate source files"):
+            self.fixture.load()
+
+    def test_exemption_list_is_mandatory(self) -> None:
+        self.fixture.inventory.pop("exempt_candidates")
+        self.fixture.write_inventory()
+        with self.assertPolicyError("inventory is missing keys: exempt_candidates"):
+            self.fixture.load()
+
+    def test_network_and_ipc_boundaries_are_inventoried_parsers(self) -> None:
+        for boundary in ("untrusted-network", "untrusted-ipc"):
+            self.fixture.inventory["parsers"][0]["trust_boundary"] = boundary
+            self.fixture.write_inventory()
+            self.assertEqual(self.fixture.load().parsers[0].trust_boundary, boundary)
 
 
 # =========================================================================
@@ -1596,12 +1733,36 @@ class TestRepositoryIntegration(unittest.TestCase):
 
     def test_every_deferral_names_an_owner_and_expiry(self) -> None:
         inventory = parser_inventory.load_inventory(REPO_ROOT)
-        self.assertGreater(len(inventory.deferred_candidates), 0)
         for deferral in inventory.deferred_candidates:
             self.assertEqual(deferral.owner, parser_inventory.DEFERRAL_OWNER)
             self.assertEqual(deferral.ticket, parser_inventory.DEFERRAL_TICKET)
             self.assertGreater(deferral.expires, TODAY)
             self.assertGreater(len(deferral.reason), 20)
+
+    def test_od21_exemptions_are_classified_per_file(self) -> None:
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        self.assertGreater(len(inventory.exempt_candidates), 0)
+        parser_ids = {parser.parser_id for parser in inventory.parsers}
+        for exemption in inventory.exempt_candidates:
+            self.assertIn(exemption.classification, parser_inventory.EXEMPT_CLASSIFICATIONS)
+            self.assertGreaterEqual(len(exemption.justification), parser_inventory.MIN_EXEMPT_JUSTIFICATION)
+            for target in exemption.delegates_to:
+                self.assertTrue(
+                    target in parser_ids or any(target == ex.path for ex in inventory.scope.excluded_subtrees),
+                    f"{exemption.source_file} delegates to unknown {target}",
+                )
+
+    def test_od21_network_parsers_stay_boundaries(self) -> None:
+        # OD-21 rule (1): network and IPC decoders are fuzz-target boundaries,
+        # never exemptions.
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        boundaries = {parser.parser_id: parser.trust_boundary for parser in inventory.parsers}
+        self.assertEqual(boundaries["tf-lan-discovery-beacon"], "untrusted-network")
+        self.assertEqual(boundaries["editor-collab-session-wire"], "untrusted-network")
+        self.assertEqual(boundaries["editor-engine-ipc-events"], "untrusted-ipc")
+        exempt = {exemption.source_file for exemption in inventory.exempt_candidates}
+        self.assertNotIn("SparkEditor/Source/Communication/CollaborativeEditSession.cpp", exempt)
+        self.assertNotIn("GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp", exempt)
 
     def test_ci_and_cmake_are_blocking_wired(self) -> None:
         check_fuzz_policy.validate_ci_and_cmake_binding(REPO_ROOT, fuzz_target_count=0)

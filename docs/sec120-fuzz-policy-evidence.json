@@ -21,6 +21,7 @@
     "Scan-root coverage is enforced against the repository: every first-party Spark*/GameModules source tree present on disk must be a declared root, and the extension set may not be narrowed.",
     "Exclusions require an approved ticket, its approved owner, an expiry inside 365 days, and an exact count of the candidates they hide; overlapping, whole-root, case-aliased, expired, stale, and newly-absorbing exclusions are rejected. Single-file exclusions additionally pin a sha256 of the reviewed content.",
     "Deferrals are per-file and carry a reason, the SEC-120 owner, and an expiry; a deferral that no longer matches a detected candidate is rejected as stale.",
+    "OD-21 classification is enforced per file: every detected candidate is an inventoried parser (trust boundary untrusted-file, untrusted-network, or untrusted-ipc), a dated SEC-120 deferral, or an exemption with one of five fixed classifications (same-process-data, developer-tooling, helper, delegating-call-site, not-a-parser) and a written justification. A delegating-call-site must name an inventoried parser or excluded subtree, and each exemption pins the exact detector hits that were reviewed, so a new kind of parsing added to an exempt file fails the gate until it is re-reviewed.",
     "A fuzzed parser must bind a CMake target declared by add_executable, reachable from the root listfile via add_subdirectory, instrumented with -fsanitize=fuzzer, registered as a CTest entry point that invokes that target, passing the corpus directory and exact -max_len/-timeout/-rss_limit_mb values, with a matching CTest TIMEOUT and a fuzz label. CMake and C++ are tokenized, so comments and string literals cannot satisfy any of it.",
     "A harness must define LLVMFuzzerTestOneInput(const uint8_t*, size_t) with a body, include a header, define and use SPARK_FUZZ_MAX_DEPTH and SPARK_FUZZ_MAX_INPUT_BYTES at the declared budget values, compare its input size against the input bound, and call its declared harness entry. A C-ABI adapter may be declared separately; in that case the adapter source must also call the production entry symbol in the parser's own inventoried sources.",
     "Corpus seeds are opened and read, not merely stat-ed, and a corpus content digest pins last_verified to exact seed bytes.",
@@ -29,16 +30,15 @@
   ],
   "what_this_gate_does_not_prove": [
     "It is a structural contract check. It is not runtime parser safety, fuzz coverage, or crash-freedom evidence.",
-    "json-utils, neural-weights-nnw, and crash-manifest-parser have production-bound libFuzzer harnesses: fuzzed_count is 3 and 102 of the 105 inventoried parsers remain blocked.",
-    "Three bounded seed corpora and runtime resource budgets are structurally bound to those parsers: corpus_count is 3; this is not runtime fuzz evidence.",
+    "json-utils, crash-manifest-parser, texture-stex-compressor, and neural-weights-nnw have production-bound libFuzzer harnesses: fuzzed_count is 4 and 131 of the 135 inventoried parsers remain blocked.",
+    "The OD-21 triage on 2026-09-24 classified all 149 previously deferred candidates by reading each file: 28 new blocked parser records (including network and IPC decoders), 3 files added to existing blocked records, and 115 per-file exemptions. The exemptions are a reviewed human judgement recorded in tools/fuzz-policy/parser-inventory.json, not a proof that those files are unreachable from untrusted input; the gate only proves each one is classified, justified, and still matches the detector hits that were reviewed.",
+    "Four bounded seed corpora and runtime resource budgets are structurally bound to those parsers: corpus_count is 4; this is not runtime fuzz evidence.",
     "json-utils is structurally wired for an active ASan/UBSan smoke, neural-weights-nnw for bounded reviewed-seed replay, and crash-manifest-parser for bounded reviewed-seed replay; no exact-SHA hosted result or scheduled mutation campaign has been recorded yet.",
-    "151 detected candidates are deferred with owner sec-120-parser-triage and expiry 2027-02-24; they are recorded, not classified.",
-    "The full inventory report records 27 inventoried source files not matched by any detector pattern: human review found them, the regexes would not have.",
+    "The full inventory report records 28 inventoried source files not matched by any detector pattern: human review found them, the regexes would not have.",
     "Production entry-point behaviour has not been proven safe for malformed input across the remaining parser inventory."
   ],
   "closure_blockers": [
-    "102 inventoried parsers have no fuzz target",
-    "151 detected candidates await classification"
+    "131 inventoried parsers have no fuzz target"
   ],
   "scope_boundaries": {
     "network": "NET-100 behind G12",
@@ -49,9 +49,8 @@
     "GameModules/SparkGameVisualScript (ENG-200) hid zero parser candidates on 2026-08-28 and was removed as stale breadth."
   ],
   "not_completed": [
-    "102 inventoried parsers still have no libFuzzer/AFL harness.",
+    "131 inventoried parsers still have no libFuzzer/AFL harness, including the 28 boundaries recorded by the OD-21 triage.",
     "The json-utils, neural-weights-nnw, and crash-manifest-parser corpora are structurally bound, but their exact-SHA hosted sanitizer smoke has not yet run.",
-    "The 151-file detected candidate backlog still requires manual classification.",
     "Exact-SHA ASan/UBSan smoke evidence and scheduled campaigns have not been recorded.",
     "Production entry-point behaviour has not been proven safe for malformed input across the remaining parser inventory."
   ]

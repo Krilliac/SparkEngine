@@ -824,7 +824,8 @@
       "description": "Editor JSON scene reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"
+        "SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp",
+        "SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp"
       ],
       "formats": [
         ".scene",
@@ -910,7 +911,8 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Core/ModuleManager.cpp",
-        "SparkEngine/Source/Core/ModuleManager.h"
+        "SparkEngine/Source/Core/ModuleManager.h",
+        "SparkSDK/Include/Spark/ModuleABI.h"
       ],
       "formats": [
         ".sparkabi",
@@ -1518,7 +1520,8 @@
       "description": "TerraFront game data-table JSON loader (lenient parse).",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.cpp"
+        "GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.cpp",
+        "GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesParseRoster.cpp"
       ],
       "formats": [
         ".json"
@@ -1901,1051 +1904,1611 @@
         "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
         "ticket": "SEC-120"
       }
-    }
-  ],
-  "deferred_candidates": [
-    {
-      "source_file": "GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.cpp",
-      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
     },
     {
+      "id": "arpg-demo-save-state",
+      "description": "SparkGameARPG demo encounter state restored from the SparkGameARPG.demo.v1 custom-state entry of a save slot read from disk.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameARPG/Source/Demo/ARPGDemoEncounter.cpp"
+      ],
+      "formats": [
+        "save-custom-state"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "rpg-demo-save-state",
+      "description": "SparkGameRPG demo session state restored from the custom-state text of a save slot read from disk.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp"
+      ],
+      "formats": [
+        "save-custom-state"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "fps-multiplayer-player-state",
+      "description": "SparkGameFPS NetworkPlayerState/PlayerInput wire decoders over peer-supplied packet bytes.",
+      "trust_boundary": "untrusted-network",
+      "source_files": [
+        "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h"
+      ],
+      "formats": [
+        "packet"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "mmo-character-record",
+      "description": "SparkGameMMO pipe-delimited character record decoded from the persisted AsyncDatabase key-value store.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+      ],
+      "formats": [
+        "database-row"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-lan-discovery-beacon",
+      "description": "Terrafront LAN discovery beacon decoded from UDP datagrams any host on the LAN can send.",
+      "trust_boundary": "untrusted-network",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp"
+      ],
+      "formats": [
+        "udp-beacon"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-progression-save",
+      "description": "Terrafront progression section interpreted from the continent-qualified terrafront_state JSON save, including legacy-file migration.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemPersist.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-world-collision-scene",
+      "description": "Terrafront world-collision INI .scene reader (sections, key=value, float triples).",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.cpp"
+      ],
+      "formats": [
+        ".scene"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "tf-world-setup-terrain-params",
+      "description": "Terrafront terrain-parameter reader over the INI .scene file named by the world setup.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.cpp"
+      ],
+      "formats": [
+        ".scene"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "ow-save-snapshot",
+      "description": "SparkGameOpenWorld save snapshot text decoder and validator for save files read from disk.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl"
+      ],
+      "formats": [
+        "save-custom-state"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "rts-save-snapshot",
+      "description": "SparkGameRTS persistence snapshot text decoder for save custom state read from disk.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameRTS/Source/Core/RTSPersistence.h"
+      ],
+      "formats": [
+        "save-custom-state"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "racing-save-snapshot",
+      "description": "SparkGameRacing persistence snapshot text decoder for save custom state read from disk.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "GameModules/SparkGameRacing/Source/Core/RacingPersistence.h"
+      ],
+      "formats": [
+        "save-custom-state"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "sparkbuild-archive-download",
+      "description": "SparkBuild HTTP(S) download plus zip/tar.gz extraction of the downloaded archive (Shell CopyHere on Windows, unzip/tar elsewhere).",
+      "trust_boundary": "untrusted-network",
+      "source_files": [
+        "SparkBuild/src/Downloader.cpp"
+      ],
+      "formats": [
+        ".zip",
+        ".tar.gz"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-collab-session-wire",
+      "description": "Collaborative edit session TCP frame decoder (DeserializeMessage) including broker presence and edit payloads.",
+      "trust_boundary": "untrusted-network",
+      "source_files": [
+        "SparkEditor/Source/Communication/CollaborativeEditSession.cpp",
+        "SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp"
+      ],
+      "formats": [
+        "tcp-frame"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-engine-ipc-events",
+      "description": "Editor-side EngineEvent decoder over bytes read from the engine named pipe, which any local process can connect to.",
+      "trust_boundary": "untrusted-ipc",
+      "source_files": [
+        "SparkEditor/Source/Communication/EngineInterface.cpp"
+      ],
+      "formats": [
+        "named-pipe-frame"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-project-file",
+      "description": "Hand-rolled JSON field scrape of .sparkproject files and the recent-projects list opened by the editor.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Core/ProjectManager.cpp"
+      ],
+      "formats": [
+        ".sparkproject",
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-engine-command-response",
+      "description": "key:value engine command response parser (SparkEngineIntegration::ParseResponse); it has no production caller today, so deleting it is an alternative to a harness.",
+      "trust_boundary": "untrusted-ipc",
+      "source_files": [
+        "SparkEditor/Source/Integration/SparkEngineIntegration.cpp"
+      ],
+      "formats": [
+        "command-response"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-dedicated-server-health",
+      "description": "Health JSON file written by a SparkServer child process, slurped by the process controller and field-scraped by the dedicated-server panel.",
+      "trust_boundary": "untrusted-ipc",
+      "source_files": [
+        "SparkEditor/Source/Panels/DedicatedServerProcessController.cpp",
+        "SparkEditor/Source/Panels/DedicatedServerPanel.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-scene-ini-import",
+      "description": "Scene Import panel reader for game INI .scene files (sections, key=value, strtof float triples).",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Panels/SceneImportPanel.cpp"
+      ],
+      "formats": [
+        ".scene"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-visual-script-graph",
+      "description": "Visual-script graph loader that scrapes a hand-written JSON dialect with find/atoi offsets.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Panels/VisualScriptPanel.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-scene-load-dispatch",
+      "description": "Editor scene load entry: extension/magic sniffing and SceneFile::Validate over the decoded, file-derived scene model.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/SceneSystem/SceneSerializer.cpp",
+        "SparkEditor/Source/SceneSystem/SceneFile.cpp"
+      ],
+      "formats": [
+        ".scene",
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-vcs-gitignore",
+      "description": "Line reader for the .gitignore of the repository the editor has open (repository content is attacker-controllable in a cloned project).",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/VersionControl/VersionControlConflicts.cpp"
+      ],
+      "formats": [
+        ".gitignore"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "editor-vcs-git-output",
+      "description": "Parsers for git porcelain/log output whose file names, branch names, and messages come from repository content.",
+      "trust_boundary": "untrusted-ipc",
+      "source_files": [
+        "SparkEditor/Source/VersionControl/VersionControlHelpers.cpp"
+      ],
+      "formats": [
+        "git-porcelain"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "reflection-binary-codec",
+      "description": "Reflection tag-length-value binary field decoder (DeserializeFromBinary/Properties); no production caller today.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Core/ReflectionSerializer.h"
+      ],
+      "formats": [
+        "binary-blob"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "game-model-obj",
+      "description": "Game Model::LoadObj Wavefront loader built on tinyobjloader (Windows and non-Windows variants).",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Game/Model.cpp"
+      ],
+      "formats": [
+        ".obj"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "mesh-obj-tinyobj",
+      "description": "Graphics Mesh::LoadFromFile Wavefront loader built on tinyobjloader (MeshLinux and MeshWindows).",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/MeshLinux.cpp",
+        "SparkEngine/Source/Graphics/MeshWindows.cpp"
+      ],
+      "formats": [
+        ".obj"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "asset-media-linux",
+      "description": "Linux AssetPipeline TextureAsset stb_image decode and AudioAsset raw read (twin of asset-media-windows).",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/AssetTypesLinuxMedia.cpp"
+      ],
+      "formats": [
+        ".png",
+        ".jpg",
+        ".tga",
+        ".bmp",
+        ".hdr",
+        ".wav"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "pbr-material-file",
+      "description": "Windows Material::LoadFromFile line-oriented material description reader (stof/stoi fields, texture paths, defines).",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/PBRMaterialLightingWindows.cpp"
+      ],
+      "formats": [
+        ".mat"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "benchmark-baseline-json",
+      "description": "BenchmarkFramework baseline reader: hand-rolled JSON line scrape of a baseline file named at runtime through the shipped benchmark console commands.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Utils/BenchmarkFrameworkBaseline.cpp"
+      ],
+      "formats": [
+        ".json"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "ticket": "SEC-120"
+      }
+    }
+  ],
+  "deferred_candidates": [],
+  "exempt_candidates": [
+    {
       "source_file": "GameModules/SparkGameFPS/Source/Core/Main.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Console commands scene_load and replay_load only pass a path to Game::LoadScene (engine SceneManager) and ReplaySystem::LoadFromFile; the file decodes no scene or replay bytes itself.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "scene-serializer",
+        "replay-system"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameFPS/Source/Game/Game.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Loads Scenes/level1.scene through SceneManager::LoadScene; ParseAuthoredFiniteFloat only converts one already-decoded scene property string to a finite float.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "scene-serializer"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameFPS/Source/Game/Game.h",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares Game::LoadScene, a wrapper that resolves a trusted scene path and forwards to the engine SceneManager parser.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "scene-serializer"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Game::LoadScene resolves the path inside FPS Assets/Scenes and forwards to SceneManager::LoadScene; no bytes are decoded here.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "scene-serializer"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameFPS/Source/Game/ModelObject.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Calls Model::LoadObj with the object's model path; OBJ decoding happens in the inventoried Model loader.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "game-model-obj"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameFPS/Source/Game/Player.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Loads weapon models through Model::LoadObj; OBJ decoding happens in the inventoried Model loader.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "game-model-obj"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesParseRoster.cpp",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "The EntityStateUpdate handler copies the packet payload into a NetBuffer and calls NetworkManager::DeserializeEntityState, which lives in the NET-100 networking subtree.",
+      "detected_by": [
+        "deserialize"
+      ],
+      "delegates_to": [
+        "SparkEngine/Source/Engine/Networking"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.cpp",
-      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "not-a-parser",
+      "justification": "Beacon sender only: fills and sends the TF_LanBeacon struct (out.magic = kTFLanBeaconMagic). Received beacons are decoded in the inventoried TFLanDiscoveryScan.cpp.",
+      "detected_by": [
+        "binary-magic-compare"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.h",
-      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp",
-      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "not-a-parser",
+      "justification": "Declares the TF_LanBeacon struct and magic constant; decoding of received datagrams is the inventoried TFLanDiscoveryScan.cpp.",
+      "detected_by": [
+        "binary-magic-compare"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Initialize() calls LoadFromDisk(), implemented and inventoried in TFProgressionSystemPersist.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "tf-progression-save"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemPersist.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares TFProgressionSystem::LoadFromDisk, implemented in the inventoried TFProgressionSystemPersist.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "tf-progression-save"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares TFDatabase::LoadFromDisk, implemented in the inventoried TFDatabase.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "tf-account-database"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Calls LoadFromDisk(), implemented and inventoried in TFOutfitStoreDisk.cpp; this file decodes no stored bytes.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "tf-outfit-store"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares TFOutfitStore::LoadFromDisk, implemented in the inventoried TFOutfitStoreDisk.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "tf-outfit-store"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFDayNight.cpp",
-      "reason": "Detected by scanf-parse; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "not-a-parser",
+      "justification": "The only match is sscanf(\"%d:%d\") on an operator-typed console argument for setting the clock, range-checked afterwards; no file, package, or network bytes are decoded.",
+      "detected_by": [
+        "scanf-parse"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFRegionDecor.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares TFRegionDecor::LoadTemplates, implemented in the inventoried TFRegionDecorData.cpp (decor.json).",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "tf-region-decor-data"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFRegionDecorLayout.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.cpp",
-      "reason": "Detected by getline-loop, parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Calls LoadTemplates(), implemented in the inventoried TFRegionDecorData.cpp; layout code consumes the decoded templates only.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "tf-region-decor-data"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.h",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.cpp",
-      "reason": "Detected by getline-loop, load-format-entry, parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares TFWorldCollision::ParseScene, implemented in the inventoried TFWorldCollision.cpp.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "tf-world-collision-scene"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares TFWorldSetup::ParseTerrainParams, implemented in the inventoried TFWorldSetup.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "tf-world-setup-terrain-params"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.h",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares OWEngineSystems::DeserializeSnapshot, implemented in the inventoried OWPersistence.inl.",
+      "detected_by": [
+        "deserialize"
+      ],
+      "delegates_to": [
+        "ow-save-snapshot"
+      ]
     },
     {
       "source_file": "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp",
-      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Loads Replays/platformer_best.replay through ReplaySystem::LoadFromFile; replay decoding is the inventoried replay-system parser.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "replay-system"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameRTS/Source/Core/RTSPersistence.h",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Passes the save custom-state string to RTSPersistence::Deserialize, the inventoried decoder in RTSPersistence.h.",
+      "detected_by": [
+        "deserialize"
+      ],
+      "delegates_to": [
+        "rts-save-snapshot"
+      ]
     },
     {
       "source_file": "GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp",
-      "reason": "Detected by deserialize, parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "GameModules/SparkGameRacing/Source/Core/RacingPersistence.h",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Passes save custom state to RacingPersistence::Deserialize and ghost paths to ReplaySystem::LoadFromFile; both decoders are inventoried.",
+      "detected_by": [
+        "deserialize",
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "racing-save-snapshot",
+        "replay-system"
+      ]
     },
     {
       "source_file": "SparkAutomation/src/main.cpp",
-      "reason": "Detected by stream-slurp; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "not-a-parser",
+      "justification": "QA harness that substring-searches the captured log of the engine child it launched and reads kernel-owned /proc/<pid>/stat; it extracts no fields from any user, mod, or network input.",
+      "detected_by": [
+        "stream-slurp"
+      ]
     },
     {
       "source_file": "SparkBuild/src/DownloadSecurity.cpp",
-      "reason": "Hashes a downloaded archive; the trust boundary is untrusted-network, routed with Downloader.cpp.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkBuild/src/Downloader.cpp",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "helper",
+      "justification": "Streams a file through SHA-256 and compares the digest; it interprets no structure. The downloaded archive itself is the inventoried sparkbuild-archive-download boundary.",
+      "detected_by": [
+        "binary-stream-read"
+      ]
     },
     {
       "source_file": "SparkBuild/src/Downloader.h",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares the Downloader download/extract entry points implemented in the inventoried Downloader.cpp.",
+      "detected_by": [
+        "parser-like-filename"
+      ],
+      "delegates_to": [
+        "sparkbuild-archive-download"
+      ]
     },
     {
       "source_file": "SparkBuild/src/SparkBuild.cpp",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "developer-tooling",
+      "justification": "SparkBuild is the developer build CLI (tools install component, never in a game package); the getline loop only counts lines of `git submodule status` output for a status message.",
+      "detected_by": [
+        "getline-loop"
+      ]
     },
     {
       "source_file": "SparkConsole/src/CommandParser.cpp",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "helper",
+      "justification": "Generic quote-aware whitespace tokenizer for console command lines; each command handler that consumes the tokens is classified on its own.",
+      "detected_by": [
+        "parser-like-filename"
+      ]
     },
     {
       "source_file": "SparkConsole/src/CommandParser.h",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "helper",
+      "justification": "Declares the generic console command-line tokenizer implemented in CommandParser.cpp; no format grammar.",
+      "detected_by": [
+        "parser-like-filename"
+      ]
     },
     {
       "source_file": "SparkCrashReporter/src/main.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "main() passes the manifest path to SparkCrashReporter::LoadManifest, the fuzzed crash-manifest-parser entry.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "crash-manifest-parser"
+      ]
     },
     {
       "source_file": "SparkDaemon/src/CollaborationService.cpp",
-      "reason": "Detected by binary-stream-read; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "not-a-parser",
+      "justification": "The binary read fills a token buffer from the OS random device; no externally supplied format is decoded at that site.",
+      "detected_by": [
+        "binary-stream-read"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Communication/CollaborativeEditSession.cpp",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares AdvancedAssetPipeline::LoadMetadata, implemented in the inventoried AdvancedAssetPipelineUI.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "editor-advanced-asset-metadata",
+        "editor-asset-database-import"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Communication/CollaborativeEditSession.h",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Communication/CollaborativeEditSessionBroker.cpp",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Communication/EngineInterface.cpp",
-      "reason": "Detected by binary-magic-compare, deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares DeserializeMessage and the session socket API implemented in the inventoried CollaborativeEditSession.cpp.",
+      "detected_by": [
+        "deserialize"
+      ],
+      "delegates_to": [
+        "editor-collab-session-wire"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Communication/EngineInterface.h",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares EngineInterface::DeserializeEvent, implemented in the inventoried EngineInterface.cpp.",
+      "detected_by": [
+        "deserialize"
+      ],
+      "delegates_to": [
+        "editor-engine-ipc-events"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Core/EditorUI.cpp",
-      "reason": "Detected by deserialize, stream-slurp; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Core/ProjectManager.cpp",
-      "reason": "Detected by deserialize, json-string-scrape, stream-slurp; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Integration/SparkEngineIntegration.cpp",
-      "reason": "Detected by getline-loop, parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Recovery restore calls DeserializeRecoverySnapshotIntoFreshWorld and world snapshots go through Spark::DeserializeInto (ReflectedSceneSerializer); ImportLayout reads only a filename. Play-mode and undo snapshots it restores were serialized by this same process.",
+      "detected_by": [
+        "deserialize",
+        "stream-slurp"
+      ],
+      "delegates_to": [
+        "scene-serializer",
+        "editor-recovery-snapshot"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Integration/SparkEngineIntegration.h",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares SparkEngineIntegration::ParseResponse (inventoried); LoadScene/LoadAsset only record the path and extension.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "editor-engine-command-response"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Panels/DecorLayoutEditorCanvas.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Calls DecorLayoutEditorPanel::LoadFromDisk, implemented in the inventoried DecorLayoutEditorIO.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "editor-decor-layout-io"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Panels/DecorLayoutEditorPanel.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Panels/DedicatedServerProcessController.cpp",
-      "reason": "Detected by getline-loop, stream-slurp; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares DecorLayoutEditorPanel::LoadFromDisk (DecorLayoutEditorIO.cpp) and the OBJ bounds reader (DecorLayoutEditorPanel.cpp), both inventoried.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "editor-decor-layout-io",
+        "editor-decor-obj-bounds"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Panels/EditorAutomation.h",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "helper",
+      "justification": "RunScript/Tokenize split an in-memory command script into lines and whitespace tokens for registered editor commands; no production caller feeds it a file.",
+      "detected_by": [
+        "getline-loop"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Panels/PlayControlLaunch.cpp",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "not-a-parser",
+      "justification": "Tails the launched game's -exec log for display: splits on newlines, strips CR, caps retained lines; nothing is interpreted.",
+      "detected_by": [
+        "getline-loop"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Panels/RegionMapEditorPanel.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Calls RegionMapEditorPanel::LoadFromDisk, implemented in the inventoried RegionMapEditorIO.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "editor-region-map-io"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Panels/RegionMapEditorPanel.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Panels/SceneImportPanel.cpp",
-      "reason": "Detected by getline-loop, parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Panels/ServiceTopologyController.cpp",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Panels/VisualScriptPanel.cpp",
-      "reason": "Editor-side visual-script graph JSON with unchecked offsets; ownership between SEC-120 and ENG-200 is unresolved.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/SceneSystem/SceneComponentCodec.h",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/SceneSystem/SceneFile.cpp",
-      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/SceneSystem/SceneManager.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/SceneSystem/SceneManager.h",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/SceneSystem/SceneSerializer.cpp",
-      "reason": "Detected by binary-magic-compare, binary-stream-read, parse-entry, parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/SceneSystem/SceneSerializer.h",
-      "reason": "Detected by deserialize, parse-entry, parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Terrain/TerrainEditor.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Terrain/TerrainEditorUI.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/VersionControl/VersionControlConflicts.cpp",
-      "reason": "Reads repo-owned .gitignore text; low-value fuzz target, classify deliberately.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/VersionControl/VersionControlHelpers.cpp",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/Workflow/BuiltinWorkflows.cpp",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEditor/Source/main.cpp",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Audio/AudioEngine.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Audio/OpenALAudioEngine.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Core/FileIntegrity.cpp",
-      "reason": "Detected by binary-stream-read; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Core/GameModuleLoader.cpp",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Core/GameModuleLoader.h",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Core/ReflectionSerializer.h",
-      "reason": "Detected by deserialize, parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Core/SparkEngineLinux.cpp",
-      "reason": "Detected by scanf-parse; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Core/SparkPakWriter.cpp",
-      "reason": "Pack/write path that consumes files without interpreting their structure; cook-side twin of sparkpak-reader.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Animation/AnimationClip.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Animation/AnimationSystem.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Animation/AnimationTypes.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Animation/Skeleton.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp",
-      "reason": "Detected by deserialize, parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializers.h",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializersInternal.h",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializersPhysicsAudio.cpp",
-      "reason": "Detected by deserialize, parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Editor/PlayModeManager.h",
-      "reason": "Detected by deserialize; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h",
-      "reason": "Detected by binary-magic-compare, deserialize, parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Persistence/AsyncDatabase.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Streaming/AreaAssetLoader.cpp",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Streaming/AreaAssetLoader.h",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp",
-      "reason": "Detected by binary-stream-read, parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h",
-      "reason": "Detected by parser-like-filename; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Game/CubeObject.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Game/GameObject.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Game/Model.cpp",
-      "reason": "Detected by load-format-entry, model-codec; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Game/Model.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Game/PlaceholderMesh.h",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Game/PlaneObject.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Game/PyramidObject.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Game/RampObject.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Game/SphereObject.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Game/WallObject.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/AssetPipelineConsoleOps.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/AssetPipelineLinuxStreaming.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/AssetTypesLinux.cpp",
-      "reason": "Detected by load-format-entry, model-codec; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/AssetTypesLinuxMedia.cpp",
-      "reason": "Detected by binary-stream-read, image-codec; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/MaterialConsoleOps.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/MaterialSystem.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/MaterialSystem.h",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/Mesh.h",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/MeshLinux.cpp",
-      "reason": "Detected by load-format-entry, model-codec, parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/MeshTypes.h",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/MeshWindows.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralFunctionApproximator.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.cpp",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralTextureCompressor.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralTextureFormat.h",
-      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/PBRMaterialLightingLinux.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/PBRMaterialLightingWindows.cpp",
-      "reason": "Detected by getline-loop, parse-entry, stream-slurp; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/RHI/RHIFactory.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/RenderCommandRing.h",
-      "reason": "Detected by byte-cursor; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/Shader.h",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/ShaderConsoleOps.cpp",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/TextureCompressor.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/SceneManager/SceneManager.h",
-      "reason": "Detected by parse-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Utils/BenchmarkFramework.h",
-      "reason": "Declares the hand-rolled JSON baseline extractor; classify with BenchmarkFrameworkBaseline.cpp.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Utils/BenchmarkFrameworkBaseline.cpp",
-      "reason": "Hand-rolled JSON baseline parser over dev-tooling input; trust boundary unresolved.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Utils/ColorUtils.h",
-      "reason": "Bounded hex-colour sscanf reachable only via config/scene strings; likely not worth its own record.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Utils/CompressionUtils.cpp",
-      "reason": "Detected by archive-codec; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Utils/CrashHandler.cpp",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Utils/FileUtils.h",
-      "reason": "Generic read primitive, not itself a grammar; owner must decide helper-exempt vs inventoried boundary.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Utils/GoldenImageTest.h",
-      "reason": "Raw image reader with a header-derived size, but it is a test-harness feature compiled into the engine.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Utils/LockFreeRingAllocator.h",
-      "reason": "Detected by byte-cursor; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkEngine/Source/Utils/WineDetection.cpp",
-      "reason": "Detected by getline-loop; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkLauncher/src/LauncherApp.h",
-      "reason": "Detected by load-format-entry; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkSDK/Include/Spark/ModuleABI.h",
-      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
-    },
-    {
-      "source_file": "SparkSDK/Include/Spark/PluginABI.h",
-      "reason": "Detected by binary-magic-compare; awaiting manual trust classification.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "Declares RegionMapEditorPanel::LoadFromDisk, implemented in the inventoried RegionMapEditorIO.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "editor-region-map-io"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Panels/ReplayPanel.cpp",
-      "reason": "The panel selects a replay path but delegates byte decoding to the separately inventoried ReplaySystem parser.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "delegating-call-site",
+      "justification": "The panel selects a replay path and calls ReplaySystem::LoadFromFile; byte decoding is the inventoried replay-system parser.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "replay-system"
+      ]
     },
     {
       "source_file": "SparkEditor/Source/Panels/SceneStatisticsPanel.cpp",
-      "reason": "The Linux-only fscanf reads kernel-owned /proc/self/statm counters, not an engine asset, network payload, or user document.",
-      "owner": "sec-120-parser-triage",
-      "ticket": "SEC-120",
-      "expires": "2027-02-24"
+      "classification": "not-a-parser",
+      "justification": "The Linux-only fscanf reads kernel-owned /proc/self/statm counters, not an engine asset, network payload, or user document.",
+      "detected_by": [
+        "scanf-parse"
+      ]
+    },
+    {
+      "source_file": "SparkEditor/Source/Panels/ServiceTopologyController.cpp",
+      "classification": "not-a-parser",
+      "justification": "Drains child-process stdout and a size-capped health file into display strings; lines are truncated and shown verbatim, no fields are extracted.",
+      "detected_by": [
+        "getline-loop"
+      ]
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneComponentCodec.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares the component field reader interface and codec entry points implemented in the inventoried SceneComponentCodec.cpp.",
+      "detected_by": [
+        "parser-like-filename"
+      ],
+      "delegates_to": [
+        "editor-scene-json"
+      ]
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneManager.cpp",
+      "classification": "delegating-call-site",
+      "justification": "SceneManager::LoadScene forwards to SceneSerializer::LoadScene (inventoried dispatch) and adopts the decoded SceneFile.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "editor-scene-load-dispatch"
+      ]
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneManager.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares SceneManager::LoadScene, which forwards to the inventoried SceneSerializer dispatch.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "editor-scene-load-dispatch"
+      ]
+    },
+    {
+      "source_file": "SparkEditor/Source/SceneSystem/SceneSerializer.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares SceneSerializer::LoadScene/LoadJSON and the binary Deserialize* helpers implemented in the inventoried SceneSerializer.cpp, JSONSceneSerializer.cpp, and BinarySceneSerializer.cpp.",
+      "detected_by": [
+        "deserialize",
+        "parse-entry",
+        "parser-like-filename"
+      ],
+      "delegates_to": [
+        "editor-scene-load-dispatch",
+        "editor-scene-json",
+        "editor-scene-binary"
+      ]
+    },
+    {
+      "source_file": "SparkEditor/Source/Terrain/TerrainEditor.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares TerrainEditor::LoadTerrain, implemented in the inventoried TerrainEditor.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "editor-terrain-file"
+      ]
+    },
+    {
+      "source_file": "SparkEditor/Source/Terrain/TerrainEditorUI.cpp",
+      "classification": "delegating-call-site",
+      "justification": "The Load button passes the typed path to TerrainEditor::LoadTerrain (inventoried TerrainEditor.cpp).",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "editor-terrain-file"
+      ]
+    },
+    {
+      "source_file": "SparkEditor/Source/Workflow/BuiltinWorkflows.cpp",
+      "classification": "not-a-parser",
+      "justification": "LastLines keeps the tail of a child process's output for display; lines are shown verbatim and no fields are extracted.",
+      "detected_by": [
+        "getline-loop"
+      ]
+    },
+    {
+      "source_file": "SparkEditor/Source/main.cpp",
+      "classification": "not-a-parser",
+      "justification": "IsDebuggerAttached reads the TracerPid line of kernel-owned /proc/self/status; no user, mod, or network input is decoded.",
+      "detected_by": [
+        "getline-loop"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Audio/AudioEngine.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Creates a SoundEffect and calls SoundEffect::LoadFromFile, the inventoried audio-sound-effect parser.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "audio-sound-effect"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Audio/OpenALAudioEngine.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares OpenALAudioEngine::LoadWAVFile, implemented in the inventoried OpenALAudioEngine.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "audio-openal-wav"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/FileIntegrity.cpp",
+      "classification": "helper",
+      "justification": "Self-contained streaming SHA-256 over file bytes before native image mapping; it hashes bytes without interpreting any structure.",
+      "detected_by": [
+        "binary-stream-read"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/GameModuleLoader.cpp",
+      "classification": "not-a-parser",
+      "justification": "Hands a module path to LoadLibraryA/dlopen and resolves two exports; the engine decodes no image bytes here (the .sparkabi sidecar check is the module-abi-sidecar boundary).",
+      "detected_by": [
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/GameModuleLoader.h",
+      "classification": "not-a-parser",
+      "justification": "Declares the dlopen/LoadLibrary wrapper; detected only by its file name, it decodes no bytes.",
+      "detected_by": [
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/SparkEngineLinux.cpp",
+      "classification": "not-a-parser",
+      "justification": "sscanf(\"%dx%d\") converts the launching user's --window-size command-line argument into two integers; no file, package, or network bytes are decoded.",
+      "detected_by": [
+        "scanf-parse"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Core/SparkPakWriter.cpp",
+      "classification": "not-a-parser",
+      "justification": "Pack writer: reads each input file as an opaque byte blob and appends it to a new archive without interpreting its structure; the archive reader is the inventoried sparkpak-reader.",
+      "detected_by": [
+        "binary-stream-read"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Animation/AnimationClip.h",
+      "classification": "not-a-parser",
+      "justification": "The only match is a documentation comment naming AnimationManager::LoadAnimations; the header declares clip data types only.",
+      "detected_by": [
+        "load-format-entry"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Animation/AnimationSystem.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares AnimationManager::LoadSkeleton/LoadAnimations, implemented in the inventoried AnimationSystem.cpp; other matches are usage comments.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "animation-skel-sanim"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Animation/AnimationTypes.h",
+      "classification": "not-a-parser",
+      "justification": "The only matches are documentation comments naming AnimationManager loaders; the header declares animation data types only.",
+      "detected_by": [
+        "load-format-entry"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Animation/Skeleton.h",
+      "classification": "not-a-parser",
+      "justification": "The only matches are documentation comments naming AnimationManager::LoadSkeleton; the header declares the Skeleton type only.",
+      "detected_by": [
+        "load-format-entry"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp",
+      "classification": "same-process-data",
+      "justification": "Play-mode snapshot codec: PlayModeManager serializes the live registry into an in-memory vector at Play and restores that same vector at Stop; the bytes are never written to or read from disk, network, or another process.",
+      "detected_by": [
+        "deserialize",
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializers.h",
+      "classification": "same-process-data",
+      "justification": "Registers the core component codecs used only by the in-memory play-mode snapshot; no file, network, or IPC input reaches them.",
+      "detected_by": [
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializersInternal.h",
+      "classification": "same-process-data",
+      "justification": "SnapshotReader/SnapshotWriter helpers used only by the in-memory play-mode snapshot codecs; no external bytes reach them.",
+      "detected_by": [
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/CoreComponentSerializersPhysicsAudio.cpp",
+      "classification": "same-process-data",
+      "justification": "Play-mode snapshot codec: PlayModeManager serializes the live registry into an in-memory vector at Play and restores that same vector at Stop; the bytes are never written to or read from disk, network, or another process.",
+      "detected_by": [
+        "deserialize",
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/PlayModeManager.h",
+      "classification": "same-process-data",
+      "justification": "Restores m_snapshot.serializedData, which this same PlayModeManager produced from the live registry at Play; the snapshot is never persisted or received.",
+      "detected_by": [
+        "deserialize"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h",
+      "classification": "same-process-data",
+      "justification": "Serialize/Deserialize pair whose only caller is PlayModeManager's in-memory Play/Stop snapshot; the magic check guards bytes this process wrote moments earlier.",
+      "detected_by": [
+        "binary-magic-compare",
+        "deserialize",
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Persistence/AsyncDatabase.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares SQLiteConnection::LoadFromDisk, implemented in the inventoried AsyncDatabase.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "async-database-kv"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp",
+      "classification": "not-a-parser",
+      "justification": "Reads kernel-owned /proc/self/maps to enumerate this process's own mappings; no user, mod, or network input is decoded.",
+      "detected_by": [
+        "getline-loop"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Streaming/AreaAssetLoader.cpp",
+      "classification": "not-a-parser",
+      "justification": "Schedules DirectStorageLoader requests per area and tracks completion; it never reads or interprets the loaded bytes.",
+      "detected_by": [
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Streaming/AreaAssetLoader.h",
+      "classification": "not-a-parser",
+      "justification": "Declares the area load scheduler; detected only by its file name, it decodes no bytes.",
+      "detected_by": [
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp",
+      "classification": "helper",
+      "justification": "Bounds-checked ranged file read into a CPU buffer for streaming requests; it interprets no bytes, and each consumer of the buffer is classified on its own.",
+      "detected_by": [
+        "binary-stream-read",
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h",
+      "classification": "helper",
+      "justification": "Declares the ranged streaming read primitive implemented in DirectStorageLoader.cpp; no format grammar.",
+      "detected_by": [
+        "parser-like-filename"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/CubeObject.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Calls Mesh::LoadFromFile with the object's model path and falls back to a procedural mesh; OBJ decoding is the inventoried mesh-obj-tinyobj loader.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-tinyobj"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/GameObject.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Calls Mesh::LoadFromFile with the object's model path and falls back to a procedural mesh; OBJ decoding is the inventoried mesh-obj-tinyobj loader.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-tinyobj"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/Model.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares Model::LoadObj, implemented in the inventoried Model.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "game-model-obj"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/PlaceholderMesh.h",
+      "classification": "delegating-call-site",
+      "justification": "Calls Mesh::LoadFromFile for .obj paths and otherwise builds a procedural placeholder; decoding is the inventoried mesh loader.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-tinyobj"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/PlaneObject.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Calls Mesh::LoadFromFile with the object's model path and falls back to a procedural mesh; OBJ decoding is the inventoried mesh-obj-tinyobj loader.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-tinyobj"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/PyramidObject.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Calls Mesh::LoadFromFile with the object's model path and falls back to a procedural mesh; OBJ decoding is the inventoried mesh-obj-tinyobj loader.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-tinyobj"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/RampObject.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Calls Mesh::LoadFromFile with the object's model path and falls back to a procedural mesh; OBJ decoding is the inventoried mesh-obj-tinyobj loader.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-tinyobj"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/SphereObject.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Calls Mesh::LoadFromFile with the object's model path and falls back to a procedural mesh; OBJ decoding is the inventoried mesh-obj-tinyobj loader.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-tinyobj"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Game/WallObject.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Calls Mesh::LoadFromFile with the object's model path and falls back to a procedural mesh; OBJ decoding is the inventoried mesh-obj-tinyobj loader.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-tinyobj"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/AssetPipelineConsoleOps.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Console commands pass a path to AssetPipeline::LoadAsset, the inventoried asset-pipeline entry.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "asset-pipeline"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/AssetPipelineLinuxStreaming.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Streaming workers call AssetPipeline::LoadAsset for queued requests; decoding is the inventoried asset-pipeline entry.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "asset-pipeline"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/AssetTypesLinux.cpp",
+      "classification": "delegating-call-site",
+      "justification": "MeshAsset::Load calls Detail::LoadOBJStaticMesh and Detail::LoadGLTFStaticMesh, both inventoried loaders.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-static-loader",
+        "mesh-gltf-loader"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/MaterialConsoleOps.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Console reload calls Material::LoadFromFile, implemented in the inventoried PBRMaterialLightingWindows.cpp.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "pbr-material-file"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/MaterialSystem.cpp",
+      "classification": "delegating-call-site",
+      "justification": "MaterialSystem load/reload paths call Material::LoadFromFile, implemented in the inventoried PBRMaterialLightingWindows.cpp.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "pbr-material-file"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/MaterialSystem.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares Material::LoadFromFile, implemented in the inventoried PBRMaterialLightingWindows.cpp.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "pbr-material-file"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Mesh.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares Mesh::LoadFromFile, implemented in the inventoried MeshLinux.cpp and MeshWindows.cpp.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-tinyobj"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/MeshTypes.h",
+      "classification": "not-a-parser",
+      "justification": "The only match is a documentation comment about Mesh::LoadFromFile grouping faces; the header declares mesh data types only.",
+      "detected_by": [
+        "parse-entry"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralFunctionApproximator.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Loads a trained network through Neural::LoadWeights, the fuzzed neural-weights-nnw entry.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "neural-weights-nnw"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.cpp",
+      "classification": "not-a-parser",
+      "justification": "LoadWeights(const std::vector<float>&) accepts an already-typed float vector from its caller and uploads it; no bytes are decoded and no production caller reads them from a file.",
+      "detected_by": [
+        "load-format-entry"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.h",
+      "classification": "not-a-parser",
+      "justification": "Declares LoadWeights(const std::vector<float>&) for already-typed weights; no bytes are decoded.",
+      "detected_by": [
+        "load-format-entry"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralTextureCompressor.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares NeuralTextureCompressor::LoadNTEX, implemented in the inventoried NeuralTextureCompressor.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "neural-texture-ntex"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Neural/NeuralTextureFormat.h",
+      "classification": "delegating-call-site",
+      "justification": "Defines the .ntex header struct and magic constant consumed by the inventoried NeuralTextureCompressor.cpp loader; it contains no decoding logic.",
+      "detected_by": [
+        "binary-magic-compare"
+      ],
+      "delegates_to": [
+        "neural-texture-ntex"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/PBRMaterialLightingLinux.cpp",
+      "classification": "not-a-parser",
+      "justification": "The Linux Material::LoadFromFile logs that file loading is unsupported and returns false without opening the file.",
+      "detected_by": [
+        "parse-entry"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/RHI/RHIFactory.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares LoadPrecompiledShader, implemented in the inventoried RHIFactory.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "rhi-shader-bytecode"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/RenderCommandRing.h",
+      "classification": "not-a-parser",
+      "justification": "m_readPos is the atomic consumer index of an in-process lock-free render command ring; no serialized bytes are decoded.",
+      "detected_by": [
+        "byte-cursor"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/Shader.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares Shader::LoadFromFile, implemented in the inventoried ShaderCompilationWindows.cpp and ShaderCompilationLinux.cpp.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "shader-source-loader"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/ShaderConsoleOps.cpp",
+      "classification": "delegating-call-site",
+      "justification": "Console reload calls Shader::LoadFromFile, the inventoried shader-source-loader entry.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "shader-source-loader"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Graphics/TextureCompressor.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares TextureCompressor::LoadCompressed, implemented in the fuzzed TextureCompressor.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "texture-stex-compressor"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/SceneManager/SceneManager.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares SceneManager::LoadScene, implemented in the inventoried SceneManager.cpp; other matches are usage comments.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "scene-serializer"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/BenchmarkFramework.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares LoadBaseline and ExtractJsonString, implemented in the inventoried BenchmarkFrameworkBaseline.cpp.",
+      "detected_by": [
+        "json-string-scrape",
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "benchmark-baseline-json"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/ColorUtils.h",
+      "classification": "helper",
+      "justification": "Generic hex colour string conversion via a bounded sscanf(\"%x\"); callers that obtain colour strings from files are classified on their own.",
+      "detected_by": [
+        "scanf-parse"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/CompressionUtils.cpp",
+      "classification": "helper",
+      "justification": "Generic deflate/zstd decompress wrapper; the caller supplies originalSize. Its only production caller, TextureCompressor (fuzzed texture-stex-compressor), bounds dimensions before calling.",
+      "detected_by": [
+        "archive-codec"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/CrashHandler.cpp",
+      "classification": "not-a-parser",
+      "justification": "Copies selected lines of kernel/driver-owned /proc/driver/nvidia and /proc/self/status into a crash report; no user, mod, or network input is decoded.",
+      "detected_by": [
+        "getline-loop"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/FileUtils.h",
+      "classification": "helper",
+      "justification": "Generic whole-file text/binary read and write primitives; they interpret no bytes, and every parser that calls them is classified on its own.",
+      "detected_by": [
+        "binary-stream-read"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/GoldenImageTest.h",
+      "classification": "developer-tooling",
+      "justification": "Header-only golden-image test harness: LoadPNG reads repository reference images and is reached only from Tests/ and the test-only CompareWithGolden path; no shipped runtime path calls it.",
+      "detected_by": [
+        "stdio-binary-read"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/LockFreeRingAllocator.h",
+      "classification": "not-a-parser",
+      "justification": "m_readPos is the atomic consumer offset of an in-process lock-free ring allocator; no serialized bytes are decoded.",
+      "detected_by": [
+        "byte-cursor"
+      ]
+    },
+    {
+      "source_file": "SparkEngine/Source/Utils/WineDetection.cpp",
+      "classification": "not-a-parser",
+      "justification": "Substring probes of kernel-owned /proc/1/comm and /proc/self/maps for sandbox detection; no user, mod, or network input is decoded.",
+      "detected_by": [
+        "getline-loop"
+      ]
+    },
+    {
+      "source_file": "SparkLauncher/src/LauncherApp.h",
+      "classification": "delegating-call-site",
+      "justification": "Declares LauncherApp::LoadTemplates, implemented in the inventoried LauncherApp.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "launcher-template-json"
+      ]
+    },
+    {
+      "source_file": "SparkSDK/Include/Spark/PluginABI.h",
+      "classification": "not-a-parser",
+      "justification": "SparkValidatePluginDescriptor checks fields of an in-memory C struct returned by a native plugin that is already mapped and executing in the process; no bytes are decoded.",
+      "detected_by": [
+        "binary-magic-compare"
+      ]
     }
   ]
 }

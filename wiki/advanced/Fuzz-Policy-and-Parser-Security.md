@@ -6,15 +6,16 @@
 
 ## Current Status
 
-SEC-120 remains open and release-blocking. The repository now has three structurally
+SEC-120 remains open and release-blocking. The repository now has four structurally
 validated production fuzz targets and bounded seed corpora for `json-utils`,
-`neural-weights-nnw`, and `crash-manifest-parser`, but exact-SHA hosted sanitizer
-evidence, scheduled campaigns, coverage, and crash-free-duration evidence remain absent.
+`crash-manifest-parser`, `texture-stex-compressor`, and `neural-weights-nnw`, but
+exact-SHA hosted sanitizer evidence, scheduled campaigns, coverage, and
+crash-free-duration evidence remain absent.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **105 explicitly inventoried parsers, 3
-fuzzed and 102 blocked**, **3 bound corpora with 21 seeds (1226 bytes)**, **151 detected candidates
-deferred with an owner and expiry**, and **1983 source files scanned across 17
+For the recorded source-tree state it reports **135 explicitly inventoried parsers, 4
+fuzzed and 131 blocked**, **4 bound corpora with 29 seeds (1619 bytes)**, **0 deferred
+candidates and 115 OD-21 exemptions**, and **1999 source files scanned across 17
 first-party roots**. Those counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.
@@ -58,8 +59,9 @@ The gate proves that:
   entries fatal and the entry cap applied *before* a directory listing is materialized;
 - the declared scope cannot shrink: every `Spark*`/`GameModules` source tree present on
   disk must be a declared root, and the extension set must be the full supported set;
-- every detected candidate is either owned by an inventory record or deferred with a
-  reason, the `sec-120-parser-triage` owner, the SEC-120 ticket, and an expiry;
+- every detected candidate is owned by an inventory record, deferred with a reason, the
+  `sec-120-parser-triage` owner, the SEC-120 ticket, and an expiry, or carries an OD-21
+  exemption (see [OD-21 Candidate Classification](#od-21-candidate-classification));
 - **exclusions are reviewed waivers, not free text.** An exclusion needs an approved
   ticket from a hard-coded allowlist, that ticket's approved owner, an expiry inside
   365 days, and the exact count of candidates it hides. Whole-scan-root, overlapping,
@@ -83,9 +85,44 @@ The gate proves that:
   a non-blocking status, while blockers remain.
 
 The gate does **not** prove that the regex scanner finds every possible parser, or that
-declared limits hold at runtime. The full inventory report records 27 inventoried files
+declared limits hold at runtime. The full inventory report records 28 inventoried files
 that no detector pattern matches, found by human review, so that limitation is a number
 rather than an assumption.
+
+## OD-21 Candidate Classification
+
+Owner decision OD-21 fixes how a detected candidate is classified, one entry per file,
+and fails closed toward fuzzing:
+
+1. Code that parses bytes from outside the process — files a user or mod can supply,
+   packages, network, save/scene/config files read at runtime — is an inventoried
+   parser in `parsers[]` and needs a fuzz target. `trust_boundary` is one of
+   `untrusted-file`, `untrusted-network`, or `untrusted-ipc` (pipes, child-process
+   output and health files, git output). Until a harness exists it is `blocked`
+   with a SEC-120 blocker; it is never exempted.
+2. Code that only parses data this same process produced, or build-time/developer
+   tooling that never ships, is exempt with a written justification.
+3. Generic read/tokenize helpers are helper-exempt; every parser that calls them is
+   classified on its own.
+
+When in doubt, the file is a boundary. Exemptions live in `exempt_candidates[]`:
+
+| `classification` | Meaning |
+|---|---|
+| `same-process-data` | rule (2): decodes only bytes this process generated (e.g. the in-memory play-mode snapshot) |
+| `developer-tooling` | rule (2): build/test tooling no shipped runtime path reaches |
+| `helper` | rule (3): generic read/tokenize/hash helper with no grammar of its own |
+| `delegating-call-site` | forwards to, or only declares, an inventoried parser's entry point; `delegates_to` must name that parser id or an excluded subtree |
+| `not-a-parser` | the detector matched code that decodes no externally suppliable bytes (doc comments, atomic ring indices, kernel-owned `/proc` reads, display-only log tails) |
+
+Each exemption also records `detected_by`, the exact detector hits the reviewer read.
+The gate requires the live scan to report the same set, so adding a new kind of parsing
+to an exempt file fails CI until the file is re-reviewed. Stale, duplicate, case-aliased,
+unjustified (under 40 characters), and parser-or-deferral-overlapping exemptions are
+rejected. The first triage (2026-09-24) classified all 149 deferred candidates: 28 new
+blocked boundaries (including the collaborative-edit TCP codec, the editor/engine named
+pipe, LAN discovery beacons, game-module save-state decoders, and two tinyobj-based OBJ
+loaders), 3 files folded into existing blocked records, and 115 exemptions.
 
 ## Commands
 
@@ -132,7 +169,10 @@ freshly computed report.
    CMake listfile, target, CTest selector, corpus id, and `entry_symbol`. If the
    harness crosses a C ABI adapter, also declare its `binding_source` and
    `harness_entry_symbol`; the adapter must call the production `entry_symbol`.
-3. Remove any corresponding entry from `deferred_candidates`.
+3. Remove any corresponding entry from `deferred_candidates` or `exempt_candidates`.
+   A newly detected file that is not a boundary gets an OD-21 exemption instead, with
+   its `classification`, a concrete `justification`, and the sorted `detected_by`
+   list the scanner reports for it.
 4. For a fuzzed parser, add exactly one entry to `corpus-manifest.json`. The seed tree
    lives under `Tests/fuzz-corpora/`, must be non-empty, fresh, confined, link-free,
    within every declared limit, and pinned by `content_digest`.
@@ -147,10 +187,9 @@ change *is* the review record.
 
 ## Remaining Closure Work
 
-- classify the 151-file deferred backlog before it expires on 2027-02-24;
-- retain exact-SHA sanitizer smoke for json-utils, neural-weights-nnw, and
-  crash-manifest-parser, then implement production entry-point fuzz targets for
-  the remaining 102 blocked parsers, starting
+- retain exact-SHA sanitizer smoke for json-utils, crash-manifest-parser,
+  texture-stex-compressor, and neural-weights-nnw, then implement production
+  entry-point fuzz targets for the remaining 131 blocked parsers, starting
   with the highest-risk binary readers (`terrain-sparkterrain`,
   `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
   `fps-terrain-heightmap-bmp`, `asset-media-windows`);
@@ -160,12 +199,14 @@ change *is* the review record.
   CI run is now required whenever a parser is marked `fuzzed`);
 - independently review that each harness reaches production parsing code and that
   allocation, depth, path, integer, and time bounds are enforced by that code;
-- extend the detector so the 27 known blind spots shrink.
+- extend the detector so the 28 known blind spots shrink;
+- have an independent security reviewer re-check the 115 OD-21 exemptions; they are
+  recorded judgement, not proof of unreachability.
 
 ## Source & Freshness
 
 Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocking
 `fuzz-policy` job in `.github/workflows/build.yml`, and the closure step in
-`.github/workflows/release.yml`. Status and both production targets were
-re-verified structurally 2026-09-20 on the release worktree; rerun the CI command for
+`.github/workflows/release.yml`. The OD-21 classification and the counts above were
+re-verified structurally 2026-09-24 on the release worktree; rerun the CI command for
 current counts and exact-SHA runtime evidence.
