@@ -535,6 +535,8 @@ add_executable(SparkTests
     TestProcess.cpp
     # PLT-210 Linux defects in the POSIX Process implementation
     TestPLT210ProcessPosixReal.cpp
+    TestPLT210AngelScriptVector3Real.cpp
+    TestPLT210RuntimeProcessesReal.cpp
     # SparkDaemon foundation (Phase 1)
     TestDaemonProtocol.cpp
     TestDaemonFoundation.cpp
