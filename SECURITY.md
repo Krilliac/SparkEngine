@@ -159,6 +159,16 @@ CI job: `check-supply-chain` in `.github/workflows/build.yml`
   `ThirdParty/` (for example, the editor fonts under `SparkEditor/Fonts/` have
   no license file on disk; see `THIRD_PARTY_NOTICES`)
 
+**Stable release approval (REL-110):** stable publication runs in the protected
+`stable-release` environment, whose only reviewer is the repository owner.
+The release job records the run's approval history
+(`.github/scripts/record_release_approval.py`) and fails unless every review is
+the owner's approval for this exact run, commit, and environment, with no
+rejection. The record is retained as a workflow artifact, and the independent
+consumer rebuilds it from the GitHub API and requires the identical SHA-256.
+An owner-only approval is a single-person review, not independent second-person
+review, and no hosted stable run has yet exercised it.
+
 The reviewed-exception schema (named owner, justification, and expiry for each
 `supply-chain.lock` exception) is implemented and enforced by the checker; see
 [`ThirdParty/POLICY.md`](ThirdParty/POLICY.md#reviewed-exceptions).

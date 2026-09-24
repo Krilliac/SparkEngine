@@ -2139,6 +2139,15 @@ if(Python3_Interpreter_FOUND)
         LABELS "release;security;supply-chain;unit;python"
         TIMEOUT 60)
 
+    # REL-110: protected stable-release approval event recorder, its consumer
+    # digest binding, and the release.yml wiring.
+    add_test(
+        NAME ReleaseApproval_Record
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_record_release_approval.py)
+    set_tests_properties(ReleaseApproval_Record PROPERTIES
+        LABELS "release;security;unit;python"
+        TIMEOUT 60)
+
     add_test(
         NAME SparkNetworkBoundaryStatic
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/check_network_boundary.py)

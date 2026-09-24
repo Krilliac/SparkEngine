@@ -1072,6 +1072,11 @@ jobs:
     needs: [prepare, build-windows, build-linux, build-macos, build-installer]
     runs-on: ubuntu-latest
     environment: ${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}
+    outputs:
+      # The independent consumer rebuilds the approval record from the GitHub
+      # API and requires this exact digest (REL-110 release-approval evidence).
+      approval_record_sha256: ${{ steps.release-approval.outputs.sha256 }}
+      approval_run_attempt: ${{ steps.release-approval.outputs.run_attempt }}
     env:
       IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
       # Stable and uniquely tagged nightly releases are both immutable. The
@@ -1109,6 +1114,33 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: python3 .github/scripts/verify_release_environment.py
+
+    # The job only starts after the stable-release environment review, so the
+    # run's approval history must now hold Krilliac's approval and no rejection.
+    - name: Record protected stable-release approval event
+      id: release-approval
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        record="$RUNNER_TEMP/stable-release-approval.json"
+        python3 .github/scripts/record_release_approval.py \
+          --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+          --source-commit "$GITHUB_SHA" --output "$record"
+        {
+          echo "sha256=$(sha256sum "$record" | cut -d' ' -f1)"
+          echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Retain protected stable-release approval evidence
+      if: needs.prepare.outputs.is_versioned == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: stable-release-approval-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/stable-release-approval.json
+        if-no-files-found: error
+        retention-days: 90
 
     - name: Verify v0.9.0 source seal before publication mutation
       if: needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version == '0.9.0'
@@ -3025,6 +3057,8 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         SIGNATURE_KEY_FINGERPRINT: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_KEY_FINGERPRINT }}
+        APPROVAL_RECORD_SHA256: ${{ needs.release.outputs.approval_record_sha256 }}
+        APPROVAL_RUN_ATTEMPT: ${{ needs.release.outputs.approval_run_attempt }}
       run: |
         set -euo pipefail
         python3 .github/scripts/verify_published_stable_release.py \
@@ -3034,7 +3068,8 @@ jobs:
            --signature-control-asset "SparkEngine-release-signature-bundle.tar.gz" \
           --fingerprint "$SIGNATURE_KEY_FINGERPRINT" --gate-output "$RUNNER_TEMP/consumer-exact-ci.out" \
           --receipt "$RUNNER_TEMP/stable-publication-evidence.json" \
-          --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+          --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+          --approval-record-sha256 "$APPROVAL_RECORD_SHA256" --approval-run-attempt "$APPROVAL_RUN_ATTEMPT"
 
     - name: Retain immutable independent publication evidence
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

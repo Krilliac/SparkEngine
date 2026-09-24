@@ -157,6 +157,7 @@ jobs:
         python3 .github/scripts/test_guard_release_mutation.py
         python3 .github/scripts/test_stage_release_draft.py
         python3 .github/scripts/test_verify_published_stable_release.py
+        python3 .github/scripts/test_record_release_approval.py
         python3 .github/scripts/test_release_stages_workflow.py
 
     - name: Test the build-matrix exact-source status gate

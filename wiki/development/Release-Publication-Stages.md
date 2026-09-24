@@ -102,7 +102,25 @@ repository Actions read access for the environment and deployment-branch APIs.
 The owner must resolve a missing environment, API denial, or unavailable
 protection feature; none is treated as approval. The preflight never creates an
 environment, broadens token permissions, or supplies a substitute approval.
-Retain the actual GitHub deployment approval history alongside release evidence.
+
+Immediately after that entry check, the publisher records the actual approval
+event with `record_release_approval.py`. It reads
+`GET /repos/{repo}/actions/runs/{run_id}/approvals` (bounded, Link-paginated,
+duplicate-key-rejecting) and binds it to the run attempt, head SHA, release
+workflow path, repository, and `stable-release` environment id. It fails unless
+the history holds at least one approval, every review is `approved` by the
+repository owner `Krilliac` (login and id) for `stable-release` only, and no
+review is rejected. Each environment-bound job needs its own review, so a stable
+run normally carries more than one owner approval; all of them are recorded.
+The closed, deterministic record keeps the run id, attempt and start time, the
+environment id, the approver, and a SHA-256 of each review comment. It is
+retained as the 90-day artifact
+`stable-release-approval-<SHA>-<run>-<attempt>` and its digest becomes the
+job output `approval_record_sha256`. The approvals API exposes no review
+timestamp, so approval time is bounded by the run start and that artifact's
+upload. An owner-only approval is one person's review, not independent
+second-person review; how GitHub reports that self-approval still needs a
+hosted stable run to confirm.
 
 The separate repository `/immutable-releases` API requires **Administration
 read** permission, which `GITHUB_TOKEN` cannot provide. The owner must provision
@@ -174,7 +192,9 @@ published asset IDs through GitHub, downloads the stable assets and the
 signature control asset, checks their sizes and SHA-256 digests, extracts and
 verifies the pinned detached signatures and SBOM, compares provenance to freshly
 revalidated exact-CI evidence, verifies the GitHub release attestation, and
-rechecks the release, assets, and tag for drift.
+rechecks the release, assets, and tag for drift. Before downloading anything it
+rebuilds the approval record from the GitHub API for the publisher's attempt and
+requires the publisher's exact `approval_record_sha256`; the receipt embeds it.
 It cannot publish, edit the ledger, or turn the profile ready.
 
 Only success produces the immutable Actions artifact
@@ -252,6 +272,8 @@ Implemented 2026-09-21. Sources: [readiness contract](../../docs/site/readiness.
 and the [repository immutability API](https://docs.github.com/en/enterprise-cloud%40latest/rest/repos/repos#check-if-immutable-releases-are-enabled-for-a-repository).
 Predecessor identity and source-lineage review updated 2026-09-22; see the
 [release API immutable field](https://docs.github.com/en/rest/releases/releases).
+Approval-event recording added 2026-09-24 against the
+[workflow-run review history API](https://docs.github.com/en/rest/actions/workflow-runs#get-the-review-history-for-a-workflow-run).
 Recheck live environment protection, approval history, signing authority, and
 exact-SHA run/artifact identities before each release.
 Contract reference rules and the public numeric-claim ledger added 2026-09-24 from
