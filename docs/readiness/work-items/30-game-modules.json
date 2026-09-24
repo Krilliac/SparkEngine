@@ -1187,7 +1187,6 @@
         "module-RTS"
       ],
       "plannedTestSelectors": [
-        "RTSSkirmish_*",
         "RTSSave_*"
       ]
     },
@@ -1275,9 +1274,7 @@
       "plannedCiJobs": [
         "module-Racing"
       ],
-      "plannedTestSelectors": [
-        "RacingCompleteRace_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-390",

@@ -4,20 +4,20 @@
     "151 detected candidates await classification"
   ],
   "corpus": {
-    "bound_target_count": 3,
-    "corpus_count": 3,
+    "bound_target_count": 4,
+    "corpus_count": 4,
     "max_staleness_days": 90,
-    "seed_bytes": 1226,
-    "seed_count": 21
+    "seed_bytes": 1619,
+    "seed_count": 29
   },
   "coverage_claim": false,
   "inputs": {
-    "corpus_manifest": "9e21d917a76ca5a0081f6103cd6bbc261bd2d043616d0caeb46717cedead8e1a",
-    "inventory": "fc3ccc73aaf8ac838c8928ffe0f8d81b8872e04e5825f98e740ce75c97545e19"
+    "corpus_manifest": "24579fbc4162ab75ec73a34fc87facf5ffd8e9765df120479c9e1c6fa280c2f4",
+    "inventory": "e4bcbf2f8a96f95d0fb0c02a0b5d4dd72a1b2f707c6dc8c2279c5229ff6b4cda"
   },
   "inventory": {
     "blocked_count": 102,
-    "candidate_count": 272,
+    "candidate_count": 274,
     "deferred_candidate_count": 151,
     "excluded_files": [],
     "excluded_subtrees": [
@@ -36,8 +36,8 @@
         "ticket": "ENG-200"
       }
     ],
-    "fuzzed_count": 3,
-    "parser_count": 105,
+    "fuzzed_count": 4,
+    "parser_count": 106,
     "scan_roots": [
       "SparkEngine/Source",
       "SparkEditor/Source",
@@ -57,7 +57,7 @@
       "SparkSDK/Include",
       "GameModules"
     ],
-    "scanned_file_count": 1992,
+    "scanned_file_count": 1998,
     "unclassified_candidate_count": 0
   },
   "passed": false,

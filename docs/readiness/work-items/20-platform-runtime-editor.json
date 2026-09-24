@@ -628,8 +628,6 @@
         "d3d11-stress"
       ],
       "plannedTestSelectors": [
-        "D3D11_Golden_*",
-        "D3D11_Resource_*",
         "D3D11_DeviceLoss_*"
       ]
     },
@@ -1350,7 +1348,6 @@
         "editor-package-roundtrip"
       ],
       "plannedTestSelectors": [
-        "EditorUndo_*",
         "EditorAssetDrag_*",
         "EditorCookPackage_*"
       ]
@@ -1738,7 +1735,6 @@
         "visual-script-package"
       ],
       "plannedTestSelectors": [
-        "ScriptLifecycle_*",
         "ScriptBindings_*",
         "VisualScriptRuntime_*"
       ]
