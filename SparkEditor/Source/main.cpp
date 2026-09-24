@@ -11,6 +11,9 @@
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include <Spark/Version.h>
+#include <cstdio>
+#include <format>
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -65,6 +68,29 @@ static bool IsDebuggerAttached()
     }
     return false;
 #endif
+}
+
+/// @brief Write CLI introspection output (e.g. --version) to the process's standard output.
+///
+/// On Windows the editor is a GUI-subsystem executable, so the CRT stdout stream is not bound to a
+/// redirected parent pipe. The inherited Win32 standard handle still is, so write to it directly
+/// (the same contract as SparkEngine's WriteCommandOutput) and fall back to the CRT for consoles.
+static void WriteCommandOutput(const std::string& text)
+{
+#ifdef _WIN32
+    const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (output != nullptr && output != INVALID_HANDLE_VALUE)
+    {
+        DWORD written = 0;
+        if (WriteFile(output, text.data(), static_cast<DWORD>(text.size()), &written, nullptr) &&
+            written == text.size())
+        {
+            return;
+        }
+    }
+#endif
+    std::fwrite(text.data(), 1, text.size(), stdout);
+    std::fflush(stdout);
 }
 
 static bool WriteSmokeResult(const std::string& path, const char* status, bool projectLoaded, int runResult,
@@ -193,9 +219,6 @@ static int RunCollabServer(uint16_t port, const std::string& serverName)
 // Unified main entry point with debug support when needed
 int main(int argc, char* argv[])
 {
-    // Initialize the Spark console system first (like the engine does)
-    auto& console = Spark::SimpleConsole::GetInstance();
-
     // Check for debug console request or if debugger is present
     bool showDebugConsole = false;
     bool collabServerMode = false;
@@ -212,11 +235,16 @@ int main(int argc, char* argv[])
     std::string openScenePath;   // --open-scene <path>: boot directly into a scene, skipping the project browser
     std::string smokeResultPath; // --smoke-result <path>: structured CI executable-smoke result
     std::vector<std::string> editorPluginDirectories;
+    bool showVersion = false;
 
     // Check command line arguments
     for (int i = 1; i < argc; i++)
     {
-        if (strcmp(argv[i], "--debug-console") == 0 || strcmp(argv[i], "-d") == 0)
+        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0)
+        {
+            showVersion = true;
+        }
+        else if (strcmp(argv[i], "--debug-console") == 0 || strcmp(argv[i], "-d") == 0)
         {
             showDebugConsole = true;
         }
@@ -275,6 +303,17 @@ int main(int argc, char* argv[])
             smokeResultPath = argv[++i];
         }
     }
+
+    // Version introspection must work in staged packages and on machines without a display or GPU,
+    // so it exits before the console, crash handling, collab server, or any ImGui/window setup.
+    if (showVersion)
+    {
+        WriteCommandOutput(std::format("SparkEditor {}.{}.{}\n", SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR,
+                                       SPARK_ENGINE_VERSION_PATCH));
+        return 0;
+    }
+
+    auto& console = Spark::SimpleConsole::GetInstance();
 
     // --open-scene forces test-mode's "skip the project browser, auto-create
     // a test project" switch (EditorApplication.h / EditorUI.cpp) so the

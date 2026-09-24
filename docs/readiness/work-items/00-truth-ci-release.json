@@ -839,7 +839,6 @@
         "release-metadata"
       ],
       "plannedTestSelectors": [
-        "VersionConsistency_*",
         "TagReleaseContract_*"
       ]
     },

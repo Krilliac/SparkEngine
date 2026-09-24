@@ -2070,17 +2070,31 @@ if(Python3_Interpreter_FOUND)
         LABELS "network-security;security;static;python"
         TIMEOUT 30)
 
-    if(TARGET SparkShaderCompiler AND TARGET SparkCooker AND
-       TARGET SparkAutomation AND TARGET SparkCrashReporter)
+    # REL-100: one executable-level --version contract for every non-test
+    # stable-v1 product. The script also fails if the stable-v1 build-product
+    # contract gains an executable its table does not cover.
+    set(_spark_stable_version_products
+        SparkEngine SparkEditor SparkConsole SparkShaderCompiler SparkCrashReporter
+        SparkCooker SparkAutomation SparkLauncher SparkBuild SparkInstaller)
+    set(_spark_stable_version_products_built TRUE)
+    foreach(_spark_product IN LISTS _spark_stable_version_products)
+        if(NOT TARGET ${_spark_product})
+            set(_spark_stable_version_products_built FALSE)
+        endif()
+    endforeach()
+    if(_spark_stable_version_products_built)
         add_test(
-            NAME SparkStableProductVersions
+            NAME VersionConsistency_StableProducts
             COMMAND ${Python3_EXECUTABLE}
                 ${CMAKE_SOURCE_DIR}/Tests/Tools/test_rel100_product_versions.py
-                --bin-dir $<TARGET_FILE_DIR:SparkShaderCompiler>)
-        set_tests_properties(SparkStableProductVersions PROPERTIES
+                --bin-dir $<TARGET_FILE_DIR:SparkEngine>)
+        set_tests_properties(VersionConsistency_StableProducts PROPERTIES
             LABELS "release;version;integration"
-            TIMEOUT 60)
+            TIMEOUT 120)
     endif()
+    unset(_spark_product)
+    unset(_spark_stable_version_products_built)
+    unset(_spark_stable_version_products)
 
     add_test(
         NAME BlenderMMOAssetSourceContract
