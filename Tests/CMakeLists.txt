@@ -1968,6 +1968,28 @@ set_tests_properties(PackageAssets_StableV1ExcludesNoAssertion PROPERTIES
     LABELS "stable-v1;asset;packaging;unit;python"
     TIMEOUT 300)
 
+# GOV-400 LicenseInventory_*: the staged-package notice-coverage gate
+# (cmake/ValidateStagedPackageNotices.cmake) against fixture packages, and the
+# notices generator's shared rule set, parity with the CMake gate, and the real
+# packaged notice file (Tests/Tools/test_third_party_notices.py).
+add_test(
+    NAME LicenseInventory_PackageNoticeCoverage
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_VALIDATOR=${CMAKE_SOURCE_DIR}/cmake/ValidateStagedPackageNotices.cmake
+        -DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/package-notice-validator-ctest
+        -DSPARK_BINARY_ROOT=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/TestValidateStagedPackageNotices.cmake)
+set_tests_properties(LicenseInventory_PackageNoticeCoverage PROPERTIES
+    LABELS "package;governance;unit"
+    TIMEOUT 120)
+add_test(
+    NAME LicenseInventory_ThirdPartyNotices
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_third_party_notices.py)
+set_tests_properties(LicenseInventory_ThirdPartyNotices PROPERTIES
+    LABELS "governance;unit;python"
+    TIMEOUT 300)
+
 # RDY-010: ModuleDiscovery_* drive the production ModuleManager and the real ABI
 # fixture DLL. The exact count fails closed if the family stops being compiled
 # in; the contract test keeps the file from regressing to a test-local mirror.

@@ -171,7 +171,7 @@
       "wave": 6,
       "area": "governance",
       "owner": "unassigned",
-      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, the audited public surfaces now use source-available terminology, and build.yml now runs the legal validator in a required license-compliance job. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.",
+      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, the audited public surfaces now use source-available terminology, and build.yml now runs the legal validator in a required license-compliance job. 2026-09-24 progress: the staged-package notice-coverage gate (cmake/ValidateStagedPackageNotices.cmake, rule set cmake/PackageNoticeCoverageRules.json shared with tools/governance/generate_third_party_notices.py --check-package) requires every shipped font to be named, with reproduced license text, in the package THIRD_PARTY_NOTICES.txt and every ThirdParty-derived install path to map to a licensed inventory entry; LicenseInventory_PackageNoticeCoverage and LicenseInventory_ThirdPartyNotices cover it. A real local install reports exactly the 7 SparkEditor/Fonts files as uncovered, so ValidateStagedPackageExecutables.cmake runs the gate in report mode until the D8 font license texts land and enforcement is coordinated. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.",
       "dependencies": [
         "RDY-000",
         "SEC-110",
@@ -255,7 +255,6 @@
       "plannedCiJobs": [
       ],
       "plannedTestSelectors": [
-        "LicenseInventory_*",
         "PublicWording_*"
       ]
     },

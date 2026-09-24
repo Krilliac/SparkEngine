@@ -19,7 +19,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "governance" / "generate_third_party_notices.py"
@@ -173,6 +173,230 @@ class FixtureDetectionTests(unittest.TestCase):
             with self.subTest(label):
                 with self.assertRaises(notices.NoticeInputError):
                     notices.parse_manifest(manifest, gitlinks)
+
+
+RULES_PATH = REPO_ROOT / "cmake" / "PackageNoticeCoverageRules.json"
+PACKAGE_GATE = REPO_ROOT / "cmake" / "ValidateStagedPackageNotices.cmake"
+PACKAGE_VALIDATOR = REPO_ROOT / "cmake" / "ValidateStagedPackageExecutables.cmake"
+AUDIT_MODULE = REPO_ROOT / "cmake" / "SparkThirdPartyAudit.cmake"
+
+FONT_LICENSE = (
+    "Copyright 2026 Fixture Type Foundry\n\n"
+    "This Font Software is licensed under a fixture license used only by the\n"
+    "SparkEngine notice-coverage contract test.\n\n"
+    "Permission is hereby granted, free of charge, to any person obtaining a copy\n"
+    "of the Font Software, to use, study, copy, merge, embed, modify, redistribute,\n"
+    "and sell modified and unmodified copies of the Font Software.\n"
+)
+LIBRARY_LICENSE = MIT_TEXT + "Redistribution and use in source and binary forms is permitted.\n" * 3
+
+
+def _package_notice(font_body: str | None, jolt_body: str | None, font_files: str) -> str:
+    """A THIRD_PARTY_NOTICES.txt in the format cmake/SparkThirdPartyAudit.cmake writes."""
+    text = (
+        "SparkEngine Third-Party Notices\n================================\n\n"
+        "SparkEngine includes or can link the dependencies listed below.\n\n"
+        "Dependency inventory\n--------------------\n\n"
+        "Jolt Physics\n  Source: https://example.invalid/jolt\n  Version: v5 (fixture; [pinned])\n"
+        "  License: MIT\n  Notice files: ThirdParty/Physics/JoltPhysics/LICENSE\n"
+        "  Files: Jolt/Jolt.h,Build/CMakeLists.txt\n\n"
+        "Fixture Sans\n  Source: https://example.invalid/sans\n  Version: 1.0\n  License: OFL-1.1\n"
+        "  Notice files: SparkEditor/Fonts/FixtureSans-LICENSE.txt\n"
+        f"  Files: {font_files}\n\n"
+        "Complete license and notice texts\n=================================\n\n"
+    )
+    if jolt_body is not None:
+        text += f"----- ThirdParty/Physics/JoltPhysics/LICENSE -----\n\n{jolt_body}\n\n"
+    if font_body is not None:
+        text += f"----- SparkEditor/Fonts/FixtureSans-LICENSE.txt -----\n\n{font_body}\n\n"
+    return text
+
+
+def _write_package(root: Path, notice: str) -> None:
+    files = {
+        "LICENSE.txt": "fixture first-party license\n",
+        "bin/EditorAssets/Fonts/FixtureSans-Regular.ttf": "fixture font bytes\n",
+        "include/Jolt/Jolt.h": "#pragma once\n",
+        "include/Jolt/Core/Core.h": "#pragma once\n",
+        "include/SparkEngine/Core/Engine.h": "#pragma once\n",
+        "include/SparkEngine/ThirdParty/angelscript.h": "#pragma once\n",
+        "THIRD_PARTY_NOTICES.txt": notice,
+    }
+    for rel, content in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(content, encoding="utf-8")
+
+
+class PackageRuleSetTests(unittest.TestCase):
+    """The shared rule set is well formed and anchored to the dependency manifest."""
+
+    def test_rules_load_and_components_are_locked_dependencies(self) -> None:
+        rules = notices.load_package_rules(RULES_PATH)
+        supply_chain = notices.parse_supply_chain((REPO_ROOT / notices.SUPPLY_CHAIN_PATH).read_text("utf-8"))
+        manifest = notices.parse_manifest(
+            (REPO_ROOT / notices.MANIFEST_PATH).read_text("utf-8"), supply_chain["submodule_gitlinks"]
+        )
+        names = {entry.name for entry in manifest}
+        unknown = sorted({r.component for r in rules.payload if r.component and r.component not in names})
+        self.assertEqual(unknown, [], "payload rules name components absent from ThirdParty/dependencies.lock")
+        for rule in rules.payload:
+            if rule.component is None:
+                self.assertTrue(rule.first_party, f"{rule.pattern.pattern} exempts payload without a reason")
+
+    def test_generator_font_inventory_uses_the_shared_rules(self) -> None:
+        rules = notices.load_package_rules(RULES_PATH)
+        self.assertTrue({".ttf", ".otf", ".woff", ".woff2"} <= rules.font_suffixes)
+        tracked = [f"Editor/Fonts/A{suffix}" for suffix in sorted(rules.font_suffixes)] + ["Editor/Fonts/A.png"]
+        self.assertEqual(
+            notices.uncovered_fonts(FIXTURE_SUPPLY_CHAIN, tracked),
+            [f"Editor/Fonts/A{suffix}" for suffix in sorted(rules.font_suffixes)],
+        )
+
+    def test_malformed_rules_fail_closed(self) -> None:
+        good = json.loads(RULES_PATH.read_text("utf-8"))
+        cases = {
+            "schema": {**good, "schema": 2},
+            "no payload rules": {**good, "payloadRules": []},
+            "rule without target": {**good, "payloadRules": [{"pattern": "^include/"}]},
+            "rule with both targets": {
+                **good,
+                "payloadRules": [{"pattern": "^include/", "component": "zstd", "firstParty": "why"}],
+            },
+            "bad regex": {**good, "thirdPartyRoots": ["^include/("]},
+            "undotted suffix": {**good, "fontSuffixes": ["ttf"]},
+        }
+        for label, data in cases.items():
+            with self.subTest(label):
+                with self.assertRaises(notices.NoticeInputError):
+                    notices.parse_package_rules(json.dumps(data))
+
+    def test_package_validator_runs_the_notice_gate_after_required_content(self) -> None:
+        text = PACKAGE_VALIDATOR.read_text("utf-8")
+        required = text.find("missing required runtime content")
+        gate = text.find('include("${CMAKE_CURRENT_LIST_DIR}/ValidateStagedPackageNotices.cmake")')
+        self.assertGreater(required, 0)
+        self.assertGreater(gate, required, "the notice gate must run in the full package validation path")
+        self.assertIn("set(SPARK_PACKAGE_NOTICE_COVERAGE report)", text)
+
+
+class LicenseInventoryPackageTests(unittest.TestCase):
+    """LicenseInventory_*: both implementations of the gate agree on fixture packages."""
+
+    CASES = {
+        "covered_font": (_package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"), {}, []),
+        "uncovered_font": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {"bin/EditorAssets/Fonts/Unlisted-Bold.otf": "font\n"},
+            ["bin/EditorAssets/Fonts/Unlisted-Bold.otf: font not named"],
+        ),
+        "font_named_without_license_text": (
+            _package_notice(None, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {},
+            ["bin/EditorAssets/Fonts/FixtureSans-Regular.ttf: font named by 'Fixture Sans' but license text"],
+        ),
+        "font_named_without_terms": (
+            _package_notice("Copyright 2026 Fixture. " * 12, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {},
+            ["bin/EditorAssets/Fonts/FixtureSans-Regular.ttf: font named by 'Fixture Sans'"],
+        ),
+        "payload_without_license_text": (
+            _package_notice(FONT_LICENSE, None, "FixtureSans-Regular.ttf"),
+            {},
+            ["include/Jolt/Core/Core.h: component 'Jolt Physics'", "include/Jolt/Jolt.h: component 'Jolt Physics'"],
+        ),
+        "unmapped_payload": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {"include/SparkEngine/ThirdParty/newlib/newlib.h": "#pragma once\n"},
+            ["include/SparkEngine/ThirdParty/newlib/newlib.h: third-party install path that no payload rule maps"],
+        ),
+    }
+
+    def _run_case(self, notice: str, extra: dict[str, str]) -> tuple[Path, notices.PackageCoverage]:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "pkg"
+        _write_package(root, notice)
+        for rel, content in extra.items():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(content, encoding="utf-8")
+        return root, notices.check_package_coverage(root, notices.load_package_rules(RULES_PATH))
+
+    def test_python_verdicts(self) -> None:
+        for label, (notice, extra, expected) in self.CASES.items():
+            with self.subTest(label):
+                _, coverage = self._run_case(notice, extra)
+                self.assertEqual(len(coverage.uncovered), len(expected), coverage.uncovered)
+                for fragment, line in zip(expected, coverage.uncovered):
+                    self.assertTrue(line.startswith(fragment), f"{line!r} does not start with {fragment!r}")
+                if not expected:
+                    self.assertEqual(coverage.font_count, 1)
+                    self.assertEqual(coverage.payload_count, 3)
+
+    def test_check_package_cli_exit_codes(self) -> None:
+        notice, extra, _ = self.CASES["uncovered_font"]
+        root, _ = self._run_case(notice, extra)
+        code, _, err = _run_main("--check-package", str(root))
+        self.assertEqual(code, 1)
+        self.assertIn("Unlisted-Bold.otf", err)
+        (root / "bin/EditorAssets/Fonts/Unlisted-Bold.otf").unlink()
+        self.assertEqual(_run_main("--check-package", str(root))[0], 0)
+        (root / "THIRD_PARTY_NOTICES.txt").write_text("not the generated format\n", encoding="utf-8")
+        self.assertEqual(_run_main("--check-package", str(root))[0], 2)
+
+    @unittest.skipUnless(shutil.which("cmake"), "cmake is required for the parity check")
+    def test_cmake_gate_agrees_with_python(self) -> None:
+        for label, (notice, extra, _) in self.CASES.items():
+            with self.subTest(label):
+                root, coverage = self._run_case(notice, extra)
+                result = subprocess.run(
+                    ["cmake", f"-DSPARK_PACKAGE_ROOT={root}", "-P", str(PACKAGE_GATE)],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                flat = " ".join((result.stdout + result.stderr).split())
+                self.assertEqual(result.returncode == 0, not coverage.uncovered, flat)
+                for line in coverage.uncovered:
+                    self.assertIn(" ".join(line.split()), flat, "CMake gate did not report the same file")
+
+    @unittest.skipUnless(shutil.which("cmake"), "cmake is required to render the packaged notice file")
+    def test_real_packaged_notice_licenses_every_entry_and_names_files(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out = Path(tmp.name) / "THIRD_PARTY_NOTICES.txt"
+        script = Path(tmp.name) / "render.cmake"
+        script.write_text(
+            f'include("{AUDIT_MODULE.as_posix()}")\n'
+            f'spark_thirdparty_generate_notice("{(REPO_ROOT / notices.MANIFEST_PATH).as_posix()}" '
+            f'"{out.as_posix()}")\n',
+            encoding="utf-8",
+        )
+        subprocess.run(["cmake", "-P", str(script)], check=True, capture_output=True, timeout=120)
+        rules = notices.load_package_rules(RULES_PATH)
+        entries = notices.parse_package_notice(out.read_text("utf-8"), rules)
+        self.assertGreater(len(entries), 0)
+        for entry in entries:
+            self.assertEqual(entry.problem, "", f"{entry.name}: {entry.problem}")
+            self.assertTrue(entry.files, f"{entry.name} has no 'Files:' line")
+        # The real notice covers mapped payload but names none of the editor fonts.
+        root = Path(tmp.name) / "pkg"
+        (root / "include/Jolt").mkdir(parents=True)
+        (root / "include/Jolt/Jolt.h").write_text("#pragma once\n", encoding="utf-8")
+        (root / "bin/EditorAssets/Fonts").mkdir(parents=True)
+        for font in sorted((REPO_ROOT / "SparkEditor" / "Fonts").glob("*.ttf")):
+            (root / "bin/EditorAssets/Fonts" / font.name).write_bytes(b"font")
+        (root / "THIRD_PARTY_NOTICES.txt").write_bytes(out.read_bytes())
+        coverage = notices.check_package_coverage(root, rules)
+        named = {PurePosixPath(rel).name for entry in entries for rel in entry.files}
+        fonts = sorted(p.name for p in (REPO_ROOT / "SparkEditor" / "Fonts").glob("*.ttf"))
+        self.assertTrue(fonts, "SparkEditor/Fonts has no fonts; the check would be vacuous")
+        # Today no dependencies.lock entry names the editor fonts (GOV-400 D8), so
+        # every one of them must be reported; a font gains coverage only through
+        # a manifest entry that names it and ships its license text.
+        self.assertEqual(
+            sorted(line.split(":", 1)[0].rsplit("/", 1)[1] for line in coverage.uncovered),
+            [font for font in fonts if font not in named],
+        )
 
 
 @unittest.skipUnless(shutil.which("git"), "git is required for the end-to-end fixture")

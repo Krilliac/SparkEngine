@@ -209,6 +209,15 @@ These choices change `ThirdParty/` or its locks, which the SEC-110 lane owns.
 - **Editor fonts:** get each font's license text from its upstream
   distribution (do not supply it from memory), add the texts next to the
   fonts, and give them an inventory entry so both notice files include them.
+  List the font file names in the entry's required files: the packaged notice
+  prints them on a `Files:` line, and the staged-package gate
+  (`cmake/ValidateStagedPackageNotices.cmake`, rules in
+  `cmake/PackageNoticeCoverageRules.json`, also run by
+  `generate_third_party_notices.py --check-package <install root>`) covers a
+  shipped font only when an entry names it and reproduces license text. Today
+  it reports all 7 editor fonts; `ValidateStagedPackageExecutables.cmake` runs
+  it in report mode until these texts land, after which the default should
+  become `enforce`.
 - **SPDX fields:** rewrite the free-text `license` fields as SPDX expressions
   once the choices in the inventory table are made.
 - **Files that change:** `ThirdParty/dependencies.lock`;

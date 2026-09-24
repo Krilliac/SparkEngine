@@ -758,6 +758,18 @@ if(_spark_missing_runtime_files)
         "  ${_spark_missing_runtime_report}")
 endif()
 
+# GOV-400: every shipped font and third-party payload file must be covered by the
+# package's THIRD_PARTY_NOTICES.txt. The shipped editor fonts have no license
+# text until the D8 remediation lands (docs/governance/GOV-400-DECISIONS.md), so
+# release workflows run this gate in report mode: it lists every uncovered file
+# as a warning in the package log. Pass -DSPARK_PACKAGE_NOTICE_COVERAGE=enforce
+# to fail on uncovered files; running ValidateStagedPackageNotices.cmake on its
+# own always enforces unless told otherwise.
+if(NOT DEFINED SPARK_PACKAGE_NOTICE_COVERAGE OR SPARK_PACKAGE_NOTICE_COVERAGE STREQUAL "")
+    set(SPARK_PACKAGE_NOTICE_COVERAGE report)
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/ValidateStagedPackageNotices.cmake")
+
 # Console and editor have interactive entry points; all remaining required tools
 # retain their --help smoke, including service tools in the default profile.
 set(_spark_help_smoke_executables ${_spark_required_executables})

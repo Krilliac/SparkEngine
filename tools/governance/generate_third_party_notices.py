@@ -17,13 +17,21 @@ listed under "ATTENTION REQUIRED" instead of being guessed at. Tracked font
 files outside ``ThirdParty/`` are listed there too, because fonts carry their
 own licenses and nothing else in the repository inventories them.
 
+The package notice-coverage rule set (font suffixes, third-party install
+paths, and what counts as reproduced license text) lives in
+cmake/PackageNoticeCoverageRules.json. This tool and the staged-package gate
+cmake/ValidateStagedPackageNotices.cmake both read it; ``--check-package``
+applies the same rules to a staged install tree and its THIRD_PARTY_NOTICES.txt.
+
 Usage:
   python tools/governance/generate_third_party_notices.py            # write
   python tools/governance/generate_third_party_notices.py --check    # exit 1 if stale
   python tools/governance/generate_third_party_notices.py --require-complete
+  python tools/governance/generate_third_party_notices.py --check-package <install root>
 
-Exit codes: 0 ok, 1 stale output (--check) or incomplete notices
-(--require-complete), 2 malformed or unreadable inputs.
+Exit codes: 0 ok, 1 stale output (--check), incomplete notices
+(--require-complete), or uncovered package files (--check-package), 2 malformed
+or unreadable inputs.
 """
 
 from __future__ import annotations
@@ -31,10 +39,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from typing import Callable, Iterable
 
@@ -42,6 +52,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_NAME = "THIRD_PARTY_NOTICES"
 MANIFEST_PATH = "ThirdParty/dependencies.lock"
 SUPPLY_CHAIN_PATH = "ThirdParty/supply-chain.lock"
+PACKAGE_RULES_PATH = REPO_ROOT / "cmake" / "PackageNoticeCoverageRules.json"
+PACKAGE_NOTICE_NAME = "THIRD_PARTY_NOTICES.txt"
+MAX_PACKAGE_NOTICE_BYTES = 8 << 20
+MAX_PACKAGE_RULES_BYTES = 256 << 10
+PACKAGE_INVENTORY_MARKER = "\nDependency inventory\n--------------------\n"
+PACKAGE_TEXTS_MARKER = "\nComplete license and notice texts\n"
 MANIFEST_VARIABLE = "SPARK_THIRDPARTY_AUDIT_ENTRIES"
 MANIFEST_FIELD_COUNT = 10
 MAX_NOTICE_BYTES = 1 << 20
@@ -51,7 +67,6 @@ SUBRULE = "-" * 79
 LICENSE_BASENAME = re.compile(
     r"^(?:licen[cs]e|copying|notice|unlicense|patents)(?:[._-][^/]*)?$", re.IGNORECASE
 )
-FONT_SUFFIXES = frozenset({".ttf", ".otf", ".woff", ".woff2", ".ttc"})
 HEADER_SUFFIXES = frozenset({".h", ".hh", ".hpp"})
 STUB_MARKER = re.compile(r"\bstub\b", re.IGNORECASE)
 STUB_SCAN_LINES = 40
@@ -189,6 +204,258 @@ def parse_supply_chain(text: str) -> dict:
     return data
 
 
+# --------------------------------------------------------------------------- package rule set
+
+
+@dataclass(frozen=True)
+class PayloadRule:
+    pattern: re.Pattern[str]
+    component: str | None  # None for a documented first-party exemption
+    first_party: str | None
+
+
+@dataclass(frozen=True)
+class PackageRules:
+    font_suffixes: frozenset[str]
+    minimum_bytes: int
+    copyright: re.Pattern[str]
+    operative_terms: re.Pattern[str]
+    roots: tuple[re.Pattern[str], ...]
+    payload: tuple[PayloadRule, ...]
+
+
+def _rules_member(data: dict, key: str, kind: type, label: str):
+    value = data.get(key)
+    if not isinstance(value, kind) or (kind is list and not value):
+        raise NoticeInputError(f"{label}: '{key}' must be a non-empty {kind.__name__}")
+    return value
+
+
+def _rules_regex(value: object, label: str) -> re.Pattern[str]:
+    if not isinstance(value, str) or not value:
+        raise NoticeInputError(f"{label}: pattern must be a non-empty string")
+    try:
+        return re.compile(value)
+    except re.error as exc:
+        raise NoticeInputError(f"{label}: invalid pattern {value!r}: {exc}") from exc
+
+
+def parse_package_rules(text: str, label: str = "package notice rules") -> PackageRules:
+    """Parse cmake/PackageNoticeCoverageRules.json; malformed rules fail closed."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise NoticeInputError(f"{label}: invalid JSON: {exc}") from exc
+    if not isinstance(data, dict) or data.get("schema") != 1:
+        raise NoticeInputError(f"{label}: expected an object with schema 1")
+    suffixes = _rules_member(data, "fontSuffixes", list, label)
+    if not all(isinstance(s, str) and s.startswith(".") for s in suffixes):
+        raise NoticeInputError(f"{label}: fontSuffixes must be dotted extensions")
+    license_text = _rules_member(data, "licenseText", dict, label)
+    minimum = license_text.get("minimumBytes")
+    if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum < 0:
+        raise NoticeInputError(f"{label}: licenseText.minimumBytes must be a non-negative integer")
+    payload = []
+    for index, rule in enumerate(_rules_member(data, "payloadRules", list, label)):
+        where = f"{label}: payloadRules[{index}]"
+        if not isinstance(rule, dict):
+            raise NoticeInputError(f"{where} must be an object")
+        component, first_party = rule.get("component"), rule.get("firstParty")
+        has_component = isinstance(component, str) and bool(component)
+        has_first_party = isinstance(first_party, str) and bool(first_party)
+        if has_component == has_first_party:
+            raise NoticeInputError(f"{where} must name exactly one of 'component' or 'firstParty'")
+        payload.append(
+            PayloadRule(
+                _rules_regex(rule.get("pattern"), where),
+                component if has_component else None,
+                first_party if has_first_party else None,
+            )
+        )
+    return PackageRules(
+        font_suffixes=frozenset(s.lower() for s in suffixes),
+        minimum_bytes=minimum,
+        copyright=_rules_regex(license_text.get("copyrightPattern"), f"{label}: copyrightPattern"),
+        operative_terms=_rules_regex(license_text.get("operativeTermsPattern"), f"{label}: operativeTermsPattern"),
+        roots=tuple(
+            _rules_regex(p, f"{label}: thirdPartyRoots")
+            for p in _rules_member(data, "thirdPartyRoots", list, label)
+        ),
+        payload=tuple(payload),
+    )
+
+
+def load_package_rules(path: Path = PACKAGE_RULES_PATH) -> PackageRules:
+    try:
+        if path.stat().st_size > MAX_PACKAGE_RULES_BYTES:
+            raise NoticeInputError(f"{path}: exceeds {MAX_PACKAGE_RULES_BYTES} bytes")
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise NoticeInputError(f"cannot read package notice rules: {exc}") from exc
+    return parse_package_rules(text, str(path))
+
+
+@lru_cache(maxsize=1)
+def _default_font_suffixes() -> frozenset[str]:
+    return load_package_rules().font_suffixes
+
+
+def _is_font(rel: str) -> bool:
+    return PurePosixPath(rel).suffix.lower() in _default_font_suffixes()
+
+
+# --------------------------------------------------------------------------- package coverage
+
+
+@dataclass
+class NoticeEntry:
+    name: str
+    notice_files: list[str] = field(default_factory=list)
+    files: list[str] = field(default_factory=list)
+    problem: str = ""
+
+
+def _split_csv(value: str) -> list[str]:
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def parse_package_notice(text: str, rules: PackageRules, label: str = PACKAGE_NOTICE_NAME) -> list[NoticeEntry]:
+    """Parse a CMake-generated THIRD_PARTY_NOTICES.txt (cmake/SparkThirdPartyAudit.cmake).
+
+    Each inventory entry records whether every notice file it declares is
+    reproduced with license text; ``problem`` is empty when it is.
+    """
+    text = text.replace("\r\n", "\n")
+    inventory_at = text.find(PACKAGE_INVENTORY_MARKER)
+    texts_at = text.find(PACKAGE_TEXTS_MARKER)
+    if inventory_at < 0 or texts_at < 0 or texts_at < inventory_at:
+        raise NoticeInputError(
+            f"{label} does not have the generated 'Dependency inventory' and "
+            "'Complete license and notice texts' sections (cmake/SparkThirdPartyAudit.cmake)"
+        )
+    inventory = text[inventory_at + len(PACKAGE_INVENTORY_MARKER) : texts_at]
+    texts = text[texts_at + len(PACKAGE_TEXTS_MARKER) :]
+
+    entries: list[NoticeEntry] = []
+    current: NoticeEntry | None = None
+    for line in inventory.split("\n"):
+        if not line:
+            current = None
+            continue
+        if current is None:
+            if line.startswith(" "):
+                raise NoticeInputError(f"{label}: inventory field without an entry name: {line!r}")
+            current = NoticeEntry(line)
+            entries.append(current)
+        elif line.startswith("  Notice files: "):
+            current.notice_files = _split_csv(line[len("  Notice files: ") :])
+        elif line.startswith("  Files: "):
+            current.files = _split_csv(line[len("  Files: ") :])
+    if not entries:
+        raise NoticeInputError(f"{label} has an empty dependency inventory")
+
+    declared = list(dict.fromkeys(rel for entry in entries for rel in entry.notice_files))
+    positions = {rel: texts.find(f"----- {rel} -----\n") for rel in declared}
+    starts = sorted(p for p in positions.values() if p >= 0)
+    problems: dict[str, str] = {}
+    for rel in declared:
+        position = positions[rel]
+        if position < 0:
+            problems[rel] = f"license text for {rel} is not reproduced"
+            continue
+        body_start = position + len(f"----- {rel} -----\n")
+        body_end = min((p for p in starts if p >= body_start), default=len(texts))
+        body = texts[body_start:body_end].strip(" \t\n\r")
+        if len(body.encode("utf-8")) < rules.minimum_bytes:
+            problems[rel] = f"license text for {rel} is shorter than {rules.minimum_bytes} bytes"
+        elif not rules.copyright.search(body):
+            problems[rel] = f"license text for {rel} has no copyright statement"
+        elif not rules.operative_terms.search(body):
+            problems[rel] = f"license text for {rel} has no operative license terms"
+        else:
+            problems[rel] = ""
+    for entry in entries:
+        if not entry.notice_files:
+            entry.problem = "declares no notice file"
+        else:
+            entry.problem = next((problems[rel] for rel in entry.notice_files if problems[rel]), "")
+    return entries
+
+
+@dataclass
+class PackageCoverage:
+    uncovered: list[str]
+    font_count: int
+    payload_count: int
+
+
+def check_package_coverage(package_root: Path, rules: PackageRules) -> PackageCoverage:
+    """Apply the notice-coverage rules to a staged install tree.
+
+    Mirrors cmake/ValidateStagedPackageNotices.cmake; the fixture tests run both
+    implementations against the same packages and require identical verdicts.
+    """
+    notice_path = package_root / PACKAGE_NOTICE_NAME
+    if not notice_path.is_file() or notice_path.is_symlink():
+        raise NoticeInputError(f"{notice_path} is missing or is not a regular non-link file")
+    if notice_path.stat().st_size > MAX_PACKAGE_NOTICE_BYTES:
+        raise NoticeInputError(f"{notice_path} exceeds {MAX_PACKAGE_NOTICE_BYTES} bytes")
+    try:
+        notice_text = notice_path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise NoticeInputError(f"{notice_path}: not UTF-8: {exc}") from exc
+    entries = parse_package_notice(notice_text, rules, str(notice_path))
+    by_name: dict[str, NoticeEntry] = {}
+    for entry in entries:
+        by_name.setdefault(entry.name, entry)
+
+    files: list[str] = []
+    for directory, subdirs, names in os.walk(package_root):
+        base = Path(directory)
+        # Mirror CMake's GLOB_RECURSE: a symlinked directory is reported as an
+        # entry, not descended into.
+        for sub in list(subdirs):
+            if (base / sub).is_symlink():
+                subdirs.remove(sub)
+                names.append(sub)
+        for name in names:
+            files.append((base / name).relative_to(package_root).as_posix())
+
+    uncovered: list[str] = []
+    font_count = payload_count = 0
+    for rel in sorted(files):
+        name = PurePosixPath(rel).name
+        if PurePosixPath(rel).suffix.lower() in rules.font_suffixes:
+            font_count += 1
+            reason = f"not named on any 'Files:' line of {PACKAGE_NOTICE_NAME}"
+            for entry in entries:
+                if not any(PurePosixPath(named).name == name for named in entry.files):
+                    continue
+                if not entry.problem:
+                    reason = ""
+                    break
+                reason = f"named by '{entry.name}' but {entry.problem}"
+            if reason:
+                uncovered.append(f"{rel}: font {reason}")
+            continue
+
+        rule = next((r for r in rules.payload if r.pattern.search(rel)), None)
+        if rule is None:
+            if any(root.search(rel) for root in rules.roots):
+                payload_count += 1
+                uncovered.append(f"{rel}: third-party install path that no payload rule maps to a dependency")
+            continue
+        payload_count += 1
+        if rule.component is None:
+            continue
+        entry = by_name.get(rule.component)
+        if entry is None:
+            uncovered.append(f"{rel}: component '{rule.component}' has no {PACKAGE_NOTICE_NAME} inventory entry")
+        elif entry.problem:
+            uncovered.append(f"{rel}: component '{rule.component}' {entry.problem}")
+    return PackageCoverage(uncovered, font_count, payload_count)
+
+
 # --------------------------------------------------------------------------- repository access
 
 
@@ -283,7 +550,7 @@ def build_components(
             )
 
         for rel in in_tree:
-            if PurePosixPath(rel).suffix.lower() in FONT_SUFFIXES and not _has_sibling_license(rel, tracked):
+            if _is_font(rel) and not _has_sibling_license(rel, tracked):
                 component.findings.append(f"font file has no license file beside it: {rel}")
 
         for required in entry.required_files:
@@ -316,7 +583,7 @@ def uncovered_fonts(supply_chain: dict, tracked: list[str]) -> list[str]:
     """Tracked font files outside every locked ThirdParty container."""
     fonts = []
     for rel in tracked:
-        if PurePosixPath(rel).suffix.lower() not in FONT_SUFFIXES:
+        if not _is_font(rel):
             continue
         if _under(rel, "ThirdParty"):
             continue
@@ -450,11 +717,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, help=f"output path (default: <root>/{OUTPUT_NAME})")
     parser.add_argument("--check", action="store_true", help="exit 1 if the output file is stale")
     parser.add_argument(
+        "--check-package",
+        type=Path,
+        metavar="INSTALL_ROOT",
+        help="check a staged install tree's font and third-party payload notice coverage and exit",
+    )
+    parser.add_argument(
         "--require-complete",
         action="store_true",
         help="exit 1 if any locked component has no notice file on disk",
     )
     args = parser.parse_args(argv)
+    if args.check_package is not None:
+        return _check_package_main(args.check_package)
     root = args.root.resolve()
     output = args.output or root / OUTPUT_NAME
 
@@ -482,6 +757,30 @@ def main(argv: list[str] | None = None) -> int:
             print("components without a notice file on disk: " + ", ".join(missing), file=sys.stderr)
             status = 1
     return status
+
+
+def _check_package_main(package_root: Path) -> int:
+    if not package_root.is_dir():
+        print(f"error: {package_root} is not a directory", file=sys.stderr)
+        return 2
+    try:
+        coverage = check_package_coverage(package_root, load_package_rules())
+    except NoticeInputError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if coverage.uncovered:
+        print(
+            f"{len(coverage.uncovered)} shipped file(s) are not covered by {package_root / PACKAGE_NOTICE_NAME}:",
+            file=sys.stderr,
+        )
+        for line in coverage.uncovered:
+            print(f"  {line}", file=sys.stderr)
+        return 1
+    print(
+        f"notice coverage ok: {coverage.font_count} font file(s) and "
+        f"{coverage.payload_count} third-party payload file(s) in {package_root}"
+    )
+    return 0
 
 
 if __name__ == "__main__":

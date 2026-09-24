@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "description": "GOV-400 package notice-coverage rule set, shared by cmake/ValidateStagedPackageNotices.cmake (staged-package gate) and tools/governance/generate_third_party_notices.py (--check-package and the repository font inventory). Every font file in a package must be named on a 'Files:' line of a THIRD_PARTY_NOTICES.txt inventory entry whose notice files are reproduced with license text. Every file matching a payload rule must map to an inventory entry with license text, or carry a documented first-party exemption; a file under a third-party root that no rule maps is uncovered. Patterns are regular expressions over the package-relative path with '/' separators, limited to the syntax CMake and Python share (literals, escaped dots, bracket classes, groups with alternation, ? * + ^ $).",
+  "fontSuffixes": [".ttf", ".otf", ".woff", ".woff2", ".ttc"],
+  "licenseText": {
+    "minimumBytes": 200,
+    "copyrightPattern": "[Cc]opyright",
+    "operativeTermsPattern": "Permission is (hereby )?granted|Redistribution and use|public domain|TERMS AND CONDITIONS FOR USE"
+  },
+  "thirdPartyRoots": [
+    "^include/SparkEngine/ThirdParty/",
+    "^include/Jolt/",
+    "^include/SDL2/",
+    "^lib/cmake/SDL2/"
+  ],
+  "payloadRules": [
+    {
+      "pattern": "^include/SparkEngine/ThirdParty/(angelscript|AngelScriptPackedBytecode)\\.h$",
+      "firstParty": "Installed from ThirdParty/Scripting/patches, which ThirdParty/supply-chain.lock records as first-party integration headers."
+    },
+    {"pattern": "^include/SparkEngine/ThirdParty/angelscript_upstream/", "component": "AngelScript"},
+    {
+      "pattern": "^include/SparkEngine/ThirdParty/(autowrapper|contextmgr|datetime|debugger|scriptany|scriptarray|scriptbuilder|scriptdictionary|scriptfile|scriptgrid|scripthandle|scripthelper|scriptmath|scriptsocket|scriptstdstring|serializer|weakref)/",
+      "component": "AngelScript"
+    },
+    {"pattern": "^include/SparkEngine/ThirdParty/(backends|examples|misc)/", "component": "Dear ImGui"},
+    {"pattern": "^include/SparkEngine/ThirdParty/(imconfig|imgui|imgui_internal|imstb_rectpack|imstb_textedit|imstb_truetype)\\.h$", "component": "Dear ImGui"},
+    {"pattern": "^include/SparkEngine/ThirdParty/entt/", "component": "EnTT"},
+    {"pattern": "^include/SparkEngine/ThirdParty/cgltf/", "component": "cgltf"},
+    {"pattern": "^include/SparkEngine/ThirdParty/glad/", "component": "glad"},
+    {"pattern": "^include/SparkEngine/ThirdParty/json/", "component": "nlohmann/json"},
+    {"pattern": "^include/SparkEngine/ThirdParty/miniaudio/", "component": "miniaudio"},
+    {"pattern": "^include/SparkEngine/ThirdParty/miniz/", "component": "miniz"},
+    {"pattern": "^include/SparkEngine/ThirdParty/recast/", "component": "RecastNavigation"},
+    {"pattern": "^include/SparkEngine/ThirdParty/stb/", "component": "stb_image"},
+    {"pattern": "^include/SparkEngine/ThirdParty/tinyexr/", "component": "tinyexr"},
+    {"pattern": "^include/SparkEngine/ThirdParty/tinyobjloader/", "component": "tinyobjloader"},
+    {"pattern": "^include/SparkEngine/ThirdParty/zstd/", "component": "zstd"},
+    {"pattern": "^include/Jolt/", "component": "Jolt Physics"},
+    {"pattern": "^include/SDL2/", "component": "SDL2"},
+    {"pattern": "^lib/cmake/SDL2/", "component": "SDL2"},
+    {"pattern": "^(bin|lib)/(lib)?SDL2[^/]*$", "component": "SDL2"},
+    {"pattern": "^lib/(lib)?Jolt\\.(a|lib)$", "component": "Jolt Physics"},
+    {"pattern": "^lib/(lib)?(Recast|Detour)\\.(a|lib)$", "component": "RecastNavigation"},
+    {"pattern": "^lib/(lib)?angelscript\\.(a|lib)$", "component": "AngelScript"},
+    {"pattern": "^lib/(lib)?cgltf\\.(a|lib)$", "component": "cgltf"},
+    {"pattern": "^lib/(lib)?glad\\.(a|lib)$", "component": "glad"},
+    {"pattern": "^lib/(lib)?miniaudio\\.(a|lib)$", "component": "miniaudio"},
+    {"pattern": "^lib/(lib)?miniz\\.(a|lib)$", "component": "miniz"},
+    {"pattern": "^lib/(lib)?stb_image\\.(a|lib)$", "component": "stb_image"},
+    {"pattern": "^lib/(lib)?tinyexr\\.(a|lib)$", "component": "tinyexr"},
+    {"pattern": "^lib/(lib)?tinyobjloader\\.(a|lib)$", "component": "tinyobjloader"},
+    {"pattern": "^lib/(lib)?zstd\\.(a|lib)$", "component": "zstd"}
+  ]
+}
