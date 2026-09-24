@@ -7,11 +7,13 @@
 
 #include "EditorCrashHandler.h"
 #include "EditorLogger.h"
+#include "Utils/StackTrace.h"
 #include "Utils/Validate.h"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
 #include <chrono>
+#include <atomic>
 #include <cerrno>
 #include <cstdint>
 #include <ctime>
@@ -405,6 +407,21 @@ namespace SparkEditor
 
     void EditorCrashHandler::HandleCrashInternal(EXCEPTION_POINTERS* exceptionPointers)
     {
+        // A fault inside DbgHelp, logging, or a crash callback can re-enter
+        // this filter on the same thread while m_statsMutex is held. Reject
+        // recursive and concurrent reports before taking any editor mutex.
+        static std::atomic_flag crashInProgress = ATOMIC_FLAG_INIT;
+        if (crashInProgress.test_and_set(std::memory_order_acquire))
+        {
+            OutputDebugStringA("[SparkEditor] Reentrant crash report ignored.\n");
+            return;
+        }
+        struct ResetCrashInProgress
+        {
+            std::atomic_flag& flag;
+            ~ResetCrashInProgress() { flag.clear(std::memory_order_release); }
+        } reset{crashInProgress};
+
         std::lock_guard<std::mutex> lock(m_statsMutex);
         m_stats.totalCrashes++;
 
@@ -512,11 +529,22 @@ namespace SparkEditor
 
         std::string result = "=== Stack Trace ===\n";
 
-        SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-        if (!SymInitialize(GetCurrentProcess(), nullptr, TRUE))
+        // SparkEditor links SparkEngineLib, so both crash paths share DbgHelp
+        // state in this process. Never initialize or clean up a second symbol
+        // handler, and never call DbgHelp while another thread is using it.
+        Spark::StackTrace::SymbolLockLease symbolLock(true);
+        if (!symbolLock.owns_lock())
         {
-            return result + "Failed to initialize symbol handler\n";
+            if (exceptionPointers->ExceptionRecord)
+            {
+                std::ostringstream address;
+                address << "DbgHelp busy; exception address 0x" << std::hex
+                        << reinterpret_cast<uintptr_t>(exceptionPointers->ExceptionRecord->ExceptionAddress) << "\n";
+                return result + address.str();
+            }
+            return result + "DbgHelp busy; stack symbols unavailable\n";
         }
+        Spark::StackTrace::EnsureSymbolsInitialized();
 
         CONTEXT& ctx = *exceptionPointers->ContextRecord;
         STACKFRAME64 frame = {};
@@ -574,7 +602,6 @@ namespace SparkEditor
             result += line;
         }
 
-        SymCleanup(GetCurrentProcess());
         return result;
     }
 
@@ -636,6 +663,13 @@ namespace SparkEditor
     {
         if (!exceptionPointers)
             return false;
+
+        Spark::StackTrace::SymbolLockLease symbolLock(true);
+        if (!symbolLock.owns_lock())
+        {
+            OutputDebugStringA("[SparkEditor] DbgHelp busy; crash dump was not written.\n");
+            return false;
+        }
 
         std::wstring wpath(filePath.begin(), filePath.end());
 

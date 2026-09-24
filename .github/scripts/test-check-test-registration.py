@@ -12,6 +12,10 @@ SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "check-test-registratio
 
 
 def bash_executable() -> str | None:
+    if os.name == "nt":
+        git_bash = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+        if git_bash.is_file():
+            return str(git_bash)
     found = shutil.which("bash")
     if found:
         return found
@@ -57,7 +61,7 @@ class CheckTestRegistrationTests(unittest.TestCase):
         env = os.environ.copy()
         env["SPARK_TEST_REGISTRATION_ROOT"] = self.root.as_posix()
         return subprocess.run(
-            [bash, str(SCRIPT)],
+            [bash, SCRIPT.as_posix()],
             cwd=SCRIPT.parents[1],
             env=env,
             text=True,

@@ -248,6 +248,29 @@ class ExtractedPackageValidationTests(unittest.TestCase):
         library = package / "lib" / "SparkEngineLib.lib"
         library.parent.mkdir(parents=True)
         library.write_bytes(library_data)
+        runtime_assets = package / "bin" / "Assets"
+        runtime_assets.mkdir(parents=True)
+        payload = b"packaged asset\n"
+        (runtime_assets / "fixture.bin").write_bytes(payload)
+        (runtime_assets / "assets.integrity.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "algorithm": "sha256",
+                    "root": "Assets",
+                    "fileCount": 1,
+                    "entries": [
+                        {
+                            "path": "fixture.bin",
+                            "sha256": hashlib.sha256(payload).hexdigest(),
+                            "size": len(payload),
+                        }
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         return package
 
     def test_clean_package_and_matching_stage_pass(self) -> None:
@@ -266,6 +289,22 @@ class ExtractedPackageValidationTests(unittest.TestCase):
 
             self.assertIn("staged/extracted SHA-256 match", output.getvalue())
             self.assertIn("headroom below 2 GiB", output.getvalue())
+
+    def test_rejects_missing_runtime_asset_integrity_manifest(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
+            package = self._package(Path(temporary))
+            (package / "bin" / "Assets" / "assets.integrity.json").unlink()
+            with self.assertRaisesRegex(
+                MODULE.ValidationError, "asset integrity manifest is missing"
+            ):
+                MODULE.validate_package(package, None, None)
+
+    def test_rejects_tampered_runtime_asset(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
+            package = self._package(Path(temporary))
+            (package / "bin" / "Assets" / "fixture.bin").write_bytes(b"tampered\n")
+            with self.assertRaisesRegex(MODULE.ValidationError, "Asset integrity"):
+                MODULE.validate_package(package, None, None)
 
     def test_rejects_any_sibling_outside_selected_extracted_package(self) -> None:
         for sibling_kind in ("file", "directory", "link-like"):
@@ -557,6 +596,11 @@ class ShippingPackageBomTests(unittest.TestCase):
 
 
 class ExtractedPackageWorkflowWiringTests(unittest.TestCase):
+    def test_component_archives_include_one_package_root(self) -> None:
+        cpack_options = (ROOT / "cmake" / "SparkCPackOptions.cmake").read_text(encoding="utf-8")
+        self.assertIn('if(CPACK_GENERATOR STREQUAL "ZIP" OR CPACK_GENERATOR STREQUAL "TGZ")', cpack_options)
+        self.assertIn("set(CPACK_COMPONENT_INCLUDE_TOPLEVEL_DIRECTORY ON)", cpack_options)
+
     def test_all_portable_platforms_run_the_full_extracted_gate(self) -> None:
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         runtime_header = "    - name: Validate Windows stable runtime component layout\n"
@@ -571,7 +615,12 @@ class ExtractedPackageWorkflowWiringTests(unittest.TestCase):
         self.assertEqual(workflow.count("validate-extracted-package.py"), 6)
         self.assertEqual(workflow.count("--preflight-archive"), 3)
         self.assertEqual(workflow.count("--stage-root"), 3)
+        # These are the three platform package validators. The protected
+        # signature bundle is generated after asset freeze and extracted by
+        # the independent consumer, which has its own focused contract tests.
         self.assertEqual(workflow.count("--archive"), 3)
+        self.assertIn("sign_release_bundle.ps1", workflow)
+        self.assertIn('--signature-control-asset "SparkEngine-release-signature-bundle.tar.gz"', workflow)
         self.assertEqual(workflow.count("package-template-smoke-build"), 3)
         self.assertIn(
             'SPARK_TEMPLATE_ROOT="$packageRoot/share/SparkEngine/templates"', workflow

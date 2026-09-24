@@ -399,6 +399,19 @@ static bool AddDuplicateComment(const CrashConfig& cfg, int issueNumber, const s
 
 bool UploadCrashToGitHub(const CrashConfig& cfg, const std::string& logContent, const std::string& zipPath)
 {
+#if defined(SPARK_BUILD_SHIPPING)
+    // The standalone SparkCrashReporter owns the public, metadata-only GitHub
+    // Issue flow.  Never let a shipped engine process send raw crash artifacts
+    // or a reusable PAT to the GitHub API, and never leave an orphan draft
+    // release behind when the process exits between asset and issue creation.
+    (void)cfg;
+    (void)logContent;
+    (void)zipPath;
+    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                   "CrashReportUploader: direct GitHub uploads are disabled in shipping builds; "
+                   "use SparkCrashReporter for the explicit metadata-only flow");
+    return false;
+#else
     if (cfg.githubRepo.empty() || cfg.githubToken.empty())
     {
         SPARK_LOG_WARN(Spark::LogCategory::Core,
@@ -677,6 +690,7 @@ bool UploadCrashToGitHub(const CrashConfig& cfg, const std::string& logContent, 
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "CrashReportUploader: Failed to create GitHub issue");
     }
     return success;
+#endif // SPARK_BUILD_SHIPPING
 }
 
 // ============================================================================
@@ -695,7 +709,7 @@ bool UploadCrashToProxy(const CrashConfig& cfg, const std::string& logContent, c
         return false;
 
     SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashReportUploader: Uploading crash report to proxy: %s",
-                   cfg.proxyURL.c_str());
+                   RedactCrashEndpointForLog(cfg.proxyURL).c_str());
 
     // Build title from crash log
     std::string title = "Crash Report";
@@ -929,7 +943,7 @@ bool UploadCrashToFTP(const CrashConfig& cfg, const std::string& zipPath)
         return false;
 
     SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashReportUploader: Uploading crash dump via FTP to %s",
-                   cfg.uploadURL.c_str());
+                   RedactCrashEndpointForLog(cfg.uploadURL).c_str());
 
     std::string filename = std::filesystem::path(zipPath).filename().string();
     std::string ftpUrl = cfg.uploadURL;
@@ -1166,7 +1180,7 @@ bool UploadCrashReport(const CrashConfig& cfg, const std::string& logContent, co
             return false;
 
         SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashReportUploader: Uploading via generic HTTP POST to %s",
-                       url.c_str());
+                       RedactCrashEndpointForLog(url).c_str());
 
         CURL* c = curl_easy_init();
         if (!c)
@@ -1212,7 +1226,8 @@ bool UploadCrashReport(const CrashConfig& cfg, const std::string& logContent, co
         return success;
     }
 
-    SPARK_LOG_WARN(Spark::LogCategory::Core, "CrashReportUploader: Unrecognized URL scheme: %s", url.c_str());
+    SPARK_LOG_WARN(Spark::LogCategory::Core, "CrashReportUploader: Unrecognized URL scheme: %s",
+                   RedactCrashEndpointForLog(url).c_str());
     return false;
 }
 

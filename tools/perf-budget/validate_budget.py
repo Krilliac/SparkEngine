@@ -353,8 +353,8 @@ def _identity(file_stat: os.stat_result) -> tuple[int, int]:
     return file_stat.st_dev, file_stat.st_ino
 
 
-def validate_trusted_directory(path: Path, label: str) -> list[str]:
-    """Reject aliases or reparse points anywhere in a governance-root path."""
+def validate_directory_path(path: Path, label: str) -> list[str]:
+    """Return diagnostics for aliases or reparse points in a governance root."""
     absolute = Path(os.path.abspath(path))
     components = list(reversed(absolute.parents)) + [absolute]
     if len(components) > MAX_PATH_COMPONENTS:
@@ -368,8 +368,7 @@ def validate_trusted_directory(path: Path, label: str) -> list[str]:
             return [f"{label}: missing required directory"]
         except OSError as exc:
             return [
-                f"{label}: cannot inspect directory path: "
-                f"{exc.strerror or type(exc).__name__}"
+                f"{label}: cannot inspect directory path (errno={exc.errno})"
             ]
         if _is_reparse_stat(component_stat):
             return [
@@ -382,8 +381,7 @@ def validate_trusted_directory(path: Path, label: str) -> list[str]:
         canonical = absolute.resolve(strict=True)
     except OSError as exc:
         return [
-            f"{label}: cannot resolve directory path: "
-            f"{exc.strerror or type(exc).__name__}"
+            f"{label}: cannot resolve directory path (errno={exc.errno})"
         ]
     # Ignore drive/UNC anchor spelling, which is not a directory entry. On
     # Windows resolve() returns the stored long-name case for every component.
@@ -432,7 +430,7 @@ def load_bounded_json(path: Path, label: str, *,
     links, containment escapes, and identity/content changes across the read.
     """
     root = trusted_root if trusted_root is not None else path.parent
-    root_errors = validate_trusted_directory(root, f"{label} root")
+    root_errors = validate_directory_path(root, f"{label} root")
     if root_errors:
         return None, root_errors
     try:
@@ -507,7 +505,7 @@ def load_bounded_json(path: Path, label: str, *,
         root_after = root.lstat()
     except OSError as exc:
         return None, [f"{label}: cannot re-inspect file: {exc.strerror or type(exc).__name__}"]
-    final_root_errors = validate_trusted_directory(root, f"{label} root")
+    final_root_errors = validate_directory_path(root, f"{label} root")
     if final_root_errors:
         return None, final_root_errors
     final_exact_errors = _check_exact_entry(path, label)
@@ -937,10 +935,16 @@ def validate_baselines(data: Any, metric_definitions: Any,
             if metric.get("status") != "active":
                 continue
             metric_hardware = metric.get("hardwareRowId")
-            applicable_hardware = (
-                known_hardware if metric_hardware is None
-                else frozenset({metric_hardware})
-            )
+            if metric_hardware is None:
+                applicable_hardware = known_hardware
+            elif isinstance(metric_hardware, str):
+                applicable_hardware = frozenset({metric_hardware})
+            else:
+                errors.append(
+                    f"baselines: active metric {metric_id!r} has an invalid "
+                    "hardwareRowId; expected a string or null"
+                )
+                applicable_hardware = frozenset()
             for hardware_id in sorted(
                     value for value in applicable_hardware if isinstance(value, str)):
                 key = (metric_id.casefold(), hardware_id.casefold())
@@ -986,6 +990,10 @@ def validate_result(data: Any, hardware_ids: Any, *,
     ))
     if not isinstance(measurements, list):
         return errors
+    if not measurements:
+        errors.append(
+            "result: measurements must contain at least one measurement"
+        )
 
     seen_ids: set[str] = set()
     for index, measurement in enumerate(measurements[:MAX_MEASUREMENTS]):
@@ -1027,7 +1035,7 @@ def validate_result(data: Any, hardware_ids: Any, *,
 
 def validate_suite(budget_dir: Path) -> list[str]:
     """Validate all three files in a versioned budget directory."""
-    directory_errors = validate_trusted_directory(budget_dir, "budget directory")
+    directory_errors = validate_directory_path(budget_dir, "budget directory")
     if directory_errors:
         return directory_errors
     hardware_data, hardware_load_errors = load_bounded_json(

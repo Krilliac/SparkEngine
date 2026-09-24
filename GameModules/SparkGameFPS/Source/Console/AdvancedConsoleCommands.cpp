@@ -22,7 +22,6 @@
 #include "Graphics/PostProcessingPipeline.h"
 #include "Graphics/AssetPipeline.h"
 #include "Physics/PhysicsSystem.h"
-#include "Core/EngineContext.h"
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -46,8 +45,6 @@ namespace
         Spark::SimpleConsole& m_console;
     };
 } // namespace
-
-// EngineContext accessed via EngineContext::Get()
 
 namespace SparkConsole
 {
@@ -292,9 +289,10 @@ namespace SparkConsole
 
         console.RegisterCommand(
             "physics_list",
-            [graphics](const std::vector<std::string>&) -> std::string
+            [game](const std::vector<std::string>&) -> std::string
             {
-                if (auto physicsSystem = EngineContext::Get() ? EngineContext::Get()->GetPhysics() : nullptr)
+                auto* context = game ? game->GetEngineContext() : nullptr;
+                if (auto* physicsSystem = context ? context->GetPhysics() : nullptr)
                 {
                     return physicsSystem->Console_ListBodies();
                 }
@@ -304,11 +302,12 @@ namespace SparkConsole
 
         console.RegisterCommand(
             "gravity",
-            [graphics](const std::vector<std::string>& args) -> std::string
+            [game](const std::vector<std::string>& args) -> std::string
             {
                 if (args.size() < 4)
                     return "Usage: gravity <x> <y> <z>";
-                if (auto physicsSystem = EngineContext::Get() ? EngineContext::Get()->GetPhysics() : nullptr)
+                auto* context = game ? game->GetEngineContext() : nullptr;
+                if (auto* physicsSystem = context ? context->GetPhysics() : nullptr)
                 {
                     try
                     {

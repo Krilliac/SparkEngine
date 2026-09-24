@@ -1,14 +1,18 @@
 /**
  * @file GamePackager.h
- * @brief Game packaging pipeline for distribution builds
+ * @brief Compatibility surface for the canonical build packager.
+ *
+ * The packaging implementation is owned by Engine/Build/GamePackager.h/.cpp.
+ * This header remains source-compatible with the original Core API while
+ * forwarding all work to that implementation.
  */
 
 #pragma once
 
+#include "Engine/Build/GamePackager.h"
+
 #include <cstdint>
-#include <filesystem>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace Spark
@@ -49,18 +53,28 @@ namespace Spark
         uint32_t dllCount = 0;
     };
 
+    /**
+     * @brief Legacy Core facade over Spark::Build::GamePackager.
+     *
+     * [game thread] The canonical packager is intentionally not thread-safe;
+     * callers must invoke this facade from the main/game thread.
+     */
     class GamePackager
     {
       public:
         static GamePackager& GetInstance();
 
+        // [game thread]
         void Initialize();
+        // [game thread]
         void Shutdown();
-
+        // [game thread]
         PackageResult Package(const PackageConfig& config);
+        // [game thread, non-thread-safe]
         [[nodiscard]] std::vector<std::string> ValidateConfig(const PackageConfig& config) const;
+        // [game thread, non-thread-safe]
         [[nodiscard]] std::vector<TargetPlatform> GetSupportedPlatforms() const;
-
+        // [game thread, non-thread-safe]
         [[nodiscard]] std::string Console_GetStatus() const;
 
       private:
@@ -69,20 +83,6 @@ namespace Spark
         GamePackager(const GamePackager&) = delete;
         GamePackager& operator=(const GamePackager&) = delete;
 
-        [[nodiscard]] static std::string_view PlatformToString(TargetPlatform p);
-        [[nodiscard]] static std::string_view GetDllExtension(TargetPlatform p);
-        [[nodiscard]] static std::string_view GetExeExtension(TargetPlatform p);
-
-        [[nodiscard]] std::pair<uint32_t, std::vector<std::string>> CookAssets(
-            const PackageConfig& config, const std::filesystem::path& outputRoot) const;
-        [[nodiscard]] std::pair<uint32_t, std::vector<std::string>> CopyBinaries(
-            const PackageConfig& config, const std::filesystem::path& outputRoot) const;
-        [[nodiscard]] std::vector<std::string> StripSymbols(const std::filesystem::path& outputRoot) const;
-        [[nodiscard]] bool CreateManifest(const PackageConfig& config, const std::filesystem::path& outputRoot,
-                                          const PackageResult& result) const;
-        [[nodiscard]] std::vector<std::string> CompressOutput(const std::filesystem::path& outputRoot) const;
-
-      private:
         bool m_initialized = false;
         std::vector<TargetPlatform> m_supportedPlatforms;
         PackageResult m_lastResult;

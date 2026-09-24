@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(SparkCrashReporter)
+if(NOT DEFINED SPARK_ENGINE_VERSION OR SPARK_ENGINE_VERSION STREQUAL "")
+    include("${CMAKE_CURRENT_LIST_DIR}/../cmake/SparkWindowsVersionInfo.cmake")
+    spark_resolve_engine_version(SPARK_ENGINE_VERSION)
+endif()
+project(SparkCrashReporter VERSION ${SPARK_ENGINE_VERSION})
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,6 +35,7 @@ if(REPORTER_SOURCES)
 
     target_compile_definitions(SparkCrashReporter PRIVATE
         _CRT_SECURE_NO_WARNINGS
+        SPARK_CRASH_REPORTER_VERSION=\"${PROJECT_VERSION}\"
     )
     if(WIN32)
         target_compile_definitions(SparkCrashReporter PRIVATE
@@ -39,7 +44,7 @@ if(REPORTER_SOURCES)
             SPARK_PLATFORM_WINDOWS
         )
         target_link_libraries(SparkCrashReporter PRIVATE
-            kernel32 user32
+            kernel32 user32 bcrypt
         )
     else()
         find_package(Threads REQUIRED)
@@ -57,10 +62,34 @@ if(REPORTER_SOURCES)
     if(BUILD_TESTS)
         enable_testing()
 
+        add_executable(SparkCrashReporterFakeGh tests/FakeGh.cpp)
+
+        add_executable(SparkCrashReporterProductionTimeoutTests
+            tests/CrashReporterProductionTimeoutTests.cpp
+            src/CrashAutoIssues.cpp
+            src/CrashAutoIssues.h
+        )
+        add_dependencies(SparkCrashReporterProductionTimeoutTests SparkCrashReporterFakeGh)
+        target_include_directories(SparkCrashReporterProductionTimeoutTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_compile_definitions(SparkCrashReporterProductionTimeoutTests PRIVATE
+            SPARK_CRASH_REPORTER_VERSION="${PROJECT_VERSION}"
+        )
+        if(WIN32)
+            target_compile_definitions(SparkCrashReporterProductionTimeoutTests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+            target_link_libraries(SparkCrashReporterProductionTimeoutTests PRIVATE kernel32 user32 bcrypt)
+        else()
+            target_link_libraries(SparkCrashReporterProductionTimeoutTests PRIVATE Threads::Threads)
+        endif()
+        add_test(NAME SparkCrashReporter.ProductionTimeout
+                 COMMAND SparkCrashReporterProductionTimeoutTests $<TARGET_FILE:SparkCrashReporterFakeGh>)
+        set_tests_properties(SparkCrashReporter.ProductionTimeout PROPERTIES TIMEOUT 5)
+
         add_executable(SparkCrashReporterManifestTests
             tests/CrashReporterManifestTests.cpp
             src/CrashReporterApp.cpp
             src/CrashReporterApp.h
+            src/CrashAutoIssues.cpp
+            src/CrashAutoIssues.h
         )
         target_include_directories(SparkCrashReporterManifestTests PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -68,6 +97,8 @@ if(REPORTER_SOURCES)
         )
         target_compile_definitions(SparkCrashReporterManifestTests PRIVATE
             _CRT_SECURE_NO_WARNINGS
+            SPARK_CRASH_REPORTER_VERSION="${PROJECT_VERSION}"
+            SPARK_AUTO_ISSUE_TEST_TIMEOUT_MS=400
         )
         if(WIN32)
             target_compile_definitions(SparkCrashReporterManifestTests PRIVATE
@@ -83,7 +114,46 @@ if(REPORTER_SOURCES)
         endif()
 
         add_test(NAME SparkCrashReporter.ManifestCompatibility
-                 COMMAND SparkCrashReporterManifestTests)
+                 COMMAND SparkCrashReporterManifestTests $<TARGET_FILE:SparkCrashReporterFakeGh>)
+
+        # OPS-100: an unanswered or non-explicit consent prompt transmits nothing.
+        add_executable(SparkCrashReporterConsentTests
+            tests/CrashReporterConsentTests.cpp
+            src/CrashReporterApp.cpp
+            src/CrashReporterApp.h
+            src/CrashAutoIssues.cpp
+            src/CrashAutoIssues.h
+        )
+        add_dependencies(SparkCrashReporterConsentTests SparkCrashReporterFakeGh)
+        target_include_directories(SparkCrashReporterConsentTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_compile_definitions(SparkCrashReporterConsentTests PRIVATE
+            _CRT_SECURE_NO_WARNINGS
+            SPARK_CRASH_REPORTER_VERSION="${PROJECT_VERSION}"
+            SPARK_AUTO_ISSUE_TEST_TIMEOUT_MS=400
+        )
+        if(WIN32)
+            target_compile_definitions(SparkCrashReporterConsentTests PRIVATE
+                WIN32_LEAN_AND_MEAN
+                NOMINMAX
+                SPARK_PLATFORM_WINDOWS
+            )
+            target_link_libraries(SparkCrashReporterConsentTests PRIVATE kernel32 user32 advapi32 bcrypt)
+        else()
+            target_link_libraries(SparkCrashReporterConsentTests PRIVATE Threads::Threads)
+        endif()
+        add_test(NAME SparkCrashReporter.CrashReporter_Consent
+                 COMMAND SparkCrashReporterConsentTests $<TARGET_FILE:SparkCrashReporterFakeGh>)
+        set_tests_properties(SparkCrashReporter.CrashReporter_Consent PROPERTIES
+                             TIMEOUT 30
+                             LABELS "crash-security;security;unit")
+
+        add_test(NAME SparkCrashReporter.ExecutableSmoke
+                 COMMAND ${CMAKE_COMMAND}
+                         -DREPORTER=$<TARGET_FILE:SparkCrashReporter>
+                         -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/spark-crash-reporter-executable-smoke
+                         -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/CrashReporterExecutableSmoke.cmake)
+        set_tests_properties(SparkCrashReporter.ExecutableSmoke PROPERTIES
+                             TIMEOUT 30)
     endif()
 else()
     message(STATUS "SparkCrashReporter: no source files found, skipping")

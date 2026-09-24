@@ -24,6 +24,24 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
+#include <cmath>
+#include <cerrno>
+#include <cstring>
+#include <atomic>
+#include <optional>
+#include <memory>
+#include <system_error>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 using DirectX::XMFLOAT3;
 
@@ -36,6 +54,473 @@ static std::string WideToNarrow(const std::wstring& wide)
         narrow.push_back(static_cast<char>(wc));
     return narrow;
 }
+
+// Narrow cache/file APIs are usable only when their spelling resolves to the
+// same native path. Keep the existing fast path for ASCII/ACP-compatible
+// paths, but never let a lossy conversion choose a different file or cache key.
+static std::optional<std::string> NarrowPathIfRoundTrips(const std::wstring& wide)
+{
+    const std::string narrow = WideToNarrow(wide);
+    try
+    {
+        if (std::filesystem::path(narrow) == std::filesystem::path(wide))
+            return narrow;
+    }
+    catch (const std::exception&)
+    {
+    }
+    return std::nullopt;
+}
+
+namespace
+{
+    bool IsFinite(const DirectX::XMFLOAT3& value)
+    {
+        return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+    }
+
+    // Rebuild the derived child lists only after every parent reference has
+    // been read. This deliberately permits forward references in the stable
+    // line-oriented format while rejecting dangling/cyclic hierarchies.
+    bool ValidateAndRebuildHierarchy(std::vector<SceneNode>& nodes)
+    {
+        for (auto& node : nodes)
+            node.childIndices.clear();
+
+        for (size_t i = 0; i < nodes.size(); ++i)
+        {
+            auto& node = nodes[i];
+            if (node.type.empty() || node.name.empty() || !IsFinite(node.position) || !IsFinite(node.rotation) ||
+                !IsFinite(node.scale))
+                return false;
+            if (node.parentIndex < -1 || node.parentIndex >= static_cast<int>(nodes.size()) ||
+                node.parentIndex == static_cast<int>(i))
+                return false;
+            if (node.parentIndex >= 0)
+                nodes[static_cast<size_t>(node.parentIndex)].childIndices.push_back(static_cast<int>(i));
+        }
+
+        // A parent chain must terminate at a root. Besides catching cycles,
+        // this bounds validation independently of scene size.
+        for (size_t i = 0; i < nodes.size(); ++i)
+        {
+            size_t current = i;
+            for (size_t steps = 0; steps <= nodes.size(); ++steps)
+            {
+                const int parent = nodes[current].parentIndex;
+                if (parent < 0)
+                    break;
+                current = static_cast<size_t>(parent);
+                if (steps == nodes.size())
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    bool FlushFileDurably(const std::filesystem::path& path, std::error_code& error)
+    {
+#if defined(_WIN32)
+        const HANDLE file = ::CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                          FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            return false;
+        }
+        const bool flushed = ::FlushFileBuffers(file) != FALSE;
+        const DWORD flushError = flushed ? ERROR_SUCCESS : ::GetLastError();
+        ::CloseHandle(file);
+        if (!flushed)
+        {
+            error = std::error_code(static_cast<int>(flushError), std::system_category());
+            return false;
+        }
+        return true;
+#else
+        const int file = ::open(path.c_str(), O_RDONLY);
+        if (file < 0)
+        {
+            error = std::error_code(errno, std::generic_category());
+            return false;
+        }
+        const bool flushed = ::fsync(file) == 0;
+        const int flushError = flushed ? 0 : errno;
+        ::close(file);
+        if (!flushed)
+        {
+            error = std::error_code(flushError, std::generic_category());
+            return false;
+        }
+        return true;
+#endif
+    }
+
+    bool ReplaceFileAtomically(const std::filesystem::path& temporary, const std::filesystem::path& destination,
+                               std::error_code& error)
+    {
+#if defined(_WIN32)
+        if (::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            return true;
+        error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+        return false;
+#else
+        std::filesystem::rename(temporary, destination, error);
+        if (error)
+            return false;
+        const auto directory = destination.has_parent_path() ? destination.parent_path() : std::filesystem::path(".");
+#if defined(O_DIRECTORY)
+        const int directoryFile = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY);
+#else
+        const int directoryFile = ::open(directory.c_str(), O_RDONLY);
+#endif
+        if (directoryFile < 0)
+        {
+            error = std::error_code(errno, std::generic_category());
+            SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                           "SceneManager: destination replaced but directory fsync is unavailable: %s",
+                           error.message().c_str());
+            return true;
+        }
+        const bool flushed = ::fsync(directoryFile) == 0;
+        const int flushError = flushed ? 0 : errno;
+        ::close(directoryFile);
+        if (!flushed)
+        {
+            error = std::error_code(flushError, std::generic_category());
+            // rename() already made the new image visible. Do not report a
+            // failed save or attempt rollback after that point: callers rely
+            // on false meaning that the old destination remains intact, and
+            // directory fsync is unsupported on some macOS filesystems.
+            SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                           "SceneManager: destination replaced but directory fsync failed: %s",
+                           error.message().c_str());
+        }
+        return true;
+#endif
+    }
+
+    std::filesystem::path MakeUniqueTemporaryPath(const std::filesystem::path& destination)
+    {
+        static std::atomic<uint64_t> sequence{0};
+        const auto threadHash = std::hash<std::thread::id>{}(std::this_thread::get_id());
+        for (int attempt = 0; attempt < 64; ++attempt)
+        {
+            const uint64_t serial = sequence.fetch_add(1, std::memory_order_relaxed);
+            std::filesystem::path candidate = destination;
+            candidate += ".tmp." + std::to_string(threadHash) + "." + std::to_string(serial);
+            std::error_code existsError;
+            if (!std::filesystem::exists(candidate, existsError) && !existsError)
+                return candidate;
+        }
+        return {};
+    }
+
+    bool WriteDurableText(const std::filesystem::path& path, const std::string& text, std::error_code& error)
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        if (!output.is_open())
+            return false;
+        output.write(text.data(), static_cast<std::streamsize>(text.size()));
+        output.flush();
+        output.close();
+        if (output.fail())
+            return false;
+        return FlushFileDurably(path, error);
+    }
+
+    void RemoveFileNoThrow(const std::filesystem::path& path)
+    {
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+    }
+
+    // ------------------------------------------------------------------
+    // Root-confined save (SaveSceneWithinRoot)
+    //
+    // The destination is never re-resolved by path after it is validated.
+    // Each directory below the trusted root is opened one component at a
+    // time and kept open; the temporary file is created exclusively inside
+    // that held directory and renamed over the destination there. POSIX
+    // pins the directory with an fd (openat + O_NOFOLLOW); Windows pins
+    // every component with a handle that denies FILE_SHARE_DELETE, so no
+    // component can be renamed or replaced until the save finishes.
+    // ------------------------------------------------------------------
+
+    bool IsConfinedRelativeScenePath(const std::filesystem::path& relative)
+    {
+        if (relative.empty() || relative.has_root_name() || relative.has_root_directory())
+            return false;
+        for (const auto& component : relative)
+        {
+            if (component.empty() || component == "." || component == "..")
+                return false;
+        }
+        const auto extension = relative.extension();
+        return (extension == ".scene" || extension == ".json") && !relative.stem().empty();
+    }
+
+    std::filesystem::path MakeTemporaryName(const std::filesystem::path& leaf, uint64_t serial)
+    {
+        std::filesystem::path name = leaf;
+        name += ".tmp." + std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id())) + "." +
+                std::to_string(serial);
+        return name;
+    }
+
+#if defined(_WIN32)
+    struct HandleCloser
+    {
+        void operator()(HANDLE handle) const
+        {
+            if (handle && handle != INVALID_HANDLE_VALUE)
+                ::CloseHandle(handle);
+        }
+    };
+    using UniqueHandle = std::unique_ptr<void, HandleCloser>;
+
+    // Opens a directory without following a reparse point in its last
+    // component and without FILE_SHARE_DELETE, which pins it: while the
+    // handle is open the directory cannot be renamed, deleted or replaced.
+    UniqueHandle OpenPinnedDirectory(const std::filesystem::path& path, bool allowReparse)
+    {
+        const DWORD flags = FILE_FLAG_BACKUP_SEMANTICS | (allowReparse ? 0 : FILE_FLAG_OPEN_REPARSE_POINT);
+        UniqueHandle handle(::CreateFileW(path.c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, flags, nullptr));
+        if (handle.get() == INVALID_HANDLE_VALUE)
+            return UniqueHandle(nullptr);
+        BY_HANDLE_FILE_INFORMATION info{};
+        if (!::GetFileInformationByHandle(handle.get(), &info) || !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+            (!allowReparse && (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)))
+            return UniqueHandle(nullptr);
+        return handle;
+    }
+
+    std::wstring FinalPath(HANDLE handle)
+    {
+        std::wstring buffer(512, L'\0');
+        for (;;)
+        {
+            const DWORD length = ::GetFinalPathNameByHandleW(handle, buffer.data(), static_cast<DWORD>(buffer.size()),
+                                                             FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
+            if (length == 0)
+                return {};
+            if (length < buffer.size())
+            {
+                buffer.resize(length);
+                return buffer;
+            }
+            buffer.resize(length + 1);
+        }
+    }
+
+    bool EqualsIgnoringCase(const std::wstring& left, const std::wstring& right)
+    {
+        return ::CompareStringOrdinal(left.c_str(), static_cast<int>(left.size()), right.c_str(),
+                                      static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
+    }
+
+    bool SaveTextWithinRoot(const std::filesystem::path& root, const std::filesystem::path& relative,
+                            const std::string& text)
+    {
+        // The root itself is trusted configuration; it is pinned but may be
+        // reached through a link. Everything below it must be a plain directory.
+        std::vector<UniqueHandle> pins;
+        pins.push_back(OpenPinnedDirectory(root, /*allowReparse=*/true));
+        if (!pins.back())
+            return false;
+        const std::wstring rootFinal = FinalPath(pins.back().get());
+
+        std::filesystem::path directory = root;
+        const std::filesystem::path leaf = relative.filename();
+        for (const auto& component : relative.parent_path())
+        {
+            directory /= component;
+            pins.push_back(OpenPinnedDirectory(directory, /*allowReparse=*/false));
+            if (!pins.back())
+                return false;
+        }
+        const std::wstring directoryFinal = FinalPath(pins.back().get());
+        if (rootFinal.empty() || directoryFinal.empty() ||
+            (directoryFinal != rootFinal && directoryFinal.rfind(rootFinal + L"\\", 0) != 0))
+            return false;
+
+        // An existing destination must be a plain file, not a link or directory.
+        const std::filesystem::path destination = directory / leaf;
+        const DWORD existing = ::GetFileAttributesW(destination.c_str());
+        if (existing != INVALID_FILE_ATTRIBUTES &&
+            (existing & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)))
+            return false;
+
+        static std::atomic<uint64_t> sequence{0};
+        UniqueHandle file(nullptr);
+        for (int attempt = 0; attempt < 64 && !file; ++attempt)
+        {
+            const auto temporary = directory / MakeTemporaryName(leaf, sequence.fetch_add(1));
+            HANDLE created = ::CreateFileW(temporary.c_str(), GENERIC_WRITE | DELETE, 0, nullptr, CREATE_NEW,
+                                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+            if (created != INVALID_HANDLE_VALUE)
+                file.reset(created);
+            else if (::GetLastError() != ERROR_FILE_EXISTS)
+                return false;
+        }
+        if (!file)
+            return false;
+
+        const auto discard = [&file]
+        {
+            FILE_DISPOSITION_INFO disposition{TRUE};
+            ::SetFileInformationByHandle(file.get(), FileDispositionInfo, &disposition, sizeof(disposition));
+        };
+
+        size_t written = 0;
+        while (written < text.size())
+        {
+            DWORD chunk = 0;
+            const DWORD request = static_cast<DWORD>(std::min<size_t>(text.size() - written, 1u << 20));
+            if (!::WriteFile(file.get(), text.data() + written, request, &chunk, nullptr) || chunk == 0)
+            {
+                discard();
+                return false;
+            }
+            written += chunk;
+        }
+        if (!::FlushFileBuffers(file.get()))
+        {
+            discard();
+            return false;
+        }
+
+        // Rename by handle into the pinned directory, replacing the old file.
+        const std::wstring target = destination.wstring();
+        std::vector<unsigned char> buffer(sizeof(FILE_RENAME_INFO) + target.size() * sizeof(wchar_t));
+        auto* renameInfo = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
+        renameInfo->ReplaceIfExists = TRUE;
+        renameInfo->RootDirectory = nullptr;
+        renameInfo->FileNameLength = static_cast<DWORD>(target.size() * sizeof(wchar_t));
+        std::memcpy(renameInfo->FileName, target.data(), target.size() * sizeof(wchar_t));
+        if (!::SetFileInformationByHandle(file.get(), FileRenameInfo, renameInfo, static_cast<DWORD>(buffer.size())))
+        {
+            discard();
+            return false;
+        }
+        ::FlushFileBuffers(file.get());
+
+        // Re-verify where the bytes actually live now.
+        const std::wstring fileFinal = FinalPath(file.get());
+        const size_t split = fileFinal.find_last_of(L'\\');
+        if (split == std::wstring::npos || fileFinal.substr(0, split) != directoryFinal ||
+            !EqualsIgnoringCase(fileFinal.substr(split + 1), leaf.wstring()))
+        {
+            discard();
+            return false;
+        }
+        return true;
+    }
+#else
+    struct FdCloser
+    {
+        int fd = -1;
+        ~FdCloser()
+        {
+            if (fd >= 0)
+                ::close(fd);
+        }
+    };
+
+    // Walks `relative`'s directories from an open root fd, refusing any
+    // symlink component. Returns -1 on failure; the caller owns the fd.
+    int OpenDirectoryBelow(int rootFd, const std::filesystem::path& relativeDirectory)
+    {
+        int current = ::dup(rootFd);
+        for (const auto& component : relativeDirectory)
+        {
+            if (current < 0)
+                return -1;
+            const int next = ::openat(current, component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+            ::close(current);
+            current = next;
+        }
+        return current;
+    }
+
+    bool SameInode(int left, int right)
+    {
+        struct stat a = {};
+        struct stat b = {};
+        return ::fstat(left, &a) == 0 && ::fstat(right, &b) == 0 && a.st_dev == b.st_dev && a.st_ino == b.st_ino;
+    }
+
+    bool SaveTextWithinRoot(const std::filesystem::path& root, const std::filesystem::path& relative,
+                            const std::string& text)
+    {
+        // The root itself is trusted configuration; everything below it is
+        // reached only through held directory fds with O_NOFOLLOW.
+        FdCloser rootFd{::open(root.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+        if (rootFd.fd < 0)
+            return false;
+        FdCloser directory{OpenDirectoryBelow(rootFd.fd, relative.parent_path())};
+        if (directory.fd < 0)
+            return false;
+
+        // An existing destination must be a plain file, not a link or directory.
+        const std::string leaf = relative.filename().string();
+        struct stat existing = {};
+        if (::fstatat(directory.fd, leaf.c_str(), &existing, AT_SYMLINK_NOFOLLOW) == 0 && !S_ISREG(existing.st_mode))
+            return false;
+
+        static std::atomic<uint64_t> sequence{0};
+        std::string temporary;
+        FdCloser file;
+        for (int attempt = 0; attempt < 64 && file.fd < 0; ++attempt)
+        {
+            temporary = MakeTemporaryName(leaf, sequence.fetch_add(1)).string();
+            file.fd =
+                ::openat(directory.fd, temporary.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
+            if (file.fd < 0 && errno != EEXIST)
+                return false;
+        }
+        if (file.fd < 0)
+            return false;
+
+        size_t written = 0;
+        while (written < text.size())
+        {
+            const ssize_t chunk = ::write(file.fd, text.data() + written, text.size() - written);
+            if (chunk < 0 && errno == EINTR)
+                continue;
+            if (chunk <= 0)
+            {
+                ::unlinkat(directory.fd, temporary.c_str(), 0);
+                return false;
+            }
+            written += static_cast<size_t>(chunk);
+        }
+        if (::fsync(file.fd) != 0 || ::renameat(directory.fd, temporary.c_str(), directory.fd, leaf.c_str()) != 0)
+        {
+            ::unlinkat(directory.fd, temporary.c_str(), 0);
+            return false;
+        }
+        ::fsync(directory.fd); // best effort, as in ReplaceFileAtomically
+
+        // Re-verify after the rename: the name now refers to our file, and
+        // the held directory is still the one reached from the root.
+        struct stat placed = {};
+        struct stat ours = {};
+        FdCloser recheck{OpenDirectoryBelow(rootFd.fd, relative.parent_path())};
+        const bool inPlace = ::fstatat(directory.fd, leaf.c_str(), &placed, AT_SYMLINK_NOFOLLOW) == 0 &&
+                             ::fstat(file.fd, &ours) == 0 && placed.st_dev == ours.st_dev &&
+                             placed.st_ino == ours.st_ino;
+        if (!inPlace || recheck.fd < 0 || !SameInode(recheck.fd, directory.fd))
+        {
+            if (inPlace)
+                ::unlinkat(directory.fd, leaf.c_str(), 0);
+            return false;
+        }
+        return true;
+    }
+#endif
+} // namespace
 
 // Use logging macros from LogMacros.h (included transitively via headers)
 
@@ -72,9 +557,11 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
     std::string narrowName(filepath.begin(), filepath.end());
     SPARK_DEBUG_HOOK_SCENE(ScenePreLoad, narrowName);
 
-    // Security: reject path traversal attempts
-    std::string narrowCheck = WideToNarrow(filepath);
-    if (narrowCheck.contains(".."))
+    // Inspect native path components before any file access. Narrowing a wide
+    // profile path can change its spelling and is not a traversal check.
+    const std::filesystem::path nativeScenePath(filepath);
+    if (std::find(nativeScenePath.begin(), nativeScenePath.end(), std::filesystem::path(L"..")) !=
+        nativeScenePath.end())
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Path traversal rejected: " + filepath, L"ERROR");
         return false;
@@ -82,28 +569,81 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
 
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager::LoadScene called. filepath=" + filepath, L"OPERATION");
 
+    // Loading formats currently clear the live graph before parsing. Keep a
+    // value snapshot so a malformed or unreadable replacement cannot leave the
+    // running editor/game with an empty half-scene. Objects are recreated from
+    // the restored nodes below; this is intentionally synchronous and bounded
+    // to the existing scene-load path.
+    const auto previousNodes = m_sceneNodes;
+    const auto previousMetadata = m_metadata;
+    const auto previousFilePath = m_currentFilePath;
+    const bool previousDirty = m_dirty;
+    // Keep ownership of the live objects out of the loader while it stages a
+    // replacement.  Re-instantiating on rollback is observably wrong: callers
+    // may retain a GameObject pointer and runtime state (health, physics,
+    // component state, etc.) must survive a failed reload byte-for-byte.
+    auto previousObjects = std::move(m_objects);
+    const auto restorePrevious =
+        [this, &previousNodes, &previousMetadata, &previousFilePath, previousDirty, &previousObjects]()
+    {
+        m_objects.clear();
+        m_sceneNodes = previousNodes;
+        m_metadata = previousMetadata;
+        m_currentFilePath = previousFilePath;
+        m_dirty = previousDirty;
+        m_nodeNameIndex.clear();
+        for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
+        {
+            if (!m_sceneNodes[i].name.empty())
+                m_nodeNameIndex[m_sceneNodes[i].name] = i;
+        }
+        m_objects = std::move(previousObjects);
+    };
+
     auto ext = std::filesystem::path(filepath).extension();
     bool loaded = false;
+    const bool previousEventSuppression = m_suppressSceneEvents;
+    m_suppressSceneEvents = true;
 
-    if (ext == L".scene")
+    try
     {
-        loaded = LoadCustom(filepath);
+        if (ext == L".scene")
+            loaded = LoadCustom(filepath);
+        else if (ext == L".json")
+            loaded = LoadJSON(filepath);
+        else
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"Scene file extension not recognized: " + filepath, L"WARNING");
+            restorePrevious();
+            m_suppressSceneEvents = previousEventSuppression;
+            return false;
+        }
     }
-    else if (ext == L".json")
+    catch (...)
     {
-        loaded = LoadJSON(filepath);
-    }
-    else
-    {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene file extension not recognized: " + filepath, L"WARNING");
+        restorePrevious();
+        m_suppressSceneEvents = previousEventSuppression;
         return false;
     }
+
+    if (!loaded)
+    {
+        restorePrevious();
+    }
+    else
+        // The replacement is now committed; release the old graph only after
+        // all parsing and instantiation succeeded.
+        previousObjects.clear();
+
+    m_suppressSceneEvents = previousEventSuppression;
 
     if (loaded)
     {
         m_currentFilePath = filepath;
         m_dirty = false;
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene loaded: " + std::to_wstring(m_objects.size()) + L" objects, " +
+        const auto instantiated =
+            std::count_if(m_objects.begin(), m_objects.end(), [](const auto& object) { return object != nullptr; });
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene loaded: " + std::to_wstring(instantiated) + L" objects, " +
                                      std::to_wstring(m_sceneNodes.size()) + L" nodes",
                                  L"SUCCESS");
 
@@ -135,6 +675,50 @@ bool SceneManager::SaveScene(const std::wstring& filepath) const
         m_dirty = false;
     }
     return saved;
+}
+
+bool SceneManager::SaveSceneWithinRoot(const std::filesystem::path& root,
+                                       const std::filesystem::path& relativePath) const
+{
+    SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
+    const std::filesystem::path destination = root / relativePath;
+    if (root.empty() || !IsConfinedRelativeScenePath(relativePath))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Scene save path rejected: " + relativePath.wstring(), L"ERROR");
+        return false;
+    }
+
+    std::string text;
+    if (!SerializeSceneText(text, destination.wstring()))
+        return false;
+
+    bool saved = false;
+    try
+    {
+        saved = SaveTextWithinRoot(root, relativePath, text);
+    }
+    catch (const std::exception&)
+    {
+        saved = false;
+    }
+    if (!saved)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Scene save refused or failed (missing directory, link component, "
+                                 L"or I/O error): " +
+                                     destination.wstring(),
+                                 L"ERROR");
+        return false;
+    }
+
+    if (m_fileCache)
+    {
+        if (const auto narrowPath = NarrowPathIfRoundTrips(destination.wstring()))
+            m_fileCache->Invalidate(*narrowPath);
+    }
+    m_currentFilePath = destination.wstring();
+    m_dirty = false;
+    LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: " + std::to_wstring(m_sceneNodes.size()) + L" nodes", L"SUCCESS");
+    return true;
 }
 
 void SceneManager::LoadSceneAsync(const std::wstring& filepath, SceneLoadCallback callback)
@@ -387,7 +971,7 @@ void SceneManager::NewScene(const std::string& name)
 void SceneManager::Clear()
 {
     // Publish SceneUnloadedEvent before clearing
-    if (!m_currentFilePath.empty())
+    if (!m_suppressSceneEvents && !m_currentFilePath.empty())
     {
         if (auto* ctx = EngineContext::Get())
         {
@@ -431,20 +1015,21 @@ std::vector<std::string> SceneManager::GetAvailableScenes(const std::wstring& di
 bool SceneManager::LoadJSON(const std::wstring& path)
 {
     std::string content;
-    std::string narrowPath = WideToNarrow(path);
+    const std::filesystem::path nativePath(path);
 
     if (m_fileCache)
     {
-        auto result = m_fileCache->ReadText(narrowPath);
-        if (result.IsOk())
+        if (const auto narrowPath = NarrowPathIfRoundTrips(path))
         {
-            content = result.Value();
+            auto result = m_fileCache->ReadText(*narrowPath);
+            if (result.IsOk())
+                content = result.Value();
         }
     }
 
     if (content.empty())
     {
-        std::ifstream file(narrowPath);
+        std::ifstream file(nativePath);
         if (!file.is_open())
         {
             LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot open JSON scene: " + path, L"ERROR");
@@ -457,8 +1042,10 @@ bool SceneManager::LoadJSON(const std::wstring& path)
     // Simple text-based scene format (not actual JSON despite the method name):
     //   Lines starting with # are comments/metadata
     //   Data lines: type name posX posY posZ [rotX rotY rotZ scaleX scaleY scaleZ parentIndex]
-    Clear();
-
+    // Parse into isolated state. A malformed row must not clear or partially
+    // replace the live scene (LoadScene also preserves the object graph).
+    SceneMetadata stagedMetadata = m_metadata;
+    std::vector<SceneNode> stagedNodes;
     std::istringstream ss(content);
     std::string line;
 
@@ -471,11 +1058,29 @@ bool SceneManager::LoadJSON(const std::wstring& path)
         {
             // Parse metadata comments like "# name: MyScene"
             if (line.find("# name:") == 0)
-                m_metadata.sceneName = line.substr(8);
+                stagedMetadata.sceneName = line.substr(8);
             else if (line.find("# gravity:") == 0)
             {
                 std::istringstream gs(line.substr(11));
-                gs >> m_metadata.gravityX >> m_metadata.gravityY >> m_metadata.gravityZ;
+                if (!(gs >> stagedMetadata.gravityX >> stagedMetadata.gravityY >> stagedMetadata.gravityZ) ||
+                    !std::isfinite(stagedMetadata.gravityX) || !std::isfinite(stagedMetadata.gravityY) ||
+                    !std::isfinite(stagedMetadata.gravityZ))
+                    return false;
+            }
+            else if (line.find("# author:") == 0)
+                stagedMetadata.author = line.substr(10);
+            else if (line.find("# version:") == 0)
+                stagedMetadata.version = line.substr(11);
+            else if (line.find("# description:") == 0)
+                stagedMetadata.description = line.substr(15);
+            else if (line.find("# ambient:") == 0)
+            {
+                std::istringstream as(line.substr(11));
+                if (!(as >> stagedMetadata.ambientLightR >> stagedMetadata.ambientLightG >>
+                      stagedMetadata.ambientLightB) ||
+                    !std::isfinite(stagedMetadata.ambientLightR) || !std::isfinite(stagedMetadata.ambientLightG) ||
+                    !std::isfinite(stagedMetadata.ambientLightB))
+                    return false;
             }
             continue;
         }
@@ -485,53 +1090,143 @@ bool SceneManager::LoadJSON(const std::wstring& path)
         // Parse node line: type name posX posY posZ [rotX rotY rotZ scaleX scaleY scaleZ parentIndex]
         std::istringstream ls(line);
         SceneNode node;
-        ls >> node.type >> node.name >> node.position.x >> node.position.y >> node.position.z;
+        // std::quoted also accepts historical unquoted names, while new saves
+        // can round-trip names containing whitespace and quotes.
+        if (!(ls >> node.type >> std::quoted(node.name) >> node.position.x >> node.position.y >> node.position.z) ||
+            node.type.empty() || node.name.empty() || !IsFinite(node.position))
+            return false;
 
-        // Try to parse optional extended fields (rotation, scale, parentIndex).
-        // If not present the stream fails silently and defaults are kept
-        // (rotation=0, scale=1, parent=-1).
-        ls >> node.rotation.x >> node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >> node.scale.z >>
-            node.parentIndex;
+        // Extended fields are optional as required for old line-oriented files,
+        // but once present they are an all-or-nothing, finite record. Previously
+        // a bad coordinate caused extraction to fail and silently left defaults.
+        ls >> std::ws;
+        if (!ls.eof())
+        {
+            if (!(ls >> node.rotation.x >> node.rotation.y >> node.rotation.z >> node.scale.x >> node.scale.y >>
+                  node.scale.z >> node.parentIndex) ||
+                !IsFinite(node.rotation) || !IsFinite(node.scale))
+                return false;
 
-        if (!node.type.empty())
-            AddNode(node);
+            ls >> std::ws;
+            if (!ls.eof())
+            {
+                size_t propertyCount = 0;
+                if (!(ls >> std::quoted(node.modelPath) >> std::quoted(node.materialPath) >> propertyCount))
+                    return false;
+                for (size_t property = 0; property < propertyCount; ++property)
+                {
+                    std::string key;
+                    std::string value;
+                    if (!(ls >> std::quoted(key) >> std::quoted(value)))
+                        return false;
+                    node.properties.emplace(std::move(key), std::move(value));
+                }
+                ls >> std::ws;
+                if (!ls.eof())
+                    return false;
+            }
+        }
+        stagedNodes.push_back(std::move(node));
     }
 
+    if (stagedNodes.empty() || !ValidateAndRebuildHierarchy(stagedNodes))
+        return false;
+
+    Clear();
+    m_metadata = std::move(stagedMetadata);
+    m_sceneNodes = std::move(stagedNodes);
+    m_nodeNameIndex.clear();
+    for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
+        m_nodeNameIndex[m_sceneNodes[static_cast<size_t>(i)].name] = i;
     InstantiateNodes();
-    return !m_sceneNodes.empty();
+    return true;
+}
+
+bool SceneManager::SerializeSceneText(std::string& text, const std::wstring& pathForLog) const
+{
+    std::vector<SceneNode> nodes;
+    nodes.reserve(m_sceneNodes.size());
+    std::vector<int> remap(m_sceneNodes.size(), -1);
+    for (size_t oldIndex = 0; oldIndex < m_sceneNodes.size(); ++oldIndex)
+    {
+        if (!m_sceneNodes[oldIndex].type.empty())
+        {
+            remap[oldIndex] = static_cast<int>(nodes.size());
+            nodes.push_back(m_sceneNodes[oldIndex]);
+        }
+    }
+    for (auto& node : nodes)
+    {
+        if (node.parentIndex >= 0 && node.parentIndex < static_cast<int>(remap.size()))
+        {
+            const int mappedParent = remap[static_cast<size_t>(node.parentIndex)];
+            node.parentIndex = mappedParent >= 0 ? mappedParent : -2;
+        }
+        else if (node.parentIndex < -1)
+            node.parentIndex = -2; // validation below reports this as malformed
+    }
+    if (nodes.empty() || !ValidateAndRebuildHierarchy(nodes) || !std::isfinite(m_metadata.gravityX) ||
+        !std::isfinite(m_metadata.gravityY) || !std::isfinite(m_metadata.gravityZ) ||
+        !std::isfinite(m_metadata.ambientLightR) || !std::isfinite(m_metadata.ambientLightG) ||
+        !std::isfinite(m_metadata.ambientLightB))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot save malformed scene hierarchy: " + pathForLog, L"ERROR");
+        return false;
+    }
+
+    std::ostringstream serialized;
+    serialized << "# SparkEngine Scene v1.0\n";
+    serialized << "# name: " << m_metadata.sceneName << "\n";
+    serialized << "# author: " << m_metadata.author << "\n";
+    serialized << "# version: " << m_metadata.version << "\n";
+    serialized << "# description: " << m_metadata.description << "\n";
+    serialized << "# gravity: " << m_metadata.gravityX << " " << m_metadata.gravityY << " " << m_metadata.gravityZ
+               << "\n";
+    serialized << "# ambient: " << m_metadata.ambientLightR << " " << m_metadata.ambientLightG << " "
+               << m_metadata.ambientLightB << "\n\n";
+
+    for (const auto& node : nodes)
+    {
+        serialized << node.type << " " << std::quoted(node.name) << " " << std::fixed << std::setprecision(3)
+                   << node.position.x << " " << node.position.y << " " << node.position.z << " " << node.rotation.x
+                   << " " << node.rotation.y << " " << node.rotation.z << " " << node.scale.x << " " << node.scale.y
+                   << " " << node.scale.z << " " << node.parentIndex << " " << std::quoted(node.modelPath) << " "
+                   << std::quoted(node.materialPath) << " " << node.properties.size();
+        std::vector<std::pair<std::string, std::string>> properties(node.properties.begin(), node.properties.end());
+        std::sort(properties.begin(), properties.end());
+        for (const auto& [key, value] : properties)
+            serialized << " " << std::quoted(key) << " " << std::quoted(value);
+        serialized << "\n";
+    }
+    text = serialized.str();
+    return true;
 }
 
 bool SceneManager::SaveJSON(const std::wstring& path) const
 {
-    std::ofstream file(WideToNarrow(path));
-    if (!file.is_open())
+    std::string text;
+    if (!SerializeSceneText(text, path))
+        return false;
+
+    const std::filesystem::path destination(path);
+    const std::filesystem::path temporary = MakeUniqueTemporaryPath(destination);
+    if (temporary.empty())
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot save scene: " + path, L"ERROR");
+        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot allocate unique temporary scene path: " + path, L"ERROR");
+        return false;
+    }
+    std::error_code error;
+    if (!WriteDurableText(temporary, text, error) || !ReplaceFileAtomically(temporary, destination, error))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Cannot save scene atomically: " + path, L"ERROR");
+        RemoveFileNoThrow(temporary);
         return false;
     }
 
-    file << "# SparkEngine Scene v1.0\n";
-    file << "# name: " << m_metadata.sceneName << "\n";
-    file << "# gravity: " << m_metadata.gravityX << " " << m_metadata.gravityY << " " << m_metadata.gravityZ << "\n";
-    file << "\n";
-
-    for (size_t i = 0; i < m_sceneNodes.size(); ++i)
-    {
-        const auto& node = m_sceneNodes[i];
-        if (node.type.empty())
-            continue; // Skip tombstoned nodes
-
-        file << node.type << " " << node.name << " " << std::fixed << std::setprecision(3) << node.position.x << " "
-             << node.position.y << " " << node.position.z << " " << node.rotation.x << " " << node.rotation.y << " "
-             << node.rotation.z << " " << node.scale.x << " " << node.scale.y << " " << node.scale.z << " "
-             << node.parentIndex << "\n";
-    }
-
-    file.close();
-
     if (m_fileCache)
     {
-        m_fileCache->Invalidate(WideToNarrow(path));
+        if (const auto narrowPath = NarrowPathIfRoundTrips(path))
+            m_fileCache->Invalidate(*narrowPath);
     }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: " + std::to_wstring(m_sceneNodes.size()) + L" nodes", L"SUCCESS");
@@ -541,12 +1236,28 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
 void SceneManager::InstantiateNodes()
 {
     if (!m_graphics || !m_graphics->GetDevice() || !m_graphics->GetContext())
+    {
+        // Data-only scenes still preserve the documented node/object index
+        // relationship; mesh slots remain null until a graphics device exists.
+        m_objects.clear();
+        m_objects.resize(m_sceneNodes.size());
         return;
+    }
 
     for (const auto& node : m_sceneNodes)
     {
         if (node.type.empty())
+        {
+            m_objects.push_back(nullptr);
             continue;
+        }
+
+        // These authored scene entries carry game data, not renderable meshes.
+        if (node.type == "Camera" || node.type == "SpawnPoint")
+        {
+            m_objects.push_back(nullptr);
+            continue;
+        }
 
         std::unique_ptr<GameObject> obj;
 
@@ -628,29 +1339,11 @@ void SceneManager::InstantiateNodes()
 // Legacy .scene loader (preserved for backward compatibility)
 // ============================================================================
 
-// Helper: parse comma-separated floats "x,y,z" into an XMFLOAT3
-static bool ParseFloat3(const std::string& str, DirectX::XMFLOAT3& out)
-{
-    std::string s = str;
-    for (char& c : s)
-        if (c == ',')
-            c = ' ';
-    std::istringstream ss(s);
-    return bool(ss >> out.x >> out.y >> out.z);
-}
-
 bool SceneManager::LoadCustom(const std::wstring& path)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager::LoadCustom called. path=" + path, L"OPERATION");
-    if (!m_graphics || !m_graphics->GetDevice() || !m_graphics->GetContext())
-    {
-        SPARK_REQUIRE_MSG(Spark::LogCategory::Scene, false, "SceneManager: Graphics device/context is null");
-        return false;
-    }
 
-    Clear();
-
-    std::ifstream file(WideToNarrow(path));
+    std::ifstream file{std::filesystem::path(path)};
     if (!file.is_open())
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Could not open scene file: " + path, L"ERROR");
@@ -661,86 +1354,193 @@ bool SceneManager::LoadCustom(const std::wstring& path)
     std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
-    bool isINIFormat = (content.contains("[Scene]") || content.contains("[Object]"));
+    // SaveScene writes the versioned text format for both .json and .scene.
+    // Route its own .scene output back through the matching loader before
+    // trying either older scene syntax; otherwise the legacy object parser
+    // silently discards authored camera, spawn, material, and property data.
+    constexpr char kSerializedHeader[] = "# SparkEngine Scene v1.0";
+    constexpr size_t kHeaderLength = sizeof(kSerializedHeader) - 1;
+    if (content.compare(0, kHeaderLength, kSerializedHeader) == 0 &&
+        (content.size() == kHeaderLength || content[kHeaderLength] == '\r' || content[kHeaderLength] == '\n'))
+        return LoadJSON(path);
+
+    bool isINIFormat = (content.contains("[Scene]") || content.contains("[Object]") || content.contains("[Camera]") ||
+                        content.contains("[SpawnPoint]"));
 
     if (isINIFormat)
     {
-        // INI-style format: [Section] headers with key=value pairs
+        // Parse into isolated state.  A malformed field invalidates the whole
+        // candidate; this prevents a valid prefix from being published as a
+        // partly loaded scene.
+        SceneMetadata stagedMetadata{};
+        std::vector<SceneNode> stagedNodes;
         std::istringstream ss(content);
         std::string line;
         std::string currentSection;
         SceneNode currentNode;
         bool hasNode = false;
+        bool nodeHasPosition = false;
+        bool nodeInvalid = false;
+        bool parseError = false;
+
+        auto trim = [](std::string value)
+        {
+            const auto first = value.find_first_not_of(" \t\r");
+            if (first == std::string::npos)
+                return std::string{};
+            const auto last = value.find_last_not_of(" \t\r");
+            return value.substr(first, last - first + 1);
+        };
+        auto parseVector = [&](const std::string& value, DirectX::XMFLOAT3& output)
+        {
+            std::string normalized = value;
+            const auto comment = normalized.find('#');
+            if (comment != std::string::npos)
+                normalized.erase(comment);
+            for (char& c : normalized)
+                if (c == ',')
+                    c = ' ';
+            std::istringstream values(normalized);
+            DirectX::XMFLOAT3 parsed{};
+            if (!(values >> parsed.x >> parsed.y >> parsed.z))
+                return false;
+            values >> std::ws;
+            if (!values.eof() || !IsFinite(parsed))
+                return false;
+            output = parsed;
+            return true;
+        };
 
         auto flushNode = [&]()
         {
-            if (hasNode && !currentNode.type.empty())
+            if (!hasNode)
+                return;
+            const bool requiresPosition = currentNode.type == "Camera" || currentNode.type == "SpawnPoint";
+            if (nodeInvalid || currentNode.type.empty() || (requiresPosition && !nodeHasPosition))
+            {
+                parseError = true;
+            }
+            else
             {
                 if (currentNode.name.empty())
-                    currentNode.name = currentNode.type + "_" + std::to_string(m_sceneNodes.size());
-                AddNode(currentNode);
+                    currentNode.name = currentNode.type + "_" + std::to_string(stagedNodes.size());
+                if (currentNode.type == "SpawnPoint")
+                {
+                    const auto tag = currentNode.properties.find("tag");
+                    if (tag == currentNode.properties.end() || tag->second.empty())
+                    {
+                        parseError = true;
+                    }
+                }
+                stagedNodes.push_back(std::move(currentNode));
             }
             currentNode = SceneNode{};
             hasNode = false;
+            nodeHasPosition = false;
+            nodeInvalid = false;
         };
 
         while (std::getline(ss, line))
         {
             // Trim whitespace
-            while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
-                line.pop_back();
+            line = trim(line);
             if (line.empty() || line[0] == '#' || line[0] == ';')
                 continue;
 
             // Section header
-            if (line[0] == '[' && line.back() == ']')
+            if (line.front() == '[')
             {
+                if (line.back() != ']')
+                {
+                    parseError = true;
+                    continue;
+                }
                 flushNode();
-                currentSection = line.substr(1, line.size() - 2);
+                currentSection = trim(line.substr(1, line.size() - 2));
 
-                if (currentSection == "Object" || currentSection == "Terrain" || currentSection == "SpawnPoint")
+                if (currentSection == "Object" || currentSection == "Terrain" || currentSection == "SpawnPoint" ||
+                    currentSection == "Camera")
+                {
                     hasNode = true;
+                    if (currentSection == "SpawnPoint" || currentSection == "Camera")
+                        currentNode.type = currentSection;
+                }
                 continue;
             }
 
             // Key=Value pair
             auto eqPos = line.find('=');
             if (eqPos == std::string::npos)
+            {
+                if (hasNode || currentSection == "Scene")
+                {
+                    parseError = true;
+                }
                 continue;
-            std::string key = line.substr(0, eqPos);
-            std::string value = line.substr(eqPos + 1);
+            }
+            std::string key = trim(line.substr(0, eqPos));
+            std::string value = trim(line.substr(eqPos + 1));
+            if (key.empty())
+            {
+                parseError = true;
+                continue;
+            }
 
             if (currentSection == "Scene")
             {
                 if (key == "name")
-                    m_metadata.sceneName = value;
+                    stagedMetadata.sceneName = value;
                 else if (key == "author")
-                    m_metadata.author = value;
+                    stagedMetadata.author = value;
+                else if (key == "version")
+                    stagedMetadata.version = value;
+                else if (key == "description")
+                    stagedMetadata.description = value;
+                else if (key == "ambientLight")
+                {
+                    XMFLOAT3 ambient;
+                    if (!parseVector(value, ambient))
+                    {
+                        parseError = true;
+                    }
+                    else
+                        stagedMetadata.ambientLightR = ambient.x, stagedMetadata.ambientLightG = ambient.y,
+                        stagedMetadata.ambientLightB = ambient.z;
+                }
                 else if (key == "gravity")
                 {
                     XMFLOAT3 grav;
-                    if (ParseFloat3(value, grav))
+                    if (!parseVector(value, grav))
                     {
-                        m_metadata.gravityX = grav.x;
-                        m_metadata.gravityY = grav.y;
-                        m_metadata.gravityZ = grav.z;
+                        parseError = true;
                     }
+                    else
+                        stagedMetadata.gravityX = grav.x, stagedMetadata.gravityY = grav.y,
+                        stagedMetadata.gravityZ = grav.z;
                 }
             }
             else if (hasNode)
             {
                 if (key == "type")
-                    currentNode.type = value;
+                {
+                    if (currentSection == "Camera" || currentSection == "SpawnPoint")
+                        currentNode.properties[key] = value;
+                    else
+                        currentNode.type = value;
+                }
                 else if (key == "name")
                     currentNode.name = value;
                 else if (key == "model")
                     currentNode.modelPath = value;
                 else if (key == "position")
-                    ParseFloat3(value, currentNode.position);
+                {
+                    nodeHasPosition = true;
+                    nodeInvalid = !parseVector(value, currentNode.position) || nodeInvalid;
+                }
                 else if (key == "rotation")
-                    ParseFloat3(value, currentNode.rotation);
+                    nodeInvalid = !parseVector(value, currentNode.rotation) || nodeInvalid;
                 else if (key == "scale")
-                    ParseFloat3(value, currentNode.scale);
+                    nodeInvalid = !parseVector(value, currentNode.scale) || nodeInvalid;
                 else if (key == "material")
                     currentNode.materialPath = value;
                 else
@@ -749,11 +1549,29 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         }
         flushNode();
 
+        if (parseError || stagedNodes.empty() || !ValidateAndRebuildHierarchy(stagedNodes))
+            return false;
+        std::unordered_map<std::string, int> stagedNameIndex;
+        for (int i = 0; i < static_cast<int>(stagedNodes.size()); ++i)
+            if (!stagedNameIndex.emplace(stagedNodes[static_cast<size_t>(i)].name, i).second)
+                return false;
+        Clear();
+        m_metadata = std::move(stagedMetadata);
+        m_sceneNodes = std::move(stagedNodes);
+        m_nodeNameIndex = std::move(stagedNameIndex);
         InstantiateNodes();
     }
     else
     {
         // Legacy space-delimited format: Type X Y Z [params...]
+        if (!m_graphics || !m_graphics->GetDevice() || !m_graphics->GetContext())
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Legacy object format requires a graphics device/context",
+                                     L"ERROR");
+            return false;
+        }
+        std::vector<SceneNode> stagedNodes;
+        std::vector<std::unique_ptr<GameObject>> stagedObjects;
         std::istringstream ss(content);
         std::string line;
         int lineNum = 0;
@@ -762,69 +1580,82 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         {
             ++lineNum;
             // Trim
-            while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+            const auto comment = line.find('#');
+            if (comment != std::string::npos)
+                line.erase(comment);
+            while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t'))
                 line.pop_back();
-            if (line.empty() || line[0] == '#')
+            if (line.empty())
                 continue;
 
             std::istringstream ls(line);
             std::string type;
             ls >> type;
             float x = 0, y = 0, z = 0;
-            ls >> x >> y >> z;
+            if (type.empty() || !(ls >> x >> y >> z) || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+                return false;
+            ls >> std::ws;
 
             std::unique_ptr<GameObject> obj;
+
+            auto finiteFloat = [&ls](float& value) { return bool(ls >> value) && std::isfinite(value); };
 
             if (type == "Cube")
             {
                 float size = 1.0f;
-                ls >> size;
+                if (ls.peek() != EOF && !finiteFloat(size))
+                    return false;
                 obj = std::make_unique<CubeObject>(size);
             }
             else if (type == "Plane")
             {
                 float width = 10.0f, depth = 10.0f;
-                ls >> width >> depth;
+                if (ls.peek() != EOF && (!finiteFloat(width) || !finiteFloat(depth)))
+                    return false;
                 obj = std::make_unique<PlaneObject>(width, depth);
             }
             else if (type == "Sphere")
             {
                 float radius = 0.5f;
                 int slices = 16, stacks = 16;
-                ls >> radius >> slices >> stacks;
+                if (ls.peek() != EOF &&
+                    (!finiteFloat(radius) || !(ls >> slices) || !(ls >> stacks) || slices <= 0 || stacks <= 0))
+                    return false;
                 obj = std::make_unique<SphereObject>(radius, slices, stacks);
             }
             else if (type == "Pyramid")
             {
                 float size = 1.0f;
-                ls >> size;
+                if (ls.peek() != EOF && !finiteFloat(size))
+                    return false;
                 obj = std::make_unique<PyramidObject>(size);
             }
             else if (type == "Ramp")
             {
                 float length = 2.0f, height = 1.0f;
-                ls >> length >> height;
+                if (ls.peek() != EOF && (!finiteFloat(length) || !finiteFloat(height)))
+                    return false;
                 obj = std::make_unique<RampObject>(length, height);
             }
             else if (type == "Wall")
             {
                 float width = 1.0f, height = 2.0f;
-                ls >> width >> height;
+                if (ls.peek() != EOF && (!finiteFloat(width) || !finiteFloat(height)))
+                    return false;
                 obj = std::make_unique<WallObject>(width, height);
             }
             else
-            {
-                std::wstring wtype(type.begin(), type.end());
-                LOG_TO_CONSOLE(L"SceneManager: Unknown type on line " + std::to_wstring(lineNum) + L": " + wtype,
-                               L"WARNING");
-                continue;
-            }
+                return false;
+
+            ls >> std::ws;
+            if (!ls.eof())
+                return false;
 
             HRESULT hr = obj->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
             if (FAILED(hr))
             {
                 LOG_TO_CONSOLE(L"SceneManager: object Initialize failed on line " + std::to_wstring(lineNum), L"ERROR");
-                continue;
+                return false;
             }
 
             std::string lowerType = type;
@@ -832,15 +1663,21 @@ bool SceneManager::LoadCustom(const std::wstring& path)
             std::wstring meshPath = L"Assets\\Models\\" + std::wstring(lowerType.begin(), lowerType.end()) + L".obj";
             LoadOrPlaceholderMesh(*obj->GetMesh(), m_graphics->GetDevice(), m_graphics->GetContext(), meshPath);
             obj->SetPosition({x, y, z});
-            m_objects.push_back(std::move(obj));
-
-            // Also track in scene hierarchy
             SceneNode node;
             node.type = type;
             node.name = type + "_" + std::to_string(lineNum);
             node.position = {x, y, z};
-            AddNode(node);
+            stagedNodes.push_back(std::move(node));
+            stagedObjects.push_back(std::move(obj));
         }
+        if (stagedNodes.empty())
+            return false;
+        Clear();
+        m_sceneNodes = std::move(stagedNodes);
+        m_objects = std::move(stagedObjects);
+        m_nodeNameIndex.clear();
+        for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
+            m_nodeNameIndex.emplace(m_sceneNodes[static_cast<size_t>(i)].name, i);
     }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"SceneManager: Loaded " + std::to_wstring(m_sceneNodes.size()) + L" nodes", L"SUCCESS");

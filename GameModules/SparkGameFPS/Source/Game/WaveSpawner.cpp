@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <random>
 #include <sstream>
 
@@ -272,6 +273,14 @@ namespace Spark
            << "\n";
         ss << "Total Kills: " << m_totalEnemiesKilled << "\n";
         ss << "Difficulty Scale: " << m_difficultyScale << "\n";
+        ss << "Wave Spawn Points: " << m_spawnPoints.size();
+        if (!m_spawnPoints.empty())
+        {
+            const auto& first = m_spawnPoints.front();
+            ss << "; first (" << std::fixed << std::setprecision(1) << first.x << ", " << first.y << ", " << first.z
+               << ")";
+        }
+        ss << "\n";
 
         if (m_state == WaveState::Countdown)
             ss << "Next wave in: " << m_countdownTimer << "s\n";

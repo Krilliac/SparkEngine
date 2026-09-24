@@ -32,6 +32,8 @@
 #include "LootSystem.h"
 #include "FPSLocalProfile.h"
 #include "Engine/Networking/NetworkManager.h"
+#include "Game/FPSWeatherPort.h"
+#include "Game/FPSWeatherIntegration.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -40,7 +42,6 @@
 namespace Spark
 {
     class SubscriptionHandle;
-    class WeatherSystem;
     class DialogueSystem;
     class DestructionSystem;
     class SaveSystem;
@@ -330,6 +331,13 @@ class SPARK_GAME_API Game
      * @param context Engine service locator — stored for lifetime of Game
      */
     void SetEngineContext(Spark::IEngineContext* context);
+    /// Attach the non-owning module weather capability at the Core/Main boundary.
+    void SetWeatherPort(SparkGameFPS::IFPSWeatherPort* port) { m_weatherIntegration.Bind(port); }
+    void ClearWeatherPort() { m_weatherIntegration.Clear(); }
+    bool SetWeatherPreset(SparkGameFPS::WeatherPreset preset, float intensity, float transitionSeconds)
+    {
+        return m_weatherIntegration.SetWeather(preset, intensity, transitionSeconds);
+    }
 
     /** @brief Get the engine context */
     Spark::IEngineContext* GetEngineContext() const { return m_engineContext; }
@@ -591,6 +599,23 @@ class SPARK_GAME_API Game
 #endif // ENABLE_NETWORKING
 
   private:
+    // One strict, locale-independent parser for authored camera clipping in
+    // both startup and scene reload paths.
+    static bool ParseAuthoredFiniteFloat(const std::string& text, float& value);
+
+    // Bind the trusted module project root after any scene load so authored
+    // material paths remain functional for both startup and console reloads.
+    void BindSceneMaterialRoots();
+
+    // Invalidate cached authored/procedural BasicMaterials after a successful
+    // scene replacement so the next render observes on-disk material edits.
+    void InvalidateSceneBasicMaterials();
+
+    // Re-apply authored camera, respawn, and wave-spawn state after a console
+    // scene reload.  Startup performs the same bindings while constructing the
+    // systems; reloads must not leave those systems pointing at the old scene.
+    void RefreshAuthoredSceneRuntimeState();
+
     /**
      * @brief Update the camera based on input and game state
      * @param dt Delta time for frame-rate independent movement
@@ -643,9 +668,10 @@ class SPARK_GAME_API Game
 
     // Engine-side pointers (not owned)
     Spark::IEngineContext* m_engineContext{nullptr}; ///< SDK v2 engine context
-    bool m_engineSystemsInitialized{false};          ///< SDK-v2 services were wired after context attachment
-    GraphicsEngine* m_graphics{nullptr};             ///< Reference to graphics engine
-    InputManager* m_input{nullptr};                  ///< Reference to input manager
+    SparkGameFPS::FPSWeatherIntegration m_weatherIntegration;
+    bool m_engineSystemsInitialized{false}; ///< SDK-v2 services were wired after context attachment
+    GraphicsEngine* m_graphics{nullptr};    ///< Reference to graphics engine
+    InputManager* m_input{nullptr};         ///< Reference to input manager
 
     // Sub-systems owned by Game (unified system - no separate shader management)
     std::unique_ptr<SparkEngineCamera> m_camera;       ///< First-person camera system

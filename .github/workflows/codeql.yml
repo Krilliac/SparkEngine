@@ -77,6 +77,7 @@ jobs:
     # Rename the scanner output in trusted workflow code so a failed-job-only
     # rerun cannot reuse a successful language artifact from an older attempt.
     - name: Bind raw CodeQL SARIF to exact source attempt
+      if: always()
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
         SARIF_ROOT: ${{ runner.temp }}/codeql-sarif

@@ -131,33 +131,23 @@ namespace SparkEditor
 
         m_commandPalette->RegisterAction("Save Scene", "Scene", [this]() { SaveScene(); });
 
-        // Play mode
+        // F5 opens real-play controls. The old editor state machine only
+        // advances preview counters, so it must not be advertised as gameplay.
         m_commandPalette->RegisterAction(
-            "Play", "Command",
+            "Open Play Control", "Command",
             [this]()
             {
-                if (m_playModeManager.IsPaused())
-                    m_playModeManager.ResumePlayMode();
-                else if (m_playModeManager.IsStopped())
-                    m_playModeManager.EnterPlayMode();
-
-                m_playMode = m_playModeManager.IsPlaying()
-                                 ? PlayMode::Playing
-                                 : (m_playModeManager.IsSimulating()
-                                        ? PlayMode::Simulating
-                                        : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
-                const bool running = m_playMode != PlayMode::Stopped;
-                ShowNotification(running ? "Running..." : "Unable to enter play mode", running ? "success" : "error");
+                SetPanelVisible("PlayControl", true);
+                ShowNotification("Play Control opened — select a module, then Launch Game", "info", 3.0f);
             },
             "F5");
 
         m_commandPalette->RegisterAction(
-            "Stop", "Command",
+            "Open Play Control to stop games", "Command",
             [this]()
             {
-                m_playModeManager.ExitPlayMode();
-                m_playMode = PlayMode::Stopped;
-                ShowNotification("Stopped", "info");
+                SetPanelVisible("PlayControl", true);
+                ShowNotification("Play Control opened — use STOP ALL to stop game processes", "info", 3.0f);
             },
             "Shift+F5");
     }

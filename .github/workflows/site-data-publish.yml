@@ -232,7 +232,6 @@ jobs:
           # reintroduce it to get a publication through.
           python3 tools/site-data/validate.py
           python3 tools/site-data/validate.py --assets
-          python3 tools/site-data/validate.py --docs
           python3 tools/site-data/validate.py --legal
           python3 tools/site-data/render_handoff.py --check
           COMMITTED_AT="$(git show -s --format=%cI "$SOURCE_COMMIT")"
@@ -263,6 +262,11 @@ jobs:
             test -s "$HEALTH_EVIDENCE"
             HEALTH_ARGS=(--doc-health-file "$HEALTH_EVIDENCE")
           done
+          # --docs consumes the ignored API corpus. The first generate.py call
+          # above is the producer on a clean checkout, so validate the docs
+          # surface only after that producer has materialized its exact-SHA
+          # output.
+          python3 tools/site-data/validate.py --docs
           diff --recursive --brief \
             "$RUNNER_TEMP/.site-data-proof-a" \
             "$RUNNER_TEMP/.site-data-proof-b"

@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.25)
 # SparkGameFPS - Game Module DLL
 #
 # SparkGameFPS compiles as a shared library (DLL on Windows, .so on Linux)
-# that the SparkEngine executable loads at runtime via GameModuleLoader.
+# that the SparkEngine executable loads at runtime via ModuleManager.
 #
 # This CMakeLists.txt can be used in two ways:
 #   1. As a subdirectory of the main SparkEngine build (typical dev workflow)

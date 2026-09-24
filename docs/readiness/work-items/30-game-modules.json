@@ -217,7 +217,7 @@
       "wave": 4,
       "area": "modules",
       "owner": "unassigned",
-      "rationale": "Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295.",
+      "rationale": "Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295. 2026-09-12 progress: FPS package-smoke now requires SparkSDK.h, IModule.h, and Version.h in the installed public SDK and rejects an incomplete package during reconfiguration. Full module lifecycle, package, and hosted evidence remains open.",
       "dependencies": [
         "RDY-010",
         "RDY-020",
@@ -474,7 +474,7 @@
       "wave": 4,
       "area": "modules",
       "owner": "unassigned",
-      "rationale": "FPS has a local arena, input, combat, rendering, and AI foundation, but it is not yet an installed public-SDK-only single-player product with real-source lifecycle and package evidence. 2026-09-05 progress: the death -> respawn -> score loop is complete (RespawnSystem decoupled from Player so the real class is testable), quicksave/quickload persist FPSLocalProfile through the engine context's SaveSystem/World and report the real result, module assets resolve from one runtime-discovered root, the module initializes without a D3D11 device, and the unreachable in-game console overlay was removed. The exact-SHA installed-package smoke path is implemented locally but has no hosted proof. Still open: the module links SparkEngineLib with engine-source include paths (public-SDK-only requirement unmet), plus installed single-player and save acceptance.",
+      "rationale": "FPS has a local arena, input, combat, rendering, and AI foundation, but it is not yet an installed public-SDK-only single-player product with real-source lifecycle and package evidence. 2026-09-05 progress: the death -> respawn -> score loop is complete (RespawnSystem decoupled from Player so the real class is testable), quicksave/quickload persist FPSLocalProfile through the engine context's SaveSystem/World and report the real result, module assets resolve from one runtime-discovered root, the module initializes without a D3D11 device, and the unreachable in-game console overlay was removed. The exact-SHA installed-package smoke path is implemented locally but has no hosted proof. 2026-09-12 progress: the FPS package consumer now requires the complete canonical SDK header set, including SparkSDK.h, and has a missing-umbrella-header regression. 2026-09-13 progress: real CTest entries now back the FPSSinglePlayerSlice, FPSPackage, and FPSPublicSDK selectors; the installed public-SDK consumer passes its focused suite. 2026-09-20 local progress: a fresh staged MinSizeRel runtime passed its real NullRHI lifecycle and a separate two-process D3D11 WARP progression persistence slice (writer 0->37 XP, fresh reader 0->37 XP after quickload, unchanged save bytes). 2026-09-21 progress: SparkGameFPS removed its private legacy IGameModule inheritance/factories and concrete EngineContext singleton lookups; its production entrypoint header now compiles against staged Spark/ SDK headers alone, the source-boundary contract passes, and rebuilt D3D11/NullRHI lifecycles remain green. 2026-09-21 further progress: the weather seam is module-owned and game-thread enforced, with the concrete dependency isolated to the Core adapter; six focused tests pass. The strict MinSizeRel windows-shipping package now contains exactly SparkGameFPS and locally passes installed-bin asset integrity, D3D11 WARP for eight rendered frames, module lifecycle, and save/reload from the staged layout. 2026-09-23 local progress: all 56 authored FPS scene objects now declare valid confined materials, procedural arena models bind trusted material paths, and an installed D3D11 WARP A/B changes 47.32% of central pixels with 0% outside; six focused CTests pass. 2026-09-23 further local progress: successful scene_load now invalidates referenced cached BasicMaterials; an installed same-process D3D11 WARP A/B changes 47.73% of center pixels and 0.26% outside, while the pre-fix binary changes only 0.41% at center; four focused CTests pass. Still open: full spawn-move-kill-respawn-score installed acceptance, clean-machine/hosted proof, hardware D3D11/golden evidence, and the implementation's SparkEngineLib plus engine-source dependencies (complete public-SDK-only requirement unmet).",
       "dependencies": [
         "MOD-290",
         "SDK-240",
@@ -557,7 +557,7 @@
       "definitionOfDone": [
         "Installed single-player and public-SDK acceptance pass",
         "Package, assets, save, docs, and evidence pass",
-        "Remaining: build against the installed SDK alone, D3D11 and NullRHI package smokes with the real module and assets, installed single-player acceptance"
+        "Remaining: build against the installed SDK alone, full declared-profile and installed single-player acceptance, clean-machine and hosted exact-SHA package proof"
       ],
       "profileApplicability": {
         "stable-v1": "required"
@@ -566,11 +566,7 @@
         "module-FPS-singleplayer",
         "module-FPS-package-windows"
       ],
-      "plannedTestSelectors": [
-        "FPSSinglePlayerSlice_*",
-        "FPSPackage_*",
-        "FPSPublicSDK_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-315",
@@ -1191,7 +1187,6 @@
         "module-RTS"
       ],
       "plannedTestSelectors": [
-        "RTSSkirmish_*",
         "RTSSave_*"
       ]
     },
@@ -1279,9 +1274,7 @@
       "plannedCiJobs": [
         "module-Racing"
       ],
-      "plannedTestSelectors": [
-        "RacingCompleteRace_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-390",

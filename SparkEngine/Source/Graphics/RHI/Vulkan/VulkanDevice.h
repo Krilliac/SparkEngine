@@ -124,6 +124,9 @@ namespace Spark
                 VkBuffer GetVkBuffer() const { return m_buffer; }
                 VkDeviceMemory GetVkMemory() const { return m_memory; }
                 void* GetMappedPtr() const { return m_mappedPtr; }
+                /// Dynamic/Staging/ReadBack buffers live in host-visible memory; Static buffers are device-local
+                /// and can only be written through a staging copy.
+                bool IsHostVisible() const { return m_desc.access != RHIBufferAccess::Static; }
                 void SetMappedPtr(void* ptr) { m_mappedPtr = ptr; }
 
               private:
@@ -250,13 +253,20 @@ namespace Spark
             class VulkanSwapChain : public IRHISwapChain
             {
               public:
-                VulkanSwapChain(VkDevice device, VkPhysicalDevice physDevice, VkSurfaceKHR surface,
+                /// Takes ownership of @p surface; it is destroyed with @p instance when the swap chain dies.
+                VulkanSwapChain(VkInstance instance, VkDevice device, VkPhysicalDevice physDevice, VkSurfaceKHR surface,
                                 const RHISwapChainDesc& desc, const QueueFamilyIndices& queueFamilies,
                                 VkQueue presentQueue);
                 ~VulkanSwapChain() override;
 
+                /// Transitions the acquired image to PRESENT_SRC and queues it. Waits for the present queue to
+                /// drain first, because engine submissions do not signal a per-image semaphore.
                 bool Present(bool vsync) override;
+                /// Recreates the chain at the clamped size, retiring the old one via oldSwapchain. A 0x0 size
+                /// (minimized window) keeps the current chain and returns false.
                 bool Resize(uint32_t width, uint32_t height) override;
+                /// Acquires the next image on first use each frame, so the returned texture is always owned
+                /// by the application when it is recorded into.
                 IRHITexture* GetBackBuffer() override;
                 PixelFormat GetFormat() const override { return m_desc.format; }
                 uint32_t GetWidth() const override { return m_desc.width; }
@@ -264,35 +274,38 @@ namespace Spark
                 uint32_t GetCurrentBufferIndex() const override { return m_currentImageIndex; }
 
                 VkSwapchainKHR GetVkSwapChain() const { return m_swapChain; }
-                VkSemaphore GetImageAvailableSemaphore() const { return m_imageAvailable; }
-                VkSemaphore GetRenderFinishedSemaphore() const { return m_renderFinished; }
-                VkFence GetInFlightFence() const { return m_inFlightFence; }
+                bool IsValid() const { return m_swapChain != VK_NULL_HANDLE; }
 
-                // Acquire next swap chain image, returns false if resize needed
+                /// Acquire the next swap chain image (host-synchronized); returns false if a resize is needed.
                 bool AcquireNextImage();
 
               private:
-                bool CreateSwapChain();
+                bool CreateSwapChain(VkSwapchainKHR oldSwapChain);
                 bool CreateImageViews();
                 bool CreateSyncObjects();
+                void DestroyImageViews();
                 void Cleanup();
 
                 RHISwapChainDesc m_desc;
+                VkInstance m_instance;
                 VkDevice m_device;
                 VkPhysicalDevice m_physDevice;
                 VkSurfaceKHR m_surface;
                 VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
+                VkFormat m_vkFormat = VK_FORMAT_B8G8R8A8_UNORM;
                 QueueFamilyIndices m_queueFamilies;
                 VkQueue m_presentQueue = VK_NULL_HANDLE;
 
                 std::vector<VkImage> m_swapChainImages;
-                std::vector<VkImageView> m_swapChainImageViews;
                 std::vector<std::unique_ptr<VulkanTexture>> m_backBuffers;
                 uint32_t m_currentImageIndex = 0;
+                bool m_imageAcquired = false;
 
-                VkSemaphore m_imageAvailable = VK_NULL_HANDLE;
-                VkSemaphore m_renderFinished = VK_NULL_HANDLE;
-                VkFence m_inFlightFence = VK_NULL_HANDLE;
+                // Host-waited acquire fence and a one-shot command buffer for the PRESENT_SRC transition.
+                VkFence m_acquireFence = VK_NULL_HANDLE;
+                VkFence m_transitionFence = VK_NULL_HANDLE;
+                VkCommandPool m_transitionPool = VK_NULL_HANDLE;
+                VkCommandBuffer m_transitionCmd = VK_NULL_HANDLE;
             };
 
             // ============================================================================
@@ -302,15 +315,21 @@ namespace Spark
             class VulkanCommandList : public IRHICommandList
             {
               public:
+                /// @param descriptorPool Pool for the non-push descriptor path (VK_NULL_HANDLE when push
+                ///        descriptors are used). @param bindingLayout Set layout matching every pipeline layout.
                 VulkanCommandList(VkDevice device, VkCommandPool commandPool, bool isImmediate,
                                   RHIStatistics* statistics = nullptr,
-                                  PFN_vkCmdPushDescriptorSetKHR pushDescriptorFn = nullptr);
+                                  PFN_vkCmdPushDescriptorSetKHR pushDescriptorFn = nullptr,
+                                  VkDescriptorPool descriptorPool = VK_NULL_HANDLE,
+                                  VkDescriptorSetLayout bindingLayout = VK_NULL_HANDLE);
                 ~VulkanCommandList() override;
 
                 void Begin() override;
                 void End() override;
                 void Reset() override;
 
+                /// Records the targets; dynamic rendering begins lazily at the next draw and is suspended
+                /// around clears, copies and layout transitions.
                 void SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
                                       IRHITexture* depthStencil) override;
                 void ClearRenderTarget(IRHITexture* target, const float color[4]) override;
@@ -347,31 +366,56 @@ namespace Spark
                 void EndEvent() override;
                 void SetMarker(const char* name) override;
 
-                // Image layout transitions
-                void TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
-                                           VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT);
+                /// Barrier from the texture's tracked layout to @p newLayout (no-op if already there).
+                /// Suspends dynamic rendering, since image barriers are not allowed inside it.
+                void TransitionTexture(VulkanTexture* texture, VkImageLayout newLayout);
+
+                /// Records a barrier moving @p texture from its tracked layout to @p newLayout into @p cmd and
+                /// updates the tracking. Layouts are tracked at record time, so recordings touching the same
+                /// texture must be submitted in the order they were recorded.
+                static void RecordTextureTransition(VkCommandBuffer cmd, VulkanTexture* texture,
+                                                    VkImageLayout newLayout);
 
                 VkCommandBuffer GetVkCommandBuffer() const { return m_commandBuffer; }
 
-                // Descriptor set binding for resource management
-                void BindDescriptorSet(VkPipelineLayout layout, VkDescriptorSet descriptorSet);
+                /// True once End() closed a recording that has not been submitted yet.
+                bool IsExecutable() const { return m_executable; }
+                /// Resets and returns the fence to pass to vkQueueSubmit; marks the list pending.
+                VkFence PrepareSubmit();
+                /// Blocks until the last submission finished and releases its descriptor sets.
+                void WaitForCompletion();
 
               private:
+                void ReleaseDescriptorSets(); ///< Frees pool sets of a completed/discarded recording
+                void ResumeRendering();
+                void SuspendRendering();
+                void FlushBindings();
+
                 VkDevice m_device;
                 VkCommandPool m_commandPool;
                 VkCommandBuffer m_commandBuffer = VK_NULL_HANDLE;
                 bool m_isImmediate;
                 bool m_isRecording = false;
+                bool m_executable = false;
+                bool m_pending = false;
                 RHIStatistics* m_statistics = nullptr;
+
+                // Signaled when the last submission of this command buffer completes.
+                VkFence m_submitFence = VK_NULL_HANDLE;
 
                 // Push descriptor function (Vulkan 1.4 core / VK_KHR_push_descriptor)
                 PFN_vkCmdPushDescriptorSetKHR m_vkCmdPushDescriptorSet = nullptr;
+                VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+                VkDescriptorSetLayout m_bindingLayout = VK_NULL_HANDLE;
+                // Pool-path sets referenced by the recording; freed only after the submission completes.
+                std::vector<VkDescriptorSet> m_liveDescriptorSets;
 
-                // Current render pass state
-                VkRenderPass m_activeRenderPass = VK_NULL_HANDLE;
-                VkFramebuffer m_activeFramebuffer = VK_NULL_HANDLE;
+                // Bound attachments and whether vkCmdBeginRendering is currently open.
+                std::vector<VulkanTexture*> m_colorTargets;
+                VulkanTexture* m_depthTarget = nullptr;
+                bool m_renderingActive = false;
 
-                // Tracked pipeline state for redundant bind elimination
+                // Tracked pipeline state for redundant bind elimination (reset at Begin)
                 VkPipeline m_currentPipeline = VK_NULL_HANDLE;
                 VkPipelineLayout m_currentPipelineLayout = VK_NULL_HANDLE;
 
@@ -448,8 +492,13 @@ namespace Spark
                 bool IsVulkan14() const { return m_vulkan14Available; }
                 bool SupportsPushDescriptors() const { return m_pushDescriptorSupported; }
                 bool SupportsHostImageCopy() const { return m_hostImageCopySupported; }
+                /// VK_EXT_headless_surface was enabled, so a VulkanSwapChain can be built without a window.
+                bool SupportsHeadlessSurface() const { return m_headlessSurfaceEnabled; }
                 D3D11ParityMilestones GetD3D11ParityMilestones() const;
                 std::vector<uint8_t> RenderCanonicalGoldenScene(uint32_t width, uint32_t height) const;
+                /// Copies mip 0 of a color texture to host memory as tightly packed rows (blocking). Returns an
+                /// empty vector for depth, compressed or unsupported formats, or textures without TransferSrc.
+                std::vector<uint8_t> ReadbackTexture(IRHITexture* texture);
                 VkQueue GetGraphicsQueue() const { return m_graphicsQueue; }
                 VkQueue GetPresentQueue() const { return m_presentQueue; }
                 VkCommandPool GetCommandPool() const { return m_commandPool; }
@@ -458,7 +507,8 @@ namespace Spark
                 // Memory helpers
                 uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
 
-                // Descriptor set management for resource binding
+                // Descriptor set management for resource binding (VK_NULL_HANDLE when the binding layout is a
+                // push-descriptor layout, which cannot back pool-allocated sets)
                 VkDescriptorSet AllocateDescriptorSet();
                 VkDescriptorSetLayout GetBindingLayout() const { return m_bindingLayout; }
                 VkPipelineLayout GetDefaultPipelineLayout() const { return m_defaultPipelineLayout; }
@@ -470,6 +520,13 @@ namespace Spark
                 bool CreateCommandPool();
                 bool CreateDescriptorSetLayout();
                 QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) const;
+                /// Records @p record into a one-shot command buffer, submits it and waits (10s bound).
+                bool SubmitOneShot(const std::function<void(VkCommandBuffer)>& record);
+                /// Creates a host-visible, host-coherent buffer (caller destroys both handles).
+                bool CreateHostBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& buffer,
+                                      VkDeviceMemory& memory);
+                /// Copies @p size bytes into a device-local buffer through a temporary staging buffer.
+                bool UploadViaStaging(VkBuffer destination, const void* data, VkDeviceSize size, VkDeviceSize offset);
                 bool CheckDeviceExtensionSupport(VkPhysicalDevice device) const;
                 void QueryCapabilities();
 
@@ -523,6 +580,7 @@ namespace Spark
                 PFN_vkCmdPushDescriptorSetKHR m_vkCmdPushDescriptorSet = nullptr;
 
                 bool m_validationEnabled = false;
+                bool m_headlessSurfaceEnabled = false;
                 bool m_isSoftwareDevice = false;
                 bool m_vulkan14Available = false;
                 bool m_pushDescriptorSupported = false;

@@ -145,9 +145,25 @@ ctest --test-dir build -C Release --output-on-failure --parallel --no-tests=erro
 
 Without sccache installed, omit the two `_LAUNCHER` flags. With sccache, keep `-DGENERATE_DEBUG_SYMBOLS=OFF`: Jolt's own `/Zi` would otherwise make sccache expect a PDB that `cl` (honouring the engine's later `/Z7`) never writes, and every Jolt translation unit fails with `sccache: encountered fatal error`. PCH is off because sccache cannot cache `/Yc` / `/Fp`; module scanning is off because no module units exist.
 
+Use a fresh build directory for each CMake executable, generator, compiler, or
+toolset. Do not run two configure processes against the same directory. A
+partially written compiler-information file can retain the compiler identity
+while losing the ABI and `CMAKE_CXX_COMPILE_FEATURES` results; the later
+`target_compile_features` diagnostic is then a stale-state symptom, not proof
+that MSVC lacks C++23 support. Re-run with `cmake --fresh` (or remove the
+directory) after changing the CMake installation or recovering an interrupted
+configure.
+
 CI installs sccache v0.17.0 from the GitHub release verified against a SHA-256 literal, keeps the cache in `SCCACHE_DIR` under `runner.temp` (split `actions/cache/restore` / `actions/cache/save` steps keyed like the Linux ccache steps; the save runs even when the job went red; `build/` is not restored), starts the server explicitly before configure, and reports the numbers in a `Print sccache stats` step. The engine selects embedded MSVC debug information (`/Z7`) through CMake policy CMP0141 before `project()`, which is what lets the configure-time try-compiles pass under the launcher.
 
 The advisory `build-windows-vs2026` job follows the same recipe inside the VS 2026 developer environment (vswhere `[18.0,19.0)`, default v145 toolset) without `-DBUILD_GAME_MODULES=ON`; it fails visibly when that toolchain is absent instead of reporting a green no-op. `build-windows-shipping` still configures through the `windows-shipping` preset (Visual Studio 17 2022 generator, v143) and uses no compiler cache.
+
+The build-matrix provenance checker records the absolute C++ compiler path in
+addition to the Visual Studio generator instance, archiver, and linker. It
+accepts only an absolute Windows x64 MSVC `cl.exe` path whose concrete toolset
+version agrees with the other recorded tools. This is provenance validation,
+not hosted reproducibility evidence: BLD-100 still requires two clean Windows
+Shipping builds and an externally verified comparison.
 
 ## macOS (job `build-macos`, `continue-on-error`)
 
@@ -179,10 +195,16 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
 
 - `check-thirdparty-manifest` — `./tools/check-thirdparty-manifest-sync.sh`
 - `coverage` — GCC Debug with `--coverage` + lcov, per-subsystem thresholds
-- `clang-tidy` (`continue-on-error`) — Clang Debug static analysis
+- `clang-tidy` — Clang Debug static analysis; the job is blocking, while
+  individual diagnostics are advisory
 - `todo-count` — fails if TODO count exceeds threshold (20)
 - `build-installer` — builds the `SparkInstaller` target
 - `report-ci-errors` — aggregates `ci-errors-*` artifacts from failed jobs; findings from advisory lanes (job-level `continue-on-error`, e.g. `build-linux-msan`) are listed but do not fail the report. The reporter is loaded from the trusted `Working` checkout, so a change to it takes effect only after it lands there
+
+To verify CI-100's required-job failure propagation on the `Working` ref, run
+`gh workflow run build.yml --ref Working -f simulate_required_job_failure=true`. The manual-only input deliberately fails
+the required `validate-ci-tools` job; `Required CI Gate` must then fail as well.
+This is a red control run and cannot qualify a release commit.
 
 ## Notes
 

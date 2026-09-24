@@ -6,16 +6,23 @@
 
 ## Current Status
 
-SEC-120 remains open and release-blocking. The repository has a blocking structural
-policy gate, but it does not yet have a production fuzz target, seed corpus, sanitizer
-fuzz smoke, scheduled campaign, coverage result, or crash-free-duration result.
+SEC-120 remains open and release-blocking. The repository now has three structurally
+validated production fuzz targets and bounded seed corpora for `json-utils`,
+`neural-weights-nnw`, and `crash-manifest-parser`, but exact-SHA hosted sanitizer
+evidence, scheduled campaigns, coverage, and crash-free-duration evidence remain absent.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **105 explicitly inventoried parsers, all
-blocked**, **151 detected candidates deferred with an owner and expiry**, and **1979
-source files scanned across 17 first-party roots**. Those counts are not fuzz coverage.
+For the recorded source-tree state it reports **105 explicitly inventoried parsers, 3
+fuzzed and 102 blocked**, **3 bound corpora with 21 seeds (1226 bytes)**, **151 detected candidates
+deferred with an owner and expiry**, and **1983 source files scanned across 17
+first-party roots**. Those counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.
+
+The neural CTest uses `-runs=8` to replay all eight reviewed seeds, and the crash-manifest
+CTest replays its six reviewed seeds, under ASan/UBSan without mutating the tracked
+corpus. These are seed-smoke checks, not mutation campaigns; scheduled campaigns must
+use a disposable writable corpus and retain their results.
 
 Two gates, deliberately separate:
 
@@ -76,9 +83,9 @@ The gate proves that:
   a non-blocking status, while blockers remain.
 
 The gate does **not** prove that the regex scanner finds every possible parser, or that
-declared limits hold at runtime. The snapshot reports `detector_blind_spot_count` — 27
-inventoried files that no detector pattern matches, found by human review — precisely so
-that limitation is a number rather than an assumption.
+declared limits hold at runtime. The full inventory report records 27 inventoried files
+that no detector pattern matches, found by human review, so that limitation is a number
+rather than an assumption.
 
 ## Commands
 
@@ -96,9 +103,19 @@ python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --emit-json \
 python3 -m unittest discover -s Tests/fuzz-policy -p "test_*.py" -v
 bash tools/check-fuzz-policy.sh          # also runs via tools/validate-all.sh
 
-cmake -S tools/fuzz-policy -B build/fuzz-policy
+# Ubuntu/Debian's compiler-rt libFuzzer archive uses libstdc++. The fuzzer
+# executable and callback stay on that ABI, while the production adapter and
+# logger compile with libc++ for the C++23 headers. They communicate only via
+# an extern "C" byte-buffer entry point, so no C++ standard-library object
+# crosses the boundary.
+sudo apt-get install -y clang cmake libc++-dev libc++abi-dev
+CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
+  LDFLAGS="-stdlib=libstdc++" \
+  cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
+cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights SparkFuzzCrashManifest
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
+ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
 
 `-C Release` is required by multi-config generators (Visual Studio) and ignored by
@@ -112,7 +129,9 @@ freshly computed report.
 1. Add its production implementation files to
    `tools/fuzz-policy/parser-inventory.json` using canonical repository-relative paths.
 2. Mark it `blocked` with a substantive SEC-120 reason, or `fuzzed` with a harness,
-   CMake listfile, target, CTest selector, corpus id, and `entry_symbol`.
+   CMake listfile, target, CTest selector, corpus id, and `entry_symbol`. If the
+   harness crosses a C ABI adapter, also declare its `binding_source` and
+   `harness_entry_symbol`; the adapter must call the production `entry_symbol`.
 3. Remove any corresponding entry from `deferred_candidates`.
 4. For a fuzzed parser, add exactly one entry to `corpus-manifest.json`. The seed tree
    lives under `Tests/fuzz-corpora/`, must be non-empty, fresh, confined, link-free,
@@ -129,14 +148,16 @@ change *is* the review record.
 ## Remaining Closure Work
 
 - classify the 151-file deferred backlog before it expires on 2027-02-24;
-- implement production-entry-point fuzz targets for the inventoried parsers, starting
-  with the highest-risk binary readers (`neural-weights-nnw`, `terrain-sparkterrain`,
+- retain exact-SHA sanitizer smoke for json-utils, neural-weights-nnw, and
+  crash-manifest-parser, then implement production entry-point fuzz targets for
+  the remaining 102 blocked parsers, starting
+  with the highest-risk binary readers (`terrain-sparkterrain`,
   `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
   `fps-terrain-heightmap-bmp`, `asset-media-windows`);
 - commit bounded seed corpora under `Tests/fuzz-corpora/` and minimized regressions;
-- add blocking ASan/UBSan smoke and scheduled campaigns with retained coverage and
-  crash-free-duration evidence, and wire the `-L fuzz` smoke run into the CI job (the
-  gate already requires it as soon as any parser is marked `fuzzed`);
+- retain the blocking ASan/UBSan smoke now wired for both targets and add scheduled
+  campaigns with retained coverage and crash-free-duration evidence (the `-L fuzz`
+  CI run is now required whenever a parser is marked `fuzzed`);
 - independently review that each harness reaches production parsing code and that
   allocation, depth, path, integer, and time bounds are enforced by that code;
 - extend the detector so the 27 known blind spots shrink.
@@ -145,5 +166,6 @@ change *is* the review record.
 
 Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocking
 `fuzz-policy` job in `.github/workflows/build.yml`, and the closure step in
-`.github/workflows/release.yml`. Status checked 2026-08-28 against base commit
-`006c2ed32f751d3c363e76c3595c78a95069c4bc`; rerun the CI command for current counts.
+`.github/workflows/release.yml`. Status and both production targets were
+re-verified structurally 2026-09-20 on the release worktree; rerun the CI command for
+current counts and exact-SHA runtime evidence.

@@ -4,6 +4,11 @@
 The caller must treat the successful package-smoke log as a process-exit
 handoff: upload it immediately from the same job-owned workspace with no
 repository-controlled command in between.
+
+An old-to-new transaction requires --previous-signer-thumbprint from the
+caller's protected trust configuration. The private predecessor copy must
+have a valid timestamped Authenticode signature from that publisher before
+any Windows Installer command. This does not authorize bootstrap admission.
 """
 from __future__ import annotations
 
@@ -13,6 +18,7 @@ from contextlib import contextmanager
 import ctypes
 from ctypes import wintypes
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -26,6 +32,12 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "module-evidence"))
 import strict_json  # noqa: E402
 import package_evidence_io  # noqa: E402
+
+_SIGNATURE_SPEC = importlib.util.spec_from_file_location(
+    "spark_windows_package_signatures", Path(__file__).with_name("verify-windows-package-signatures.py"),
+)
+package_signatures = importlib.util.module_from_spec(_SIGNATURE_SPEC)
+_SIGNATURE_SPEC.loader.exec_module(package_signatures)
 
 if os.name == "nt":
     _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -72,7 +84,16 @@ foreach ($product in $installer.RelatedProducts($identity.UpgradeCode)) {
     $related += [string]$product
 }
 $identity.RelatedProducts = @($related)
-$identity | ConvertTo-Json -Compress
+$json = $identity | ConvertTo-Json -Compress
+$bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($json)
+$stream = [System.IO.File]::Open(
+    $env:SPARK_MSI_IDENTITY_JSON_PATH,
+    [System.IO.FileMode]::CreateNew,
+    [System.IO.FileAccess]::Write,
+    [System.IO.FileShare]::None
+)
+try { $stream.Write($bytes, 0, $bytes.Length) }
+finally { $stream.Dispose() }
 """
 
 
@@ -146,7 +167,10 @@ def _read_terminal_lines(log):
 
 def _validate_nullrhi_log(log):
     lines = _read_terminal_lines(log)
-    if any(line.startswith("SPARK_D3D11_DEVICE") for line in lines):
+    # The engine may route device diagnostics through its logger, so the
+    # forbidden marker is not required to start at column zero.  Reject any
+    # standalone marker token before accepting the NullRHI terminal records.
+    if any(re.search(r"(?:^|\s)SPARK_D3D11_DEVICE(?:\s|$)", line) for line in lines):
         raise ValueError("installed FPS NullRHI smoke emitted a D3D11 device record")
     ready = _exact_record(lines, _READY_RE, "installed FPS NullRHI module-ready")
     rhi = _exact_record(lines, _NULLRHI_RE, "installed FPS NullRHI backend")
@@ -227,13 +251,17 @@ def _validate_shipping_package_manifest(path, source_sha, version, msi_name, msi
         raise ValueError("shipping package manifest fields must all be strings")
     expected = {
         "schemaVersion": "spark-shipping-package-v1",
-        "commitSHA": source_sha,
         "profile": "stable-v1",
         "configuration": "MinSizeRel",
         "version": version,
         "msi": msi_name,
         "sha256": msi_sha256,
     }
+    if source_sha is None:
+        if not re.fullmatch(r"[0-9a-f]{40}", document["commitSHA"]):
+            raise ValueError("shipping package manifest commitSHA is not an exact lower-case source SHA")
+    else:
+        expected["commitSHA"] = source_sha
     for field, value in expected.items():
         if document[field] != value:
             label = "hash" if field == "sha256" else field
@@ -242,22 +270,36 @@ def _validate_shipping_package_manifest(path, source_sha, version, msi_name, msi
             )
 
 
-def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_command,
-            msiexec, powershell, cmake, source_sha=None, package_manifest=None):
-    if os.name != "nt":
-        raise ValueError("Windows is required for native MSI qualification")
+def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_command,
+                  msiexec, powershell, cmake, source_sha=None, package_manifest=None,
+                  previous_packages=None, previous_version=None, previous_package_manifest=None,
+                  previous_signer_thumbprint=None, bootstrap_repair=False):
     logs = Path(logs)
     if os.path.lexists(logs):
         raise ValueError("package-evidence log directory must be fresh")
     logs.mkdir(parents=True, exist_ok=False)
     errors = []
-    report = {"scope": "hosted-windows-msi-install-uninstall", "source_sha": source_sha,
+    transaction = any(value is not None for value in
+                      (previous_packages, previous_version, previous_package_manifest,
+                       previous_signer_thumbprint))
+    if bootstrap_repair and transaction:
+        raise ValueError("bootstrap_repair cannot be combined with predecessor transaction inputs")
+    report = {"scope": ("hosted-windows-msi-upgrade-repair-rollback-uninstall"
+                         if transaction else ("hosted-windows-msi-bootstrap-repair-uninstall"
+                                              if bootstrap_repair else "hosted-windows-msi-install-uninstall")),
+              "source_sha": source_sha,
               "version": version, "errors": errors, "certifies_windows11": False}
     attempted = False
     validated = False
     package = None
     install_root = None
     digest = None
+    cleanup_package = None
+    cleanup_digest = None
+    upgrade_attempted = False
+    previous_install_attempted = False
+    old_product_code = None
+    old_upgrade_code = None
     smoke_output = logs / "package-smoke.log"
 
     def execute(label, argv, *, env=None, cwd=None, timeout=900):
@@ -265,25 +307,63 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         if code != 0:
             raise ValueError(f"{label} failed with exit {code}")
 
-    def package_digest():
+    def package_digest(selected_package=None):
+        selected_package = selected_package or package
         digest_state = hashlib.sha256()
-        with package.open("rb") as stream:
+        with selected_package.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 digest_state.update(chunk)
         return digest_state.hexdigest()
 
-    def identity(label):
+    def identity(label, selected_package=None):
+        selected_package = selected_package or package
         command = base64.b64encode(IDENTITY_SCRIPT.encode("utf-16-le")).decode("ascii")
+        identity_path = logs / f"{label}.json"
         execute(label, [powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", command],
-                env={**os.environ, "SPARK_MSI_PATH": str(package)})
-        info = json.loads((logs / f"{label}.log").read_text(encoding="utf-8-sig"))
-        if (not isinstance(info, dict) or type(info.get("ProductState")) is not int
+                env={**os.environ, "SPARK_MSI_PATH": str(selected_package),
+                     "SPARK_MSI_IDENTITY_JSON_PATH": str(identity_path.absolute())})
+        try:
+            data = strict_json.read_file_no_follow_bytes(identity_path.absolute(), max_bytes=64 * 1024)
+            info = json.loads(data.decode("utf-8"), object_pairs_hook=_reject_duplicate_json_keys)
+        except (OSError, UnicodeDecodeError, ValueError, strict_json.StrictJSONError) as exc:
+            raise ValueError(f"MSI identity query did not write valid isolated JSON: {exc}") from exc
+        if (not isinstance(info, dict) or set(info) != {
+                "ProductName", "ProductVersion", "ProductCode", "UpgradeCode",
+                "InstallRoot", "ProductState", "RelatedProducts",
+            } or type(info.get("ProductState")) is not int
                 or not isinstance(info.get("RelatedProducts"), list)
                 or any(not isinstance(code, str) for code in info.get("RelatedProducts", []))
                 or any(not isinstance(info.get(key), str)
                        for key in ("ProductName", "ProductVersion", "ProductCode", "UpgradeCode", "InstallRoot"))):
             raise ValueError("MSI identity query did not return the required schema")
         return info
+
+    def validate_identity(info, expected_version, label):
+        if (info.get("ProductName") != "SparkEngine"
+                or info.get("ProductVersion") != expected_version
+                or info.get("InstallRoot") != "INSTALL_ROOT"
+                or any(not re.fullmatch(r"\{[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}\}", info[key])
+                       for key in ("ProductCode", "UpgradeCode"))):
+            raise ValueError(f"{label} MSI database identity or install directory does not match the expected package")
+
+    def verify_previous_signature(selected_package, expected_digest):
+        """Use the shared native signature policy while the private MSI is locked."""
+        command = base64.b64encode(package_signatures.SIGNATURE_SCRIPT.encode("utf-16-le")).decode("ascii")
+        execute("signature-previous", [powershell, "-NoLogo", "-NoProfile", "-NonInteractive",
+                                       "-EncodedCommand", command],
+                env={**os.environ, "SPARK_SIGNATURE_PATH": str(selected_package)}, timeout=120)
+        if package_digest(selected_package) != expected_digest:
+            raise ValueError("private previous MSI changed during signature verification")
+        evidence = json.loads((logs / "signature-previous.log").read_text(encoding="utf-8-sig"),
+                              object_pairs_hook=_reject_duplicate_json_keys)
+        package_signatures._validate_signature_evidence(
+            evidence, previous_signer_thumbprint, selected_package.name,
+        )
+        _write_result_report(logs / "previous-signature.json", {
+            "scope": "previous-windows-msi-authenticode", "msi": selected_package.name,
+            "sha256": expected_digest, "publisher_thumbprint": previous_signer_thumbprint.upper(),
+            "signature": evidence, "passed": True,
+        })
 
     try:
         if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
@@ -314,29 +394,138 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         )
         report.update(msi=package.name, sha256=digest)
         report["shipping_package_manifest"] = str(package_manifest)
+        old_package = old_digest = None
+        if transaction:
+            if any(value is None for value in (previous_packages, previous_version,
+                                              previous_package_manifest, previous_signer_thumbprint)):
+                raise ValueError(
+                    "previous_packages, previous_version, previous_package_manifest, and "
+                    "previous_signer_thumbprint must be supplied together"
+                )
+            if (not isinstance(previous_signer_thumbprint, str)
+                    or not re.fullmatch(r"[0-9a-fA-F]{40}", previous_signer_thumbprint)):
+                raise ValueError("previous_signer_thumbprint must be the trusted publisher's 40-hex thumbprint")
+            if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", previous_version):
+                raise ValueError("Invalid previous MSI release version")
+            previous_packages = Path(previous_packages)
+            if not previous_packages.is_dir() or previous_packages.is_symlink():
+                raise ValueError("previous shipping package directory must be a real directory")
+            previous_expected = f"SparkEngine-{previous_version}-Windows-AMD64-MinSizeRel-Runtime.msi"
+            previous_candidates = sorted(path for path in previous_packages.iterdir()
+                                         if path.suffix.lower() == ".msi")
+            if len(previous_candidates) != 1 or previous_candidates[0].name != previous_expected:
+                raise ValueError("Expected exactly one versioned previous Windows Shipping Runtime MSI")
+            previous_source = previous_candidates[0].absolute()
+            if not previous_source.is_file() or _has_link_component(previous_source):
+                raise ValueError("previous MSI path must be a regular file without symlink traversal")
+            previous_private_dir = logs / ".private-previous-package"
+            previous_private_dir.mkdir()
+            old_package, old_digest = package_evidence_io.copy_private_verified_file(
+                previous_source, previous_private_dir, previous_source.name,
+            )
+            _validate_shipping_package_manifest(
+                previous_package_manifest, None, previous_version, old_package.name, old_digest,
+            )
+            report.update(previous_msi=old_package.name, previous_sha256=old_digest,
+                          previous_shipping_package_manifest=str(previous_package_manifest))
         scratch = Path(tempfile.mkdtemp(prefix="spark-msi-", dir=runner_temp)).resolve()
         install_root = scratch / "install"
+        local_app_data = scratch / "localappdata"
+        user_data_root = local_app_data / "SparkEngine"
+        user_data_root.mkdir(parents=True, exist_ok=False)
+        user_data_sentinel = user_data_root / "release-qualification-sentinel.sav"
+        user_data_sentinel_bytes = b"SparkEngine stable-v1 external user data\n"
+        user_data_sentinel.write_bytes(user_data_sentinel_bytes)
         report["install_root"] = str(install_root)
+        report["user_data_root"] = str(user_data_root)
+
+        def verify_user_data(label):
+            try:
+                actual = user_data_sentinel.read_bytes()
+            except OSError as error:
+                raise ValueError(f"{label} could not read external user data sentinel: {error}") from error
+            if actual != user_data_sentinel_bytes:
+                raise ValueError(f"{label} changed external user data sentinel")
         with _hold_private_msi_identity(package):
-            if package_digest() != digest:
+            if package_digest(package) != digest:
                 raise ValueError("private MSI changed during identity validation")
+            if transaction:
+                if package_digest(old_package) != old_digest:
+                    raise ValueError("private previous MSI changed during identity validation")
+                with _hold_private_msi_identity(old_package):
+                    if package_digest(old_package) != old_digest:
+                        raise ValueError("private previous MSI changed before signature verification")
+                    verify_previous_signature(old_package, old_digest)
+                    old_info = identity("identity-previous-before", old_package)
+                    validate_identity(old_info, previous_version, "previous")
+                    old_product_code = old_info["ProductCode"]
+                    old_upgrade_code = old_info["UpgradeCode"]
+                    if old_info.get("ProductState") != -1:
+                        raise ValueError("previous MSI product is already registered; qualification requires an owned fresh install")
+                    if old_info["RelatedProducts"]:
+                        raise ValueError("previous MSI related-product registration exists before owned install")
+                    if old_info.get("ProductState") == -1:
+                        previous_install_attempted = True
+                        execute("install-previous", [msiexec, "/i", str(old_package), "/qn", "/norestart", "/L*V",
+                                                       str(logs / "msi-install-previous.log"), f"INSTALL_ROOT={install_root}"])
+                        attempted = True
+                cleanup_package, cleanup_digest = old_package, old_digest
+            else:
+                cleanup_package, cleanup_digest = package, digest
             info = identity("identity-before")
-            if (info.get("ProductName") != "SparkEngine" or info.get("ProductVersion") != version
-                    or info.get("InstallRoot") != "INSTALL_ROOT"
-                    or any(not re.fullmatch(r"\{[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}\}", info[key])
-                           for key in ("ProductCode", "UpgradeCode"))):
-                raise ValueError("MSI database identity or install directory does not match the expected package")
-            if info.get("ProductState") != -1:
-                raise ValueError("MSI product already registered; refusing to modify an existing installation")
-            if info["RelatedProducts"]:
-                raise ValueError("Related MSI products are registered; refusing an unintended upgrade")
+            if transaction:
+                validate_identity(info, version, "current")
+                if info.get("ProductState") != -1:
+                    raise ValueError("current MSI product is already registered; refusing an unintended replacement")
+                if info["UpgradeCode"] != old_upgrade_code:
+                    raise ValueError("current MSI UpgradeCode does not match the previous product")
+                if info["ProductCode"] == old_product_code:
+                    raise ValueError("current MSI ProductCode must differ from the previous product")
+            else:
+                validate_identity(info, version, "current")
+                if info.get("ProductState") != -1:
+                    raise ValueError("MSI product already registered; refusing to modify an existing installation")
+                if info["RelatedProducts"]:
+                    raise ValueError("Related MSI products are registered; refusing an unintended upgrade")
             report["product_code"] = info["ProductCode"]
             report["upgrade_code"] = info["UpgradeCode"]
-            attempted = True
-            execute("install", [msiexec, "/i", str(package), "/qn", "/norestart", "/L*V",
-                                str(logs / "msi-install.log"), f"INSTALL_ROOT={install_root}"])
+            if transaction:
+                upgrade_attempted = True
+                execute("upgrade", [msiexec, "/i", str(package), "/qn", "/norestart", "/L*V",
+                                     str(logs / "msi-upgrade.log"), f"INSTALL_ROOT={install_root}"])
+                attempted = True
+                cleanup_package, cleanup_digest = package, digest
+            else:
+                attempted = True
+                execute("install", [msiexec, "/i", str(package), "/qn", "/norestart", "/L*V",
+                                    str(logs / "msi-install.log"), f"INSTALL_ROOT={install_root}"])
+        if transaction:
+            with _hold_private_msi_identity(package):
+                if package_digest(package) != digest:
+                    raise ValueError("private MSI changed before upgraded identity validation")
+                upgraded = identity("identity-upgraded", package)
+                if upgraded["ProductState"] != 5 or upgraded["ProductVersion"] != version:
+                    raise ValueError("MSI upgrade did not establish the new installed product")
+            with _hold_private_msi_identity(old_package):
+                if package_digest(old_package) != old_digest:
+                    raise ValueError("private previous MSI changed before upgraded identity validation")
+            with _hold_private_msi_identity(package):
+                if package_digest(package) != digest:
+                    raise ValueError("private MSI changed before repair")
+                execute("repair", [msiexec, "/fvomus", str(package), "/qn", "/norestart", "/L*V",
+                                    str(logs / "msi-repair.log"), f"INSTALL_ROOT={install_root}"])
+            verify_user_data("upgrade+repair")
+        elif bootstrap_repair:
+            # Bootstrap qualification has no N-1 package, but it must still
+            # exercise the repair transaction and prove user data survives it.
+            with _hold_private_msi_identity(package):
+                if package_digest(package) != digest:
+                    raise ValueError("private MSI changed before bootstrap repair")
+                execute("repair-bootstrap", [msiexec, "/fvomus", str(package), "/qn", "/norestart", "/L*V",
+                                              str(logs / "msi-repair-bootstrap.log"), f"INSTALL_ROOT={install_root}"])
+            verify_user_data("bootstrap+repair")
         with _hold_private_msi_identity(package):
-            if package_digest() != digest:
+            if package_digest(package) != digest:
                 raise ValueError("private MSI changed before installed identity validation")
             installed = identity("identity-installed")
             # INSTALLSTATE_DEFAULT (5) means installed for the current context;
@@ -350,30 +539,100 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         execute("fps-nullrhi", [str(install_root / "bin/SparkEngine.exe"), "-headless", "-game",
                                str(install_root / "bin/SparkGameFPS.dll"), "-test-frames", "5", "-require-game",
                                "-no-subprocess", "-no-jobsystem"],
-                env={**os.environ, "SPARK_RHI_BACKEND": "null"},
+                env={**os.environ, "LOCALAPPDATA": str(local_app_data),
+                     "SPARK_RHI_BACKEND": "null"},
                 cwd=install_root / "bin", timeout=120)
         _validate_nullrhi_log(logs / "fps-nullrhi.log")
         execute("fps-d3d11-warp", [str(install_root / "bin/SparkEngine.exe"), "-game",
                                     str(install_root / "bin/SparkGameFPS.dll"), "-require-game",
                                     "-test-seconds", "1.0", "-threads", "2", "-window-size", "640x360",
                                     "-no-subprocess"],
-                env={**os.environ, "SPARK_RHI_BACKEND": "d3d11", "SPARK_D3D11_DRIVER": "warp"},
+                env={**os.environ, "LOCALAPPDATA": str(local_app_data),
+                     "SPARK_RHI_BACKEND": "d3d11", "SPARK_D3D11_DRIVER": "warp"},
                 cwd=install_root / "bin", timeout=120)
         _validate_d3d11_log(logs / "fps-d3d11-warp.log")
+        verify_user_data("runtime validation")
         validated = True
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         errors.append(str(error))
+        if transaction and upgrade_attempted and old_package is not None:
+            try:
+                # A nonzero installer exit may mean no mutation or a partial
+                # mutation. Inspect registration before issuing destructive
+                # rollback commands, preserving the original failure above.
+                with _hold_private_msi_identity(package):
+                    failed_upgrade = identity("identity-upgrade-failure", package)
+                if failed_upgrade["ProductState"] == -1:
+                    with _hold_private_msi_identity(old_package):
+                        if package_digest(old_package) != old_digest:
+                            raise ValueError("private previous MSI changed while inspecting failed upgrade")
+                        old_after_failure = identity("identity-upgrade-failure-old", old_package)
+                        if old_after_failure["ProductState"] == -1:
+                            execute("rollback-install-previous", [msiexec, "/i", str(old_package), "/qn", "/norestart", "/L*V",
+                                                                  str(logs / "msi-rollback-install.log"),
+                                                                  f"INSTALL_ROOT={install_root}"])
+                            restored = identity("identity-rollback", old_package)
+                            if restored["ProductState"] != 5 or restored["ProductVersion"] != previous_version:
+                                raise ValueError("failed upgrade could not restore the previous installed product")
+                            verify_user_data("rollback restoration")
+                            attempted = True
+                            cleanup_package, cleanup_digest = old_package, old_digest
+                        elif old_after_failure["ProductState"] != 5:
+                            raise ValueError("failed upgrade left the previous product in an indeterminate state")
+                    upgrade_attempted = False
+                elif failed_upgrade["ProductState"] == 5:
+                    with _hold_private_msi_identity(package):
+                        if package_digest(package) != digest:
+                            raise ValueError("private MSI changed; refusing rollback uninstall")
+                        execute("rollback-uninstall-new", [msiexec, "/x", str(package), "/qn", "/norestart", "/L*V",
+                                                            str(logs / "msi-rollback-uninstall.log")])
+                    with _hold_private_msi_identity(old_package):
+                        if package_digest(old_package) != old_digest:
+                            raise ValueError("private previous MSI changed; refusing rollback install")
+                        execute("rollback-install-previous", [msiexec, "/i", str(old_package), "/qn", "/norestart", "/L*V",
+                                                              str(logs / "msi-rollback-install.log"),
+                                                              f"INSTALL_ROOT={install_root}"])
+                        restored = identity("identity-rollback", old_package)
+                        if restored["ProductState"] != 5 or restored["ProductVersion"] != previous_version:
+                            raise ValueError("rollback did not restore the previous installed product")
+                        verify_user_data("rollback restoration")
+                    cleanup_package, cleanup_digest = old_package, old_digest
+                else:
+                    raise ValueError("failed upgrade left an indeterminate MSI registration state")
+            except (OSError, ValueError, subprocess.SubprocessError) as rollback_error:
+                errors.append(f"rollback failed: {rollback_error}")
+        elif transaction and previous_install_attempted and old_package is not None:
+            try:
+                with _hold_private_msi_identity(old_package):
+                    if package_digest(old_package) != old_digest:
+                        raise ValueError("private previous MSI changed after failed previous install")
+                    old_after_failure = identity("identity-previous-install-failure", old_package)
+                    if old_after_failure["ProductState"] == 5:
+                        execute("cleanup-partial-previous", [msiexec, "/x", str(old_package), "/qn", "/norestart", "/L*V",
+                                                              str(logs / "msi-cleanup-partial-previous.log")])
+                        cleaned = identity("identity-previous-install-cleanup", old_package)
+                        if cleaned["ProductState"] != -1:
+                            raise ValueError("failed previous install left a registered product")
+                    elif old_after_failure["ProductState"] != -1:
+                        raise ValueError("failed previous install left an indeterminate MSI registration state")
+                if install_root.exists() or install_root.is_symlink():
+                    errors.append(f"Uninstall residue remains at {install_root}")
+            except (OSError, ValueError, subprocess.SubprocessError) as cleanup_error:
+                errors.append(f"previous-install cleanup failed: {cleanup_error}")
     finally:
         if attempted:
             try:
-                with _hold_private_msi_identity(package):
-                    if package_digest() != digest:
+                if cleanup_package is None or cleanup_digest is None:
+                    raise ValueError("cleanup MSI identity was not established")
+                with _hold_private_msi_identity(cleanup_package):
+                    if package_digest(cleanup_package) != cleanup_digest:
                         raise ValueError("private MSI changed; refusing to execute substituted uninstall package")
-                    execute("uninstall", [msiexec, "/x", str(package), "/qn", "/norestart", "/L*V",
+                    execute("uninstall", [msiexec, "/x", str(cleanup_package), "/qn", "/norestart", "/L*V",
                                           str(logs / "msi-uninstall.log")])
-                    remaining = identity("identity-after")
+                    remaining = identity("identity-after", cleanup_package)
                     if remaining["ProductState"] != -1 or remaining["RelatedProducts"]:
                         raise ValueError("MSI product registration remains after uninstall")
+                    verify_user_data("final uninstall")
             except (OSError, ValueError, subprocess.SubprocessError) as error:
                 errors.append(str(error))
             # Never hide uninstall defects by deleting installed files ourselves.
@@ -397,6 +656,29 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
     return int(not report["passed"])
 
 
+def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_command,
+            msiexec, powershell, cmake, source_sha=None, package_manifest=None,
+            previous_packages=None, previous_version=None, previous_package_manifest=None,
+            previous_signer_thumbprint=None, bootstrap_repair=False):
+    """Run native MSI qualification on Windows.
+
+    The platform-independent transaction state machine lives in the private
+    implementation so injected unit fixtures can exercise it without mutating
+    Python's process-global ``os.name`` value.
+    """
+    if os.name != "nt":
+        raise ValueError("Windows is required for native MSI qualification")
+    return _qualify_impl(
+        packages, version, manifest, runner_temp, logs,
+        runner=runner, msiexec=msiexec, powershell=powershell, cmake=cmake,
+        source_sha=source_sha, package_manifest=package_manifest,
+        previous_packages=previous_packages, previous_version=previous_version,
+        previous_package_manifest=previous_package_manifest,
+        previous_signer_thumbprint=previous_signer_thumbprint,
+        bootstrap_repair=bootstrap_repair,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--packages", type=Path, required=True)
@@ -406,14 +688,31 @@ def main():
     parser.add_argument("--runner-temp", type=Path, required=True)
     parser.add_argument("--logs", type=Path, required=True)
     parser.add_argument("--source-sha", required=True)
+    parser.add_argument("--previous-packages", type=Path)
+    parser.add_argument("--previous-version")
+    parser.add_argument("--previous-package-manifest", type=Path)
+    parser.add_argument("--previous-signer-thumbprint", help="Trusted Authenticode publisher for the predecessor MSI")
+    parser.add_argument("--bootstrap-repair", action="store_true",
+                        help="run repair after a fresh install without an N-1 predecessor")
     args = parser.parse_args()
+    previous_values = (args.previous_packages, args.previous_version, args.previous_package_manifest,
+                       args.previous_signer_thumbprint)
+    if any(value is not None for value in previous_values) and not all(value is not None for value in previous_values):
+        parser.error("--previous-packages, --previous-version, --previous-package-manifest, and "
+                     "--previous-signer-thumbprint must be supplied together")
+    if args.bootstrap_repair and any(value is not None for value in previous_values):
+        parser.error("--bootstrap-repair cannot be combined with predecessor transaction inputs")
     if os.name != "nt" or not re.fullmatch(r"[0-9a-f]{40}", args.source_sha):
         parser.error("Native Windows and an exact source commit are required")
     system = Path(os.environ["SystemRoot"]) / "System32"
     return qualify(args.packages, args.version, args.manifest, args.runner_temp,
                    args.logs, msiexec=str(system / "msiexec.exe"),
                    powershell=str(system / "WindowsPowerShell/v1.0/powershell.exe"), cmake="cmake",
-                   source_sha=args.source_sha, package_manifest=args.package_manifest)
+                   source_sha=args.source_sha, package_manifest=args.package_manifest,
+                   previous_packages=args.previous_packages, previous_version=args.previous_version,
+                   previous_package_manifest=args.previous_package_manifest,
+                   previous_signer_thumbprint=args.previous_signer_thumbprint,
+                   bootstrap_repair=args.bootstrap_repair)
 
 
 if __name__ == "__main__":

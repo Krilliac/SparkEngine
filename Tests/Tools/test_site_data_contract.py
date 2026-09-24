@@ -95,6 +95,8 @@ class ContractTestCase(unittest.TestCase):
         for item in contract["workItems"]:
             if item["id"] in declared:
                 item["status"] = "done"
+                if item["id"] == "GOV-400":
+                    contract["content"]["legal"]["policyGaps"] = []
         contract["readiness"]["execution"]["firstUnblockedWorkItemId"] = None
         contract["readiness"]["globalRelease"]["state"] = "ready"
 
@@ -253,6 +255,7 @@ class WorkItemApplicabilityTests(ContractTestCase):
             "BLD-100": "required",
             "CI-120": "required",
             "REL-100": "required",
+            "REL-190": "shared",
             "REL-200": "shared",
             "INST-130": "required",
             "SEC-120": "required",
@@ -380,6 +383,72 @@ class WorkItemApplicabilityTests(ContractTestCase):
                 )
 
 
+class LegalContractConsistencyTests(ContractTestCase):
+    """GOV-400 legal data stays explicit while its policy work is open."""
+
+    @staticmethod
+    def license_of(contract: dict[str, Any]) -> dict[str, Any]:
+        return contract["content"]["legal"]["license"]
+
+    def test_current_license_declaration_cannot_be_relabelled(self) -> None:
+        mutations = (
+            ("name", "MIT", "content.legal.license.name"),
+            ("kind", "OSI-approved open-source license", "content.legal.license.kind"),
+            ("osiApproved", True, "content.legal.license.osiApproved"),
+        )
+        for field, value, location in mutations:
+            with self.subTest(field=field):
+                mutated = copy.deepcopy(self.contract)
+                self.license_of(mutated)[field] = value
+                self.assert_rejected(mutated, location)
+
+    def test_open_gov_400_requires_non_empty_unique_string_policy_gaps(self) -> None:
+        for policy_gaps in ([], ["same gap", "same gap"], ["valid gap", 7], [""]):
+            with self.subTest(policy_gaps=policy_gaps):
+                mutated = copy.deepcopy(self.contract)
+                mutated["content"]["legal"]["policyGaps"] = policy_gaps
+                self.assert_rejected(mutated, "content.legal.policyGaps")
+
+        missing = copy.deepcopy(self.contract)
+        missing["content"]["legal"].pop("policyGaps")
+        self.assert_rejected(missing, "content.legal.policyGaps")
+
+    def test_done_gov_400_rejects_remaining_policy_gaps(self) -> None:
+        mutated = copy.deepcopy(self.contract)
+        self.items_of(mutated)["GOV-400"]["status"] = "done"
+        self.assert_rejected(mutated, "GOV-400 cannot be done while policyGaps remain")
+
+
+class LegalPublicWordingTests(ContractTestCase):
+    """Public legal wording cannot outrun the reviewed license declaration."""
+
+    def test_non_osi_license_accepts_reviewed_source_available_project_wording(self) -> None:
+        validator = site_data_validate.Validator(copy.deepcopy(self.contract))
+        validator.validate(legal=True)
+
+        errors = site_data_validate.legal_public_wording_errors(
+            self.contract["content"]["legal"]["license"],
+            {"README.md": "A C++23 open-source game engine."},
+        )
+        self.assertEqual(1, len(errors))
+        self.assertIn("unreviewed open-source wording", errors[0])
+        self.assertIn("README.md", errors[0])
+
+    def test_negated_wording_is_allowed_for_explaining_the_distinction(self) -> None:
+        errors = site_data_validate.legal_public_wording_errors(
+            {"osiApproved": False},
+            {"legal.md": "This project is not open-source under an OSI-approved license."},
+        )
+        self.assertEqual([], errors)
+
+    def test_osi_approved_declaration_does_not_apply_the_custom_license_guard(self) -> None:
+        errors = site_data_validate.legal_public_wording_errors(
+            {"osiApproved": True},
+            {"README.md": "A C++23 open-source game engine."},
+        )
+        self.assertEqual([], errors)
+
+
 class TransitiveDependencyTests(ContractTestCase):
     """Frozen case 4: profile dependency closure is transitive and diagnostic."""
 
@@ -407,6 +476,47 @@ class TransitiveDependencyTests(ContractTestCase):
         self.promote_ready(self.mutable)
         self.items_of(self.mutable)["RDY-020"]["status"] = "open"
         self.assert_rejected(self.mutable, "unfinished transitive dependencies")
+
+    def close_blocker_over_open_dependency(self) -> None:
+        """DOC-410 done while its dependency RDY-000 is still open."""
+        items = self.items_of(self.mutable)
+        self.assertIn("RDY-000", items["DOC-410"]["dependencies"])
+        items["DOC-410"]["status"] = "done"
+        items["RDY-000"]["status"] = "open"
+
+    def validation_errors(self) -> str:
+        try:
+            site_data_validate.Validator(self.mutable).validate()
+        except SiteDataError as error:
+            return str(error)
+        return ""
+
+    def test_ready_capability_rejects_an_unfinished_transitive_dependency(self) -> None:
+        self.close_blocker_over_open_dependency()
+        capability = self.capabilities_of(self.mutable)["platform.console"]
+        capability["release"] = "ready"
+        capability["requiredGateIds"] = []
+        capability["blockingWorkItemIds"] = ["DOC-410"]
+        self.assert_rejected(
+            self.mutable,
+            "capabilities.platform.console: ready capability has unfinished "
+            "transitive dependencies: DOC-410 -> RDY-000",
+        )
+        # Control: once the dependency closes, the diagnostic disappears.
+        self.items_of(self.mutable)["RDY-000"]["status"] = "done"
+        self.assertNotIn("transitive dependencies", self.validation_errors())
+
+    def test_passing_gate_rejects_an_unfinished_transitive_dependency(self) -> None:
+        self.close_blocker_over_open_dependency()
+        gate = self.gates_of(self.mutable)["G00"]
+        gate["state"] = "passing"
+        gate["blockingWorkItemIds"] = ["DOC-410"]
+        self.assert_rejected(
+            self.mutable,
+            "gates.G00: passing gate has unfinished transitive dependencies: DOC-410 -> RDY-000",
+        )
+        self.items_of(self.mutable)["RDY-000"]["status"] = "done"
+        self.assertNotIn("transitive dependencies", self.validation_errors())
 
 
 class ReadyPromotionTests(ContractTestCase):
@@ -537,7 +647,7 @@ class ScopeNarrowingTests(ContractTestCase):
             self.assertIn(required, performance)
         self.assertNotIn("linux", performance)
 
-        rehearsal = self.item_text(items["REL-200"], "implementationScope", "acceptanceCriteria")
+        rehearsal = self.item_text(items["REL-190"], "implementationScope", "acceptanceCriteria")
         self.assertIn("requiredgateids", rehearsal)
         for excluded in ("protocol", "backup", "incident"):
             self.assertNotIn(excluded, rehearsal)
@@ -1149,6 +1259,27 @@ class PublicClaimInvariantTests(ContractTestCase):
                     [],
                 )
 
+    def test_multiplayer_quick_start_keeps_rcon_local_only(self) -> None:
+        quick_start = (REPO_ROOT / "wiki" / "subsystems" / "Multiplayer-Quick-Start.md").read_text(
+            encoding="utf-8", errors="replace"
+        )
+        self.assertIn("trusted local administration", quick_start)
+        self.assertIn("remote RCON is unavailable", quick_start)
+        self.assertIn("There is no network RCON listener", quick_start)
+        self.assertNotIn('config.rconPassword = "admin123";', quick_start)
+
+    def test_memory_integrity_docs_keep_admin_boundary_local_only(self) -> None:
+        surfaces = (
+            REPO_ROOT / "wiki" / "subsystems" / "Memory-Integrity.md",
+            REPO_ROOT / "wiki" / "advanced" / "Memory-Integrity-System.md",
+        )
+        for surface in surfaces:
+            with self.subTest(surface=surface):
+                text = surface.read_text(encoding="utf-8", errors="replace")
+                self.assertIn("local administration", text.lower())
+                self.assertNotIn("Chat-to-RCON command gate", text)
+                self.assertNotIn("RCON command gate", text)
+
     def test_negative_tests_have_no_tracked_file_mutation_calls(self) -> None:
         tree = ast.parse(TEST_PATH.read_text(encoding="utf-8"))
         forbidden: list[str] = []
@@ -1165,9 +1296,11 @@ class PublicClaimInvariantTests(ContractTestCase):
     def test_readme_does_not_overclaim_templates_or_generic_nullrhi(self) -> None:
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertNotIn("Nine complete installed-SDK-independent templates", readme)
-        self.assertIn("contract targets the no-render `NullRHIDevice` path", readme)
-        self.assertIn("do not instantiate it (`HEAD-220` remains open)", readme)
-        self.assertIn("NullRHI itself rasterizes no pixels", readme)
+        self.assertIn("headless entry points now own and tick a NullRHI bridge", readme)
+        self.assertIn("passing no windowed `GraphicsEngine` or `InputManager`", readme)
+        self.assertIn("the FPS client module does not load through `SparkServer`", readme)
+        self.assertIn("Packaged clean-host, soak, and recovery qualification remains open (`HEAD-220`)", readme)
+        self.assertIn("NullRHI rasterizes no pixels", readme)
 
     def test_public_content_uses_profile_derived_gate_wording(self) -> None:
         content = (REPO_ROOT / "docs" / "site" / "content.json").read_text(

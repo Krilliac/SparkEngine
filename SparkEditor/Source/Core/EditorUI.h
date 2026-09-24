@@ -381,17 +381,7 @@ namespace SparkEditor
         // Additional member variable for selected objects count
         int m_selectedObjectCount = 0;
 
-        // Toolbar state — delegates to PlayModeManager for scene snapshot/restore
-        enum class PlayMode
-        {
-            Stopped,
-            Playing,
-            Simulating,
-            Paused
-        };
-        PlayMode m_playMode = PlayMode::Stopped;
-
-        /// @brief Play-in-editor manager (scene snapshot, time control, subsystem toggles)
+        /// @brief Authoritative state-preview manager (snapshot/time/counters; no gameplay-system tick)
         Spark::Editor::PlayModeManager m_playModeManager;
 
         TransformTool m_currentTool = TransformTool::Move;

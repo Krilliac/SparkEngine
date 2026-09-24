@@ -32,9 +32,12 @@
  *   key/value property strings).
  * - A trailing `uint32` **customState** count followed by length-prefixed key/value
  *   pairs (arbitrary game-specific data).
+ * - v4 appends a little-endian standard CRC-32 over every preceding byte. Readers
+ *   verify it before parsing or returning metadata. This detects accidental
+ *   corruption; it is not authentication and an attacker can recompute it.
  *
- * String fields use `uint16` length prefixes; the writer rejects (rather than
- * truncates) any string that would overflow that prefix.
+ * v4 fixed-width integers are little-endian. String fields use `uint16` length
+ * prefixes; the writer rejects (rather than truncates) any overflowing string.
  *
  * ## Hierarchy (v3)
  *
@@ -441,8 +444,11 @@ namespace Spark
      * Serializes all entities and components in `world`, attaches `metadata`,
      * and writes the binary result to `<saveDirectory>/<slotName>.spark_save`.
      * The save directory is created if it does not exist. If a file already exists
-     * for this slot it is retained as `<slotName>.spark_save.bak` and then replaced
-     * atomically, so an interrupted write never destroys the last good state.
+     * for this slot and validates successfully, it is retained as
+     * `<slotName>.spark_save.bak` and then replaced atomically. An unreadable primary
+     * never overwrites an existing last-good copy. A primary written by a newer build
+     * (SPRK header declaring a format newer than kCurrentSaveVersion) is never
+     * overwritten: the save fails with an actionable error and both files stay intact.
      *
      * @param slotName  Unique slot identifier (file-system-safe string, e.g. "slot1").
      *                  Must not be empty or contain path separators.
@@ -467,14 +473,16 @@ namespace Spark
         /**
      * @brief Load a previously saved game state from the specified slot.
      *
-     * Reads and parses the binary save file, reconstructs all entities and components
+     * Reads and verifies the binary save file, reconstructs all entities and components
      * in `world`, and applies any version migrations if the save format version is
      * older than the current engine version. Saves written by a newer format version
      * are rejected (the load fails) rather than misinterpreted.
      *
      * If the slot file cannot be read or parsed, the retained last-good copy
      * (`<slotName>.spark_save.bak`) is loaded instead and a warning is logged. The
-     * load only fails once both copies are unusable.
+     * load only fails once both copies are unusable. The exception is a primary written
+     * by a newer build: the load fails with an actionable error instead of silently
+     * rolling back to the older retained copy.
      *
      * @warning A successful load replaces the provided `world`. Ensure no raw pointers
      *          to world entities are held by callers before invoking this method.
@@ -573,7 +581,9 @@ namespace Spark
      * loading full save files. Every returned entry carries its `slotName`, so a
      * listed slot can be passed straight to Load(), GetSaveMetadata() or DeleteSave().
      * A slot that survives only as its retained last-good copy (`*.spark_save.bak`)
-     * is listed under its own slot name, because Load() recovers it.
+     * is listed under its own slot name, because Load() recovers it — unless the
+     * primary was written by a newer build, in which case Load() refuses the older
+     * copy and it is not listed.
      *
      * @return  Vector of SaveMetadata, one per discovered save file. Empty if the
      *          directory contains no valid save files.
@@ -783,7 +793,8 @@ namespace Spark
         /**
      * @brief Read and parse a binary save file from disk.
      *
-     * Reads the file at `filepath`, verifies the `"SPRK"` magic and format version,
+     * Reads the file at `filepath`, verifies the `"SPRK"` magic, format version, and
+     * v4 CRC-32 integrity trailer,
      * and parses the binary layout into `outData`. Returns false if the file does not
      * exist, has a bad magic, has a newer-than-supported version, or is truncated.
      *
@@ -796,9 +807,10 @@ namespace Spark
         /**
      * @brief Read only the header + metadata block of a save file.
      *
-     * Parses the magic, version, and metadata text block and then stops, skipping the
-     * (potentially large) entity payload. Used by GetSaveSlots()/GetSaveMetadata() so
-     * enumerating slots does not cost the size of every save's full entity data.
+     * Verifies the complete v4 byte snapshot before parsing the magic, version, and
+     * metadata text block. Entity records are not deserialized. Used by
+     * GetSaveSlots()/GetSaveMetadata() so slot enumeration stays semantically bounded
+     * while never displaying metadata from a checksum-invalid v4 save.
      *
      * @param filepath     Absolute or relative path of the input file.
      * @param outMetadata  Output parameter populated on success.

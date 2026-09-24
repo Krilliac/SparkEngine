@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.25)
-project(SparkAutomation LANGUAGES CXX)
+if(NOT DEFINED SPARK_ENGINE_VERSION OR SPARK_ENGINE_VERSION STREQUAL "")
+    include("${CMAKE_CURRENT_LIST_DIR}/../cmake/SparkWindowsVersionInfo.cmake")
+    spark_resolve_engine_version(SPARK_ENGINE_VERSION)
+endif()
+project(SparkAutomation VERSION ${SPARK_ENGINE_VERSION} LANGUAGES CXX)
 add_executable(SparkAutomation src/main.cpp)
+target_compile_definitions(SparkAutomation PRIVATE
+    SPARK_AUTOMATION_VERSION=\"${PROJECT_VERSION}\"
+)
 target_compile_features(SparkAutomation PRIVATE cxx_std_23)
 if(MSVC)
     target_compile_definitions(SparkAutomation PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)

@@ -95,6 +95,31 @@ namespace Spark::Build
         std::vector<std::string> warnings; ///< Non-fatal warnings
     };
 
+    /** @brief Compatibility request for the historical Core packaging surface. */
+    struct LegacyPackageConfig
+    {
+        std::string outputDirectory = "Build/Package";
+        std::string projectName = "SparkGame";
+        PackagePlatform platform = PackagePlatform::WindowsX64;
+        bool debugBuild = false;
+        bool stripDebugSymbols = true;
+        bool compressAssets = true;
+        bool includeEditor = false;
+    };
+
+    /** @brief Compatibility result retaining the historical Core fields. */
+    struct LegacyPackageResult
+    {
+        bool success = false;
+        std::string outputPath;
+        float totalSizeMB = 0.0f;
+        std::vector<std::string> errors;
+        std::vector<std::string> warnings;
+        uint32_t assetCount = 0;
+        uint32_t dllCount = 0;
+        uint32_t filesCopied = 0; ///< Payload files copied; excludes generated manifest metadata.
+    };
+
     /**
      * @brief Standalone game packaging system
      *
@@ -113,7 +138,7 @@ namespace Spark::Build
             return instance;
         }
 
-        /** @brief Initialize the packaging system */
+        /** @brief Initialize the packaging system. [game thread, non-thread-safe] */
         void Initialize()
         {
             m_initialized = true;
@@ -122,13 +147,14 @@ namespace Spark::Build
             SPARK_LOG_INFO(Spark::LogCategory::Core, "GamePackager initialized");
         }
 
-        /** @brief Shut down */
+        /** @brief Shut down. [game thread, non-thread-safe] */
         void Shutdown() { m_initialized = false; }
 
         /**
          * @brief Package a game build into a distributable directory
          * @param config Packaging configuration
          * @return Result of the packaging operation
+         * [game thread, non-thread-safe]
          */
         PackageResult Package(const PackageConfig& config)
         {
@@ -146,6 +172,14 @@ namespace Spark::Build
             if (config.projectName.empty())
             {
                 result.errorMessage = "Project name is empty";
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
+                m_lastResult = result;
+                return result;
+            }
+            if (config.projectName.find_first_of("/\\") != std::string::npos || config.projectName == "." ||
+                config.projectName == "..")
+            {
+                result.errorMessage = "Project name must be a single safe path component";
                 SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
                 m_lastResult = result;
                 return result;
@@ -207,7 +241,10 @@ namespace Spark::Build
                 return result;
             }
 
-            // 8. Copy files
+            // 8. Copy files. Every collected file is part of the package, so any
+            // copy failure makes the package incomplete: collect all of them and
+            // fail rather than publishing a partial directory as a success.
+            std::vector<std::string> copyFailures;
             for (const auto& entry : manifest)
             {
                 std::filesystem::path destPath = outDir / entry.relativePath;
@@ -217,7 +254,8 @@ namespace Spark::Build
                                            std::filesystem::copy_options::overwrite_existing, ec);
                 if (ec)
                 {
-                    result.warnings.push_back("Failed to copy: " + entry.sourcePath + " (" + ec.message() + ")");
+                    copyFailures.push_back(entry.sourcePath + " (" + ec.message() + ")");
+                    ec.clear();
                     continue;
                 }
 
@@ -227,6 +265,24 @@ namespace Spark::Build
 
             auto endTime = std::chrono::steady_clock::now();
             result.durationSeconds = std::chrono::duration<double>(endTime - startTime).count();
+
+            if (!copyFailures.empty())
+            {
+                result.errorMessage = "Failed to copy " + std::to_string(copyFailures.size()) + " file(s): ";
+                for (size_t i = 0; i < copyFailures.size(); ++i)
+                {
+                    if (i > 0)
+                        result.errorMessage += "; ";
+                    result.errorMessage += copyFailures[i];
+                }
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
+                // Counts are kept for diagnostics, but an incomplete package has
+                // no publishable output and does not count as a built package.
+                result.success = false;
+                m_lastResult = result;
+                return result;
+            }
+
             result.outputPath = outDir.string();
             result.success = (result.filesCopied > 0) && result.errorMessage.empty();
 
@@ -238,7 +294,13 @@ namespace Spark::Build
             return result;
         }
 
-        /** @brief Validate a config without actually packaging */
+        /**
+         * @brief Package the legacy build-tree layout through this canonical owner.
+         * [game thread] This compatibility operation is not thread-safe.
+         */
+        LegacyPackageResult PackageLegacy(const LegacyPackageConfig& config);
+
+        /** @brief Validate a config without actually packaging. [game thread, non-thread-safe] */
         std::vector<std::string> ValidateConfig(const PackageConfig& config) const
         {
             std::vector<std::string> errors;
@@ -246,6 +308,9 @@ namespace Spark::Build
 
             if (config.projectName.empty())
                 errors.push_back("Project name is empty");
+            else if (config.projectName.find_first_of("/\\") != std::string::npos || config.projectName == "." ||
+                     config.projectName == "..")
+                errors.push_back("Project name must be a single safe path component");
             if (config.executablePath.empty())
                 errors.push_back("Executable path is empty");
             else if (!std::filesystem::exists(config.executablePath, ec))
@@ -258,13 +323,13 @@ namespace Spark::Build
             return errors;
         }
 
-        /** @brief Get the result of the last packaging operation */
+        /** @brief Get the result of the last packaging operation. [game thread, non-thread-safe] */
         const PackageResult& GetLastResult() const { return m_lastResult; }
 
-        /** @brief Get total number of packages created */
+        /** @brief Get total number of packages created. [game thread, non-thread-safe] */
         uint32_t GetPackageCount() const { return m_packageCount; }
 
-        /** @brief Get the platform-specific DLL extension */
+        /** @brief Get the platform-specific DLL extension. [any thread, pure] */
         static std::string GetModuleExtension(PackagePlatform platform)
         {
             switch (platform)
@@ -280,7 +345,7 @@ namespace Spark::Build
             return ".dll";
         }
 
-        /** @brief Get the platform-specific executable extension */
+        /** @brief Get the platform-specific executable extension. [any thread, pure] */
         static std::string GetExecutableExtension(PackagePlatform platform)
         {
             switch (platform)
@@ -292,7 +357,7 @@ namespace Spark::Build
             }
         }
 
-        /** @brief Get console-friendly status string */
+        /** @brief Get console-friendly status string. [game thread, non-thread-safe] */
         std::string Console_GetStatus() const
         {
             if (!m_initialized)

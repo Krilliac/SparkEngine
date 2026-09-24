@@ -5,7 +5,8 @@
  * @date 2025
  *
  * Provides functions to upload crash reports via multiple backends:
- * - **GitHub Issues** — direct API with PAT (dev builds)
+ * - **GitHub Issues** — legacy direct API with PAT (development builds only;
+ *   disabled in shipping builds)
  * - **Proxy server** — relays to GitHub, token stays server-side (release builds)
  * - **Dropbox** — shared file request link or API upload
  * - **FTP/FTPS** — standard FTP upload via libcurl
@@ -20,8 +21,38 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 struct CrashConfig;
+
+/**
+ * @brief Remove endpoint credentials and capability-bearing path/query data before logging.
+ *
+ * The returned value is intentionally limited to the scheme and host. The
+ * original endpoint remains available to the transport code, but must never be
+ * copied into diagnostic output where URL paths, user-info, queries, or
+ * fragments may act as bearer capabilities.
+ */
+inline std::string RedactCrashEndpointForLog(std::string_view endpoint)
+{
+    const size_t schemeEnd = endpoint.find("://");
+    if (schemeEnd == std::string_view::npos || schemeEnd == 0)
+        return "<redacted>";
+
+    const std::string_view scheme = endpoint.substr(0, schemeEnd);
+    if (scheme == "dbx")
+        return "dbx://<redacted>";
+    const size_t authorityBegin = schemeEnd + 3;
+    const size_t authorityEnd = endpoint.find_first_of("/?#", authorityBegin);
+    const std::string_view authority =
+        endpoint.substr(authorityBegin, authorityEnd == std::string_view::npos ? std::string_view::npos
+                                                                               : authorityEnd - authorityBegin);
+    const size_t userInfoEnd = authority.rfind('@');
+    const std::string_view host = authority.substr(userInfoEnd == std::string_view::npos ? 0 : userInfoEnd + 1);
+    if (host.empty())
+        return std::string(scheme) + "://<redacted>";
+    return std::string(scheme) + "://" + std::string(host);
+}
 
 /**
  * @brief Auto-detect backend and upload crash report
@@ -51,7 +82,9 @@ bool UploadCrashReport(const CrashConfig& cfg, const std::string& logContent, co
  * @param cfg        Crash configuration (must have githubRepo and githubToken set)
  * @param logContent The crash log text to embed in the issue body
  * @param zipPath    Path to the compressed crash dump file (empty = no attachment)
- * @return true if the GitHub Issue was created (or comment added) successfully
+ * @return true if the GitHub Issue was created (or comment added) successfully.
+ *         Always returns false in shipping builds; shipped applications must
+ *         use the standalone SparkCrashReporter metadata-only flow.
  */
 bool UploadCrashToGitHub(const CrashConfig& cfg, const std::string& logContent, const std::string& zipPath);
 

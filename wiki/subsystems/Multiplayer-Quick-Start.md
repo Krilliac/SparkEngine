@@ -15,7 +15,7 @@ SparkEngine's networking stack provides:
 - **Client-side prediction** with input buffering and server reconciliation
 - **Lag compensation** via server-side hitbox history rewinding
 - **Reliable and unreliable** message channels with ACK-based retransmission
-- **Dedicated server** support with RCON, map rotation, and LAN discovery
+- **Dedicated server** support with trusted local administration (remote RCON is unavailable), map rotation, and LAN discovery
 - **Instability simulation** for testing under packet loss, latency, and jitter
 
 All networking types live in `Spark::Net`. The `ClientPrediction` class lives in `Spark`.
@@ -279,7 +279,7 @@ config.maxClients = 24;
 config.tickRate = 64.0f;
 config.gameMode = Spark::Net::GameModeType::TeamDeathmatch;
 config.mapRotation = {"dm_arena", "dm_warehouse", "dm_rooftop"};
-config.rconPassword = "admin123";
+// rconPassword/rconPort are reserved compatibility fields; remote RCON is disabled.
 
 server.Start(config);  // launches tick loop on background thread
 ```
@@ -295,7 +295,9 @@ For the built-in server, build with `-DENABLE_GRAPHICS=OFF -DENABLE_SERVER_PROCE
 Every `SparkServer` launch must select game code with either `--manifest <path>`
 or `--module <game-library>`. See [Dedicated Server](Dedicated-Server.md) for full details.
 
-**RCON** -- built-in commands: `help`, `status`, `kick`, `ban`, `map`, `say`. Add custom ones:
+**Local administration (legacy RCON API names)** -- built-in commands: `help`, `status`, `kick`, `ban`, `map`, `say`.
+These commands are available only to trusted in-process host/control code. There is no network RCON listener;
+`rconPassword`/`rconPort` are inactive, and client chat cannot invoke administrative commands. Add custom ones:
 
 ```cpp
 server.RegisterRconCommand("restart", "Restart match",

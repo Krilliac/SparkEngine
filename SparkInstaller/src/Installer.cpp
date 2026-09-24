@@ -72,6 +72,41 @@ namespace SparkInstaller
         }
         GitRunner git(gitBoot.gitExe);
 
+        // Updates mutate the live checkout before the new build has been
+        // proven. Capture the exact working commit first so every later
+        // failure has a bounded, non-forcing rollback target.
+        const bool isUpdate = ctx.mode == Mode::Update;
+        std::string previousCommit;
+        if (isUpdate)
+        {
+            previousCommit = git.HeadCommit(ctx.destination);
+            if (previousCommit.empty())
+            {
+                Emit(ctx.log, "error: could not determine the current install commit; refusing update");
+                return 5;
+            }
+        }
+
+        const auto rollbackUpdate = [&](const std::string& reason)
+        {
+            if (!isUpdate)
+                return true;
+
+            Emit(ctx.log, "Update failed (" + reason + "); rolling back update to " + previousCommit);
+            if (!git.CheckoutCommit(previousCommit, ctx.destination, ctx.log))
+            {
+                Emit(ctx.log, "error: update rollback failed; the install requires manual repair");
+                return false;
+            }
+            if (!ctx.skipSubmoduleUpdate && !git.UpdateSubmodules(ctx.destination, ctx.log))
+            {
+                Emit(ctx.log, "error: update rollback restored the commit but not its submodules");
+                return false;
+            }
+            Emit(ctx.log, "Update rollback complete.");
+            return true;
+        };
+
         // --- Install mode: clone ------------------------------------------
         if (ctx.mode == Mode::Install)
         {
@@ -94,14 +129,21 @@ namespace SparkInstaller
         else
         {
             Emit(ctx.log, "Updating existing install at " + ctx.destination);
+            if (!git.WorkingTreeClean(ctx.destination, ctx.log))
+            {
+                Emit(ctx.log, "error: existing install has local changes; refusing update");
+                return 5;
+            }
             if (!git.Fetch(ctx.destination, ctx.log) || !git.CheckoutRef(ctx.ref, ctx.destination, ctx.log))
             {
                 Emit(ctx.log, "error: git fetch/checkout failed");
+                (void)rollbackUpdate("git fetch/checkout failure");
                 return 5;
             }
             if (!ctx.skipSubmoduleUpdate && !git.UpdateSubmodules(ctx.destination, ctx.log))
             {
                 Emit(ctx.log, "error: submodule update failed");
+                (void)rollbackUpdate("submodule update failure");
                 return 5;
             }
         }
@@ -128,6 +170,7 @@ namespace SparkInstaller
         catch (const std::invalid_argument& error)
         {
             Emit(ctx.log, std::string("error: unsafe CMake configure input: ") + error.what());
+            (void)rollbackUpdate("unsafe CMake configure input");
             return 6;
         }
         Emit(ctx.log, "Configuring: " + configureCmd);
@@ -140,6 +183,7 @@ namespace SparkInstaller
             if (rc != 0)
             {
                 Emit(ctx.log, "error: cmake configure exited " + std::to_string(rc));
+                (void)rollbackUpdate("CMake configure failure");
                 return 6;
             }
         }
@@ -152,6 +196,7 @@ namespace SparkInstaller
         catch (const std::invalid_argument& error)
         {
             Emit(ctx.log, std::string("error: unsafe CMake build input: ") + error.what());
+            (void)rollbackUpdate("unsafe CMake build input");
             return 7;
         }
         Emit(ctx.log, "Building: " + buildCmd);
@@ -164,6 +209,7 @@ namespace SparkInstaller
             if (rc != 0)
             {
                 Emit(ctx.log, "error: cmake build exited " + std::to_string(rc));
+                (void)rollbackUpdate("CMake build failure");
                 return 7;
             }
         }
@@ -172,13 +218,23 @@ namespace SparkInstaller
         InstallState state;
         state.ref = ctx.ref;
         state.commit = git.HeadCommit(ctx.destination);
+        if (state.commit.empty())
+        {
+            Emit(ctx.log, "error: could not determine the installed commit; refusing to report success");
+            (void)rollbackUpdate("installed commit verification failure");
+            return 8;
+        }
         state.generator = SparkBuild::GeneratorToString(ctx.configManager.config.generator);
         state.buildType = SparkBuild::BuildTypeToString(ctx.configManager.config.buildType);
         state.installerVersion = kInstallerVersion;
         for (const auto& opt : ctx.configManager.config.options)
             state.options[opt.cmakeVar] = opt.currentValue;
         if (!state.Save(ctx.destination))
-            Emit(ctx.log, "warning: could not write install state file");
+        {
+            Emit(ctx.log, "error: could not write install state file");
+            (void)rollbackUpdate("install-state persistence failure");
+            return 8;
+        }
 
         Emit(ctx.log, "Done. Engine built at: " + ctx.configManager.config.buildPath);
         return 0;

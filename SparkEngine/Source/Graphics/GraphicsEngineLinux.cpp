@@ -117,6 +117,10 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     // GraphicsEngine.h).
     CreatePlatformRenderTargets(m_width, m_height);
 
+    // Retain the white fallback so an empty material can restore slot 0.
+    if (FAILED(CreateDefaultTexture()))
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GraphicsEngine (Linux): default material texture unavailable");
+
     // Create subsystems
     m_textureSystem = std::make_unique<TextureSystem>();
     m_materialSystem = std::make_unique<MaterialSystem>();
@@ -358,6 +362,7 @@ void GraphicsEngine::Shutdown()
     // the bridge's registry stores non-owning pointers and must not be left
     // dangling. Calling RegisterRenderTarget(slot, nullptr) clears the slot.
     ReleasePlatformRenderTargets();
+    rhi.defaultTexture.reset();
 
     rhi.bridge.Shutdown();
     rhi.initialized = false;

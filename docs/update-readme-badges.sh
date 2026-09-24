@@ -5,7 +5,7 @@
 # .github/copilot-instructions.md, .github/prompts/*, and badge JSON files.
 #
 # What it updates:
-#   - README.md: panel count, game module count, and test count prose
+#   - README.md: panel, wiki page, game module, and test count prose
 #   - .github/badges/*.json: tests, LOC, and source-file count badges
 #   - .github/copilot-instructions.md: test/panel counts
 #   - .github/prompts/copilot-instructions.md: test/panel counts
@@ -118,6 +118,15 @@ update_readme() {
     sed_replace "$readme" \
         'ImGui editor ([0-9]* panels)' \
         "ImGui editor (${PANEL_COUNT} panels)"
+    sed_replace "$readme" \
+        '[0-9][0-9]* `[*]Panel[.]h`' \
+        "${PANEL_COUNT} \`*Panel.h\`"
+    sed_replace "$readme" \
+        'Editor ([0-9][0-9]* panel header classes)' \
+        "Editor (${PANEL_COUNT} panel header classes)"
+    sed_replace "$readme" \
+        '[0-9][0-9]* [*]Panel[.]h classes' \
+        "${PANEL_COUNT} *Panel.h classes"
 
     # Source-level test-definition count in prose. This is deliberately not
     # described as executed tests: feature/platform gates control registration.
@@ -140,6 +149,9 @@ update_readme() {
     sed_replace "$readme" \
         '# [0-9]* wiki pages' \
         "# ${WIKI_PAGES} wiki pages"
+    sed_replace "$readme" \
+        '[0-9][0-9]* Markdown pages' \
+        "${WIKI_PAGES} Markdown pages"
 
     # Game module count: "(N modules)"
     sed_replace "$readme" \
@@ -169,6 +181,9 @@ update_ai_instructions() {
         sed_replace "$f" \
             'ImGui-based editor ([0-9]* panels)' \
             "ImGui-based editor (${PANEL_COUNT} panels)"
+        sed_replace "$f" \
+            '[0-9][0-9]* `[*]Panel[.]h`' \
+            "${PANEL_COUNT} \`*Panel.h\`"
     done
 
     # build-test.prompt.md
@@ -179,6 +194,32 @@ update_ai_instructions() {
     sed_replace "$bt" \
         '[0-9,]* test definitions across [0-9,]* files' \
         "${FORMATTED_TESTS} test definitions across ${TEST_FILES} files"
+}
+
+# Keep the same source-inventory claims current on the other public pages.
+update_public_inventory_claims() {
+    local relative_path
+    local panel_docs=(
+        docs/tooling/README.md
+        docs/status/PROJECT_STATUS.md
+        docs/plans/FEATURE_ROADMAP.md
+        wiki/Home.md
+        wiki/platform/System-Requirements.md
+        wiki/getting-started/FAQ.md
+        wiki/getting-started/Editor-Walkthrough.md
+        wiki/gameplay-tools/SparkEditor.md
+    )
+    for relative_path in "${panel_docs[@]}"; do
+        sed_replace "$PROJECT_ROOT/$relative_path" \
+            '[0-9][0-9]* `[*]Panel[.]h`' \
+            "${PANEL_COUNT} \`*Panel.h\`"
+    done
+    sed_replace "$PROJECT_ROOT/wiki/getting-started/Editor-Walkthrough.md" \
+        '[0-9][0-9]*-header inventory' \
+        "${PANEL_COUNT}-header inventory"
+    sed_replace "$PROJECT_ROOT/docs/README.md" \
+        '[0-9][0-9]* Markdown pages' \
+        "${WIKI_PAGES} Markdown pages"
 }
 
 # ============================================================================
@@ -227,6 +268,9 @@ update() {
     log_info "Updating AI instruction files..."
     update_ai_instructions
 
+    log_info "Updating public source-inventory claims..."
+    update_public_inventory_claims
+
     log_info "Updating badge JSON files..."
     update_badges
 
@@ -243,6 +287,7 @@ check_mode() {
     CHANGES_MADE=0
     update_readme
     update_ai_instructions
+    update_public_inventory_claims
     update_badges
 
     if [ "$CHANGES_MADE" -gt 0 ]; then

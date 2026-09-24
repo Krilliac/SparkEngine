@@ -14,6 +14,7 @@
 #include "AssetPipeline.h"
 #include "FBXImporter.h"
 #include "GLTFStaticMeshLoader.h"
+#include "OBJStaticMeshLoader.h"
 #include "GraphicsEngineRHI.h"
 #include "RHI/RHIResources.h"
 #include "Utils/LogMacros.h"
@@ -156,41 +157,37 @@ HRESULT MeshAsset::Load(ID3D11Device* /*device*/)
 
         if (ext == ".obj")
         {
-            tinyobj::attrib_t attrib;
-            std::vector<tinyobj::shape_t> shapes;
-            std::vector<tinyobj::material_t> materials;
-            std::string warn, err;
-            if (tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, m_path.c_str()))
+            // Same shared importer as the Windows/D3D11 MeshAsset path.
+            Spark::Graphics::Detail::OBJStaticMeshData imported;
+            std::string error;
+            if (!Spark::Graphics::Detail::LoadOBJStaticMesh(std::filesystem::path(m_path), imported, error))
             {
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics, "OBJ import failed for '%s': %s", m_path.c_str(),
+                               error.c_str());
                 m_meshData.vertices.clear();
                 m_meshData.indices.clear();
-                for (const auto& shape : shapes)
-                {
-                    for (const auto& index : shape.mesh.indices)
-                    {
-                        MeshAssetData::Vertex vertex{};
-                        if (index.vertex_index >= 0)
-                        {
-                            vertex.position = {attrib.vertices[3 * index.vertex_index + 0],
-                                               attrib.vertices[3 * index.vertex_index + 1],
-                                               attrib.vertices[3 * index.vertex_index + 2]};
-                        }
-                        if (index.normal_index >= 0 && !attrib.normals.empty())
-                        {
-                            vertex.normal = {attrib.normals[3 * index.normal_index + 0],
-                                             attrib.normals[3 * index.normal_index + 1],
-                                             attrib.normals[3 * index.normal_index + 2]};
-                        }
-                        if (index.texcoord_index >= 0 && !attrib.texcoords.empty())
-                        {
-                            vertex.texCoord0 = {attrib.texcoords[2 * index.texcoord_index + 0],
-                                                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
-                        }
-                        vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
-                        m_meshData.indices.push_back(static_cast<uint32_t>(m_meshData.vertices.size()));
-                        m_meshData.vertices.push_back(vertex);
-                    }
-                }
+                m_meshData.submeshes.clear();
+                m_metadata.state = StreamingState::Failed;
+                return E_FAIL;
+            }
+
+            m_meshData.vertices.clear();
+            m_meshData.indices.clear();
+            m_meshData.submeshes.clear();
+            m_meshData.vertices.reserve(imported.vertices.size());
+            for (const auto& source : imported.vertices)
+            {
+                MeshAssetData::Vertex vertex{};
+                vertex.position = {source.position[0], source.position[1], source.position[2]};
+                vertex.normal = {source.normal[0], source.normal[1], source.normal[2]};
+                vertex.texCoord0 = {source.texCoord[0], source.texCoord[1]};
+                vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+                m_meshData.vertices.push_back(vertex);
+            }
+            m_meshData.indices = std::move(imported.indices);
+            for (const auto& submesh : imported.submeshes)
+            {
+                m_meshData.submeshes.push_back(submesh.indexStart);
             }
         }
         else if (ext == ".fbx")

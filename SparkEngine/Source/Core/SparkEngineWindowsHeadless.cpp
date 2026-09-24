@@ -137,13 +137,9 @@ static bool InitHeadlessEngineContext()
     // EngineRuntime gives the no-render device the same bounded startup and
     // teardown lifetime as the other core services without exposing a fake
     // GraphicsEngine to game modules.
-    runtime.headlessRhiBridge = std::make_unique<Spark::RHI::RHIBridge>();
-    if (!runtime.headlessRhiBridge->Initialize(nullptr, 1, 1, Spark::RHI::GraphicsBackend::None, false) ||
-        !runtime.headlessRhiBridge->IsHeadless() ||
-        runtime.headlessRhiBridge->GetActiveBackend() != Spark::RHI::GraphicsBackend::None)
+    if (!runtime.InitializeHeadlessRhi())
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "Windows headless startup could not establish NullRHI");
-        runtime.headlessRhiBridge.reset();
         return false;
     }
 
@@ -156,8 +152,7 @@ static bool InitHeadlessEngineContext()
     if (!ctx)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — headless init aborted");
-        runtime.headlessRhiBridge->Shutdown();
-        runtime.headlessRhiBridge.reset();
+        runtime.ShutdownHeadlessRhi();
         return false;
     }
 
@@ -208,9 +203,14 @@ static size_t LoadHeadlessModules(LPWSTR lpCmdLine)
 
     if (LoadGameModules(*GetEngineRuntime().moduleManager, lpCmdLine))
     {
-        GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
+        const bool moduleInitializationSucceeded =
+            GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
         const size_t initializedModules = GetEngineRuntime().moduleManager->GetInitializedModuleCount();
-        console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
+        if (moduleInitializationSucceeded)
+            console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
+        else
+            console.LogError("Module initialization failed; " + std::to_string(initializedModules) +
+                             " module(s) initialized");
         if (initializedModules > 0)
         {
             SPARK_LOG_INFO(Spark::LogCategory::Core, "SPARK_MODULE_READY count=%zu", initializedModules);
@@ -420,23 +420,6 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     // path otherwise AVs in ~UIPanel (dead ImGui/graphics) and then hangs
     // inside the crash handler.
     //
-    // Deregister them from EngineContext FIRST. Module OnUnload runs later,
-    // inside ShutdownEngineAfterPreflight, and a module that unregisters what
-    // it installed in OnLoad reaches these systems through ctx->GetUI() /
-    // GetDialogue() / GetWeather() / GetModSystem(). Leaving the slots set
-    // handed that module freed memory; clearing them makes the getters return
-    // null, which the documented contract allows.
-    if (EngineContext* shutdownContext = EngineContext::Get())
-    {
-        shutdownContext->SetModSystem(nullptr);
-        shutdownContext->SetDialogue(nullptr);
-        shutdownContext->SetUI(nullptr);
-        shutdownContext->SetWeather(nullptr);
-    }
-    g_modSystem.reset();
-    g_dialogueSystem.reset();
-    g_uiSystem.reset();
-    g_weatherSystem.reset();
     console.LogInfo("Headless server shutting down...");
     ShutdownEngineAfterPreflight();
 

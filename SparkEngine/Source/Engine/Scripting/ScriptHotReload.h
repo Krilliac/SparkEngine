@@ -125,13 +125,13 @@ namespace Spark::Scripting
         /**
      * @brief Check for file changes and trigger recompilation
      * Call this each frame from the main thread.
-     * @return Number of files recompiled
+     * @return Number of files successfully recompiled
      */
         int PollChanges();
 
         /**
      * @brief Force recompile all watched scripts
-     * @return Number of files recompiled
+     * @return Number of files successfully recompiled
      */
         int RecompileAll();
 
@@ -157,7 +157,7 @@ namespace Spark::Scripting
 
         void ScanDirectory(const std::string& directory, bool recursive);
         bool IsWatchedExtension(const std::string& path) const;
-        void ProcessChange(const std::string& filePath);
+        bool ProcessChange(const std::string& filePath);
 
         std::vector<std::string> m_watchDirs;
         std::vector<std::string> m_extensions = {".as", ".angelscript"};
@@ -176,7 +176,7 @@ namespace Spark::Scripting
         uint32_t m_debounceMs = 300; // 300ms default debounce
 
         std::atomic<bool> m_running{false};
-        int m_recompileCount = 0;
+        int m_recompileCount = 0; ///< Total successful recompilations since start.
         int m_errorCount = 0;
         std::vector<RecompileResult> m_recentErrors; ///< Last N errors
         static constexpr int MaxRecentErrors = 10;

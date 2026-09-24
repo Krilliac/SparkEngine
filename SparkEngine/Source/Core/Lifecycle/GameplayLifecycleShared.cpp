@@ -138,7 +138,6 @@
 #include "Engine/Build/GamePackager.h"
 #include "Engine/OnlineServices/OnlineServices.h"
 #include "Engine/DataTable/DataTableSystem.h"
-#include "Engine/Rendering/MovieRenderPipeline.h"
 #include "Engine/RemoteDebug/RemoteDebugSystem.h"
 #include "Engine/Crafting/LootAndCraftingSystem.h"
 #include "Utils/FileWatcher/FileWatcher.h"
@@ -745,7 +744,6 @@ namespace Spark::Core::Lifecycle
         // before any network handshake fires.
         (void)Spark::Net::DatablockRegistry::Get();
 
-        Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
         // HLODSystem: no cluster registration or per-frame Update exists in
         // production, so it is not lifecycle-initialized.
@@ -1356,8 +1354,6 @@ namespace Spark::Core::Lifecycle
         SPARK_GUARDED_UPDATE("InputActions", "Core", { Spark::Input::InputActionSystem::GetInstance().Update(); });
         SPARK_GUARDED_UPDATE("OnlineServices", "Core",
                              { Spark::OnlineServices::OnlineServiceManager::GetInstance().Update(dt); });
-        SPARK_GUARDED_UPDATE("MovieRender", "Core",
-                             { Spark::Rendering::MovieRenderPipeline::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("RemoteDebug", "Core",
                              { Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("Crafting", "Core", { Spark::Gameplay::CraftingSystem::GetInstance().Update(dt); });
@@ -1541,7 +1537,6 @@ namespace Spark::Core::Lifecycle
         Spark::Gameplay::CraftingSystem::GetInstance().Shutdown();
         Spark::Gameplay::LootTableManager::GetInstance().Shutdown();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Shutdown();
-        Spark::Rendering::MovieRenderPipeline::GetInstance().Shutdown();
         Spark::Data::DataTableRegistry::GetInstance().Shutdown();
 
         // Engine-orphan singletons wired in this branch — teardown

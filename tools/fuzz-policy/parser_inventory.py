@@ -381,18 +381,38 @@ def _parse_target(root: Path, value: Any, field: str) -> dict[str, Any]:
         value,
         field,
         {"harness", "cmake_file", "cmake_target", "test_selector", "corpus_id", "entry_symbol"},
+        {"binding_source", "harness_entry_symbol"},
     )
     harness = normalized_relative_path(value["harness"], f"{field}.harness")
     cmake_file = normalized_relative_path(value["cmake_file"], f"{field}.cmake_file")
     confined_path(root, harness, f"{field}.harness", expect="file")
     confined_path(root, cmake_file, f"{field}.cmake_file", expect="file")
+    entry_symbol = require_token(value["entry_symbol"], f"{field}.entry_symbol", SYMBOL_PATTERN)
+    has_binding_source = "binding_source" in value
+    has_harness_entry_symbol = "harness_entry_symbol" in value
+    if has_binding_source != has_harness_entry_symbol:
+        raise PolicyError(f"{field} must provide binding_source and harness_entry_symbol together")
+
+    binding_source: str | None = None
+    harness_entry_symbol = entry_symbol
+    if has_binding_source:
+        binding_source = normalized_relative_path(value["binding_source"], f"{field}.binding_source")
+        confined_path(root, binding_source, f"{field}.binding_source", expect="file")
+        harness_entry_symbol = require_token(
+            value["harness_entry_symbol"], f"{field}.harness_entry_symbol", SYMBOL_PATTERN
+        )
+        if harness_entry_symbol == entry_symbol:
+            raise PolicyError(f"{field}.harness_entry_symbol must differ from entry_symbol when a binding_source is used")
+
     return {
         "harness": harness,
         "cmake_file": cmake_file,
         "cmake_target": require_token(value["cmake_target"], f"{field}.cmake_target", CMAKE_NAME_PATTERN),
         "test_selector": require_token(value["test_selector"], f"{field}.test_selector", CMAKE_NAME_PATTERN),
         "corpus_id": require_token(value["corpus_id"], f"{field}.corpus_id", ID_PATTERN),
-        "entry_symbol": require_token(value["entry_symbol"], f"{field}.entry_symbol", SYMBOL_PATTERN),
+        "entry_symbol": entry_symbol,
+        "binding_source": binding_source,
+        "harness_entry_symbol": harness_entry_symbol,
     }
 
 

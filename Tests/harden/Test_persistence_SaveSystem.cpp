@@ -1,11 +1,14 @@
 // Test_persistence_SaveSystem.cpp
-// Regression for two SaveSystem findings:
+// Regression for three SaveSystem findings:
 //   P1: Load/ReadFromFile never validated the save-format version. A file written by a
 //       newer, incompatible format is now rejected instead of silently misinterpreted.
 //   P2: GetSaveMetadata now uses a metadata-only read path; this test also confirms it
 //       still parses the metadata header correctly.
-// Both are exercised through the public GetSaveMetadata() (which needs no World/ECS),
-// by hand-crafting .spark_save files with the real on-disk binary layout.
+//   P3: DeleteSave must evict primary and retained-copy entries from LocalFileCache so
+//       a deleted slot cannot be resurrected from stale cached bytes.
+// P1 and P2 are exercised through the public GetSaveMetadata() (which needs no World/ECS),
+// by hand-crafting .spark_save files with the real on-disk binary layout. P3 uses the
+// production-linked Save/Load/Delete path with an attached LocalFileCache.
 
 #include "TestFramework.h"
 #include "Core/Reflection.h"
@@ -193,6 +196,74 @@ namespace
     {
         std::ifstream input(path, std::ios::binary);
         return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    }
+
+    uint32_t ReadLittleEndian32(const char* bytes)
+    {
+        return static_cast<uint32_t>(static_cast<uint8_t>(bytes[0])) |
+               (static_cast<uint32_t>(static_cast<uint8_t>(bytes[1])) << 8u) |
+               (static_cast<uint32_t>(static_cast<uint8_t>(bytes[2])) << 16u) |
+               (static_cast<uint32_t>(static_cast<uint8_t>(bytes[3])) << 24u);
+    }
+
+    void WriteLittleEndian32(char* bytes, uint32_t value)
+    {
+        bytes[0] = static_cast<char>(value & 0xFFu);
+        bytes[1] = static_cast<char>((value >> 8u) & 0xFFu);
+        bytes[2] = static_cast<char>((value >> 16u) & 0xFFu);
+        bytes[3] = static_cast<char>((value >> 24u) & 0xFFu);
+    }
+
+    uint32_t ComputeFixtureCRC32(const char* bytes, size_t size)
+    {
+        uint32_t crc = 0xFFFFFFFFu;
+        for (size_t index = 0; index < size; ++index)
+        {
+            crc ^= static_cast<uint8_t>(bytes[index]);
+            for (int bit = 0; bit < 8; ++bit)
+                crc = (crc & 1u) != 0u ? (crc >> 1u) ^ 0xEDB88320u : crc >> 1u;
+        }
+        return ~crc;
+    }
+
+    bool HasValidV4Checksum(const std::vector<char>& bytes)
+    {
+        constexpr size_t headerBytes = 4u + sizeof(uint32_t);
+        constexpr size_t checksumBytes = sizeof(uint32_t);
+        if (bytes.size() < headerBytes + checksumBytes || std::string(bytes.data(), 4) != "SPRK" ||
+            ReadLittleEndian32(bytes.data() + 4) != 4u)
+        {
+            return false;
+        }
+        const size_t checksumOffset = bytes.size() - checksumBytes;
+        return ReadLittleEndian32(bytes.data() + checksumOffset) == ComputeFixtureCRC32(bytes.data(), checksumOffset);
+    }
+
+    bool RefreshV4Checksum(std::vector<char>& bytes)
+    {
+        constexpr size_t headerBytes = 4u + sizeof(uint32_t);
+        constexpr size_t checksumBytes = sizeof(uint32_t);
+        if (bytes.size() < headerBytes || std::string(bytes.data(), 4) != "SPRK")
+            return false;
+        if (ReadLittleEndian32(bytes.data() + 4) < 4u)
+            return true;
+        if (bytes.size() < headerBytes + checksumBytes)
+            return false;
+        const size_t checksumOffset = bytes.size() - checksumBytes;
+        WriteLittleEndian32(bytes.data() + checksumOffset, ComputeFixtureCRC32(bytes.data(), checksumOffset));
+        return true;
+    }
+
+    bool AppendV4Checksum(std::vector<char>& bytes)
+    {
+        if (bytes.size() < 8u || std::string(bytes.data(), 4) != "SPRK" || ReadLittleEndian32(bytes.data() + 4) != 4u)
+        {
+            return false;
+        }
+        const size_t checksumOffset = bytes.size();
+        bytes.resize(bytes.size() + sizeof(uint32_t));
+        WriteLittleEndian32(bytes.data() + checksumOffset, ComputeFixtureCRC32(bytes.data(), checksumOffset));
+        return true;
     }
 
     template <typename Integer> bool ReadIntegerAt(const std::vector<char>& bytes, size_t& offset, Integer& value)
@@ -589,6 +660,296 @@ TEST(SaveMigration_OnDiskRejectsRetiredVersionTransactionally)
     std::filesystem::remove_all(dir);
 }
 
+TEST(SaveSystem_Save_WritesV4ChecksumTrailerAndRoundTrips)
+{
+    const std::string dir = MakeTempSaveDir("v4_checksum_roundtrip");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    const EntityID sourceEntity = source.CreateEntity("integrity-owner");
+    source.AddComponent<Transform>(sourceEntity).position.x = 19.5f;
+    SaveMetadata metadata;
+    metadata.saveName = "Integrity roundtrip";
+    const std::unordered_map<std::string, std::string> sourceState = {{"integrity.key", "integrity-value"}};
+    ASSERT_TRUE(saveSystem.Save("integrity", source, metadata, sourceState));
+
+    const auto path = std::filesystem::path(dir) / "integrity.spark_save";
+    const std::vector<char> bytes = ReadBytes(path);
+    EXPECT_EQ(ReadHeaderVersion(path), 4u);
+    EXPECT_TRUE(HasValidV4Checksum(bytes));
+
+    World loaded;
+    std::unordered_map<std::string, std::string> loadedState;
+    ASSERT_TRUE(saveSystem.Load("integrity", loaded, loadedState));
+    const EntityID loadedEntity = FindNamedEntity(loaded, "integrity-owner");
+    ASSERT_TRUE(loadedEntity != entt::null);
+    ASSERT_TRUE(loaded.GetComponent<Transform>(loadedEntity) != nullptr);
+    EXPECT_NEAR(loaded.GetComponent<Transform>(loadedEntity)->position.x, 19.5f, 0.0001f);
+    EXPECT_EQ(loadedState.at("integrity.key"), std::string("integrity-value"));
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_Load_RejectsV4PayloadCorruptionTransactionally)
+{
+    const std::string dir = MakeTempSaveDir("v4_payload_corruption");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    source.AddComponent<Transform>(source.CreateEntity("candidate-only"));
+    SaveMetadata metadata;
+    metadata.saveName = "Integrity payload";
+    ASSERT_TRUE(saveSystem.Save("corrupt-payload", source, metadata, {{"candidate", "state"}}));
+
+    const auto path = std::filesystem::path(dir) / "corrupt-payload.spark_save";
+    std::vector<char> bytes = ReadBytes(path);
+    ASSERT_TRUE(ReplaceFirstAscii(bytes, "Integrity payload", "Jntegrity payload"));
+    ASSERT_TRUE(WriteBytes(path, bytes));
+
+    SaveMetadata unchangedMetadata;
+    unchangedMetadata.saveName = "metadata-sentinel";
+    EXPECT_FALSE(saveSystem.GetSaveMetadata("corrupt-payload", unchangedMetadata));
+    EXPECT_EQ(unchangedMetadata.saveName, std::string("metadata-sentinel"));
+
+    World liveWorld;
+    const EntityID sentinel = liveWorld.CreateEntity("live-sentinel");
+    liveWorld.AddComponent<Transform>(sentinel).position.x = 77.0f;
+    std::unordered_map<std::string, std::string> liveState = {{"live", "sentinel"}};
+    EXPECT_FALSE(saveSystem.Load("corrupt-payload", liveWorld, liveState));
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "live-sentinel"));
+    EXPECT_NEAR(liveWorld.GetComponent<Transform>(sentinel)->position.x, 77.0f, 0.0001f);
+    EXPECT_EQ(liveState.size(), 1u);
+    EXPECT_EQ(liveState.at("live"), std::string("sentinel"));
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_MetadataAndLoadRejectV4TrailerAndVersionCorruption)
+{
+    const std::string dir = MakeTempSaveDir("v4_envelope_corruption");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    source.AddComponent<Transform>(source.CreateEntity("envelope-candidate"));
+    SaveMetadata metadata;
+    metadata.saveName = "Envelope integrity";
+    ASSERT_TRUE(saveSystem.Save("envelope", source, metadata));
+
+    const auto path = std::filesystem::path(dir) / "envelope.spark_save";
+    const std::vector<char> original = ReadBytes(path);
+    ASSERT_TRUE(HasValidV4Checksum(original));
+
+    for (int failureCase = 0; failureCase < 4; ++failureCase)
+    {
+        std::vector<char> corrupted = original;
+        if (failureCase == 0)
+            corrupted.back() ^= static_cast<char>(0x40);
+        else
+            corrupted[4] = static_cast<char>(failureCase);
+        ASSERT_TRUE(WriteBytes(path, corrupted));
+
+        SaveMetadata unchanged;
+        unchanged.saveName = "metadata-sentinel";
+        EXPECT_FALSE(saveSystem.GetSaveMetadata("envelope", unchanged));
+        EXPECT_EQ(unchanged.saveName, std::string("metadata-sentinel"));
+
+        World liveWorld;
+        liveWorld.AddComponent<Transform>(liveWorld.CreateEntity("live-sentinel"));
+        EXPECT_FALSE(saveSystem.Load("envelope", liveWorld));
+        EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+        EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "live-sentinel"));
+    }
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_Load_RejectsEveryTruncatedV4ChecksumTrailer)
+{
+    const std::string dir = MakeTempSaveDir("v4_truncated_trailer");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    source.AddComponent<Transform>(source.CreateEntity("trailer-candidate"));
+    SaveMetadata metadata;
+    metadata.saveName = "Trailer truncation";
+    ASSERT_TRUE(saveSystem.Save("truncated-trailer", source, metadata));
+
+    const auto path = std::filesystem::path(dir) / "truncated-trailer.spark_save";
+    const std::vector<char> original = ReadBytes(path);
+    ASSERT_TRUE(HasValidV4Checksum(original));
+    for (size_t bytesRemoved = 1; bytesRemoved <= sizeof(uint32_t); ++bytesRemoved)
+    {
+        const std::vector<char> truncated(original.begin(), original.end() - static_cast<std::ptrdiff_t>(bytesRemoved));
+        ASSERT_TRUE(WriteBytes(path, truncated));
+
+        World liveWorld;
+        liveWorld.AddComponent<Transform>(liveWorld.CreateEntity("trailer-live-sentinel"));
+        EXPECT_FALSE(saveSystem.Load("truncated-trailer", liveWorld));
+        EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+        EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "trailer-live-sentinel"));
+    }
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_Load_DoesNotLetCachedV4SnapshotHideExternalCorruption)
+{
+    const std::string dir = MakeTempSaveDir("v4_cache_freshness");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    LocalFileCache cache;
+    saveSystem.SetFileCache(&cache);
+    World source;
+    source.AddComponent<Transform>(source.CreateEntity("cached-candidate"));
+    SaveMetadata metadata;
+    metadata.saveName = "Cached integrity";
+    ASSERT_TRUE(saveSystem.Save("cached-integrity", source, metadata));
+
+    World firstLoad;
+    ASSERT_TRUE(saveSystem.Load("cached-integrity", firstLoad));
+    const auto path = std::filesystem::path(dir) / "cached-integrity.spark_save";
+    ASSERT_TRUE(cache.Contains(path.string()));
+
+    std::vector<char> corrupted = ReadBytes(path);
+    ASSERT_TRUE(ReplaceFirstAscii(corrupted, "Cached integrity", "Xached integrity"));
+    ASSERT_TRUE(WriteBytes(path, corrupted));
+
+    World liveWorld;
+    liveWorld.AddComponent<Transform>(liveWorld.CreateEntity("cache-live-sentinel"));
+    EXPECT_FALSE(saveSystem.Load("cached-integrity", liveWorld));
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "cache-live-sentinel"));
+
+    saveSystem.SetFileCache(nullptr);
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_Load_RecoversValidBackupWhenV4PrimaryChecksumFails)
+{
+    const std::string dir = MakeTempSaveDir("v4_checksum_backup");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    World first;
+    first.AddComponent<Transform>(first.CreateEntity("first-integrity-revision"));
+    SaveMetadata firstMetadata;
+    firstMetadata.saveName = "First integrity revision";
+    ASSERT_TRUE(saveSystem.Save("integrity-backup", first, firstMetadata));
+
+    World second;
+    second.AddComponent<Transform>(second.CreateEntity("second-integrity-revision"));
+    SaveMetadata secondMetadata;
+    secondMetadata.saveName = "Second integrity revision";
+    ASSERT_TRUE(saveSystem.Save("integrity-backup", second, secondMetadata));
+
+    const auto primaryPath = std::filesystem::path(dir) / "integrity-backup.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "integrity-backup.spark_save.bak";
+    ASSERT_TRUE(std::filesystem::exists(backupPath));
+    std::vector<char> primaryBytes = ReadBytes(primaryPath);
+    ASSERT_TRUE(ReplaceFirstAscii(primaryBytes, "Second integrity revision", "Xecond integrity revision"));
+    ASSERT_TRUE(WriteBytes(primaryPath, primaryBytes));
+
+    World recovered;
+    ASSERT_TRUE(saveSystem.Load("integrity-backup", recovered));
+    EXPECT_EQ(recovered.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(recovered, "first-integrity-revision"));
+    EXPECT_FALSE(WorldContainsNamedEntity(recovered, "second-integrity-revision"));
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_Load_RejectsWhenV4PrimaryAndBackupChecksumsFail)
+{
+    const std::string dir = MakeTempSaveDir("v4_both_revisions_corrupt");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    World first;
+    first.AddComponent<Transform>(first.CreateEntity("first-corruptible-revision"));
+    SaveMetadata firstMetadata;
+    firstMetadata.saveName = "First corruptible revision";
+    ASSERT_TRUE(saveSystem.Save("both-corrupt", first, firstMetadata));
+
+    World second;
+    second.AddComponent<Transform>(second.CreateEntity("second-corruptible-revision"));
+    SaveMetadata secondMetadata;
+    secondMetadata.saveName = "Second corruptible revision";
+    ASSERT_TRUE(saveSystem.Save("both-corrupt", second, secondMetadata));
+
+    const auto primaryPath = std::filesystem::path(dir) / "both-corrupt.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "both-corrupt.spark_save.bak";
+    std::vector<char> primary = ReadBytes(primaryPath);
+    std::vector<char> backup = ReadBytes(backupPath);
+    ASSERT_TRUE(ReplaceFirstAscii(primary, "Second corruptible revision", "Xecond corruptible revision"));
+    ASSERT_TRUE(ReplaceFirstAscii(backup, "First corruptible revision", "Xirst corruptible revision"));
+    ASSERT_TRUE(WriteBytes(primaryPath, primary));
+    ASSERT_TRUE(WriteBytes(backupPath, backup));
+
+    World liveWorld;
+    liveWorld.AddComponent<Transform>(liveWorld.CreateEntity("both-corrupt-live-sentinel"));
+    EXPECT_FALSE(saveSystem.Load("both-corrupt", liveWorld));
+    EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+    EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "both-corrupt-live-sentinel"));
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_Save_PreservesValidV4BackupWhenPrimaryChecksumFails)
+{
+    const std::string dir = MakeTempSaveDir("v4_preserve_backup");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    auto saveRevision = [&](const char* entityName, const char* saveName)
+    {
+        World world;
+        world.AddComponent<Transform>(world.CreateEntity(entityName));
+        SaveMetadata metadata;
+        metadata.saveName = saveName;
+        return saveSystem.Save("preserve-backup", world, metadata);
+    };
+
+    ASSERT_TRUE(saveRevision("first-preserved-revision", "First preserved revision"));
+    ASSERT_TRUE(saveRevision("second-primary-revision", "Second primary revision"));
+
+    const auto primaryPath = std::filesystem::path(dir) / "preserve-backup.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "preserve-backup.spark_save.bak";
+    const std::vector<char> retainedBefore = ReadBytes(backupPath);
+    ASSERT_TRUE(HasValidV4Checksum(retainedBefore));
+
+    std::vector<char> corruptPrimary = ReadBytes(primaryPath);
+    ASSERT_TRUE(ReplaceFirstAscii(corruptPrimary, "Second primary revision", "Xecond primary revision"));
+    ASSERT_TRUE(WriteBytes(primaryPath, corruptPrimary));
+
+    ASSERT_TRUE(saveRevision("third-primary-revision", "Third primary revision"));
+    EXPECT_TRUE(ReadBytes(backupPath) == retainedBefore);
+
+    std::vector<char> thirdPrimary = ReadBytes(primaryPath);
+    ASSERT_TRUE(ReplaceFirstAscii(thirdPrimary, "Third primary revision", "Xhird primary revision"));
+    ASSERT_TRUE(WriteBytes(primaryPath, thirdPrimary));
+
+    World recovered;
+    ASSERT_TRUE(saveSystem.Load("preserve-backup", recovered));
+    EXPECT_TRUE(WorldContainsNamedEntity(recovered, "first-preserved-revision"));
+    EXPECT_FALSE(WorldContainsNamedEntity(recovered, "second-primary-revision"));
+    EXPECT_FALSE(WorldContainsNamedEntity(recovered, "third-primary-revision"));
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST(SaveSystem_GetSaveMetadata_RejectsBadMagic)
 {
     const std::string dir = MakeTempSaveDir("badmagic");
@@ -624,11 +985,16 @@ TEST(SaveSystem_Load_RejectsTruncatedCustomStateCountWithoutChangingWorld)
     input.close();
     EXPECT_TRUE(original.size() >= sizeof(uint32_t));
 
+    const bool hasV4Checksum = ReadLittleEndian32(original.data() + 4) >= 4u;
     for (size_t bytesRemoved = 1; bytesRemoved <= sizeof(uint32_t); ++bytesRemoved)
     {
-        std::ofstream truncated(path, std::ios::binary | std::ios::trunc);
-        truncated.write(original.data(), static_cast<std::streamsize>(original.size() - bytesRemoved));
-        truncated.close();
+        std::vector<char> truncated = original;
+        if (hasV4Checksum)
+            truncated.resize(truncated.size() - sizeof(uint32_t));
+        truncated.resize(truncated.size() - bytesRemoved);
+        if (hasV4Checksum)
+            ASSERT_TRUE(AppendV4Checksum(truncated));
+        ASSERT_TRUE(WriteBytes(path, truncated));
 
         World target;
         target.CreateEntity("sentinel");
@@ -686,7 +1052,13 @@ TEST(SaveSystem_Load_RejectsEveryTruncatedCustomStateField)
     std::ifstream input(path, std::ios::binary);
     std::vector<char> prefix((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
     input.close();
-    EXPECT_TRUE(prefix.size() >= sizeof(uint32_t));
+    ASSERT_TRUE(prefix.size() >= 8u + sizeof(uint32_t));
+    const bool hasV4Checksum = ReadLittleEndian32(prefix.data() + 4) >= 4u;
+    if (hasV4Checksum)
+    {
+        ASSERT_TRUE(prefix.size() >= 8u + 2u * sizeof(uint32_t));
+        prefix.resize(prefix.size() - sizeof(uint32_t));
+    }
     prefix.resize(prefix.size() - sizeof(uint32_t));
 
     auto append16 = [](std::vector<char>& bytes, uint16_t value)
@@ -715,8 +1087,11 @@ TEST(SaveSystem_Load_RejectsEveryTruncatedCustomStateField)
     entry.push_back('v');
     malformed.push_back(entry); // partial value bytes
 
-    for (const auto& bytes : malformed)
+    for (const auto& malformedBytes : malformed)
     {
+        auto bytes = malformedBytes;
+        if (hasV4Checksum)
+            ASSERT_TRUE(AppendV4Checksum(bytes));
         std::ofstream output(path, std::ios::binary | std::ios::trunc);
         output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
         output.close();
@@ -760,6 +1135,98 @@ TEST(SaveSystem_Save_ReplacesExistingSlotAtomically)
     EXPECT_TRUE(ss.Load("same-slot", loadedWorld));
     EXPECT_EQ(loadedWorld.GetEntityCount(), 2u);
 
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_SaveAbortsWhenPreviousRevisionCannotBeRetained)
+{
+    const std::string dir = MakeTempSaveDir("backup_retention_failure");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    World firstWorld;
+    const EntityID firstEntity = firstWorld.CreateEntity("first-revision");
+    firstWorld.AddComponent<Transform>(firstEntity);
+    SaveMetadata firstMetadata;
+    firstMetadata.saveName = "First revision";
+    EXPECT_TRUE(ss.Save("retention-failure", firstWorld, firstMetadata));
+
+    const auto primaryPath = std::filesystem::path(dir) / "retention-failure.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "retention-failure.spark_save.bak";
+    ASSERT_TRUE(std::filesystem::create_directory(backupPath));
+
+    World secondWorld;
+    const EntityID secondEntity = secondWorld.CreateEntity("second-revision");
+    secondWorld.AddComponent<Transform>(secondEntity);
+    SaveMetadata secondMetadata;
+    secondMetadata.saveName = "Second revision";
+
+    // Retaining the previous revision is part of the save transaction. If that
+    // boundary fails, replacing the primary would silently discard the only
+    // recoverable copy of the first revision.
+    EXPECT_FALSE(ss.Save("retention-failure", secondWorld, secondMetadata));
+    EXPECT_TRUE(std::filesystem::exists(primaryPath));
+    EXPECT_TRUE(std::filesystem::is_directory(backupPath));
+
+    SaveMetadata retainedMetadata;
+    EXPECT_TRUE(ss.GetSaveMetadata("retention-failure", retainedMetadata));
+    EXPECT_EQ(retainedMetadata.saveName, std::string("First revision"));
+
+    World retainedWorld;
+    EXPECT_TRUE(ss.Load("retention-failure", retainedWorld));
+    EXPECT_TRUE(WorldContainsNamedEntity(retainedWorld, "first-revision"));
+    EXPECT_FALSE(WorldContainsNamedEntity(retainedWorld, "second-revision"));
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_DeleteSave_EvictsCachedPrimaryAndBackup)
+{
+    const std::string dir = MakeTempSaveDir("delete_cached_revisions");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    ss.SetFileCache(nullptr);
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    LocalFileCache cache;
+    ss.SetFileCache(&cache);
+
+    World firstWorld;
+    const EntityID firstEntity = firstWorld.CreateEntity("cached-first-revision");
+    firstWorld.AddComponent<Transform>(firstEntity);
+    SaveMetadata firstMetadata;
+    firstMetadata.saveName = "Cached first revision";
+    EXPECT_TRUE(ss.Save("cached-delete", firstWorld, firstMetadata));
+
+    World secondWorld;
+    const EntityID secondEntity = secondWorld.CreateEntity("cached-second-revision");
+    secondWorld.AddComponent<Transform>(secondEntity);
+    SaveMetadata secondMetadata;
+    secondMetadata.saveName = "Cached second revision";
+    EXPECT_TRUE(ss.Save("cached-delete", secondWorld, secondMetadata));
+
+    const auto primaryPath = std::filesystem::path(dir) / "cached-delete.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "cached-delete.spark_save.bak";
+    EXPECT_TRUE(std::filesystem::exists(primaryPath));
+    EXPECT_TRUE(std::filesystem::exists(backupPath));
+
+    World cachedPrimary;
+    EXPECT_TRUE(ss.Load("cached-delete", cachedPrimary));
+    EXPECT_TRUE(cache.Contains(primaryPath.string()));
+
+    const auto cachedBackup = cache.ReadBinary(backupPath.string());
+    EXPECT_TRUE(cachedBackup.IsOk());
+    EXPECT_TRUE(cache.Contains(backupPath.string()));
+
+    EXPECT_TRUE(ss.DeleteSave("cached-delete"));
+    EXPECT_FALSE(std::filesystem::exists(primaryPath));
+    EXPECT_FALSE(std::filesystem::exists(backupPath));
+    EXPECT_FALSE(cache.Contains(primaryPath.string()));
+    EXPECT_FALSE(cache.Contains(backupPath.string()));
+
+    World afterDelete;
+    EXPECT_FALSE(ss.Load("cached-delete", afterDelete));
+
+    ss.SetFileCache(nullptr);
     std::filesystem::remove_all(dir);
 }
 
@@ -944,23 +1411,27 @@ TEST(SaveMigration_OnDiskRejectsDuplicateRecordsWithoutMutation)
         auto bytes = original;
         ASSERT_TRUE(DuplicateWireRecord<uint16_t>(bytes, locations.componentCount, locations.firstComponentBegin,
                                                   locations.firstComponentEnd));
+        ASSERT_TRUE(RefreshV4Checksum(bytes));
         malformedCases.push_back(std::move(bytes));
     }
     {
         auto bytes = original;
         ASSERT_TRUE(DuplicateWireRecord<uint16_t>(bytes, locations.propertyCount, locations.firstPropertyBegin,
                                                   locations.firstPropertyEnd));
+        ASSERT_TRUE(RefreshV4Checksum(bytes));
         malformedCases.push_back(std::move(bytes));
     }
     {
         auto bytes = original;
         ASSERT_TRUE(DuplicateWireRecord<uint32_t>(bytes, locations.customStateCount, locations.firstCustomStateBegin,
                                                   locations.firstCustomStateEnd));
+        ASSERT_TRUE(RefreshV4Checksum(bytes));
         malformedCases.push_back(std::move(bytes));
     }
     {
         auto bytes = original;
         ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "NameComponent"));
+        ASSERT_TRUE(RefreshV4Checksum(bytes));
         malformedCases.push_back(std::move(bytes));
     }
 
@@ -1144,6 +1615,7 @@ TEST(SaveMigration_MissingCustomComponentFailsBeforeLiveStoragePreparation)
     const auto path = std::filesystem::path(dir) / "missing-custom-component.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "MissingTx"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     auto& serializers = ComponentSerializerRegistry::GetInstance();
@@ -1209,6 +1681,7 @@ TEST(SaveMigration_LiveStoragePreparationFailurePropagatesWithoutFalseRollbackCl
     const auto path = std::filesystem::path(dir) / "storage-preparation.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "PrepareTx"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     auto& serializers = ComponentSerializerRegistry::GetInstance();
@@ -1275,6 +1748,7 @@ TEST(SaveMigration_ExtraCandidateEntityFailsBeforeLiveStoragePreparation)
     const auto path = std::filesystem::path(dir) / "ghost-candidate.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "GhostTx"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     auto& serializers = ComponentSerializerRegistry::GetInstance();
@@ -1338,6 +1812,7 @@ TEST(SaveMigration_OneEntityTransientCandidateAllocationFailsBeforeLiveStoragePr
     const auto path = std::filesystem::path(dir) / "one-transient-candidate.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "TransientOneTx"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     auto& serializers = ComponentSerializerRegistry::GetInstance();
@@ -1424,6 +1899,7 @@ TEST(SaveMigration_TwoEntityTransientCandidateAllocationFailsBeforeLiveStoragePr
     const auto path = std::filesystem::path(dir) / "two-transient-candidate.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "TransientTwoTx"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     auto& serializers = ComponentSerializerRegistry::GetInstance();
@@ -1507,6 +1983,7 @@ TEST(SaveMigration_CandidateAllocatorCursorMutationDoesNotReachLiveWorld)
     const auto path = std::filesystem::path(dir) / "candidate-allocator-cursor.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "CursorTx"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     auto& serializers = ComponentSerializerRegistry::GetInstance();
@@ -1577,6 +2054,7 @@ TEST(SaveMigration_ExtraStagedComponentFailsBeforeLiveStoragePreparation)
     const auto path = std::filesystem::path(dir) / "extra-staged-component.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "ExtraTx"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     auto& serializers = ComponentSerializerRegistry::GetInstance();
@@ -1638,6 +2116,7 @@ TEST(SaveMigration_HierarchyPlanFailureLeavesExactLiveStateBeforeStoragePreparat
     const auto path = std::filesystem::path(dir) / "hierarchy-plan.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "PlanTx"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     auto& serializers = ComponentSerializerRegistry::GetInstance();
@@ -1716,6 +2195,7 @@ TEST(SaveMigration_HierarchyRetirementUsesOnlyPreBoundarySnapshots)
     const auto path = std::filesystem::path(dir) / "hierarchy-guard.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceLengthPrefixedString(bytes, "Transform", "GuardTx"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     auto& serializers = ComponentSerializerRegistry::GetInstance();
@@ -1825,6 +2305,7 @@ TEST(SaveMigration_HandWrittenComponentSemanticFailuresRollbackWorldAndCustomSta
         else
             ASSERT_TRUE(ReplaceLengthPrefixedString(malformed, "12.500000",
                                                     std::string(std::numeric_limits<uint16_t>::max(), '9')));
+        ASSERT_TRUE(RefreshV4Checksum(malformed));
         ASSERT_TRUE(WriteBytes(path, malformed));
 
         World liveWorld;
@@ -1863,6 +2344,7 @@ TEST(SaveMigration_ReflectedSetFieldFailureRollsBackWorldAndCustomState)
     const auto path = std::filesystem::path(dir) / "strict-reflected.spark_save";
     std::vector<char> malformed = ReadBytes(path);
     ASSERT_TRUE(ReplaceLengthPrefixedString(malformed, "0.625000", "badfloat"));
+    ASSERT_TRUE(RefreshV4Checksum(malformed));
     ASSERT_TRUE(WriteBytes(path, malformed));
 
     World liveWorld;
@@ -1974,6 +2456,90 @@ TEST(SaveMigration_ImmutableV1FixtureLoadsWithoutRewritingSourceOrSlot)
     std::filesystem::remove_all(dir);
 }
 
+TEST(SaveMigration_ImmutableV2FixtureLoadsAndAddsHierarchyRoots)
+{
+    const auto fixturePath = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests" / "Fixtures" / "Compatibility" /
+                             "SaveSystem" / "v2-screenshot-without-hierarchy.spark_save.hex";
+    const std::string fixtureBefore = ReadTextFile(fixturePath);
+    const std::vector<char> legacyBytes = DecodeHexFixture(fixtureBefore);
+    ASSERT_EQ(legacyBytes.size(), static_cast<size_t>(307));
+
+    const std::string dir = MakeTempSaveDir("v2_fixture");
+    const auto slotPath = std::filesystem::path(dir) / "legacy-v2.spark_save";
+    ASSERT_TRUE(WriteBytes(slotPath, legacyBytes));
+
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+    EXPECT_EQ(ReadHeaderVersion(slotPath), 2u);
+
+    SaveMetadata metadata;
+    EXPECT_TRUE(saveSystem.GetSaveMetadata("legacy-v2", metadata));
+    EXPECT_EQ(metadata.version, kCurrentSaveVersion);
+    EXPECT_EQ(metadata.saveName, std::string("Legacy screenshotless save"));
+    EXPECT_EQ(metadata.screenshotPath, std::string("Screenshots/legacy.png"));
+
+    World loadedWorld;
+    loadedWorld.CreateEntity("must-be-replaced-only-on-success");
+    std::unordered_map<std::string, std::string> customState = {{"sentinel", "replace-on-success"}};
+    EXPECT_TRUE(saveSystem.Load("legacy-v2", loadedWorld, customState));
+    EXPECT_EQ(loadedWorld.GetEntityCount(), 1u);
+
+    const EntityID legacyPlayer = FindNamedEntity(loadedWorld, "legacy-player");
+    ASSERT_TRUE(legacyPlayer != entt::null);
+    const Transform* transform = loadedWorld.GetComponent<Transform>(legacyPlayer);
+    ASSERT_TRUE(transform != nullptr);
+    EXPECT_TRUE(transform->parent == entt::null);
+    EXPECT_EQ(customState.size(), 1u);
+    EXPECT_EQ(customState.at("legacy.key"), std::string("legacy-value"));
+
+    // Migration is in memory only: neither the checked-in fixture nor the copied
+    // N-1 slot is rewritten as a side effect of reading it.
+    EXPECT_EQ(ReadHeaderVersion(slotPath), 2u);
+    EXPECT_TRUE(ReadBytes(slotPath) == legacyBytes);
+    EXPECT_EQ(ReadTextFile(fixturePath), fixtureBefore);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_ImmutableV3FixtureLoadsWithoutRewritingSourceOrSlot)
+{
+    const auto fixturePath = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests" / "Fixtures" / "Compatibility" /
+                             "SaveSystem" / "v3-fps-profile.spark_save.hex";
+    const std::string fixtureBefore = ReadTextFile(fixturePath);
+    const std::vector<char> legacyBytes = DecodeHexFixture(fixtureBefore);
+    ASSERT_EQ(legacyBytes.size(), static_cast<size_t>(355));
+
+    const std::string dir = MakeTempSaveDir("v3_fixture");
+    const auto slotPath = std::filesystem::path(dir) / "legacy-v3.spark_save";
+    ASSERT_TRUE(WriteBytes(slotPath, legacyBytes));
+
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    EXPECT_TRUE(saveSystem.Initialize(dir));
+    EXPECT_EQ(ReadHeaderVersion(slotPath), 3u);
+
+    SaveMetadata metadata;
+    EXPECT_TRUE(saveSystem.GetSaveMetadata("legacy-v3", metadata));
+    EXPECT_EQ(metadata.version, kCurrentSaveVersion);
+    EXPECT_EQ(metadata.saveName, std::string("Quick Save"));
+    EXPECT_EQ(metadata.sceneName, std::string("combat_arena"));
+
+    World loadedWorld;
+    loadedWorld.CreateEntity("must-be-replaced-only-on-success");
+    std::unordered_map<std::string, std::string> customState = {{"sentinel", "replace-on-success"}};
+    EXPECT_TRUE(saveSystem.Load("legacy-v3", loadedWorld, customState));
+    EXPECT_EQ(loadedWorld.GetEntityCount(), 0u);
+    EXPECT_EQ(customState.at("fps.profile.xp"), std::string("37"));
+    EXPECT_EQ(customState.at("fps.profile.level"), std::string("1"));
+    EXPECT_EQ(customState.at("fps.profile.weapon"), std::string("7"));
+
+    EXPECT_EQ(ReadHeaderVersion(slotPath), 3u);
+    EXPECT_TRUE(ReadBytes(slotPath) == legacyBytes);
+    EXPECT_EQ(ReadTextFile(fixturePath), fixtureBefore);
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST(SaveMigration_UnknownComponentFailsWithoutMutatingWorldOrCustomState)
 {
     const std::string dir = MakeTempSaveDir("unknown_component");
@@ -1990,6 +2556,7 @@ TEST(SaveMigration_UnknownComponentFailsWithoutMutatingWorldOrCustomState)
     const auto path = std::filesystem::path(dir) / "unknown-component.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceFirstAscii(bytes, "Transform", "NoSuchCmp"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     World liveWorld;
@@ -2020,6 +2587,7 @@ TEST(SaveMigration_ThrowingDeserializerFailsWithoutMutatingWorldOrCustomState)
     const auto path = std::filesystem::path(dir) / "throwing-component.spark_save";
     std::vector<char> bytes = ReadBytes(path);
     ASSERT_TRUE(ReplaceFirstAscii(bytes, "Transform", "ThrowTest"));
+    ASSERT_TRUE(RefreshV4Checksum(bytes));
     ASSERT_TRUE(WriteBytes(path, bytes));
 
     auto& registry = ComponentSerializerRegistry::GetInstance();

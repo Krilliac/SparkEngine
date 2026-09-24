@@ -20,6 +20,7 @@
 #include "Engine/ECS/Components.h"
 #include "Engine/Events/EventSystem.h"
 #include "Engine/Localization/LocalizationSystem.h"
+#include "Engine/Rendering/MovieRenderPipeline.h"
 #include "Engine/Replay/ReplaySystem.h"
 #include "Engine/World/ProximityTriggerSystem.h"
 #include "Input/InputActionSystem.h"
@@ -195,6 +196,35 @@ TEST(EngineWiring_LifecycleRegistersEngineLifetimeServices)
     EXPECT_TRUE(ctx->GetAreaStreaming() == nullptr);
     EXPECT_TRUE(ctx->GetLocalization() == nullptr);
     EXPECT_TRUE(ctx->GetComponentSerializers() == nullptr);
+}
+
+TEST(EngineWiring_MovieRenderPipelineRequiresExplicitOwnership)
+{
+    SetupContextWithWorld();
+    auto& pipeline = Spark::Rendering::MovieRenderPipeline::GetInstance();
+    pipeline.Shutdown();
+
+    InitializeProductionLifecycle();
+
+    Spark::Rendering::MovieRenderSettings settings;
+    settings.qualityPreset = Spark::Rendering::RenderQuality::Custom;
+    settings.aaSamples = 1;
+    settings.motionBlurSubFrames = 1;
+    settings.startFrame = 0;
+    settings.endFrame = 1;
+
+    // Ordinary engine startup must not silently opt into an offline tool.
+    EXPECT_FALSE(pipeline.StartRender(settings));
+
+    pipeline.Initialize();
+    ASSERT_TRUE(pipeline.StartRender(settings));
+    Spark::Core::Lifecycle::UpdateGameplaySystemsImpl(1.0f / 60.0f);
+    EXPECT_EQ(pipeline.GetCurrentJob().currentFrame, 0);
+
+    // The engine must not stop a job owned by an explicit caller either.
+    Spark::Core::Lifecycle::ShutdownGameplaySystemsImpl();
+    EXPECT_TRUE(pipeline.IsRendering());
+    pipeline.Shutdown();
 }
 
 // ============================================================================

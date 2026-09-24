@@ -73,6 +73,7 @@ namespace Spark
         StateViolationSeverity severity = StateViolationSeverity::Error;
         bool enabled = true;  ///< Can be toggled at runtime.
         StateCheckFn checkFn; ///< The actual validation logic.
+        std::string ownerId;  ///< Module image that registered the rule; empty for engine rules.
     };
 
     // =========================================================================
@@ -115,6 +116,24 @@ namespace Spark
       public:
         static InvalidStateDetector& GetInstance();
 
+        /** @brief Inject the host detector into a statically linked module image. */
+        static void SetGlobalInstance(InvalidStateDetector* instance);
+
+        /** @brief Attribute implicit rule registrations to one module image. */
+        class ScopedRegistrationOwner final
+        {
+          public:
+            ScopedRegistrationOwner(InvalidStateDetector& detector, std::string ownerId);
+            ~ScopedRegistrationOwner();
+
+            ScopedRegistrationOwner(const ScopedRegistrationOwner&) = delete;
+            ScopedRegistrationOwner& operator=(const ScopedRegistrationOwner&) = delete;
+
+          private:
+            InvalidStateDetector& m_detector;
+            std::string m_previousOwner;
+        };
+
         void Initialize();
         void Update(float dt);
         void Shutdown();
@@ -147,6 +166,9 @@ namespace Spark
          * @param category The category to purge. No-op if no rule matches.
          */
         void RemoveRulesByCategory(const std::string& category);
+
+        /** @brief Remove every rule registered by one module image. */
+        size_t RemoveRulesByOwner(const std::string& ownerId);
 
         /**
          * @brief Remove all registered rules (including the engine defaults).
@@ -184,6 +206,7 @@ namespace Spark
         uint32_t m_totalChecks = 0;
         uint32_t m_totalViolations = 0;
         bool m_initialized = false;
+        std::string m_registrationOwner;
     };
 
 } // namespace Spark

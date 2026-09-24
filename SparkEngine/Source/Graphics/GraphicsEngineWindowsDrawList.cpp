@@ -80,7 +80,18 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
                 m_assetPipeline->BindMesh(cmd.meshPath);
                 if (cmd.materialPath != lastMaterial)
                 {
-                    m_assetPipeline->BindMaterial(cmd.materialPath);
+                    if (cmd.materialPath.empty())
+                    {
+                        // BindMaterial intentionally treats an empty path as
+                        // the default-material selector. Rebind the engine's
+                        // actual default SRV here so a prior explicit texture
+                        // cannot leak into this draw.
+                        SetBasicTexture(nullptr);
+                    }
+                    else
+                    {
+                        m_assetPipeline->BindMaterial(cmd.materialPath);
+                    }
                     lastMaterial = cmd.materialPath;
                 }
                 m_assetPipeline->DrawBoundMesh();
@@ -174,7 +185,10 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
 
                 // Bind material from first instance (batch shares mesh, material may vary).
                 // string_view overload avoids per-draw-call std::string allocation.
-                m_assetPipeline->BindMaterial(localDrawList[batchStart].materialPath);
+                if (localDrawList[batchStart].materialPath.empty())
+                    SetBasicTexture(nullptr);
+                else
+                    m_assetPipeline->BindMaterial(localDrawList[batchStart].materialPath);
 
                 // GPU cull + indirect draw
                 ID3D11Buffer* vb = meshAsset->GetVertexBuffer();

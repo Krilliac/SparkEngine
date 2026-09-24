@@ -114,6 +114,23 @@
       }
     },
     {
+      "id": "mesh-obj-static-loader",
+      "description": "Shared Wavefront OBJ static-mesh importer used by the D3D11 and portable MeshAsset paths.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/OBJStaticMeshLoader.cpp",
+        "SparkEngine/Source/Graphics/OBJStaticMeshLoader.h"
+      ],
+      "formats": [
+        ".obj"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
       "id": "texture-loader-windows",
       "description": "Windows image and texture loader.",
       "trust_boundary": "untrusted-file",
@@ -287,6 +304,7 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/SceneManager/SceneManager.cpp",
+        "SparkEngine/Source/SceneManager/ReflectedScenePersistence.cpp",
         "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp",
         "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h"
       ],
@@ -684,10 +702,16 @@
       "formats": [
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No direct production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "Tests/Fuzz/FuzzJsonUtils.cpp",
+        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "cmake_target": "SparkFuzzJsonUtils",
+        "test_selector": "FuzzJsonUtilsSmoke",
+        "corpus_id": "json-utils-corpus",
+        "entry_symbol": "Spark::Json::ParseBounded",
+        "binding_source": "Tests/Fuzz/FuzzJsonUtilsProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseJson"
       }
     },
     {
@@ -717,10 +741,16 @@
       "formats": [
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "Tests/Fuzz/FuzzCrashManifest.cpp",
+        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "cmake_target": "SparkFuzzCrashManifest",
+        "test_selector": "FuzzCrashManifestSmoke",
+        "corpus_id": "crash-manifest-corpus",
+        "entry_symbol": "SparkCrashReporter::ParseManifestJson",
+        "binding_source": "Tests/Fuzz/FuzzCrashManifestProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseCrashManifest"
       }
     },
     {
@@ -969,10 +999,16 @@
       "formats": [
         ".stex"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "Tests/Fuzz/FuzzTextureStex.cpp",
+        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "cmake_target": "SparkFuzzTextureStex",
+        "test_selector": "FuzzTextureStexSmoke",
+        "corpus_id": "texture-stex-corpus",
+        "entry_symbol": "Spark::Graphics::TextureCompressor::LoadCompressed",
+        "binding_source": "Tests/Fuzz/FuzzTextureStexProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadStex"
       }
     },
     {
@@ -1019,10 +1055,14 @@
       "formats": [
         ".nnw"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "Tests/Fuzz/FuzzNeuralWeights.cpp",
+        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "cmake_target": "SparkFuzzNeuralWeights",
+        "test_selector": "FuzzNeuralWeightsSmoke",
+        "corpus_id": "neural-weights-nnw-corpus",
+        "entry_symbol": "Spark::Graphics::Neural::LoadWeights"
       }
     },
     {
@@ -1769,6 +1809,8 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEditor/Source/Core/EditorRecovery.cpp",
+        "SparkEditor/Source/Core/EditorRecoveryFiles.h",
+        "SparkEditor/Source/Core/EditorRecoveryJson.h",
         "SparkEditor/Source/Core/EditorRecovery.h"
       ],
       "formats": [
@@ -1837,6 +1879,22 @@
       ],
       "formats": [
         "telemetry-spool"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
+      "id": "vulkan-spirv-module-header",
+      "description": "SPIR-V bytecode header and word-count validation before Vulkan shader-module creation.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp"
+      ],
+      "formats": [
+        ".spv"
       ],
       "status": "blocked",
       "blocker": {

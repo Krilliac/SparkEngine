@@ -3,14 +3,14 @@
   "workItems": [
     {
       "id": "INST-130",
-      "title": "Make installer and updater verified, transactional, and recoverable",
+      "title": "Make installer clean-install, repair, and uninstall behavior verified and recoverable",
       "priority": "P0",
       "status": "open",
       "blocking": true,
       "wave": 2,
       "area": "installer",
       "owner": "unassigned",
-      "rationale": "The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. Local process fixtures verify orchestration; hosted native results are pending. This does not close signing, Windows 11, NSIS, upgrade, rollback, repair, or user-data retention requirements.",
+      "rationale": "The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. 2026-09-12 progress: InstallState now flushes to a same-directory temporary marker before replacement, loads into a temporary object with required-field validation, and treats malformed state as invalid; focused round-trip/replacement/recovery tests pass. The installer CI job now explicitly builds SparkInstallerInstallStateTests before invoking CTest, closing a hosted registration/build omission found on the prior exact-SHA run. 2026-09-13 progress: final installed-commit verification now fails closed and invokes rollback when the recorded commit cannot be verified; installer transaction selectors are explicitly labeled and the native selector suite is green. Local process fixtures verify orchestration; hosted native results are pending. 2026-09-13 additional progress: updates now refuse to fetch or replace an existing checkout when tracked or untracked local changes are present, or when the status query itself fails; focused GitRunner regression coverage passes. 2026-09-13 further progress: InstallState::Save now rejects invalid state before creating or replacing its temporary marker; the valid-marker preservation regression passes in a fresh MSVC build. 2026-09-21 progress: 24 local transaction tests now cover owned old-to-new upgrade, repair, rollback, uninstall, registration/residue cleanup, and preservation of external user data. 2026-09-21 further progress: INST-130 resolver tests now provision the greatest-lower immutable published stable MSI and Shipping manifest by asset ID, binding tag, commit, digest, and pre/post metadata. Nine resolver tests plus workflow/release suites pass. The resolver implementation is complete locally, but a real published predecessor release asset and hosted Windows execution are still required. These local contracts establish the intended transaction semantics, but formal hosted/native signed Windows 11 proof for upgrade, rollback, repair, and user-data retention remains open.",
       "dependencies": [
         "ASSET-220",
         "REL-100",
@@ -38,12 +38,12 @@
         "Use secure unique staging paths and content-aware extraction",
         "Verify hashes and signatures before extraction",
         "Propagate fetch, configure, build, and install errors",
-        "Stage, verify, atomically activate, rollback, repair, and recover interruptions",
+        "Stage, verify, atomically activate, repair, uninstall, and recover interruptions for a fresh install",
         "Generate a Windows install manifest and remove nonexistent refs"
       ],
       "acceptanceCriteria": [
         "Tampered download, failed fetch/build, wrong archive, or interruption never replaces a working install",
-        "Fresh install, upgrade, downgrade policy, rollback, repair, and uninstall pass on Windows 11 x64",
+        "Fresh install, repair, user-data retention, and uninstall pass on Windows 11 x64",
         "Capabilities match documentation exactly",
         "Only signed artifacts can enter the stable channel",
         "Experimental platform installers remain owned by their platform work"
@@ -54,7 +54,6 @@
       "testSelectors": [
         "Installer_Tamper",
         "Installer_AtomicUpdate",
-        "Installer_Rollback",
         "Installer_Interrupted",
         "Installer_Uninstall"
       ],
@@ -85,7 +84,7 @@
         "Certifying Linux or macOS installers for stable-v1"
       ],
       "definitionOfDone": [
-        "Tamper/interruption/rollback tests pass",
+        "Tamper/interruption/repair/uninstall tests pass",
         "Clean-host install matrix passes",
         "Claims match"
       ],
@@ -98,10 +97,70 @@
       "plannedTestSelectors": [
         "Installer_Tamper",
         "Installer_AtomicUpdate",
-        "Installer_Rollback",
         "Installer_Interrupted",
         "Installer_Uninstall"
       ]
+    },
+    {
+      "id": "INST-131",
+      "title": "Qualify stable-v1 N-1 upgrade and rollback against an immutable predecessor",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 6,
+      "area": "installer",
+      "owner": "unassigned",
+      "rationale": "N-1 upgrade and rollback are distinct from fresh-install correctness and cannot be used to qualify the first immutable predecessor. This item owns the stable-v1-only transaction proof against a previously published signed MSI and manifest.",
+      "dependencies": ["INST-130", "REL-100", "REL-110"],
+      "parallelWith": ["REL-190"],
+      "sourceContext": ["SparkInstaller/src/Installer.cpp", ".github/scripts/provision-previous-windows-msi.py", ".github/workflows/release.yml"],
+      "entryPoints": ["SparkInstaller/src/Installer.cpp", ".github/scripts/qualify-windows-msi.py"],
+      "implementationScope": ["Verify the greatest-lower immutable signed MSI and shipping manifest", "Exercise upgrade, rollback, interruption, and external user-data retention on Windows 11 x64"],
+      "acceptanceCriteria": ["A real published signed predecessor is selected by exact tag, commit, digest, and asset identity", "Upgrade and rollback pass on a clean supported Windows host", "Failure or interruption never replaces the working install"],
+      "commands": ["ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error"],
+      "testSelectors": ["Installer_Upgrade", "Installer_Rollback", "Installer_Interrupted"],
+      "requiredCiJobs": ["installer-windows"],
+      "performanceBudgets": [],
+      "documentationUpdates": ["SparkInstaller/README.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "readinessChanges": ["G05", "G08", "G17"],
+      "websiteImpact": ["Stable-v1 upgrade claims remain blocked until exact predecessor evidence exists"],
+      "risks": ["Using the candidate itself as its own predecessor", "Rollback data loss"],
+      "outOfScope": ["Bootstrapping the first signed predecessor"],
+      "definitionOfDone": ["Hosted exact-SHA upgrade and rollback evidence passes against a signed immutable predecessor"],
+      "profileApplicability": {"stable-v1": "required"},
+      "plannedCiJobs": ["installer-windows"],
+      "plannedTestSelectors": ["Installer_Upgrade", "Installer_Rollback", "Installer_Interrupted"]
+    },
+    {
+      "id": "INST-132",
+      "title": "Qualify predecessor bootstrap recovery without an N-1 dependency",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 6,
+      "area": "installer",
+      "owner": "unassigned",
+      "rationale": "The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence is explicit fresh-install activation, interruption recovery, repair, uninstall, and external user-data retention; it never claims v1 N-1 upgrade coverage.",
+      "dependencies": ["INST-130"],
+      "parallelWith": ["INST-131"],
+      "sourceContext": ["SparkInstaller/src/Installer.cpp", "SparkInstaller/tests/InstallerTransactionTests.cpp"],
+      "entryPoints": ["SparkInstaller/src/Installer.cpp"],
+      "implementationScope": ["Exercise bootstrap activation and recovery with no predecessor input", "Retain user data across repair and uninstall"],
+      "acceptanceCriteria": ["Fresh predecessor installation and interrupted activation recover without replacing user data", "Repair and uninstall pass with no N-1 claim", "Evidence is bound to the reviewed v0.9.0 source commit"],
+      "commands": ["ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error"],
+      "testSelectors": ["Installer_Tamper", "Installer_AtomicUpdate", "Installer_Interrupted", "Installer_Uninstall"],
+      "requiredCiJobs": ["installer-windows"],
+      "performanceBudgets": [],
+      "documentationUpdates": ["SparkInstaller/README.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "readinessChanges": ["G05", "G08", "G17"],
+      "websiteImpact": ["Predecessor bootstrap evidence remains internal until signed publication"],
+      "risks": ["Mistaking bootstrap recovery for N-1 compatibility"],
+      "outOfScope": ["Upgrade from a prior stable release"],
+      "definitionOfDone": ["Exact-SHA bootstrap recovery evidence passes and is reviewed"],
+      "profileApplicability": {"stable-v1": "outside"},
+      "predecessorOnly": true,
+      "plannedCiJobs": ["installer-windows"],
+      "plannedTestSelectors": ["Installer_Tamper", "Installer_AtomicUpdate", "Installer_Interrupted", "Installer_Uninstall"]
     },
     {
       "id": "GOV-400",
@@ -112,7 +171,7 @@
       "wave": 6,
       "area": "governance",
       "owner": "unassigned",
-      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag.",
+      "rationale": "The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, the audited public surfaces now use source-available terminology, and build.yml now runs the legal validator in a required license-compliance job. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.",
       "dependencies": [
         "RDY-000",
         "SEC-110",
@@ -194,7 +253,6 @@
         "stable-v1": "shared"
       },
       "plannedCiJobs": [
-        "license-compliance"
       ],
       "plannedTestSelectors": [
         "LicenseInventory_*",
@@ -205,12 +263,12 @@
       "id": "DOC-410",
       "title": "Repair and enforce deterministic repository documentation generation",
       "priority": "P0",
-      "status": "open",
+      "status": "done",
       "blocking": true,
       "wave": 0,
       "area": "documentation",
       "owner": "unassigned",
-      "rationale": "A hostile audit found timestamp-only false greens, incomplete first-party source coverage, contradictory health evidence, fabricated mixed-case macro rows, and link-validation bypasses. The repair remains open until the exact final commit completes the blocking docs-health and site-data CI jobs.",
+      "rationale": "A hostile audit found timestamp-only false greens, incomplete first-party source coverage, contradictory health evidence, fabricated mixed-case macro rows, and link-validation bypasses. Deterministic generation, hostile documentation checks, link validation, and exact-commit docs-health and site-data CI evidence now pass; future documentation changes remain covered by the same blocking jobs.",
       "dependencies": [
         "RDY-000"
       ],
@@ -261,10 +319,7 @@
         "python3 tools/site-data/render_handoff.py --check",
         "git diff --exit-code"
       ],
-      "testSelectors": [
-        "DocsGeneration_*",
-        "DocsLinks_*"
-      ],
+      "testSelectors": [],
       "requiredCiJobs": [
         "docs-health",
         "site-data-validate"
@@ -300,10 +355,7 @@
       "profileApplicability": {
         "stable-v1": "shared"
       },
-      "plannedTestSelectors": [
-        "DocsGeneration_*",
-        "DocsLinks_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "DOC-400",
@@ -314,7 +366,7 @@
       "wave": 6,
       "area": "website",
       "owner": "unassigned",
-      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. site-runtime-contract and the runtime-side selectors remain planned.",
+      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. 2026-09-21 exact-SHA evidence: Repository Site Data succeeded for 37a4bec5, while live runtime consumption, stale-fallback presentation, and the owner-only site deployment remain unproven. site-runtime-contract and the runtime-side selectors remain planned.",
       "dependencies": [
         "RDY-000"
       ],

@@ -10,6 +10,11 @@
 #
 # ============================================================================
 
+if(NOT DEFINED SPARK_ENGINE_VERSION OR SPARK_ENGINE_VERSION STREQUAL "")
+    include("${CMAKE_CURRENT_LIST_DIR}/../cmake/SparkWindowsVersionInfo.cmake")
+    spark_resolve_engine_version(SPARK_ENGINE_VERSION)
+endif()
+
 set(COMPILER_SOURCES
     src/main.cpp
 )
@@ -50,6 +55,7 @@ if(SPARK_VULKAN_AVAILABLE)
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanCommandList.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanFormatHelpers.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanSwapChain.cpp"
     )
 endif()
 
@@ -70,6 +76,9 @@ target_include_directories(SparkShaderCompiler PRIVATE
 )
 
 target_compile_features(SparkShaderCompiler PRIVATE cxx_std_23)
+target_compile_definitions(SparkShaderCompiler PRIVATE
+    SPARK_SHADER_COMPILER_VERSION=\"${SPARK_ENGINE_VERSION}\"
+)
 
 # Platform-specific link libraries and definitions
 if(WIN32)

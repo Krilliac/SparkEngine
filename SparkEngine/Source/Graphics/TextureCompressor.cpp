@@ -7,13 +7,14 @@
 #include "TextureBlockCompression.h"
 
 #include "Utils/LogMacros.h"
-#include "Utils/Validate.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <vector>
 
 namespace Spark::Graphics
 {
@@ -236,7 +237,7 @@ namespace Spark::Graphics
 
         // Magic + header
         const char magic[4] = {'S', 'T', 'E', 'X'};
-        uint32_t version = 1;
+        const uint32_t version = kStexVersion;
         file.write(magic, 4);
         file.write(reinterpret_cast<const char*>(&version), 4);
         file.write(reinterpret_cast<const char*>(&tex.width), 4);
@@ -280,6 +281,19 @@ namespace Spark::Graphics
             return tex;
         }
 
+        // Every size below is file-declared and untrusted, so each one is checked
+        // against the real file length before it can size an allocation.
+        file.seekg(0, std::ios::end);
+        const std::streamoff fileSizeOff = file.tellg();
+        file.seekg(0, std::ios::beg);
+        if (fileSizeOff < 0 || !file.good())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "TextureCompressor::LoadCompressed could not size '%s'",
+                            path.c_str());
+            return tex;
+        }
+        const uint64_t fileSize = static_cast<uint64_t>(fileSizeOff);
+
         char magic[4]{};
         uint32_t version = 0;
         file.read(magic, 4);
@@ -304,10 +318,11 @@ namespace Spark::Graphics
             return tex;
         }
 
+        uint8_t formatByte = 0;
         file.read(reinterpret_cast<char*>(&version), 4);
         file.read(reinterpret_cast<char*>(&tex.width), 4);
         file.read(reinterpret_cast<char*>(&tex.height), 4);
-        file.read(reinterpret_cast<char*>(&tex.format), 1);
+        file.read(reinterpret_cast<char*>(&formatByte), 1);
         file.read(reinterpret_cast<char*>(&tex.mipLevels), 4);
         if (!file.good())
         {
@@ -318,6 +333,46 @@ namespace Spark::Graphics
             return tex;
         }
 
+        if (version != kStexVersion)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::LoadCompressed unsupported version %u in '%s' (expected %u)", version,
+                            path.c_str(), kStexVersion);
+            tex = CompressedTexture{};
+            return tex;
+        }
+        if (formatByte > static_cast<uint8_t>(TextureCompressionFormat::Uncompressed))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "TextureCompressor::LoadCompressed unknown format %u in '%s'",
+                            static_cast<unsigned>(formatByte), path.c_str());
+            tex = CompressedTexture{};
+            return tex;
+        }
+        tex.format = static_cast<TextureCompressionFormat>(formatByte);
+
+        // Bound the dimensions first: they drive the mip-count limit, every
+        // expected mip size, and the w*h*4 allocation in Decompress().
+        if (tex.width == 0 || tex.height == 0 || tex.width > kMaxStexDimension || tex.height > kMaxStexDimension)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::LoadCompressed rejected dimensions %ux%u in '%s' (limit %u)", tex.width,
+                            tex.height, path.c_str(), kMaxStexDimension);
+            tex = CompressedTexture{};
+            return tex;
+        }
+        const uint32_t maxMipLevels = CalculateMipLevels(tex.width, tex.height);
+        if (tex.mipLevels == 0 || tex.mipLevels > maxMipLevels || tex.mipLevels > kMaxStexMipLevels)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::LoadCompressed rejected mip count %u in '%s' (%ux%u allows %u)",
+                            tex.mipLevels, path.c_str(), tex.width, tex.height, maxMipLevels);
+            tex = CompressedTexture{};
+            return tex;
+        }
+
+        constexpr uint64_t kFixedHeaderBytes = 4u + 4u + 4u + 4u + 1u + 4u;
+        const uint64_t headerBytes = kFixedHeaderBytes + 4ull * tex.mipLevels;
+
         std::vector<uint32_t> mipSizes(tex.mipLevels);
         for (uint32_t m = 0; m < tex.mipLevels; ++m)
             file.read(reinterpret_cast<char*>(&mipSizes[m]), 4);
@@ -326,6 +381,36 @@ namespace Spark::Graphics
             SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
                             "TextureCompressor::LoadCompressed truncated mip size table in '%s' (expected %u entries)",
                             path.c_str(), tex.mipLevels);
+            tex = CompressedTexture{};
+            return tex;
+        }
+
+        // Each mip must be exactly the size Compress() produces for its
+        // dimensions, and together they must account for the rest of the file.
+        uint64_t declaredPayload = 0;
+        uint32_t mipW = tex.width;
+        uint32_t mipH = tex.height;
+        for (uint32_t m = 0; m < tex.mipLevels; ++m)
+        {
+            const uint64_t expected = EstimateCompressedSize(mipW, mipH, tex.format);
+            if (mipSizes[m] != expected)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                "TextureCompressor::LoadCompressed mip %u in '%s' declares %u bytes (expected %llu)", m,
+                                path.c_str(), mipSizes[m], static_cast<unsigned long long>(expected));
+                tex = CompressedTexture{};
+                return tex;
+            }
+            declaredPayload += expected;
+            mipW = std::max(mipW / 2, 1u);
+            mipH = std::max(mipH / 2, 1u);
+        }
+        if (headerBytes + declaredPayload != fileSize)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::LoadCompressed '%s' is %llu bytes but its header declares %llu",
+                            path.c_str(), static_cast<unsigned long long>(fileSize),
+                            static_cast<unsigned long long>(headerBytes + declaredPayload));
             tex = CompressedTexture{};
             return tex;
         }

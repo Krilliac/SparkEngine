@@ -22,6 +22,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -82,6 +83,8 @@ namespace Spark
         return false;
     }
     void Logger::Log(LogLevel, LogCategory, const char*, int, const char*, const std::string&) {}
+    void Logger::LogFormatted(LogLevel, LogCategory, const char*, int, const char*, const char*, ...) {}
+    void Logger::LogFormatted(LogLevel, const char*, const char*, int, const char*, const char*, ...) {}
 
     SimpleConsole& SimpleConsole::GetInstance()
     {
@@ -156,6 +159,62 @@ namespace
         const bool receivedQueuedResponse = server.GetSession().DequeuePendingSend(queuedResponse);
         return IsDenied(directResponse) && receivedQueuedResponse && IsDenied(queuedResponse) &&
                effectCount.load() == 0;
+    }
+
+    [[nodiscard]] bool ReservedCommandCannotBeRebound()
+    {
+        auto& system = RemoteDebugSystem::GetInstance();
+        system.Initialize();
+        system.EnableLoopback();
+        auto* client = system.GetClient();
+        auto* server = system.GetServer();
+        if (client == nullptr || server == nullptr)
+            return false;
+
+        std::atomic_bool replacementCalled{false};
+        server->RegisterCommandHandler("console_cmd", RemoteDebugCapability::Inspect,
+                                       [&replacementCalled](const RemoteCommand& command)
+                                       {
+                                           replacementCalled.store(true, std::memory_order_release);
+                                           return RemoteCommand{"replacement_ok", "", command.requestId, 0.0f};
+                                       });
+
+        const uint32_t requestId = client->ExecuteConsoleCommand("audit_reserved_rebind");
+        system.Update(0.016f);
+        const auto responses = client->PollResponses();
+        const bool denied =
+            responses.size() == 1 && IsDenied(responses.front()) && responses.front().requestId == requestId;
+        system.Shutdown();
+        return denied && !replacementCalled.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] bool MalformedTimestampIsDenied()
+    {
+        auto& system = RemoteDebugSystem::GetInstance();
+        system.Initialize();
+        system.EnableLoopback();
+        auto* client = system.GetClient();
+        auto* server = system.GetServer();
+        if (client == nullptr || server == nullptr)
+            return false;
+
+        std::atomic_bool handlerCalled{false};
+        server->RegisterCommandHandler("malformed_timestamp_probe", RemoteDebugCapability::Inspect,
+                                       [&handlerCalled](const RemoteCommand& command)
+                                       {
+                                           handlerCalled.store(true, std::memory_order_release);
+                                           return RemoteCommand{"malformed_timestamp_ok", "", command.requestId, 0.0f};
+                                       });
+
+        client->SendCommand({"malformed_timestamp_probe", "", 1, std::numeric_limits<float>::quiet_NaN()});
+        system.Update(0.016f);
+        const auto responses = client->PollResponses();
+        const auto events = server->GetAuditEvents();
+        const bool malformedAudit =
+            !events.empty() && events.back().decision == RemoteDebugAuditDecision::MalformedRequestDenied;
+        const bool denied = responses.size() == 1 && IsDenied(responses.front()) && responses.front().requestId == 1;
+        system.Shutdown();
+        return denied && !handlerCalled.load(std::memory_order_acquire) && malformedAudit;
     }
 
     [[nodiscard]] bool RevocationWaitsForEffectAndThenFailsClosed()
@@ -258,6 +317,8 @@ int main()
     Report("legacy_test_macro_cannot_mint", true, allPassed);
     Report("public_loopback_console_denied", PublicLoopbackConsoleIsDenied(), allPassed);
     Report("raw_dispatch_and_queue_denied", RawDispatchAndQueueAreDenied(), allPassed);
+    Report("reserved_command_rebind_denied", ReservedCommandCannotBeRebound(), allPassed);
+    Report("malformed_timestamp_denied", MalformedTimestampIsDenied(), allPassed);
     Report("revocation_execution_lease", RevocationWaitsForEffectAndThenFailsClosed(), allPassed);
     return allPassed ? 0 : 1;
 }

@@ -10,6 +10,12 @@ on:
   pull_request:
     branches: [ main, develop, Working ]
   workflow_dispatch:
+    inputs:
+      simulate_required_job_failure:
+        description: "Fail the required CI-tooling job to verify Required CI Gate propagation"
+        required: false
+        default: false
+        type: boolean
 
 # Supersede stale pull-request runs, but preserve every pushed SHA so the
 # required gate and its evidence can reach a terminal state for Working.
@@ -59,22 +65,39 @@ jobs:
   fuzz-policy:
     name: "Fuzz policy"
     runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
     permissions:
       contents: read
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+    - name: Install Clang C++23 libc++ toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang cmake libc++-dev libc++abi-dev
+
     - name: Configure fuzz-policy checks
+      env:
+        CXXFLAGS: "-stdlib=libstdc++"
+        LDFLAGS: "-stdlib=libstdc++"
       run: cmake -S tools/fuzz-policy -B build/fuzz-policy
 
     - name: Run blocking fuzz-policy target
       run: cmake --build build/fuzz-policy --target check-fuzz-policy
 
+    - name: Build production fuzz smoke target
+      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex
+
     - name: Run adversarial policy tests
       # -C is required by multi-config generators and ignored by single-config
       # ones, so the same command works for CI and for local Windows runs.
       run: ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
+
+    - name: Run production fuzz smoke
+      run: ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 
   # ===========================================================================
   # CI Tooling — prove report parsers and generated repository statistics
@@ -102,6 +125,12 @@ jobs:
     - name: Test sanitizer JUnit evidence parser
       run: python3 .github/scripts/test-verify-sanitizer-evidence.py
 
+    - name: Validate flaky warning ownership and expiry
+      run: python3 Tools/validate_test_warnings.py
+
+    - name: Test flaky warning ownership and expiry policy
+      run: python3 Tests/Tools/test_validate_test_warnings.py
+
     - name: Test required-job gate
       run: python3 .github/scripts/test-verify-required-jobs.py
 
@@ -110,6 +139,16 @@ jobs:
 
     - name: Test release acceptance publication gate
       run: python3 .github/scripts/test-release-acceptance-gate.py
+
+    - name: Test candidate and protected publication stages
+      run: |
+        python3 Tests/Tools/test_release_stages.py
+        python3 .github/scripts/test_verify_release_environment.py
+        python3 .github/scripts/test_verify_release_policy.py
+        python3 .github/scripts/test_guard_release_mutation.py
+        python3 .github/scripts/test_stage_release_draft.py
+        python3 .github/scripts/test_verify_published_stable_release.py
+        python3 .github/scripts/test_release_stages_workflow.py
 
     - name: Test the build-matrix exact-source status gate
       run: node .github/scripts/test-build-matrix-commit-status.js
@@ -120,11 +159,21 @@ jobs:
     - name: Test Windows package signature orchestration
       run: python3 .github/scripts/test_verify_windows_package_signatures.py
 
+    - name: Test owner-run signing precursor contract
+      run: python3 -m unittest Tests.Tools.test_self_signed_signing_precursor -v
+
     - name: Test native MSI qualification orchestration
       run: python3 .github/scripts/test_qualify_windows_msi.py
 
     - name: Test exact release asset publication boundary
       run: python3 .github/scripts/test_verify_release_asset_boundary.py
+
+    - name: Test detached stable signature bundle contracts
+      run: |
+        python3 .github/scripts/test_sign_release_bundle.py
+        python3 .github/scripts/test_extract_release_signature_bundle.py
+        python3 .github/scripts/test_verify_release_bundle.py
+        python3 .github/scripts/test_verify_release_bundle_workflow.py
 
     - name: Test release publication recovery
       run: python3 .github/scripts/test_recover_release_publication.py
@@ -165,6 +214,9 @@ jobs:
     - name: Verify repository asset integrity baseline
       run: python3 tools/asset-integrity/verify_asset_integrity.py check-all --repo-root .
 
+    - name: Verify authored FPS material coverage
+      run: python3 -m unittest Tests.Tools.test_fps_scene_material_contract -v
+
     - name: Validate module evidence manifest (declarative layer)
       # Fast pre-check: no build artifacts exist in this job. The release gate
       # is the module-evidence job, which validates against really-produced
@@ -179,6 +231,9 @@ jobs:
 
     - name: Test build-matrix inventory and parity
       run: python3 Tests/Tools/test_build_matrix_parity.py
+
+    - name: Test strict Shipping and reproducible-build contract
+      run: python3 Tests/Tools/test_build_shipping_contract.py
 
     - name: Generate and compare the deterministic build-matrix inventory
       run: |
@@ -264,6 +319,12 @@ jobs:
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: error
 
+    - name: Controlled required-job failure probe
+      if: github.event_name == 'workflow_dispatch' && inputs.simulate_required_job_failure == true
+      run: |
+        echo "::error::CI-100 controlled required-job failure probe requested"
+        exit 1
+
   # ===========================================================================
   # Code Quality — clang-format enforcement
   # ===========================================================================
@@ -321,7 +382,7 @@ jobs:
           case "$source" in
             .clang-format) FORMAT_CONFIG_CHANGED=true ;;
             */Metal/*) ;;
-            *.h|*.hpp|*.cpp)
+            *.h|*.hpp|*.inl|*.cpp)
               if [[ -f "$source" ]]; then
                 FORMAT_SOURCES+=("$source")
               fi
@@ -441,7 +502,7 @@ jobs:
         fetch-depth: 0
 
     - name: Check ThirdParty manifest sync
-      run: ./tools/check-thirdparty-manifest-sync.sh
+      run: ./tools/check-thirdparty-manifest-sync.sh --ci
 
   check-supply-chain:
     runs-on: ubuntu-24.04
@@ -467,6 +528,20 @@ jobs:
 
     - name: Supply-chain adversarial tests
       run: python3 -m unittest Tests.test_check_supply_chain -v
+
+  license-compliance:
+    name: "License compliance"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Run legal contract validator
+      run: |
+        set -euo pipefail
+        timeout 3m python3 tools/site-data/validate.py --legal
 
   # ===========================================================================
   # Linux Build — GCC with AddressSanitizer + UBSan + LSan
@@ -509,8 +584,11 @@ jobs:
 
     - name: Configure CMake (ASan + UBSan + LSan)
       run: |
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc-14 \
@@ -605,6 +683,7 @@ jobs:
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
     - name: Upload ASan exact-commit test evidence
+      if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results-linux-asan
@@ -653,8 +732,11 @@ jobs:
 
     - name: Configure CMake (TSan)
       run: |
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc-14 \
@@ -744,6 +826,7 @@ jobs:
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
     - name: Upload TSan exact-commit test evidence
+      if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results-linux-tsan
@@ -983,6 +1066,7 @@ jobs:
           -DBUILD_TESTS=ON \
           -DENABLE_SDL2=OFF \
           -DENABLE_VULKAN=OFF \
+          -DSPARK_IMGUI_ENABLE_FREETYPE=OFF \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -1272,6 +1356,8 @@ jobs:
       run: |
         python .github/scripts/test_write_shipping_package_manifest.py
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python .github/scripts/test_provision_previous_windows_msi.py
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         python .github/scripts/test_qualify_windows_msi.py
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -1512,9 +1598,14 @@ jobs:
   build-windows-shipping:
     name: "Windows Shipping build matrix"
     runs-on: windows-2022
-    timeout-minutes: 120
+    timeout-minutes: 240
     permissions:
       contents: read
+    # This producer intentionally performs the visible required lane builds and
+    # separate owned File API capture/build transactions.  The full stable-v1
+    # matrix exceeded the old two-hour ceiling during its second Windows
+    # validation transaction, so retain the complete evidence contract with
+    # enough bounded time for a clean hosted run and its final artifacts.
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1532,6 +1623,13 @@ jobs:
         # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a
         # 2-core runner. /MP stays; the project-level parallelism is capped.
         cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee build-matrix-windows-shipping-build.log
+
+    - name: Verify stable Shipping product versions
+      shell: bash
+      run: |
+        set -euo pipefail
+        python Tests/Tools/test_rel100_product_versions.py \
+          --bin-dir build/windows-shipping/bin/MinSizeRel
 
     - name: Capture Windows Shipping provenance
       shell: bash
@@ -1974,7 +2072,7 @@ jobs:
   build-linux-gcc:
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         config: [Debug, Release]
 
@@ -2026,8 +2124,11 @@ jobs:
     - name: Configure CMake
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc-14 \
@@ -2139,7 +2240,7 @@ jobs:
   build-linux-clang:
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         config: [Debug, Release]
 
@@ -2191,8 +2292,11 @@ jobs:
     - name: Configure CMake
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DENABLE_LTO=OFF \
@@ -2344,8 +2448,11 @@ jobs:
     - name: Configure CMake (MinGW cross-compilation)
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake \
           -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_TESTS=ON \
@@ -2481,12 +2588,15 @@ jobs:
     - name: Configure CMake
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         # macOS path: SDL2 + OpenGL + OpenAL. DXR/Vulkan always off here
         # (MoltenVK path has its own preset). ENABLE_METAL is matrix-driven —
         # the Metal entry compiles MetalDevice.mm and the Objective-C++ wiring.
         # ENABLE_SDL2=ON is required — macOS has no X11 fallback.
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DENABLE_LTO=OFF \
@@ -2638,8 +2748,11 @@ jobs:
             build-coverage-
       - name: Configure
         run: |
+          spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+          test -n "$spark_engine_version"
           command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DSPARK_ENGINE_VERSION="$spark_engine_version" \
             -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic" \
@@ -2655,7 +2768,6 @@ jobs:
         run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
       - name: Test
         id: coverage-tests
-        continue-on-error: true
         env:
           SPARK_TEST_EXCLUDE: "LoadTest_"
         run: |
@@ -2668,7 +2780,6 @@ jobs:
       - name: Generate coverage
         id: generate-coverage
         if: always()
-        continue-on-error: true
         # lcov is noisy on warnings and sometimes emits non-zero exit
         # codes even with --ignore-errors. Capture each command's exit
         # status explicitly so we can continue into the per-subsystem
@@ -2709,7 +2820,6 @@ jobs:
       - name: Per-subsystem coverage analysis
         id: subsystem-coverage
         if: always()
-        continue-on-error: true
         run: |
           set +e
           chmod +x scripts/coverage-report.sh
@@ -2843,16 +2953,16 @@ jobs:
           THRESHOLD_OUTCOME: ${{ steps.subsystem-coverage.outcome }}
         run: |
           failed=0
-          if [ "$TEST_OUTCOME" = "failure" ]; then
-            echo "::error::SparkTests failed during the coverage run"
+          if [ "$TEST_OUTCOME" != "success" ]; then
+            echo "::error::SparkTests coverage step ended as '$TEST_OUTCOME'"
             failed=1
           fi
-          if [ "$GENERATE_OUTCOME" = "failure" ]; then
-            echo "::error::Coverage generation failed"
+          if [ "$GENERATE_OUTCOME" != "success" ]; then
+            echo "::error::Coverage generation step ended as '$GENERATE_OUTCOME'"
             failed=1
           fi
-          if [ "$THRESHOLD_OUTCOME" = "failure" ]; then
-            echo "::error::One or more coverage thresholds failed"
+          if [ "$THRESHOLD_OUTCOME" != "success" ]; then
+            echo "::error::Coverage threshold step ended as '$THRESHOLD_OUTCOME'"
             failed=1
           fi
           exit "$failed"
@@ -3033,7 +3143,10 @@ jobs:
             build-clang-tidy-
       - name: Configure
         run: |
+          spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+          test -n "$spark_engine_version"
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DSPARK_ENGINE_VERSION="$spark_engine_version" \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
@@ -3049,7 +3162,38 @@ jobs:
           # comment, while also printing a tail to the job log for
           # live-viewing in the Actions UI.
           set +e
-          find SparkEngine/Source -name '*.cpp' -print0 | sort -z | head -z -n 30 > clang-tidy-files.list
+          # Analyze every shipped-product translation unit. Keep the inventory
+          # byte-deterministic and fail closed if the checkout yields nothing;
+          # a bounded sample can never prove the static-analysis gate.
+          source_roots=(
+            SparkEngine/Source
+            SparkEditor/Source
+            SparkConsole/src
+            SparkDaemon/src
+            SparkGateway/src
+            SparkLauncher/src
+            SparkServer/src
+            SparkWorker/src
+            SparkCooker/src
+            SparkAutomation/src
+            SparkBuild/src
+            SparkInstaller/src
+            SparkShaderCompiler/src
+            GameModules
+          )
+          for root in "${source_roots[@]}"; do
+            if [ ! -d "$root" ]; then
+              echo "::error::clang-tidy source root is missing: $root"
+              exit 1
+            fi
+          done
+          find "${source_roots[@]}" -type f -name '*.cpp' -print0 | sort -z > clang-tidy-files.list
+          file_count=$(tr -cd '\0' < clang-tidy-files.list | wc -c)
+          echo "clang-tidy translation units: $file_count"
+          if [ "$file_count" -eq 0 ]; then
+            echo "::error::clang-tidy source inventory is empty"
+            exit 1
+          fi
           xargs -0 -r -n 1 -P 2 clang-tidy -p build --warnings-as-errors="" \
             < clang-tidy-files.list 2>&1 | tee clang-tidy-output.log
           ct_exit=${PIPESTATUS[0]}
@@ -3192,6 +3336,7 @@ jobs:
       - validate-ops100
       - check-thirdparty-manifest
       - check-supply-chain
+      - license-compliance
       - build-linux-asan
       - build-linux-tsan
       - telemetry-integration
@@ -3253,13 +3398,31 @@ jobs:
       - name: Count TODO/FIXME/HACK comments
         id: todo-count-run
         run: |
-          grep -rn 'TODO\|FIXME\|HACK\|XXX' SparkEngine/Source SparkEditor/Source GameModules \
-            --include='*.h' --include='*.cpp' > todo-list.log || true
+          set -euo pipefail
+          todo_roots=(SparkEngine/Source SparkEditor/Source GameModules)
+          for root in "${todo_roots[@]}"; do
+            if [ ! -d "$root" ]; then
+              echo "::error::TODO/FIXME source root is missing: $root"
+              exit 1
+            fi
+          done
+          # grep exits 1 when nothing matched (a real zero count). Any higher
+          # status is a failed scan and must not be reported as zero markers.
+          set +e
+          grep -rn 'TODO\|FIXME\|HACK\|XXX' "${todo_roots[@]}" \
+            --include='*.h' --include='*.cpp' > todo-list.log
+          grep_status=$?
+          set -e
+          if [ "$grep_status" -gt 1 ]; then
+            echo "::error::TODO/FIXME scan failed (grep exit $grep_status)"
+            exit "$grep_status"
+          fi
           count=$(wc -l < todo-list.log)
           echo "Found $count TODO/FIXME/HACK/XXX comments"
           echo "count=$count" >> "$GITHUB_OUTPUT"
           if [ "$count" -gt 20 ]; then
-            echo "::warning::TODO/FIXME count ($count) exceeds threshold of 20"
+            echo "::error::TODO/FIXME count ($count) exceeds threshold of 20"
+            exit 1
           fi
       - name: Upload todo-count summary artifact
         if: always()
@@ -3315,6 +3478,8 @@ jobs:
           cmake --build build-installer/build --config Release --target
           SparkInstaller
           SparkInstallerGitTests
+          SparkInstallerInstallStateTests
+          SparkInstallerTransactionTests
           SparkBuildProcessRunnerTests
           SparkBuildDownloaderTests
           -j
@@ -3526,11 +3691,11 @@ jobs:
           python3 tools/module-evidence/collect_targets.py \
             --build-dir build/module-evidence-configure \
             --out build/module-evidence/module-targets.json \
-            --configure-arg -DCMAKE_BUILD_TYPE=Release \
-            --configure-arg -DBUILD_GAME_MODULES=ON \
-            --configure-arg -DBUILD_TESTS=OFF \
-            --configure-arg -DCMAKE_C_COMPILER=gcc-14 \
-            --configure-arg -DCMAKE_CXX_COMPILER=g++-14
+            --configure-arg=-DCMAKE_BUILD_TYPE=Release \
+            --configure-arg=-DBUILD_GAME_MODULES=ON \
+            --configure-arg=-DBUILD_TESTS=OFF \
+            --configure-arg=-DCMAKE_C_COMPILER=gcc-14 \
+            --configure-arg=-DCMAKE_CXX_COMPILER=g++-14
 
       - name: Download published JUnit evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -3603,6 +3768,7 @@ jobs:
       - validate-ops100
       - check-thirdparty-manifest
       - check-supply-chain
+      - license-compliance
       - build-linux-asan
       - build-linux-tsan
       - telemetry-integration
@@ -3627,6 +3793,6 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py

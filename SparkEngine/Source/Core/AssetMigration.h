@@ -28,6 +28,7 @@
 #pragma once
 
 #include "Utils/Serializer.h"
+#include "Utils/CRC32.h"
 
 #include "Platform.h"
 
@@ -141,30 +142,6 @@ namespace Spark
     // =========================================================================
     // Header I/O helpers (static, usable without the registry singleton)
     // =========================================================================
-
-    /**
-     * @brief Compute a simple CRC32 checksum over a byte range.
-     * @param data Pointer to the data.
-     * @param size Number of bytes.
-     * @return CRC32 value.
-     */
-    inline uint32_t ComputeCRC32(const uint8_t* data, size_t size)
-    {
-        // Standard CRC32 with the 0xEDB88320 polynomial (same as zlib)
-        uint32_t crc = 0xFFFFFFFF;
-        for (size_t i = 0; i < size; ++i)
-        {
-            crc ^= data[i];
-            for (int bit = 0; bit < 8; ++bit)
-            {
-                if (crc & 1)
-                    crc = (crc >> 1) ^ 0xEDB88320;
-                else
-                    crc >>= 1;
-            }
-        }
-        return ~crc;
-    }
 
     /**
      * @brief Serialize an AssetFileHeader into a BinaryWriter.
@@ -378,8 +355,13 @@ namespace Spark
             if (!ValidateHeader(header))
                 return false;
 
+            if (header.assetType != type)
+                return false;
+
             AssetVersion targetVer = GetCurrentVersion(type);
-            if (header.version >= targetVer)
+            if (header.version > targetVer)
+                return false;
+            if (header.version == targetVer)
                 return true; // Already current
 
             auto path = GetMigrationPath(header.version, targetVer, type);

@@ -139,6 +139,15 @@ def shipping_fixture(artifact_root: Path, *, include_pdb: bool = False) -> tuple
         "CMAKE_GENERATOR_PLATFORM": "x64",
         "CMAKE_GENERATOR_TOOLSET": "v143",
         "CMAKE_HOME_DIRECTORY": REPOSITORY_ROOT,
+        "CMAKE_GENERATOR_INSTANCE": "C:/Program Files/Microsoft Visual Studio/2022/Community",
+        "CMAKE_AR": (
+            "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+            "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/lib.exe"
+        ),
+        "CMAKE_LINKER": (
+            "C:/Program Files/Microsoft Visual Studio/2022/Community/"
+            "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/link.exe"
+        ),
         **{name: str(value) for name, value in resolved.get("cacheVariables", {}).items()},
     }
     write_json(
@@ -189,7 +198,7 @@ def shipping_fixture(artifact_root: Path, *, include_pdb: bool = False) -> tuple
         "untrackedPolicy": "all-nonignored",
         "statusSha256": hashlib.sha256(b"").hexdigest(),
     }
-    configure_argv = [EXECUTABLE, "--preset", "windows-shipping"]
+    configure_argv = [EXECUTABLE, "--fresh", "--preset", "windows-shipping"]
     ci = {
         "provider": "github-actions",
         "repository": "Krilliac/SparkEngine",
@@ -370,6 +379,17 @@ class SourceMetadataTests(unittest.TestCase):
 
 
 class RawProfileEvidenceTests(unittest.TestCase):
+    def test_nonfresh_configure_transaction_is_rejected(self) -> None:
+        contract = verifier._profile_contract("windows-shipping", REPOSITORY_ROOT)
+
+        with self.assertRaisesRegex(verifier.ExternalEvidenceError, "canonical preset invocation"):
+            verifier._validate_configure_argv(
+                [EXECUTABLE, "--preset", "windows-shipping"],
+                EXECUTABLE,
+                contract,
+                "windows-shipping",
+            )
+
     def test_absent_optional_pdb_is_accepted_only_with_hashed_primary_product(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

@@ -30,6 +30,30 @@ EXPECTED_PROFILES = (
 )
 EXPECTED_ERROR_CATEGORY = "codemodel-producer-authority-unavailable"
 EXPECTED_WARNING_CATEGORY = "target-name-unresolved"
+EXPECTED_OUTSIDE_OPTION_WARNING = {
+    "category": "cmake-only",
+    "severity": "warning",
+    "message": "CMake option 'SPARK_ENABLE_FUZZ_TARGETS' is not representable in SparkBuild",
+    "detail": (
+        "The supported configurator cannot reproduce the root configuration surface. "
+        "Explicitly classified outside: Linux/Clang libFuzzer targets are release-validation "
+        "tooling and are outside the Windows stable-v1 product profile."
+    ),
+}
+EXPECTED_UNRESOLVED_TARGET_WARNINGS = [
+    {
+        "category": EXPECTED_WARNING_CATEGORY,
+        "severity": "warning",
+        "message": "Target name '${TARGET_NAME}' at cmake/SparkGameModule.cmake:190 cannot be resolved statically",
+        "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration.",
+    },
+    {
+        "category": EXPECTED_WARNING_CATEGORY,
+        "severity": "warning",
+        "message": "Target name '${TARGET_NAME}' at cmake/SparkPlugin.cmake:62 cannot be resolved statically",
+        "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration.",
+    },
+]
 MAX_INVENTORY_BYTES = 128 * 1024 * 1024
 MAX_REPORT_BYTES = 64 * 1024 * 1024
 
@@ -89,7 +113,7 @@ def _validate_report(report: dict[str, Any]) -> dict[str, Any]:
         or report.get("profile") != "stable-v1"
         or report.get("state") != "blocked"
         or report.get("errorCount") != len(EXPECTED_PROFILES)
-        or report.get("warningCount") != 2
+        or report.get("warningCount") != 3
     ):
         raise PendingAuthorityError("parity report is not the exact reviewed externally pending state")
 
@@ -111,11 +135,17 @@ def _validate_report(report: dict[str, Any]) -> dict[str, Any]:
         else:
             raise PendingAuthorityError(f"parity finding {offset} has an invalid severity")
 
-    if len(errors) != len(EXPECTED_PROFILES) or len(warnings) != 2:
+    if len(errors) != len(EXPECTED_PROFILES) or len(warnings) != 3:
         raise PendingAuthorityError("parity finding cardinality differs from its counters")
     if {item.get("category") for item in errors} != {EXPECTED_ERROR_CATEGORY}:
         raise PendingAuthorityError("parity has a blocking error other than missing external authority")
-    if {item.get("category") for item in warnings} != {EXPECTED_WARNING_CATEGORY}:
+    outside_options = [item for item in warnings if item.get("category") == "cmake-only"]
+    unresolved_targets = [item for item in warnings if item.get("category") == EXPECTED_WARNING_CATEGORY]
+    if (
+        outside_options != [EXPECTED_OUTSIDE_OPTION_WARNING]
+        or sorted(unresolved_targets, key=lambda item: item["message"])
+        != EXPECTED_UNRESOLVED_TARGET_WARNINGS
+    ):
         raise PendingAuthorityError("parity warnings differ from the reviewed static target-name warnings")
 
     error_profiles: set[str] = set()
@@ -134,7 +164,7 @@ def _validate_report(report: dict[str, Any]) -> dict[str, Any]:
         "errorCount": report["errorCount"],
         "warningCount": report["warningCount"],
         "errorCategory": EXPECTED_ERROR_CATEGORY,
-        "warningCategory": EXPECTED_WARNING_CATEGORY,
+        "warningCategories": ["cmake-only", EXPECTED_WARNING_CATEGORY],
     }
 
 
@@ -219,11 +249,25 @@ def _validate_inventory(inventory_document: dict[str, Any]) -> tuple[str, list[d
             target = _require_mapping(raw_target, f"{identifier} target {offset}")
             if target.get("artifactState") != "locally-observed-post-build":
                 raise PendingAuthorityError(f"{identifier}: target artifact was not observed post-build")
+            target_name = target.get("target")
+            if not isinstance(target_name, str) or not target_name:
+                raise PendingAuthorityError(f"{identifier} target {offset}: target has no name")
             identities = _require_list(
                 target.get("artifactIdentities"), f"{identifier} target artifact identities", 32
             )
-            if not identities and str(target.get("kind", "")).lower() != "utility":
-                raise PendingAuthorityError(f"{identifier}: target has no artifact identities")
+            # Utility, object, and interface libraries do not produce a
+            # standalone file artifact.  CMake's File API reports their
+            # target identity, but capture_provenance correctly has no path
+            # to hash.  Executables and linkable libraries still require one
+            # identity for every post-build artifact.
+            if not identities and str(target.get("kind", "")).lower() not in {
+                "utility",
+                "object_library",
+                "interface_library",
+            }:
+                raise PendingAuthorityError(
+                    f"{identifier}: target {target_name!r} has no artifact identities"
+                )
 
         ci = {
             "provider": str(provenance.get("ciProvider", "")),

@@ -17,6 +17,7 @@
 
 #include <windows.h>
 #include <d3d11_1.h>
+#include <objbase.h>
 #include <DirectXPackedVector.h> // XMConvertFloatToHalf for the fp16 1x1 material defaults
 #include <wrl.h>
 
@@ -320,14 +321,29 @@ ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string&
     auto handleDecodeFailure = [&rememberDeterministicFailure](HRESULT result) -> ID3D11ShaderResourceView*
     { return IsTransientDecodeFailure(result) ? nullptr : rememberDeterministicFailure(); };
 
+    // WIC is COM-based, but the normal render thread is not guaranteed to
+    // have an apartment. Initialize only around a cache miss's decode. Declare
+    // the guard before WIC objects so they release before CoUninitialize.
+    struct ComApartment
+    {
+        HRESULT result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+
+        ~ComApartment()
+        {
+            if (result == S_OK || result == S_FALSE)
+                CoUninitialize();
+        }
+    } apartment;
+    if (FAILED(apartment.result) && apartment.result != RPC_E_CHANGED_MODE)
+        return nullptr; // Transient thread/service failure; do not negative-cache the asset.
+
     // WIC decode to RGBA8
     ComPtr<IWICImagingFactory> factory;
     HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory));
     if (FAILED(hr))
     {
-        // COM may not be initialized on this thread yet, and factory creation
-        // can fail under temporary memory pressure. Neither says anything
-        // deterministic about the asset itself.
+        // Factory creation can fail under temporary memory pressure or COM
+        // service problems. Neither says anything deterministic about the asset.
         return nullptr;
     }
 

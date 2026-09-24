@@ -17,6 +17,13 @@ SparkEngine uses CMake 3.25+ as its build system with documented options, cross-
 - C++23 standard (enforced via `cxx_std_23`, no extensions)
 - CMP0091 policy for consistent MSVC runtime library selection
 
+Native compiler metadata is build-directory state. Keep a build directory tied
+to one CMake executable, generator, compiler, and toolset; never configure it
+concurrently or switch CMake installations in place. If any of those inputs
+change, use a new directory or `cmake --fresh` so compiler ABI and feature
+detection run again. The supported Windows preset selects Visual Studio 17
+2022, x64, and v143, but does not pin CMake/MSVC/Windows SDK patch versions.
+
 ### Quick Configuration
 
 ```bash
@@ -30,7 +37,7 @@ SparkEngine uses CMake 3.25+ as its build system with documented options, cross-
 cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
 
 # Using presets (recommended)
-cmake --preset windows-release
+cmake --fresh --preset windows-release
 cmake --build --preset windows-release
 ```
 

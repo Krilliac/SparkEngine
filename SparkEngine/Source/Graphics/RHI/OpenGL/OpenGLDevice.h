@@ -27,6 +27,10 @@
 #elif defined(__linux__)
 #ifdef SPARK_EGL_SUPPORT
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
+#ifndef EGL_PLATFORM_SURFACELESS_MESA
+#define EGL_PLATFORM_SURFACELESS_MESA 0x31DD
+#endif
 #else
 // VulkanDevice.h #undefs X11 macros (Bool, Status, None, etc.) after its
 // Vulkan include to prevent collisions with C++ identifiers.  GLX headers
@@ -50,6 +54,10 @@ typedef GLXContext (*PFNGLXCREATECONTEXTATTRIBSARBPROC)(Display*, GLXFBConfig, G
 #define GLX_CONTEXT_MINOR_VERSION_ARB 0x2092
 #define GLX_CONTEXT_PROFILE_MASK_ARB 0x9126
 #define GLX_CONTEXT_CORE_PROFILE_BIT_ARB 0x00000001
+#endif
+#ifndef GLX_CONTEXT_FLAGS_ARB
+#define GLX_CONTEXT_FLAGS_ARB 0x2094
+#define GLX_CONTEXT_DEBUG_BIT_ARB 0x00000001
 #endif
 #ifndef GLX_ARB_get_proc_address
 extern "C" void (*glXGetProcAddressARB(const GLubyte*))();
@@ -95,6 +103,7 @@ extern "C" void (*glXGetProcAddressARB(const GLubyte*))();
 #endif
 #endif
 
+#include <array>
 #include <vector>
 #include <unordered_map>
 #include <string>
@@ -111,6 +120,9 @@ namespace Spark
             // ============================================================================
 
             class GLDevice;
+
+            /// Vertex buffer binding points tracked per command list (D3D11 allows 32; engine uses few)
+            inline constexpr uint32_t kMaxVertexBufferSlots = 16;
 
             // ============================================================================
             // OPENGL RESOURCE IMPLEMENTATIONS
@@ -252,6 +264,16 @@ namespace Spark
                 GLuint GetGLProgram() const { return m_program; }
                 GLuint GetGLVAO() const { return m_vao; }
 
+                /// Stride implied by the input layout for a slot; used when the buffer declares none
+                uint32_t GetSlotStride(uint32_t slot) const
+                {
+                    return slot < kMaxVertexBufferSlots ? m_slotStrides[slot] : 0;
+                }
+                void SetSlotStrides(const std::array<uint32_t, kMaxVertexBufferSlots>& strides)
+                {
+                    m_slotStrides = strides;
+                }
+
                 void ApplyRasterizerState() const;
                 void ApplyDepthStencilState() const;
                 void ApplyBlendState() const;
@@ -260,6 +282,7 @@ namespace Spark
                 RHIPipelineStateDesc m_desc;
                 GLuint m_program;
                 GLuint m_vao;
+                std::array<uint32_t, kMaxVertexBufferSlots> m_slotStrides{};
             };
 
             // ============================================================================
@@ -269,7 +292,9 @@ namespace Spark
             class GLSwapChain : public IRHISwapChain
             {
               public:
-                GLSwapChain(const RHISwapChainDesc& desc);
+                /// @param deviceDC,deviceContext Windows only: the GLDevice's HDC/HGLRC. A windowed swap
+                ///        chain makes that context current on the window instead of creating its own.
+                GLSwapChain(const RHISwapChainDesc& desc, void* deviceDC = nullptr, void* deviceContext = nullptr);
                 ~GLSwapChain() override;
 
                 bool Present(bool vsync) override;
@@ -286,8 +311,10 @@ namespace Spark
                 bool m_windowed = false; ///< True when rendering to an on-screen window
 
 #ifdef _WIN32
-                HDC m_hdc = nullptr;
-                HGLRC m_hglrc = nullptr;
+                HWND m_hwnd = nullptr;
+                HDC m_hdc = nullptr;             ///< Application window DC (windowed mode)
+                HDC m_deviceDC = nullptr;        ///< GLDevice's hidden-window DC, restored on destruction
+                HGLRC m_deviceContext = nullptr; ///< GLDevice-owned context (never deleted here)
 #elif defined(__linux__)
                 void* m_sdlWindow = nullptr; ///< SDL_Window* for windowed Present
 #ifdef SPARK_EGL_SUPPORT
@@ -349,6 +376,17 @@ namespace Spark
                 void SetMarker(const char* name) override;
 
               private:
+                struct VertexBufferBinding
+                {
+                    GLuint buffer = 0;
+                    uint32_t offset = 0;
+                    uint32_t stride = 0; ///< From RHIBufferDesc::stride; 0 = use the pipeline layout stride
+                };
+
+                /// VAO vertex-buffer and element-buffer bindings are VAO state, so they are
+                /// re-applied whenever a pipeline (and therefore its VAO) is bound.
+                void ApplyVertexBuffer(uint32_t slot);
+
                 bool m_isImmediate;
                 RHIStatistics* m_statistics = nullptr;
                 GLenum m_currentTopology = GL_TRIANGLES;
@@ -356,6 +394,8 @@ namespace Spark
                 GLuint m_currentProgram = 0;
                 GLuint m_boundIndexBuffer = 0;
                 uint32_t m_indexStride = 4;
+                uint32_t m_indexOffset = 0;
+                std::array<VertexBufferBinding, kMaxVertexBufferSlots> m_vertexBuffers{};
                 IRHIPipelineState* m_lastBoundPipeline = nullptr; ///< Redundant bind elimination
                 GLuint m_compositeFBO = 0;          ///< FBO composing MRT color targets + depth for SetRenderTargets
                 uint32_t m_compositeColorCount = 0; ///< Color attachments currently set on m_compositeFBO
@@ -413,8 +453,14 @@ namespace Spark
                 GLenum GetDepthAttachmentType(PixelFormat format) const;
 
                 void QueryCapabilities();
+#if defined(_WIN32)
+                void DestroyWGLContext();
+#endif
+                std::string PrepareGLSLSource(const RHIShaderDesc& desc) const;
 
                 std::unique_ptr<GLCommandList> m_immediateCommandList;
+                int m_maxGLSLVersion = 450; ///< Highest #version the context accepts (e.g. 450 on llvmpipe)
+                bool m_hasAnisotropicFiltering = false;
                 bool m_debugEnabled = false;
                 bool m_shutdownCalled = false; ///< Guards against double Shutdown() calls
 
@@ -428,6 +474,14 @@ namespace Spark
                 EGLContext m_bootstrapContext = EGL_NO_CONTEXT;
                 EGLSurface m_bootstrapSurface = EGL_NO_SURFACE;
                 bool m_ownsEglContext = true; ///< False when host (e.g. SDL2) created the context
+#elif defined(_WIN32)
+                // The device's rendering context lives on a hidden 1x1 window for the device's
+                // whole lifetime, so resources can be created and rendered off-screen before (or
+                // without) a swap chain. A windowed swap chain rebinds this same context to the
+                // application window's DC, so every object stays in one namespace.
+                HWND m_wglWindow = nullptr;
+                HDC m_wglDC = nullptr;
+                HGLRC m_wglContext = nullptr;
 #endif
             };
 

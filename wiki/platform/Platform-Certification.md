@@ -140,6 +140,30 @@ python -m pytest Tests/Tools/test_platform_certification.py -v
 
 136 tests covering schema loading, strict JSON parsing (duplicate keys, NaN/Infinity), additionalProperties enforcement, timestamp bounds, compiler identity, zero-duration pass rejection, SHA-256/artifact path confinement, canonical profile coverage, complete host matching, dependency closure, collector identity, resource limits, cross-validation, and CLI modes.
 
+## Windows installer predecessor evidence
+
+The Runtime MSI family uses the project-owned UpgradeCode declared in
+`cmake/SparkCPackOptions.cmake`; ProductCode remains generated per MSI. Before
+an old-to-new transaction, `.github/scripts/qualify-windows-msi.py` requires
+`--previous-signer-thumbprint` from the caller's protected trust configuration,
+together with all three predecessor artifact arguments. It verifies a valid,
+timestamped Authenticode signature from that publisher on the private MSI copy
+before any Windows Installer command, and keeps that copy locked through its
+initial installation. The current MSI is locked and its digest rechecked before
+the `/fvomus` repair command; the lock remains held until that command exits.
+`previous-signature.json` binds the checked publisher
+and native signature result to the predecessor bytes; it is signature evidence,
+not proof that the installation or upgrade passed.
+
+This foundation does not admit a bootstrap release, provision signing authority,
+or certify Windows 11. The release controller supplies the externally provisioned
+`SPARK_PREVIOUS_RELEASE_SIGNER_THUMBPRINT` repository/environment variable explicitly
+to the qualifier. The release owner must set it to the authorized predecessor
+publisher's 40-hex Authenticode certificate thumbprint; it is not inferred from
+the downloaded MSI or the current release's signer. An absent, malformed, or
+mismatched value blocks qualification. Hosted signed-artifact and supported-host
+execution remain required evidence.
+
 ## Related Pages
 
 - [System Requirements](System-Requirements.md)

@@ -819,10 +819,18 @@ TEST(NetworkStress_InterleavedTraffic)
                        attackSender.SendTo(garbage.data(), garbage.size(), port);
 
                        nm.Update(0.016f);
+                       // UDP delivery is asynchronous even for loopback. On
+                       // macOS the datagram can become readable just after
+                       // this update, so leave a bounded opportunity for the
+                       // socket queue to drain before the next round.
+                       std::this_thread::sleep_for(std::chrono::milliseconds(1));
                    }
 
-                   for (int frame = 0; frame < 10; ++frame)
+                   for (int frame = 0; frame < 100 && nm.GetClients().empty(); ++frame)
+                   {
                        nm.Update(0.016f);
+                       std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                   }
 
                    // Valid clients should have connected; garbage should be rejected
                    EXPECT_GT(static_cast<int>(nm.GetClients().size()), 0);
@@ -987,25 +995,47 @@ TEST(NetworkStress_BandwidthTracking)
                [port](NetworkManager& nm)
                {
                    RawUDPSender sender;
-                   EXPECT_TRUE(sender.Open());
+                   ASSERT_TRUE(sender.Open());
 
                    // Connect
                    auto connectPkt = BuildConnectPacket("BWClient");
-                   sender.SendTo(connectPkt.data(), connectPkt.size(), port);
-                   for (int f = 0; f < 3; ++f)
+                   ASSERT_TRUE(sender.SendTo(connectPkt.data(), connectPkt.size(), port));
+
+                   // UDP sockets are non-blocking, and loopback delivery can be deferred
+                   // until the networking stack gets a scheduling opportunity. Wait for
+                   // the observable connection state instead of assuming three immediate
+                   // polls have drained the socket.
+                   constexpr auto kArrivalTimeout = std::chrono::seconds(1);
+                   const auto connectDeadline = std::chrono::steady_clock::now() + kArrivalTimeout;
+                   while (nm.GetClients().empty() && std::chrono::steady_clock::now() < connectDeadline)
+                   {
                        nm.Update(0.016f);
+                       std::this_thread::yield();
+                   }
+                   ASSERT_FALSE(nm.GetClients().empty());
 
                    auto statsBefore = nm.GetStats();
 
                    // Send 100 packets
+                   size_t successfulSends = 0;
                    for (int i = 0; i < 100; ++i)
                    {
                        auto heartbeat = BuildPacket(MessageType::Heartbeat, ChannelType::Unreliable, 1, 0, 0.0f, {});
-                       sender.SendTo(heartbeat.data(), heartbeat.size(), port);
+                       if (sender.SendTo(heartbeat.data(), heartbeat.size(), port))
+                           ++successfulSends;
                    }
+                   ASSERT_TRUE(successfulSends > 0);
 
-                   for (int frame = 0; frame < 10; ++frame)
+                   // bytesReceived is updated when recvfrom observes a datagram, not
+                   // when another socket's sendto returns. Poll until that accounting
+                   // change is observable, with a bounded timeout for a real failure.
+                   const auto receiveDeadline = std::chrono::steady_clock::now() + kArrivalTimeout;
+                   while (nm.GetStats().bytesReceived <= statsBefore.bytesReceived &&
+                          std::chrono::steady_clock::now() < receiveDeadline)
+                   {
                        nm.Update(0.016f);
+                       std::this_thread::yield();
+                   }
 
                    auto statsAfter = nm.GetStats();
 

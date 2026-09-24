@@ -3,12 +3,18 @@
   "profile": "stable-v1",
   "state": "blocked",
   "errorCount": 3,
-  "warningCount": 2,
+  "warningCount": 3,
   "findings": [
+    {
+      "category": "cmake-only",
+      "severity": "warning",
+      "message": "CMake option 'SPARK_ENABLE_FUZZ_TARGETS' is not representable in SparkBuild",
+      "detail": "The supported configurator cannot reproduce the root configuration surface. Explicitly classified outside: Linux/Clang libFuzzer targets are release-validation tooling and are outside the Windows stable-v1 product profile."
+    },
     {
       "category": "target-name-unresolved",
       "severity": "warning",
-      "message": "Target name '${TARGET_NAME}' at cmake/SparkGameModule.cmake:183 cannot be resolved statically",
+      "message": "Target name '${TARGET_NAME}' at cmake/SparkGameModule.cmake:190 cannot be resolved statically",
       "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration."
     },
     {

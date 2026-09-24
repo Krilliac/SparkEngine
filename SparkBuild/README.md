@@ -68,6 +68,28 @@ The binary will be at `build/bin/SparkBuild`.
 4. **Configure** — Use option `2` to select your generator, build type, and toggle engine modules
 5. **Build** — Use option `3` to generate the project and compile
 
+## Noninteractive plan mode
+
+CI and tooling can validate a build configuration without entering the
+interactive TUI:
+
+```bash
+sparkbuild --plan --engine-path <engine-root> --build-path <fresh-build-root> \
+  --generator Ninja --build-type Release
+```
+
+`--engine-path` must point to an existing directory containing
+`CMakeLists.txt`. The command prints the selected paths, generator, build type,
+and the exact configure/build commands that the interactive tool would run. It
+only prints a plan: it does not create, configure, delete, or otherwise modify
+the source or build directories. A successful plan exits `0`; malformed,
+unsupported, unsafe, or invalid paths exit `2` with a diagnostic on stderr.
+
+Accepted generator values are `Ninja`, `NinjaMultiConfig`, and
+`UnixMakefiles` on Linux/macOS. Windows additionally accepts `VS2022` and
+`VS2026`. Accepted build types are `Debug`, `Release`, `RelWithDebInfo`, and
+`MinSizeRel`. Values are case-sensitive and no aliases are accepted.
+
 ## Main Menu
 
 ```

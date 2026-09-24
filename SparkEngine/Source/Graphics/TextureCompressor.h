@@ -74,6 +74,13 @@ namespace Spark::Graphics
     class TextureCompressor
     {
       public:
+        /// The only .stex container version SaveCompressed writes and LoadCompressed accepts.
+        static constexpr uint32_t kStexVersion = 1;
+        /// Largest width/height a .stex may declare (the D3D11 Texture2D limit).
+        static constexpr uint32_t kMaxStexDimension = 16384;
+        /// Longest mip chain a kMaxStexDimension-sized texture can have.
+        static constexpr uint32_t kMaxStexMipLevels = 15;
+
         static TextureCompressor& GetInstance();
 
         /**
@@ -105,8 +112,17 @@ namespace Spark::Graphics
 
         /**
          * @brief Load compressed texture from .stex file
+         *
+         * The file is untrusted. It is rejected (an empty texture is returned)
+         * unless the version is kStexVersion, the format is a known enumerator,
+         * both dimensions are in [1, kMaxStexDimension], the mip count is in
+         * [1, CalculateMipLevels(width, height)], every mip size equals
+         * EstimateCompressedSize() for that mip's dimensions, and the header plus
+         * declared payload is exactly the file's size. Nothing is allocated from a
+         * file-declared size before those checks pass.
+         *
          * @param path Input file path
-         * @return Loaded compressed texture
+         * @return Loaded compressed texture, or an empty one on any validation failure
          */
         CompressedTexture LoadCompressed(const std::string& path);
 

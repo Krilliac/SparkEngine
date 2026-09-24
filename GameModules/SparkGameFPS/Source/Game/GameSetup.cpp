@@ -35,6 +35,7 @@
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <charconv>
 
 using namespace DirectX;
 
@@ -109,8 +110,16 @@ void Game::InitializeInteractionObjects()
 
 void Game::InitializeRespawnAndVehicles()
 {
-    m_respawnSystem = std::make_unique<Spark::RespawnSystem>();
-    m_respawnSystem->Initialize();
+    // scene_load re-enters here through RefreshAuthoredSceneRuntimeState. The
+    // respawn system owns live match state (score, kill history, and a pending
+    // death with its countdown), so it is created once and only its spawn table
+    // is rebound. Recreating it dropped a pending death, leaving a player who
+    // died before scene_load dead forever, and zeroed the scoreboard.
+    if (!m_respawnSystem)
+    {
+        m_respawnSystem = std::make_unique<Spark::RespawnSystem>();
+        m_respawnSystem->Initialize();
+    }
     m_respawnSystem->SetEventBus(m_eventBus);
 
     // Close the death -> respawn -> score loop: without this callback a death
@@ -127,34 +136,18 @@ void Game::InitializeRespawnAndVehicles()
             });
     }
 
-    // NOTE: Spawn points are now defined in the scene file (Assets/Scenes/level1.scene)
-    // as [SpawnPoint] entries with position, tag, and priority. They can be placed and
-    // edited in the SparkEditor without recompiling.
-    // The code below shows the equivalent C++ approach for reference.
-    //
-    // Spark::RespawnPoint spawn1;
-    // spawn1.name = "North Spawn";
-    // spawn1.position = {0.0f, 2.0f, -20.0f};
-    // spawn1.priority = 1;
-    // m_respawnSystem->AddSpawnPoint(spawn1);
-    //
-    // Spark::RespawnPoint spawn2;
-    // spawn2.name = "South Spawn";
-    // spawn2.position = {0.0f, 2.0f, 20.0f};
-    // spawn2.priority = 1;
-    // m_respawnSystem->AddSpawnPoint(spawn2);
-    //
-    // Spark::RespawnPoint spawn3;
-    // spawn3.name = "East Spawn";
-    // spawn3.position = {20.0f, 2.0f, 0.0f};
-    // m_respawnSystem->AddSpawnPoint(spawn3);
-    //
-    // Spark::RespawnPoint spawn4;
-    // spawn4.name = "West Spawn";
-    // spawn4.position = {-20.0f, 2.0f, 0.0f};
-    // m_respawnSystem->AddSpawnPoint(spawn4);
-
-    LOG_TO_CONSOLE_IMMEDIATE(L"Spawn points loaded from scene file", L"SUCCESS");
+    // BindSpawnPoints keeps the built-in fallback when no valid authored point
+    // exists, so absent/invalid scenes still remain playable.
+    std::vector<Spark::RespawnPoint> authoredSpawns;
+    if (m_sceneManager)
+        authoredSpawns = Spark::RespawnSystem::CollectAuthoredSpawnPoints(*m_sceneManager);
+    const int authoredRespawns = m_respawnSystem->BindSpawnPoints(authoredSpawns);
+    const Spark::RespawnPoint preferred = m_respawnSystem->GetBestSpawnPoint(-1);
+    LOG_TO_CONSOLE_IMMEDIATE(L"Scene-authored respawn points: " + std::to_wstring(authoredRespawns) +
+                                 L"; preferred at (" + std::to_wstring(preferred.position.x) + L", " +
+                                 std::to_wstring(preferred.position.y) + L", " + std::to_wstring(preferred.position.z) +
+                                 L")",
+                             L"SUCCESS");
 
     // NOTE: Vehicles are now defined in the scene file as [Vehicle] entries.
     // The code below shows the equivalent C++ approach for reference.
@@ -436,19 +429,19 @@ void Game::InitializeGameplaySystems()
     // --- Wave Spawner ---
     m_waveSpawner = std::make_unique<Spark::WaveSpawner>();
 
-    // NOTE: Wave spawn points are now defined in the scene file (Assets/Scenes/level1.scene)
-    // as [SpawnPoint] entries with tag=wave_spawn. They can be placed and edited in the
-    // SparkEditor without recompiling.
-    // The code below shows the equivalent C++ approach for reference.
-    //
-    // std::vector<XMFLOAT3> enemySpawnPoints = {
-    //     {20.0f, 1.0f, 20.0f}, {-20.0f, 1.0f, 20.0f},  {20.0f, 1.0f, -20.0f}, {-20.0f, 1.0f, -20.0f},
-    //     {25.0f, 1.0f, 0.0f},  {-25.0f, 1.0f, 0.0f},   {0.0f, 1.0f, 25.0f},   {0.0f, 1.0f, -25.0f},
-    //     {15.0f, 1.0f, 10.0f}, {-15.0f, 1.0f, -10.0f},
-    // };
-
-    // Initialize with empty points — scene loader will populate from [SpawnPoint] tag=wave_spawn
     std::vector<XMFLOAT3> enemySpawnPoints;
+    if (m_sceneManager)
+    {
+        for (int i = 0; i < m_sceneManager->GetNodeCount(); ++i)
+        {
+            const SceneNode* node = m_sceneManager->GetNode(i);
+            if (!node || node->type != "SpawnPoint")
+                continue;
+            const auto tag = node->properties.find("tag");
+            if (tag != node->properties.end() && tag->second == "wave_spawn")
+                enemySpawnPoints.push_back(node->position);
+        }
+    }
     m_waveSpawner->Initialize(enemySpawnPoints);
 
     // --- Progression ---
@@ -572,6 +565,11 @@ bool Game::StartWaves()
         m_player->Console_SetArmor(0.0f);
         m_player->Console_SetPosition(spawn.position.x, spawn.position.y, spawn.position.z);
         m_player->SetActive(true);
+        if (m_camera)
+        {
+            m_camera->Console_SetPosition(spawn.position.x, spawn.position.y, spawn.position.z);
+            m_camera->Console_SetRotation(spawn.rotation.x, spawn.rotation.y, spawn.rotation.z);
+        }
     }
 
     if (m_hudSystem)

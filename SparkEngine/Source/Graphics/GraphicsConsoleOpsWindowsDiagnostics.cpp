@@ -13,6 +13,7 @@
 
 #include "GraphicsEngine.h"
 #include "TextureSystem.h"
+#include "VRAMBudgetMonitor.h"
 #include "AssetPipeline.h"
 #include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
@@ -27,9 +28,37 @@
 #include <cstring>
 #include <sstream>
 #include <chrono>
-#include <thread>
-#include <cfloat>
 #include <algorithm>
+
+namespace
+{
+    std::string AdapterIdentity(ID3D11Device* device)
+    {
+        if (!device)
+            return "unavailable";
+        Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
+        Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
+        DXGI_ADAPTER_DESC desc{};
+        if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dxgiDevice))) || FAILED(dxgiDevice->GetAdapter(&adapter)) ||
+            FAILED(adapter->GetDesc(&desc)))
+            return "unavailable";
+
+        const int length =
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, desc.Description, -1, nullptr, 0, nullptr, nullptr);
+        std::string name;
+        if (length > 1)
+        {
+            name.resize(static_cast<size_t>(length));
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, desc.Description, -1, name.data(), length, nullptr,
+                                nullptr);
+            name.resize(static_cast<size_t>(length - 1));
+        }
+        std::ostringstream result;
+        result << (name.empty() ? "unknown" : name) << " (vendor=0x" << std::hex << desc.VendorId << ", device=0x"
+               << desc.DeviceId << ")";
+        return result.str();
+    }
+} // namespace
 
 // ============================================================================
 // CONSOLE DIAGNOSTICS AND DEVICE OPERATIONS
@@ -60,13 +89,39 @@ bool GraphicsEngine::Console_ReloadShaders()
 
 bool GraphicsEngine::Console_Screenshot(const std::string& filename)
 {
-    // Real backbuffer readback: swapchain -> staging copy -> map -> PNG via
-    // ScreenCapture (which owns naming/output dir when filename is empty).
-    LOG_TO_CONSOLE_IMMEDIATE(L"Taking screenshot", L"INFO");
-
-    if (!m_device || !m_context || !m_swapChain)
+    if (m_attachedMode || !m_device || !m_context || !m_swapChain)
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot failed: no D3D11 device/swapchain", L"ERROR");
+        return false;
+    }
+
+    // Console commands run after EndFrame/Present in the game loop. A
+    // flip-discard backbuffer is undefined then, so defer the readback until
+    // the next completed frame, after the overlay and before Present.
+    bool alreadyQueued = false;
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        if (m_pendingScreenshotFilename)
+            alreadyQueued = true;
+        else
+            m_pendingScreenshotFilename = filename;
+    }
+    if (alreadyQueued)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot already queued for next frame", L"WARNING");
+        return false;
+    }
+    LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot queued for next frame", L"INFO");
+    return true;
+}
+
+bool GraphicsEngine::CaptureScreenshotBeforePresent(const std::string& filename)
+{
+    // Real backbuffer readback: swapchain -> staging copy -> map -> PNG via
+    // ScreenCapture (which owns naming/output dir when filename is empty).
+    if (!m_device || !m_context || !m_swapChain)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot failed: device/swapchain unavailable before Present", L"ERROR");
         return false;
     }
 
@@ -79,6 +134,13 @@ bool GraphicsEngine::Console_Screenshot(const std::string& filename)
 
     D3D11_TEXTURE2D_DESC desc{};
     backBuffer->GetDesc(&desc);
+    const bool bgra = desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM || desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    const bool rgbaFormat = desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM || desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    if (!bgra && !rgbaFormat)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot failed: unsupported backbuffer pixel format", L"ERROR");
+        return false;
+    }
     desc.Usage = D3D11_USAGE_STAGING;
     desc.BindFlags = 0;
     desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
@@ -102,7 +164,6 @@ bool GraphicsEngine::Console_Screenshot(const std::string& filename)
 
     const uint32_t w = desc.Width, h = desc.Height;
     std::vector<uint8_t> rgba(static_cast<size_t>(w) * h * 4);
-    const bool bgra = desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM || desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
     for (uint32_t y = 0; y < h; ++y)
     {
         const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) + static_cast<size_t>(y) * mapped.RowPitch;
@@ -148,6 +209,7 @@ bool GraphicsEngine::Console_Screenshot(const std::string& filename)
     }
     const std::wstring wpath(result.filePath.begin(), result.filePath.end());
     LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot saved as " + wpath, L"SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Screenshot saved as %s", result.filePath.c_str());
     return true;
 }
 
@@ -188,57 +250,43 @@ std::string GraphicsEngine::Console_GetSystemInfo() const
     // Add memory usage
     size_t vramUsage = Console_GetVRAMUsage();
     ss << "VRAM Usage: " << (vramUsage / 1024 / 1024) << " MB\n";
+    if (!m_vramBudgetMonitor || !m_vramBudgetMonitor->IsCurrentUsageValid())
+    {
+        ss << "VRAM Telemetry: unavailable (DXGI sample not valid)\n";
+    }
+    else if (m_vramBudgetMonitor->GetCurrentUsage() == 0)
+    {
+        ss << "VRAM Telemetry: valid DXGI sample reported zero; engine estimate fallback may apply\n";
+    }
+    else
+    {
+        ss << "VRAM Telemetry: valid DXGI sample\n";
+    }
 
     return ss.str();
 }
 
 std::string GraphicsEngine::Console_Benchmark(int seconds)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Starting " + std::to_wstring(seconds) + L" second benchmark", L"INFO");
+    if (seconds < 1 || seconds > 300)
+        return "Benchmark duration must be 1-300 seconds";
+    if (m_attachedMode || !m_device || !m_context || !m_swapChain)
+        return "Benchmark unavailable: no D3D11 swapchain";
 
-    auto startTime = std::chrono::high_resolution_clock::now();
-    int frameCount = 0;
-    float totalFrameTime = 0.0f;
-    float maxFrameTime = 0.0f;
-    float minFrameTime = FLT_MAX;
-
-    // Simple benchmark - just count frames and measure timing
-    while (true)
-    {
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime);
-
-        if (elapsed.count() >= seconds)
-        {
-            break;
-        }
-
-        // Simulate frame timing
-        auto frameStart = std::chrono::high_resolution_clock::now();
-        std::this_thread::sleep_for(std::chrono::microseconds(16667)); // ~60 FPS
-        auto frameEnd = std::chrono::high_resolution_clock::now();
-
-        float frameTime =
-            std::chrono::duration_cast<std::chrono::microseconds>(frameEnd - frameStart).count() / 1000.0f;
-
-        totalFrameTime += frameTime;
-        maxFrameTime = (std::max)(maxFrameTime, frameTime);
-        minFrameTime = (std::min)(minFrameTime, frameTime);
-        frameCount++;
-    }
-
-    std::stringstream ss;
-    ss << "=== Benchmark Results ===\n";
-    ss << "Duration: " << seconds << " seconds\n";
-    ss << "Total Frames: " << frameCount << "\n";
-    ss << "Average FPS: " << (seconds > 0 ? (frameCount / static_cast<float>(seconds)) : 0.0f) << "\n";
-    ss << "Average Frame Time: " << (frameCount > 0 ? (totalFrameTime / frameCount) : 0.0f) << " ms\n";
-    ss << "Min Frame Time: " << (frameCount > 0 ? minFrameTime : 0.0f) << " ms\n";
-    ss << "Max Frame Time: " << maxFrameTime << " ms\n";
-
-    LOG_TO_CONSOLE_IMMEDIATE(L"Benchmark completed", L"SUCCESS");
-
-    return ss.str();
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    if (m_benchmarkActive)
+        return "Benchmark already running";
+    m_benchmarkActive = true;
+    m_benchmarkSeconds = seconds;
+    m_benchmarkStart = std::chrono::steady_clock::now();
+    m_benchmarkPresentedFrames = 0;
+    m_benchmarkGpuHistoryResetFrames = 0;
+    m_benchmarkGpuLastSampleSequence = 0;
+    m_benchmarkCpuSamples.Reset();
+    m_benchmarkGpuSamples.Reset();
+    m_benchmarkAdapterIdentity = AdapterIdentity(m_device.Get());
+    return "Benchmark started: sampling actual presented frames for " + std::to_string(seconds) +
+           " second(s); result will be logged after the interval";
 }
 
 void GraphicsEngine::Console_ForceGarbageCollection()
@@ -322,16 +370,27 @@ size_t GraphicsEngine::Console_GetVRAMUsage() const
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Retrieving VRAM usage via console", L"INFO");
 
-    // Calculate total VRAM usage from tracked memory
-    size_t totalUsage = m_textureMemoryUsage + m_bufferMemoryUsage;
+    // The DXGI adapter query is the authoritative live usage source on
+    // Windows. The legacy counters below are only an engine estimate and are
+    // not populated for every D3D11 resource path.
+    size_t estimatedUsage = m_textureMemoryUsage + m_bufferMemoryUsage;
+    bool liveAdapterUsage = false;
+    size_t liveUsage = 0;
+    if (m_vramBudgetMonitor && m_vramBudgetMonitor->IsQuerySupported() && m_vramBudgetMonitor->IsCurrentUsageValid())
+    {
+        liveUsage = m_vramBudgetMonitor->GetCurrentUsage();
+        liveAdapterUsage = true;
+    }
 
-    // Add advanced system memory usage if available
-    if (m_textureSystem)
+    // The estimate remains a fallback when live telemetry is unavailable or
+    // reports zero despite known engine-owned GPU resources.  The latter is
+    // observed with some WDDM/driver combinations during early presentation.
+    if ((!liveAdapterUsage || liveUsage == 0) && m_textureSystem)
     {
         try
         {
             auto textureMetrics = m_textureSystem->Console_GetMetrics();
-            totalUsage = textureMetrics.totalMemoryUsage + m_bufferMemoryUsage;
+            estimatedUsage = textureMetrics.totalMemoryUsage + m_bufferMemoryUsage;
         }
         catch (const std::exception& e)
         {
@@ -344,9 +403,16 @@ size_t GraphicsEngine::Console_GetVRAMUsage() const
         }
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"VRAM usage retrieved: " + std::to_wstring(totalUsage / 1024 / 1024) + L" MB", L"INFO");
+    const auto reading = SelectVRAMUsage(liveUsage, liveAdapterUsage, estimatedUsage);
+    const wchar_t* source =
+        reading.fromLiveQuery
+            ? L"DXGI adapter query"
+            : (reading.liveQueryReportedZero ? L"engine estimate (DXGI reported zero)" : L"engine estimate");
+    LOG_TO_CONSOLE_IMMEDIATE(L"VRAM usage retrieved from " + std::wstring(source) + L": " +
+                                 std::to_wstring(reading.bytes / 1024 / 1024) + L" MB",
+                             L"INFO");
 
-    return totalUsage;
+    return reading.bytes;
 }
 
 void GraphicsEngine::Console_ResetDevice()

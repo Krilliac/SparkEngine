@@ -1,6 +1,7 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-12.
+Comprehensive metrics and analysis of the SparkEngine codebase, generated from
+the exact tracked source tree.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
@@ -10,31 +11,31 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321291 |
-| **SparkEditor/Source** | 103591 |
-| **GameModules** | 142614 |
-| **External services** | 11280 |
-| **Asset pipeline** | 2504 |
-| **Tests** | 182920 |
-| **SparkConsole/src** | 1701 |
-| **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~777873** |
+| **SparkEngine/Source** | 326248 |
+| **SparkEditor/Source** | 104078 |
+| **GameModules** | 144206 |
+| **External services** | 11305 |
+| **Asset pipeline** | 2524 |
+| **Tests** | 193469 |
+| **SparkConsole/src** | 1800 |
+| **SparkShaderCompiler/src** | 691 |
+| **Total C++ (excl. ThirdParty)** | **~798847** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1059 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1580 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1074 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1630 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 605 |
-| Wiki pages (.md) | 201 |
+| Test-bearing implementation files (.cpp/.mm) | 632 |
+| Wiki pages (.md) | 202 |
 
 ### Largest Top-Level Source Section
 
-Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 123488 lines, or 37% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -42,29 +43,29 @@ Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121125 | 37.6% |
-| Engine (all subsystems) | 89088 | 27.7% |
-| Utils | 46113 | 14.3% |
-| Core | 31065 | 9.6% |
-| Physics | 10799 | 3.3% |
+| Graphics | 123488 | 37.8% |
+| Engine (all subsystems) | 90475 | 27.7% |
+| Utils | 46450 | 14.2% |
+| Core | 30919 | 9.4% |
+| Physics | 10812 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
-| SceneManager | 2606 | 0.8% |
+| SceneManager | 3513 | 1.0% |
 | Enums | 1383 | 0.4% |
-| Game | 2855 | 0.8% |
+| Game | 2937 | 0.9% |
 | Camera | 999 | 0.3% |
 
 ### Engine Subsystems (SparkEngine/Source/Engine/)
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 15167 |
+| Networking | 15745 |
 | AI | 13490 |
 | ECS | 8497 |
 | Gameplay | 7925 |
 | Animation | 6876 |
-| Scripting | 5093 |
-| SaveSystem | 3711 |
+| Scripting | 5210 |
+| SaveSystem | 3958 |
 | UI | 2522 |
 | Streaming | 2123 |
 | Editor | 1737 |
@@ -72,7 +73,7 @@ Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source
 | World | 1604 |
 | Modding | 1579 |
 | Dialogue | 1425 |
-| Persistence | 1318 |
+| Persistence | 1412 |
 | 2D | 1015 |
 | Coroutine | 800 |
 | Replay | 784 |
@@ -103,22 +104,22 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 103591 |
+| Total editor lines | 104078 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 605 |
-| TEST() definitions | 7329 |
+| Test files | 632 |
+| TEST() definitions | 7567 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
 
 | Metric | Count |
 |--------|------:|
-| CMake option() declarations | 32 |
-| ENABLE_* feature toggles | 24 |
+| CMake option() declarations | 33 |
+| ENABLE_* feature toggles | 25 |
 | Game modules | 11 |
 | SDK public headers | 16 |
 | Documented build compiler paths | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
@@ -156,16 +157,16 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `SaveSystem.cpp` | 2347 |
-| `CrashHandler.cpp` | 2282 |
-| `OpenGLDevice.cpp` | 2160 |
-| `ModuleManager.cpp` | 2013 |
-| `VulkanDevice.cpp` | 1991 |
-| `D3D11Device.cpp` | 1902 |
+| `SaveSystem.cpp` | 2582 |
+| `OpenGLDevice.cpp` | 2483 |
+| `ModuleManager.cpp` | 2107 |
+| `VulkanDevice.cpp` | 2088 |
+| `CrashHandler.cpp` | 2085 |
+| `D3D11Device.cpp` | 2079 |
 | `EngineSettings.cpp` | 1849 |
+| `SceneManager.cpp` | 1754 |
 | `NetworkConnection.cpp` | 1680 |
-| `GameplayLifecycleShared.cpp` | 1653 |
-| `PostProcessingPipeline.cpp` | 1602 |
+| `GameplayLifecycleShared.cpp` | 1648 |
 
 ### SparkEngine .h Files (by line count)
 
@@ -174,11 +175,11 @@ inventory is implementation evidence, not support certification.
 | `RenderGraph.h` | 1427 |
 | `Telemetry.h` | 1419 |
 | `JsonUtils.h` | 1318 |
-| `GraphicsEngine.h` | 1277 |
+| `GraphicsEngine.h` | 1297 |
 | `EngineSettings.h` | 1152 |
 | `NetworkManager.h` | 943 |
-| `SaveSystem.h` | 860 |
-| `RemoteDebugSystem.h` | 859 |
+| `RemoteDebugSystem.h` | 874 |
+| `SaveSystem.h` | 872 |
 | `ECSystems.h` | 846 |
 | `PhysicsTypes.h` | 828 |
 
@@ -186,7 +187,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `EditorUI.cpp` | 2867 |
+| `EditorUI.cpp` | 2844 |
 | `ProjectManager.cpp` | 2589 |
 | `JSONSceneSerializer.cpp` | 2010 |
 | `VisualScriptPanel.cpp` | 1773 |

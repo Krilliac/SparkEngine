@@ -23,7 +23,7 @@ Verified present (2026-06-08) in all of the following:
 
 - `PacketValidator.cpp` — payload size, auth, direction checks
 - `NetworkConnection.cpp` — packet validation gateway
-- `DedicatedServer.cpp` — RCON command gate
+- `DedicatedServer.cpp` — trusted local administration command boundary; network chat never dispatches admin commands and no remote RCON listener exists
 - `SparkConsole.cpp` — RBAC permission check
 - `ScriptSandbox.cpp` — instruction / timeout / memory limits
 - `AbilitySystem.cpp` — cooldowns, damage validation, death check, health cap

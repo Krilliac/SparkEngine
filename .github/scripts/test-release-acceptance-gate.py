@@ -8,6 +8,7 @@ identified in the adversarial audit of the release pipeline.
 from __future__ import annotations
 
 import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -32,7 +33,7 @@ REPOSITORY_ID = 1001
 API_URL = "https://api.github.com"
 TOKEN = "test-token"
 RELEASE_ID = 100
-RELEASE_TAG = "nightly"
+RELEASE_TAG = "nightly-123-1-aaaaaaaaaaaa"
 DIGEST_A = "sha256:" + "c" * 64
 DIGEST_B = "sha256:" + "d" * 64
 ASSET_NAMES = ["SparkEngine-Linux.tar.gz", "SparkEngine-Windows.zip", "SHA256SUMS"]
@@ -128,6 +129,7 @@ def _published_release(is_versioned=False, **overrides):
         "tag_name": RELEASE_TAG,
         "draft": False,
         "prerelease": not is_versioned,
+        "immutable": is_versioned,
     }
     value.update(overrides)
     return value
@@ -153,11 +155,14 @@ class FakeApi:
         self.working_sha = working_sha
         self.published = published or _published_release()
         self.patch_should_fail = patch_should_fail
+        self.policy = {"enabled": not self.release["prerelease"], "enforced_by_owner": False}
         self.fetch_calls: list[str] = []
         self.patch_calls: list[tuple[str, dict]] = []
 
     def fetch(self, url: str, token: str) -> Any:
         self.fetch_calls.append(url)
+        if url.endswith("/immutable-releases"):
+            return self.policy
         if f"/releases/{RELEASE_ID}/assets" in url:
             return self.assets
         if f"/releases/{RELEASE_ID}" in url:
@@ -176,11 +181,52 @@ class FakeApi:
             return _ci_jobs_payload(jobs[start : start + MODULE.CI_PAGE_SIZE])
         raise MODULE.GateError(f"unexpected API path: {url}")
 
-    def patch(self, url: str, token: str, body: dict) -> Any:
+    def patch(self, url: str, token: str, body: dict, **_kwargs: Any) -> Any:
         self.patch_calls.append((url, body))
         if self.patch_should_fail:
             raise MODULE.GateError("PATCH failed")
+        self.release["draft"] = body.get("draft")
+        if "prerelease" in body:
+            self.release["prerelease"] = body["prerelease"]
+        self.release["immutable"] = self.published["immutable"]
+        if body.get("draft") is True:
+            return dict(self.release)
         return self.published
+
+
+class PostPatchTamperApi(FakeApi):
+    """Expose an asset mutation between publication and post-PATCH recheck."""
+
+    def __init__(self):
+        super().__init__()
+        self.tampered_assets = _default_assets()
+        self.tampered_assets[0]["digest"] = "sha256:" + "f" * 64
+
+    def fetch(self, url: str, token: str) -> Any:
+        if f"/releases/{RELEASE_ID}/assets" in url and self.patch_calls:
+            return self.tampered_assets
+        return super().fetch(url, token)
+
+    def patch(self, url: str, token: str, body: dict, **_kwargs: Any) -> Any:
+        self.patch_calls.append((url, body))
+        self.release["draft"] = body.get("draft")
+        if "prerelease" in body:
+            self.release["prerelease"] = body["prerelease"]
+        response = dict(self.published)
+        response["draft"] = body.get("draft")
+        if "prerelease" in body:
+            response["prerelease"] = body["prerelease"]
+        return response
+
+
+class StalePublicationResponseApi(FakeApi):
+    """Return a successful-looking PATCH response without publishing the target."""
+
+    def patch(self, url: str, token: str, body: dict, **_kwargs: Any) -> Any:
+        self.patch_calls.append((url, body))
+        if body.get("draft") is True:
+            return _release(draft=True)
+        return _published_release()
 
 
 class TestVerifyDraftRelease(unittest.TestCase):
@@ -750,7 +796,17 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
     """End-to-end integration: verify + PATCH in one step."""
 
     def _run_gate(self, api, is_versioned=False, tag=RELEASE_TAG):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory() as tmpdir, patch.dict(os.environ, {"RELEASE_POLICY_READ_TOKEN": "generated-policy-read-fixture"}):
+            if is_versioned:
+                control = Path(tmpdir) / "signature-control.tar.gz"
+                control.write_bytes(b"deterministic signature control fixture\n")
+                api.assets.append(_asset(
+                    MODULE.SIGNATURE_CONTROL_ASSET,
+                    "sha256:" + hashlib.sha256(control.read_bytes()).hexdigest(),
+                    id=999991, size=control.stat().st_size,
+                    uploader={"id": 41898282, "login": "github-actions[bot]"},
+                ))
+                os.environ["SIGNATURE_BUNDLE_PATH"] = str(control)
             assets_file = Path(tmpdir) / "expected-assets.txt"
             digests_file = Path(tmpdir) / "expected-digests.txt"
             _write_assets_file(assets_file)
@@ -773,6 +829,7 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
                     expected_digests_file=digests_file,
                 )
             finally:
+                os.environ.pop("SIGNATURE_BUNDLE_PATH", None)
                 MODULE._fetch_json = original_fetch
                 MODULE._patch_json = original_patch
 
@@ -816,6 +873,62 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
         self.assertEqual(body["make_latest"], "true")
 
     @patch("subprocess.run")
+    def test_incompatible_repository_policy_blocks_before_patch(self, mock_run):
+        for is_versioned in (False, True):
+            tag = "v1.0.0" if is_versioned else RELEASE_TAG
+            mock_run.return_value = MagicMock(returncode=0, stdout=f"{SHA}\trefs/tags/{tag}\n")
+            api = FakeApi(release=_release(tag=tag, prerelease=not is_versioned))
+            api.policy["enabled"] = not is_versioned
+            with self.assertRaisesRegex(MODULE.GateError, "immutability"):
+                self._run_gate(api, is_versioned=is_versioned, tag=tag)
+            self.assertEqual(api.patch_calls, [])
+
+    @patch("subprocess.run")
+    def test_stable_publication_rejects_mutable_patch_or_followup_record(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout=f"{SHA}\trefs/tags/v1.0.0\n")
+        for location in ("patch", "get"):
+            api = FakeApi(release=_release(tag="v1.0.0", prerelease=False),
+                          published=_published_release(is_versioned=True, tag_name="v1.0.0"))
+            if location == "patch":
+                api.published["immutable"] = False
+            else:
+                original = api.fetch
+                def fetch(url, token):
+                    value = original(url, token)
+                    if url.endswith(f"/releases/{RELEASE_ID}") and api.patch_calls:
+                        return {**value, "immutable": False}
+                    return value
+                api.fetch = fetch
+            with self.assertRaisesRegex(MODULE.GateError, "immutability"):
+                self._run_gate(api, is_versioned=True, tag="v1.0.0")
+            self.assertEqual(len(api.patch_calls), 2 if location == "patch" else 1)
+
+    @patch("subprocess.run")
+    def test_ambiguous_stable_response_never_authorizes_blind_quarantine(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout=f"{SHA}\trefs/tags/v1.0.0\n")
+        for field in ("id", "immutable"):
+            api = FakeApi(release=_release(tag="v1.0.0", prerelease=False),
+                          published=_published_release(is_versioned=True, tag_name="v1.0.0"))
+            api.published[field] = None
+            with self.assertRaisesRegex(MODULE.GateError, "preserved"):
+                self._run_gate(api, is_versioned=True, tag="v1.0.0")
+            self.assertEqual(len(api.patch_calls), 1)
+
+    @patch("subprocess.run")
+    def test_blocks_versioned_publication_with_rolling_tag(self, mock_run):
+        """A stable publication must not accept the nightly tag identity."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{SHA}\trefs/tags/nightly\n"
+        )
+        api = FakeApi(
+            release=_release(tag="nightly", prerelease=False),
+            published=_published_release(is_versioned=True, tag_name="nightly"),
+        )
+        with self.assertRaisesRegex(MODULE.GateError, "versioned release tag"):
+            self._run_gate(api, is_versioned=True, tag="nightly")
+        self.assertEqual(api.patch_calls, [])
+
+    @patch("subprocess.run")
     def test_blocks_on_tag_drift(self, mock_run):
         """Test 3: Tag moved between verify and PATCH."""
         mock_run.return_value = MagicMock(
@@ -850,6 +963,25 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
         self.assertEqual(len(api.patch_calls), 0)
 
     @patch("subprocess.run")
+    def test_blocks_on_asset_drift_after_other_preflight_checks(self, mock_run):
+        """A release changed during preflight must not reach the publication PATCH."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{SHA}\trefs/tags/{RELEASE_TAG}\n"
+        )
+        api = FakeApi()
+        original_fetch = api.fetch
+
+        def mutate_after_working_check(url, token):
+            if url.endswith("/commits/Working"):
+                api.assets[0]["digest"] = "sha256:" + "f" * 64
+            return original_fetch(url, token)
+
+        api.fetch = mutate_after_working_check
+        with self.assertRaisesRegex(MODULE.GateError, "digest mismatch"):
+            self._run_gate(api)
+        self.assertEqual(api.patch_calls, [])
+
+    @patch("subprocess.run")
     def test_blocks_on_non_draft(self, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0, stdout=f"{SHA}\trefs/tags/{RELEASE_TAG}\n"
@@ -867,6 +999,34 @@ class TestAcceptanceGateIntegration(unittest.TestCase):
         api = FakeApi(patch_should_fail=True)
         with self.assertRaisesRegex(MODULE.GateError, "PATCH failed"):
             self._run_gate(api)
+
+    @patch("subprocess.run")
+    def test_redrafts_when_assets_change_after_publication(self, mock_run):
+        """A post-PATCH asset race must not leave a public tampered release."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{SHA}\trefs/tags/{RELEASE_TAG}\n"
+        )
+        api = PostPatchTamperApi()
+        with self.assertRaisesRegex(MODULE.GateError, "post-PATCH"):
+            self._run_gate(api)
+        self.assertEqual(
+            [body["draft"] for _url, body in api.patch_calls],
+            [False, True],
+        )
+
+    @patch("subprocess.run")
+    def test_rejects_stale_publication_response_when_target_remains_draft(self, mock_run):
+        """A stale PATCH response must not make an unpublished target look complete."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=f"{SHA}\trefs/tags/{RELEASE_TAG}\n"
+        )
+        api = StalePublicationResponseApi()
+        with self.assertRaisesRegex(MODULE.GateError, "post-PATCH publication validation failed"):
+            self._run_gate(api)
+        self.assertEqual(
+            [body["draft"] for _url, body in api.patch_calls],
+            [False, True],
+        )
 
 
 class TestInputValidation(unittest.TestCase):

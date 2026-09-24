@@ -4,6 +4,31 @@ SparkGameRTS is a playable real-time-strategy example built from the module's re
 fog-of-war, and match systems. Loading the module starts a Human-versus-Swarm skirmish and opens the **RTS
 Battlefield** panel in editor-enabled runtimes.
 
+## Deterministic skirmish tick
+
+All gameplay advances through `Source/Simulation/RTSSkirmishSimulation`, a fixed 32 Hz tick
+(`TICK_SECONDS = 1/32`). Frame time from `OnUpdate` is only accumulated into whole ticks (at most 8 per frame), so
+the outcome depends on the starting state and the command stream, never on frame pacing or the host's fixed-step
+rate. Each tick runs, in order: AI opponents (once per simulated second) → commands/movement → combat → dead-unit
+cleanup → construction/production → economy → fog of war → elimination and win/loss.
+
+Determinism rules the tick relies on:
+
+- Unit, building, resource-node, player-economy, and command-queue containers are id-ordered `std::map`s, so two
+  worlds holding the same state iterate identically regardless of insertion order or standard library.
+- Simulation math uses only correctly rounded IEEE-754 operations (`std::sqrt`, not `std::hypot`), and the module
+  builds with `-ffp-contract=off` on GCC/Clang so no multiply-add is fused into an FMA on some targets only.
+- Combat picks every target from start-of-tick state and applies all hits together; ties resolve to the lowest id.
+- `ComputeStateHash()` hashes the complete state (units, buildings, queues, economy, nodes, fog grids, match) in
+  canonical order. `Tests/TestMOD370SkirmishDeterminismReal.cpp` compares it tick by tick across repeated runs,
+  shuffled container insertion, and different frame pacings, and plays a scripted skirmish to Human victory.
+
+Combat is continuous damage (`damage × attackSpeed × tick`) against the nearest enemy unit in template attack range,
+falling back to enemy structures. An `Attack` order without a target entity is an attack-move: the unit walks
+toward the point but stops to fight whatever enters range. The Swarm AI keeps its barracks producing marines and
+sends its idle army at the oldest surviving Human structure once four units are ready. A faction with no units and
+no structures is eliminated; the match reports **Victory** or **Defeat** from the local (non-AI) player's side.
+
 ## Live controls
 
 | Input | Action |
@@ -18,7 +43,7 @@ Battlefield** panel in editor-enabled runtimes.
 The panel also exposes army selection, production, hold, stop, and restart buttons. Production is authoritative: it
 checks faction resources and supply, consumes both when queued, and spawns the completed unit beside its building.
 Assigned workers credit their own faction's economy, and fog visibility is rebuilt from the live unit roster every
-frame.
+simulation tick.
 
 ## Console controls
 

@@ -23,11 +23,12 @@ This ensures your report is private and only visible to the maintainers until a 
 
 **Please do NOT open a public issue for security vulnerabilities.**
 
-## Response Timeline
+## Response Expectations
 
-- **Acknowledgment**: Within 48 hours of report submission
-- **Triage**: Within 7 days — we will confirm whether the issue is valid and assess severity
-- **Fix**: Within 30 days for critical issues, 90 days for lower severity
+SparkEngine does not currently promise an acknowledgment, triage, or fix
+timeline. Any response is best-effort and depends on maintainer availability,
+severity, reproducibility, and whether a supported release exists. These
+expectations will be revisited as part of the release-governance review.
 
 ## Scope
 
@@ -42,11 +43,13 @@ registered CTest entry point that passes the corpus directory and exact runtime 
 and a harness that calls the production entry point — a commented-out or string-literal
 declaration proves nothing. It is not runtime parser-safety or fuzz-coverage evidence.
 SEC-120 remains release-blocking, and `release.yml` enforces that with
-`check_fuzz_policy.py --require-closure`, because no production parser fuzz target,
-bounded seed corpus, sanitizer smoke campaign, or scheduled campaign is currently
-committed: 104 inventoried parsers are blocked and 151 detected candidates are still
-deferred. See `wiki/advanced/Fuzz-Policy-and-Parser-Security.md` for the exact scope,
-the reviewed exclusions, and the closure blockers.
+`check_fuzz_policy.py --require-closure`. Three production parsers (`json-utils`,
+`neural-weights-nnw`, and `crash-manifest-parser`) now have structurally bound
+sanitizer targets and bounded seed corpora. The current inventory still records 102
+blocked parser targets and 151 deferred candidates; exact-SHA hosted smoke,
+runtime coverage, and scheduled campaign evidence are not yet retained. See
+`wiki/advanced/Fuzz-Policy-and-Parser-Security.md` for the exact scope, reviewed
+exclusions, and closure blockers.
 
 The following are considered security vulnerabilities:
 
@@ -94,13 +97,20 @@ CI job: `check-supply-chain` in `.github/workflows/build.yml`
 
 **Outstanding (SEC-110 remains open/blocking):**
 
-- SBOM generation and release provenance
+- Retained success evidence for release SBOM and provenance: `release.yml`
+  defines an SPDX SBOM step and a build-provenance attestation, but no
+  versioned release has exercised them, and publisher identity and consumer
+  verification evidence remain open
 - Vulnerability-scanner integration
 - Required secret-scanning enforcement
 - CodeQL coverage for every shipped product
-- A formal severity-exception schema with owner and expiry
 - SPDX allowlist enforcement and policy for third-party code outside
-  `ThirdParty/`
+  `ThirdParty/` (for example, the editor fonts under `SparkEditor/Fonts/` have
+  no license file on disk; see `THIRD_PARTY_NOTICES`)
+
+The reviewed-exception schema (named owner, justification, and expiry for each
+`supply-chain.lock` exception) is implemented and enforced by the checker; see
+[`ThirdParty/POLICY.md`](ThirdParty/POLICY.md#reviewed-exceptions).
 
 ## Credit
 

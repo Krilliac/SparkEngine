@@ -199,13 +199,29 @@ namespace RTS
             switch (cmd.type)
             {
             case RTSCommandType::Move:
+            case RTSCommandType::Attack:
             {
+                if (cmd.type == RTSCommandType::Attack && cmd.targetEntity != 0)
+                {
+                    // Targeted attack: combat resolution owns the engagement from here.
+                    unit->state = RTSUnitState::Attacking;
+                    unit->targetId = cmd.targetEntity;
+                    queue.erase(queue.begin());
+                    break;
+                }
+
+                // Move, or attack-move: an attack-move holds position while combat reports an engagement.
+                const bool attackMove = cmd.type == RTSCommandType::Attack;
+                if (attackMove && unit->state == RTSUnitState::Attacking && unit->targetId != 0)
+                    break;
+
                 const float dx = cmd.targetX - unit->posX;
                 const float dy = cmd.targetY - unit->posY;
-                const float distance = std::hypot(dx, dy);
+                // sqrt is correctly rounded on every IEEE-754 platform; std::hypot is not, which breaks lockstep.
+                const float distance = std::sqrt(dx * dx + dy * dy);
                 const float speed = std::isfinite(unit->moveSpeed) ? std::max(unit->moveSpeed, 0.0f) : 0.0f;
                 const float step = speed * safeDeltaTime;
-                unit->state = RTSUnitState::Moving;
+                unit->state = attackMove ? RTSUnitState::Attacking : RTSUnitState::Moving;
                 unit->targetId = 0;
                 if (distance <= 0.001f || (step > 0.0f && step >= distance))
                 {
@@ -229,11 +245,6 @@ namespace RTS
             case RTSCommandType::Hold:
                 unit->state = RTSUnitState::Holding;
                 unit->targetId = 0;
-                queue.erase(queue.begin());
-                break;
-            case RTSCommandType::Attack:
-                unit->state = RTSUnitState::Attacking;
-                unit->targetId = cmd.targetEntity;
                 queue.erase(queue.begin());
                 break;
             case RTSCommandType::Gather:
@@ -269,7 +280,8 @@ namespace RTS
             return false;
 
         if (command.type == RTSCommandType::Move || command.type == RTSCommandType::Patrol ||
-            command.type == RTSCommandType::Build)
+            command.type == RTSCommandType::Build ||
+            (command.type == RTSCommandType::Attack && command.targetEntity == 0))
         {
             return std::isfinite(command.targetX) && std::isfinite(command.targetY);
         }

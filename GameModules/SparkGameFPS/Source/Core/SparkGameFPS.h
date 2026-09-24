@@ -8,17 +8,21 @@
  * It demonstrates all major engine subsystems: rendering, physics, AI,
  * animation, audio, networking, ECS, vehicles, and class-based FPS gameplay.
  *
- * Implements both the new IModule interface (via Spark::IModule) and
- * the legacy IGameModule interface for backward compatibility.
+ * Implements the installed SDK's Spark::IModule interface.
  */
 
 #pragma once
 
 #include "Spark/SparkSDK.h"
-#include "Core/IGameModule.h"
 
 #include <string>
 #include <vector>
+#include <memory>
+
+namespace SparkGameFPS
+{
+    class EngineWeatherAdapter;
+}
 
 // Forward declarations
 class Game;
@@ -31,17 +35,14 @@ extern SPARK_GAME_API Game* g_game;
 /**
  * @brief Game module implementation for SparkGame
  *
- * Implements both the new Spark::IModule interface and the legacy IGameModule.
- * The new interface receives an IEngineContext; the legacy interface receives
- * individual system pointers. Both paths ultimately initialize the same Game.
+ * Receives all engine services through the injected public IEngineContext.
  */
-class SparkGameModule : public Spark::IModule, public IGameModule
+class SparkGameModule : public Spark::IModule
 {
   public:
     SparkGameModule();
     ~SparkGameModule() override;
 
-    // --- Spark::IModule interface (new, SDK v2) ---
     Spark::ModuleInfo GetModuleInfo() const override;
     bool OnLoad(Spark::IEngineContext* context) override;
     void OnUnload() override;
@@ -53,36 +54,20 @@ class SparkGameModule : public Spark::IModule, public IGameModule
     void OnResume() override;
     void OnImGui() override;
 
-    // --- IGameModule interface (legacy) ---
-    const char* GetGameName() const override;
-    const char* GetGameVersion() const override;
-    bool Initialize(GraphicsEngine* graphics, InputManager* input) override;
-    void Shutdown() override;
-    void Update(float deltaTime) override;
-    void Render() override;
-    // OnResize is shared via override above
-    void Pause() override;
-    void Resume() override;
-    bool IsPaused() const override;
-
   private:
+    bool InitializeFromContext();
+    void Shutdown();
     void RegisterGameConsoleCommands();
 
     Spark::IEngineContext* m_context{nullptr};
+    std::unique_ptr<SparkGameFPS::EngineWeatherAdapter> m_weatherAdapter;
     std::vector<std::string> m_registeredConsoleCommands;
     bool m_initialized{false};
 };
 
-// New module exports (preferred by ModuleManager)
+// Installed SDK module exports consumed by ModuleManager.
 extern "C"
 {
     SPARK_MODULE_API Spark::IModule* CreateModule();
     SPARK_MODULE_API void DestroyModule(Spark::IModule* mod);
-}
-
-// Legacy exports (backward compatibility)
-extern "C"
-{
-    SPARK_GAME_API IGameModule* CreateGameModule();
-    SPARK_GAME_API void DestroyGameModule(IGameModule* module);
 }

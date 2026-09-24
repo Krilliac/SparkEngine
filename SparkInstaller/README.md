@@ -24,9 +24,11 @@ taste, and builds the engine on your machine.
 **Update mode** (destination contains an existing install):
 
 1. Read the prior `.sparkengine-install.json` to recover ref + options.
-2. `git fetch` + `git checkout <ref>` + `git submodule update --init --recursive`.
-3. Re-run configure + build with the stored options.
-4. Update `.sparkengine-install.json` with the new commit + timestamp.
+2. Verify the existing checkout has no tracked or untracked changes; refuse the
+   update when local changes could make rollback ambiguous.
+3. `git fetch` + `git checkout <ref>` + `git submodule update --init --recursive`.
+4. Re-run configure + build with the stored options.
+5. Update `.sparkengine-install.json` with the new commit + timestamp.
 
 The same binary handles both modes — it picks automatically based on what's
 in the destination.
@@ -79,7 +81,7 @@ concerns outside the blocked `stable-v1` contract.
 
 | Platform | Behaviour when `git` is missing |
 |---|---|
-| Windows | Auto-downloads MinGit into `%LOCALAPPDATA%/SparkInstaller/cache/mingit` and uses it. The user's system PATH is never modified. |
+| Windows | Auto-downloads the SHA-256-pinned MinGit archive, extracts it into a unique staging directory under `%LOCALAPPDATA%/SparkInstaller/cache`, and only then renames it to `cache/mingit` with a hash activation marker. A cached `mingit` tree without a matching marker (for example after an interrupted extraction), or one that is a symlink/junction, is never used: it is renamed aside to `mingit.untrusted-*` (not deleted) and replaced by a fresh verified copy. The user's system PATH is never modified. |
 | Linux | Prints a short message instructing `apt`/`dnf`/`pacman` install and exits. |
 | macOS | Prints `xcode-select --install` instruction and exits. |
 

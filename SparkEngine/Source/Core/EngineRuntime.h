@@ -99,6 +99,12 @@ struct EngineRuntime
 
     /// [shutdown thread] Release owned asset services after EngineContext teardown.
     void ShutdownHeadlessAssetServices();
+
+    /** [startup thread] Create the owned NullRHI bridge for a headless host. */
+    [[nodiscard]] bool InitializeHeadlessRhi();
+
+    /** [shutdown thread] Release the owned headless RHI after module teardown. */
+    void ShutdownHeadlessRhi() noexcept;
 };
 
 /**

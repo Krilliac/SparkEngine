@@ -17,6 +17,7 @@
 #include "Engine/ECS/Components.h"
 #include "Engine/Events/EventSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Graphics/RHI/RHIBridge.h"
 #include "Utils/ConfigParser.h"
 #include "Utils/ConsoleProcessManager.h"
 #include "Utils/SparkConsole.h"
@@ -447,12 +448,14 @@ namespace Spark::Server
         if (!options.controlEndpoint.empty())
         {
             if (requestedLanBroadcast.value_or(false))
-                return {{}, "Gateway-managed servers cannot enable LAN broadcast; remove Network.lan_broadcast=true "
-                            "or --lan-broadcast"};
+                return {{},
+                        "Gateway-managed servers cannot enable LAN broadcast; remove Network.lan_broadcast=true "
+                        "or --lan-broadcast"};
             if (options.server.endpointPolicy.IsValid() &&
                 options.server.endpointPolicy.PeerScope() == Net::NetworkPeerScope::PrivateLan)
-                return {{}, "Gateway-managed servers cannot combine local control with an RFC1918 game bind; use "
-                            "Network.bind_address=loopback and disable LAN broadcast"};
+                return {{},
+                        "Gateway-managed servers cannot combine local control with an RFC1918 game bind; use "
+                        "Network.bind_address=loopback and disable LAN broadcast"};
             options.server.endpointPolicy = Net::NetworkEndpointPolicy::Loopback();
             options.server.enableLanBroadcast = false;
         }
@@ -534,12 +537,22 @@ namespace Spark::Server
         runtime.timer = std::make_unique<Timer>();
         runtime.timer->Start();
         runtime.eventBus = std::make_unique<Spark::EventBus>();
+        if (!runtime.InitializeHeadlessRhi())
+        {
+            SetError("Failed to initialize the headless NullRHI device");
+            runtime.eventBus.reset();
+            runtime.timer.reset();
+            return false;
+        }
         EngineContext::SetOwned(
             std::make_unique<EngineContext>(nullptr, nullptr, runtime.timer.get(), runtime.eventBus.get()));
         EngineContext* context = EngineContext::Get();
         if (!context)
         {
             SetError("Failed to create the headless EngineContext");
+            runtime.ShutdownHeadlessRhi();
+            runtime.eventBus.reset();
+            runtime.timer.reset();
             return false;
         }
 
@@ -553,6 +566,7 @@ namespace Spark::Server
         if (!LoadSelectedModules())
         {
             DestroyModuleRuntime(true);
+            runtime.ShutdownHeadlessRhi();
             runtime.ShutdownHeadlessAssetServices();
             EngineContext::ResetOwned();
             runtime.eventBus.reset();
@@ -566,6 +580,7 @@ namespace Spark::Server
             SetError("DedicatedServer failed to bind or initialize networking");
             m_server.reset();
             DestroyModuleRuntime(true);
+            runtime.ShutdownHeadlessRhi();
             runtime.ShutdownHeadlessAssetServices();
             EngineContext::ResetOwned();
             runtime.eventBus.reset();
@@ -586,6 +601,7 @@ namespace Spark::Server
                 m_server->Stop();
                 m_server.reset();
                 DestroyModuleRuntime(true);
+                runtime.ShutdownHeadlessRhi();
                 Spark::FixedTimestepAccumulator::GetInstance().Shutdown();
                 runtime.ShutdownHeadlessAssetServices();
                 EngineContext::ResetOwned();
@@ -608,6 +624,7 @@ namespace Spark::Server
         auto nextStatus = startedAt;
         auto lastTick = startedAt;
         const auto frameBudget = std::chrono::duration<float>(1.0f / m_options.server.tickRate);
+        auto& runtime = GetEngineRuntime();
         bool draining = false;
         while (true)
         {
@@ -631,11 +648,15 @@ namespace Spark::Server
             }
             const float deltaTime = std::clamp(std::chrono::duration<float>(tickStart - lastTick).count(), 0.0f, 0.25f);
             lastTick = tickStart;
+            if (runtime.headlessRhiBridge)
+                runtime.headlessRhiBridge->BeginFrame();
             m_modules->UpdateAll(deltaTime);
             auto& fixed = Spark::FixedTimestepAccumulator::GetInstance();
             fixed.Advance(deltaTime);
             for (uint32_t step = fixed.GetFixedStepCount(); step > 0; --step)
                 m_modules->FixedUpdateAll(fixed.GetFixedTimestep());
+            if (runtime.headlessRhiBridge)
+                runtime.headlessRhiBridge->EndFrame();
 
             if (tickStart >= nextStatus)
             {
@@ -681,6 +702,7 @@ namespace Spark::Server
         Spark::FixedTimestepAccumulator::GetInstance().Shutdown();
 
         auto& runtime = GetEngineRuntime();
+        runtime.ShutdownHeadlessRhi();
         runtime.ShutdownHeadlessAssetServices();
         EngineContext::ResetOwned();
         runtime.eventBus.reset();

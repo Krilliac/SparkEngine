@@ -255,7 +255,7 @@ class DocsGenerationHostileTests(unittest.TestCase):
         self.assertNotIn("SPARK_FILE_TREE_OUTPUT", environment)
         self.assertNotIn("SPARK_WIKI_DIR", environment)
 
-    def test_currentness_pins_generation_date_to_source_commit_utc_day(self) -> None:
+    def test_currentness_strips_date_overrides_and_preserves_source_identity(self) -> None:
         environments: list[dict[str, str]] = []
 
         def completed_process(
@@ -290,8 +290,48 @@ class DocsGenerationHostileTests(unittest.TestCase):
 
         self.assertEqual(
             [environment.get("GENERATED_DATE") for environment in environments],
-            ["2026-09-01", "2026-09-01", "2026-09-01"],
+            [None] * 3,
         )
+        self.assertEqual(
+            [environment.get("SPARKENGINE_DOC_SOURCE_SHA") for environment in environments],
+            [EXACT_SHA] * 3,
+        )
+        self.assertEqual(
+            [environment.get("SPARKENGINE_DOC_SOURCE_COMMITTED_AT") for environment in environments],
+            ["2026-08-31T19:31:59-05:00"] * 3,
+        )
+        self.assertEqual(
+            {environment.get("PYTHONDONTWRITEBYTECODE") for environment in environments},
+            {"1"},
+        )
+
+    def test_tracked_codebase_statistics_excludes_calendar_time(self) -> None:
+        script = (REPO_ROOT / "docs" / "update-codebase-stats.sh").read_text(encoding="utf-8")
+        page = (REPO_ROOT / "wiki" / "advanced" / "Codebase-Statistics.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("GENERATED_DATE", script)
+        self.assertNotIn("date -u", script)
+        self.assertNotRegex(
+            page,
+            r"(?m)^Comprehensive metrics.*Updated [0-9]{4}-[0-9]{2}-[0-9]{2}\.$",
+        )
+
+    def test_windows_prefers_installed_git_bash_over_wsl_shim(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-bash-selection-") as directory:
+            git_bash = Path(directory) / "bash.exe"
+            git_bash.write_text("trusted", encoding="utf-8")
+            with (
+                mock.patch.object(docs_currentness, "WINDOWS_HOST", True, create=True),
+                mock.patch.object(docs_currentness, "GIT_BASH_PATH", str(git_bash), create=True),
+                mock.patch.object(
+                    docs_currentness.shutil,
+                    "which",
+                    return_value=r"C:\WindowsApps\bash.exe",
+                ),
+            ):
+                selected = docs_currentness.find_bash(allow_override=False)
+        self.assertEqual(str(git_bash), selected)
 
     def test_bounded_process_timeout_terminates_descendants_promptly(self) -> None:
         child = (
@@ -381,6 +421,74 @@ class DocsGenerationHostileTests(unittest.TestCase):
                 projection,
             )
             self.assertIn("not a regular non-reparse file", str(caught.exception))
+
+    def test_undeclared_isolated_output_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-undeclared-output-") as directory:
+            root = Path(directory)
+            first = root / "first"
+            second = root / "second"
+            for snapshot in (first, second):
+                write(snapshot / "tracked.md", "tracked\n")
+                write(snapshot / "docs" / "api" / "README.md", "generated\n")
+                write(snapshot / "docs" / "unlisted.md", "undeclared\n")
+            write(root / "tracked.md", "tracked\n")
+            contract = {
+                "schemaVersion": 1,
+                "generators": [
+                    {
+                        "id": "api-docs",
+                        "script": "generate-api-docs.sh",
+                        "mode": "generate",
+                        "outputs": [
+                            {"path": "docs/api", "tracked": False, "tree": True},
+                        ],
+                    },
+                ],
+            }
+            with mock.patch.object(docs_currentness, "REPO_ROOT", root):
+                with self.assertRaisesRegex(
+                    docs_currentness.CurrentnessError,
+                    "undeclared generated output",
+                ):
+                    docs_currentness.compare_outputs(
+                        contract,
+                        first,
+                        second,
+                        ["tracked.md"],
+                    )
+
+    def test_windows_case_variant_of_tracked_input_is_not_undeclared(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-case-variant-") as directory:
+            root = Path(directory)
+            first = root / "first"
+            second = root / "second"
+            for snapshot in (first, second):
+                write(snapshot / "Tools" / "api-changelog.py", "tracked\n")
+                write(snapshot / "docs" / "api" / "README.md", "generated\n")
+            write(root / "tools" / "api-changelog.py", "tracked\n")
+            contract = {
+                "schemaVersion": 1,
+                "generators": [
+                    {
+                        "id": "api-docs",
+                        "script": "generate-api-docs.sh",
+                        "mode": "generate",
+                        "outputs": [
+                            {"path": "docs/api", "tracked": False, "tree": True},
+                        ],
+                    },
+                ],
+            }
+            with (
+                mock.patch.object(docs_currentness, "CASE_INSENSITIVE_TRACKED_PATHS", True),
+                mock.patch.object(docs_currentness, "REPO_ROOT", root),
+            ):
+                docs_currentness.compare_outputs(
+                    contract,
+                    first,
+                    second,
+                    ["tools/api-changelog.py"],
+                )
 
     def test_newer_readme_cannot_hide_stale_source_or_missing_page(self) -> None:
         with MiniContract() as fixture:
@@ -693,6 +801,79 @@ class RepositoryEvidenceTests(unittest.TestCase):
         ids = tuple(row["id"] for row in contract["generators"])
         self.assertEqual(docs_currentness.REQUIRED_GENERATORS, ids)
 
+    def test_wiki_ecs_inventory_is_identical_for_lf_and_crlf_headers(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wiki-ecs-newlines-") as directory:
+            root = Path(directory)
+            write(root / "docs" / "sync-wiki.sh", (REPO_ROOT / "docs" / "sync-wiki.sh").read_text(encoding="utf-8"))
+            for relative in ("SparkEditor/Source/Panels", "Tests", "GameModules"):
+                (root / relative).mkdir(parents=True)
+            headers = {
+                "SparkEngine/Source/Engine/ECS/Components/FixtureComponents.h": (
+                    "struct ZuluComponent\n{\n};\n"
+                    "struct AlphaComponent\n{\n};\n"
+                    "struct AlphaComponentExtra {};\n"
+                ),
+                "SparkEngine/Source/Engine/ECS/Systems/FixtureSystems.h": (
+                    "class ZuluSystem\n{\n};\n"
+                    "class AlphaSystem\n{\n};\n"
+                    "class AlphaSystemExtra : public AlphaSystem {};\n"
+                ),
+            }
+            page = root / "wiki" / "subsystems" / "Entity-Component-System.md"
+            git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            command = [str(git_bash if git_bash.is_file() else "bash"), "docs/sync-wiki.sh", "sync"]
+            generated = []
+            for newline in ("\n", "\r\n"):
+                with self.subTest(newline=repr(newline)):
+                    for relative, content in headers.items():
+                        path = root / relative
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_bytes(content.replace("\n", newline).encode("utf-8"))
+                    write(page, "# ECS\n")
+                    result = subprocess.run(
+                        command,
+                        cwd=root,
+                        env={**os.environ, "SPARK_WIKI_DIR": str(root / "wiki")},
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=30,
+                    )
+                    self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+                    published = page.read_bytes()
+                    generated.append(published)
+                    self.assertEqual(
+                        [b"AlphaComponentExtra", b"AlphaComponent", b"ZuluComponent",
+                         b"AlphaSystemExtra", b"AlphaSystem", b"ZuluSystem"],
+                        [line.split(b"`")[1] for line in published.split(b"\n") if line.startswith(b"| `")],
+                    )
+                    self.assertNotIn(b"\r", published)
+            self.assertEqual(generated[0], generated[1])
+
+    def test_wiki_test_inventory_includes_all_registered_test_sources(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wiki-test-inventory-") as directory:
+            wiki = Path(directory)
+            (wiki / "advanced").mkdir(parents=True)
+            for relative in (Path("Home.md"), Path("advanced") / "Testing.md"):
+                source = REPO_ROOT / "wiki" / relative
+                destination = wiki / relative
+                destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+            git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            command = [str(git_bash if git_bash.is_file() else "bash"), "docs/sync-wiki.sh", "sync"]
+            result = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                env={**os.environ, "SPARK_WIKI_DIR": str(wiki)},
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=120,
+            )
+            self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+            published = (wiki / "advanced" / "Testing.md").read_text(encoding="utf-8")
+            self.assertIn("| `TestMain` | 1 |", published)
+
     def test_check_paths_are_content_based_and_read_only(self) -> None:
         scripts = {
             name: (REPO_ROOT / "docs" / name).read_text(encoding="utf-8")
@@ -719,7 +900,7 @@ class RepositoryEvidenceTests(unittest.TestCase):
         self.assertEqual([], errors)
         gateway = REPO_ROOT / "Tests" / "TestGatewaySecurity.cpp"
         actual_loc = len(gateway.read_text(encoding="utf-8").splitlines())
-        self.assertEqual(576, actual_loc)
+        self.assertEqual(596, actual_loc)
         tree = (REPO_ROOT / "wiki" / "reference" / "File-Tree.md").read_text(encoding="utf-8")
         self.assertIn(
             f"(../../Tests/TestGatewaySecurity.cpp) - {actual_loc} LOC",
@@ -931,6 +1112,18 @@ class AssetIntegrityTests(unittest.TestCase):
                 )
                 self.assertTrue(any(fragment in message for message in messages), messages)
 
+    def test_windows_reserved_asset_reference_fails_before_resolution(self) -> None:
+        for reference in ("CON", "CON.txt", "nested/AUX.bin", "LPT9.log"):
+            with self.subTest(reference=reference):
+                messages = self.findings(
+                    [{"path": reference, "origin": "authored", "sha256": "0" * 64}],
+                    {"art.png": b"intact\n"},
+                )
+                self.assertTrue(
+                    any("reserved Windows device name" in message for message in messages),
+                    messages,
+                )
+
     def test_undeclared_shipped_file_fails(self) -> None:
         payload = b"intact\n"
         messages = self.findings(
@@ -938,6 +1131,88 @@ class AssetIntegrityTests(unittest.TestCase):
             {"art.png": payload, "stowaway.bin": b"extra"},
         )
         self.assertTrue(any("no manifest declares it" in message for message in messages), messages)
+
+    def test_directory_reparse_is_rejected_before_asset_hash(self) -> None:
+        root = Path(self.temporary.name)
+        assets = root / "Templates" / "Probe" / "Assets"
+        outside = root / "outside"
+        assets.mkdir(parents=True)
+        outside.mkdir()
+        payload = b"outside payload"
+        (outside / "payload.bin").write_bytes(payload)
+        reparse = assets / "External"
+        try:
+            if sys.platform == "win32":
+                subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(reparse), str(outside)],
+                    check=True,
+                    capture_output=True,
+                )
+            else:
+                reparse.symlink_to(outside, target_is_directory=True)
+        except (OSError, subprocess.CalledProcessError) as error:
+            self.skipTest(f"directory reparses unavailable: {error}")
+
+        try:
+            (assets / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "manifestVersion": 1,
+                        "package": "Probe",
+                        "license": "Spark Open License 1.0",
+                        "assets": [
+                            {
+                                "path": "External/payload.bin",
+                                "origin": "fixture",
+                                "sha256": self.digest(payload),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            tracked = frozenset(
+                {
+                    "Templates/Probe/Assets/External/payload.bin",
+                    "Templates/Probe/Assets/manifest.json",
+                }
+            )
+            with mock.patch.object(site_assets, "REPO_ROOT", root), mock.patch.object(
+                site_assets, "file_digest", wraps=site_assets.file_digest
+            ) as digest_mock:
+                results = site_assets.validate_package("Templates/Probe/Assets", tracked)
+        finally:
+            if sys.platform == "win32":
+                subprocess.run(["cmd", "/c", "rmdir", str(reparse)], check=False, capture_output=True)
+            else:
+                reparse.unlink(missing_ok=True)
+
+        messages = [message for _, message in results]
+        self.assertTrue(any("reparse" in message.lower() for message in messages), messages)
+        digest_mock.assert_not_called()
+
+    def test_manifest_package_identity_must_match_directory(self) -> None:
+        payload = b"intact\n"
+        directory, _ = self.package(
+            [{"path": "art.png", "origin": "authored", "sha256": self.digest(payload)}],
+            {"art.png": payload},
+        )
+        manifest = directory / "Templates" / "Probe" / "Assets" / "manifest.json"
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        data["package"] = "DifferentPackage"
+        manifest.write_text(json.dumps(data), encoding="utf-8")
+        with mock.patch.object(site_assets, "REPO_ROOT", directory):
+            results = site_assets.validate_package(
+                "Templates/Probe/Assets",
+                frozenset(
+                    {
+                        "Templates/Probe/Assets/art.png",
+                        "Templates/Probe/Assets/manifest.json",
+                    }
+                ),
+            )
+        messages = [message for _, message in results]
+        self.assertTrue(any("package" in message.lower() for message in messages), messages)
 
     def test_repository_asset_packages_pass_the_real_walk(self) -> None:
         integrity = [

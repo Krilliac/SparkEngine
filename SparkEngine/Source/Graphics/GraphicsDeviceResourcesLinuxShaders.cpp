@@ -122,10 +122,10 @@ HRESULT GraphicsEngine::CreateDefaultTexture()
         return E_FAIL;
 
     const uint32_t whitePixel = 0xFFFFFFFF;
-    auto defaultTex = rhi.bridge.CreateTexture2D(1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
-                                                 Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
+    rhi.defaultTexture = rhi.bridge.CreateTexture2D(1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
+                                                    Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
 
-    if (!defaultTex)
+    if (!rhi.defaultTexture)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create default texture via RHI");
         return E_FAIL;
@@ -335,6 +335,27 @@ void GraphicsEngine::SetBasicMaterialTextures(ID3D11ShaderResourceView* /*normal
                                               ID3D11ShaderResourceView* /*roughnessSrv*/)
 {
     // Basic D3D11 SRVs are not part of the non-Windows RHI path.
+}
+
+// --- Basic-path output-merger state and the blob-shadow SRV are part of the
+//     public basic-draw surface game modules link against (SparkGameMMOFPS's
+//     transparent, FX and blob-shadow passes). Without Linux definitions the
+//     module fails dlopen(RTLD_NOW) with an undefined symbol and never loads.
+//     As with ApplyBasicRenderStates, the active RHI pipeline owns blend and
+//     depth state on Linux, and a null SRV means "no texture" to SetBasicTexture.
+void GraphicsEngine::SetBasicBlendMode(BasicBlendMode /*mode*/)
+{
+    // Blend state is owned by the RHI pipeline state on non-Windows builds.
+}
+
+void GraphicsEngine::SetBasicDepthMode(BasicDepthMode /*mode*/)
+{
+    // Depth-stencil state is owned by the RHI pipeline state on non-Windows builds.
+}
+
+ID3D11ShaderResourceView* GraphicsEngine::GetOrCreateSoftCircleShadowSRV()
+{
+    return nullptr;
 }
 
 const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(const std::string& /*jsonPath*/,

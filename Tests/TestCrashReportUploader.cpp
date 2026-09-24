@@ -2,12 +2,57 @@
 // Tests ComputeStackHash, IsCrashUploadRateLimited, and URL auto-detection
 
 #include "TestFramework.h"
+#include "Utils/CrashHandler.h"
 #include "Utils/CrashReportUploader.h"
 #include <string>
 #include <sstream>
 #include <cstdint>
 #include <chrono>
 #include <atomic>
+
+#if defined(SPARK_BUILD_SHIPPING)
+TEST(LegacyGithubUploader_IsDisabledInShipping)
+{
+    CrashConfig cfg;
+    cfg.githubRepo = "Krilliac/SparkEngine";
+    cfg.githubToken = "test-token-never-sent";
+    cfg.githubAttachDump = true;
+
+    // This must fail closed before any CURL request, draft release, issue, or
+    // artifact upload can occur.  The standalone SparkCrashReporter owns the
+    // explicit metadata-only public Issue flow for shipped builds.
+    EXPECT_FALSE(UploadCrashToGitHub(cfg, "*** CRASH DETECTED ***\nraw path", "does-not-exist.zip"));
+}
+#endif
+
+TEST(CrashUploadEndpointLogRedaction_RemovesCredentialsAndCapabilities)
+{
+    const std::string endpoint = "https://user:secret@example.invalid/private/upload?token=query-secret#fragment";
+    const std::string redacted = RedactCrashEndpointForLog(endpoint);
+
+    EXPECT_EQ(redacted, "https://example.invalid");
+    EXPECT_TRUE(redacted.find("secret") == std::string::npos);
+    EXPECT_TRUE(redacted.find("query-secret") == std::string::npos);
+    EXPECT_TRUE(redacted.find("private") == std::string::npos);
+}
+
+TEST(CrashUploadEndpointLogRedaction_PreservesOnlySchemeAndHost)
+{
+    EXPECT_EQ(RedactCrashEndpointForLog("dbx://shared-capability"), "dbx://<redacted>");
+    EXPECT_EQ(RedactCrashEndpointForLog("ftp://example.invalid/reports/"), "ftp://example.invalid");
+    EXPECT_EQ(RedactCrashEndpointForLog("not-a-url"), "<redacted>");
+}
+
+TEST(CrashUploadEndpointLogRedaction_UnknownSchemeCannotExposeCapability)
+{
+    const std::string endpoint = "custom://user:secret@example.invalid/private/upload?token=query-secret";
+    const std::string redacted = RedactCrashEndpointForLog(endpoint);
+
+    EXPECT_EQ(redacted, "custom://example.invalid");
+    EXPECT_TRUE(redacted.find("secret") == std::string::npos);
+    EXPECT_TRUE(redacted.find("query-secret") == std::string::npos);
+    EXPECT_TRUE(redacted.find("private") == std::string::npos);
+}
 
 // ============================================================================
 // ComputeStackHash is exercised through the real CrashReportUploader.cpp

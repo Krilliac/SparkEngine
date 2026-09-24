@@ -1,6 +1,6 @@
 # Spark CLI
 
-`spark_cli.py` creates, builds, runs, validates, migrates, and packages standalone SparkEngine projects.
+`spark_cli.py` creates, builds, runs, validates, audits, and packages standalone SparkEngine projects.
 Run it from a project root containing `CMakeLists.txt`, one `*.sparkproject` descriptor, and
 `spark.modules.json`.
 
@@ -73,7 +73,7 @@ runnable-package layout containing:
 - a generated `spark.modules.json` that preserves root and per-module metadata while rewriting module paths
   to their packaged filenames;
 - runtime `Shaders`, optional `Resources`, and engine branding assets;
-- project `Assets`, `Scenes`, `Config`, and the active project descriptor;
+- project `Assets`, `Scenes`, `Config`, `Data` archives, and the active project descriptor;
 - `Startup.sparkscene` plus an isolated scene-preview host when a startup scene exists;
 - native game/scene launchers, package guidance, and a `manifest.json` whose entrypoint is the game launcher
   with `workingDirectory` set to the package root.
@@ -101,6 +101,24 @@ dependencies according to the target platform's deployment policy.
 `--strip` remains accepted and omits external PDB files, but does not mutate module bytes because doing so
 would invalidate the pre-load ABI hash. `--compress` also remains accepted; the current runnable-package
 contract keeps assets raw and records both requested and effective states in `manifest.json`.
+
+## Validate references and audit asset headers
+
+```powershell
+python <engine-root>/Tools/spark-cli/spark_cli.py validate . --format json
+python <engine-root>/Tools/spark-cli/spark_cli.py migrate Assets
+```
+
+`validate` parses every `.sparkscene`, `.scene`, and `.material` file under the given path and checks each
+`*Path` field (and legacy `mesh`/texture keys) against the project root, i.e. the nearest directory holding
+the `*.sparkproject` descriptor. Missing files, absolute paths, and references escaping the project are
+errors; only the renderer's built-in `__spark_primitive_*` meshes are exempt. Only parsed scene/material
+files are counted, and a run that inspects none of them exits 1.
+
+`migrate` is a read-only audit of the 32-byte `AssetFileHeader` from `Core/AssetMigration.h` (magic bytes
+`KRPS` on disk). The engine ships no migration steps, so it never rewrites or backs up files: outdated,
+newer, truncated, or over-claiming headers are reported and make the command exit 1. `--dry-run` and
+`--backup` are accepted for compatibility and change nothing.
 
 ## Inspect SparkPak archives
 

@@ -173,8 +173,10 @@ namespace Spark::Scripting
         {
             if (now - it->detectedAt >= debounce)
             {
-                ProcessChange(it->filePath);
-                recompiled++;
+                if (ProcessChange(it->filePath))
+                {
+                    recompiled++;
+                }
                 it = m_pendingChanges.erase(it);
             }
             else
@@ -191,8 +193,10 @@ namespace Spark::Scripting
         int count = 0;
         for (const auto& [path, state] : m_fileStates)
         {
-            ProcessChange(path);
-            count++;
+            if (ProcessChange(path))
+            {
+                count++;
+            }
         }
         return count;
     }
@@ -260,15 +264,13 @@ namespace Spark::Scripting
         return false;
     }
 
-    void ScriptHotReloadManager::ProcessChange(const std::string& filePath)
+    bool ScriptHotReloadManager::ProcessChange(const std::string& filePath)
     {
         if (!m_recompileCallback)
-            return;
+            return false;
 
         SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadBegin, filePath, 0.0);
         RecompileResult result = m_recompileCallback(filePath);
-        m_recompileCount++;
-
         if (!result.success)
         {
             m_errorCount++;
@@ -284,11 +286,12 @@ namespace Spark::Scripting
             {
                 m_errorCallback(result);
             }
+            return false;
         }
-        else
-        {
-            SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadComplete, filePath, 0.0);
-        }
+
+        m_recompileCount++;
+        SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadComplete, filePath, 0.0);
+        return true;
     }
 
     // ============================================================================

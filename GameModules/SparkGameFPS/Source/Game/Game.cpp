@@ -3,6 +3,7 @@
 #include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <cstdint>
+#include <cctype>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
@@ -36,13 +37,30 @@
 #include "Console/AdvancedConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
 #include "Audio/MusicManager.h"
-#include "Graphics/WeatherSystem.h"
+#include <cmath>
 #include <filesystem>
+#include <format>
+#include <locale>
+#include <sstream>
+#include <unordered_set>
 
 // Centralized logging macros (previously defined locally with inconsistent rate limits)
 #include "Utils/LogMacros.h"
 
 using namespace DirectX;
+
+bool Game::ParseAuthoredFiniteFloat(const std::string& text, float& value)
+{
+    // Keep the old from_chars contract without relying on the floating-point
+    // overload, which is unavailable on some libc++ toolchains.
+    if (text.empty() || text.front() == '+' || std::isspace(static_cast<unsigned char>(text.front())))
+        return false;
+    std::istringstream stream(text);
+    stream.imbue(std::locale::classic());
+    stream >> std::noskipws >> value;
+    return !stream.fail() && stream.peek() == std::char_traits<char>::eof() && std::isfinite(value);
+}
+
 /*-------------------------------------------------------------
   Ctor / Dtor
 --------------------------------------------------------------*/
@@ -88,6 +106,15 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     std::wstring sceneMsg = L"SceneManager::LoadScene returned: " + std::wstring(sceneLoaded ? L"SUCCESS" : L"FAILURE");
     LOG_TO_CONSOLE_IMMEDIATE(sceneMsg, L"INFO");
 
+    // Scene material paths are authored data, but the project root is trusted
+    // module state. Bind that root immediately after scene construction so
+    // GameObject::Render can resolve Assets/Materials/*.json without consulting
+    // the process working directory or accepting an arbitrary scene-controlled
+    // filesystem root. Keep the UTF-8 conversion explicit for installed paths
+    // containing non-ASCII characters.
+    if (sceneLoaded)
+        BindSceneMaterialRoots();
+
     /* Camera ------------------------------------------------*/
     m_camera = std::make_unique<SparkEngineCamera>();
     ASSERT(m_camera);
@@ -98,12 +125,69 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     ASSERT_MSG(aspect > 0.0f, "Invalid aspect ratio");
 
     m_camera->Initialize(aspect);
-    // NOTE: Camera position is now defined in the scene file (Assets/Scenes/level1.scene)
-    // as a [Camera] entry. It can be placed and edited in the SparkEditor.
-    // The code below shows the equivalent C++ approach for reference.
-    // m_camera->SetPosition({0.0f, 2.0f, -5.0f});
-    m_camera->SetPosition({0.0f, 2.0f, -5.0f}); // Fallback if scene camera not loaded
-    LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized (scene override available)", L"INFO");
+    const SceneNode* authoredCamera = nullptr;
+    if (sceneLoaded)
+    {
+        for (int i = 0; i < m_sceneManager->GetNodeCount(); ++i)
+        {
+            const SceneNode* node = m_sceneManager->GetNode(i);
+            if (!node || node->type != "Camera")
+                continue;
+            const auto projection = node->properties.find("projection");
+            if (projection != node->properties.end() && projection->second != "perspective")
+            {
+                LOG_TO_CONSOLE_IMMEDIATE(L"Unsupported authored camera projection; keeping perspective fallback",
+                                         L"WARNING");
+                continue;
+            }
+            if (!authoredCamera)
+                authoredCamera = node;
+            const auto main = node->properties.find("isMain");
+            if (main != node->properties.end() && (main->second == "true" || main->second == "1"))
+            {
+                authoredCamera = node;
+                break;
+            }
+        }
+    }
+    // Preserve the verified visible fallback when older scenes have no camera.
+    m_camera->SetPosition(authoredCamera ? authoredCamera->position : XMFLOAT3{0.0f, 2.0f, -20.0f});
+    if (authoredCamera)
+    {
+        m_camera->Console_SetRotation(authoredCamera->rotation.x, authoredCamera->rotation.y,
+                                      authoredCamera->rotation.z);
+
+        const auto nearProperty = authoredCamera->properties.find("nearPlane");
+        const auto farProperty = authoredCamera->properties.find("farPlane");
+        if (nearProperty != authoredCamera->properties.end() && farProperty != authoredCamera->properties.end())
+        {
+            float nearPlane = 0.0f;
+            float farPlane = 0.0f;
+            if (ParseAuthoredFiniteFloat(nearProperty->second, nearPlane) &&
+                ParseAuthoredFiniteFloat(farProperty->second, farPlane) && nearPlane >= 0.01f && nearPlane <= 10.0f &&
+                farPlane >= 100.0f && farPlane <= 10000.0f && nearPlane < farPlane)
+            {
+                m_camera->Console_SetClippingPlanes(nearPlane, farPlane);
+            }
+            else
+            {
+                LOG_TO_CONSOLE_IMMEDIATE(L"Invalid authored camera clipping; keeping camera defaults", L"WARNING");
+            }
+        }
+
+        const auto cameraState = m_camera->Console_GetState();
+        LOG_TO_CONSOLE_IMMEDIATE(
+            std::format(L"Camera authored state: rotation ({:.1f}, {:.1f}, {:.1f}) near/far ({:.2f}, {:.1f})",
+                        cameraState.rotation.x, cameraState.rotation.y, cameraState.rotation.z, cameraState.nearPlane,
+                        cameraState.farPlane),
+            L"INFO");
+    }
+    const XMFLOAT3 cameraPosition = m_camera->GetPosition();
+    const std::wstring cameraSource = authoredCamera ? L"authored scene" : L"fallback";
+    LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized from " + cameraSource + L" at (" + std::to_wstring(cameraPosition.x) +
+                                 L", " + std::to_wstring(cameraPosition.y) + L", " + std::to_wstring(cameraPosition.z) +
+                                 L")",
+                             L"INFO");
 
     /* Class System -----------------------------------------*/
     m_classSystem = std::make_unique<Spark::ClassSystem>();
@@ -144,6 +228,10 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
         return hr;
     }
+    // Player movement/physics owns the camera position after the first tick.
+    // Start both from the authored camera so a locked or skipped movement tick
+    // cannot snap the view back to the player's constructor origin.
+    m_player->SetPosition(m_camera->GetPosition());
 
     // Set graphics engine for weapon rendering shader setup
     m_player->SetGraphicsEngine(m_graphics);
@@ -163,6 +251,7 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
             if (auto* mo = dynamic_cast<ModelObject*>(obj.get()))
                 mo->SetGraphicsEngine(m_graphics);
         }
+        BindSceneMaterialRoots();
     }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Game initialization complete - class system & combat arena ready", L"SUCCESS");
@@ -220,6 +309,60 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     return S_OK;
 }
 
+void Game::BindSceneMaterialRoots()
+{
+    if (!m_sceneManager)
+        return;
+
+    const std::filesystem::path projectRoot = Spark::FPSAssets::Root().parent_path();
+    const std::u8string projectRootU8 = projectRoot.u8string();
+    const std::string projectRootUtf8(reinterpret_cast<const char*>(projectRootU8.data()), projectRootU8.size());
+    int materialRootsBound = 0;
+    if (!projectRootUtf8.empty())
+    {
+        for (auto& object : m_sceneManager->GetObjects())
+        {
+            if (object && object->SetMaterialProjectRoot(projectRootUtf8))
+                ++materialRootsBound;
+        }
+        for (auto& object : m_gameObjects)
+        {
+            if (object && object->SetMaterialProjectRoot(projectRootUtf8))
+                ++materialRootsBound;
+        }
+    }
+    LOG_TO_CONSOLE_IMMEDIATE(L"Scene and procedural material roots bound for " + std::to_wstring(materialRootsBound) +
+                                 L" renderable objects",
+                             L"INFO");
+}
+
+void Game::InvalidateSceneBasicMaterials()
+{
+    if (!m_graphics || !m_sceneManager)
+        return;
+
+    const std::filesystem::path projectRoot = Spark::FPSAssets::Root().parent_path();
+    const std::u8string projectRootU8 = projectRoot.u8string();
+    const std::string projectRootUtf8(reinterpret_cast<const char*>(projectRootU8.data()), projectRootU8.size());
+    if (projectRootUtf8.empty())
+        return;
+
+    std::unordered_set<std::string> materialPaths;
+    for (const auto& object : m_sceneManager->GetObjects())
+    {
+        if (object && !object->GetMaterialPath().empty())
+            materialPaths.insert(object->GetMaterialPath());
+    }
+    for (const auto& object : m_gameObjects)
+    {
+        if (object && !object->GetMaterialPath().empty())
+            materialPaths.insert(object->GetMaterialPath());
+    }
+
+    for (const auto& materialPath : materialPaths)
+        m_graphics->InvalidateBasicMaterial(materialPath, projectRootUtf8);
+}
+
 /*-------------------------------------------------------------
   Tear-down
 --------------------------------------------------------------*/
@@ -254,6 +397,7 @@ void Game::Shutdown()
     m_camera.reset();
     m_sceneManager.reset();
     m_eventBus = nullptr;
+    m_weatherIntegration.Clear();
     m_engineContext = nullptr;
     m_engineSystemsInitialized = false;
 
@@ -360,6 +504,14 @@ void Game::SetEventBus(Spark::EventBus* bus)
             if (m_camera)
             {
                 m_camera->Console_SetPosition(e.spawnX, e.spawnY, e.spawnZ);
+                // The event carries only a position; face the authored spawn
+                // rotation of the point the respawn system actually used.
+                if (m_respawnSystem && m_respawnSystem->HasLastRespawnPoint())
+                {
+                    const Spark::RespawnPoint& spawn = m_respawnSystem->GetLastRespawnPoint();
+                    if (spawn.position.x == e.spawnX && spawn.position.y == e.spawnY && spawn.position.z == e.spawnZ)
+                        m_camera->Console_SetRotation(spawn.rotation.x, spawn.rotation.y, spawn.rotation.z);
+                }
             }
             if (m_player)
             {
@@ -484,17 +636,17 @@ void Game::Update(float dt)
         if (m_weatherTransitionTimer > 120.0f) // Every 2 minutes
         {
             m_weatherTransitionTimer = 0.0f;
-            if (auto* weather = m_engineContext->GetWeather())
+            if (m_weatherIntegration.IsActive())
             {
                 // Cycle: Clear → Rain → Fog → Storm → Clear
                 static int weatherCycle = 0;
-                constexpr Spark::WeatherType cycle[] = {
-                    Spark::WeatherType::Rain,
-                    Spark::WeatherType::Fog,
-                    Spark::WeatherType::Storm,
-                    Spark::WeatherType::Clear,
+                constexpr SparkGameFPS::WeatherPreset cycle[] = {
+                    SparkGameFPS::WeatherPreset::Rain,
+                    SparkGameFPS::WeatherPreset::Fog,
+                    SparkGameFPS::WeatherPreset::Storm,
+                    SparkGameFPS::WeatherPreset::Clear,
                 };
-                weather->SetWeather(cycle[weatherCycle % 4], 0.8f, 5.0f);
+                m_weatherIntegration.SetWeather(cycle[weatherCycle % 4], 0.8f, 5.0f);
                 weatherCycle++;
             }
         }

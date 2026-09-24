@@ -7,6 +7,23 @@
 #include "Graphics/RHI/NullRHIDevice.h"
 #include "Graphics/RHI/RHIFactory.h"
 #include "Graphics/RHI/RHIBridge.h"
+#include "Graphics/GraphicsConsoleCommands.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "Graphics/GraphicsEngine.h"
+#include <chrono>
+#endif
+
+TEST(GraphicsFallback_ScreenshotCommandReportsPlatformCompletion)
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    EXPECT_EQ(Spark::Graphics::Detail::ScreenshotCommandResponse(true),
+              std::string("Screenshot queued for next frame"));
+    EXPECT_EQ(Spark::Graphics::Detail::ScreenshotCommandResponse(false), std::string("Screenshot could not be queued"));
+#else
+    EXPECT_EQ(Spark::Graphics::Detail::ScreenshotCommandResponse(true), std::string("Screenshot saved"));
+    EXPECT_EQ(Spark::Graphics::Detail::ScreenshotCommandResponse(false), std::string("Failed to save screenshot"));
+#endif
+}
 
 // ============================================================================
 // NullRHIDevice direct construction
@@ -177,3 +194,20 @@ TEST(GraphicsFallback_AutoSelectOnLinuxNoGPU)
         EXPECT_TRUE(backends.size() > 0);
     }
 }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+TEST(GraphicsFallback_ConsoleBenchmarkRequiresRealPresent)
+{
+    GraphicsEngine engine;
+    const auto start = std::chrono::steady_clock::now();
+    const std::string result = engine.Console_Benchmark(1);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+
+    // The old command slept for one second and reported synthetic frames
+    // even though this engine has no swapchain and cannot present anything.
+    EXPECT_TRUE(result.find("unavailable") != std::string::npos);
+    EXPECT_TRUE(elapsed < std::chrono::milliseconds(500));
+    EXPECT_FALSE(engine.Console_Screenshot("no-device.png"));
+    EXPECT_TRUE(engine.Console_Benchmark(0).find("1-300") != std::string::npos);
+}
+#endif

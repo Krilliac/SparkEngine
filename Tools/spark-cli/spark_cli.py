@@ -40,6 +40,7 @@ import importlib.util
 import os
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import json
@@ -1074,7 +1075,9 @@ def _assemble_runnable_package(project_root, project_file, project_info, source_
                           runtime_directory)
     if error:
         return None, error
-    for directory in ("Assets", "Scenes", "Config"):
+    # Project .spk archives are mounted from Data/ beside the packaged host.
+    # Keep them in the runnable package alongside the loose content.
+    for directory in ("Assets", "Scenes", "Config", "Data"):
         _, error = _copy_tree(project_root / directory, destination / directory, project_root)
         if error:
             return None, error
@@ -1295,13 +1298,19 @@ def cmd_package(args):
         )
         return 1
     resolved_package_directory = package_directory.resolve()
-    protected = [project_root, project_root / "Assets", project_root / "Scenes", project_root / "Config"]
+    protected = [
+        project_root,
+        project_root / "Assets",
+        project_root / "Scenes",
+        project_root / "Config",
+        project_root / "Data",
+    ]
     if (resolved_package_directory == project_root or
             _path_is_within(project_root, resolved_package_directory) or
             any(_path_is_within(resolved_package_directory, path) for path in protected[1:])):
         print(
             "Error: Package output cannot replace or contain the project root, "
-            "or live inside Assets, Scenes, or Config."
+            "or live inside Assets, Scenes, Config, or Data."
         )
         return 1
     build_directory = configured_build_dir(project_root, config)
@@ -1465,8 +1474,93 @@ def cmd_package(args):
     return 0
 
 
+#: Built-in meshes the renderer synthesises instead of loading from disk
+#: (see SparkEngine/Source/Graphics/WorldBasicRenderer.cpp). Only mesh
+#: references may use this prefix; any other field naming it is a broken path.
+BUILTIN_MESH_PREFIX = "__spark_primitive_"
+_MESH_REFERENCE_KEYS = {"meshPath", "mesh"}
+
+
+def _find_validation_root(target_path):
+    """Return the project root that scene/material references resolve against.
+
+    Editor-written references are project-relative ("Assets/Models/x.obj"), so
+    validating a subdirectory such as Scenes/ must still resolve them against
+    the directory that owns the project descriptor.
+    """
+    start = target_path.resolve()
+    if start.is_file():
+        start = start.parent
+    for candidate in (start, *start.parents):
+        if any(candidate.glob("*.sparkproject")) or (candidate / "spark.project.json").is_file():
+            return candidate
+    return start
+
+
+def _reference_fields(component):
+    """Yield (key, value) for every asset reference a scene component declares.
+
+    Current .sparkscene components keep string fields under "fields" and name
+    references "<something>Path"; legacy .scene components used a bare "mesh".
+    """
+    sources = [component]
+    fields = component.get("fields")
+    if isinstance(fields, dict):
+        sources.append(fields)
+    for source in sources:
+        for key, value in source.items():
+            if not isinstance(key, str):
+                continue
+            if key.endswith("Path") or key == "mesh":
+                yield key, value
+
+
+def _check_reference(project_root, owner, key, value):
+    """Return an error dict for a broken or escaping reference, else None."""
+    if not isinstance(value, str):
+        return {
+            "file": str(owner),
+            "severity": "error",
+            "message": f"Reference field '{key}' must be a string",
+            "suggestion": "Store asset references as project-relative path strings",
+        }
+    if not value:
+        return None
+    if key in _MESH_REFERENCE_KEYS and value.startswith(BUILTIN_MESH_PREFIX):
+        return None
+    reference = Path(value.replace("\\", "/"))
+    if reference.is_absolute() or reference.drive or reference.root:
+        return {
+            "file": str(owner),
+            "severity": "error",
+            "message": f"Reference '{key}' = '{value}' must be project-relative",
+            "suggestion": "Use a path relative to the project root, e.g. Assets/Models/x.obj",
+        }
+    resolved = project_root / reference
+    if not _path_is_within(resolved, project_root):
+        return {
+            "file": str(owner),
+            "severity": "error",
+            "message": f"Reference '{key}' = '{value}' escapes the project root",
+            "suggestion": "Move the asset inside the project and reference it relatively",
+        }
+    if not resolved.is_file():
+        return {
+            "file": str(owner),
+            "severity": "error",
+            "message": f"Missing asset for '{key}': {value}",
+            "suggestion": f"Ensure '{value}' exists under the project root or clear the reference",
+        }
+    return None
+
+
 def cmd_validate(args):
-    """Validate project assets for integrity."""
+    """Validate scene and material references for integrity.
+
+    Only files that are actually parsed and checked are counted. A run that
+    inspects nothing fails, so a wrong path cannot masquerade as a clean
+    project.
+    """
     target_path = Path(args.path)
     strict = args.strict
     output_format = args.format
@@ -1475,80 +1569,96 @@ def cmd_validate(args):
         print(f"Error: Path '{target_path}' does not exist.")
         return 1
 
-    print(f"Validating assets in '{target_path}'...")
+    project_root = _find_validation_root(target_path)
+    if output_format != "json":
+        print(f"Validating assets in '{target_path}' (project root '{project_root}')...")
 
     errors = []
     warnings = []
     checked = 0
 
-    # Check material files for broken texture references
-    for mat_file in target_path.rglob("*.material"):
+    # Materials: every texture-ish or *Path string must resolve inside the project.
+    for mat_file in sorted(target_path.rglob("*.material")):
         checked += 1
         try:
-            content = mat_file.read_text(encoding="utf-8")
-            mat_data = json.loads(content)
-            for key, value in mat_data.items():
-                if "texture" in key.lower() and isinstance(value, str) and value:
-                    tex_path = target_path / value
-                    if not tex_path.exists():
-                        errors.append({
-                            "file": str(mat_file),
-                            "severity": "error",
-                            "message": f"Missing texture: {value}",
-                            "suggestion": f"Ensure '{value}' exists or remove the reference"
-                        })
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            warnings.append({
+            mat_data = json.loads(mat_file.read_text(encoding="utf-8"))
+            if not isinstance(mat_data, dict):
+                raise ValueError("material root must be a JSON object")
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError, ValueError) as error:
+            errors.append({
                 "file": str(mat_file),
-                "severity": "warning",
-                "message": "Could not parse material file",
-                "suggestion": "Check file encoding and JSON syntax"
+                "severity": "error",
+                "message": f"Could not parse material file: {error}",
+                "suggestion": "Check file encoding and JSON syntax",
             })
+            continue
+        for key, value in mat_data.items():
+            if not isinstance(key, str):
+                continue
+            if "texture" in key.lower() or key.endswith("Path"):
+                if isinstance(value, str) or key.endswith("Path"):
+                    issue = _check_reference(project_root, mat_file, key, value)
+                    if issue:
+                        errors.append(issue)
 
-    # Check scene files for broken references
-    for scene_file in target_path.rglob("*.scene"):
-        checked += 1
-        try:
-            content = scene_file.read_text(encoding="utf-8")
-            scene_data = json.loads(content)
-            # Check for referenced assets
-            for entity in scene_data.get("entities", []):
-                for comp in entity.get("components", []):
-                    if "mesh" in comp and comp["mesh"]:
-                        mesh_path = target_path / comp["mesh"]
-                        if not mesh_path.exists():
-                            warnings.append({
-                                "file": str(scene_file),
-                                "severity": "warning",
-                                "message": f"Missing mesh reference: {comp['mesh']}",
-                                "suggestion": "Update mesh path or remove component"
-                            })
-        except (json.JSONDecodeError, UnicodeDecodeError, KeyError):
-            pass
+    # Scenes: the shipped .sparkscene format and the legacy .scene suffix are
+    # both package inputs; malformed structure fails closed.
+    for scene_pattern in ("*.scene", "*.sparkscene"):
+        for scene_file in sorted(target_path.rglob(scene_pattern)):
+            checked += 1
+            try:
+                scene_data = json.loads(scene_file.read_text(encoding="utf-8"))
+                if not isinstance(scene_data, dict):
+                    raise ValueError("scene root must be a JSON object")
+                entities = scene_data.get("entities", [])
+                if not isinstance(entities, list):
+                    raise ValueError("scene entities must be a JSON array")
+                references = []
+                for entity in entities:
+                    if not isinstance(entity, dict):
+                        raise ValueError("scene entity must be a JSON object")
+                    components = entity.get("components", [])
+                    if not isinstance(components, list):
+                        raise ValueError("scene components must be a JSON array")
+                    for comp in components:
+                        if not isinstance(comp, dict):
+                            raise ValueError("scene component must be a JSON object")
+                        references.extend(_reference_fields(comp))
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError, ValueError) as error:
+                errors.append({
+                    "file": str(scene_file),
+                    "severity": "error",
+                    "message": f"Could not parse scene file: {error}",
+                    "suggestion": "Check scene JSON syntax and structure",
+                })
+                continue
+            for key, value in references:
+                issue = _check_reference(project_root, scene_file, key, value)
+                if issue:
+                    errors.append(issue)
 
-    # Check for orphaned assets (files not referenced by any scene/material)
-    for shader_file in target_path.rglob("*.hlsl"):
-        checked += 1
+    if checked == 0:
+        errors.append({
+            "file": str(target_path),
+            "severity": "error",
+            "message": "No scene or material files were found to validate",
+            "suggestion": "Point spark validate at a project directory containing .sparkscene, .scene or .material files",
+        })
 
-    for asset_file in target_path.rglob("*.png"):
-        checked += 1
-
-    for asset_file in target_path.rglob("*.wav"):
-        checked += 1
-
-    # Output results
     total_issues = len(errors) + len(warnings)
+    passed = not errors and not (strict and warnings)
 
     if output_format == "json":
         report = {
+            "projectRoot": str(project_root),
             "totalChecked": checked,
             "errors": errors,
             "warnings": warnings,
-            "passed": total_issues == 0 or (not strict and len(errors) == 0)
+            "passed": passed,
         }
         print(json.dumps(report, indent=2))
     else:
-        print(f"\nValidation complete: {checked} assets checked")
+        print(f"\nValidation complete: {checked} scene/material files checked")
         if errors:
             print(f"\n  ERRORS ({len(errors)}):")
             for e in errors:
@@ -1561,86 +1671,108 @@ def cmd_validate(args):
                 print(f"    [{w['severity'].upper()}] {w['file']}: {w['message']}")
 
         if total_issues == 0:
-            print("\n  All assets validated successfully.")
+            print("\n  All references validated successfully.")
         else:
             print(f"\n  {len(errors)} errors, {len(warnings)} warnings")
 
-    if strict and (errors or warnings):
-        return 1
-    if errors:
-        return 1
-    return 0
+    return 0 if passed else 1
+
+
+# AssetFileHeader from SparkEngine/Source/Core/AssetMigration.h. MigrateAsset
+# memcpy's it straight out of the file, so this is the MSVC/GCC x64 layout:
+# uint32 magic, uint16 major/minor/patch, uint8 assetType, 1 pad byte,
+# uint32 checksum, uint32 headerSize, 4 pad bytes, uint64 dataSize.
+_ASSET_HEADER_FORMAT = "<IHHHBxIIxxxxQ"
+_ASSET_HEADER_SIZE = 32
+_ASSET_HEADER_MAGIC = 0x5350524B  # "SPRK" as a little-endian uint32 -> b"KRPS" on disk
+_ASSET_TYPE_MAX = 7  # AssetType::ShaderCache
+#: Every AssetType's current version. No IMigrationStep ships in the engine,
+#: so anything older than this has no migration path.
+_CURRENT_ASSET_VERSION = (1, 0, 0)
+
+
+def _audit_asset_header(data):
+    """Classify a binary asset buffer. Returns (status, detail).
+
+    status is one of "current", "outdated", "future", "invalid", "not-asset".
+    """
+    if data[:4] != struct.pack("<I", _ASSET_HEADER_MAGIC):
+        return "not-asset", None
+    if len(data) < _ASSET_HEADER_SIZE:
+        return "invalid", f"truncated header ({len(data)} of {_ASSET_HEADER_SIZE} bytes)"
+    (_, major, minor, patch, asset_type, _checksum,
+     header_size, data_size) = struct.unpack_from(_ASSET_HEADER_FORMAT, data)
+    version = (major, minor, patch)
+    label = f"v{major}.{minor}.{patch}"
+    if header_size == 0:
+        return "invalid", f"{label}: headerSize is 0"
+    if asset_type > _ASSET_TYPE_MAX:
+        return "invalid", f"{label}: unknown asset type {asset_type}"
+    if header_size < _ASSET_HEADER_SIZE:
+        return "invalid", f"{label}: headerSize {header_size} is smaller than the {_ASSET_HEADER_SIZE}-byte header"
+    if header_size > len(data):
+        return "invalid", f"{label}: headerSize {header_size} claims more than the {len(data)}-byte file"
+    if header_size + data_size > len(data):
+        return "invalid", (f"{label}: header claims {data_size} payload bytes but only "
+                           f"{len(data) - header_size} follow the header")
+    if version > _CURRENT_ASSET_VERSION:
+        return "future", f"{label} is newer than the supported v{'.'.join(map(str, _CURRENT_ASSET_VERSION))}"
+    if version < _CURRENT_ASSET_VERSION:
+        return "outdated", (f"{label} predates v{'.'.join(map(str, _CURRENT_ASSET_VERSION))} "
+                            "and no migration steps ship for it")
+    return "current", label
 
 
 def cmd_migrate(args):
-    """Migrate asset files to current format version."""
+    """Audit binary asset headers against the current format version.
+
+    This command is read-only. The engine ships no IMigrationStep, so there is
+    nothing to apply: an outdated, future, or malformed header is reported and
+    fails the run instead of being claimed as migrated. --dry-run and --backup
+    are accepted for compatibility and change nothing.
+    """
     target_path = Path(args.path)
-    dry_run = args.dry_run
-    backup = args.backup
 
     if not target_path.exists():
         print(f"Error: Path '{target_path}' does not exist.")
         return 1
 
-    print(f"Scanning for assets needing migration in '{target_path}'...")
-    if dry_run:
-        print("  (dry run — no changes will be made)")
+    print(f"Auditing asset headers in '{target_path}' (read-only; no files are modified)...")
 
-    migrated = 0
-    skipped = 0
-    failed = 0
+    counts = {"current": 0, "outdated": 0, "future": 0, "invalid": 0, "not-asset": 0}
+    unreadable = 0
+    asset_extensions = {".scene", ".sparkscene", ".material", ".prefab", ".archetype", ".save"}
 
-    asset_extensions = {".scene", ".material", ".prefab", ".archetype", ".save"}
-
-    for asset_file in target_path.rglob("*"):
-        if asset_file.suffix not in asset_extensions:
+    for asset_file in sorted(target_path.rglob("*")):
+        if asset_file.suffix not in asset_extensions or not asset_file.is_file():
+            continue
+        try:
+            data = asset_file.read_bytes()
+        except OSError as error:
+            print(f"  {asset_file}: unreadable - {error}")
+            unreadable += 1
             continue
 
-        # Check for SPRK magic header (binary format)
-        try:
-            with open(asset_file, "rb") as f:
-                magic = f.read(4)
-                if magic == b"SPRK":
-                    version_bytes = f.read(6)
-                    major = int.from_bytes(version_bytes[0:2], "little")
-                    minor = int.from_bytes(version_bytes[2:4], "little")
-                    patch = int.from_bytes(version_bytes[4:6], "little")
-                    print(f"  {asset_file.name}: v{major}.{minor}.{patch}")
+        status, detail = _audit_asset_header(data)
+        counts[status] += 1
+        if status == "current":
+            print(f"  {asset_file}: {detail} (current)")
+        elif status == "not-asset":
+            print(f"  {asset_file}: no AssetFileHeader (text or other binary format); not audited")
+        else:
+            print(f"  {asset_file}: {status.upper()} - {detail}")
 
-                    # Current version is 1.0.0
-                    if major < 1:
-                        if dry_run:
-                            print(f"    -> Would migrate to v1.0.0")
-                            migrated += 1
-                        else:
-                            if backup:
-                                backup_path = asset_file.with_suffix(asset_file.suffix + ".bak")
-                                shutil.copy2(asset_file, backup_path)
-                            print(f"    -> Migrated to v1.0.0")
-                            migrated += 1
-                    else:
-                        skipped += 1
-                else:
-                    # Text/JSON format — check for version field
-                    f.seek(0)
-                    try:
-                        content = f.read().decode("utf-8")
-                        data = json.loads(content)
-                        version = data.get("version", "0.0.0")
-                        print(f"  {asset_file.name}: v{version} (JSON)")
-                        skipped += 1
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        skipped += 1
-        except (IOError, OSError) as e:
-            print(f"  {asset_file.name}: Failed — {e}")
-            failed += 1
-
-    print(f"\nMigration complete:")
-    print(f"  Migrated: {migrated}")
-    print(f"  Skipped:  {skipped}")
-    print(f"  Failed:   {failed}")
-
-    return 1 if failed > 0 else 0
+    failures = counts["outdated"] + counts["future"] + counts["invalid"] + unreadable
+    print("\nAsset header audit complete:")
+    print(f"  Current:        {counts['current']}")
+    print(f"  Outdated:       {counts['outdated']}")
+    print(f"  Newer:          {counts['future']}")
+    print(f"  Invalid:        {counts['invalid']}")
+    print(f"  Unreadable:     {unreadable}")
+    print(f"  Not audited:    {counts['not-asset']}")
+    if counts["outdated"]:
+        print("\n  Outdated assets cannot be migrated: the engine registers no migration steps.")
+    return 1 if failures else 0
 
 
 def cmd_templates(args):
@@ -1811,7 +1943,7 @@ def main():
                            help="Replace an existing non-linked directory not owned by spark-cli")
 
     # spark validate
-    val_parser = subparsers.add_parser("validate", help="Validate project assets for integrity")
+    val_parser = subparsers.add_parser("validate", help="Validate scene/material asset references against the project root")
     val_parser.add_argument("path", nargs="?", default=".",
                            help="Path to validate (default: current directory)")
     val_parser.add_argument("--strict", action="store_true",
@@ -1821,13 +1953,13 @@ def main():
                            help="Output format (default: text)")
 
     # spark migrate
-    mig_parser = subparsers.add_parser("migrate", help="Migrate asset files to current format version")
+    mig_parser = subparsers.add_parser("migrate", help="Audit binary asset headers against the current format version (read-only; no migration steps ship)")
     mig_parser.add_argument("path", nargs="?", default=".",
                            help="Path to migrate (default: current directory)")
     mig_parser.add_argument("--dry-run", action="store_true",
-                           help="Show what would be migrated without changes")
+                           help="Accepted for compatibility; the audit never modifies files")
     mig_parser.add_argument("--backup", action="store_true", default=True,
-                           help="Create backups before migrating (default: true)")
+                           help="Accepted for compatibility; the audit never modifies files, so no backup is made")
 
     # spark templates
     subparsers.add_parser("templates", help="List available project templates")

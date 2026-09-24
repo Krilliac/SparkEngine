@@ -173,6 +173,7 @@ add_executable(SparkTests
     TestPhysicsSystem.cpp
     TestPhysicsTeardownGuard.cpp
     TestGraphicsEngine.cpp
+    TestGraphicsBenchmarkStats.cpp
     TestProcessDrawListLinux.cpp
     TestRenderGraph.cpp
     TestTerrainRenderer.cpp
@@ -200,6 +201,7 @@ add_executable(SparkTests
     TestNullRHIDevice.cpp
     TestGraphicsInitFallback.cpp
     TestSoftwareRendering.cpp
+    TestRHI240OpenGLReal.cpp
     TestRenderCommandRing.cpp
     TestMultiISADispatch.cpp
     TestConstantBufferDiff.cpp
@@ -261,6 +263,7 @@ add_executable(SparkTests
     TestScriptSandbox.cpp
     TestPacketValidator.cpp
     TestPacketValidatorReal.cpp
+    TestNET100TransportReal.cpp
     TestLogger.cpp
     TestProfiler.cpp
     TestStackTrace.cpp
@@ -311,6 +314,7 @@ add_executable(SparkTests
     TestFaultIsolation.cpp
     TestSelfRecovery.cpp
     TestVulkanLavapipe.cpp
+    TestRHI230VulkanValidationReal.cpp
     TestMSanCanary.cpp
     TestWARPRendering.cpp
     # Hardware acceleration tests
@@ -337,6 +341,7 @@ add_executable(SparkTests
     TestMaterialSystemReal.cpp
     TestAssetPipelineReal.cpp
     TestMMOAssetImport.cpp
+    TestENG220ObjImportReal.cpp
     TestAbilitySystemReal.cpp
     TestAchievementSystemReal.cpp
     TestConstantBufferDiffReal.cpp
@@ -359,6 +364,7 @@ add_executable(SparkTests
     TestSceneSerializerReal.cpp
     TestMusicManager.cpp
     TestAngelScriptEngine.cpp
+    TestENG200ScriptFaultsReal.cpp
     TestScriptHotReload.cpp
     TestVRSystem.cpp
     TestSeamlessAreaManager.cpp
@@ -367,6 +373,7 @@ add_executable(SparkTests
     TestVisualScriptCompiler.cpp
     TestEntityPresetManager.cpp
     TestGamePackager.cpp
+    TestASSET220GamePackagerReal.cpp
     TestAssetValidator.cpp
     TestAssetMigration.cpp
     TestAccessibility.cpp
@@ -400,12 +407,14 @@ add_executable(SparkTests
     TestFBXImportValidation.cpp
     TestTextureCompressor.cpp
     TestNeuralInference.cpp
+    TestNeuralWeightsValidation.cpp
     TestCpuNeuralInference.cpp
     TestCpuNeuralTraining.cpp
     TestNeuralTextureCompressor.cpp
     TestNeuralRadianceCache.cpp
     TestNeuralPostProcessing.cpp
     TestGPUProfiler.cpp
+    TestVRAMTelemetry.cpp
     TestShaderHotReloadCompilation.cpp
     TestShaderHotReloadPhaseU.cpp
     TestShaderDiskCachePhaseV.cpp
@@ -526,6 +535,10 @@ add_executable(SparkTests
     TestMacOSPlatform.cpp
     # Subprocess spawning and piping
     TestProcess.cpp
+    # PLT-210 Linux defects in the POSIX Process implementation
+    TestPLT210ProcessPosixReal.cpp
+    TestPLT210AngelScriptVector3Real.cpp
+    TestPLT210RuntimeProcessesReal.cpp
     # SparkDaemon foundation (Phase 1)
     TestDaemonProtocol.cpp
     TestDaemonFoundation.cpp
@@ -552,6 +565,7 @@ add_executable(SparkTests
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp
+    TestEditorAssetReference.cpp
     TestDedicatedServerProcessController.cpp
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/DedicatedServerProcessController.cpp"
     TestServiceTopologyController.cpp
@@ -563,9 +577,11 @@ add_executable(SparkTests
     TestCoreAndBuildSystems.cpp
     TestOpenWorldModule.cpp
     TestGameModuleRTS.cpp
+    TestMOD370SkirmishDeterminismReal.cpp
     TestGameModuleMMO.cpp
     TestGameModuleRPG.cpp
     TestGameModuleRacing.cpp
+    TestMOD380RacingCompleteRaceReal.cpp
     TestGameModulePlatformerARPG.cpp
     # TERRAFRONT (SparkGameMMOFPS) — header-only wire protocol, standalone
     # rule math, and validation of the real Assets/MMOFPS/Data tables.
@@ -588,6 +604,8 @@ add_executable(SparkTests
     # W5 onboarding (TFDatabase Task 1) — module .cpp added explicitly below
     # since SparkTests does not compile module sources by default.
     TestTFOnboarding.cpp
+    # DATA-120 atomic multi-row character commits + schema versioning (TFDatabase above)
+    TestDATA120PersistenceReal.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFPlayerMeta.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp"
@@ -624,6 +642,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSLocalProfile.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/ProgressionSystem.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Core/EngineWeatherAdapter.cpp"
     # Editor core sources (no ImGui dependency)
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
@@ -707,6 +726,8 @@ add_library(SparkMismatchedModuleFixture SHARED
     Fixtures/ModuleABI/MismatchedModule.cpp)
 add_library(SparkCompatibleModuleFixture SHARED
     Fixtures/ModuleABI/CompatibleModule.cpp)
+add_library(SparkRegistryLifecycleModuleFixture SHARED
+    Fixtures/ModuleABI/RegistryLifecycleModule.cpp)
 add_library(SparkLegacyModuleFixture SHARED
     Fixtures/ModuleABI/LegacyModule.cpp)
 add_library(SparkModuleSiblingDependency SHARED
@@ -725,6 +746,22 @@ foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkCompatibleMod
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
 endforeach()
+
+target_compile_features(SparkRegistryLifecycleModuleFixture PRIVATE cxx_std_23)
+target_compile_definitions(SparkRegistryLifecycleModuleFixture PRIVATE SPARK_MODULE_DLL)
+target_include_directories(SparkRegistryLifecycleModuleFixture PRIVATE
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+    "${CMAKE_SOURCE_DIR}/SparkSDK/Include"
+    "${SPARK_GENERATED_INCLUDE_DIR}")
+if(WIN32)
+    target_link_libraries(SparkRegistryLifecycleModuleFixture PRIVATE SparkEngineLib)
+elseif(TARGET SparkEngineInterface)
+    target_link_libraries(SparkRegistryLifecycleModuleFixture PRIVATE SparkEngineInterface)
+endif()
+if(MSVC)
+    set_property(TARGET SparkRegistryLifecycleModuleFixture PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 
 target_include_directories(SparkLegacyModuleFixture PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
@@ -760,14 +797,17 @@ math(EXPR SPARK_TEST_MISMATCHED_SDK_VERSION
 spark_configure_module_abi(SparkMismatchedModuleFixture
     SDK_VERSION "${SPARK_TEST_MISMATCHED_SDK_VERSION}")
 spark_configure_module_abi(SparkCompatibleModuleFixture)
+spark_configure_module_abi(SparkRegistryLifecycleModuleFixture)
 spark_configure_module_abi(SparkLegacyModuleFixture)
 spark_configure_module_abi(SparkSiblingDependentModuleFixture)
 
-add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture SparkLegacyModuleFixture
+add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture
+    SparkRegistryLifecycleModuleFixture SparkLegacyModuleFixture
     SparkSiblingDependentModuleFixture)
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_MISMATCHED_MODULE_PATH="$<TARGET_FILE:SparkMismatchedModuleFixture>"
     SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>"
+    SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH="$<TARGET_FILE:SparkRegistryLifecycleModuleFixture>"
     SPARK_TEST_LEGACY_MODULE_PATH="$<TARGET_FILE:SparkLegacyModuleFixture>"
     SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH="$<TARGET_FILE:SparkSiblingDependentModuleFixture>")
 
@@ -889,6 +929,7 @@ endif()
 
 if(WIN32)
     target_sources(SparkTests PRIVATE TestWorldBasicRender.cpp)
+    target_sources(SparkTests PRIVATE TestLegacyGameObjectMaterial.cpp)
     target_sources(SparkTests PRIVATE TestPostProcessingPipelineD3D11.cpp)
     target_sources(SparkTests PRIVATE TestGPUDrivenRendererD3D11.cpp)
     target_compile_definitions(SparkTests PRIVATE
@@ -978,21 +1019,31 @@ target_sources(SparkTests PRIVATE
     TestEditorRecovery.cpp
     TestEngineWiringReal.cpp
     TestD3D11DeviceContractsReal.cpp
+    TestRHI210D3D11GoldenReal.cpp
     TestEditorGizmoTransformReal.cpp
     TestEditorProjectMaterializationReal.cpp
     TestEditorUndoHierarchyReal.cpp
+    TestEDT210InspectorEditCommitReal.cpp
     TestFPSComponentsReal.cpp
     TestLoggerSinksReal.cpp
     TestModuleLifecycleReal.cpp
     TestRunnerSemanticsReal.cpp
+    TestSEC100ChatAuditLogReal.cpp
     TestSaveSystemRoundTripReal.cpp
+    TestSAVE230NewerFormatSlotReal.cpp
     TestSecurityParsersReal.cpp
+    TestTextureStexBoundsReal.cpp
     TestShaderCompilerReal.cpp
     TestShadowPassReal.cpp
     TestSparkGameFPSLoopReal.cpp
     TestSparkGameFPSMirrorCompanionsReal.cpp
+    TestMOD310FPSSceneReloadRespawnReal.cpp
+    TestFPSWeatherPort.cpp
     TestTemplateRuntimeReal.cpp
     TestUserDataPathsReal.cpp
+    TestHEAD220NullRHILifetimeReal.cpp
+    TestSceneManagerUnicodeReal.cpp
+    TestSceneSaveConfinedReal.cpp
     TestWeaponMechanicsReal.cpp
 )
 
@@ -1031,6 +1082,9 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Building/RTSBuildingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp"
     )
 
     # MMO module sources
@@ -1327,8 +1381,11 @@ add_test(
         "-DSPARK_TEST_TIMEOUT_SECONDS=$<IF:$<CONFIG:Debug>,${SPARK_TEST_TIMEOUT_DEBUG},${SPARK_TEST_TIMEOUT_OPTIMIZED}>"
         -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
 )
+# The main suite holds both unit and Integration_* families, so the documented
+# `ctest -L unit` and `ctest -L integration` selectors must both reach it.
 set_tests_properties(SparkEngineTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_EXCLUDE=${SPARK_TEST_LOAD_EXCLUDE}"
+    LABELS "sparktests;unit;integration"
     TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
 
 add_test(
@@ -1349,6 +1406,27 @@ set_tests_properties(SparkEngineLoadTests PROPERTIES
     LABELS "load;slow"
     RUN_SERIAL TRUE
     TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
+
+# RHI-240: real OpenGL backend under KHR_debug (llvmpipe on Linux hosts). The
+# lane requires a GL context (SPARK_REQUIRE_OPENGL=1) so it cannot pass by
+# skipping; llvmpipe evidence is software-rasterizer only, not driver certification.
+if(SPARK_OPENGL_AVAILABLE AND NOT WIN32)
+    add_test(
+        NAME SparkOpenGLTests
+        COMMAND ${CMAKE_COMMAND}
+            -DSPARK_TEST_EXECUTABLE=$<TARGET_FILE:SparkTests>
+            -DSPARK_JUNIT_REPORT=${CMAKE_BINARY_DIR}/SparkTests-opengl-junit.xml
+            -DSPARK_TEST_LOG=${CMAKE_BINARY_DIR}/SparkTests-opengl.log
+            -DSPARK_TEST_OUTPUT=${CMAKE_BINARY_DIR}/SparkTests-opengl-output.log
+            -DSPARK_TEST_WARN_IS_ERROR=${SPARK_TESTS_WARN_IS_ERROR}
+            "-DSPARK_TEST_TIMEOUT_SECONDS=$<IF:$<CONFIG:Debug>,${SPARK_TEST_TIMEOUT_DEBUG},${SPARK_TEST_TIMEOUT_OPTIMIZED}>"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkTests.cmake
+    )
+    set_tests_properties(SparkOpenGLTests PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI240OpenGLReal.cpp;SPARK_TEST_EXPECT_COUNT=11;SPARK_REQUIRE_OPENGL=1"
+        LABELS "opengl;llvmpipe"
+        TIMEOUT ${SPARK_TEST_CTEST_TIMEOUT})
+endif()
 add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --quiet)
 set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=SaveMigration_"
@@ -1369,11 +1447,24 @@ set_tests_properties(LifecyclePartialInit PROPERTIES
     LABELS "lifecycle;unit"
     TIMEOUT 30)
 
+# RHI-230: Vulkan backend under VK_LAYER_KHRONOS_validation (Lavapipe on CI).
+# Lavapipe proves API-usage correctness only, not hardware certification.
+if(SPARK_VULKAN_AVAILABLE)
+    add_test(NAME VulkanValidation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(VulkanValidation PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI230VulkanValidationReal.cpp;SPARK_TEST_EXPECT_COUNT=16"
+        LABELS "vulkan;rendering;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
+
 foreach(_remote_admin_selector IN ITEMS
         RemoteAdmin_AnonymousDenied
+        RemoteAdmin_MalformedTimestampDenied
         RemoteAdmin_RoleMatrix
         RemoteAdmin_ReplayDenied
-        RemoteAdmin_RateLimited)
+        RemoteAdmin_RateLimited
+        RemoteAdmin_ReservedCommandsCannotBeRebound)
     add_test(NAME ${_remote_admin_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(${_remote_admin_selector} PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=${_remote_admin_selector};SPARK_TEST_EXPECT_COUNT=1"
@@ -1393,6 +1484,23 @@ foreach(_remote_debug_epoch_selector IN ITEMS
         TIMEOUT 30)
 endforeach()
 
+# RHI-210: D3D11 golden-frame and render-target resource contracts. Exact
+# counts so a filter that silently selects nothing (or a skip) cannot pass.
+if(WIN32)
+    add_test(NAME D3D11_Golden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11_Golden PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=D3D11_Golden_;SPARK_TEST_EXPECT_COUNT=2"
+        LABELS "d3d11-golden;d3d11;stable-v1"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+    add_test(NAME D3D11_Resource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11_Resource PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=D3D11_Resource_;SPARK_TEST_EXPECT_COUNT=2"
+        LABELS "d3d11-stress;d3d11;stable-v1"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
+
 add_test(
     NAME ModuleProfileLifecycleParserContract
     COMMAND ${CMAKE_COMMAND}
@@ -1409,6 +1517,16 @@ if(TARGET SparkNetworkingDisabledCompileContract)
 endif()
 set_tests_properties(ModuleProfileLifecycleParserContract PROPERTIES
     LABELS "module-profile;stable-v1;d3d11;unit"
+    TIMEOUT 10)
+
+add_test(
+    NAME FPSPackage_SaveReloadParserContract
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+        -DSPARK_FPS_SAVE_RELOAD_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake)
+set_tests_properties(FPSPackage_SaveReloadParserContract PROPERTIES
+    LABELS "module;stable-v1;fps;package;unit"
     TIMEOUT 10)
 
 if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND
@@ -1438,11 +1556,69 @@ set_tests_properties(NullRHIWindowsLifecycleParserContract PROPERTIES
     LABELS "nullrhi-headless;stable-v1;unit"
     TIMEOUT 10)
 
+# HEAD-220: NullRHIDevice live-resource accounting follows resource lifetime
+# (leak/soak signal for packaged headless runs).
+add_test(NAME NullRHIResourceLifetime COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
+set_tests_properties(NullRHIResourceLifetime PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=NullRHI_Lifetime_;SPARK_TEST_EXPECT_COUNT=6"
+    LABELS "nullrhi-headless;stable-v1;unit"
+    TIMEOUT 30)
+
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(NOT TARGET SparkEngine OR NOT TARGET SparkGameFPS)
         message(FATAL_ERROR
             "BUILD_GAME_MODULES=ON requires SparkEngine and SparkGameFPS "
             "for the stable-v1 module-profile lifecycle gate")
+    endif()
+
+    # Keep nested MSVC consumer try-compiles below the Windows path-length
+    # pressure that makes FileTracker fail before the consumer can configure.
+    # The build-directory hash keeps separate worktrees/configurations isolated.
+    string(MD5 _spark_mod310_build_id "${CMAKE_BINARY_DIR}")
+    string(SUBSTRING "${_spark_mod310_build_id}" 0 8 _spark_mod310_build_id)
+    set(_spark_mod310_test_root "$ENV{TEMP}/m310-${_spark_mod310_build_id}")
+
+    # The nested package project also runs CMake try-compiles. Prefer the
+    # bundled Ninja binary over a nested Visual Studio project so those probes
+    # do not inherit FileTracker's long-path failure mode.
+    set(_spark_mod310_consumer_generator "${CMAKE_GENERATOR}")
+    set(_spark_mod310_consumer_platform "${CMAKE_GENERATOR_PLATFORM}")
+    set(_spark_mod310_consumer_toolset "${CMAKE_GENERATOR_TOOLSET}")
+    set(_spark_mod310_consumer_make_program "${CMAKE_MAKE_PROGRAM}")
+    set(_spark_mod310_ninja "")
+    if(CMAKE_GENERATOR MATCHES "Ninja" AND
+       DEFINED CMAKE_MAKE_PROGRAM AND
+       EXISTS "${CMAKE_MAKE_PROGRAM}" AND
+       NOT IS_DIRECTORY "${CMAKE_MAKE_PROGRAM}")
+        # Preserve the outer generator's known-good make program. A nested
+        # CMake configure must not replace it with a stale PATH/cache result.
+        set(_spark_mod310_ninja "${CMAKE_MAKE_PROGRAM}")
+    else()
+        get_filename_component(_spark_mod310_cmake_bin "${CMAKE_COMMAND}" DIRECTORY)
+        get_filename_component(_spark_mod310_cmake_dist "${_spark_mod310_cmake_bin}" DIRECTORY)
+        get_filename_component(_spark_mod310_cmake_bundle "${_spark_mod310_cmake_dist}" DIRECTORY)
+        set(_spark_mod310_bundled_ninja "${_spark_mod310_cmake_bundle}/Ninja/ninja.exe")
+        if(EXISTS "${_spark_mod310_bundled_ninja}" AND
+           NOT IS_DIRECTORY "${_spark_mod310_bundled_ninja}")
+            set(_spark_mod310_ninja "${_spark_mod310_bundled_ninja}")
+        else()
+            find_program(_spark_mod310_ninja NAMES ninja ninja.exe NO_CACHE)
+            if(_spark_mod310_ninja AND
+               (NOT EXISTS "${_spark_mod310_ninja}" OR
+                IS_DIRECTORY "${_spark_mod310_ninja}"))
+                set(_spark_mod310_ninja "")
+            endif()
+        endif()
+    endif()
+    if(_spark_mod310_ninja)
+        set(_spark_mod310_consumer_generator "Ninja Multi-Config")
+        set(_spark_mod310_consumer_platform "")
+        set(_spark_mod310_consumer_toolset "")
+        set(_spark_mod310_consumer_make_program "${_spark_mod310_ninja}")
+    elseif(CMAKE_GENERATOR MATCHES "Ninja")
+        message(FATAL_ERROR
+            "The profile package consumer requires a runnable Ninja make program; "
+            "the outer Ninja generator did not provide one")
     endif()
 
     # Exercise the stable-v1 first-party slice through the production host and
@@ -1480,6 +1656,69 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         LABELS "nullrhi-headless;stable-v1;integration;source-tree"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+
+    # Copy the built FPS runtime to a fresh package-like directory, edit only
+    # its copied scene, and inspect post-update game/wave state plus rendered
+    # frames. Fresh-process and same-process material edits also catch stale
+    # FPS material cache entries without trusting a synthetic scene preview.
+    add_test(
+        NAME FPSAuthoredScene_PackageLayoutEdit
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_PACKAGE_BIN=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/fps-authored/$<CONFIG>"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyFPSAuthoredScene.cmake)
+    set_tests_properties(FPSAuthoredScene_PackageLayoutEdit PROPERTIES
+        LABELS "module;fps;d3d11;scene;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+
+    # MOD-310 selector contracts. Each entry invokes a real production-source
+    # or installed-package test; these are bounded evidence slices, not a
+    # declaration that the full FPS module is public-SDK compliant or released.
+    add_test(
+        NAME FPSSinglePlayerSlice_RespawnProductionSource
+        COMMAND $<TARGET_FILE:SparkTests> --quiet --warn-is-error)
+    set_tests_properties(FPSSinglePlayerSlice_RespawnProductionSource PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=FPSRespawn_;SPARK_TEST_EXPECT_COUNT=10"
+        LABELS "module;stable-v1;fps;production-source"
+        RUN_SERIAL TRUE
+        TIMEOUT 30)
+
+    if(SPARK_GAME_MODULES STREQUAL "SparkGameFPS")
+        add_test(
+            NAME FPSPackage_InstalledRuntime
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/p/$<CONFIG>"
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
+        set_tests_properties(FPSPackage_InstalledRuntime PROPERTIES
+            LABELS "module;stable-v1;fps;package;integration;save;d3d11"
+            RUN_SERIAL TRUE
+            TIMEOUT 600)
+
+        add_test(
+            NAME FPSPublicSDK_InstalledConsumers
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/s/$<CONFIG>"
+                "-DSPARK_CONSUMER_GENERATOR=${_spark_mod310_consumer_generator}"
+                "-DSPARK_CONSUMER_PLATFORM=${_spark_mod310_consumer_platform}"
+                "-DSPARK_CONSUMER_TOOLSET=${_spark_mod310_consumer_toolset}"
+                "-DSPARK_CONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+                "-DSPARK_CONSUMER_MAKE_PROGRAM=${_spark_mod310_consumer_make_program}"
+                "-DSPARK_CONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+                "-DSPARK_CONSUMER_CTEST=${CMAKE_CTEST_COMMAND}"
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPublicSDK.cmake)
+        set_tests_properties(FPSPublicSDK_InstalledConsumers PROPERTIES
+            LABELS "module;stable-v1;fps;sdk;package;integration"
+            RUN_SERIAL TRUE
+            TIMEOUT 600)
+    endif()
 endif()
 
 add_test(
@@ -1488,6 +1727,9 @@ add_test(
         -DSPARK_TEMPLATE_ROOT=${CMAKE_SOURCE_DIR}/Templates
         -P ${CMAKE_SOURCE_DIR}/cmake/VerifyTemplateAssets.cmake
 )
+set_tests_properties(SparkTemplateAssets PROPERTIES
+    LABELS "template;asset;unit"
+    TIMEOUT 60)
 add_test(
     NAME SparkVersionSingleSource
     COMMAND ${CMAKE_COMMAND}
@@ -1504,6 +1746,9 @@ add_test(
         -DSPARK_TEMPLATE_ROOT=${CMAKE_SOURCE_DIR}/Templates
         -P ${CMAKE_SOURCE_DIR}/cmake/VerifyTemplateServiceConfigs.cmake
 )
+set_tests_properties(SparkTemplateServiceConfigs PROPERTIES
+    LABELS "template;config;unit"
+    TIMEOUT 60)
 add_test(
     NAME SparkTemplateServiceConfigValidatorTests
     COMMAND ${CMAKE_COMMAND}
@@ -1513,6 +1758,9 @@ add_test(
         -DSPARK_BINARY_ROOT=${CMAKE_BINARY_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/TestTemplateServiceConfigValidator.cmake
 )
+set_tests_properties(SparkTemplateServiceConfigValidatorTests PROPERTIES
+    LABELS "template;config;unit"
+    TIMEOUT 120)
 add_test(
     NAME SparkPackageModuleSidecarValidatorTests
     COMMAND ${CMAKE_COMMAND}
@@ -1523,7 +1771,73 @@ add_test(
 )
 set_tests_properties(SparkPackageModuleSidecarValidatorTests PROPERTIES
     LABELS "package;unit"
+    # The contract launches a separate CMake validator for each malformed
+    # fixture. On a busy Windows host, 30 seconds can expire after only the
+    # first twenty cases; keep the full adversarial battery bounded at 90.
+    TIMEOUT 90)
+
+add_test(
+    NAME SparkSDKRejectsAmbiguousVersionHeader
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_GAME_MODULE_CMAKE=${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/sdk-version-header-ambiguity/$<CONFIG>"
+        "-DCONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCONSUMER_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCONSUMER_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCONSUMER_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/FPSProgression/TestSparkGameModuleVersion.cmake)
+set_tests_properties(SparkSDKRejectsAmbiguousVersionHeader PROPERTIES
+    LABELS "sdk;module;unit"
     TIMEOUT 30)
+
+add_test(
+    NAME SparkInstalledPackageRejectsMissingVersionDiagnostics
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/incomplete-sdk-package/$<CONFIG>"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestSparkEnginePackageCompleteness.cmake)
+set_tests_properties(SparkInstalledPackageRejectsMissingVersionDiagnostics PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 30)
+
+add_test(
+    NAME SparkInstalledPackageRejectsMissingPublicSDKHeader
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/incomplete-sdk-public-header/$<CONFIG>"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestSparkEnginePackageRequiresPublicHeader.cmake)
+set_tests_properties(SparkInstalledPackageRejectsMissingPublicSDKHeader PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 30)
+
+add_test(
+    NAME SparkSDKRequiresInstalledVersionHeader
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_GAME_MODULE_CMAKE=${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/sdk-version-header-missing/$<CONFIG>"
+        "-DCONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCONSUMER_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCONSUMER_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCONSUMER_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestInstalledPackageRequiresVersionHeader.cmake)
+set_tests_properties(SparkSDKRequiresInstalledVersionHeader PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 30)
+
+add_test(
+    NAME SparkSDKComponentCompleteness
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+        "-DSPARK_CONFIG=$<CONFIG>"
+        "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/sdk-component-completeness/$<CONFIG>"
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestSparkSDKComponentCompleteness.cmake)
+set_tests_properties(SparkSDKComponentCompleteness PROPERTIES
+    LABELS "sdk;package;unit"
+    TIMEOUT 660)
 
 # ----------------------------------------------------------------------------
 # Installed-SDK template gate (opt-in)
@@ -1567,7 +1881,159 @@ endif()
 
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(
+    NAME FPSSceneMaterialContract
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_fps_scene_material_contract.py)
+set_tests_properties(FPSSceneMaterialContract PROPERTIES
+    LABELS "module;stable-v1;fps;asset;unit"
+    TIMEOUT 30)
+
+# RDY-010: ModuleDiscovery_* drive the production ModuleManager and the real ABI
+# fixture DLL. The exact count fails closed if the family stops being compiled
+# in; the contract test keeps the file from regressing to a test-local mirror.
+add_test(NAME ModuleDiscoveryProductionSource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(ModuleDiscoveryProductionSource PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=ModuleDiscovery_;SPARK_TEST_EXPECT_COUNT=7"
+    LABELS "module;module-profile;stable-v1;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 60)
+add_test(
+    NAME ModuleDiscoveryProductionSourceContract
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_module_evidence_discovery_real.py)
+set_tests_properties(ModuleDiscoveryProductionSourceContract PROPERTIES
+    LABELS "module;module-profile;stable-v1;unit"
+    TIMEOUT 30)
+
+if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkCrashReporter)
+    add_dependencies(SparkTests SparkCrashReporter)
+    add_test(
+        NAME CrashCapturePackageSecurity
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/run_crash_capture_security.py
+            --producer $<TARGET_FILE:SparkTests>
+            --reporter $<TARGET_FILE:SparkCrashReporter>)
+    set_tests_properties(CrashCapturePackageSecurity PROPERTIES
+        LABELS "crash-security;security;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 180)
+endif()
+
+# CI-110: exercise the shipped SparkCooker binary against real nested assets.
+# This registration is independent of Python because the smoke is a CMake
+# script invoking the executable directly.
+if(TARGET SparkCooker)
+    if(TARGET SparkTests)
+        add_dependencies(SparkTests SparkCooker)
+    endif()
+    add_test(
+        NAME SparkCookerExecutableSmoke
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_COOKER=$<TARGET_FILE:SparkCooker>"
+            "-DSPARK_COOKER_WORK_DIR=${CMAKE_BINARY_DIR}/cooker-executable-smoke/$<CONFIG>"
+            -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkCookerSmoke.cmake)
+    set_tests_properties(SparkCookerExecutableSmoke PROPERTIES
+        LABELS "release;cooker;process"
+        TIMEOUT 30)
+endif()
+
+# CI-110: execute the shipped editor against an isolated project.  This is a
+# Windows-only gate because the stable-v1 editor backend is Win32/D3D11; Linux
+# editor builds require an X11/GL display and are covered by the live-editor
+# lane instead of reporting a misleading headless pass.
+if(WIN32 AND TARGET SparkEditor)
+    add_dependencies(SparkTests SparkEditor)
+    add_test(
+        NAME SparkEditorExecutableSmoke
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_EDITOR=$<TARGET_FILE:SparkEditor>"
+            "-DSPARK_EDITOR_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_EDITOR_WORK_DIR=${CMAKE_BINARY_DIR}/editor-executable-smoke/$<CONFIG>"
+            -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkEditorSmoke.cmake)
+    set_tests_properties(SparkEditorExecutableSmoke PROPERTIES
+        LABELS "release;editor;process"
+        TIMEOUT 45)
+endif()
+
 if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME SparkEditorPlayTruthContract
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_editor_play_truth.py)
+    set_tests_properties(SparkEditorPlayTruthContract PROPERTIES
+        LABELS "release;editor;static;python"
+        TIMEOUT 30)
+
+    # CI-110: exercise the actual shipped Windows shader compiler binary. The
+    # test is intentionally Windows-only because D3DCompiler is the only
+    # integrated HLSL backend; non-Windows builds must not report a fake pass.
+    if(WIN32 AND TARGET SparkShaderCompiler)
+        if(TARGET SparkTests)
+            add_dependencies(SparkTests SparkShaderCompiler)
+        endif()
+        add_test(
+            NAME SparkShaderCompilerExecutableSmoke
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_SHADER_COMPILER=$<TARGET_FILE:SparkShaderCompiler>"
+                "-DSPARK_SHADER_FIXTURE=${CMAKE_SOURCE_DIR}/Tests/Fixtures/ShaderCompiler/BasicVS.hlsl"
+                "-DSPARK_SHADER_OUTPUT_DIR=${CMAKE_BINARY_DIR}/shader-compiler-smoke"
+                -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkShaderCompilerSmoke.cmake)
+        set_tests_properties(SparkShaderCompilerExecutableSmoke PROPERTIES
+            LABELS "release;shader;process"
+            TIMEOUT 30)
+    endif()
+
+    # CI-110: prove the shipped automation host can launch the production
+    # engine and FPS module through the bounded Windows NullRHI lifecycle. The
+    # direct NullRHI lifecycle test remains separate; this test specifically
+    # covers SparkAutomation's process, timeout, and report contract.
+    if(WIN32 AND TARGET SparkAutomation AND TARGET SparkEngine AND TARGET SparkGameFPS)
+        add_dependencies(SparkTests SparkAutomation SparkEngine SparkGameFPS)
+        add_test(
+            NAME SparkAutomationNullRHIExecutableSmoke
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_AUTOMATION=$<TARGET_FILE:SparkAutomation>"
+                "-DSPARK_ENGINE=$<TARGET_FILE:SparkEngine>"
+                "-DSPARK_GAME=$<TARGET_FILE:SparkGameFPS>"
+                "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+                "-DSPARK_AUTOMATION_SMOKE_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+                "-DSPARK_AUTOMATION_SMOKE_OUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/spark-automation-nullrhi-smoke"
+                -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkAutomationNullRHISmoke.cmake)
+        set_tests_properties(SparkAutomationNullRHIExecutableSmoke PROPERTIES
+            LABELS "release;automation;nullrhi;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 135)
+    endif()
+
+    add_test(
+        NAME AsyncDatabaseDurabilityContract
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_async_database_durability.py)
+    set_tests_properties(AsyncDatabaseDurabilityContract PROPERTIES
+        LABELS "persistence;durability;static;python"
+        TIMEOUT 30)
+
+    add_test(
+        NAME SparkNetworkSecurityCsprngContract
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_network_security_csprng.py)
+    set_tests_properties(SparkNetworkSecurityCsprngContract PROPERTIES
+        LABELS "network-security;security;static;python"
+        TIMEOUT 30)
+
+    if(TARGET SparkShaderCompiler AND TARGET SparkCooker AND
+       TARGET SparkAutomation AND TARGET SparkCrashReporter)
+        add_test(
+            NAME SparkStableProductVersions
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_rel100_product_versions.py
+                --bin-dir $<TARGET_FILE_DIR:SparkShaderCompiler>)
+        set_tests_properties(SparkStableProductVersions PROPERTIES
+            LABELS "release;version;integration"
+            TIMEOUT 60)
+    endif()
+
     add_test(
         NAME BlenderMMOAssetSourceContract
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/blender/validate_mmo_props.py
@@ -1726,6 +2192,19 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_SOURCE_DIR}/Tools/validate_template_runtime_sheets.py
             ${CMAKE_SOURCE_DIR}/Templates
     )
+    set_tests_properties(SparkTemplateRuntimeSheets PROPERTIES
+        LABELS "template;static;python"
+        TIMEOUT 60)
+
+    # CI-110: CTest applies no timeout to a test without TIMEOUT (this project
+    # never includes CTest.cmake), so one hang would stall the run instead of
+    # failing. This gate keeps every registration above bounded and labelled.
+    add_test(
+        NAME SparkCTestTimeoutPolicy
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_validate_ctest_policy.py)
+    set_tests_properties(SparkCTestTimeoutPolicy PROPERTIES
+        LABELS "ci;test-policy;unit;python"
+        TIMEOUT 60)
     add_test(
         NAME SparkCliContract
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
@@ -1797,3 +2276,7 @@ endif()
 
 # Actual FPS mutation adapters and engine event publication, without module rendering dependencies.
 add_subdirectory(FPSGameplayEvents)
+
+if(SPARK_ENABLE_FUZZ_TARGETS)
+    add_subdirectory(Fuzz)
+endif()

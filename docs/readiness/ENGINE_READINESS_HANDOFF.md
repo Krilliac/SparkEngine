@@ -8,9 +8,9 @@
 **Pre-release hardening — `blocked`.** SparkEngine is source-usable and feature-rich, but it is not yet a fully ready engine release. Required CI can mask failures, no versioned release exists, no versioned Shipping artifact has same-commit stable-v1 qualification, code-signing, install, uninstall, and rollback evidence, and the stable-v1 Windows, D3D11, editor, NullRHI, installed-package, public-SDK, and SparkGameFPS evidence is not certified.
 
 - Capabilities tracked: **22**
-- Ledger gates marked blocking: **18** (profile applicability determines release impact)
-- Gate states: **0 passing**, **0 at risk**, **18 blocked**, **0 not evaluated**
-- Work items: **58 total**, **49 unfinished ledger items marked blocking** (profile applicability determines release impact)
+- Ledger gates marked blocking: **19** (profile applicability determines release impact)
+- Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
+- Work items: **64 total**, **54 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -73,6 +73,12 @@ Before ending the session, update the item status/evidence and regenerate this f
 
 The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as one installed first-party single-player vertical slice, SparkGameFPS, that must build through the public SDK surface alone. The complete required Windows build-product set is enumerated below and includes SparkEditor, SparkConsole, shader compiler, crash reporter, cooker, automation host, launcher, build tool, and installer; those products are in profile but remain blocked and uncertified. Constrained LAN play is optional and is not required. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface. Nothing in this profile is certified while its state is blocked.
 
+Publication follows candidate qualification, protected publication, independent verification, then final readiness. Only the typed finalization work declared in this profile may remain pending at publication; no technical gate is waived.
+
+- Publication environment: `stable-release`
+- Publication finalizers: `REL-200`
+- Procedure: `wiki/development/Release-Publication-Stages.md`
+
 | Dimension | Declared value | In-profile capabilities | Evidence |
 |---|---|---|---|
 | Host operating system | Windows 11 x64 only. Windows 10 x64 and every non-Windows host remain documented development and build floors; they are outside this profile and are not certified by it. | `platform.windows` | `.github/workflows/build.yml` (build-windows-vs2022), `wiki/platform/System-Requirements.md` |
@@ -132,6 +138,7 @@ Configuration-surface exceptions (every omitted option remains required):
 - `ENABLE_SERVER_PROCESSES` — **outside**: Dedicated services and production multiplayer are outside the service-free single-player profile.
 - `ENABLE_VR` — **outside**: VR hosts are explicitly unsupported by stable-v1.
 - `SPARK_DOUBLE_PRECISION_PHYSICS` — **shared**: Large-world double-precision physics is shared engine breadth, not a requirement of the first stable FPS slice.
+- `SPARK_ENABLE_FUZZ_TARGETS` — **outside**: Linux/Clang libFuzzer targets are release-validation tooling and are outside the Windows stable-v1 product profile.
 
 ### Profile gates
 
@@ -140,15 +147,16 @@ Configuration-surface exceptions (every omitted option remains required):
 - Explicitly excluded:
   - `G11` — Scripting is outside the profile: AngelScript and visual scripting are declared experimental and no profile claim depends on them.
   - `G12` — The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported.
+  - `G18` — G18 qualifies only the separately staged v0.9.0 predecessor; stable-v1 uses G17 and retains its own N-1 gate through REL-192.
 
-- Blocking work: `ASSET-220`, `BLD-100`, `CI-100`, `CI-110`, `CI-120`, `DOC-400`, `DOC-410`, `EDT-210`, `ENG-220`, `GOV-400`, `HEAD-220`, `INST-130`, `LIFE-200`, `MOD-290`, `MOD-310`, `OPS-100`, `PERF-100`, `PLT-200`, `RDY-000`, `RDY-010`, `RDY-020`, `REL-100`, `REL-110`, `REL-200`, `RHI-210`, `SAVE-230`, `SDK-240`, `SEC-100`, `SEC-110`, `SEC-120`
+- Blocking work: `ASSET-220`, `BLD-100`, `CI-100`, `CI-110`, `CI-120`, `DOC-400`, `DOC-410`, `EDT-210`, `ENG-220`, `GOV-400`, `HEAD-220`, `INST-130`, `INST-131`, `LIFE-200`, `MOD-290`, `MOD-310`, `OPS-100`, `PERF-100`, `PLT-200`, `RDY-000`, `RDY-010`, `RDY-020`, `REL-100`, `REL-110`, `REL-190`, `REL-192`, `REL-200`, `RHI-210`, `SAVE-230`, `SDK-240`, `SEC-100`, `SEC-110`, `SEC-120`
 
 ### Profile limitations
 
 - Windows 11 client-host certification does not exist; the build-windows-vs2022 lane runs on the hosted windows-2022 image, so host certification remains PLT-200 work rather than published evidence.
 - No Shipping-configuration artifact is signed, checksummed, attested, installed, upgraded, or rollback-tested at a single commit.
 - The first-party slice SparkGameFPS is in the profile but uncertified: its release state is blocked and it holds this profile at blocked (MOD-310).
-- SparkGameFPS builds against SparkEngineLib with the engine source tree on its include path, so the public-API-only requirement is unmet (SDK-240, MOD-310).
+- The installed SparkGameFPS entrypoint consumer and source-boundary contract pass, but the complete production DLL still builds against SparkEngineLib and private engine-source headers, so the public-API-only requirement remains unmet (SDK-240, MOD-310).
 - No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200).
 - The Windows Shipping producer records its File API capture as structural evidence and reports producer authority unavailable by design: a same-job GitHub OIDC audience proves only the mutable job identity, not CMake execution. The protected Build Matrix Verifier attests that evidence from the Working checkout, and no attested receipt exists yet for a Working commit (CI-120).
 - The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.
@@ -168,7 +176,7 @@ Configuration-surface exceptions (every omitted option remains required):
 | `G02` Supported build matrix | build | **blocked** | yes | Declared host/compiler configurations configure and build from clean checkout; Every shipped target and real module library is built; Shipping configuration exists and is distinct from Debug/Release; Submodule/toolchain inputs are pinned; Configured build-matrix evidence is producer-verified only by an independently verified protected external attestation; a same-job OIDC token, mutable workflow, checkout, receipt, artifact path, or hash cannot satisfy this gate | `CI-120`, `BLD-100` |
 | `G03` Production-source test coverage | tests | **blocked** | yes | Every in-profile real module library loads and executes in tests; No mirror-only or tautological test satisfies release; Coverage thresholds are explicit and enforced; Sanitizer and concurrency lanes fail closed; Experimental module lifecycle evidence remains owned by RDY-015 outside stable-v1 | `RDY-010`, `CI-110` |
 | `G04` Asset, cook, and package integrity | content | **blocked** | yes | Every discovered module has a validated content manifest; Zero missing or case-mismatched references in declared manifests; In-profile cooked packages launch without repository-relative dependencies; Stable package smoke covers clean Windows 11 machines; Experimental module package debt remains outside stable-v1 | `RDY-020`, `ASSET-220` |
-| `G05` Versioned Shipping artifacts | release | **blocked** | yes | Version is derived from the tag and embedded everywhere; Shipping artifacts are deterministic; Installer/uninstaller/upgrade/rollback smoke tests pass; Release notes and compatibility policy are published | `BLD-100`, `REL-100`, `INST-130`, `REL-200` |
+| `G05` Versioned Shipping artifacts | release | **blocked** | yes | Version is derived from the tag and embedded everywhere; Shipping artifacts are deterministic; Installer/uninstaller/upgrade/rollback smoke tests pass; Release notes and compatibility policy are published | `BLD-100`, `REL-100`, `INST-130`, `INST-131`, `REL-200` |
 | `G06` Supply-chain integrity | security | **blocked** | yes | Every artifact is signed and checksummed; SBOM and provenance are attached; Third-party license/manifest validation is blocking; Dependency and CodeQL findings follow an owned severity policy | `REL-110`, `SEC-110` |
 | `G07` Security and hostile-input safety | security | **blocked** | yes | Threat model and security ownership are current; Shipped remote administration is disabled by default and cannot expose credentials; Save, scene, asset, shader, archive, manifest, package, and crash parsers meet fuzz and bounds budgets; Packet/protocol fuzzing stays with NET-100 behind G12; Script fuzzing stays with ENG-200 behind G11 | `SEC-100`, `SEC-120` |
 | `G08` Platform support certification | platform | **blocked** | yes | Every platform inside a release profile has a declared compiler/OS/device matrix; Build, install, launch, content, input, audio, crash, save, upgrade, and uninstall pass on it; Experimental and unsupported targets remain labeled and keep their own certification work outside this gate | `PLT-200` |
@@ -180,7 +188,8 @@ Configuration-surface exceptions (every omitted option remains required):
 | `G14` Performance, reliability, and operations | operations | **blocked** | yes | Representative CPU/GPU/memory budgets are versioned; Long soaks show bounded memory and tick/frame percentiles; Crashes produce symbolized actionable reports with retained symbols; Production server observability, load, backup, and incident drills stay gated by OPS-110 behind G12 with the service surfaces they serve | `PERF-100`, `OPS-100` |
 | `G15` Documentation, legal, and support truth | governance | **blocked** | yes | Docs health is current and every link resolves; License, attribution, trademark, privacy, security, support, and contribution text is reviewed for the release; Quick starts run from clean machines; Website wording is generated from the tested contract | `DOC-410`, `GOV-400`, `DOC-400` |
 | `G16` Compatibility and migration | compatibility | **blocked** | yes | Version contracts exist for SDK, modules, assets, saves, scenes, and scripts; N-1 upgrade and rollback fixtures pass; Breaking changes fail with actionable diagnostics; Release notes enumerate migrations; Network protocol version contracts stay gated by NET-100 behind G12 | `SDK-240`, `SAVE-230`, `REL-200` |
-| `G17` Release rehearsal and sign-off | release | **blocked** | yes | A release candidate tag passes every gate required by each target profile; Excluded gates may remain blocked and stay explicitly unsupported; Artifacts are installed and upgraded on clean supported hosts; Rollback and recovery drills pass; Named owners sign repository evidence before the final tag | `REL-200` |
+| `G17` Release rehearsal and sign-off | release | **blocked** | yes | A release candidate tag passes every gate required by each target profile; Excluded gates may remain blocked and stay explicitly unsupported; Artifacts are installed and upgraded on clean supported hosts; Rollback and recovery drills pass; Named owners sign repository evidence before the final tag | `REL-190`, `REL-192`, `REL-200` |
+| `G18` Predecessor immutable publication and independent acceptance | release | **blocked** | yes | REL-191 common qualification and bootstrap rehearsal pass at the reviewed predecessor SHA before publication; Krilliac gives protected owner approval with administrative bypass disabled; Published immutable assets are independently downloaded and verified without claiming N-1 upgrade coverage | `INST-132`, `REL-191`, `REL-193` |
 
 ## Capability truth ledger
 
@@ -230,7 +239,7 @@ Establish the only source of readiness truth and make CI report reality.
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **open** | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **open** | — | `RDY-000`, `SEC-100`, `OPS-100` |
-| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **open** | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
+| [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **done** | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
 ### Wave 1 — Build, security, and release substrate
 
@@ -260,7 +269,7 @@ Certify Windows/D3D11, headless, runtime, editor, assets, installer, saves, SDK,
 | [`LIFE-200`](#life-200--close-runtime-ownership-shutdown-reload-and-failure-semantics) Close runtime ownership, shutdown, reload, and failure semantics | P0 | **open** | `RDY-010`, `BLD-100` | `HEAD-220`, `EDT-210`, `ENG-200` |
 | [`EDT-210`](#edt-210--finish-the-editor-authoring-and-undo-safe-package-round-trip) Finish the editor authoring and undo-safe package round trip | P1 | **open** | `RDY-010`, `RDY-020`, `LIFE-200` | `RHI-210`, `ENG-200`, `SAVE-230` |
 | [`ASSET-220`](#asset-220--consolidate-cooking-packaging-cli-and-installed-consumer-behavior) Consolidate cooking, packaging, CLI, and installed consumer behavior | P0 | **open** | `RDY-020`, `BLD-100`, `LIFE-200` | `EDT-210`, `SAVE-230`, `SDK-240` |
-| [`INST-130`](#inst-130--make-installer-and-updater-verified-transactional-and-recoverable) Make installer and updater verified, transactional, and recoverable | P0 | **open** | `ASSET-220`, `REL-100`, `REL-110` | `PLT-200`, `SDK-240` |
+| [`INST-130`](#inst-130--make-installer-clean-install-repair-and-uninstall-behavior-verified-and-recoverable) Make installer clean-install, repair, and uninstall behavior verified and recoverable | P0 | **open** | `ASSET-220`, `REL-100`, `REL-110` | `PLT-200`, `SDK-240` |
 | [`SAVE-230`](#save-230--version-saves-scenes-assets-editor-data-and-migrations) Version saves, scenes, assets, editor data, and migrations | P0 | **open** | `RDY-000`, `RDY-010`, `LIFE-200` | `EDT-210`, `ASSET-220`, `SDK-240` |
 | [`SDK-240`](#sdk-240--stabilize-sdk-module-abi-package-exports-and-compatibility-diagnostics) Stabilize SDK, module ABI, package exports, and compatibility diagnostics | P0 | **open** | `ASSET-220`, `LIFE-200`, `REL-100` | `SAVE-230`, `EDT-210` |
 | [`PERF-100`](#perf-100--make-performance-memory-startup-package-size-and-visual-regression-release-gates) Make performance, memory, startup, package size, and visual regression release gates | P1 | **in-progress** | `CI-110`, `BLD-100`, `RHI-210` | `EDT-210`, `SAVE-230`, `SDK-240` |
@@ -325,7 +334,13 @@ Finish governance, publish the live bundle, rehearse every gate required by each
 |---|---|---|---|---|
 | [`GOV-400`](#gov-400--resolve-licensing-third-party-notices-trademark-contribution-security-and-support-policy) Resolve licensing, third-party notices, trademark, contribution, security, and support policy | P0 | **open** | `RDY-000`, `SEC-110`, `REL-100` | `DOC-400` |
 | [`DOC-400`](#doc-400--publish-the-repository-synchronized-site-data-bundle-and-complete-public-framing) Publish the repository-synchronized site-data bundle and complete public framing | P0 | **in-progress** | `RDY-000` | `DOC-410`, `CI-100`, `GOV-400` |
-| [`REL-200`](#rel-200--rehearse-sign-off-and-publish-the-first-fully-gated-release) Rehearse, sign off, and publish the first fully gated release | P0 | **blocked** | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400` | — |
+| [`INST-131`](#inst-131--qualify-stable-v1-n-1-upgrade-and-rollback-against-an-immutable-predecessor) Qualify stable-v1 N-1 upgrade and rollback against an immutable predecessor | P0 | **open** | `INST-130`, `REL-100`, `REL-110` | `REL-190` |
+| [`INST-132`](#inst-132--qualify-predecessor-bootstrap-recovery-without-an-n-1-dependency) Qualify predecessor bootstrap recovery without an N-1 dependency | P0 | **open** | `INST-130` | `INST-131` |
+| [`REL-190`](#rel-190--rehearse-and-approve-the-qualified-release-candidate-before-publication) Rehearse and approve the qualified release candidate before publication | P0 | **blocked** | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
+| [`REL-191`](#rel-191--rehearse-the-predecessor-release-without-n-1-upgrade-claims) Rehearse the predecessor release without N-1 upgrade claims | P0 | **open** | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220` | — |
+| [`REL-192`](#rel-192--qualify-stable-v1-n-1-release-rehearsal-and-rollback) Qualify stable-v1 N-1 release rehearsal and rollback | P0 | **blocked** | `REL-190`, `INST-131` | — |
+| [`REL-193`](#rel-193--publish-and-independently-accept-the-reviewed-v090-predecessor) Publish and independently accept the reviewed v0.9.0 predecessor | P0 | **in-progress** | `REL-191` | — |
+| [`REL-200`](#rel-200--publish-and-independently-verify-the-qualified-release) Publish and independently verify the qualified release | P0 | **blocked** | `REL-190` | — |
 
 ## Game-module parity baseline
 
@@ -440,7 +455,7 @@ git diff --exit-code
 **Priority:** P0 · **Status:** in-progress · **Wave:** 0 · **Area:** tests · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, has a real Windows lifecycle collector/host contract, and requires exact-SHA Windows lifecycle and installed-package-smoke producers before the Ubuntu consumer and aggregate gate. No hosted run has yet supplied the corresponding immutable lifecycle/package artifacts and successful required-gate evidence. Those unhosted proof gaps keep this item release-blocking.
+In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, has a real Windows lifecycle collector/host contract, and requires exact-SHA Windows lifecycle and installed-package-smoke producers before the Ubuntu consumer and aggregate gate. 2026-09-13 progress: the lifecycle consumer now rejects malformed or logger-prefixed duplicate marker lines instead of filtering them, with the full module-evidence suite green. 2026-09-14 progress: the local module-evidence wrapper now selects a runnable Python interpreter when the Windows Store python3 alias is present; its declarative/adversarial run completes with 307 tests and 12 expected skips. No hosted run has yet supplied the corresponding immutable lifecycle/package artifacts and successful required-gate evidence. Those unhosted proof gaps keep this item release-blocking.
 
 **Dependency contract**
 
@@ -551,7 +566,7 @@ tools/check-test-registration.sh
 **Priority:** P0 · **Status:** open · **Wave:** 0 · **Area:** content · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked; the profile-module-package-smoke producer/consumer path is implemented but has no hosted exact-SHA proof yet.
+Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked. 2026-09-12 progress: runtime packages now install Assets/assets.integrity.json under bin/Assets, and extracted-package validation rejects a missing, link-like, or tampered runtime asset manifest/payload using the repository verifier with case-correct paths. 2026-09-21 progress: the installed FPS profile-package smoke now stages the manifest's root README and verifies all 882 staged bin/Assets entries before module lifecycle and save/reload; adversarial helper tests reject missing manifests, missing or tampered payloads, exact-case mismatches, undeclared files, and link-like paths. The fail-closed module inventory covers all 11 GameModules, with FPS root Models/Scenes integrity coverage at 317/317; content outside the in-profile FPS root remains unclassified. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. Clean Windows 11/archive, profile-wide package, provenance, exact-SHA proof, and remaining module content debt still remain open.
 
 **Dependency contract**
 
@@ -609,7 +624,7 @@ ctest --test-dir build/windows-shipping -L profile-package --output-on-failure -
 **Automated evidence**
 
 - Test selectors: `AssetManifest_*`, `PackageAssets_*`, `PathCase_*`, `ProjectMaterialization_*`, `SparkTemplateAssets`
-- Required CI jobs: `asset-integrity`, `profile-module-package-smoke`
+- Required CI jobs: `asset-integrity`, `module-profile-package-smoke`
 - Performance / reliability budgets:
   - Manifest validation completes before compilation cache restore is material
 
@@ -643,7 +658,7 @@ ctest --test-dir build/windows-shipping -L profile-package --output-on-failure -
 **Priority:** P0 · **Status:** open · **Wave:** 0 · **Area:** ci · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under current triggers, and coverage, validation, format, and static-analysis surfaces are incomplete or advisory. 2026-09-05 progress: the advisory-lane derivation landed in the exact-source gate (a failed Build job is accepted only if build.yml at that exact commit declares continue-on-error; required set cross-checked against EXPECTED_REQUIRED_JOBS_JSON; a required job marked continue-on-error is rejected). 2026-09-08 read-only remote evidence for Working 891e00c1cb4a930a38e61da26e62f56d4af88de3: its Build Matrix Verifier rejected the exact producer artifact because the producer reported 3 parity errors while the Linux trusted checker reported 19. The 16-error difference is a cross-host path-semantics defect in the old checker, which interpreted Windows-recorded paths with host Path/os.path rules. Local canonical commit 9583053edabdae37af6f737132bfc50eefd92930 uses recorded Windows/POSIX path semantics and restricts verifier sources to Working push/workflow_dispatch, but has not been published or proven by an exact-SHA remote run. Verified read-only that no branch protection or ruleset is active on Working (branches/Working/protection is 404; all five rulesets enforcement=disabled), so required-ci-gate is a post-hoc publication gate, not a merge gate. Item stays open until CI proves the derivation and the ruleset is activated by the account owner.
+ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under current triggers, and coverage, validation, format, and static-analysis surfaces are incomplete or advisory. 2026-09-05 progress: the advisory-lane derivation landed in the exact-source gate (a failed Build job is accepted only if build.yml at that exact commit declares continue-on-error; required set cross-checked against EXPECTED_REQUIRED_JOBS_JSON; a required job marked continue-on-error is rejected). 2026-09-08 read-only remote evidence for Working 891e00c1cb4a930a38e61da26e62f56d4af88de3: its Build Matrix Verifier rejected the exact producer artifact because the producer reported 3 parity errors while the Linux trusted checker reported 19. The 16-error difference is a cross-host path-semantics defect in the old checker, which interpreted Windows-recorded paths with host Path/os.path rules. Local canonical commit 9583053edabdae37af6f737132bfc50eefd92930 uses recorded Windows/POSIX path semantics and restricts verifier sources to Working push/workflow_dispatch, but has not been published or proven by an exact-SHA remote run. Verified 2026-09-12 that legacy branch protection remains absent on Working (branches/Working/protection is 404), while repository ruleset 21968740 (Working integrity) is active and requires the GitHub Actions Required CI Gate check with no bypass actors. 2026-09-13 progress: the required-job verifier now fails closed when EXPECTED_REQUIRED_JOBS_JSON is missing or empty, with focused and failure-propagation regressions green. 2026-09-13 additional progress: the TODO/FIXME threshold now emits an error and exits nonzero, and the Windows registration guard now prefers Git Bash and passes POSIX script paths; focused CI policy suites pass locally. 2026-09-14 progress: the failure-propagation contract now verifies that workflow_dispatch reaches every required job and the always-running Required CI Gate without event/ref skips or cancellation; the full local contract suite passes 78/78. 2026-09-14 additional progress: build.yml now exposes an explicit, default-off workflow_dispatch control that fails the required validate-ci-tools job, and the workflow regression suite covers its manual-only guard. 2026-09-21 further progress: exact hosted failure showed a registered fuzz test without a built executable; the workflow now builds all three fuzz targets, and structural policy enforces target completeness plus build-before-CTest across 162 tests. The same hosted run exposed Windows newline drift in the crash-manifest corpus; those exact seed bytes are now LF-pinned and pass in an isolated core.autocrlf=true checkout. Exact SHA 37a4bec5 subsequently passed Site Data, CodeQL, Microsoft C++ analysis, and Trusted Reporter, while the main Build correctly failed on a portable temporary-directory assumption, platform-native cooker fixture newlines, and non-artifact CMake target semantics; bounded local fixes are covered by focused policy suites. The corrected SHA still needs hosted proof. Item stays open until an exact-SHA hosted control run proves the required-job failure turns Required CI Gate red.
 
 **Dependency contract**
 
@@ -656,11 +671,13 @@ ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under
 - `.github/workflows/codeql.yml`
 - `tools/validate-all.sh`
 - `tools/check-test-registration.sh`
+- `.github/scripts/test-workflow-failure-propagation.py`
 
 **Entry points**
 
 - `.github/workflows/build.yml`
 - `.github/workflows/codeql.yml`
+- `.github/scripts/test-workflow-failure-propagation.py`
 
 **Implementation scope**
 
@@ -716,14 +733,14 @@ gh api repos/Krilliac/SparkEngine/branches/Working/protection
 - Mutation tests prove failure propagation
 - Exact-SHA artifacts publish
 - Branch protection requires the intended set
-- Remaining: activate ruleset 21968740 with required_status_checks (account-owner action), then attach a CI run proving a controlled required-job failure turns the gate red
+- Working ruleset 21968740 is active with Required CI Gate as its required status check; attach a CI run proving a controlled required-job failure turns the gate red
 
 ### DOC-410 — Repair and enforce deterministic repository documentation generation
 
-**Priority:** P0 · **Status:** open · **Wave:** 0 · **Area:** documentation · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** done · **Wave:** 0 · **Area:** documentation · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-A hostile audit found timestamp-only false greens, incomplete first-party source coverage, contradictory health evidence, fabricated mixed-case macro rows, and link-validation bypasses. The repair remains open until the exact final commit completes the blocking docs-health and site-data CI jobs.
+A hostile audit found timestamp-only false greens, incomplete first-party source coverage, contradictory health evidence, fabricated mixed-case macro rows, and link-validation bypasses. Deterministic generation, hostile documentation checks, link validation, and exact-commit docs-health and site-data CI evidence now pass; future documentation changes remain covered by the same blocking jobs.
 
 **Dependency contract**
 
@@ -781,7 +798,7 @@ git diff --exit-code
 
 **Automated evidence**
 
-- Test selectors: `DocsGeneration_*`, `DocsLinks_*`
+- Test selectors: none declared
 - Required CI jobs: `docs-health`, `site-data-validate`
 - Performance / reliability budgets:
   - Each generator is bounded to five minutes and the blocking exact-currentness job to fifteen minutes
@@ -820,7 +837,7 @@ git diff --exit-code
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** tests · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking thresholds, missing golden baselines, and partial clang-tidy/CodeQL coverage prevent a green result from proving release quality. 2026-09-05 progress: SparkTests is split into SparkEngineTests and SparkEngineLoadTests (labels load;slow) with per-configuration timeout budgets; the runner reports [ EMPTY ] tests and flaky waivers explicitly (EXPECT_WARN_ONLY, EXPECT_NO_CRASH, SKIP_TEST) and JUnit carries flaky=/empty= attributes; SPARK_TESTS_WARN_IS_ERROR exists but defaults OFF because Tests/TestWarnings.h still holds 9 waivers documenting real non-determinism. Still open: no unowned-flaky policy, no golden baselines, coverage/analysis regressions do not block.
+One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking thresholds, missing golden baselines, and partial clang-tidy/CodeQL coverage prevent a green result from proving release quality. 2026-09-05 progress: SparkTests is split into SparkEngineTests and SparkEngineLoadTests (labels load;slow) with per-configuration timeout budgets; the runner reports [ EMPTY ] tests and flaky waivers explicitly (EXPECT_WARN_ONLY, EXPECT_NO_CRASH, SKIP_TEST) and JUnit carries flaky=/empty= attributes; SPARK_TESTS_WARN_IS_ERROR exists but defaults OFF because Tests/TestWarnings.h still holds 8 waivers documenting real non-determinism. 2026-09-12 progress: the clang-tidy lane now inventories every shipped-product source root and fails closed on missing roots or an empty translation-unit inventory instead of analyzing a capped sample. 2026-09-13 progress: coverage enforcement now requires test, generation, and threshold steps to end exactly in success and rejects skipped/cancelled evidence, with direct workflow regressions. 2026-09-13 additional progress: Tools/validate_test_warnings.py now requires exact registry/metadata parity, named owners, and future ISO expiries for all whole-test waivers; blocking CI runs the validator and 7 adversarial policy tests. 2026-09-21 further progress: the exact hosted failure was a registered fuzz test without a built executable; the workflow now builds all three fuzz targets and structural policy enforces target completeness plus build-before-CTest across 162 tests. Executable-level smokes now exercise SparkConsole batch dispatch, SparkCrashReporter failure semantics, a two-pass SparkCooker manifest, real D3D11 shader compilation, SparkAutomation through the FPS NullRHI lifecycle, SparkBuild plan generation, and SparkEditor project load/clean shutdown. The hosted MSAN static-destruction failure is fixed with lifetime-safe EventBus subscriptions and a production regression. Exact SHA 37a4bec5 exposed and now locally closes the remaining cross-platform SparkCooker smoke digest mismatch by pinning LF fixture bytes. Golden baselines, corrected-SHA hosted proof, remaining shipped-product integration depth, and static-analysis coverage are still open.
 
 **Dependency contract**
 
@@ -905,7 +922,7 @@ SparkTests --warn-is-error --shuffle 123 --junit-xml test-results.xml
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** build · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product.
+SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product. 2026-09-12 progress: build-matrix parity now fails closed when a stable shipping/validation profile cannot resolve its matching CMake build preset or declares the wrong configuration; the reviewed inventory was regenerated for the current source tree. 2026-09-13 progress: parity now rejects conflicting cache overrides appended to a canonical preset, preserving the reviewed stable-v1 option contract. 2026-09-21 progress: hosted Shipping codemodel evidence confirmed that CMake object and interface libraries correctly have no standalone artifact identity; pending-authority validation now permits only those non-artifact kinds while retaining strict identities for executable and linkable products, with 14 authority, 201 parity, and 27 external-verifier tests green. Protected external-attestation evidence remains open.
 
 **Dependency contract**
 
@@ -1024,7 +1041,7 @@ python3 tools/site-data/validate.py
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** build · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Versioned Windows publication now selects the authoritative windows-shipping preset and MinSizeRel product tree, with separate windows-release validation. Nightly retains Debug/Release packages. Executed workflow-selection and asset-collection regressions, plus staged-package profile checks, verify the local orchestration contract. Runtime-only component staging now has an explicit trusted-layout preflight before CPack, retaining executable, runtime-content, and all configured module sidecar/hash checks without requiring installed SDK files. Local fixture validation does not establish native installer execution. Hosted Windows Shipping packaging, reproducibility comparison, exact toolchain/dependency manifests, and private symbol retention remain unverified or unfinished; this item is not complete.
+Versioned Windows publication now selects the authoritative windows-shipping preset and MinSizeRel product tree, with separate windows-release validation. Nightly retains Debug/Release packages. Executed workflow-selection and asset-collection regressions, plus staged-package profile checks, verify the local orchestration contract. 2026-09-12 progress: the reviewed build-matrix inventory now binds stable shipping and validation profiles to matching CMake build presets/configurations and rejects drift. Runtime-only component staging now has an explicit trusted-layout preflight before CPack, retaining executable, runtime-content, and all configured module sidecar/hash checks without requiring installed SDK files. 2026-09-13 progress: the inventory retains CMake’s Visual Studio instance, archiver, and linker identities and fails closed when they are missing and disagree. It now also accepts only absolute Windows x64 C++ compiler paths, preventing relative or non-Windows spellings from being mistaken for exact MSVC provenance. Local fixture validation does not establish native installer execution. Hosted Windows Shipping packaging, reproducibility comparison, exact toolchain/dependency manifests, and private symbol retention remain unverified or unfinished; this item is not complete.
 
 **Dependency contract**
 
@@ -1075,6 +1092,7 @@ cmake --build build/windows-shipping --config MinSizeRel --clean-first
 
 - Documentation:
   - `README.md`
+  - `wiki/development/CI-Reproducible-Builds.md`
   - `wiki/getting-started/Building-from-Source.md`
 - Readiness contract:
   - G02
@@ -1100,7 +1118,7 @@ cmake --build build/windows-shipping --config MinSizeRel --clean-first
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Stable preparation now requires tag/default-version equality, one source version declaration, and exactly one matching versioned changelog heading, with executed rejection fixtures; the current Unreleased-only changelog intentionally does not satisfy this contract. Still open: complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy.
+CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Stable preparation now requires tag/default-version equality, one source version declaration, and exactly one matching versioned changelog heading, with executed rejection fixtures; the current Unreleased-only changelog intentionally does not satisfy this contract. 2026-09-12 progress: SparkConsole now receives the top-level version at configure time, rejects standalone builds without it, exposes --version/-v, and has a CTest contract that verifies the executable output. 2026-09-13 progress: SparkShaderCompiler, SparkCooker, SparkAutomation, and SparkCrashReporter now receive the authoritative CMake version and expose exact --version contracts; fresh Windows Shipping binaries pass the executable-level regression, and the required Shipping workflow runs it after build. 2026-09-14 progress: the shared executable-level regression now resolves the platform-native executable suffix, so macOS and Linux validate extensionless tool binaries while Windows retains the .exe contract; the Windows targeted CTest and Darwin suffix probe pass locally. Still open: complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy.
 
 **Dependency contract**
 
@@ -1135,8 +1153,9 @@ CMake, SDK generated headers, installer, and launcher consume the requested engi
 
 1. A vX.Y.Z tag embeds exactly X.Y.Z in every stable-v1 product and artifact
 2. Every stable-v1 artifact records source SHA, dependency-lock digest, exact toolchain, and configuration
-3. Stable publication is impossible while a target profile gate is open
+3. Stable publication requires every qualification gate and dependency; only explicitly typed publication-finalization work may remain pending in candidate state
 4. Nightly, stable, and experimental channels have explicit retention and support semantics
+5. Prove one uniquely tagged immutable nightly and the protected signed stable path independently; the repository policy and workflow topology are compatible, but live publication remains unverified
 
 **Required commands**
 
@@ -1184,7 +1203,7 @@ SparkLauncher --version
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Release automation already generates SHA256SUMS, an SBOM, and build attestations. Stable-v1 still requires independently verified code signing, artifact and dependency scan policy, and a protected release approval environment; existing integrity metadata alone does not satisfy this gate. A bounded first slice now gates final stable Windows Runtime EXE/MSI execution and upload on native Valid embedded Authenticode, a timestamp certificate, an explicitly configured publisher certificate thumbprint, and SHA-256 continuity through native qualification. Injected-process regressions run in validate-ci-tools; real unsigned EXE/MSI fixture rejection is wired to ordinary Windows VS 2022 Release CI and the Windows stable release job. This verifies outer installers only, not ZIP/internal PE payloads. Publisher identity provisioning, a secure signing pipeline, native signed-artifact success evidence, consumer verification, scans, and protected approval remain prerequisites; REL-110 is open.
+Release automation already generates SHA256SUMS, an SBOM, and build attestations. Stable-v1 still requires independently verified code signing, artifact and dependency scan policy, and a protected release approval environment; existing integrity metadata alone does not satisfy this gate. A bounded first slice now gates final stable Windows Runtime EXE/MSI execution and upload on native Valid embedded Authenticode, a timestamp certificate, an explicitly configured publisher certificate thumbprint, and SHA-256 continuity through native qualification. Injected-process regressions run in validate-ci-tools; real unsigned EXE/MSI fixture rejection is wired to ordinary Windows VS 2022 Release CI and the Windows stable release job. 2026-09-13 progress: native signature evidence and persisted reports now reject duplicate JSON keys instead of accepting last-write-wins contradictions. 2026-09-13 additional progress: signature report publication and hash verification now reject symlinked report paths and publish through an atomic no-replace boundary, with 7 focused signature tests. 2026-09-21 progress: stable publication now has a fail-closed consumer verifier for the exact asset set, SHA256SUMS, nonempty SPDX payload coverage, exact-CI provenance, pinned trusted-key fingerprint, and real OpenSSL detached signatures. Its externally provisioned signature archive is digest-pinned, flat regular-file-only, Windows-name-safe, and reverified before both draft creation and promotion. Local cryptographic, archive, workflow, and failure-propagation suites pass. Publisher key/signature-bundle provisioning, protected approval, artifact vulnerability scanning and exception policy, native signed-artifact success evidence, and hosted exact-SHA proof remain prerequisites; REL-110 is open.
 
 **Dependency contract**
 
@@ -1261,7 +1280,7 @@ grype sbom:sbom.spdx.json
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.
+Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. 2026-09-12 progress: built-in RemoteDebug command types are now reserved against public handler rebinding, with a hostile probe and RemoteAdmin regression proving a replacement cannot downgrade authorization. 2026-09-13 progress: the local area-control HMAC replay ledger now fails closed at the existing 4,096-entry bound on Windows and POSIX, with a capacity regression. 2026-09-14 progress: the Multiplayer Quick Start now labels administration as trusted local-only, removes the sample password, and states that remote RCON is unavailable. 2026-09-14 additional progress: stale Memory Integrity documentation now names the trusted local administration boundary and is protected by a site-contract regression against chat/remote RCON wording. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.
 
 **Dependency contract**
 
@@ -1303,7 +1322,7 @@ ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure --no-te
 
 **Automated evidence**
 
-- Test selectors: `RemoteAdmin_AnonymousDenied`, `RemoteAdmin_RoleMatrix`, `RemoteAdmin_ReplayDenied`, `RemoteAdmin_RateLimited`
+- Test selectors: `RemoteAdmin_AnonymousDenied`, `RemoteAdmin_RoleMatrix`, `RemoteAdmin_ReplayDenied`, `RemoteAdmin_RateLimited`, `GatewayAreaControl_*`
 - Required CI jobs: `security-runtime`, `network-integration`
 - Performance / reliability budgets:
   - Admin authentication does not block the simulation thread
@@ -1313,6 +1332,8 @@ ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure --no-te
 - Documentation:
   - `SECURITY.md`
   - `wiki/subsystems/Dedicated-Server.md`
+  - `wiki/subsystems/Memory-Integrity.md`
+  - `wiki/advanced/Memory-Integrity-System.md`
 - Readiness contract:
   - G07
   - G12
@@ -1337,7 +1358,7 @@ ctest --test-dir build/linux-shipping -R RemoteAdmin --output-on-failure --no-te
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates.
+Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. 2026-09-13 progress: the supply-chain lock now requires a bounded, case-insensitive-unique, non-waiving exception schema with named owners, valid expiries, adversarial tests, and required legal-compliance CI wiring. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open.
 
 **Dependency contract**
 
@@ -1428,7 +1449,7 @@ osv-scanner --lockfile ThirdParty/dependencies.lock
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross stable-v1 trust boundaries without a unified fuzz/bounds gate; packet and script campaigns belong to the excluded networking and scripting surfaces. 2026-09-05 progress (partial hardening, no fuzz harness): Json::ParseBounded/JsonLimits budgets on every default parse entry point; mod.json and mod config capped at 64 KB / depth 16 / 4096 nodes and parsed strictly; scene manifests capped at 8 MB / 100,000 entries with path containment; .spk decompression ratio bounded at Open; .skel/.sanim name-length and parentIndex validation; Spark::IsVirtualPathSafe. Tests/TestSecurityParsersReal.cpp now executes the shipped parsers (the packet-validator evidence is tracked under NET-100). Do not promote a JSON-fuzz claim: only bounded regressions were added.
+Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross stable-v1 trust boundaries without a unified fuzz/bounds gate; packet and script campaigns belong to the excluded networking and scripting surfaces. 2026-09-05 progress (partial hardening, no fuzz harness): Json::ParseBounded/JsonLimits budgets on every default parse entry point; mod.json and mod config capped at 64 KB / depth 16 / 4096 nodes and parsed strictly; scene manifests capped at 8 MB / 100,000 entries with path containment; .spk decompression ratio bounded at Open; .skel/.sanim name-length and parentIndex validation; Spark::IsVirtualPathSafe. Tests/TestSecurityParsersReal.cpp now executes the shipped parsers (the packet-validator evidence is tracked under NET-100). 2026-09-12 progress: SparkPak now rejects unsafe traversal entry names while opening the archive, with a production regression fixture. 2026-09-13 additional progress: installer state manifests now reject inputs above 64 KiB and detect shrink/growth races while reading, with focused native install-state coverage. 2026-09-14 progress: the first production-entry-point Clang/libFuzzer target exercises Spark::Json::ParseBounded with a bounded seven-seed corpus, explicit 4 KiB/32-level/256 MiB/1-second limits, a 4-second active smoke, and a 10-second CTest bound. 2026-09-20 progress: the production .nnw loader now validates bounded dimensions, connectivity, activation/optimizer values, checked parameter counts, exact payload size, and saver symmetry before allocating weight/optimizer payloads; a direct LoadWeights libFuzzer target is bound to an eight-seed corpus. 2026-09-21 progress: the production crash-manifest parser now has a direct bounded Clang/libFuzzer target and six-seed corpus. Its seed bytes are LF-pinned and independently verified in a fresh Windows-style autocrlf checkout. The structural policy gate records 3 fuzzed parsers, 3 corpora, 102 blocked parser targets, and 151 deferred candidates; exact-SHA hosted sanitizer evidence, runtime coverage, deferred-candidate closure, and scheduled campaigns remain open. Do not promote SEC-120 or parser coverage from these structural slices alone.
 
 **Dependency contract**
 
@@ -1438,6 +1459,9 @@ Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross st
 **Source context**
 
 - `SparkEngine/Source/Utils/Serializer.h`
+- `SparkEngine/Source/Utils/JsonUtils.h`
+- `Tests/Fuzz`
+- `tools/fuzz-policy`
 - `SparkEngine/Source/Graphics`
 - `SparkShaderCompiler`
 - `SparkInstaller`
@@ -1447,6 +1471,7 @@ Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross st
 
 - `Tests/Fuzz`
 - `CMakeLists.txt`
+- `CMakePresets.json`
 
 **Implementation scope**
 
@@ -1482,6 +1507,7 @@ ctest --test-dir build/linux-fuzz -L fuzz-smoke --output-on-failure --no-tests=e
 - Documentation:
   - `SECURITY.md`
   - `wiki/advanced/Testing.md`
+  - `wiki/advanced/Fuzz-Policy-and-Parser-Security.md`
 - Readiness contract:
   - G07
 - Website impact:
@@ -1500,14 +1526,14 @@ ctest --test-dir build/linux-fuzz -L fuzz-smoke --output-on-failure --no-tests=e
 - Trust surfaces inventoried
 - Harnesses run production code
 - Budgets and regression workflow are enforced
-- Remaining: Tests/Fuzz harnesses over the production parsers, fuzz-smoke CI lane, minimized regression fixtures
+- Remaining: production harnesses for 102 blocked parsers, classification of 151 deferred candidates, retained exact-SHA sanitizer evidence, minimized regression fixtures, and scheduled campaigns
 
 ### OPS-100 — Secure and complete crash reporting, telemetry delivery, and symbol operations
 
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** operations · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. OPS-100 remains open because networking/CURL builds retain a legacy in-process direct-upload configuration with reusable credentials, and controlled relay delivery, scoped authorization, release symbolication, privacy/retention review, and exact-SHA crash evidence are absent.
+Crash manifests are now transport-free, pinned to a private artifact root, and handled by a read-only external reporter; C++ telemetry has bounded durable spool/retry/drop accounting. 2026-09-12 progress: crash-upload proxy and FTP endpoint logs now retain only scheme and host, with Dropbox capability URLs fully redacted; production-linked regressions cover credentials, paths, queries, fragments, malformed URLs, and bearer data. 2026-09-13 progress: CrashHandler no longer invokes the legacy in-process uploader or archive/consent fallback; it always publishes a local manifest and launches the read-only reporter for interactive processes, with a source-policy regression. OPS-100 remains open because the standalone uploader/configuration compatibility surface, controlled relay delivery, scoped authorization, release symbolication, privacy/retention review, and exact-SHA crash evidence are absent.
 
 **Dependency contract**
 
@@ -1592,7 +1618,7 @@ ctest --test-dir build/linux-shipping -R TelemetrySpool --output-on-failure --no
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** platform · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification.
+Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification. 2026-09-12 progress: full platform-cert validation now rejects unknown profiles even when a caller enables matrix-only diagnostic compatibility; unknown profiles cannot produce certified evidence. 2026-09-13 progress: root Visual Studio profiles now retain measured compiler path/identity/version, x64 architecture, and Windows SDK provenance in the CMake cache, with parity regressions for missing and mismatched values. Clean Windows 11, driver, installer, upgrade, rollback, and hosted certification evidence remain open.
 
 **Dependency contract**
 
@@ -1668,7 +1694,7 @@ ctest --test-dir build/windows-shipping -L certification --output-on-failure --n
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** rendering · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-D3D11 is the deepest renderer but lacks a same-commit packaged golden-scene/pass/shader/resource/driver/performance release gate.
+D3D11 is the deepest renderer but lacks a same-commit packaged golden-scene/pass/shader/resource/driver/performance release gate. 2026-09-12 progress: Texture2DArray color and depth resources now create array-aware SRV/DSV views, including MSAA dimensions, with production-linked native view-descriptor coverage. 2026-09-21 progress: the strict MinSizeRel windows-shipping package stages exactly SparkGameFPS and completes an installed-bin-only D3D11 WARP smoke for eight rendered frames with one strict device marker, zero lifecycle faults, save/reload, and retained binary/module hashes. 2026-09-23 local progress: an installed Release D3D11 WARP package now binds authored and procedural FPS materials; changing only the center-building albedo changes 47.32% of central screenshot samples and 0% outside, while the pre-fix binary fails the same test at 0%. GPU captures, golden-scene and hardware-driver execution, visual thresholds, clean-machine and hosted exact-SHA evidence remain open.
 
 **Dependency contract**
 
@@ -1745,7 +1771,7 @@ ctest --test-dir build/windows-shipping -L d3d11-stress --output-on-failure --no
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** runtime · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS module/assets/save, shutdown, leak, soak, and no-GPU evidence without inheriting production-service operations. 2026-09-05 progress: Saves/, Logs/ (rotating SparkEngine_*.log), spark_trace.json and ShaderCache/ resolve through Spark::UserPaths under %LOCALAPPDATA%/SparkEngine (POSIX: $XDG_DATA_HOME or ~/.local/share/SparkEngine), Data/*.spk is resolved beside the executable first, and settings.ini falls back to a per-user directory on read-only installs (Tests/TestUserDataPathsReal.cpp). RHIBridge::Initialize no longer degrades a windowed request to NullRHIDevice silently (headless needs a headless request or allowHeadlessFallback). No packaged Windows 11 x64 no-GPU boot/soak evidence exists yet; the item stays open.
+NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS module/assets/save, shutdown, leak, soak, and no-GPU evidence without inheriting production-service operations. 2026-09-05 progress: Saves/, Logs/ (rotating SparkEngine_*.log), spark_trace.json and ShaderCache/ resolve through Spark::UserPaths under %LOCALAPPDATA%/SparkEngine (POSIX: $XDG_DATA_HOME or ~/.local/share/SparkEngine), Data/*.spk is resolved beside the executable first, and settings.ini falls back to a per-user directory on read-only installs (Tests/TestUserDataPathsReal.cpp). RHIBridge::Initialize no longer degrades a windowed request to NullRHIDevice silently (headless needs a headless request or allowHeadlessFallback). 2026-09-12 progress: NullRHI qualification now rejects logger-prefixed SPARK_D3D11_DEVICE records rather than accepting a false no-GPU result. 2026-09-13 progress: runtime-layout validation now executes the staged SparkEngine NullRHI lifecycle before returning from module-only validation; the Windows text-fixture path is explicitly excluded because the real installed-package smoke supplies the executable proof. 2026-09-20 local progress: the staged MinSizeRel package completed its existing real NullRHI FPS lifecycle and, separately, two fresh D3D11 WARP processes wrote and restored 37 progression XP with semantic audit checks and unchanged save bytes. This is not NullRHI save/reload, no-display-host, soak/recovery, leak/sanitizer, clean-machine, or hosted exact-SHA evidence; the item stays open.
 
 **Dependency contract**
 
@@ -1822,7 +1848,7 @@ ctest --test-dir build/windows-shipping -L nullrhi-headless --output-on-failure 
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** runtime · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-A fully ready engine needs deterministic initialization/teardown and safe partial-failure behavior across context services, modules, jobs, assets, render, audio, physics, scripts, editor, daemon, and tools. 2026-09-05 progress: a failed module OnLoad no longer blocks a replacement game module or freezes the windowed present path; engine teardown runs module OnUnload before gameplay/debug system shutdown; the InitDebug stage runs first (LifecycleOrder::Diagnostics) and ten never-fed lifecycle registrations were removed (Tests/TestModuleLifecycleReal.cpp, Tests/TestEngineWiringReal.cpp). Still open (core-29): module hot reload silently drops the reloaded module's console commands and InvalidStateDetector rules; EngineContext::InitializeAll/ShutdownAll is not the production init path and is kept only for tests.
+A fully ready engine needs deterministic initialization/teardown and safe partial-failure behavior across context services, modules, jobs, assets, render, audio, physics, scripts, editor, daemon, and tools. 2026-09-05 progress: a failed module OnLoad no longer blocks a replacement game module or freezes the windowed present path; engine teardown runs module OnUnload before gameplay/debug system shutdown; the InitDebug stage runs first (LifecycleOrder::Diagnostics) and ten never-fed lifecycle registrations were removed (Tests/TestModuleLifecycleReal.cpp, Tests/TestEngineWiringReal.cpp). 2026-09-12 progress: ModuleHotReloadManager now snapshots a watched image only after a successful reload, so a failed replacement remains retryable; the production lifecycle regression observes both failed polls. 2026-09-13 progress: ModuleManager now catches OnLoad exceptions, cleans partial registrations, attempts guarded partial OnUnload, destroys the instance, and unmaps ownership safely, with a real throwing-load fixture. 2026-09-14 progress: ModuleHotReloadManager now contains standard and unknown exceptions from PollChanges and ForceReload callbacks, logs the failure, and preserves the reload result; real-fixture exception regressions and the 11-test module-lifecycle slice pass in a fresh MSVC build. 2026-09-14 further progress: per-image registration owners prevent outgoing module cleanup from removing replacement console commands or InvalidStateDetector rules; ModuleABI_ReloadPreservesHostRegistryCallbacks proves the handoff. 2026-09-21 further progress: Windows teardown now keeps Mod, Dialogue, UI, and Weather alive through module OnUnload and clears injected context before destruction/DLL unload; the full local 7198-test suite is green. Cross-platform, file-cache, and live-D3D11 proof remain open. Still open (core-29): EngineContext::InitializeAll/ShutdownAll production wiring remains unresolved.
 
 **Dependency contract**
 
@@ -1867,7 +1893,7 @@ ctest --test-dir build/linux-tsan -L lifecycle --output-on-failure --no-tests=er
 
 **Automated evidence**
 
-- Test selectors: `EngineLifecycle_*`, `ModuleReload_*`, `PartialInit_*`, `ModuleLifecycle_*`, `EngineWiring_*`
+- Test selectors: `EngineLifecycle_*`, `ModuleReload_*`, `PartialInit_*`, `ModuleLifecycle_*`, `EngineWiring_*`, `ModuleABI_ThrownOnLoadCleansPartialHostRegistryState`
 - Required CI jobs: `lifecycle-asan`, `lifecycle-tsan`
 - Performance / reliability budgets:
   - Startup/shutdown/reload budgets from PERF-100
@@ -1899,7 +1925,7 @@ ctest --test-dir build/linux-tsan -L lifecycle --output-on-failure --no-tests=er
 **Priority:** P1 · **Status:** open · **Wave:** 2 · **Area:** editor · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate. 2026-09-05 progress: World-document create/delete/duplicate/reparent/rename/translate/rotate/scale and inspector edits are command-backed (one CommandHistory entry per gizmo drag); all three transform gizmos ship. Still open: asset browse/drag/assign path, author-to-installed-runtime round trip, and the crash-recovery pipeline (RecoveryCallback, RecordOperation callers, recovery dialog remain unwired; do not claim crash recovery works).
+Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate. 2026-09-05 progress: World-document create/delete/duplicate/reparent/rename/translate/rotate/scale and inspector edits are command-backed (one CommandHistory entry per gizmo drag); all three transform gizmos ship. 2026-09-12 progress: UndoRedoManager now restores its dispatch-depth boundary through RAII when a command throws, with a production regression proving the manager does not remain in dispatch state or enqueue a failed command. 2026-09-13 progress: recovery saves now validate the strict scene schema before replacing the primary snapshot, with a malformed-structured-scene regression. 2026-09-21 progress: the real SparkEditor executable loads an explicit isolated project in bounded test mode, publishes an atomic structured result, completes three frames, and shuts down cleanly; cleanup paths are build-root anchored and adversarially checked. 2026-09-23 verification: EditorUI initializes the per-user crash handler and recovery store, project-open offers matching snapshots, document-history observation records mutations, and the recovery modal exposes explicit restore/discard actions; the focused EditorRecovery suite passes 18 tests and 119 assertions. This verifies recovery persistence and guarded restore/discard paths, not public crash-triggered restore or clean-host crash recovery. Still open: asset browse/drag/assign path, author-to-installed-runtime round trip, and independent public crash-recovery qualification.
 
 **Dependency contract**
 
@@ -1941,7 +1967,7 @@ ctest --test-dir build/windows-shipping -L editor-integration --output-on-failur
 
 **Automated evidence**
 
-- Test selectors: `EditorUndo_*`, `EditorGizmo_*`, `EditorAssetDrag_*`, `EditorCookPackage_*`, `EditorUndoHierarchy_*`
+- Test selectors: `EditorUndo_*`, `EditorGizmo_*`, `EditorAssetDrag_*`, `EditorCookPackage_*`, `EditorUndoHierarchy_*`, `EditorRecovery_*`
 - Required CI jobs: `editor-integration`, `editor-package-roundtrip`
 - Performance / reliability budgets:
   - Representative project load/save/cook/editor-interaction budgets from PERF-100
@@ -1976,7 +2002,7 @@ ctest --test-dir build/windows-shipping -L editor-integration --output-on-failur
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** packaging · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-CPack omits products/modules, package smoke does not call Spark symbols, installed linkage can contradict host architecture, CLI behaviors are placeholders, and two GamePackager implementations diverge.
+CPack omits products/modules, installed linkage can contradict host architecture, CLI behaviors are placeholders, and two GamePackager implementations diverge. 2026-09-12 progress: the canonical GamePackager now rejects traversal or path-like project names at both configuration validation and package-write boundaries, with a regression proving no escaped output is created. 2026-09-13 progress: the CLI now validates both .scene and .sparkscene inputs as structured JSON and fails closed on malformed scene files. 2026-09-13 additional progress: runnable packages now copy project Data/*.spk archives, and package output nested under Data is rejected before build to prevent archive omission and self-recursive staging; the bounded Spark CLI/Pak suites pass 42/42 and 9/9. 2026-09-21 progress: the installed FPS SDK consumer now compiles the production module entrypoint header from staged Spark/ headers only, and a source-boundary regression rejects private IGameModule factories or concrete EngineContext singleton access. The rebuilt module passes D3D11 and NullRHI lifecycle tests. The installed FPS runtime verifies all 882 staged asset-manifest entries before module lifecycle and save/reload, with adversarial missing, tampered, exact-case, undeclared, and link-like coverage. The legacy Core GamePackager is now a compatibility facade over one canonical implementation; validation ordering, native-first platform order, aggregate copy failures, payload/PDB counts, manifest exclusion, and output equivalence are covered by 20 focused tests and 84 assertions. 2026-09-23 local progress: the installed Release stage verifies 883/883 asset-manifest entries, and the FPS package smoke now proves the procedural center-building material changes rendered pixels. The complete FPS DLL still includes private engine headers and links SparkEngineLib on Windows, so full installed-consumer, linkage, clean-machine/archive, uninstall, and profile-wide qualification remain open.
 
 **Dependency contract**
 
@@ -2055,12 +2081,12 @@ ctest --test-dir /tmp/spark-consumer --output-on-failure --no-tests=error
 - Packager is canonical
 - CLI behavior is real or removed
 
-### INST-130 — Make installer and updater verified, transactional, and recoverable
+### INST-130 — Make installer clean-install, repair, and uninstall behavior verified and recoverable
 
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. Local process fixtures verify orchestration; hosted native results are pending. This does not close signing, Windows 11, NSIS, upgrade, rollback, repair, or user-data retention requirements.
+The published installer configuration and public GUI claims diverge; prerequisite downloads lack integrity checks; archive selection can be wrong; pull failure can be ignored; updates are non-atomic and have no rollback. A native MSI gate now reuses the existing Windows Shipping build to check database identity, install into a fresh runner-owned path, validate the installed runtime, exercise five FPS headless frames, and uninstall with registration/residue checks and retained failure diagnostics. 2026-09-12 progress: InstallState now flushes to a same-directory temporary marker before replacement, loads into a temporary object with required-field validation, and treats malformed state as invalid; focused round-trip/replacement/recovery tests pass. The installer CI job now explicitly builds SparkInstallerInstallStateTests before invoking CTest, closing a hosted registration/build omission found on the prior exact-SHA run. 2026-09-13 progress: final installed-commit verification now fails closed and invokes rollback when the recorded commit cannot be verified; installer transaction selectors are explicitly labeled and the native selector suite is green. Local process fixtures verify orchestration; hosted native results are pending. 2026-09-13 additional progress: updates now refuse to fetch or replace an existing checkout when tracked or untracked local changes are present, or when the status query itself fails; focused GitRunner regression coverage passes. 2026-09-13 further progress: InstallState::Save now rejects invalid state before creating or replacing its temporary marker; the valid-marker preservation regression passes in a fresh MSVC build. 2026-09-21 progress: 24 local transaction tests now cover owned old-to-new upgrade, repair, rollback, uninstall, registration/residue cleanup, and preservation of external user data. 2026-09-21 further progress: INST-130 resolver tests now provision the greatest-lower immutable published stable MSI and Shipping manifest by asset ID, binding tag, commit, digest, and pre/post metadata. Nine resolver tests plus workflow/release suites pass. The resolver implementation is complete locally, but a real published predecessor release asset and hosted Windows execution are still required. These local contracts establish the intended transaction semantics, but formal hosted/native signed Windows 11 proof for upgrade, rollback, repair, and user-data retention remains open.
 
 **Dependency contract**
 
@@ -2088,13 +2114,13 @@ The published installer configuration and public GUI claims diverge; prerequisit
 - Use secure unique staging paths and content-aware extraction
 - Verify hashes and signatures before extraction
 - Propagate fetch, configure, build, and install errors
-- Stage, verify, atomically activate, rollback, repair, and recover interruptions
+- Stage, verify, atomically activate, repair, uninstall, and recover interruptions for a fresh install
 - Generate a Windows install manifest and remove nonexistent refs
 
 **Acceptance criteria**
 
 1. Tampered download, failed fetch/build, wrong archive, or interruption never replaces a working install
-2. Fresh install, upgrade, downgrade policy, rollback, repair, and uninstall pass on Windows 11 x64
+2. Fresh install, repair, user-data retention, and uninstall pass on Windows 11 x64
 3. Capabilities match documentation exactly
 4. Only signed artifacts can enter the stable channel
 5. Experimental platform installers remain owned by their platform work
@@ -2107,7 +2133,7 @@ ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-te
 
 **Automated evidence**
 
-- Test selectors: `Installer_Tamper`, `Installer_AtomicUpdate`, `Installer_Rollback`, `Installer_Interrupted`, `Installer_Uninstall`
+- Test selectors: `Installer_Tamper`, `Installer_AtomicUpdate`, `Installer_Interrupted`, `Installer_Uninstall`
 - Required CI jobs: `installer-windows`
 - Performance / reliability budgets:
   - Install/update time and disk overhead budgets are recorded
@@ -2135,7 +2161,7 @@ ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-te
 
 **Definition of done**
 
-- Tamper/interruption/rollback tests pass
+- Tamper/interruption/repair/uninstall tests pass
 - Clean-host install matrix passes
 - Claims match
 
@@ -2144,7 +2170,7 @@ ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-te
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** compatibility · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-A release engine must preserve or explicitly migrate user projects and game state across versions; several modules still contain placeholder serialization. 2026-09-05 progress: .spark_save v3 persists the Transform hierarchy, retains <slot>.spark_save.bak and falls back to it on an unreadable slot, creates the save directory on demand, and covers every ComponentFactory-registered serializer; the in-memory v2->v3 migration and the v1 disk fixture are tested. Not yet: a v2 disk fixture, a payload checksum, scene/asset migration fixtures. AchievementSystem persistence remains a game-module responsibility.
+A release engine must preserve or explicitly migrate user projects and game state across versions; several modules still contain placeholder serialization. 2026-09-05 progress: .spark_save v3 persists the Transform hierarchy, retains <slot>.spark_save.bak and falls back to it on an unreadable slot, creates the save directory on demand, and covers every ComponentFactory-registered serializer; the in-memory v2->v3 migration and the v1 disk fixture are tested. 2026-09-12 progress: AssetMigrationRegistry now rejects a valid header whose asset type differs from the requested migration type, with a production regression. 2026-09-13 progress: an immutable v2 disk fixture now preserves its screenshot metadata, migrates every pre-v3 Transform to an explicit root, and verifies that neither the checked-in fixture nor copied slot is rewritten. 2026-09-20 local progress: a staged MinSizeRel FPS package preserved 37 progression XP across two fresh D3D11 WARP processes and left the 355-byte save hash unchanged after reading. 2026-09-21 v4 progress: the writer now appends a standard CRC-32 over the complete preceding file, readers verify it before parsing or metadata display, stale cache entries cannot hide external corruption, an unreadable primary cannot overwrite a valid retained copy, and immutable v1-v3 fixtures migrate in memory without rewrite. Production-linked tests cover payload/trailer/version corruption and valid-backup recovery. CRC-32 detects accidental corruption and is not authentication. Still open: forced process-interruption rehearsal, full profile fields, scene/prefab/asset/editor migrations, per-module schema declarations, clean-machine and hosted exact-SHA proof. AchievementSystem persistence remains a game-module responsibility.
 
 **Dependency contract**
 
@@ -2223,7 +2249,7 @@ ctest --test-dir build/linux-shipping -L compatibility --output-on-failure --no-
 **Priority:** P0 · **Status:** open · **Wave:** 2 · **Area:** sdk · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior.
+Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior. 2026-09-12 progress: SparkGameModule now rejects SDK headers with multiple or missing SPARK_SDK_VERSION definitions before deriving the module ABI sidecar, with a configure-level hostile-header regression. 2026-09-13 progress: the sdk install component now carries its legal materials, documentation, third-party notices, EmptyProject example, and a completeness CTest. 2026-09-21 further progress: the weather seam is module-owned and game-thread enforced, with the concrete dependency isolated to the Core adapter; six focused tests pass. The complete FPS DLL still has many private dependencies, so the public-SDK-only requirement remains open. The full installed-consumer and N-1 compatibility gates remain open.
 
 **Dependency contract**
 
@@ -2269,7 +2295,7 @@ ctest --test-dir /tmp/spark-sdk-consumer --output-on-failure --no-tests=error
 
 **Automated evidence**
 
-- Test selectors: `SDKConsumer_*`, `ModuleABI_*`, `ModuleVersion_*`
+- Test selectors: `SDKConsumer_*`, `ModuleABI_*`, `ModuleVersion_*`, `SparkSDKComponentCompleteness`
 - Required CI jobs: `sdk-consumer-linux`, `sdk-consumer-windows`, `module-compatibility`
 - Performance / reliability budgets:
   - Module load/reload budgets from PERF-100
@@ -2305,7 +2331,7 @@ ctest --test-dir /tmp/spark-sdk-consumer --output-on-failure --no-tests=error
 **Priority:** P1 · **Status:** in-progress · **Wave:** 2 · **Area:** performance · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. Pre-release control-plane tooling now provides identity-bound bounded duplicate-aware JSON ingestion, exact nested schemas, externally supplied full-SHA equality, per-hardware active-budget approvals bound to canonical definition digests, hardware-scoped completeness, explicit non-active semantics, a required CI governance job, and 152 Python test methods including 21 second-audit and 15 final-audit hostile cases. These are tooling checks only: all 17 committed metric definitions remain pending_measurement, with zero certified hardware rows and zero accepted baselines. Representative measured budgets, certified baselines, benchmark scenes, golden images, soaks, and release-result jobs remain pending.
+Profiler and benchmark scaffolding exists, but no representative regression budget, committed golden-image baseline, blocking long soak, or previous-release comparison protects users. Pre-release control-plane tooling now provides identity-bound bounded duplicate-aware JSON ingestion, exact nested schemas, externally supplied full-SHA equality, per-hardware active-budget approvals bound to canonical definition digests, hardware-scoped completeness, explicit non-active semantics, a required CI governance job, and 153 Python test methods including 22 second-audit and 15 final-audit hostile cases. 2026-09-12 progress: malformed active-metric hardwareRowId values now return validation errors instead of raising during baseline validation. 2026-09-13 progress: the comparison CLI now fails closed with a nonzero result and NON-AUTHORITATIVE status when hardware is uncertified, while library callers retain advisory detail; golden-image comparison now also fails closed on nonfinite thresholds. 2026-09-13 additional progress: benchmark comparisons now fail closed when a measured scenario has no matching baseline, and empty comparison sets are failures with explicit diagnostics; the focused C++ suite passes 17/17. These are tooling checks only: all 17 committed metric definitions remain pending_measurement, with zero certified hardware rows and zero accepted baselines. Representative measured budgets, certified baselines, benchmark scenes, golden images, soaks, and release-result jobs remain pending.
 
 **Dependency contract**
 
@@ -2637,7 +2663,7 @@ ctest --test-dir build/linux-shipping -L online-services --output-on-failure --n
 **Priority:** P1 · **Status:** open · **Wave:** 3 · **Area:** persistence · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic ownership, schema migration, concurrent writes, backups, restore, or disaster recovery. 2026-09-05 progress: AsyncDatabase's key-value store no longer truncates the live file on every write, so the interrupted-write acceptance now also covers that store (Tests/TestSaveSystemRoundTripReal.cpp, AsyncDatabaseReal_*); MMO/MMOFPS module persistence is unchanged and the item stays open.
+MMO/MMOFPS reference persistence is local/demo-grade and does not prove atomic ownership, schema migration, concurrent writes, backups, restore, or disaster recovery. 2026-09-05 progress: AsyncDatabase's key-value store no longer truncates the live file on every write, so the interrupted-write acceptance now also covers that store (Tests/TestSaveSystemRoundTripReal.cpp, AsyncDatabaseReal_*); MMO/MMOFPS module persistence is unchanged and the item stays open. 2026-09-13 progress: AsyncDatabase now explicitly durably flushes its completed sibling revision before atomic replacement on Windows and POSIX, with a production round-trip regression and a source policy contract; concurrent module writes, migrations, backup/restore, and disaster-recovery evidence remain open.
 
 **Dependency contract**
 
@@ -2951,7 +2977,7 @@ ctest --test-dir build/linux-shipping -L recovery-drill --output-on-failure --no
 **Priority:** P1 · **Status:** open · **Wave:** 4 · **Area:** modules · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295.
+Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295. 2026-09-12 progress: FPS package-smoke now requires SparkSDK.h, IModule.h, and Version.h in the installed public SDK and rejects an incomplete package during reconfiguration. Full module lifecycle, package, and hosted evidence remains open.
 
 **Dependency contract**
 
@@ -3101,7 +3127,7 @@ ctest --test-dir build/windows-shipping -R SparkGameShowcase --output-on-failure
 **Priority:** P1 · **Status:** open · **Wave:** 4 · **Area:** modules · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-FPS has a local arena, input, combat, rendering, and AI foundation, but it is not yet an installed public-SDK-only single-player product with real-source lifecycle and package evidence. 2026-09-05 progress: the death -> respawn -> score loop is complete (RespawnSystem decoupled from Player so the real class is testable), quicksave/quickload persist FPSLocalProfile through the engine context's SaveSystem/World and report the real result, module assets resolve from one runtime-discovered root, the module initializes without a D3D11 device, and the unreachable in-game console overlay was removed. The exact-SHA installed-package smoke path is implemented locally but has no hosted proof. Still open: the module links SparkEngineLib with engine-source include paths (public-SDK-only requirement unmet), plus installed single-player and save acceptance.
+FPS has a local arena, input, combat, rendering, and AI foundation, but it is not yet an installed public-SDK-only single-player product with real-source lifecycle and package evidence. 2026-09-05 progress: the death -> respawn -> score loop is complete (RespawnSystem decoupled from Player so the real class is testable), quicksave/quickload persist FPSLocalProfile through the engine context's SaveSystem/World and report the real result, module assets resolve from one runtime-discovered root, the module initializes without a D3D11 device, and the unreachable in-game console overlay was removed. The exact-SHA installed-package smoke path is implemented locally but has no hosted proof. 2026-09-12 progress: the FPS package consumer now requires the complete canonical SDK header set, including SparkSDK.h, and has a missing-umbrella-header regression. 2026-09-13 progress: real CTest entries now back the FPSSinglePlayerSlice, FPSPackage, and FPSPublicSDK selectors; the installed public-SDK consumer passes its focused suite. 2026-09-20 local progress: a fresh staged MinSizeRel runtime passed its real NullRHI lifecycle and a separate two-process D3D11 WARP progression persistence slice (writer 0->37 XP, fresh reader 0->37 XP after quickload, unchanged save bytes). 2026-09-21 progress: SparkGameFPS removed its private legacy IGameModule inheritance/factories and concrete EngineContext singleton lookups; its production entrypoint header now compiles against staged Spark/ SDK headers alone, the source-boundary contract passes, and rebuilt D3D11/NullRHI lifecycles remain green. 2026-09-21 further progress: the weather seam is module-owned and game-thread enforced, with the concrete dependency isolated to the Core adapter; six focused tests pass. The strict MinSizeRel windows-shipping package now contains exactly SparkGameFPS and locally passes installed-bin asset integrity, D3D11 WARP for eight rendered frames, module lifecycle, and save/reload from the staged layout. 2026-09-23 local progress: all 56 authored FPS scene objects now declare valid confined materials, procedural arena models bind trusted material paths, and an installed D3D11 WARP A/B changes 47.32% of central pixels with 0% outside; six focused CTests pass. 2026-09-23 further local progress: successful scene_load now invalidates referenced cached BasicMaterials; an installed same-process D3D11 WARP A/B changes 47.73% of center pixels and 0.26% outside, while the pre-fix binary changes only 0.41% at center; four focused CTests pass. Still open: full spawn-move-kill-respawn-score installed acceptance, clean-machine/hosted proof, hardware D3D11/golden evidence, and the implementation's SparkEngineLib plus engine-source dependencies (complete public-SDK-only requirement unmet).
 
 **Dependency contract**
 
@@ -3171,7 +3197,7 @@ ctest --test-dir build/windows-shipping -R FPSPackage --output-on-failure --no-t
 
 - Installed single-player and public-SDK acceptance pass
 - Package, assets, save, docs, and evidence pass
-- Remaining: build against the installed SDK alone, D3D11 and NullRHI package smokes with the real module and assets, installed single-player acceptance
+- Remaining: build against the installed SDK alone, full declared-profile and installed single-player acceptance, clean-machine and hosted exact-SHA package proof
 
 ### MOD-320 — Finish MMO as a secure persistent integrated world
 
@@ -4695,7 +4721,7 @@ ctest --test-dir build/windows-shipping -L gltf-d3d11 --output-on-failure --no-t
 **Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** governance · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag.
+The root uses a custom non-SPDX Spark Open License while some subprojects and the website say MIT/open source; no complete THIRD_PARTY_NOTICES/package license set exists; release/security wording assumes a 1.0 line with no tag. 2026-09-12 progress: SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed acknowledgment, triage, and fix deadlines. 2026-09-13 progress: the --legal validator now fails closed on unreviewed non-OSI open-source wording, the audited public surfaces now use source-available terminology, and build.yml now runs the legal validator in a required license-compliance job. License classification, complete notices, published-channel policy, and legal/maintainer sign-off remain open.
 
 **Dependency contract**
 
@@ -4782,7 +4808,7 @@ python3 tools/site-data/generate.py --output .site-data
 **Priority:** P0 · **Status:** in-progress · **Wave:** 6 · **Area:** website · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. site-runtime-contract and the runtime-side selectors remain planned.
+The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. 2026-09-21 exact-SHA evidence: Repository Site Data succeeded for 37a4bec5, while live runtime consumption, stale-fallback presentation, and the owner-only site deployment remain unproven. site-runtime-contract and the runtime-side selectors remain planned.
 
 **Dependency contract**
 
@@ -4871,16 +4897,153 @@ npm test
 - Parity/no-drift tests pass
 - Owner-only site is redeployed once with the runtime
 
-### REL-200 — Rehearse, sign off, and publish the first fully gated release
+### INST-131 — Qualify stable-v1 N-1 upgrade and rollback against an immutable predecessor
+
+**Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=required
+
+N-1 upgrade and rollback are distinct from fresh-install correctness and cannot be used to qualify the first immutable predecessor. This item owns the stable-v1-only transaction proof against a previously published signed MSI and manifest.
+
+**Dependency contract**
+
+- Depends on: `INST-130`, `REL-100`, `REL-110`
+- Safe parallel work: `REL-190`
+
+**Source context**
+
+- `SparkInstaller/src/Installer.cpp`
+- `.github/scripts/provision-previous-windows-msi.py`
+- `.github/workflows/release.yml`
+
+**Entry points**
+
+- `SparkInstaller/src/Installer.cpp`
+- `.github/scripts/qualify-windows-msi.py`
+
+**Implementation scope**
+
+- Verify the greatest-lower immutable signed MSI and shipping manifest
+- Exercise upgrade, rollback, interruption, and external user-data retention on Windows 11 x64
+
+**Acceptance criteria**
+
+1. A real published signed predecessor is selected by exact tag, commit, digest, and asset identity
+2. Upgrade and rollback pass on a clean supported Windows host
+3. Failure or interruption never replaces the working install
+
+**Required commands**
+
+```bash
+ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error
+```
+
+**Automated evidence**
+
+- Test selectors: `Installer_Upgrade`, `Installer_Rollback`, `Installer_Interrupted`
+- Required CI jobs: `installer-windows`
+- Performance / reliability budgets:
+
+**Same-change updates**
+
+- Documentation:
+  - `SparkInstaller/README.md`
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G05
+  - G08
+  - G17
+- Website impact:
+  - Stable-v1 upgrade claims remain blocked until exact predecessor evidence exists
+
+**Risks and boundaries**
+
+- Risks:
+  - Using the candidate itself as its own predecessor
+  - Rollback data loss
+- Out of scope:
+  - Bootstrapping the first signed predecessor
+
+**Definition of done**
+
+- Hosted exact-SHA upgrade and rollback evidence passes against a signed immutable predecessor
+
+### INST-132 — Qualify predecessor bootstrap recovery without an N-1 dependency
+
+**Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=outside
+
+The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence is explicit fresh-install activation, interruption recovery, repair, uninstall, and external user-data retention; it never claims v1 N-1 upgrade coverage.
+
+**Dependency contract**
+
+- Depends on: `INST-130`
+- Safe parallel work: `INST-131`
+
+**Source context**
+
+- `SparkInstaller/src/Installer.cpp`
+- `SparkInstaller/tests/InstallerTransactionTests.cpp`
+
+**Entry points**
+
+- `SparkInstaller/src/Installer.cpp`
+
+**Implementation scope**
+
+- Exercise bootstrap activation and recovery with no predecessor input
+- Retain user data across repair and uninstall
+
+**Acceptance criteria**
+
+1. Fresh predecessor installation and interrupted activation recover without replacing user data
+2. Repair and uninstall pass with no N-1 claim
+3. Evidence is bound to the reviewed v0.9.0 source commit
+
+**Required commands**
+
+```bash
+ctest --test-dir build/windows-shipping -L installer --output-on-failure --no-tests=error
+```
+
+**Automated evidence**
+
+- Test selectors: `Installer_Tamper`, `Installer_AtomicUpdate`, `Installer_Interrupted`, `Installer_Uninstall`
+- Required CI jobs: `installer-windows`
+- Performance / reliability budgets:
+
+**Same-change updates**
+
+- Documentation:
+  - `SparkInstaller/README.md`
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G05
+  - G08
+  - G17
+- Website impact:
+  - Predecessor bootstrap evidence remains internal until signed publication
+
+**Risks and boundaries**
+
+- Risks:
+  - Mistaking bootstrap recovery for N-1 compatibility
+- Out of scope:
+  - Upgrade from a prior stable release
+
+**Definition of done**
+
+- Exact-SHA bootstrap recovery evidence passes and is reviewed
+
+### REL-190 — Rehearse and approve the qualified release candidate before publication
 
 **Priority:** P0 · **Status:** blocked · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-A release is ready only when every gate required by each target release profile passes at one candidate commit and the target artifacts survive clean install, migration, recovery, and rollback rehearsal.
+Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence.
 
 **Dependency contract**
 
-- Depends on: `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`
+- Depends on: `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220`
 - Safe parallel work: none declared
 
 **Source context**
@@ -4897,24 +5060,297 @@ A release is ready only when every gate required by each target release profile 
 
 **Implementation scope**
 
-- Create a release-candidate tag
-- Run every gate required by each target release profile at the same SHA
-- Install and upgrade on clean supported hosts
-- Exercise rollback, save/asset migration, crash ingestion, repair, and uninstall for the target profiles
-- Collect named owner sign-off with repository evidence
-- Publish verified artifacts and evidence
+- Freeze the exact release-candidate commit and tag
+- Run every qualification gate required by each target release profile at the same SHA
+- Install on clean supported hosts and exercise crash ingestion, repair, and uninstall for the target profiles
+- Delegate N-1 upgrade, rollback, and migration proof to REL-192
+- Collect named qualification owner sign-off and protected release approval evidence before publication
+
+**Acceptance criteria**
+
+1. Every technical qualification item, transitive dependency, and qualification requirement from requiredGateIds has passing exact-SHA evidence before publication
+2. Excluded gates may remain blocked and cannot be presented as supported
+3. Clean install, uninstall, repair, and recovery drills pass; REL-192 separately gates N-1 upgrade and rollback
+4. Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance
+5. The profile-required-gates and release-approval jobs execute and block on failure; no planned rehearsal selector remains
+6. Named qualification sign-off is retained; the protected stable-release environment requires Krilliac owner approval with administrative bypass disabled, and independent technical verification remains separate
+
+**Required commands**
+
+```bash
+python3 tools/site-data/validate.py
+sha256sum -c SHA256SUMS
+```
+
+**Automated evidence**
+
+- Test selectors: `ReleaseProfileRehearsal_*`
+- Required CI jobs: `profile-required-gates`, `release-approval`
+- Performance / reliability budgets:
+  - Every budget required by the target profiles passes without unreviewed exception
+
+**Same-change updates**
+
+- Documentation:
+  - `CHANGELOG.md`
+  - `SECURITY.md`
+  - `wiki/development/Release-Publication-Stages.md`
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G17 qualification evidence; this item must be done before candidate publication
+- Website impact:
+  - Qualification alone preserves candidate wording; no public ready claim
+
+**Risks and boundaries**
+
+- Risks:
+  - The v0.9.0 bootstrap MSI has not passed protected install and repair qualification
+  - Unique-tag immutable nightlies have not passed live publication acceptance
+- Out of scope:
+  - Publishing artifacts or changing final readiness
+  - Protocol migration, production-service backup/restore, and incident drills owned by G12 and OPS-110
+
+**Definition of done**
+
+- All supported-host rehearsals pass at the candidate SHA
+- Qualification sign-off and protected approval evidence are retained
+- No planned qualification job or selector remains
+
+### REL-191 — Rehearse the predecessor release without N-1 upgrade claims
+
+**Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=outside
+
+The first signed predecessor needs the same exact-SHA release rehearsal, sign-off, and protected approval discipline as v1, but its rehearsal cannot invent an older stable release.
+
+**Dependency contract**
+
+- Depends on: `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400`, `INST-130`, `SAVE-230`, `MOD-310`, `ASSET-220`, `LIFE-200`, `ENG-220`
+- Safe parallel work: none declared
+
+**Source context**
+
+- `.github/workflows/release.yml`
+- `docs/site/readiness.json`
+
+**Entry points**
+
+- `.github/workflows/release.yml`
+
+**Implementation scope**
+
+- Freeze and review the exact predecessor source commit
+- Run all common qualification gates and protected approval checks
+- Record bootstrap install, repair, retention, and uninstall evidence without N-1 claims
+
+**Acceptance criteria**
+
+1. Every common qualification item and gate passes at the reviewed predecessor SHA
+2. Named sign-off and protected approval evidence are retained
+3. No N-1 upgrade or rollback result is presented as predecessor evidence
+
+**Required commands**
+
+```bash
+python3 tools/site-data/validate.py --require-predecessor-candidate
+```
+
+**Automated evidence**
+
+- Test selectors: `ReleaseProfilePredecessorRehearsal_*`
+- Required CI jobs: `profile-required-gates`, `release-approval`
+- Performance / reliability budgets:
+
+**Same-change updates**
+
+- Documentation:
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G17
+- Website impact:
+  - Predecessor remains candidate-only until immutable publication
+
+**Risks and boundaries**
+
+- Risks:
+  - Accidentally claiming v1 compatibility from bootstrap evidence
+- Out of scope:
+  - Publishing the predecessor or proving v1 N-1 compatibility
+
+**Definition of done**
+
+- Exact-SHA predecessor rehearsal and protected sign-off pass
+
+### REL-192 — Qualify stable-v1 N-1 release rehearsal and rollback
+
+**Priority:** P0 · **Status:** blocked · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=required
+
+N-1 installer upgrade, rollback, and migration evidence is a v1 requirement and is intentionally separate from the first predecessor rehearsal.
+
+**Dependency contract**
+
+- Depends on: `REL-190`, `INST-131`
+- Safe parallel work: none declared
+
+**Source context**
+
+- `.github/workflows/release.yml`
+- `docs/site/readiness.json`
+
+**Entry points**
+
+- `.github/workflows/release.yml`
+
+**Implementation scope**
+
+- Run the stable-v1 rehearsal against a previously published signed predecessor
+- Verify upgrade, rollback, save migration, and recovery evidence
+
+**Acceptance criteria**
+
+1. Exact-SHA v1 rehearsal passes with a real immutable predecessor
+2. Upgrade and rollback evidence is independently retained
+3. The first predecessor path cannot satisfy this item
+
+**Required commands**
+
+```bash
+python3 tools/site-data/validate.py --require-candidate-ready
+```
+
+**Automated evidence**
+
+- Test selectors: `ReleaseProfileNMinusOneRehearsal_*`
+- Required CI jobs: `profile-required-gates`, `release-approval`
+- Performance / reliability budgets:
+
+**Same-change updates**
+
+- Documentation:
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G17
+- Website impact:
+  - Stable-v1 remains blocked until N-1 rehearsal passes
+
+**Risks and boundaries**
+
+- Risks:
+  - Using predecessor bootstrap evidence as N-1 proof
+- Out of scope:
+  - First-predecessor bootstrap qualification
+
+**Definition of done**
+
+- Hosted exact-SHA N-1 rehearsal and rollback pass
+
+### REL-193 — Publish and independently accept the reviewed v0.9.0 predecessor
+
+**Priority:** P0 · **Status:** in-progress · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=outside
+
+The predecessor publication is a distinct terminal action. It must remain incomplete until the reviewed source, signed immutable artifacts, protected approval, and independent consumer verification exist.
+
+**Dependency contract**
+
+- Depends on: `REL-191`
+- Safe parallel work: none declared
+
+**Source context**
+
+- `.github/workflows/release.yml`
+- `docs/site/readiness.json`
+
+**Entry points**
+
+- `.github/workflows/release.yml`
+
+**Implementation scope**
+
+- Publish only the reviewed immutable predecessor artifacts
+- Independently download and verify hashes, signatures, provenance, and exact source identity
+
+**Acceptance criteria**
+
+1. Artifacts are immutable and signed under the disclosed project-pinned trust model
+2. Krilliac gives required owner approval with administrative bypass disabled
+3. A read-only independent consumer verifies the published predecessor before v1 uses it
+
+**Required commands**
+
+```bash
+python3 tools/site-data/validate.py --require-predecessor-candidate
+```
+
+**Automated evidence**
+
+- Test selectors: none declared
+- Required CI jobs: none declared
+- Performance / reliability budgets:
+
+**Same-change updates**
+
+- Documentation:
+  - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+- Readiness contract:
+  - G17
+- Website impact:
+  - No public ready claim until independent predecessor acceptance exists
+
+**Risks and boundaries**
+
+- Risks:
+  - Sole-owner approval must not be misrepresented as a second human review
+  - Mutating an immutable release
+- Out of scope:
+  - v1 N-1 qualification, which remains REL-192
+
+**Definition of done**
+
+- Signed predecessor publication and independent acceptance evidence are retained
+
+### REL-200 — Publish and independently verify the qualified release
+
+**Priority:** P0 · **Status:** blocked · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
+**Profile applicability:** `stable-v1`=shared
+
+Final readiness requires every profile gate at one candidate commit, supported-host rehearsal, protected publication, independent download verification, and live-site evidence. Candidate qualification now requires every technical item and transitive dependency while leaving the explicitly declared publication-finalization item in progress; publication-dependent gates remain at risk until completion. The stable-release environment and its required-reviewer/Working-branch protections are verified before building and at publication. A separate read-only consumer retains exact-SHA publication-verified evidence without changing this ledger. No evidence has been manufactured or promoted. Protected authority and signing must be provisioned externally, and the strict real prior-stable MSI requirement still makes the first release an unresolved policy blocker. All release qualification and terminal evidence remain outstanding.
+
+**Dependency contract**
+
+- Depends on: `REL-190`
+- Safe parallel work: none declared
+
+**Source context**
+
+- `.github/workflows/release.yml`
+- `docs/site/readiness.json`
+- `CHANGELOG.md`
+- `SECURITY.md`
+
+**Entry points**
+
+- `.github/workflows/release.yml`
+- `docs/readiness/ENGINE_READINESS_HANDOFF.md`
+
+**Implementation scope**
+
+- Publish the complete preverified draft as an immutable stable release after REL-190 qualification
+- Independently download and verify the published artifact set and retain exact-SHA evidence
+- Verify live-site consumption of the released evidence before final readiness review
 
 **Acceptance criteria**
 
 1. Every gate listed in requiredGateIds for every target release profile is passing at the candidate SHA
 2. Excluded gates may remain blocked and cannot be presented as supported
-3. Clean install, N-1 upgrade, uninstall, rollback, repair, and recovery drills pass
-4. Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance
-5. Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists
+3. Published artifacts are immutable and independently verify against the exact qualified candidate
+4. Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists
 
 **Required commands**
 
 ```bash
+python3 tools/site-data/validate.py --require-candidate-ready
 python3 tools/site-data/validate.py --require-ready
 gh release view vX.Y.Z
 sha256sum -c SHA256SUMS
@@ -4922,10 +5358,9 @@ sha256sum -c SHA256SUMS
 
 **Automated evidence**
 
-- Test selectors: `ReleaseProfileRehearsal_*`
-- Required CI jobs: `profile-required-gates`, `release-approval`, `site-data-publish`
+- Test selectors: none declared
+- Required CI jobs: `verify-stable-publication`, `site-data-publish`
 - Performance / reliability budgets:
-  - Every budget required by the target profiles passes without unreviewed exception
 
 **Same-change updates**
 

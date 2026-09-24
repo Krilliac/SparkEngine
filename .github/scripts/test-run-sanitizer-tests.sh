@@ -241,6 +241,20 @@ XML
         write_clean
         printf 'ERROR: AddressSanitizer: report-only heap-buffer-overflow\n' >> "$report"
         ;;
+    partial-report)
+        write_clean
+        "$TEST_PYTHON" - "$report" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+lines = path.read_text(encoding="utf-8").splitlines()
+path.write_text(
+    "\n".join(line for line in lines if not line.startswith("Assertions:")) + "\n",
+    encoding="utf-8",
+)
+PY
+        ;;
     duplicate-seed)
         write_clean "Shuffle seed: 999"
         ;;
@@ -933,6 +947,10 @@ expect_status 70 "$CASE_STATUS" "terminal Results arithmetic cannot spoof JUnit 
 run_case report-signature
 expect_status 1 "$CASE_STATUS" "report-only sanitizer signature fails the lane"
 expect_contains "$CASE_DIR/metadata.json" '"classification": "sanitizer-finding"' "console and report are scanned as a union"
+run_case partial-report
+expect_status 70 "$CASE_STATUS" "partial report without assertion summary fails the lane"
+expect_contains "$CASE_DIR/metadata.json" "report: expected exactly one Assertions summary marker" \
+    "partial report rejection identifies the missing assertion summary"
 run_case arbitrary-entry
 expect_status 70 "$CASE_STATUS" "arbitrary evidence-directory entries are rejected"
 run_case late-entry

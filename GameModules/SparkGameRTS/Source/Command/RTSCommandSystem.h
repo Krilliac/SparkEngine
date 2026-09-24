@@ -15,7 +15,7 @@
 
 #include <cstdint>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 namespace RTS
@@ -29,7 +29,7 @@ namespace RTS
         RTSCommandType type = RTSCommandType::Stop;
         float targetX = 0.0f;
         float targetY = 0.0f;
-        uint32_t targetEntity = 0; ///< Target unit or building ID (for attack/gather)
+        uint32_t targetEntity = 0; ///< Target unit or building ID; an Attack with no target is an attack-move
     };
 
     /**
@@ -79,8 +79,8 @@ namespace RTS
         // Current selection
         std::vector<uint32_t> m_selectedUnits;
 
-        // Per-unit command queues
-        std::unordered_map<uint32_t, std::vector<UnitCommand>> m_commandQueues;
+        // Per-unit command queues, ordered by unit id so processing order never depends on hashing
+        std::map<uint32_t, std::vector<UnitCommand>> m_commandQueues;
     };
 
 } // namespace RTS

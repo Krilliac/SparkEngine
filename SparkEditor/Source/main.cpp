@@ -13,6 +13,7 @@
 #include "Utils/LogMacros.h"
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -22,6 +23,7 @@
 #include <chrono>
 #include <csignal>
 #include <atomic>
+#include <system_error>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -63,6 +65,64 @@ static bool IsDebuggerAttached()
     }
     return false;
 #endif
+}
+
+static bool WriteSmokeResult(const std::string& path, const char* status, bool projectLoaded, int runResult,
+                             std::string& error)
+{
+    if (path.empty())
+        return true;
+    const std::filesystem::path destination = std::filesystem::u8path(path.begin(), path.end());
+    if (destination.empty() || destination.filename().empty())
+    {
+        error = "smoke result path is empty or has no filename";
+        return false;
+    }
+
+    static std::atomic<uint64_t> counter{0};
+    const uint64_t nonce = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^
+                           counter.fetch_add(1, std::memory_order_relaxed);
+    const std::filesystem::path temporary =
+        destination.parent_path() / (destination.filename().string() + ".tmp." + std::to_string(nonce));
+    std::ofstream result{temporary, std::ios::binary | std::ios::trunc};
+    if (!result.is_open())
+    {
+        error = "cannot open temporary result '" + temporary.string() + "'";
+        return false;
+    }
+    result << "{\n  \"schema\": 1,\n  \"status\": \"" << status
+           << "\",\n  \"projectLoaded\": " << (projectLoaded ? "true" : "false") << ",\n  \"runResult\": " << runResult
+           << "\n}\n";
+    result.close();
+    if (!result.good())
+    {
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        error = "cannot write temporary result '" + temporary.string() + "'";
+        return false;
+    }
+
+#ifdef _WIN32
+    if (!::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    {
+        error = "cannot atomically replace result '" + destination.string() +
+                "': " + std::error_code(static_cast<int>(::GetLastError()), std::system_category()).message();
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        return false;
+    }
+#else
+    std::error_code renameError;
+    std::filesystem::rename(temporary, destination, renameError);
+    if (renameError)
+    {
+        error = "cannot atomically replace result '" + destination.string() + "': " + renameError.message();
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        return false;
+    }
+#endif
+    return true;
 }
 
 #ifndef _WIN32
@@ -148,8 +208,9 @@ int main(int argc, char* argv[])
     std::string projectPathArg;
     std::string startupTheme;
     std::string startupPanel;
-    std::string saveScenePath; // --save-scene <path>: save seeded World then exit (D2 acceptance)
-    std::string openScenePath; // --open-scene <path>: boot directly into a scene, skipping the project browser
+    std::string saveScenePath;   // --save-scene <path>: save seeded World then exit (D2 acceptance)
+    std::string openScenePath;   // --open-scene <path>: boot directly into a scene, skipping the project browser
+    std::string smokeResultPath; // --smoke-result <path>: structured CI executable-smoke result
     std::vector<std::string> editorPluginDirectories;
 
     // Check command line arguments
@@ -208,6 +269,10 @@ int main(int argc, char* argv[])
         else if (strcmp(argv[i], "--open-scene") == 0 && i + 1 < argc)
         {
             openScenePath = argv[++i];
+        }
+        else if (strcmp(argv[i], "--smoke-result") == 0 && i + 1 < argc)
+        {
+            smokeResultPath = argv[++i];
         }
     }
 
@@ -322,6 +387,10 @@ int main(int argc, char* argv[])
             {
                 std::cerr << "Failed to initialize SparkEditor" << std::endl;
             }
+            std::string smokeResultError;
+            if (!WriteSmokeResult(smokeResultPath, "initialize-failed", false, -1, smokeResultError) &&
+                !smokeResultPath.empty())
+                std::cerr << "Failed to publish SparkEditor smoke result: " << smokeResultError << std::endl;
             if (waitForConsoleOnExit)
             {
                 std::cout << "Press Enter to exit..." << std::endl;
@@ -331,6 +400,19 @@ int main(int argc, char* argv[])
         }
 
         console.LogSuccess("SparkEditor application initialized successfully");
+
+        const bool smokeProjectLoaded =
+            app->GetUI() && app->GetUI()->GetProjectManager() && app->GetUI()->GetProjectManager()->HasOpenProject();
+        if (!smokeResultPath.empty() && !smokeProjectLoaded)
+        {
+            console.LogError("SparkEditor smoke requested a project, but no project is open");
+            app->Shutdown();
+            std::string smokeResultError;
+            if (!WriteSmokeResult(smokeResultPath, "project-load-failed", false, -1, smokeResultError))
+                console.LogError("Failed to publish SparkEditor smoke result: " + smokeResultError);
+            console.Shutdown();
+            return -1;
+        }
 
         if (!startupPanel.empty())
         {
@@ -416,6 +498,13 @@ int main(int argc, char* argv[])
                 {
                     std::cerr << "Failed to open scene from " << openScenePath << std::endl;
                 }
+                app->Shutdown();
+                std::string smokeResultError;
+                if (!WriteSmokeResult(smokeResultPath, "scene-open-failed", smokeProjectLoaded, -1, smokeResultError) &&
+                    !smokeResultPath.empty())
+                    console.LogError("Failed to publish SparkEditor smoke result: " + smokeResultError);
+                console.Shutdown();
+                return -1;
             }
         }
 
@@ -443,6 +532,14 @@ int main(int argc, char* argv[])
         app->Shutdown();
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor shutdown complete");
         console.LogSuccess("SparkEditor application shutdown complete");
+        std::string smokeResultError;
+        if (!WriteSmokeResult(smokeResultPath, result == 0 ? "passed" : "run-failed", smokeProjectLoaded, result,
+                              smokeResultError) &&
+            !smokeResultPath.empty())
+        {
+            console.LogError("Failed to publish SparkEditor smoke result: " + smokeResultError);
+            result = 3;
+        }
 
         if (showDebugConsole)
         {

@@ -25,10 +25,12 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -347,6 +349,20 @@ namespace Spark::Net
 
         /// @brief Log a message to file and callback.
         void Log(const std::string& message);
+
+        /// @brief Maximum number of remote-supplied bytes copied into one server log record.
+        static constexpr std::size_t kMaxLoggedRemoteTextBytes = 256;
+
+        /// @brief Render untrusted remote text as a single, unambiguous log field.
+        ///
+        /// Remote chat reaches Log() after PacketValidator, which deliberately permits
+        /// '\n' and '\r'. Written raw, a client could terminate its own record and
+        /// forge a following line (for example a fake "RCON: ... disposition=dispatched"
+        /// audit record). This escapes backslash, double quote, every byte below 0x20,
+        /// 0x7F, and every byte >= 0x80 as \xHH (or \n, \r, \t), so the output is
+        /// printable ASCII with no line terminators, and bounds the copied input to
+        /// kMaxLoggedRemoteTextBytes, appending "...[truncated]" when it was longer.
+        static std::string EscapeRemoteTextForLog(std::string_view text);
 
         /// @brief Parse an administration command string into name + arguments.
         static void ParseRconCommandLine(const std::string& commandLine, std::string& outName,

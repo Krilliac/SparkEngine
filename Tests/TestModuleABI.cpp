@@ -30,6 +30,10 @@
 #error SPARK_TEST_COMPATIBLE_MODULE_PATH must name the compatible module fixture
 #endif
 
+#ifndef SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH
+#error SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH must name the registry lifecycle module fixture
+#endif
+
 #ifndef SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH
 #error SPARK_TEST_SIBLING_DEPENDENT_MODULE_PATH must name the sibling-dependent module fixture
 #endif
@@ -57,7 +61,12 @@ namespace
     class NullEngineContext final : public Spark::IEngineContext
     {
       public:
-        explicit NullEngineContext(Spark::SaveSystem* saveSystem = nullptr) : m_saveSystem(saveSystem) {}
+        explicit NullEngineContext(Spark::SaveSystem* saveSystem = nullptr, Spark::WeatherSystem* weather = nullptr,
+                                   Spark::UI::UISystem* ui = nullptr, Spark::DialogueSystem* dialogue = nullptr,
+                                   Spark::ModSystem* mods = nullptr)
+            : m_saveSystem(saveSystem), m_weather(weather), m_ui(ui), m_dialogue(dialogue), m_mods(mods)
+        {
+        }
 
         GraphicsEngine* GetGraphics() override { return nullptr; }
         const GraphicsEngine* GetGraphics() const override { return nullptr; }
@@ -73,11 +82,23 @@ namespace
         const PhysicsSystem* GetPhysics() const override { return nullptr; }
         Spark::SaveSystem* GetSaveSystem() override { return m_saveSystem; }
         const Spark::SaveSystem* GetSaveSystem() const override { return m_saveSystem; }
+        Spark::WeatherSystem* GetWeather() override { return m_weather; }
+        const Spark::WeatherSystem* GetWeather() const override { return m_weather; }
+        Spark::UI::UISystem* GetUI() override { return m_ui; }
+        const Spark::UI::UISystem* GetUI() const override { return m_ui; }
+        Spark::DialogueSystem* GetDialogue() override { return m_dialogue; }
+        const Spark::DialogueSystem* GetDialogue() const override { return m_dialogue; }
+        Spark::ModSystem* GetModSystem() override { return m_mods; }
+        const Spark::ModSystem* GetModSystem() const override { return m_mods; }
         uint32_t GetEngineVersion() const override { return SPARK_ENGINE_VERSION_PACKED; }
         uint32_t GetSDKVersion() const override { return SPARK_SDK_VERSION; }
 
       private:
         Spark::SaveSystem* m_saveSystem = nullptr;
+        Spark::WeatherSystem* m_weather = nullptr;
+        Spark::UI::UISystem* m_ui = nullptr;
+        Spark::DialogueSystem* m_dialogue = nullptr;
+        Spark::ModSystem* m_mods = nullptr;
     };
 
     std::filesystem::path CopyCompatibleFixtureToTemp(const std::filesystem::path& stem)
@@ -153,6 +174,48 @@ namespace
             setenv("SPARK_MODULE_ABI_VETO_UNLOAD", "1", 1);
         else
             unsetenv("SPARK_MODULE_ABI_VETO_UNLOAD");
+#endif
+    }
+
+    void SetSupportsHotReloadEnvironment(bool enabled)
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_MODULE_ABI_VETO_HOT_RELOAD", enabled ? "1" : "");
+#else
+        if (enabled)
+            setenv("SPARK_MODULE_ABI_VETO_HOT_RELOAD", "1", 1);
+        else
+            unsetenv("SPARK_MODULE_ABI_VETO_HOT_RELOAD");
+#endif
+    }
+
+    void SetRegistryFixtureThrowOnLoadEnvironment(bool enabled)
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", enabled ? "1" : "");
+#else
+        if (enabled)
+            setenv("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD", "1", 1);
+        else
+            unsetenv("SPARK_REGISTRY_FIXTURE_THROW_ON_LOAD");
+#endif
+    }
+
+    void SetRegistryFixtureLifecycleSentinel(const std::filesystem::path& path)
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL", path.string().c_str());
+#else
+        setenv("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL", path.string().c_str(), 1);
+#endif
+    }
+
+    void ClearRegistryFixtureLifecycleSentinel()
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL", "");
+#else
+        unsetenv("SPARK_REGISTRY_FIXTURE_LIFECYCLE_SENTINEL");
 #endif
     }
 
@@ -507,6 +570,35 @@ TEST(ModuleABI_UnloadVetoPreservesInitializedWorkingModule)
     RemoveModuleCopy(modulePath);
 }
 
+TEST(ModuleABI_ReplacementHotReloadVetoPreservesInitializedWorkingModule)
+{
+    const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkReplacementHotReloadVetoModule");
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(modulePath.string()));
+    manager.InitializeAll(&context);
+
+    Spark::IModule* const workingInstance = manager.GetModule("Spark Compatible ABI Fixture");
+    ASSERT_TRUE(workingInstance != nullptr);
+
+    // The already-loaded image captured the allow decision at construction.
+    // Only the staged replacement sees this veto, so the test covers the
+    // replacement-side contract rather than the existing-image preflight.
+    SetSupportsHotReloadEnvironment(true);
+    const bool reloadSucceeded = manager.ReloadModule("Spark Compatible ABI Fixture", &context);
+    SetSupportsHotReloadEnvironment(false);
+
+    EXPECT_FALSE(reloadSucceeded);
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "replacement");
+    EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "hot reload");
+    EXPECT_TRUE(manager.GetModule("Spark Compatible ABI Fixture") == workingInstance);
+    EXPECT_TRUE(manager.HasInitializedModules());
+
+    manager.ShutdownAll();
+    manager.UnloadAll();
+    RemoveModuleCopy(modulePath);
+}
+
 TEST(ModuleABI_CommittedShutdownDoesNotRepeatFalliblePreflight)
 {
     const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkCommittedShutdownModule");
@@ -703,6 +795,138 @@ TEST(ModuleABI_SparkGameShutdownReleasesHostRegistryCallbacksBeforeUnload)
     EXPECT_EQ(manager.GetModuleCount(), size_t{0});
 }
 #endif
+
+TEST(ModuleABI_ReloadPreservesHostRegistryCallbacks)
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    auto& detector = Spark::InvalidStateDetector::GetInstance();
+    const std::string commandName = "registry_fixture_status";
+    const std::string ruleCategory = "RegistryFixture";
+    const bool consoleWasInitialized = console.IsInitialized();
+    struct RegistryStateGuard final
+    {
+        Spark::SimpleConsole& console;
+        Spark::InvalidStateDetector& detector;
+        bool restoreUninitialized;
+        ~RegistryStateGuard()
+        {
+            detector.RemoveRulesByCategory("RegistryFixture");
+            console.UnregisterCommand("registry_fixture_status");
+            if (restoreUninitialized)
+                console.Shutdown();
+        }
+    } registryState{console, detector, !consoleWasInitialized};
+
+    if (!consoleWasInitialized)
+        ASSERT_TRUE(console.Initialize());
+    detector.RemoveRulesByCategory(ruleCategory);
+    ASSERT_FALSE(console.HasCommand(commandName));
+
+    const uint32_t initialRuleCount = detector.GetRuleCount();
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+    ASSERT_TRUE(console.HasCommand(commandName));
+    EXPECT_EQ(detector.GetRuleCount(), initialRuleCount + 1);
+
+    // The replacement is initialized before the outgoing image's OnUnload.
+    // Its command and rule must survive that handoff and remain owned by the
+    // live replacement rather than being removed by the outgoing instance.
+    ASSERT_TRUE(manager.ReloadModule("Spark Registry Lifecycle Fixture", &context));
+    EXPECT_TRUE(console.HasCommand(commandName));
+    EXPECT_EQ(detector.GetRuleCount(), initialRuleCount + 1);
+
+    ASSERT_TRUE(manager.ShutdownAll());
+    EXPECT_FALSE(console.HasCommand(commandName));
+    EXPECT_EQ(detector.GetRuleCount(), initialRuleCount);
+    manager.UnloadAll();
+}
+
+TEST(ModuleABI_OnUnloadSeesEngineServicesBeforeImageTeardown)
+{
+    const std::filesystem::path sentinel =
+        std::filesystem::temp_directory_path() / "SparkRegistryLifecycleServicesAlive.txt";
+    std::error_code cleanupError;
+    std::filesystem::remove(sentinel, cleanupError);
+    SetRegistryFixtureLifecycleSentinel(sentinel);
+    struct SentinelGuard final
+    {
+        ~SentinelGuard() { ClearRegistryFixtureLifecycleSentinel(); }
+    } sentinelGuard;
+
+    int serviceStorage = 0;
+    NullEngineContext context(nullptr, reinterpret_cast<Spark::WeatherSystem*>(&serviceStorage),
+                              reinterpret_cast<Spark::UI::UISystem*>(&serviceStorage),
+                              reinterpret_cast<Spark::DialogueSystem*>(&serviceStorage),
+                              reinterpret_cast<Spark::ModSystem*>(&serviceStorage));
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+    ASSERT_TRUE(manager.ShutdownAll());
+
+    std::ifstream marker(sentinel);
+    ASSERT_TRUE(marker.good());
+    std::string result;
+    std::getline(marker, result);
+    EXPECT_EQ(result, "services_alive");
+
+    // Exercise a second complete cycle on the same process. UnloadEntry must
+    // clear the image-local injected EngineContext before FreeLibrary/dlclose.
+    manager.UnloadAll();
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+    ASSERT_TRUE(manager.InitializeAll(&context));
+    ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+    std::filesystem::remove(sentinel, cleanupError);
+}
+
+TEST(ModuleABI_ThrownOnLoadCleansPartialHostRegistryState)
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    auto& detector = Spark::InvalidStateDetector::GetInstance();
+    const std::string commandName = "registry_fixture_status";
+    const std::string ruleCategory = "RegistryFixture";
+    const bool consoleWasInitialized = console.IsInitialized();
+    struct RegistryStateGuard final
+    {
+        Spark::SimpleConsole& console;
+        Spark::InvalidStateDetector& detector;
+        bool restoreUninitialized;
+        ~RegistryStateGuard()
+        {
+            detector.RemoveRulesByCategory("RegistryFixture");
+            console.UnregisterCommand("registry_fixture_status");
+            if (restoreUninitialized)
+                console.Shutdown();
+        }
+    } registryState{console, detector, !consoleWasInitialized};
+
+    if (!consoleWasInitialized)
+        ASSERT_TRUE(console.Initialize());
+    detector.RemoveRulesByCategory(ruleCategory);
+    console.UnregisterCommand(commandName);
+    ASSERT_FALSE(console.HasCommand(commandName));
+
+    const uint32_t initialRuleCount = detector.GetRuleCount();
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_REGISTRY_LIFECYCLE_MODULE_PATH));
+
+    SetRegistryFixtureThrowOnLoadEnvironment(true);
+    bool initializeResult = true;
+    EXPECT_NO_THROW(initializeResult = manager.InitializeAll(&context));
+    SetRegistryFixtureThrowOnLoadEnvironment(false);
+
+    EXPECT_FALSE(initializeResult);
+    EXPECT_FALSE(manager.HasInitializedModules());
+    EXPECT_TRUE(manager.GetModule("Spark Registry Lifecycle Fixture") == nullptr);
+    EXPECT_FALSE(console.HasCommand(commandName));
+    EXPECT_EQ(detector.GetRuleCount(), initialRuleCount);
+
+    manager.UnloadAll();
+    EXPECT_EQ(manager.GetModuleCount(), size_t{0});
+}
 
 TEST(ModuleABI_FailedReplacementInitializationPreservesWorkingModule)
 {

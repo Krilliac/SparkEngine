@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from assets import validate_assets
+from module_content import validate as validate_module_content
 from common import (
     METRIC_IDS,
     REPO_ROOT,
@@ -28,6 +29,8 @@ from common import (
 )
 from contract_selectors import resolve_ci_job, resolve_test_selector
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
+from release_stages import (candidate_readiness_errors, finalization_contract_errors,
+                            predecessor_candidate_readiness_errors)
 
 
 IMPLEMENTATION_STATES = {"absent", "stub", "partial", "functional", "complete"}
@@ -220,6 +223,27 @@ WORK_ITEM_PLANNED_KEYS = {
     "requiredCiJobs": "plannedCiJobs",
     "testSelectors": "plannedTestSelectors",
 }
+# These values preserve the repository-authored declaration. They are a
+# consistency pin, not a legal classification decision.
+CURRENT_LICENSE_DECLARATION = {
+    "name": "Spark Open License 1.0",
+    "kind": "Custom software license",
+    "osiApproved": False,
+}
+# These are project-facing surfaces whose license terminology can be mistaken
+# for the repository's own legal classification.  Generated guidance files are
+# included so regeneration cannot silently restore a stale public claim.
+LEGAL_PUBLIC_WORDING_SURFACES = {
+    ".github/copilot-instructions.md",
+    ".github/prompts/copilot-instructions.md",
+    "README.md",
+    "wiki/Home.md",
+    "wiki/getting-started/FAQ.md",
+}
+PROJECT_OPEN_SOURCE_WORDING = re.compile(r"\bopen(?:-| )source\b", re.IGNORECASE)
+NEGATED_PROJECT_OPEN_SOURCE_WORDING = re.compile(
+    r"\b(?:not|never|no\s+longer)\s+(?:an?\s+)?$", re.IGNORECASE
+)
 
 
 _CTEST_COMMAND_TOKEN = re.compile(
@@ -248,6 +272,38 @@ def executable_ctest_segments(command: str) -> list[str]:
         for segment in re.split(r"[;&|\r\n]+", command)
         if _CTEST_COMMAND_TOKEN.search(segment)
     ]
+
+
+def legal_public_wording_errors(
+    license_data: Any,
+    surfaces: dict[str, str],
+) -> list[str]:
+    """Reject unreviewed project license wording on public-facing surfaces.
+
+    ``osiApproved`` is a repository-authored contract fact, not a legal opinion
+    supplied by this tool.  When it is explicitly false, an unqualified
+    ``open-source`` project label would outrun that fact and must be reviewed
+    before publication.  Negated statements remain usable for explaining the
+    distinction.
+    """
+
+    if not isinstance(license_data, dict) or license_data.get("osiApproved") is not False:
+        return []
+
+    errors: list[str] = []
+    for location, text in sorted(surfaces.items()):
+        if not isinstance(text, str):
+            errors.append(f"{location}: legal wording source must be text")
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            for match in PROJECT_OPEN_SOURCE_WORDING.finditer(line):
+                if NEGATED_PROJECT_OPEN_SOURCE_WORDING.search(line[:match.start()]):
+                    continue
+                errors.append(
+                    f"{location}:{number}: contains unreviewed open-source wording "
+                    "while the declared license is non-OSI"
+                )
+    return errors
 
 
 def build_matrix_evidence_errors(
@@ -1134,6 +1190,30 @@ class Validator:
             visit(identifier, [])
         return item_ids
 
+    @staticmethod
+    def unfinished_dependency_paths(
+        work_ids: Iterable[str], item_by_id: dict[Any, dict[str, Any]]
+    ) -> list[str]:
+        """Dependency paths from the given blockers that end in unfinished work.
+
+        A blocker marked done does not unblock anything while work it depends on
+        is still open, so readiness must follow the whole dependency closure.
+        """
+        paths: list[str] = []
+        seen: set[str] = set()
+        stack = [(work_id, [work_id]) for work_id in work_ids]
+        while stack:
+            current, path = stack.pop()
+            for dependency in item_by_id.get(current, {}).get("dependencies", []):
+                if dependency in seen or dependency not in item_by_id:
+                    continue
+                seen.add(dependency)
+                dependency_path = [*path, dependency]
+                if item_by_id[dependency].get("status") != "done":
+                    paths.append(" -> ".join(dependency_path))
+                stack.append((dependency, dependency_path))
+        return sorted(paths)
+
     def validate_readiness(self, item_ids: set[str]) -> tuple[set[str], set[str]]:
         readiness = self.contract["readiness"]
         capabilities = readiness.get("capabilities", [])
@@ -1173,6 +1253,12 @@ class Validator:
                 ]
                 self.require(not unfinished, location, f"ready capability has unfinished blockers: {unfinished}")
                 self.require(not nonpassing, location, f"ready capability has non-passing gates: {nonpassing}")
+                transitive = self.unfinished_dependency_paths(capability.get("blockingWorkItemIds", []), item_by_id)
+                self.require(
+                    not transitive,
+                    location,
+                    f"ready capability has unfinished transitive dependencies: {'; '.join(transitive)}",
+                )
 
         for gate in gates:
             identifier = gate.get("id", "?")
@@ -1190,6 +1276,12 @@ class Validator:
                     if work_id in item_by_id and item_by_id[work_id].get("status") != "done"
                 ]
                 self.require(not unfinished, location, f"passing gate has unfinished blockers: {unfinished}")
+                transitive = self.unfinished_dependency_paths(gate.get("blockingWorkItemIds", []), item_by_id)
+                self.require(
+                    not transitive,
+                    location,
+                    f"passing gate has unfinished transitive dependencies: {'; '.join(transitive)}",
+                )
 
         release = readiness.get("globalRelease", {})
         self.require(release.get("state") in RELEASE_STATES, "globalRelease.state", "invalid release state")
@@ -2000,17 +2092,94 @@ class Validator:
             for index, source_path in enumerate(track.get("documentSourcePaths", [])):
                 self.require_path(source_path, f"learn.{track.get('id')}.documentSourcePaths[{index}]")
 
-    def validate_legal(self) -> None:
+    def validate_legal(self, *, strict_public_wording: bool = False) -> None:
         legal = self.contract["content"].get("legal", {})
-        license_path = REPO_ROOT / legal.get("license", {}).get("sourcePath", "")
+        license_data = legal.get("license", {})
+        license_path = REPO_ROOT / license_data.get("sourcePath", "")
         self.require(license_path.is_file(), "content.legal.license.sourcePath", "license source must exist")
         if license_path.is_file():
             first_line = license_path.read_text(encoding="utf-8").splitlines()[0].strip()
             self.require(
-                legal.get("license", {}).get("name") == first_line,
+                license_data.get("name") == first_line,
                 "content.legal.license.name",
                 f"must exactly match LICENSE first line {first_line!r}",
             )
+        self.require(
+            license_data.get("name") == CURRENT_LICENSE_DECLARATION["name"],
+            "content.legal.license.name",
+            f"must preserve the current repository declaration {CURRENT_LICENSE_DECLARATION['name']!r}",
+        )
+        self.require(
+            license_data.get("kind") == CURRENT_LICENSE_DECLARATION["kind"],
+            "content.legal.license.kind",
+            f"must preserve the current repository declaration {CURRENT_LICENSE_DECLARATION['kind']!r}",
+        )
+        self.require(
+            type(license_data.get("osiApproved")) is bool
+            and license_data.get("osiApproved") == CURRENT_LICENSE_DECLARATION["osiApproved"],
+            "content.legal.license.osiApproved",
+            f"must preserve the current repository declaration {CURRENT_LICENSE_DECLARATION['osiApproved']!r}",
+        )
+
+        if strict_public_wording:
+            public_surfaces: dict[str, str] = {}
+            for path in sorted(LEGAL_PUBLIC_WORDING_SURFACES):
+                resolved = REPO_ROOT / path
+                location = f"content.legal.publicWording.{path}"
+                self.require(resolved.is_file(), location, "public wording source must exist")
+                if resolved.is_file():
+                    public_surfaces[path] = resolved.read_text(encoding="utf-8", errors="replace")
+            for violation in legal_public_wording_errors(license_data, public_surfaces):
+                self.error("content.legal.publicWording", violation)
+
+        gov_items = [
+            item
+            for item in self.contract.get("workItems", [])
+            if isinstance(item, dict) and item.get("id") == "GOV-400"
+        ]
+        if len(gov_items) != 1:
+            self.error(
+                "workItems.GOV-400",
+                "exactly one work item is required to govern legal policy gaps",
+            )
+        else:
+            policy_gaps = legal.get("policyGaps")
+            policy_location = "content.legal.policyGaps"
+            status = gov_items[0].get("status")
+            if status == "open" or policy_gaps is not None:
+                self.require(
+                    isinstance(policy_gaps, list),
+                    policy_location,
+                    "must be a list of non-empty unique strings while GOV-400 is open",
+                )
+            if isinstance(policy_gaps, list):
+                all_non_empty_strings = all(
+                    isinstance(value, str) and bool(value.strip()) for value in policy_gaps
+                )
+                self.require(
+                    all_non_empty_strings,
+                    policy_location,
+                    "must contain only non-empty strings",
+                )
+                if all_non_empty_strings:
+                    self.require(
+                        len(policy_gaps) == len(set(policy_gaps)),
+                        policy_location,
+                        "must contain unique strings",
+                    )
+                if status == "open":
+                    self.require(
+                        bool(policy_gaps),
+                        policy_location,
+                        "must contain at least one policy gap while GOV-400 is open",
+                    )
+                if status == "done":
+                    self.require(
+                        not policy_gaps,
+                        policy_location,
+                        "GOV-400 cannot be done while policyGaps remain",
+                    )
+
         for index, document in enumerate(legal.get("documents", [])):
             self.require_path(document.get("sourcePath"), f"content.legal.documents[{index}].sourcePath")
 
@@ -2018,14 +2187,6 @@ class Validator:
         self.require((REPO_ROOT / "Assets").is_dir(), "Assets", "asset root does not exist")
         self.require((REPO_ROOT / "Shaders").is_dir(), "Shaders", "shader root does not exist")
         self.require((REPO_ROOT / "SparkEngine" / "Source" / "Graphics" / "AssetPipeline.cpp").is_file(), "asset pipeline", "primary asset-pipeline source is absent")
-        for location, message in validate_assets():
-            # Every asset finding, absent manifest included, is a hard error. A
-            # missing manifest is the headline condition the asset-integrity job
-            # exists to catch (RDY-020); routing it through the legacy waiver
-            # made that job structurally incapable of failing for it, while the
-            # job still has to pass the waiver for the unrelated
-            # contract-reference debt the whole validator walks.
-            self.error(location, message)
         integrity_manifest = REPO_ROOT / "Assets" / "assets.integrity.json"
         self.require(integrity_manifest.is_file(), "Assets/assets.integrity.json", "asset integrity manifest is missing")
         tool_path = REPO_ROOT / "tools" / "asset-integrity" / "verify_asset_integrity.py"
@@ -2047,7 +2208,13 @@ class Validator:
                 if not callable(verifier):
                     self.error("tools/asset-integrity/verify_asset_integrity.py", "asset integrity verifier exposes no verify_manifest function")
                     return
-                errors = verifier(integrity_manifest, REPO_ROOT / "Assets")
+                errors = verifier(
+                    integrity_manifest,
+                    REPO_ROOT / "Assets",
+                    provenance_policy=REPO_ROOT / "tools" / "asset-integrity" / "provenance.json",
+                    repo_root=REPO_ROOT,
+                    require_provenance=True,
+                )
             except Exception as exc:  # noqa: BLE001 - a gate must report tool load failures.
                 self.error("tools/asset-integrity/verify_asset_integrity.py", f"asset integrity verifier failed: {exc}")
                 return
@@ -2126,6 +2293,8 @@ class Validator:
         self,
         *,
         require_ready: bool = False,
+        require_candidate_ready: bool = False,
+        require_predecessor_candidate: bool = False,
         modules: bool = False,
         assets: bool = False,
         legal: bool = False,
@@ -2137,11 +2306,23 @@ class Validator:
         item_ids = self.validate_work_items()
         capability_ids, gate_ids = self.validate_readiness(item_ids)
         profile_ids = self.validate_release_profiles(item_ids, capability_ids, gate_ids)
+        for message in finalization_contract_errors(self.contract):
+            self.error("publicationFinalization", message)
+        if require_candidate_ready:
+            for message in candidate_readiness_errors(self.contract):
+                self.error("candidate readiness", message)
+        if require_predecessor_candidate:
+            for message in predecessor_candidate_readiness_errors(self.contract):
+                self.error("predecessor candidate readiness", message)
         self.validate_execution(item_ids)
         self.validate_content(capability_ids, profile_ids)
+        for location, message in validate_assets():
+            self.error(location, message)
+        for location, message in validate_module_content(REPO_ROOT):
+            self.error(location, message)
         self.validate_docs_catalog()
         self.validate_build_matrix_evidence()
-        self.validate_legal()
+        self.validate_legal(strict_public_wording=legal)
         if assets:
             self.validate_asset_surface()
         if docs:
@@ -2177,6 +2358,8 @@ class Validator:
 def validate_contract(
     *,
     require_ready: bool = False,
+    require_candidate_ready: bool = False,
+    require_predecessor_candidate: bool = False,
     modules: bool = False,
     assets: bool = False,
     legal: bool = False,
@@ -2192,6 +2375,8 @@ def validate_contract(
         max_legacy_contract=max_legacy_contract,
     ).validate(
         require_ready=require_ready,
+        require_candidate_ready=require_candidate_ready,
+        require_predecessor_candidate=require_predecessor_candidate,
         modules=modules,
         assets=assets,
         legal=legal,
@@ -2367,7 +2552,10 @@ def warn_legacy_contract_flag_deprecated(command: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--require-ready", action="store_true")
+    stages = parser.add_mutually_exclusive_group()
+    stages.add_argument("--require-ready", action="store_true", help="require final global release readiness")
+    stages.add_argument("--require-candidate-ready", action="store_true", help="require all qualification gates with declared publication finalization pending")
+    stages.add_argument("--require-predecessor-candidate", action="store_true", help="require the explicitly reviewed immutable predecessor stage without waiving v1 qualification")
     parser.add_argument("--modules", action="store_true")
     parser.add_argument("--assets", action="store_true")
     parser.add_argument("--legal", action="store_true")
@@ -2410,6 +2598,8 @@ def main() -> int:
     try:
         contract = validate_contract(
             require_ready=args.require_ready,
+            require_candidate_ready=args.require_candidate_ready,
+            require_predecessor_candidate=args.require_predecessor_candidate,
             modules=args.modules,
             assets=args.assets,
             legal=args.legal,

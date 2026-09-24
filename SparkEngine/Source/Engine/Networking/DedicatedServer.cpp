@@ -369,7 +369,12 @@ namespace Spark::Net
 
                                               if (m_callbacks.onChatMessage)
                                                   m_callbacks.onChatMessage(chatText);
-                                              Log("Chat: " + chatText);
+                                              // The server log also carries the administration audit trail.
+                                              // Remote text is escaped into one bounded field so a client
+                                              // cannot end its record and forge an audit line.
+                                              Log("Chat: client=" + std::to_string(msg.senderID) +
+                                                  " bytes=" + std::to_string(chatText.size()) + " text=\"" +
+                                                  EscapeRemoteTextForLog(chatText) + "\"");
                                           });
     }
 
@@ -634,13 +639,21 @@ namespace Spark::Net
             std::string response = handler(args);
             if (m_callbacks.onRconCommand)
                 m_callbacks.onRconCommand(commandLine, response);
-            Log("RCON: " + commandLine + " -> " + response);
+            // Arguments and response bodies may contain reusable secrets. Only
+            // retain a bounded, log-safe identifier for a registered command.
+            const std::string auditName =
+                !cmdName.empty() && cmdName.size() <= 64 &&
+                        cmdName.find_first_not_of(
+                            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-") == std::string::npos
+                    ? cmdName
+                    : "<redacted>";
+            Log("RCON: command=" + auditName + " disposition=dispatched");
             return response;
         }
 
         std::string err = "Unknown command: " + cmdName;
-        SPARK_LOG_WARN(Spark::LogCategory::Network, "RCON unknown command: %s", cmdName.c_str());
-        Log("RCON: " + err);
+        SPARK_LOG_WARN(Spark::LogCategory::Network, "RCON: command=<unknown> disposition=unknown_command");
+        Log("RCON: command=<unknown> disposition=unknown_command");
         return err;
     }
 
@@ -1054,6 +1067,53 @@ namespace Spark::Net
         oss << "LAN Bcast:  " << (m_lanBroadcastActive.load(std::memory_order_acquire) ? "ON" : "OFF") << "\n";
         oss << "Admin Cmds: LOCAL API ONLY\n";
         return oss.str();
+    }
+
+    std::string DedicatedServer::EscapeRemoteTextForLog(std::string_view text)
+    {
+        static constexpr char kHexDigits[] = "0123456789ABCDEF";
+        const std::size_t copied = std::min(text.size(), kMaxLoggedRemoteTextBytes);
+
+        std::string escaped;
+        escaped.reserve(copied + 16);
+        for (std::size_t i = 0; i < copied; ++i)
+        {
+            const auto byte = static_cast<unsigned char>(text[i]);
+            switch (byte)
+            {
+            case '\\':
+                escaped += "\\\\";
+                break;
+            case '"':
+                escaped += "\\\"";
+                break;
+            case '\n':
+                escaped += "\\n";
+                break;
+            case '\r':
+                escaped += "\\r";
+                break;
+            case '\t':
+                escaped += "\\t";
+                break;
+            default:
+                if (byte < 0x20 || byte >= 0x7F)
+                {
+                    escaped += "\\x";
+                    escaped += kHexDigits[(byte >> 4) & 0x0F];
+                    escaped += kHexDigits[byte & 0x0F];
+                }
+                else
+                {
+                    escaped += static_cast<char>(byte);
+                }
+                break;
+            }
+        }
+
+        if (text.size() > copied)
+            escaped += "...[truncated]";
+        return escaped;
     }
 
     void DedicatedServer::Log(const std::string& message)

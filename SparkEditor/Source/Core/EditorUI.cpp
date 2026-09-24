@@ -224,7 +224,12 @@ namespace SparkEditor
 
             // Honour --project before deciding whether the browser is needed.
             // This value was previously parsed and then ignored.
-            if (!config.testMode && m_projectManager && !config.projectPath.empty() && config.projectPath != ".")
+            // Bounded CI launches use testMode to suppress interactive browser
+            // UI, but an explicit project path must still exercise the real
+            // project-open path.  Keeping the browser guard below testMode
+            // preserves unattended startup while making --project meaningful
+            // for executable smoke tests.
+            if (m_projectManager && !config.projectPath.empty() && config.projectPath != ".")
             {
                 if (!m_projectManager->OpenProject(config.projectPath))
                     console.LogWarning("Could not open startup project: " + config.projectPath);
@@ -542,7 +547,7 @@ namespace SparkEditor
         // Tick tutorial auto-advance timers so active tutorials progress.
         SPARK_GUARDED_UPDATE("TutorialSystem", "Editor", { TutorialSystem::GetInstance().Update(deltaTime); });
 
-        // Tick play/simulate state machine (PIE and in-editor simulation stepping/stats)
+        // Tick only the editor preview state machine; gameplay runs in a separate process.
         m_playModeManager.Update(deltaTime);
         if (auto it = m_panels.find("GameView"); it != m_panels.end())
             if (auto* gameView = dynamic_cast<GameViewPanel*>(it->second.get()))
@@ -598,50 +603,23 @@ namespace SparkEditor
     {
         ImGuiIO& io = ImGui::GetIO();
 
-        // F5: Toggle play mode (delegates to PlayModeManager)
+        // F5: Open the verified out-of-process gameplay surface. The old
+        // in-editor state machine only advances preview counters and must not
+        // be presented as a playable game session.
         if (ImGui::IsKeyPressed(ImGuiKey_F5) && !io.WantTextInput)
         {
-            if (io.KeyShift)
-            {
-                m_playModeManager.ExitPlayMode();
-                m_playMode = PlayMode::Stopped;
-                ShowNotification("Stopped", "info", 2.0f);
-            }
-            else
-            {
-                m_playModeManager.TogglePlayMode();
-                m_playMode = m_playModeManager.IsPlaying()
-                                 ? PlayMode::Playing
-                                 : (m_playModeManager.IsSimulating()
-                                        ? PlayMode::Simulating
-                                        : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
-                ShowNotification(m_playMode == PlayMode::Playing
-                                     ? "Playing..."
-                                     : (m_playMode == PlayMode::Simulating ? "Simulating..." : "Stopped"),
-                                 "info", 2.0f);
-            }
+            SetPanelVisible("PlayControl", true);
+            ShowNotification(io.KeyShift ? "Play Control opened — use STOP ALL to stop game processes"
+                                         : "Play Control opened — select a module, then Launch Game",
+                             "info", 3.0f);
         }
 
-        // F6: Toggle simulation mode (physics/AI/etc. while retaining editor camera workflow)
+        // F6 remains a discoverable alias for the same real-play surface. Do
+        // not route it to the synthetic simulation counters either.
         if (ImGui::IsKeyPressed(ImGuiKey_F6) && !io.WantTextInput)
         {
-            if (io.KeyShift)
-            {
-                m_playModeManager.ExitPlayMode();
-                m_playMode = PlayMode::Stopped;
-                ShowNotification("Stopped simulation", "info", 2.0f);
-            }
-            else
-            {
-                m_playModeManager.ToggleSimulationMode();
-                m_playMode = m_playModeManager.IsPlaying()
-                                 ? PlayMode::Playing
-                                 : (m_playModeManager.IsSimulating()
-                                        ? PlayMode::Simulating
-                                        : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
-                ShowNotification(m_playMode == PlayMode::Simulating ? "Simulation running..." : "Simulation stopped",
-                                 "info", 2.0f);
-            }
+            SetPanelVisible("PlayControl", true);
+            ShowNotification("Play Control opened — Launch Game runs actual gameplay", "info", 3.0f);
         }
 
 #ifdef _WIN32
@@ -2404,7 +2382,6 @@ namespace SparkEditor
     {
         if (m_playModeManager.IsInPlayMode())
             m_playModeManager.ExitPlayMode();
-        m_playMode = PlayMode::Stopped;
     }
 
     void EditorUI::SwapWorld(std::unique_ptr<::World> newWorld)

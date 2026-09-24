@@ -1,5 +1,38 @@
 @PACKAGE_INIT@
 
+# CMake treats a package without a ConfigVersion file as usable when the
+# consumer does not request a version. The installed SDK contract always ships
+# this file, so accepting its absence would silently drop package-version
+# compatibility diagnostics.
+set(_spark_required_package_files
+    SparkEngineConfigVersion.cmake
+)
+foreach(_spark_required_package_file IN LISTS _spark_required_package_files)
+    # `IS_REGULAR_FILE` is not a portable `if()` predicate across the declared
+    # consumer range. Preserve the same contract using operators available on
+    # every supported consumer: the path must exist and must not be a directory.
+    if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/${_spark_required_package_file}" OR
+       IS_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/${_spark_required_package_file}")
+        message(FATAL_ERROR
+            "SparkEngine package is incomplete: missing required package file "
+            "${CMAKE_CURRENT_LIST_DIR}/${_spark_required_package_file}")
+    endif()
+endforeach()
+unset(_spark_required_package_file)
+unset(_spark_required_package_files)
+
+# The umbrella header is the entry point promised by the public SDK contract.
+# Reject a partial installation while configuring the package so consumers do
+# not receive a misleading successful `find_package` followed by a compile
+# failure when they include <Spark/SparkSDK.h>.
+set(_spark_required_sdk_header "${PACKAGE_PREFIX_DIR}/include/Spark/SparkSDK.h")
+if(NOT EXISTS "${_spark_required_sdk_header}" OR IS_DIRECTORY "${_spark_required_sdk_header}")
+    message(FATAL_ERROR
+        "SparkEngine package is incomplete: missing required public SDK header "
+        "${_spark_required_sdk_header}")
+endif()
+unset(_spark_required_sdk_header)
+
 include(CMakeFindDependencyMacro)
 
 if(NOT WIN32 OR @SPARK_PACKAGE_HAS_ANGELSCRIPT@)

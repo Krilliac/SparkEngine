@@ -14,6 +14,7 @@
 #include "Spark/IEngineContext.h"
 #include "Enums/RacingEnums.h"
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -91,6 +92,16 @@ namespace Racing
     };
 
     /**
+     * @brief Where a world position lies relative to the track centerline
+     */
+    struct TrackProjection
+    {
+        uint32_t segment = 0;         ///< Centerline segment from waypoint `segment` to the next waypoint
+        float t = 0.0f;               ///< 0-1 position along that segment
+        float lateralDistance = 0.0f; ///< Distance from the centerline in meters
+    };
+
+    /**
      * @brief Manages track definitions, checkpoint collision, and surface queries
      *
      * Provides the track spline for AI path-following, validates checkpoint
@@ -127,6 +138,12 @@ namespace Racing
         /// Get a waypoint by index (wraps for circuits)
         const TrackWaypoint& GetWaypoint(uint32_t index) const;
 
+        /// Project a position onto the centerline; a heading breaks ties where the track crosses itself.
+        TrackProjection ProjectOntoTrack(float x, float z, std::optional<float> heading = std::nullopt) const;
+
+        /// Point `distance` meters further along the centerline (clamped at a point-to-point finish).
+        void GetPointAhead(const TrackProjection& from, float distance, float& outX, float& outZ) const;
+
         const TrackData& GetCurrentTrack() const { return m_currentTrack; }
         size_t GetTrackCount() const { return m_tracks.size(); }
         size_t GetCheckpointCount() const { return m_currentTrack.checkpoints.size(); }
@@ -134,6 +151,7 @@ namespace Racing
         std::string GetTrackListString() const;
 
       private:
+        uint32_t GetSegmentCount() const;
         void BuildDemoTracks();
         TrackData CreateCircuitTrack() const;
         TrackData CreatePointToPointTrack() const;

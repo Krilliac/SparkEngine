@@ -89,6 +89,21 @@ SparkConsole.exe
 
 In standalone mode, SparkConsole provides local diagnostics and built-in commands but cannot control the engine (engine-forwarded commands will report "not connected").
 
+### FPS playtest scene reload
+
+When the SparkGameFPS module is running, the engine registers:
+
+```text
+scene_load <level.scene|Scenes/level.scene>
+```
+
+For example, `scene_load Assets/Scenes/level1.scene` reloads the authored scene
+and rebinds its material roots. The command accepts only `.scene` files below
+the installed `Assets/Scenes` directory; absolute paths, `..` traversal, missing
+files, and symlink escapes are rejected before the scene manager is called.
+`scene_save` is intentionally not advertised until save round-trip
+qualification is complete.
+
 ---
 
 ## Internal Implementation

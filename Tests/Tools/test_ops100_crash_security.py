@@ -6,6 +6,7 @@ import importlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -62,6 +63,17 @@ class CrashSecurityTests(unittest.TestCase):
         ):
             self.assertIn(declaration, source)
 
+    def test_crash_handler_has_no_in_process_transport_fallback(self) -> None:
+        source = (ROOT / "SparkEngine" / "Source" / "Utils" / "CrashHandler.cpp").read_text(encoding="utf-8")
+        self.assertNotIn('"Utils/CrashReportUploader.h"', source)
+        self.assertNotRegex(source, re.compile(r"\bUploadCrashReport\s*\("))
+        self.assertNotIn("Reporter-unavailable fallback", source)
+        self.assertNotIn(
+            "ShouldLaunchReadOnlyReporter(g_cfg.enableCrashReporting, g_cfg.headlessMode)",
+            source,
+        )
+        self.assertIn("if (!g_cfg.headlessMode)", source)
+
     def test_missing_referenced_log_is_fatal(self) -> None:
         manifest = self.write_manifest({"logFile": "missing.log"})
         validator = crash.CrashPackageValidator()
@@ -114,8 +126,9 @@ class CrashSecurityTests(unittest.TestCase):
 
     def test_manifest_hardlink_is_rejected_before_json_read(self) -> None:
         outside = self.root.parent / f"manifest-outside-{self.root.name}.json"
-        secret = "ghp_" + "A" * 40
-        outside.write_text(json.dumps({"logFile": secret}), encoding="utf-8")
+        # Deliberately generated token-shaped test data, never a credential.
+        token_shaped_fixture = "ghp_" + "A" * 40
+        outside.write_text(json.dumps({"logFile": token_shaped_fixture}), encoding="utf-8")
         try:
             os.link(outside, self.root / READY)
             validator = crash.CrashPackageValidator()
@@ -284,6 +297,17 @@ class CrashSecurityTests(unittest.TestCase):
         archive = io.BytesIO()
         with zipfile.ZipFile(archive, "w") as output:
             output.writestr("../outside.log", "safe")
+        (self.root / "crash.log").write_text("safe", encoding="utf-8")
+        (self.root / "package.zip").write_bytes(archive.getvalue())
+        manifest = self.write_manifest({"logFile": "crash.log", "zipFile": "package.zip"})
+        validator = crash.CrashPackageValidator()
+        validator.validate_manifest_file(manifest)
+        self.assertIn("binary-policy", self.checks(validator))
+
+    def test_zip_traversal_directory_member_is_rejected(self) -> None:
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as output:
+            output.writestr("../", "")
         (self.root / "crash.log").write_text("safe", encoding="utf-8")
         (self.root / "package.zip").write_bytes(archive.getvalue())
         manifest = self.write_manifest({"logFile": "crash.log", "zipFile": "package.zip"})

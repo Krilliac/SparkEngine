@@ -1,10 +1,9 @@
 /**
  * @file Main.cpp
- * @brief SparkGameFPS DLL - IModule + IGameModule implementation and exports
+ * @brief SparkGameFPS DLL - installed SDK IModule implementation and exports
  *
- * This file implements the SparkGameModule class and exports both the new
- * (CreateModule/DestroyModule) and legacy (CreateGameModule/DestroyGameModule)
- * factory functions. The engine's ModuleManager will prefer the new exports.
+ * This file implements SparkGameModule and exports the installed SDK's
+ * CreateModule/DestroyModule factory functions.
  *
  * When the engine starts, it finds and loads SparkGameFPS.dll, calls
  * CreateModule() to get a SparkGameModule instance, then drives
@@ -12,6 +11,7 @@
  */
 
 #include "SparkGameFPS.h"
+#include "Core/EngineWeatherAdapter.h"
 #include "Game/Game.h"
 #include "Game/GameMode.h"
 #include "Game/InventorySystem.h"
@@ -22,12 +22,10 @@
 #include "Game/Player.h"
 #include "Game/Enemy.h"
 #include "Game/FPSStateRules.h"
-#include "Core/EngineContext.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "Audio/MusicManager.h"
-#include "Graphics/WeatherSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
@@ -124,9 +122,11 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
         return true;
     }
 
-    // Delegate to the shared Initialize logic using the context's subsystems
-    if (!Initialize(context->GetGraphics(), context->GetInput()))
+    if (!InitializeFromContext())
+    {
+        m_context = nullptr;
         return false;
+    }
 
     if (g_game)
     {
@@ -192,24 +192,14 @@ void SparkGameModule::OnImGui()
     g_game->RenderDebugUI();
 }
 
-// --- IGameModule interface (legacy) ---
-
-const char* SparkGameModule::GetGameName() const
-{
-    return "Spark Arena";
-}
-
-const char* SparkGameModule::GetGameVersion() const
-{
-    return "1.0.0";
-}
-
-bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
+bool SparkGameModule::InitializeFromContext()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     if (m_initialized)
         return true; // Prevent double-init
 
+    GraphicsEngine* graphics = m_context ? m_context->GetGraphics() : nullptr;
+    InputManager* input = m_context ? m_context->GetInput() : nullptr;
     SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, graphics, false);
     SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, input, false);
 
@@ -228,6 +218,8 @@ bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
     }
 
     // Register game-specific console commands
+    m_weatherAdapter = std::make_unique<SparkGameFPS::EngineWeatherAdapter>(m_context->GetWeather());
+    g_game->SetWeatherPort(m_weatherAdapter.get());
     RegisterGameConsoleCommands();
 
     // Register FPS-specific state validation rules on the HOST's detector.
@@ -310,31 +302,16 @@ void SparkGameModule::Shutdown()
 
     if (g_game)
     {
+        g_game->ClearWeatherPort();
         g_game->Shutdown();
         delete g_game;
         g_game = nullptr;
     }
+    m_weatherAdapter.reset();
     m_context = nullptr;
     m_initialized = false;
 
     Spark::SimpleConsole::GetInstance().LogInfo("SparkGameFPS module shut down");
-}
-
-void SparkGameModule::Update(float deltaTime)
-{
-    if (g_game && !g_game->IsPaused())
-    {
-        g_game->Update(deltaTime);
-        // Legacy hosts do not call OnFixedUpdate, so advance fixed gameplay once per frame.
-        if (auto* vehicleSystem = g_game->GetVehicleSystem())
-            vehicleSystem->Update(deltaTime);
-    }
-}
-
-void SparkGameModule::Render()
-{
-    if (g_game)
-        g_game->Render();
 }
 
 void SparkGameModule::OnResize(int width, int height)
@@ -345,23 +322,6 @@ void SparkGameModule::OnResize(int width, int height)
     (void)height;
 }
 
-void SparkGameModule::Pause()
-{
-    if (g_game)
-        g_game->Pause();
-}
-
-void SparkGameModule::Resume()
-{
-    if (g_game)
-        g_game->Resume();
-}
-
-bool SparkGameModule::IsPaused() const
-{
-    return g_game ? g_game->IsPaused() : false;
-}
-
 // ===================================================================================
 // Game-specific console commands (registered when game module loads)
 // ===================================================================================
@@ -370,11 +330,40 @@ void SparkGameModule::RegisterGameConsoleCommands()
     auto& simpleConsole = Spark::SimpleConsole::GetInstance();
     TrackedConsoleRegistrar console(simpleConsole, m_registeredConsoleCommands);
     Game* game = g_game;
+    Spark::IEngineContext* context = m_context;
 
     console.RegisterCommand(
         "game_status", [game](const std::vector<std::string>&) -> std::string
         { return game ? game->GetStatusString() : "Game not available"; },
         "Show the live Spark Arena match, wave, player, and progression status");
+
+    console.RegisterCommand(
+        "scene_load",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() != 1)
+                return "Usage: scene_load <level.scene|Scenes/level.scene>";
+            if (!game)
+                return "Game not available";
+            return game->LoadScene(args.front()) ? "Scene reloaded successfully: " + args.front()
+                                                 : "Scene reload failed: " + args.front();
+        },
+        "Reload a scene from the trusted FPS Assets/Scenes directory", "Scene",
+        "scene_load <level.scene|Scenes/level.scene>");
+
+    console.RegisterCommand(
+        "scene_save",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() != 1)
+                return "Usage: scene_save <level.scene|Scenes/level.scene>";
+            if (!game)
+                return "Game not available";
+            return game->SaveScene(args.front()) ? "Scene saved: " + args.front()
+                                                 : "Scene save failed: " + args.front();
+        },
+        "Save the live scene inside the trusted FPS Assets/Scenes directory", "Scene",
+        "scene_save <level.scene|Scenes/level.scene>");
 
     console.RegisterCommand(
         "game_timescale",
@@ -767,24 +756,23 @@ void SparkGameModule::RegisterGameConsoleCommands()
 
     console.RegisterCommand(
         "weather",
-        [](const std::vector<std::string>& args) -> std::string
+        [game](const std::vector<std::string>& args) -> std::string
         {
             if (args.empty())
                 return "Usage: weather <clear|rain|snow|fog|storm>";
-            auto* ctx = EngineContext::Get();
-            auto* weather = ctx ? ctx->GetWeather() : nullptr;
-            if (!weather)
+            if (!game)
                 return "WeatherSystem not available";
-            Spark::WeatherType type = Spark::WeatherType::Clear;
+            SparkGameFPS::WeatherPreset type = SparkGameFPS::WeatherPreset::Clear;
             if (args[0] == "rain")
-                type = Spark::WeatherType::Rain;
+                type = SparkGameFPS::WeatherPreset::Rain;
             else if (args[0] == "snow")
-                type = Spark::WeatherType::Snow;
+                type = SparkGameFPS::WeatherPreset::Snow;
             else if (args[0] == "fog")
-                type = Spark::WeatherType::Fog;
+                type = SparkGameFPS::WeatherPreset::Fog;
             else if (args[0] == "storm")
-                type = Spark::WeatherType::Storm;
-            weather->SetWeather(type, 0.8f, 3.0f);
+                type = SparkGameFPS::WeatherPreset::Storm;
+            if (!game->SetWeatherPreset(type, 0.8f, 3.0f))
+                return "WeatherSystem not available";
             return "Weather set to " + args[0];
         },
         "Set weather (weather <clear|rain|snow|fog|storm>)");
@@ -837,12 +825,11 @@ void SparkGameModule::RegisterGameConsoleCommands()
 
     console.RegisterCommand(
         "dialogue_start",
-        [](const std::vector<std::string>& args) -> std::string
+        [context](const std::vector<std::string>& args) -> std::string
         {
             if (args.empty())
                 return "Usage: dialogue_start <tree_id>";
-            auto* ctx = EngineContext::Get();
-            auto* dialogue = ctx ? ctx->GetDialogue() : nullptr;
+            auto* dialogue = context ? context->GetDialogue() : nullptr;
             if (!dialogue)
                 return "DialogueSystem not available";
             dialogue->StartConversation(args[0]);
@@ -1308,7 +1295,7 @@ void SparkGameModule::RegisterGameConsoleCommands()
 }
 
 // ===================================================================================
-// DLL Exports - New API (preferred by ModuleManager)
+// DLL Exports - installed SDK module API
 // ===================================================================================
 
 SPARK_EXPORT_MODULE_COMPATIBILITY()
@@ -1324,25 +1311,6 @@ extern "C"
     SPARK_MODULE_API void DestroyModule(Spark::IModule* mod)
     {
         delete mod;
-    }
-
-} // extern "C"
-
-// ===================================================================================
-// DLL Exports - Legacy API (backward compatibility)
-// ===================================================================================
-
-extern "C"
-{
-
-    SPARK_GAME_API IGameModule* CreateGameModule()
-    {
-        return new SparkGameModule();
-    }
-
-    SPARK_GAME_API void DestroyGameModule(IGameModule* module)
-    {
-        delete module;
     }
 
 } // extern "C"

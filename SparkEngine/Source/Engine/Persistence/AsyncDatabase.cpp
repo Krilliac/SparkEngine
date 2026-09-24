@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cerrno>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -24,6 +26,9 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <Windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 namespace Spark::Persistence
@@ -538,9 +543,20 @@ namespace Spark::Persistence
         {
             return false;
         }
+
+        if (!FlushToDisk())
+        {
+            // A transaction is not committed until its durable revision has
+            // replaced the destination.  Restore the snapshot when that
+            // boundary fails so callers cannot observe an unpersisted commit.
+            m_kvStore = std::move(m_transactionSnapshot);
+            m_transactionSnapshot.clear();
+            m_inTransaction = false;
+            return false;
+        }
+
         m_inTransaction = false;
         m_transactionSnapshot.clear();
-        FlushToDisk();
         return true;
     }
 
@@ -555,7 +571,7 @@ namespace Spark::Persistence
         return true;
     }
 
-    void SQLiteConnection::FlushToDisk()
+    bool SQLiteConnection::FlushToDisk()
     {
         // Never truncate the live store: a crash or a write error midway through would
         // destroy every key. Build the new revision in a sibling temp file and replace
@@ -569,13 +585,23 @@ namespace Spark::Persistence
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to open '%s' for writing",
                                 temporary.string().c_str());
-                return;
+                return false;
             }
 
             file << kKVFormatMarker << '\n';
             for (const auto& [key, value] : m_kvStore)
             {
                 file << EscapeKVField(key) << '\t' << EscapeKVField(value) << '\n';
+            }
+
+            file.flush();
+            if (!file)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: flush error writing '%s' (%zu entries)",
+                                temporary.string().c_str(), m_kvStore.size());
+                std::error_code removeError;
+                std::filesystem::remove(temporary, removeError);
+                return false;
             }
 
             file.close();
@@ -585,9 +611,67 @@ namespace Spark::Persistence
                                 m_dbPath.c_str(), m_kvStore.size());
                 std::error_code removeError;
                 std::filesystem::remove(temporary, removeError);
-                return;
+                return false;
             }
         }
+
+        // Seal the complete temporary revision before the atomic name swap. The
+        // Windows replace flag below covers the rename itself; explicitly flushing
+        // the file here also makes the durability boundary clear and gives POSIX
+        // the equivalent data-write ordering before rename.
+#ifdef _WIN32
+        HANDLE temporaryHandle = ::CreateFileW(temporary.c_str(), GENERIC_READ | GENERIC_WRITE,
+                                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (temporaryHandle == INVALID_HANDLE_VALUE)
+        {
+            const DWORD error = ::GetLastError();
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to reopen '%s' for durable flush: %s",
+                            temporary.string().c_str(),
+                            std::system_category().message(static_cast<int>(error)).c_str());
+            std::error_code removeError;
+            std::filesystem::remove(temporary, removeError);
+            return false;
+        }
+        const BOOL flushed = ::FlushFileBuffers(temporaryHandle);
+        const DWORD flushError = flushed ? ERROR_SUCCESS : ::GetLastError();
+        ::CloseHandle(temporaryHandle);
+        if (!flushed)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: durable flush failed for '%s': %s",
+                            temporary.string().c_str(),
+                            std::system_category().message(static_cast<int>(flushError)).c_str());
+            std::error_code removeError;
+            std::filesystem::remove(temporary, removeError);
+            return false;
+        }
+#else
+        int temporaryOpenFlags = O_RDONLY;
+#ifdef O_CLOEXEC
+        temporaryOpenFlags |= O_CLOEXEC;
+#endif
+        int temporaryFd = ::open(temporary.c_str(), temporaryOpenFlags);
+        if (temporaryFd < 0)
+        {
+            const int error = errno;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: failed to reopen '%s' for durable flush: %s",
+                            temporary.string().c_str(), std::strerror(error));
+            std::error_code removeError;
+            std::filesystem::remove(temporary, removeError);
+            return false;
+        }
+        const int flushResult = ::fsync(temporaryFd);
+        const int flushError = flushResult == 0 ? 0 : errno;
+        ::close(temporaryFd);
+        if (flushResult != 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "AsyncDatabase: durable flush failed for '%s': %s",
+                            temporary.string().c_str(), std::strerror(flushError));
+            std::error_code removeError;
+            std::filesystem::remove(temporary, removeError);
+            return false;
+        }
+#endif
 
         // Replace in one step so the destination is never missing: std::filesystem::rename
         // does not overwrite on Windows, where MoveFileEx does.
@@ -606,7 +690,10 @@ namespace Spark::Persistence
                             m_dbPath.c_str(), temporary.string().c_str(), replaceError.message().c_str());
             std::error_code removeError;
             std::filesystem::remove(temporary, removeError);
+            return false;
         }
+
+        return true;
     }
 
     void SQLiteConnection::LoadFromDisk()
@@ -975,8 +1062,15 @@ namespace Spark::Persistence
 
                         if (allSucceeded)
                         {
-                            conn->CommitTransaction();
-                            result.success = true;
+                            if (conn->CommitTransaction())
+                            {
+                                result.success = true;
+                            }
+                            else
+                            {
+                                result.success = false;
+                                result.errorMessage = "Failed to commit transaction";
+                            }
                         }
                         else
                         {

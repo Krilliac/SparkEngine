@@ -1,6 +1,7 @@
 {
   "version": 2,
   "description": "Authoritative supply-chain content lockfile. Verified by tools/check-supply-chain.py on every CI run. Update with: python tools/check-supply-chain.py --update",
+  "exceptions": [],
   "submodule_gitlinks": {
     "ThirdParty/AI/recastnavigation": "9f4ce64458dfae86e1239c525ddc219c4e9e06f1",
     "ThirdParty/ECS/entt": "85c6bba014049b5de8fad49d25424df2f1f6a8c1",
@@ -362,9 +363,74 @@
     ],
     "microsoft/setup-msbuild": [
       "30375c66a4eea26614e0d39710365f22f8b0af57"
-    ],
-    "softprops/action-gh-release": [
-      "3d0d9888cb7fd7b750713d6e236d1fcb99157228"
     ]
+  },
+  "license_policy": {
+    "dependencies": {
+      "AngelScript": {
+        "declared": "zlib",
+        "spdx": "Zlib"
+      },
+      "Dear ImGui": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "EnTT": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "Jolt Physics": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "RecastNavigation": {
+        "declared": "zlib",
+        "spdx": "Zlib"
+      },
+      "SDL2": {
+        "declared": "zlib",
+        "spdx": "Zlib"
+      },
+      "VulkanMemoryAllocator": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "cgltf": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "glad": {
+        "declared": "MIT and Apache-2.0",
+        "spdx": "MIT AND Apache-2.0"
+      },
+      "miniaudio": {
+        "declared": "Public Domain / MIT-0",
+        "spdx": "Unlicense OR MIT-0"
+      },
+      "miniz": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "nlohmann/json": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "stb_image": {
+        "declared": "Public Domain / MIT",
+        "spdx": "MIT OR Unlicense"
+      },
+      "tinyexr": {
+        "declared": "BSD-3-Clause",
+        "spdx": "BSD-3-Clause"
+      },
+      "tinyobjloader": {
+        "declared": "MIT",
+        "spdx": "MIT"
+      },
+      "zstd": {
+        "declared": "BSD-3-Clause (library, upstream tools are dual-licensed)",
+        "spdx": "BSD-3-Clause"
+      }
+    }
   }
 }

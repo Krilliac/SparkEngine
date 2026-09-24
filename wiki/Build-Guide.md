@@ -25,6 +25,22 @@ cmake --build --preset windows-release
 ctest --test-dir build/windows-release -C Release --output-on-failure --no-tests=error
 ```
 
+For a reproducible native configure, keep one CMake executable, generator, and
+MSVC toolset associated with a build directory. Do not configure the same
+directory concurrently or switch between the Visual Studio-bundled CMake and a
+standalone CMake installation in place: compiler-identification and feature
+metadata are generated state, and an interrupted or competing configure can
+leave that state incomplete. After changing any of those inputs, start from a
+new directory or explicitly refresh the preset directory:
+
+```powershell
+cmake --fresh --preset windows-release
+```
+
+The Windows preset selects Visual Studio 17 2022, x64, and v143; it does not
+pin the patch version of CMake, MSVC, or the Windows SDK. Record those exact
+versions separately for release certification.
+
 ```bash
 # Linux
 cmake --preset linux-gcc-release

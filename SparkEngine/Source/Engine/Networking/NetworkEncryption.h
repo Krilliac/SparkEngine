@@ -1,19 +1,31 @@
 /**
  * @file NetworkEncryption.h
- * @brief Legacy XOR/FNV packet-format prototype (not cryptography)
+ * @brief ChaCha20-Poly1305 (RFC 8439) authenticated packet channel plus traffic-control helpers
  * @author Spark Engine Team
  * @date 2026
  *
- * Provides experimental packet-obfuscation helpers using an XOR-based stream
- * construction. This is not cryptographic confidentiality or authentication,
- * is not the active NetworkManager wire path, and must not protect credentials
- * or remotely exposed production game traffic.
+ * Replaces the former XOR keystream + 32-bit FNV tag prototype. Packets are
+ * sealed with the IETF ChaCha20-Poly1305 AEAD construction from RFC 8439,
+ * pinned by the RFC's published known-answer vectors in
+ * Tests/TestNET100TransportReal.cpp.
  *
- * The encryption/HMAC/session-key names are legacy compatibility names. The
- * implementation uses predictable XOR state mixing and a short keyed FNV tag;
- * attackers can forge or recover it. Sequence and token helpers are local
- * equality/duplicate filters, not authenticated peer admission or replay
- * protection. Only the independent rate limiter is suitable as traffic control.
+ * Security properties provided by SecureChannel (each one is exercised by a
+ * production-linked test):
+ *  - confidentiality and integrity of the payload, the caller's associated
+ *    data, and the packet header (version, key epoch, sequence);
+ *  - per-direction keys derived from one shared secret, so a packet reflected
+ *    back to its sender does not authenticate;
+ *  - nonce uniqueness by construction: the sender owns a strictly increasing
+ *    sequence counter and refuses to seal once it is exhausted;
+ *  - authenticated replay rejection: the sliding window is only updated after
+ *    the tag verifies, so forged packets cannot poison it;
+ *  - forward key rotation (epoch + one-way HKDF ratchet);
+ *  - fail-closed version handling: there is no plaintext or legacy mode, and
+ *    any header version other than SECURE_TRANSPORT_VERSION is rejected.
+ *
+ * Not provided here (tracked under NET-100): the key-agreement handshake that
+ * produces the shared secret, wiring into NetworkManager's live UDP path, and
+ * independent review of this in-house implementation of the RFC primitive.
  *
  * Build: Compiled when ENABLE_NETWORKING is defined.
  */
@@ -23,7 +35,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
-#include <string>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -34,79 +46,211 @@ namespace Spark::Net
     // Constants
     // ============================================================================
 
-    constexpr size_t SESSION_KEY_SIZE = 32; ///< Legacy XOR state size; not a cryptographic key guarantee.
-    constexpr size_t NONCE_SIZE = 8;        ///< Serialized sequence bytes; not a secure nonce.
-    constexpr size_t HMAC_SIZE = 4;         ///< Legacy name for a forgeable 32-bit keyed FNV tag.
-    constexpr size_t TOKEN_SIZE = 16;       ///< Prototype random-byte token size.
-    constexpr size_t ENCRYPTION_OVERHEAD = NONCE_SIZE + HMAC_SIZE; ///< Legacy packet-format overhead.
+    constexpr size_t SESSION_KEY_SIZE = 32; ///< ChaCha20 key / shared-secret size (256-bit).
+    constexpr size_t AEAD_NONCE_SIZE = 12;  ///< RFC 8439 96-bit nonce.
+    constexpr size_t AEAD_TAG_SIZE = 16;    ///< Full 128-bit Poly1305 tag (never truncated).
+    constexpr size_t TOKEN_SIZE = 16;       ///< CSPRNG connection-token size.
 
-    // ============================================================================
-    // Session Key
-    // ============================================================================
+    constexpr uint8_t SECURE_TRANSPORT_VERSION = 1;  ///< Only accepted wire version; no downgrade path exists.
+    constexpr size_t SECURE_HEADER_SIZE = 1 + 1 + 8; ///< [version][key epoch][sequence u64 LE].
+    constexpr size_t SECURE_PACKET_OVERHEAD = SECURE_HEADER_SIZE + AEAD_TAG_SIZE;
+    constexpr size_t SECURE_MAX_PAYLOAD = 64 * 1024; ///< Upper bound on a sealed payload (packet bounds).
 
     using SessionKey = std::array<uint8_t, SESSION_KEY_SIZE>;
+    using AeadNonce = std::array<uint8_t, AEAD_NONCE_SIZE>;
     using ConnectionToken = std::array<uint8_t, TOKEN_SIZE>;
 
-    /**
-     * @brief Generate pseudo-random state for the XOR prototype
-     * @return Prototype state; not suitable as a production encryption key
-     */
-    SessionKey GenerateSessionKey();
-
-    /**
-     * @brief Generate pseudo-random bytes for prototype equality checks
-     * @return Prototype token bytes; not peer authentication
-     */
-    ConnectionToken GenerateConnectionToken();
-
     // ============================================================================
-    // Legacy packet transformation API
+    // Key / token generation (fail closed)
     // ============================================================================
 
     /**
-     * @brief Apply the legacy XOR/FNV packet transform
-     *
-     * Prepends sequence bytes, XOR-obfuscates the payload, and appends a
-     * forgeable keyed FNV tag. This provides no security boundary.
-     *
-     * Output layout: [sequence (8B)] [obfuscated payload] [prototype tag (4B)]
-     *
-     * @param key         Prototype XOR state
-     * @param sequence    Packet sequence number
-     * @param payload     Input payload data
-     * @return Legacy transformed packet
+     * @brief Fill a session secret from the OS CSPRNG
+     * @param outKey Receives the key; zeroed on failure
+     * @return false if the CSPRNG failed; callers must not proceed with the key
      */
-    std::vector<uint8_t> EncryptPacket(const SessionKey& key, uint64_t sequence, const std::vector<uint8_t>& payload);
+    [[nodiscard]] bool GenerateSessionKey(SessionKey& outKey);
 
     /**
-     * @brief Reverse the legacy transform after checking its forgeable tag
-     *
-     * A successful tag comparison is not authentication or integrity against an attacker.
-     *
-     * @param key         Prototype XOR state
-     * @param packet      Legacy transformed packet
-     * @param outPayload  Recovered payload on success
-     * @param outSequence Extracted sequence value
-     * @return true if the packet shape and prototype tag matched
+     * @brief Fill a connection token from the OS CSPRNG
+     * @param outToken Receives the token; zeroed on failure
+     * @return false if the CSPRNG failed
      */
-    bool DecryptPacket(const SessionKey& key, const std::vector<uint8_t>& packet, std::vector<uint8_t>& outPayload,
-                       uint64_t& outSequence);
-
-    // ============================================================================
-    // Prototype token equality
-    // ============================================================================
+    [[nodiscard]] bool GenerateConnectionToken(ConnectionToken& outToken);
 
     /**
-     * @brief Constant-time byte equality for two prototype tokens
-     *
-     * This helper does not establish token secrecy, bind a token to an endpoint,
-     * or integrate with NetworkManager admission; it does not authenticate peers.
-     *
+     * @brief Constant-time token equality (no early exit on mismatch)
      * @param expected The token the server generated
      * @param received The token the client sent
-     * @return true if tokens match (constant-time comparison)
+     * @return true if the tokens are byte-identical
      */
-    bool ValidateToken(const ConnectionToken& expected, const ConnectionToken& received);
+    [[nodiscard]] bool ValidateToken(const ConnectionToken& expected, const ConnectionToken& received);
+
+    /**
+     * @brief Constant-time byte-span equality; a length mismatch returns false
+     * @param a First span
+     * @param b Second span
+     * @return true if both spans have the same length and contents
+     */
+    [[nodiscard]] bool ConstantTimeEqual(std::span<const uint8_t> a, std::span<const uint8_t> b);
+
+    // ============================================================================
+    // Raw RFC 8439 AEAD
+    // ============================================================================
+
+    /**
+     * @brief ChaCha20-Poly1305 seal (RFC 8439 section 2.8)
+     *
+     * Stateless: the caller is responsible for never reusing a (key, nonce)
+     * pair. Transport code should use SecureChannel, which guarantees that.
+     *
+     * @param key       256-bit key
+     * @param nonce     96-bit nonce, unique per key
+     * @param aad       Associated data authenticated but not encrypted
+     * @param plaintext Data to encrypt
+     * @return ciphertext followed by the 16-byte tag
+     */
+    [[nodiscard]] std::vector<uint8_t> ChaCha20Poly1305Seal(const SessionKey& key, const AeadNonce& nonce,
+                                                            std::span<const uint8_t> aad,
+                                                            std::span<const uint8_t> plaintext);
+
+    /**
+     * @brief ChaCha20-Poly1305 open; the tag is verified in constant time before decrypting
+     * @param key              256-bit key
+     * @param nonce            96-bit nonce used to seal
+     * @param aad              Associated data used to seal
+     * @param ciphertextAndTag Ciphertext followed by the 16-byte tag
+     * @param outPlaintext     Receives the plaintext on success; cleared on failure
+     * @return false on truncation or tag mismatch
+     */
+    [[nodiscard]] bool ChaCha20Poly1305Open(const SessionKey& key, const AeadNonce& nonce, std::span<const uint8_t> aad,
+                                            std::span<const uint8_t> ciphertextAndTag,
+                                            std::vector<uint8_t>& outPlaintext);
+
+    // ============================================================================
+    // Sequence replay window
+    // ============================================================================
+
+    /**
+     * @brief Sliding-window duplicate/too-old sequence filter
+     *
+     * On its own this is only a duplicate filter. SecureChannel consults it
+     * after the AEAD tag verifies (sequence is authenticated header data), which
+     * is what makes it replay protection.
+     */
+    class ReplayProtection
+    {
+      public:
+        static constexpr size_t WINDOW_SIZE = 256;
+
+        ReplayProtection() = default;
+
+        /**
+         * @brief Check whether a sequence would be accepted, without recording it
+         * @param sequence The packet sequence number
+         * @return true if the sequence is non-zero, not a duplicate, and inside the window
+         */
+        [[nodiscard]] bool IsFresh(uint64_t sequence) const;
+
+        /**
+         * @brief Record a sequence if it is fresh
+         * @param sequence The packet sequence number
+         * @return true if this is a new, valid sequence number
+         */
+        bool Accept(uint64_t sequence);
+
+        /** @brief Reset filter state */
+        void Reset();
+
+      private:
+        uint64_t m_maxSequence = 0;
+        std::array<bool, WINDOW_SIZE> m_window{};
+    };
+
+    // ============================================================================
+    // Authenticated packet channel
+    // ============================================================================
+
+    /** @brief Which end of the connection a SecureChannel represents (selects key direction). */
+    enum class ChannelRole : uint8_t
+    {
+        Client,
+        Server
+    };
+
+    /** @brief Outcome of SecureChannel::Open. Every value other than Ok means the packet was dropped. */
+    enum class OpenResult : uint8_t
+    {
+        Ok,
+        Malformed,            ///< Truncated, oversized, or zero sequence
+        UnsupportedVersion,   ///< Header version is not SECURE_TRANSPORT_VERSION (downgrade attempt)
+        UnknownKeyEpoch,      ///< Epoch is neither current nor the next rotation
+        AuthenticationFailed, ///< Tag mismatch: tamper, wrong key, wrong direction, or wrong AAD
+        Replayed              ///< Authenticated, but the sequence was already seen or is outside the window
+    };
+
+    /**
+     * @brief One authenticated, encrypted, replay-protected packet channel
+     *
+     * Both peers construct a SecureChannel from the same shared secret with
+     * opposite roles. Keys are derived per direction with HKDF-SHA256, and
+     * rotated forward with a one-way ratchet. Sealed packet layout:
+     * [version 1B][key epoch 1B][sequence 8B LE][ciphertext][tag 16B], where the
+     * 10-byte header plus the caller's AAD are authenticated.
+     */
+    class SecureChannel
+    {
+      public:
+        /**
+         * @brief Derive per-direction keys from a shared secret
+         * @param sharedSecret 256-bit secret agreed by both peers
+         * @param role         This endpoint's role
+         */
+        SecureChannel(const SessionKey& sharedSecret, ChannelRole role);
+        ~SecureChannel();
+
+        SecureChannel(const SecureChannel&) = delete;
+        SecureChannel& operator=(const SecureChannel&) = delete;
+
+        /**
+         * @brief Encrypt and authenticate one payload with the next sequence number
+         * @param payload   Plaintext (at most SECURE_MAX_PAYLOAD bytes)
+         * @param outPacket Receives the sealed packet
+         * @param aad       Extra associated data (e.g. message type) both sides must agree on
+         * @return false if the payload is too large or the sequence space is exhausted (rotate first)
+         */
+        [[nodiscard]] bool Seal(std::span<const uint8_t> payload, std::vector<uint8_t>& outPacket,
+                                std::span<const uint8_t> aad = {});
+
+        /**
+         * @brief Authenticate, replay-check, and decrypt one packet
+         * @param packet     Sealed packet from the peer
+         * @param outPayload Receives the plaintext when the result is Ok; cleared otherwise
+         * @param aad        Extra associated data; must match the sender's
+         * @return OpenResult::Ok or the reason the packet was dropped
+         */
+        [[nodiscard]] OpenResult Open(std::span<const uint8_t> packet, std::vector<uint8_t>& outPayload,
+                                      std::span<const uint8_t> aad = {});
+
+        /**
+         * @brief Ratchet the send key forward and restart the sequence at 1
+         * @return false once the 8-bit epoch space is exhausted (establish a new session)
+         */
+        [[nodiscard]] bool RotateSendKey();
+
+        /** @brief Current send key epoch */
+        [[nodiscard]] uint8_t GetSendEpoch() const { return m_sendEpoch; }
+        /** @brief Current receive key epoch */
+        [[nodiscard]] uint8_t GetReceiveEpoch() const { return m_recvEpoch; }
+
+      private:
+        SessionKey m_sendKey{};
+        SessionKey m_recvKey{};
+        uint8_t m_sendEpoch = 0;
+        uint8_t m_recvEpoch = 0;
+        uint64_t m_nextSendSequence = 1;
+        ReplayProtection m_replay;
+    };
 
     // ============================================================================
     // Rate Limiter
@@ -163,41 +307,6 @@ namespace Spark::Net
         uint32_t m_maxPacketsPerSecond;                         ///< Hard limit before packets are dropped.
         uint32_t m_burstAllowance;                              ///< Extra packets allowed in short bursts.
         std::unordered_map<uint64_t, ClientRateInfo> m_clients; ///< Per-client rate tracking (keyed by address hash).
-    };
-
-    // ============================================================================
-    // Sequence duplicate filter
-    // ============================================================================
-
-    /**
-     * @brief Sliding-window duplicate sequence filter
-     *
-     * Tracks received sequence numbers and rejects previously seen or too-old
-     * values. Without authenticated packets an attacker can forge sequences, so
-     * this class is not a production replay-defense boundary.
-     */
-    class ReplayProtection
-    {
-      public:
-        static constexpr size_t WINDOW_SIZE = 256;
-
-        ReplayProtection() = default;
-
-        /**
-         * @brief Check whether a sequence number is new within the local window
-         * @param sequence The packet sequence number
-         * @return true if this is a new, valid sequence number
-         */
-        bool Accept(uint64_t sequence);
-
-        /**
-         * @brief Reset duplicate-sequence filter state
-         */
-        void Reset();
-
-      private:
-        uint64_t m_maxSequence = 0;
-        std::array<bool, WINDOW_SIZE> m_window{};
     };
 
 } // namespace Spark::Net

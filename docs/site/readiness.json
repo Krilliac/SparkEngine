@@ -14,6 +14,28 @@
       "The repository-generated site bundle and handoff match the exact tested commit."
     ]
   },
+  "predecessorRelease": {
+    "id": "v0.9.0-predecessor",
+    "profileId": "stable-v1",
+    "state": "blocked",
+    "owner": "unassigned",
+    "signOffEvidence": [],
+    "sourceCommitEvidence": {
+      "baselineCommit": "",
+      "reviewPath": "docs/readiness/ENGINE_READINESS_HANDOFF.md"
+    },
+    "requiredGateIds": ["G00", "G01", "G02", "G03", "G04", "G05", "G06", "G07", "G08", "G09", "G10", "G13", "G14", "G15", "G16", "G18"],
+    "blockingWorkItemIds": ["ASSET-220", "BLD-100", "CI-100", "CI-110", "CI-120", "DOC-400", "DOC-410", "EDT-210", "ENG-220", "GOV-400", "HEAD-220", "INST-130", "INST-131", "LIFE-200", "MOD-290", "MOD-310", "OPS-100", "PERF-100", "PLT-200", "RDY-000", "RDY-010", "RDY-020", "REL-100", "REL-110", "REL-190", "REL-192", "REL-193", "RHI-210", "SAVE-230", "SDK-240", "SEC-100", "SEC-110", "SEC-120"],
+    "qualificationSubstitutions": {
+      "INST-131": "INST-132",
+      "REL-192": "REL-191"
+    },
+    "publicationFinalization": {
+      "workItemIds": ["REL-193"],
+      "gateId": "G18",
+      "environment": "stable-release"
+    }
+  },
   "statusPromotionRules": [
     "Implementation, verification, support, and release are independent dimensions; never infer one from another.",
     "A capability cannot be release-ready while a required gate is not passing or a blocking work item is open.",
@@ -1013,10 +1035,10 @@
       "verification": "unit-tested",
       "support": "supported",
       "release": "blocked",
-      "summary": "SparkGameFPS is the declared first-party single-player vertical slice of the stable-v1 release profile. It is in scope and intended to be supported; it is not certified. Its release state is blocked and it holds the whole profile at blocked until its gates pass. Multiplayer is outside the profile and its existing multiplayer path is fake, so it is not release evidence for anything.",
+      "summary": "SparkGameFPS is the declared first-party single-player vertical slice of the stable-v1 release profile. It is in scope and intended to be supported; it is not certified. Its release state is blocked and it holds the whole profile at blocked until its gates pass. Multiplayer is outside the profile and its existing multiplayer path is fake, so it is not release evidence for anything. The installed public entrypoint consumer and source-boundary contract now pass, but the complete FPS DLL still uses private engine headers and SparkEngineLib.",
       "limitations": [
         "Not certified: no same-commit author-cook-package-install-run evidence for the slice",
-        "Builds against SparkEngineLib with the engine source tree on its include path rather than the public SDK surface alone, so the public-API-only requirement is unmet",
+        "The production DLL still builds against SparkEngineLib and private engine-source include paths; the installed entrypoint consumer and source-boundary contract pass, but the complete public-API-only requirement is unmet",
         "Fake/in-memory multiplayer state",
         "No production two-client authoritative loop",
         "Content gaps remain; quicksave/quickload now persist the declared local profile (slot fps_quicksave) through the engine context's SaveSystem, and the single-player death -> respawn -> score loop is complete (Tests/TestSparkGameFPSLoopReal.cpp), but installed-package smoke has no hosted exact-SHA proof and the module still initializes gameplay only (GPU work skipped) without a D3D11 device"
@@ -1030,7 +1052,7 @@
         {
           "type": "source",
           "path": "GameModules/SparkGameFPS/CMakeLists.txt",
-          "label": "Links SparkEngineLib and the engine source include path, not the public SDK alone"
+          "label": "Production DLL still links SparkEngineLib and private engine-source headers; entrypoint consumer is public-SDK-only"
         }
       ],
       "requiredGateIds": [
@@ -1296,6 +1318,7 @@
         "BLD-100",
         "REL-100",
         "INST-130",
+        "INST-131",
         "REL-200"
       ]
     },
@@ -1335,7 +1358,7 @@
       "area": "security",
       "state": "blocked",
       "blocking": true,
-      "summary": "Stable-v1 remote-administration and file/package parser paths are unclosed. Packet transport and script-language campaigns remain with the excluded networking and scripting surfaces.",
+      "summary": "Stable-v1 remote-administration and file/package parser paths are unclosed. The structural policy inventory records 3 production-bound fuzzed parsers, 3 corpora, 102 blocked parser targets, and 151 deferred candidates; exact-SHA hosted sanitizer evidence and runtime coverage remain open. Packet transport and script-language campaigns remain with the excluded networking and scripting surfaces.",
       "acceptanceCriteria": [
         "Threat model and security ownership are current",
         "Shipped remote administration is disabled by default and cannot expose credentials",
@@ -1625,6 +1648,7 @@
     },
     {
       "id": "G17",
+      "completionPhase": "publication-finalization",
       "name": "Release rehearsal and sign-off",
       "area": "release",
       "state": "blocked",
@@ -1645,14 +1669,33 @@
         }
       ],
       "blockingWorkItemIds": [
+        "REL-190",
+        "REL-192",
         "REL-200"
       ]
+    },
+    {
+      "id": "G18",
+      "completionPhase": "publication-finalization",
+      "name": "Predecessor immutable publication and independent acceptance",
+      "area": "release",
+      "state": "blocked",
+      "blocking": true,
+      "summary": "The reviewed v0.9.0 predecessor has not been signed, published immutably, and independently accepted.",
+      "acceptanceCriteria": ["REL-191 common qualification and bootstrap rehearsal pass at the reviewed predecessor SHA before publication", "Krilliac gives protected owner approval with administrative bypass disabled", "Published immutable assets are independently downloaded and verified without claiming N-1 upgrade coverage"],
+      "evidence": [{"type": "workflow", "path": ".github/workflows/release.yml", "label": "Release workflow"}],
+      "blockingWorkItemIds": ["INST-132", "REL-191", "REL-193"]
     }
   ],
   "releaseProfiles": [
     {
       "id": "stable-v1",
       "name": "Stable v1",
+      "publicationFinalization": {
+        "workItemIds": ["REL-200"],
+        "gateId": "G17",
+        "environment": "stable-release"
+      },
       "state": "blocked",
       "owner": "unassigned",
       "summary": "The single product shape SparkEngine intends to declare stable first: a Windows 11 x64 host built with the MSVC v143 toolset line, rendering through Direct3D 11 with NullRHI as the headless path, gameplay authored in C++ game modules, and delivered as one installed first-party single-player vertical slice, SparkGameFPS, that must build through the public SDK surface alone. The complete required Windows build-product set is enumerated below and includes SparkEditor, SparkConsole, shader compiler, crash reporter, cooker, automation host, launcher, build tool, and installer; those products are in profile but remain blocked and uncertified. Constrained LAN play is optional and is not required. Every capability outside this profile is experimental or unsupported and must never be framed as a supported release surface. Nothing in this profile is certified while its state is blocked.",
@@ -1860,7 +1903,7 @@
           "architecture": "x64",
           "toolset": "v143",
           "packageDirectory": "build/build-matrix-stage/lib/cmake/SparkEngine",
-          "expectedEngineVersion": "1.0.0",
+          "expectedEngineVersion": "0.9.0",
           "description": "A separate configure against an installed SparkEngine package that proves public SDK headers, imports, and module linkage without source-tree include leakage."
         }
       ],
@@ -2136,6 +2179,11 @@
           "name": "SPARK_DOUBLE_PRECISION_PHYSICS",
           "applicability": "shared",
           "reason": "Large-world double-precision physics is shared engine breadth, not a requirement of the first stable FPS slice."
+        },
+        {
+          "name": "SPARK_ENABLE_FUZZ_TARGETS",
+          "applicability": "outside",
+          "reason": "Linux/Clang libFuzzer targets are release-validation tooling and are outside the Windows stable-v1 product profile."
         }
       ],
       "supportedHosts": [
@@ -2236,6 +2284,10 @@
         {
           "gateId": "G12",
           "reason": "The profile is single-player and service-free, so production multiplayer transport and online services are out of scope and declared experimental or unsupported."
+        },
+        {
+          "gateId": "G18",
+          "reason": "G18 qualifies only the separately staged v0.9.0 predecessor; stable-v1 uses G17 and retains its own N-1 gate through REL-192."
         }
       ],
       "blockingWorkItemIds": [
@@ -2251,6 +2303,7 @@
         "GOV-400",
         "HEAD-220",
         "INST-130",
+        "INST-131",
         "LIFE-200",
         "MOD-290",
         "MOD-310",
@@ -2262,6 +2315,8 @@
         "RDY-020",
         "REL-100",
         "REL-110",
+        "REL-190",
+        "REL-192",
         "REL-200",
         "RHI-210",
         "SAVE-230",
@@ -2274,7 +2329,7 @@
         "Windows 11 client-host certification does not exist; the build-windows-vs2022 lane runs on the hosted windows-2022 image, so host certification remains PLT-200 work rather than published evidence.",
         "No Shipping-configuration artifact is signed, checksummed, attested, installed, upgraded, or rollback-tested at a single commit.",
         "The first-party slice SparkGameFPS is in the profile but uncertified: its release state is blocked and it holds this profile at blocked (MOD-310).",
-        "SparkGameFPS builds against SparkEngineLib with the engine source tree on its include path, so the public-API-only requirement is unmet (SDK-240, MOD-310).",
+        "The installed SparkGameFPS entrypoint consumer and source-boundary contract pass, but the complete production DLL still builds against SparkEngineLib and private engine-source headers, so the public-API-only requirement remains unmet (SDK-240, MOD-310).",
         "No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200).",
         "The Windows Shipping producer records its File API capture as structural evidence and reports producer authority unavailable by design: a same-job GitHub OIDC audience proves only the mutable job identity, not CMake execution. The protected Build Matrix Verifier attests that evidence from the Working checkout, and no attested receipt exists yet for a Working commit (CI-120).",
         "The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.",
@@ -2475,6 +2530,12 @@
         "workItemIds": [
           "GOV-400",
           "DOC-400",
+          "INST-131",
+          "INST-132",
+          "REL-190",
+          "REL-191",
+          "REL-192",
+          "REL-193",
           "REL-200"
         ]
       }

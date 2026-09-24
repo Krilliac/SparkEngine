@@ -4,8 +4,9 @@
  *
  * Standalone application launched by SparkEngine at startup. Monitors the
  * engine process and, when a crash is detected, shows a user-facing dialog
- * with consent, description input, screenshot selection, and local report
- * preparation. Network delivery is not implemented by this executable.
+ * with consent, screenshot selection, and local report review. A separate
+ * user-local opt-in may create a metadata-only GitHub Issue via the user's
+ * authenticated GitHub CLI. Manifest fields cannot enable network delivery.
  *
  * Communication:
  *   Engine writes a crash manifest file (JSON) to a known path, then signals
@@ -22,7 +23,9 @@
 #pragma once
 
 #include <cstdint>
+#include <iosfwd>
 #include <string>
+#include <string_view>
 
 namespace SparkCrashReporter
 {
@@ -71,15 +74,26 @@ namespace SparkCrashReporter
     /// Parse a crash manifest from a JSON file
     bool LoadManifest(const std::string& path, CrashManifest& out);
 
+    /// Parse bounded manifest JSON without touching the filesystem or artifacts.
+    /// The file/path trust boundary remains enforced by LoadManifest.
+    bool ParseManifestJson(std::string_view json, CrashManifest& out);
+
     /// Write a crash manifest to a JSON file
     bool WriteManifest(const std::string& path, const CrashManifest& manifest);
 
     /// Build the privacy disclosure shown before crash-report consent.
     std::string BuildConsentMessage(const CrashManifest& manifest);
 
+    /// Read one console consent answer. @p emptyMeansYes is the prompt's
+    /// documented default for a bare Enter.
+    bool ReadConsentAnswer(std::istream& input, bool emptyMeansYes);
+
     /// Run the crash reporter UI and prepare the local report
     /// Returns 0 on success, non-zero on error
     int RunCrashReporter(const CrashManifest& manifest);
+
+    /// Show bounded, local automatic-Issue receipts from a crash directory.
+    int ShowAutoIssueStatus(const std::string& crashDirectory);
 
     /// Watch for the engine process to crash (used in watchdog mode)
     /// Consumes sequential manifests and returns after the engine exits

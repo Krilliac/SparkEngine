@@ -37,6 +37,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #include <algorithm>
 #include <filesystem>
+#include <string_view>
 
 #include "Utils/LogMacros.h"
 
@@ -376,6 +377,75 @@ void Game::RefreshGraphicsSettings()
 // ENHANCED SCENE MANAGEMENT METHODS - Full Implementation
 // ============================================================================
 
+void Game::RefreshAuthoredSceneRuntimeState()
+{
+    if (!m_sceneManager)
+        return;
+
+    const SceneNode* authoredCamera = nullptr;
+    for (int i = 0; i < m_sceneManager->GetNodeCount(); ++i)
+    {
+        const SceneNode* node = m_sceneManager->GetNode(i);
+        if (!node || node->type != "Camera")
+            continue;
+        const auto projection = node->properties.find("projection");
+        if (projection != node->properties.end() && projection->second != "perspective")
+            continue;
+        if (!authoredCamera)
+            authoredCamera = node;
+        const auto main = node->properties.find("isMain");
+        if (main != node->properties.end() && (main->second == "true" || main->second == "1"))
+        {
+            authoredCamera = node;
+            break;
+        }
+    }
+
+    if (m_camera)
+    {
+        m_camera->SetPosition(authoredCamera ? authoredCamera->position : DirectX::XMFLOAT3{0.0f, 2.0f, -20.0f});
+        if (authoredCamera)
+        {
+            m_camera->Console_SetRotation(authoredCamera->rotation.x, authoredCamera->rotation.y,
+                                          authoredCamera->rotation.z);
+            const auto nearProperty = authoredCamera->properties.find("nearPlane");
+            const auto farProperty = authoredCamera->properties.find("farPlane");
+            float nearPlane = 0.0f;
+            float farPlane = 0.0f;
+            if (nearProperty != authoredCamera->properties.end() && farProperty != authoredCamera->properties.end() &&
+                ParseAuthoredFiniteFloat(nearProperty->second, nearPlane) &&
+                ParseAuthoredFiniteFloat(farProperty->second, farPlane) && nearPlane >= 0.01f && nearPlane <= 10.0f &&
+                farPlane >= 100.0f && farPlane <= 10000.0f && nearPlane < farPlane)
+            {
+                m_camera->Console_SetClippingPlanes(nearPlane, farPlane);
+            }
+        }
+        if (m_player)
+            m_player->SetPosition(m_camera->GetPosition());
+    }
+
+    // Rebuild authored spawn bindings while preserving the existing player,
+    // score, and event subscriptions.  InitializeRespawnAndVehicles creates a
+    // fresh spawn state and reinstalls the player's death callback.
+    if (m_respawnSystem)
+        InitializeRespawnAndVehicles();
+
+    if (m_waveSpawner)
+    {
+        std::vector<DirectX::XMFLOAT3> waveSpawns;
+        for (int i = 0; i < m_sceneManager->GetNodeCount(); ++i)
+        {
+            const SceneNode* node = m_sceneManager->GetNode(i);
+            if (!node || node->type != "SpawnPoint")
+                continue;
+            const auto tag = node->properties.find("tag");
+            if (tag != node->properties.end() && tag->second == "wave_spawn")
+                waveSpawns.push_back(node->position);
+        }
+        m_waveSpawner->Initialize(waveSpawns);
+    }
+}
+
 bool Game::LoadScene(const std::string& scenePath)
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Loading scene via console integration", L"INFO");
@@ -388,15 +458,46 @@ bool Game::LoadScene(const std::string& scenePath)
 
     try
     {
-        // Convert string to wstring for scene manager
-        std::wstring wScenePath(scenePath.begin(), scenePath.end());
+        std::filesystem::path trustedScenePath;
+        std::string pathError;
+        if (!Spark::FPSAssets::ResolveScenePath(scenePath, trustedScenePath, pathError))
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"Scene load rejected: " + std::wstring(pathError.begin(), pathError.end()),
+                                     L"ERROR");
+            return false;
+        }
+        const std::wstring wScenePath = trustedScenePath.wstring();
         bool success = m_sceneManager->LoadScene(wScenePath);
 
         if (success)
         {
-            // Clear existing game objects if loading a new scene
+            std::error_code arenaIdentityError;
+            const bool isBuiltInArena =
+                std::filesystem::equivalent(trustedScenePath, Spark::FPSAssets::Root() / "Scenes" / "level1.scene",
+                                            arenaIdentityError) &&
+                !arenaIdentityError;
+            BindSceneMaterialRoots();
+            // A successful replacement discards objects from the old level.
+            // The built-in FPS level also has a legacy combat-arena layer
+            // created at startup; recreate that same layer on reload instead
+            // of leaving the player in a mostly empty blue scene.
             m_enemies.clear();
             m_gameObjects.clear();
+            if (m_renderingEnabled && isBuiltInArena)
+            {
+                CreateCombatArena();
+                for (auto& object : m_gameObjects)
+                {
+                    if (auto* model = dynamic_cast<ModelObject*>(object.get()))
+                        model->SetGraphicsEngine(m_graphics);
+                }
+                BindSceneMaterialRoots();
+            }
+            // Invalidate only after the replacement scene and its procedural
+            // layer have their trusted roots bound, so the next render parses
+            // each newly referenced material from disk.
+            InvalidateSceneBasicMaterials();
+            RefreshAuthoredSceneRuntimeState();
 
             std::wstring loadMsg = L"Scene loaded successfully: " + wScenePath;
             LOG_TO_CONSOLE_IMMEDIATE(loadMsg, L"SUCCESS");
@@ -428,15 +529,43 @@ bool Game::SaveScene(const std::string& scenePath)
         return false;
     }
 
-    std::wstring wScenePath(scenePath.begin(), scenePath.end());
-    bool saved = m_sceneManager->SaveScene(wScenePath);
+    // Accept the same spellings as scene_load ("x.scene", "Scenes/x.scene",
+    // "Assets/Scenes/x.scene") and write only below the trusted FPS scene
+    // directory. SaveSceneWithinRoot rejects absolute paths, traversal and any
+    // symlink/junction component, and is race-free against a component being
+    // swapped mid-save. Only .scene is accepted so scene_load can reload it.
+    if (scenePath.empty() || scenePath.size() > 4096 || scenePath.find('\0') != std::string::npos)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save rejected: malformed scene path", L"ERROR");
+        return false;
+    }
+    std::string normalized = scenePath;
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    for (const std::string_view prefix : {std::string_view("Assets/Scenes/"), std::string_view("Scenes/")})
+    {
+        if (normalized.starts_with(prefix))
+        {
+            normalized.erase(0, prefix.size());
+            break;
+        }
+    }
+    const std::filesystem::path relative(
+        std::u8string(reinterpret_cast<const char8_t*>(normalized.data()), normalized.size()));
+    const std::wstring wScenePath = relative.wstring();
+    if (relative.extension() != ".scene")
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save rejected (expected a relative .scene path): " + wScenePath, L"ERROR");
+        return false;
+    }
+
+    const bool saved = m_sceneManager->SaveSceneWithinRoot(Spark::FPSAssets::Root() / "Scenes", relative);
     if (saved)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: " + wScenePath, L"SUCCESS");
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: Scenes/" + wScenePath, L"SUCCESS");
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save failed: " + wScenePath, L"ERROR");
+        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save failed or was refused: " + wScenePath, L"ERROR");
     }
     return saved;
 }
@@ -524,6 +653,24 @@ void Game::CyclePrevClass()
 namespace
 {
 
+    std::string ProceduralMaterialFor(const wchar_t* modelPath, const std::string& name)
+    {
+        if (name == "Center_Building")
+            return "Assets/Materials/Arena_CenterBuilding.json";
+
+        const std::wstring path(modelPath ? modelPath : L"");
+        if (path.find(L"crate.obj") != std::wstring::npos)
+            return "Assets/Materials/Wood.json";
+        if (path.find(L"target.obj") != std::wstring::npos || path.find(L"rifle.obj") != std::wstring::npos ||
+            path.find(L"sniper.obj") != std::wstring::npos || path.find(L"lmg.obj") != std::wstring::npos ||
+            path.find(L"shotgun.obj") != std::wstring::npos || path.find(L"pistol.obj") != std::wstring::npos)
+            return "Assets/Materials/Metal.json";
+        if (path.find(L"building_small.obj") != std::wstring::npos || path.find(L"barrier.obj") != std::wstring::npos ||
+            path.find(L"watchtower.obj") != std::wstring::npos || path.find(L"character.obj") != std::wstring::npos)
+            return "Assets/Materials/Concrete.json";
+        return {};
+    }
+
     /// Helper: create a ModelObject, initialize it, set position/name, and add to the list
     void PlaceModel(const wchar_t* modelPath, const std::string& name, XMFLOAT3 pos, ID3D11Device* device,
                     ID3D11DeviceContext* context, std::vector<std::unique_ptr<GameObject>>& objects,
@@ -535,6 +682,7 @@ namespace
             return;
         obj->SetPosition(pos);
         obj->SetName(name);
+        obj->SetMaterialPath(ProceduralMaterialFor(modelPath, name));
         if (scale.x != 1.0f || scale.y != 1.0f || scale.z != 1.0f)
             obj->SetScale(scale);
         objects.push_back(std::move(obj));
@@ -570,6 +718,7 @@ void Game::CreateCombatArena()
         {
             ground->SetPosition({0.0f, -1.0f, 0.0f});
             ground->SetName("Arena_Ground");
+            ground->SetMaterialPath("Assets/Materials/Terrain_Dirt.json");
             m_gameObjects.push_back(std::move(ground));
         }
     }
@@ -658,6 +807,7 @@ void Game::CreateCombatArena()
             {
                 sphere->SetPosition({cpPositions[i][0], cpPositions[i][1], cpPositions[i][2]});
                 sphere->SetName("ControlPoint_" + std::to_string(i + 1));
+                sphere->SetMaterialPath("Assets/Materials/Metal.json");
                 m_gameObjects.push_back(std::move(sphere));
             }
         }

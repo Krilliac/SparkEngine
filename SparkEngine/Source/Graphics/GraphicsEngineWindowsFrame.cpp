@@ -44,10 +44,16 @@ using Spark::Graphics::PostProcessingPipeline;
 #include <chrono>
 #include <cstdint>
 #include <mutex>
+#include <sstream>
 #include <vector>
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
+
+namespace
+{
+    constexpr const char* kBenchmarkGpuPass = "gfx_benchmark_frame";
+} // namespace
 
 // Centralized logging macros
 #include "../Utils/LogMacros.h"
@@ -80,6 +86,20 @@ void GraphicsEngine::BeginFrame()
     m_sortedDrawList.clear();
     m_constantBufferRing.BeginFrame(m_context.Get());
     m_gpuTimestampQuery.BeginFrame(m_context.Get());
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        if (m_benchmarkActive)
+        {
+            if (m_benchmarkGpuHistoryResetFrames < Spark::Graphics::GPUTimestampQuery::kFrameLatency)
+            {
+                m_gpuTimestampQuery.ResetPassHistory(kBenchmarkGpuPass);
+                ++m_benchmarkGpuHistoryResetFrames;
+            }
+            m_benchmarkGpuTimerId = m_gpuTimestampQuery.BeginTimestamp(m_context.Get(), kBenchmarkGpuPass);
+        }
+        else
+            m_benchmarkGpuTimerId = UINT32_MAX;
+    }
     if (m_shadowAtlas)
         m_shadowAtlas->BeginFrame();
 
@@ -201,6 +221,11 @@ void GraphicsEngine::EndFrame()
             }
         }
         m_constantBufferRing.EndFrame();
+        if (m_benchmarkGpuTimerId != UINT32_MAX)
+        {
+            m_gpuTimestampQuery.EndTimestamp(m_context.Get(), m_benchmarkGpuTimerId);
+            m_benchmarkGpuTimerId = UINT32_MAX;
+        }
         m_gpuTimestampQuery.EndFrame(m_context.Get());
         m_renderTargetPool.Tick();
         if (m_shadowAtlas)
@@ -228,6 +253,17 @@ void GraphicsEngine::EndFrame()
         if (m_context && m_renderTargetView)
             m_context->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(), nullptr);
         m_prePresentHook(m_prePresentHookUser);
+    }
+
+    std::optional<std::string> screenshotFilename;
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        screenshotFilename.swap(m_pendingScreenshotFilename);
+    }
+    if (screenshotFilename)
+    {
+        if (!CaptureScreenshotBeforePresent(*screenshotFilename))
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Queued screenshot failed before Present");
     }
 
     UINT syncInterval = m_settings.vsync ? 1 : 0;
@@ -282,10 +318,74 @@ void GraphicsEngine::EndFrame()
     auto frameTime = std::chrono::duration_cast<std::chrono::microseconds>(frameEndTime - m_frameStartTime);
     auto renderTime = std::chrono::duration_cast<std::chrono::microseconds>(renderEndTime - m_renderStartTime);
 
+    std::string benchmarkResult;
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         m_statistics.frameTime = frameTime.count() / 1000.0f;
         m_statistics.renderTime = renderTime.count() / 1000.0f;
+
+        if (m_benchmarkActive)
+        {
+            if (FAILED(hr))
+            {
+                benchmarkResult = "Benchmark failed: swapchain Present failed; no performance result";
+                m_benchmarkActive = false;
+            }
+            else
+            {
+                const double cpuMs = std::chrono::duration<double, std::milli>(frameEndTime - m_frameStartTime).count();
+                m_benchmarkCpuSamples.Add(cpuMs);
+                ++m_benchmarkPresentedFrames;
+
+                const uint64_t gpuSequence = m_gpuTimestampQuery.GetPassSampleSequence(kBenchmarkGpuPass);
+                if (gpuSequence > m_benchmarkGpuLastSampleSequence)
+                {
+                    const float latestGpuMs = m_gpuTimestampQuery.GetPassTimeMs(kBenchmarkGpuPass);
+                    if (latestGpuMs > 0.0f)
+                        m_benchmarkGpuSamples.Add(latestGpuMs);
+                    m_benchmarkGpuLastSampleSequence = gpuSequence;
+                }
+
+                const double elapsedSeconds =
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - m_benchmarkStart).count();
+                if (elapsedSeconds >= m_benchmarkSeconds)
+                {
+                    std::ostringstream result;
+                    result << "=== Graphics Benchmark (actual presents) ===\n"
+                           << "Elapsed wall time: " << elapsedSeconds << " s\n"
+                           << "Presented frames: " << m_benchmarkPresentedFrames << "\n"
+                           << "Presented FPS: " << m_benchmarkPresentedFrames / elapsedSeconds << "\n"
+                           << "Adapter: " << m_benchmarkAdapterIdentity << "\n"
+                           << "CPU BeginFrame-to-Present: avg " << m_benchmarkCpuSamples.Mean() << " ms, min "
+                           << m_benchmarkCpuSamples.Min() << " ms, max " << m_benchmarkCpuSamples.Max() << " ms, p50 "
+                           << m_benchmarkCpuSamples.Percentile(0.50) << " ms, p95 "
+                           << m_benchmarkCpuSamples.Percentile(0.95) << " ms, p99 "
+                           << m_benchmarkCpuSamples.Percentile(0.99) << " ms (" << m_benchmarkCpuSamples.Count() << "/"
+                           << m_benchmarkCpuSamples.Capacity() << " samples, "
+                           << (m_benchmarkCpuSamples.IsTruncated() ? "TRUNCATED" : "complete") << ")\n";
+                    if (m_benchmarkGpuSamples.Count() > 0)
+                        result << "GPU render interval: avg " << m_benchmarkGpuSamples.Mean() << " ms, p50 "
+                               << m_benchmarkGpuSamples.Percentile(0.50) << " ms, p95 "
+                               << m_benchmarkGpuSamples.Percentile(0.95) << " ms, p99 "
+                               << m_benchmarkGpuSamples.Percentile(0.99) << " ms (" << m_benchmarkGpuSamples.Count()
+                               << "/" << m_benchmarkGpuSamples.Capacity() << " valid D3D11 timestamp samples, "
+                               << (m_benchmarkGpuSamples.IsTruncated() ? "TRUNCATED" : "complete")
+                               << "; two-frame collection lag)";
+                    else
+                        result << "GPU render interval: unavailable (D3D11 timestamp query returned no valid samples)";
+                    benchmarkResult = result.str();
+                    m_benchmarkActive = false;
+                }
+            }
+        }
+    }
+    if (!benchmarkResult.empty())
+    {
+        Spark::SimpleConsole::GetInstance().Log(benchmarkResult, FAILED(hr) ? "ERROR" : "SUCCESS");
+        if (FAILED(hr))
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "%s", benchmarkResult.c_str());
+        else
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "%s", benchmarkResult.c_str());
     }
 }
 

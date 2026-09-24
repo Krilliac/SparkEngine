@@ -162,8 +162,9 @@ TEST(NullRHIDevicePhaseY_TexturePoolTracksCreates)
     Spark::RHI::RHITextureDesc desc;
     desc.width = 32;
     desc.height = 32;
-    fx.device.CreateTexture(desc);
-    fx.device.CreateTexture(desc);
+    // Pools count live objects, so keep them alive across the check.
+    auto first = fx.device.CreateTexture(desc);
+    auto second = fx.device.CreateTexture(desc);
 
     EXPECT_EQ(fx.device.GetTexturePool().Count() - before, static_cast<uint32_t>(2));
 }
@@ -174,7 +175,7 @@ TEST(NullRHIDevicePhaseY_ShaderPoolTracksCreates)
     const uint32_t before = fx.device.GetShaderPool().Count();
 
     Spark::RHI::RHIShaderDesc desc;
-    fx.device.CreateShader(desc);
+    auto shader = fx.device.CreateShader(desc);
     EXPECT_EQ(fx.device.GetShaderPool().Count() - before, static_cast<uint32_t>(1));
 }
 
@@ -184,9 +185,9 @@ TEST(NullRHIDevicePhaseY_SamplerPoolTracksCreates)
     const uint32_t before = fx.device.GetSamplerPool().Count();
 
     Spark::RHI::RHISamplerDesc desc;
-    fx.device.CreateSampler(desc);
-    fx.device.CreateSampler(desc);
-    fx.device.CreateSampler(desc);
+    auto a = fx.device.CreateSampler(desc);
+    auto b = fx.device.CreateSampler(desc);
+    auto c = fx.device.CreateSampler(desc);
     EXPECT_EQ(fx.device.GetSamplerPool().Count() - before, static_cast<uint32_t>(3));
 }
 
@@ -196,7 +197,7 @@ TEST(NullRHIDevicePhaseY_PipelinePoolTracksCreates)
     const uint32_t before = fx.device.GetPipelinePool().Count();
 
     Spark::RHI::RHIPipelineStateDesc desc;
-    fx.device.CreatePipelineState(desc, nullptr, nullptr);
+    auto pipeline = fx.device.CreatePipelineState(desc, nullptr, nullptr);
     EXPECT_EQ(fx.device.GetPipelinePool().Count() - before, static_cast<uint32_t>(1));
 }
 
@@ -213,11 +214,11 @@ TEST(NullRHIDevicePhaseY_ShutdownClearsAllPools)
     Spark::RHI::RHISamplerDesc samDesc;
     Spark::RHI::RHIPipelineStateDesc pipDesc;
 
-    device.CreateBuffer(bufDesc);
-    device.CreateTexture(texDesc);
-    device.CreateShader(shDesc);
-    device.CreateSampler(samDesc);
-    device.CreatePipelineState(pipDesc, nullptr, nullptr);
+    auto buffer = device.CreateBuffer(bufDesc);
+    auto texture = device.CreateTexture(texDesc);
+    auto shader = device.CreateShader(shDesc);
+    auto sampler = device.CreateSampler(samDesc);
+    auto pipeline = device.CreatePipelineState(pipDesc, nullptr, nullptr);
 
     // At least one entry per pool before Shutdown.
     EXPECT_TRUE(device.GetBufferPool().Count() > 0);
@@ -330,7 +331,7 @@ TEST(NullRHIDevicePhaseY_ReinitializeAfterShutdown)
 
     Spark::RHI::RHIBufferDesc bd;
     bd.size = 64;
-    device.CreateBuffer(bd);
+    auto buffer = device.CreateBuffer(bd);
     EXPECT_TRUE(device.GetBufferPool().Count() > 0);
 
     device.Shutdown();

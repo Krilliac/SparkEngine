@@ -59,7 +59,7 @@ were not shipped as v1.0.0 and do not establish stable-v1 support or certificati
 - Shader Graph (35+ nodes, HLSL generation)
 - Visual Scripting (64 node palette entries across 9 categories, compiles to AngelScript)
 - HeroEngine-inspired MMO networking (AreaServers, WorldServer, seamless migration)
-- 65 `*Panel.h` editor-class inventory; registration, operation coverage, and collaborative editing remain separately gated
+- 64 `*Panel.h` editor-class inventory; registration, operation coverage, and collaborative editing remain separately gated
 - Jolt Physics (vehicles, ragdoll, cloth, destruction)
 - 11 in-tree game-module directories with differing prototype maturity
 - Accessibility (colorblind modes, subtitles, reduced motion, one-handed input)

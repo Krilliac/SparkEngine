@@ -37,6 +37,18 @@ by `list(APPEND ...)` after the closing parenthesis, entries split across lines,
 and entries built from variables are all seen. A text scrape of the manifest
 sees none of them and reports a clean tree it never examined.
 
+### Reviewed exceptions
+
+`ThirdParty/supply-chain.lock` contains an `exceptions` list, which is empty in
+the normal case. Every record must contain exactly these fields: `id`, `scope`,
+`owner`, `justification`, and `expires`. IDs are unique without regard to case;
+owners must name a maintainer, justifications must explain the temporary
+exception, and `expires` must be a valid `YYYY-MM-DD` date. Missing, malformed,
+duplicate, placeholder-owned, or unknown fields are checker errors (exit 2),
+and an expired record is a policy violation (exit 1). Exception records document
+reviewed risk; they never waive an inventory, hash, license, action-pin, or
+manifest check. The checker bounds the collection at 256 records.
+
 ## Adding a New Dependency
 
 1. **Justify the addition.** A new dependency must solve a problem that cannot
@@ -163,7 +175,9 @@ that did not run is not a check that passed.
 - **CI:** `check-supply-chain` job in `.github/workflows/build.yml`, plus the
   adversarial suite `Tests/test_check_supply_chain.py` in the same job and
   `Tests/Tools/test_check_thirdparty_manifest_sync.py` in `validate-ci-tools`.
-  Both jobs are members of the required-CI gate.
+  Both jobs are members of the required-CI gate. The separate required
+  `license-compliance` job runs `tools/site-data/validate.py --legal` and is
+  also included in the gate.
 - **Tooling:** `python tools/check-supply-chain.py` (local), `--json` for
   machine-readable output, `--update` for regeneration. It requires PyYAML and
   CMake and exits 2 without them rather than degrading to a weaker check.

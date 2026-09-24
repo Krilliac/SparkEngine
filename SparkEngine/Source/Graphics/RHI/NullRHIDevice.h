@@ -7,11 +7,13 @@
  * `NullRHIResources.h` instead of `nullptr`. Phase Y Theme 3B wires
  * two previously-orphaned RHI utilities into this backend:
  *
- *   - `Spark::RHI::HandlePool<T, Tag, 256>` for each resource type —
- *     CreateBuffer / CreateTexture / CreateShader / CreateSampler /
- *     CreatePipelineState register the returned pointer in the
- *     matching pool so tests can introspect live resource counts.
- *     The pool is cleared on Shutdown.
+ *   - `Spark::RHI::HandlePool<T, Tag, kPoolCapacity>` for each resource
+ *     type — CreateBuffer / CreateTexture / CreateShader / CreateSampler /
+ *     CreatePipelineState / WrapNativeTexture register the returned object
+ *     in the matching pool, and destroying the object returns its slot, so
+ *     each pool's Count() is the exact number of live objects of that type
+ *     (HEAD-220 leak/soak signal). The pools are cleared on Shutdown; a
+ *     resource that outlives Shutdown or the device releases nothing.
  *
  *   - `Spark::RHI::TransientBufferAllocator` — initialized from
  *     NullRHIDevice::Initialize (now that CreateBuffer returns real
@@ -31,6 +33,8 @@
 #include "TransientBufferAllocator.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace Spark
@@ -69,7 +73,13 @@ namespace Spark
             void SetVertexBuffer(IRHIBuffer*, uint32_t, uint32_t) override {}
             void SetIndexBuffer(IRHIBuffer*, uint32_t) override {}
             void SetConstantBuffer(RHIShaderStage, uint32_t, IRHIBuffer*) override {}
-            void SetShaderResource(RHIShaderStage, uint32_t, IRHITexture*) override {}
+            void SetShaderResource(RHIShaderStage stage, uint32_t slot, IRHITexture* texture) override
+            {
+                m_shaderResourceBindCount++;
+                m_lastShaderResourceStage = stage;
+                m_lastShaderResourceSlot = slot;
+                m_lastShaderResource = texture;
+            }
             void SetSampler(RHIShaderStage, uint32_t, IRHISampler*) override {}
 
             void Draw(uint32_t, uint32_t) override { m_drawCalls++; }
@@ -91,10 +101,18 @@ namespace Spark
 
             uint32_t GetDrawCallCount() const { return m_drawCalls; }
             uint32_t GetDispatchCount() const { return m_dispatchCalls; }
+            uint32_t GetShaderResourceBindCount() const { return m_shaderResourceBindCount; }
+            IRHITexture* GetLastShaderResource() const { return m_lastShaderResource; }
+            RHIShaderStage GetLastShaderResourceStage() const { return m_lastShaderResourceStage; }
+            uint32_t GetLastShaderResourceSlot() const { return m_lastShaderResourceSlot; }
 
           private:
             uint32_t m_drawCalls = 0;
             uint32_t m_dispatchCalls = 0;
+            uint32_t m_shaderResourceBindCount = 0;
+            RHIShaderStage m_lastShaderResourceStage = RHIShaderStage::Pixel;
+            uint32_t m_lastShaderResourceSlot = 0;
+            IRHITexture* m_lastShaderResource = nullptr;
         };
 
         /** @brief CPU-only swap chain with a stable NullTexture back buffer. */
@@ -156,7 +174,8 @@ namespace Spark
         class NullRHIDevice : public IRHIDevice
         {
           public:
-            static constexpr uint32_t kPoolCapacity = 256;
+            /** @brief Simultaneously live objects tracked per resource type. */
+            static constexpr uint32_t kPoolCapacity = 4096;
             using BufferPool = HandlePool<IRHIBuffer, BufferTag, kPoolCapacity>;
             using TexturePool = HandlePool<IRHITexture, TextureTag, kPoolCapacity>;
             using ShaderPool = HandlePool<IRHIShader, ShaderTag, kPoolCapacity>;
@@ -196,19 +215,20 @@ namespace Spark
 
             void Shutdown() override
             {
-                // Phase Y: tear the transient allocator down first — it holds
-                // unique_ptrs to NullBuffer objects that were registered in
-                // m_bufferPool. Clearing the pools before the allocator
-                // destructs would leave the pool with dangling raw pointers,
-                // which is fine in practice (Clear doesn't dereference), but
-                // teardown ordering is easier to reason about this way.
+                // Tear the transient allocator down first: destroying its two
+                // NullBuffers returns their slots through the release hook.
                 m_transientBuffers.Shutdown(this);
 
-                m_bufferPool.Clear();
-                m_texturePool.Clear();
-                m_shaderPool.Clear();
-                m_samplerPool.Clear();
-                m_pipelinePool.Clear();
+                // Advance the epoch before clearing so objects created before
+                // this Shutdown cannot release a slot reused after the next
+                // Initialize (Clear resets slot generations).
+                ++m_tracker->epoch;
+                m_tracker->buffers.Clear();
+                m_tracker->textures.Clear();
+                m_tracker->shaders.Clear();
+                m_tracker->samplers.Clear();
+                m_tracker->pipelines.Clear();
+                m_tracker->untracked = 0;
 
                 m_initialized = false;
                 m_stats = {};
@@ -225,12 +245,9 @@ namespace Spark
             {
                 m_stats.buffersCreated++;
                 auto buffer = std::make_unique<NullBuffer>(desc);
-                // Phase Y: register the raw pointer with the HandlePool. The
-                // handle is stored locally on the stack — the pool is used
-                // here as a debug/validation counter rather than as the
-                // primary lifetime owner (the caller still owns the
-                // unique_ptr).
-                [[maybe_unused]] auto handle = m_bufferPool.Allocate(buffer.get());
+                // The caller owns the unique_ptr; the pool only counts it while
+                // it is alive and the release hook returns the slot on destroy.
+                Track(static_cast<IRHIBuffer*>(buffer.get()), *buffer);
                 return buffer;
             }
 
@@ -238,7 +255,7 @@ namespace Spark
             {
                 m_stats.texturesCreated++;
                 auto texture = std::make_unique<NullTexture>(desc);
-                [[maybe_unused]] auto handle = m_texturePool.Allocate(texture.get());
+                Track(static_cast<IRHITexture*>(texture.get()), *texture);
                 return texture;
             }
 
@@ -246,14 +263,14 @@ namespace Spark
             {
                 m_stats.shadersCreated++;
                 auto shader = std::make_unique<NullShader>(desc);
-                [[maybe_unused]] auto handle = m_shaderPool.Allocate(shader.get());
+                Track(static_cast<IRHIShader*>(shader.get()), *shader);
                 return shader;
             }
 
             std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc& desc) override
             {
                 auto sampler = std::make_unique<NullSampler>(desc);
-                [[maybe_unused]] auto handle = m_samplerPool.Allocate(sampler.get());
+                Track(static_cast<IRHISampler*>(sampler.get()), *sampler);
                 return sampler;
             }
 
@@ -262,7 +279,7 @@ namespace Spark
             {
                 m_stats.pipelinesCreated++;
                 auto pipeline = std::make_unique<NullPipelineState>(desc);
-                [[maybe_unused]] auto handle = m_pipelinePool.Allocate(pipeline.get());
+                Track(static_cast<IRHIPipelineState*>(pipeline.get()), *pipeline);
                 return pipeline;
             }
 
@@ -271,7 +288,7 @@ namespace Spark
                 // Wrappers also emit real NullTexture objects so callers
                 // never see nullptr.
                 auto texture = std::make_unique<NullTexture>(desc);
-                [[maybe_unused]] auto handle = m_texturePool.Allocate(texture.get());
+                Track(static_cast<IRHITexture*>(texture.get()), *texture);
                 return texture;
             }
 
@@ -340,11 +357,19 @@ namespace Spark
 
             // Phase Y accessors — test hooks for validating the wired
             // HandlePool and TransientBufferAllocator instances.
-            const BufferPool& GetBufferPool() const { return m_bufferPool; }
-            const TexturePool& GetTexturePool() const { return m_texturePool; }
-            const ShaderPool& GetShaderPool() const { return m_shaderPool; }
-            const SamplerPool& GetSamplerPool() const { return m_samplerPool; }
-            const PipelinePool& GetPipelinePool() const { return m_pipelinePool; }
+            // Each pool's Count() is the number of currently live objects.
+            const BufferPool& GetBufferPool() const { return m_tracker->buffers; }
+            const TexturePool& GetTexturePool() const { return m_tracker->textures; }
+            const ShaderPool& GetShaderPool() const { return m_tracker->shaders; }
+            const SamplerPool& GetSamplerPool() const { return m_tracker->samplers; }
+            const PipelinePool& GetPipelinePool() const { return m_tracker->pipelines; }
+            /**
+             * @brief Live objects created while their pool was full (kPoolCapacity reached).
+             *
+             * Non-zero means the pool counts are a floor, not the live total; a leak
+             * check must fail rather than trust them.
+             */
+            uint32_t GetUntrackedResourceCount() const { return m_tracker->untracked; }
             TransientBufferAllocator& GetTransientBuffers() { return m_transientBuffers; }
             const TransientBufferAllocator& GetTransientBuffers() const { return m_transientBuffers; }
 
@@ -352,19 +377,70 @@ namespace Spark
             NullRHIDevice() = default;
 
           private:
+            /**
+             * @brief Live-resource pools, heap-owned so resources can outlive the device.
+             *
+             * Each tracked resource's release hook holds a weak_ptr to this tracker and
+             * the epoch it was created in; the hook frees nothing once the device is
+             * destroyed or has been shut down since. Not thread-safe, like the rest of
+             * NullRHIDevice: create and destroy Null resources on one thread.
+             */
+            struct ResourceTracker
+            {
+                BufferPool buffers;
+                TexturePool textures;
+                ShaderPool shaders;
+                SamplerPool samplers;
+                PipelinePool pipelines;
+                uint64_t epoch = 0;
+                uint32_t untracked = 0;
+            };
+
+            // Pool selection by resource interface type.
+            static BufferPool& PoolFor(ResourceTracker& tracker, IRHIBuffer*) { return tracker.buffers; }
+            static TexturePool& PoolFor(ResourceTracker& tracker, IRHITexture*) { return tracker.textures; }
+            static ShaderPool& PoolFor(ResourceTracker& tracker, IRHIShader*) { return tracker.shaders; }
+            static SamplerPool& PoolFor(ResourceTracker& tracker, IRHISampler*) { return tracker.samplers; }
+            static PipelinePool& PoolFor(ResourceTracker& tracker, IRHIPipelineState*) { return tracker.pipelines; }
+
+            /** @brief Count @p resource as live until its NullReleaseHook runs. */
+            template <typename Interface> void Track(Interface* resource, NullReleaseHook& hook)
+            {
+                ResourceTracker& tracker = *m_tracker;
+                const auto handle = PoolFor(tracker, resource).Allocate(resource);
+                const uint64_t epoch = tracker.epoch;
+                std::weak_ptr<ResourceTracker> weakTracker = m_tracker;
+                if (!handle.IsValid())
+                {
+                    ++tracker.untracked;
+                    hook.SetReleaseCallback(
+                        [weakTracker, epoch]()
+                        {
+                            auto owner = weakTracker.lock();
+                            if (owner && owner->epoch == epoch && owner->untracked > 0)
+                                --owner->untracked;
+                        });
+                    return;
+                }
+                hook.SetReleaseCallback(
+                    [weakTracker, handle, epoch]()
+                    {
+                        auto owner = weakTracker.lock();
+                        if (owner && owner->epoch == epoch)
+                            PoolFor(*owner, static_cast<Interface*>(nullptr)).Free(handle);
+                    });
+            }
+
             RHIDeviceCapabilities m_caps;
             RHIStatistics m_rhiStats;
             NullStats m_stats;
             NullCommandList m_commandList;
             bool m_initialized = false;
 
-            // Phase Y: resource tracking pools. Populated on Create*; cleared
-            // on Shutdown.
-            BufferPool m_bufferPool;
-            TexturePool m_texturePool;
-            ShaderPool m_shaderPool;
-            SamplerPool m_samplerPool;
-            PipelinePool m_pipelinePool;
+            // Resource tracking pools. Populated on Create*, released when the
+            // object is destroyed, cleared on Shutdown. Declared before the
+            // transient allocator so its buffers release into a live tracker.
+            std::shared_ptr<ResourceTracker> m_tracker = std::make_shared<ResourceTracker>();
 
             // Phase Y: per-frame transient vertex/index memory. 64 KB vertex
             // + 32 KB index is generous for headless tests and cheap at

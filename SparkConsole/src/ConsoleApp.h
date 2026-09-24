@@ -23,6 +23,7 @@
 #include <atomic>
 #include <mutex>
 #include <deque>
+#include <istream>
 #include <unordered_map>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -38,11 +39,14 @@
 class ConsoleApp
 {
   public:
-    explicit ConsoleApp(bool enginePipeRequested = false);
+    explicit ConsoleApp(bool enginePipeRequested = false, bool batchMode = false);
     ~ConsoleApp();
 
     /** @brief Enter the main event loop; blocks until exit is requested. */
     void Run();
+
+    /** @brief Execute newline-delimited commands from stdin without prompts or terminal setup. */
+    void RunBatch(std::istream& input);
 
 #ifdef SPARK_PLATFORM_WINDOWS
     /**
@@ -118,6 +122,7 @@ class ConsoleApp
     // --- State ---
     std::atomic<bool> m_running;     ///< False signals all threads to exit.
     bool m_enginePipeRequested;      ///< True only when launched by an engine/editor IPC parent.
+    bool m_batchMode;                ///< True when running the deterministic noninteractive CLI contract.
     std::thread m_engineInputThread; ///< Background thread reading engine pipe input.
     std::mutex m_outputMutex;        ///< Serializes console output from multiple threads.
     std::mutex m_historyMutex;       ///< Guards m_commandHistory.

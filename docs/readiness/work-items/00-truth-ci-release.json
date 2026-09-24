@@ -102,7 +102,7 @@
       "wave": 0,
       "area": "tests",
       "owner": "unassigned",
-      "rationale": "In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, has a real Windows lifecycle collector/host contract, and requires exact-SHA Windows lifecycle and installed-package-smoke producers before the Ubuntu consumer and aggregate gate. No hosted run has yet supplied the corresponding immutable lifecycle/package artifacts and successful required-gate evidence. Those unhosted proof gaps keep this item release-blocking.",
+      "rationale": "In-profile module tests compile subsets, tautologies, standalone mirrors, or reimplemented models rather than loading the production libraries they claim to verify; experimental-module completion evidence is tracked separately. The production-source census and installed-template smoke are progress, not release proof. The module-evidence control plane now proves CMake target existence from a configure-generated CMake File API codemodel, rejects declared-but-unproduced evidence, has a real Windows lifecycle collector/host contract, and requires exact-SHA Windows lifecycle and installed-package-smoke producers before the Ubuntu consumer and aggregate gate. 2026-09-13 progress: the lifecycle consumer now rejects malformed or logger-prefixed duplicate marker lines instead of filtering them, with the full module-evidence suite green. 2026-09-14 progress: the local module-evidence wrapper now selects a runnable Python interpreter when the Windows Store python3 alias is present; its declarative/adversarial run completes with 307 tests and 12 expected skips. No hosted run has yet supplied the corresponding immutable lifecycle/package artifacts and successful required-gate evidence. Those unhosted proof gaps keep this item release-blocking.",
       "dependencies": [
         "RDY-000",
         "CI-100"
@@ -224,7 +224,7 @@
       "wave": 0,
       "area": "content",
       "owner": "unassigned",
-      "rationale": "Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked; the profile-module-package-smoke producer/consumer path is implemented but has no hosted exact-SHA proof yet.",
+      "rationale": "Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked. 2026-09-12 progress: runtime packages now install Assets/assets.integrity.json under bin/Assets, and extracted-package validation rejects a missing, link-like, or tampered runtime asset manifest/payload using the repository verifier with case-correct paths. 2026-09-21 progress: the installed FPS profile-package smoke now stages the manifest's root README and verifies all 882 staged bin/Assets entries before module lifecycle and save/reload; adversarial helper tests reject missing manifests, missing or tampered payloads, exact-case mismatches, undeclared files, and link-like paths. The fail-closed module inventory covers all 11 GameModules, with FPS root Models/Scenes integrity coverage at 317/317; content outside the in-profile FPS root remains unclassified. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. Clean Windows 11/archive, profile-wide package, provenance, exact-SHA proof, and remaining module content debt still remain open.",
       "dependencies": [
         "RDY-000"
       ],
@@ -283,7 +283,7 @@
       ],
       "requiredCiJobs": [
         "asset-integrity",
-        "profile-module-package-smoke"
+        "module-profile-package-smoke"
       ],
       "performanceBudgets": [
         "Manifest validation completes before compilation cache restore is material"
@@ -314,9 +314,7 @@
       "profileApplicability": {
         "stable-v1": "required"
       },
-      "plannedCiJobs": [
-        "profile-module-package-smoke"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": [
         "AssetManifest_*",
         "PackageAssets_*",
@@ -345,7 +343,7 @@
       "wave": 0,
       "area": "ci",
       "owner": "unassigned",
-      "rationale": "ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under current triggers, and coverage, validation, format, and static-analysis surfaces are incomplete or advisory. 2026-09-05 progress: the advisory-lane derivation landed in the exact-source gate (a failed Build job is accepted only if build.yml at that exact commit declares continue-on-error; required set cross-checked against EXPECTED_REQUIRED_JOBS_JSON; a required job marked continue-on-error is rejected). 2026-09-08 read-only remote evidence for Working 891e00c1cb4a930a38e61da26e62f56d4af88de3: its Build Matrix Verifier rejected the exact producer artifact because the producer reported 3 parity errors while the Linux trusted checker reported 19. The 16-error difference is a cross-host path-semantics defect in the old checker, which interpreted Windows-recorded paths with host Path/os.path rules. Local canonical commit 9583053edabdae37af6f737132bfc50eefd92930 uses recorded Windows/POSIX path semantics and restricts verifier sources to Working push/workflow_dispatch, but has not been published or proven by an exact-SHA remote run. Verified read-only that no branch protection or ruleset is active on Working (branches/Working/protection is 404; all five rulesets enforcement=disabled), so required-ci-gate is a post-hoc publication gate, not a merge gate. Item stays open until CI proves the derivation and the ruleset is activated by the account owner.",
+      "rationale": "ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under current triggers, and coverage, validation, format, and static-analysis surfaces are incomplete or advisory. 2026-09-05 progress: the advisory-lane derivation landed in the exact-source gate (a failed Build job is accepted only if build.yml at that exact commit declares continue-on-error; required set cross-checked against EXPECTED_REQUIRED_JOBS_JSON; a required job marked continue-on-error is rejected). 2026-09-08 read-only remote evidence for Working 891e00c1cb4a930a38e61da26e62f56d4af88de3: its Build Matrix Verifier rejected the exact producer artifact because the producer reported 3 parity errors while the Linux trusted checker reported 19. The 16-error difference is a cross-host path-semantics defect in the old checker, which interpreted Windows-recorded paths with host Path/os.path rules. Local canonical commit 9583053edabdae37af6f737132bfc50eefd92930 uses recorded Windows/POSIX path semantics and restricts verifier sources to Working push/workflow_dispatch, but has not been published or proven by an exact-SHA remote run. Verified 2026-09-12 that legacy branch protection remains absent on Working (branches/Working/protection is 404), while repository ruleset 21968740 (Working integrity) is active and requires the GitHub Actions Required CI Gate check with no bypass actors. 2026-09-13 progress: the required-job verifier now fails closed when EXPECTED_REQUIRED_JOBS_JSON is missing or empty, with focused and failure-propagation regressions green. 2026-09-13 additional progress: the TODO/FIXME threshold now emits an error and exits nonzero, and the Windows registration guard now prefers Git Bash and passes POSIX script paths; focused CI policy suites pass locally. 2026-09-14 progress: the failure-propagation contract now verifies that workflow_dispatch reaches every required job and the always-running Required CI Gate without event/ref skips or cancellation; the full local contract suite passes 78/78. 2026-09-14 additional progress: build.yml now exposes an explicit, default-off workflow_dispatch control that fails the required validate-ci-tools job, and the workflow regression suite covers its manual-only guard. 2026-09-21 further progress: exact hosted failure showed a registered fuzz test without a built executable; the workflow now builds all three fuzz targets, and structural policy enforces target completeness plus build-before-CTest across 162 tests. The same hosted run exposed Windows newline drift in the crash-manifest corpus; those exact seed bytes are now LF-pinned and pass in an isolated core.autocrlf=true checkout. Exact SHA 37a4bec5 subsequently passed Site Data, CodeQL, Microsoft C++ analysis, and Trusted Reporter, while the main Build correctly failed on a portable temporary-directory assumption, platform-native cooker fixture newlines, and non-artifact CMake target semantics; bounded local fixes are covered by focused policy suites. The corrected SHA still needs hosted proof. Item stays open until an exact-SHA hosted control run proves the required-job failure turns Required CI Gate red.",
       "dependencies": [],
       "parallelWith": [
         "RDY-000",
@@ -356,11 +354,13 @@
         ".github/workflows/build.yml",
         ".github/workflows/codeql.yml",
         "tools/validate-all.sh",
-        "tools/check-test-registration.sh"
+        "tools/check-test-registration.sh",
+        ".github/scripts/test-workflow-failure-propagation.py"
       ],
       "entryPoints": [
         ".github/workflows/build.yml",
-        ".github/workflows/codeql.yml"
+        ".github/workflows/codeql.yml",
+        ".github/scripts/test-workflow-failure-propagation.py"
       ],
       "implementationScope": [
         "Propagate every piped command's failure with pipefail or PIPESTATUS",
@@ -417,7 +417,7 @@
         "Mutation tests prove failure propagation",
         "Exact-SHA artifacts publish",
         "Branch protection requires the intended set",
-        "Remaining: activate ruleset 21968740 with required_status_checks (account-owner action), then attach a CI run proving a controlled required-job failure turns the gate red"
+        "Working ruleset 21968740 is active with Required CI Gate as its required status check; attach a CI run proving a controlled required-job failure turns the gate red"
       ],
       "profileApplicability": {
         "stable-v1": "shared"
@@ -436,7 +436,7 @@
       "wave": 1,
       "area": "tests",
       "owner": "unassigned",
-      "rationale": "One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking thresholds, missing golden baselines, and partial clang-tidy/CodeQL coverage prevent a green result from proving release quality. 2026-09-05 progress: SparkTests is split into SparkEngineTests and SparkEngineLoadTests (labels load;slow) with per-configuration timeout budgets; the runner reports [ EMPTY ] tests and flaky waivers explicitly (EXPECT_WARN_ONLY, EXPECT_NO_CRASH, SKIP_TEST) and JUnit carries flaky=/empty= attributes; SPARK_TESTS_WARN_IS_ERROR exists but defaults OFF because Tests/TestWarnings.h still holds 9 waivers documenting real non-determinism. Still open: no unowned-flaky policy, no golden baselines, coverage/analysis regressions do not block.",
+      "rationale": "One monolithic CTest registration, warning-tolerated flaky patterns, nonblocking thresholds, missing golden baselines, and partial clang-tidy/CodeQL coverage prevent a green result from proving release quality. 2026-09-05 progress: SparkTests is split into SparkEngineTests and SparkEngineLoadTests (labels load;slow) with per-configuration timeout budgets; the runner reports [ EMPTY ] tests and flaky waivers explicitly (EXPECT_WARN_ONLY, EXPECT_NO_CRASH, SKIP_TEST) and JUnit carries flaky=/empty= attributes; SPARK_TESTS_WARN_IS_ERROR exists but defaults OFF because Tests/TestWarnings.h still holds 8 waivers documenting real non-determinism. 2026-09-12 progress: the clang-tidy lane now inventories every shipped-product source root and fails closed on missing roots or an empty translation-unit inventory instead of analyzing a capped sample. 2026-09-13 progress: coverage enforcement now requires test, generation, and threshold steps to end exactly in success and rejects skipped/cancelled evidence, with direct workflow regressions. 2026-09-13 additional progress: Tools/validate_test_warnings.py now requires exact registry/metadata parity, named owners, and future ISO expiries for all whole-test waivers; blocking CI runs the validator and 7 adversarial policy tests. 2026-09-21 further progress: the exact hosted failure was a registered fuzz test without a built executable; the workflow now builds all three fuzz targets and structural policy enforces target completeness plus build-before-CTest across 162 tests. Executable-level smokes now exercise SparkConsole batch dispatch, SparkCrashReporter failure semantics, a two-pass SparkCooker manifest, real D3D11 shader compilation, SparkAutomation through the FPS NullRHI lifecycle, SparkBuild plan generation, and SparkEditor project load/clean shutdown. The hosted MSAN static-destruction failure is fixed with lifetime-safe EventBus subscriptions and a production regression. Exact SHA 37a4bec5 exposed and now locally closes the remaining cross-platform SparkCooker smoke digest mismatch by pinning LF fixture bytes. Golden baselines, corrected-SHA hosted proof, remaining shipped-product integration depth, and static-analysis coverage are still open.",
       "dependencies": [
         "CI-100",
         "RDY-000"
@@ -542,7 +542,7 @@
       "wave": 1,
       "area": "build",
       "owner": "unassigned",
-      "rationale": "SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product.",
+      "rationale": "SparkBuild exposes options not recognized by root CMake, root CMake exposes options SparkBuild cannot represent, and strict dependency/shipping profiles do not cover every product. 2026-09-12 progress: build-matrix parity now fails closed when a stable shipping/validation profile cannot resolve its matching CMake build preset or declares the wrong configuration; the reviewed inventory was regenerated for the current source tree. 2026-09-13 progress: parity now rejects conflicting cache overrides appended to a canonical preset, preserving the reviewed stable-v1 option contract. 2026-09-21 progress: hosted Shipping codemodel evidence confirmed that CMake object and interface libraries correctly have no standalone artifact identity; pending-authority validation now permits only those non-artifact kinds while retaining strict identities for executable and linkable products, with 14 authority, 201 parity, and 27 external-verifier tests green. Protected external-attestation evidence remains open.",
       "dependencies": [
         "CI-100"
       ],
@@ -671,7 +671,7 @@
       "wave": 1,
       "area": "build",
       "owner": "unassigned",
-      "rationale": "Versioned Windows publication now selects the authoritative windows-shipping preset and MinSizeRel product tree, with separate windows-release validation. Nightly retains Debug/Release packages. Executed workflow-selection and asset-collection regressions, plus staged-package profile checks, verify the local orchestration contract. Runtime-only component staging now has an explicit trusted-layout preflight before CPack, retaining executable, runtime-content, and all configured module sidecar/hash checks without requiring installed SDK files. Local fixture validation does not establish native installer execution. Hosted Windows Shipping packaging, reproducibility comparison, exact toolchain/dependency manifests, and private symbol retention remain unverified or unfinished; this item is not complete.",
+      "rationale": "Versioned Windows publication now selects the authoritative windows-shipping preset and MinSizeRel product tree, with separate windows-release validation. Nightly retains Debug/Release packages. Executed workflow-selection and asset-collection regressions, plus staged-package profile checks, verify the local orchestration contract. 2026-09-12 progress: the reviewed build-matrix inventory now binds stable shipping and validation profiles to matching CMake build presets/configurations and rejects drift. Runtime-only component staging now has an explicit trusted-layout preflight before CPack, retaining executable, runtime-content, and all configured module sidecar/hash checks without requiring installed SDK files. 2026-09-13 progress: the inventory retains CMake’s Visual Studio instance, archiver, and linker identities and fails closed when they are missing and disagree. It now also accepts only absolute Windows x64 C++ compiler paths, preventing relative or non-Windows spellings from being mistaken for exact MSVC provenance. Local fixture validation does not establish native installer execution. Hosted Windows Shipping packaging, reproducibility comparison, exact toolchain/dependency manifests, and private symbol retention remain unverified or unfinished; this item is not complete.",
       "dependencies": [
         "CI-100",
         "CI-120"
@@ -719,6 +719,7 @@
       ],
       "documentationUpdates": [
         "README.md",
+        "wiki/development/CI-Reproducible-Builds.md",
         "wiki/getting-started/Building-from-Source.md"
       ],
       "readinessChanges": [
@@ -759,7 +760,7 @@
       "wave": 1,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Stable preparation now requires tag/default-version equality, one source version declaration, and exactly one matching versioned changelog heading, with executed rejection fixtures; the current Unreleased-only changelog intentionally does not satisfy this contract. Still open: complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy.",
+      "rationale": "CMake, SDK generated headers, installer, and launcher consume the requested engine version. Versioned publication now collects only the three Windows Shipping packages (portable SDK ZIP and NSIS/WiX runtime installers); nightly retains its platform packages, bootstrap installers, and direct-download aliases. Stable metadata identifies Windows Shipping, and existing exact-source, readiness, immutable-tag, checksum, SBOM, and attestation gates remain enforced. Stable preparation now requires tag/default-version equality, one source version declaration, and exactly one matching versioned changelog heading, with executed rejection fixtures; the current Unreleased-only changelog intentionally does not satisfy this contract. 2026-09-12 progress: SparkConsole now receives the top-level version at configure time, rejects standalone builds without it, exposes --version/-v, and has a CTest contract that verifies the executable output. 2026-09-13 progress: SparkShaderCompiler, SparkCooker, SparkAutomation, and SparkCrashReporter now receive the authoritative CMake version and expose exact --version contracts; fresh Windows Shipping binaries pass the executable-level regression, and the required Shipping workflow runs it after build. 2026-09-14 progress: the shared executable-level regression now resolves the platform-native executable suffix, so macOS and Linux validate extensionless tool binaries while Windows retains the .exe contract; the Windows targeted CTest and Darwin suffix probe pass locally. Still open: complete toolchain/dependency manifests, final hosted package qualification, and release-channel support policy.",
       "dependencies": [
         "BLD-100",
         "CI-100"
@@ -792,8 +793,9 @@
       "acceptanceCriteria": [
         "A vX.Y.Z tag embeds exactly X.Y.Z in every stable-v1 product and artifact",
         "Every stable-v1 artifact records source SHA, dependency-lock digest, exact toolchain, and configuration",
-        "Stable publication is impossible while a target profile gate is open",
-        "Nightly, stable, and experimental channels have explicit retention and support semantics"
+        "Stable publication requires every qualification gate and dependency; only explicitly typed publication-finalization work may remain pending in candidate state",
+        "Nightly, stable, and experimental channels have explicit retention and support semantics",
+        "Prove one uniquely tagged immutable nightly and the protected signed stable path independently; the repository policy and workflow topology are compatible, but live publication remains unverified"
       ],
       "commands": [
         "git ls-remote --tags origin",
@@ -854,7 +856,7 @@
       "wave": 1,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "Release automation already generates SHA256SUMS, an SBOM, and build attestations. Stable-v1 still requires independently verified code signing, artifact and dependency scan policy, and a protected release approval environment; existing integrity metadata alone does not satisfy this gate. A bounded first slice now gates final stable Windows Runtime EXE/MSI execution and upload on native Valid embedded Authenticode, a timestamp certificate, an explicitly configured publisher certificate thumbprint, and SHA-256 continuity through native qualification. Injected-process regressions run in validate-ci-tools; real unsigned EXE/MSI fixture rejection is wired to ordinary Windows VS 2022 Release CI and the Windows stable release job. This verifies outer installers only, not ZIP/internal PE payloads. Publisher identity provisioning, a secure signing pipeline, native signed-artifact success evidence, consumer verification, scans, and protected approval remain prerequisites; REL-110 is open.",
+      "rationale": "Release automation already generates SHA256SUMS, an SBOM, and build attestations. Stable-v1 still requires independently verified code signing, artifact and dependency scan policy, and a protected release approval environment; existing integrity metadata alone does not satisfy this gate. A bounded first slice now gates final stable Windows Runtime EXE/MSI execution and upload on native Valid embedded Authenticode, a timestamp certificate, an explicitly configured publisher certificate thumbprint, and SHA-256 continuity through native qualification. Injected-process regressions run in validate-ci-tools; real unsigned EXE/MSI fixture rejection is wired to ordinary Windows VS 2022 Release CI and the Windows stable release job. 2026-09-13 progress: native signature evidence and persisted reports now reject duplicate JSON keys instead of accepting last-write-wins contradictions. 2026-09-13 additional progress: signature report publication and hash verification now reject symlinked report paths and publish through an atomic no-replace boundary, with 7 focused signature tests. 2026-09-21 progress: stable publication now has a fail-closed consumer verifier for the exact asset set, SHA256SUMS, nonempty SPDX payload coverage, exact-CI provenance, pinned trusted-key fingerprint, and real OpenSSL detached signatures. Its externally provisioned signature archive is digest-pinned, flat regular-file-only, Windows-name-safe, and reverified before both draft creation and promotion. Local cryptographic, archive, workflow, and failure-propagation suites pass. Publisher key/signature-bundle provisioning, protected approval, artifact vulnerability scanning and exception policy, native signed-artifact success evidence, and hosted exact-SHA proof remain prerequisites; REL-110 is open.",
       "dependencies": [
         "BLD-100",
         "SEC-110",
@@ -942,27 +944,161 @@
       ]
     },
     {
-      "id": "REL-200",
-      "title": "Rehearse, sign off, and publish the first fully gated release",
+      "id": "REL-191",
+      "completionPhase": "qualification",
+      "title": "Rehearse the predecessor release without N-1 upgrade claims",
+      "priority": "P0",
+      "status": "open",
+      "blocking": true,
+      "wave": 6,
+      "area": "release",
+      "owner": "unassigned",
+      "rationale": "The first signed predecessor needs the same exact-SHA release rehearsal, sign-off, and protected approval discipline as v1, but its rehearsal cannot invent an older stable release.",
+      "dependencies": ["REL-100", "REL-110", "PLT-200", "RHI-210", "HEAD-220", "EDT-210", "SDK-240", "PERF-100", "OPS-100", "GOV-400", "DOC-400", "INST-130", "SAVE-230", "MOD-310", "ASSET-220", "LIFE-200", "ENG-220"],
+      "parallelWith": [],
+      "sourceContext": [".github/workflows/release.yml", "docs/site/readiness.json"],
+      "entryPoints": [".github/workflows/release.yml"],
+      "implementationScope": ["Freeze and review the exact predecessor source commit", "Run all common qualification gates and protected approval checks", "Record bootstrap install, repair, retention, and uninstall evidence without N-1 claims"],
+      "acceptanceCriteria": ["Every common qualification item and gate passes at the reviewed predecessor SHA", "Named sign-off and protected approval evidence are retained", "No N-1 upgrade or rollback result is presented as predecessor evidence"],
+      "commands": ["python3 tools/site-data/validate.py --require-predecessor-candidate"],
+      "testSelectors": ["ReleaseProfilePredecessorRehearsal_*"],
+      "requiredCiJobs": ["profile-required-gates", "release-approval"],
+      "performanceBudgets": [],
+      "documentationUpdates": ["docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "readinessChanges": ["G17"],
+      "websiteImpact": ["Predecessor remains candidate-only until immutable publication"],
+      "risks": ["Accidentally claiming v1 compatibility from bootstrap evidence"],
+      "outOfScope": ["Publishing the predecessor or proving v1 N-1 compatibility"],
+      "definitionOfDone": ["Exact-SHA predecessor rehearsal and protected sign-off pass"],
+      "profileApplicability": {"stable-v1": "outside"},
+      "predecessorOnly": true,
+      "plannedCiJobs": ["profile-required-gates", "release-approval"],
+      "plannedTestSelectors": ["ReleaseProfilePredecessorRehearsal_*"]
+    },
+    {
+      "id": "REL-192",
+      "completionPhase": "qualification",
+      "title": "Qualify stable-v1 N-1 release rehearsal and rollback",
       "priority": "P0",
       "status": "blocked",
       "blocking": true,
       "wave": 6,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "A release is ready only when every gate required by each target release profile passes at one candidate commit and the target artifacts survive clean install, migration, recovery, and rollback rehearsal.",
+      "rationale": "N-1 installer upgrade, rollback, and migration evidence is a v1 requirement and is intentionally separate from the first predecessor rehearsal.",
+      "dependencies": ["REL-190", "INST-131"],
+      "parallelWith": [],
+      "sourceContext": [".github/workflows/release.yml", "docs/site/readiness.json"],
+      "entryPoints": [".github/workflows/release.yml"],
+      "implementationScope": ["Run the stable-v1 rehearsal against a previously published signed predecessor", "Verify upgrade, rollback, save migration, and recovery evidence"],
+      "acceptanceCriteria": ["Exact-SHA v1 rehearsal passes with a real immutable predecessor", "Upgrade and rollback evidence is independently retained", "The first predecessor path cannot satisfy this item"],
+      "commands": ["python3 tools/site-data/validate.py --require-candidate-ready"],
+      "testSelectors": ["ReleaseProfileNMinusOneRehearsal_*"],
+      "requiredCiJobs": ["profile-required-gates", "release-approval"],
+      "performanceBudgets": [],
+      "documentationUpdates": ["docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "readinessChanges": ["G17"],
+      "websiteImpact": ["Stable-v1 remains blocked until N-1 rehearsal passes"],
+      "risks": ["Using predecessor bootstrap evidence as N-1 proof"],
+      "outOfScope": ["First-predecessor bootstrap qualification"],
+      "definitionOfDone": ["Hosted exact-SHA N-1 rehearsal and rollback pass"],
+      "profileApplicability": {"stable-v1": "required"},
+      "plannedCiJobs": ["profile-required-gates", "release-approval"],
+      "plannedTestSelectors": ["ReleaseProfileNMinusOneRehearsal_*"]
+    },
+    {
+      "id": "REL-193",
+      "completionPhase": "publication-finalization",
+      "title": "Publish and independently accept the reviewed v0.9.0 predecessor",
+      "priority": "P0",
+      "status": "in-progress",
+      "blocking": true,
+      "wave": 6,
+      "area": "release",
+      "owner": "unassigned",
+      "rationale": "The predecessor publication is a distinct terminal action. It must remain incomplete until the reviewed source, signed immutable artifacts, protected approval, and independent consumer verification exist.",
+      "dependencies": ["REL-191"],
+      "parallelWith": [],
+      "sourceContext": [".github/workflows/release.yml", "docs/site/readiness.json"],
+      "entryPoints": [".github/workflows/release.yml"],
+      "implementationScope": ["Publish only the reviewed immutable predecessor artifacts", "Independently download and verify hashes, signatures, provenance, and exact source identity"],
+      "acceptanceCriteria": ["Artifacts are immutable and signed under the disclosed project-pinned trust model", "Krilliac gives required owner approval with administrative bypass disabled", "A read-only independent consumer verifies the published predecessor before v1 uses it"],
+      "commands": ["python3 tools/site-data/validate.py --require-predecessor-candidate"],
+      "testSelectors": [],
+      "requiredCiJobs": [],
+      "performanceBudgets": [],
+      "documentationUpdates": ["docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "readinessChanges": ["G17"],
+      "websiteImpact": ["No public ready claim until independent predecessor acceptance exists"],
+      "risks": ["Sole-owner approval must not be misrepresented as a second human review", "Mutating an immutable release"],
+      "outOfScope": ["v1 N-1 qualification, which remains REL-192"],
+      "definitionOfDone": ["Signed predecessor publication and independent acceptance evidence are retained"],
+      "profileApplicability": {"stable-v1": "outside"},
+      "predecessorOnly": true,
+      "plannedCiJobs": [],
+      "plannedTestSelectors": []
+    },
+    {
+      "id": "REL-190",
+      "completionPhase": "qualification",
+      "title": "Rehearse and approve the qualified release candidate before publication",
+      "priority": "P0",
+      "status": "blocked",
+      "blocking": true,
+      "wave": 6,
+      "area": "release",
+      "owner": "unassigned",
+      "rationale": "Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence.",
       "dependencies": [
-        "REL-100",
-        "REL-110",
-        "PLT-200",
-        "RHI-210",
-        "HEAD-220",
-        "EDT-210",
-        "SDK-240",
-        "PERF-100",
-        "OPS-100",
-        "GOV-400",
-        "DOC-400"
+        "REL-100", "REL-110", "PLT-200", "RHI-210", "HEAD-220", "EDT-210",
+        "SDK-240", "PERF-100", "OPS-100", "GOV-400", "DOC-400", "INST-130",
+        "SAVE-230", "MOD-310", "ASSET-220", "LIFE-200", "ENG-220"
+      ],
+      "parallelWith": [],
+      "sourceContext": [".github/workflows/release.yml", "docs/site/readiness.json", "CHANGELOG.md", "SECURITY.md"],
+      "entryPoints": [".github/workflows/release.yml", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "implementationScope": [
+        "Freeze the exact release-candidate commit and tag",
+        "Run every qualification gate required by each target release profile at the same SHA",
+        "Install on clean supported hosts and exercise crash ingestion, repair, and uninstall for the target profiles",
+        "Delegate N-1 upgrade, rollback, and migration proof to REL-192",
+        "Collect named qualification owner sign-off and protected release approval evidence before publication"
+      ],
+      "acceptanceCriteria": [
+        "Every technical qualification item, transitive dependency, and qualification requirement from requiredGateIds has passing exact-SHA evidence before publication",
+        "Excluded gates may remain blocked and cannot be presented as supported",
+        "Clean install, uninstall, repair, and recovery drills pass; REL-192 separately gates N-1 upgrade and rollback",
+        "Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance",
+        "The profile-required-gates and release-approval jobs execute and block on failure; no planned rehearsal selector remains",
+        "Named qualification sign-off is retained; the protected stable-release environment requires Krilliac owner approval with administrative bypass disabled, and independent technical verification remains separate"
+      ],
+      "commands": ["python3 tools/site-data/validate.py", "sha256sum -c SHA256SUMS"],
+      "testSelectors": ["ReleaseProfileRehearsal_*"],
+      "requiredCiJobs": ["profile-required-gates", "release-approval"],
+      "performanceBudgets": ["Every budget required by the target profiles passes without unreviewed exception"],
+      "documentationUpdates": ["CHANGELOG.md", "SECURITY.md", "wiki/development/Release-Publication-Stages.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "readinessChanges": ["G17 qualification evidence; this item must be done before candidate publication"],
+      "websiteImpact": ["Qualification alone preserves candidate wording; no public ready claim"],
+      "risks": ["The v0.9.0 bootstrap MSI has not passed protected install and repair qualification", "Unique-tag immutable nightlies have not passed live publication acceptance"],
+      "outOfScope": ["Publishing artifacts or changing final readiness", "Protocol migration, production-service backup/restore, and incident drills owned by G12 and OPS-110"],
+      "definitionOfDone": ["All supported-host rehearsals pass at the candidate SHA", "Qualification sign-off and protected approval evidence are retained", "No planned qualification job or selector remains"],
+      "profileApplicability": {"stable-v1": "shared"},
+      "plannedCiJobs": ["profile-required-gates", "release-approval"],
+      "plannedTestSelectors": ["ReleaseProfileRehearsal_*"]
+    },
+    {
+      "id": "REL-200",
+      "completionPhase": "publication-finalization",
+      "title": "Publish and independently verify the qualified release",
+      "priority": "P0",
+      "status": "blocked",
+      "blocking": true,
+      "wave": 6,
+      "area": "release",
+      "owner": "unassigned",
+      "rationale": "Final readiness requires every profile gate at one candidate commit, supported-host rehearsal, protected publication, independent download verification, and live-site evidence. Candidate qualification now requires every technical item and transitive dependency while leaving the explicitly declared publication-finalization item in progress; publication-dependent gates remain at risk until completion. The stable-release environment and its required-reviewer/Working-branch protections are verified before building and at publication. A separate read-only consumer retains exact-SHA publication-verified evidence without changing this ledger. No evidence has been manufactured or promoted. Protected authority and signing must be provisioned externally, and the strict real prior-stable MSI requirement still makes the first release an unresolved policy blocker. All release qualification and terminal evidence remain outstanding.",
+      "dependencies": [
+        "REL-190"
       ],
       "parallelWith": [],
       "sourceContext": [
@@ -976,36 +1112,28 @@
         "docs/readiness/ENGINE_READINESS_HANDOFF.md"
       ],
       "implementationScope": [
-        "Create a release-candidate tag",
-        "Run every gate required by each target release profile at the same SHA",
-        "Install and upgrade on clean supported hosts",
-        "Exercise rollback, save/asset migration, crash ingestion, repair, and uninstall for the target profiles",
-        "Collect named owner sign-off with repository evidence",
-        "Publish verified artifacts and evidence"
+        "Publish the complete preverified draft as an immutable stable release after REL-190 qualification",
+        "Independently download and verify the published artifact set and retain exact-SHA evidence",
+        "Verify live-site consumption of the released evidence before final readiness review"
       ],
       "acceptanceCriteria": [
         "Every gate listed in requiredGateIds for every target release profile is passing at the candidate SHA",
         "Excluded gates may remain blocked and cannot be presented as supported",
-        "Clean install, N-1 upgrade, uninstall, rollback, repair, and recovery drills pass",
-        "Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance",
+        "Published artifacts are immutable and independently verify against the exact qualified candidate",
         "Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists"
       ],
       "commands": [
+        "python3 tools/site-data/validate.py --require-candidate-ready",
         "python3 tools/site-data/validate.py --require-ready",
         "gh release view vX.Y.Z",
         "sha256sum -c SHA256SUMS"
       ],
-      "testSelectors": [
-        "ReleaseProfileRehearsal_*"
-      ],
+      "testSelectors": [],
       "requiredCiJobs": [
-        "profile-required-gates",
-        "release-approval",
+        "verify-stable-publication",
         "site-data-publish"
       ],
-      "performanceBudgets": [
-        "Every budget required by the target profiles passes without unreviewed exception"
-      ],
+      "performanceBudgets": [],
       "documentationUpdates": [
         "CHANGELOG.md",
         "SECURITY.md",
@@ -1033,13 +1161,8 @@
       "profileApplicability": {
         "stable-v1": "shared"
       },
-      "plannedCiJobs": [
-        "profile-required-gates",
-        "release-approval"
-      ],
-      "plannedTestSelectors": [
-        "ReleaseProfileRehearsal_*"
-      ]
+      "plannedCiJobs": [],
+      "plannedTestSelectors": []
     }
   ]
 }

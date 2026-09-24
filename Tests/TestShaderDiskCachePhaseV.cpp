@@ -25,8 +25,10 @@
 #include "TestFramework.h"
 #include "Graphics/ShaderDiskCache.h"
 
+#include <chrono>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -71,6 +73,44 @@ namespace
     void ResetDiskCache()
     {
         Spark::Graphics::GetShaderDiskCache().Shutdown();
+    }
+
+    std::filesystem::path MakeUnicodeCacheDir()
+    {
+        std::error_code error;
+        const auto root = std::filesystem::temp_directory_path(error);
+        if (error || root.empty())
+            return {};
+
+        const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+        const std::wstring prefix = L"spark_phaseV_Unicode_\x7528\x6237\x6570\x636E_";
+        for (int attempt = 0; attempt < 64; ++attempt)
+        {
+            const auto directory = root / (prefix + std::to_wstring(nonce) + L"_" + std::to_wstring(attempt));
+            error.clear();
+            if (std::filesystem::create_directory(directory, error))
+                return directory;
+            if (error && error != std::errc::file_exists)
+                return {};
+        }
+        return {};
+    }
+
+    void RemoveUnicodeCacheDir(const std::filesystem::path& directory)
+    {
+        std::error_code error;
+        const auto tempDirectory = std::filesystem::temp_directory_path(error);
+        if (error || tempDirectory.empty())
+            return;
+        const auto tempRoot = std::filesystem::weakly_canonical(tempDirectory, error);
+        if (error || std::filesystem::is_symlink(directory, error) || error)
+            return;
+        const auto resolved = std::filesystem::weakly_canonical(directory, error);
+        const auto filename = resolved.filename().wstring();
+        constexpr std::wstring_view Prefix = L"spark_phaseV_Unicode_";
+        if (error || resolved.parent_path() != tempRoot || filename.rfind(Prefix, 0) != 0)
+            return;
+        std::filesystem::remove_all(resolved, error);
     }
 
 } // namespace
@@ -411,4 +451,30 @@ TEST(ShaderDiskCachePhaseV_PersistsAcrossShutdownInitialize)
 
     cache.Shutdown();
     std::filesystem::remove_all(dir);
+}
+
+TEST(ShaderDiskCachePhaseV_UnicodeDirectoryRoundTripsOnWindows)
+{
+#if !defined(SPARK_PLATFORM_WINDOWS)
+    SKIP_TEST("Unicode shader-cache path regression is Windows-specific");
+    return;
+#else
+    ResetDiskCache();
+    const auto directory = MakeUnicodeCacheDir();
+    ASSERT_FALSE(directory.empty());
+
+    auto& cache = Spark::Graphics::GetShaderDiskCache();
+    const auto source = MakeSource("unicode cache path");
+    cache.Initialize(directory);
+    ASSERT_TRUE(cache.IsInitialized());
+    cache.Store(source, Spark::Graphics::ShaderTarget::DXBC, MakeBlob(0xA5, 48));
+
+    const auto retrieved = cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC);
+    ASSERT_TRUE(retrieved.has_value());
+    EXPECT_EQ(retrieved->bytecode.size(), static_cast<size_t>(48));
+    EXPECT_EQ(retrieved->bytecode.front(), static_cast<uint8_t>(0xA5));
+
+    cache.Shutdown();
+    RemoveUnicodeCacheDir(directory);
+#endif
 }

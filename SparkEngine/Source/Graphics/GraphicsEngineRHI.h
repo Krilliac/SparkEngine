@@ -44,6 +44,9 @@ namespace Spark::Graphics::Detail
         std::unique_ptr<Spark::RHI::IRHITexture> gBufferMotion;
         std::unique_ptr<Spark::RHI::IRHITexture> depthStencil;
         std::unique_ptr<Spark::RHI::IRHITexture> hdrLighting;
+
+        // Shared 1x1 white fallback used by the basic material path.
+        std::unique_ptr<Spark::RHI::IRHITexture> defaultTexture;
     };
 
     inline LinuxRHIState& GetRHI()

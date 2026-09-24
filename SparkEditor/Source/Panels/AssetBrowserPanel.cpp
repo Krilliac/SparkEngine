@@ -6,6 +6,7 @@
  */
 
 #include "AssetBrowserPanel.h"
+#include "../AssetPipeline/EditorAssetReference.h"
 
 #include "Graphics/GraphicsEngine.h"
 #include <algorithm>
@@ -103,7 +104,34 @@ namespace SparkEditor
                       { return PathToUtf8(lhs.filename()) < PathToUtf8(rhs.filename()); });
             return directories;
         }
+
+        // The runtime resolver deliberately accepts only project-relative
+        // Assets/... references.  Never put the editor's absolute filesystem
+        // path in a drag payload: that would make saved scenes machine-local
+        // and would bypass the runtime's project-boundary contract.
+        std::string AssetDragReference(const fs::path& assetPath, const fs::path& assetsRoot)
+        {
+            std::error_code ec;
+            const fs::path relative = fs::relative(assetPath, assetsRoot, ec);
+            if (ec || relative.empty() || relative.is_absolute())
+                return {};
+
+            for (const auto& component : relative)
+            {
+                if (component == "." || component == "..")
+                    return {};
+            }
+
+            std::string reference = "Assets/" + PathToUtf8(relative);
+            std::replace(reference.begin(), reference.end(), '\\', '/');
+            if (!IsValidEditorAssetReference(reference, EditorAssetKind::Mesh) &&
+                !IsValidEditorAssetReference(reference, EditorAssetKind::Material))
+                return {};
+            return reference;
+        }
     } // namespace
+
+    constexpr const char* kAssetDragPayload = "SPARK_ASSET_PATH";
 
     AssetBrowserPanel::AssetBrowserPanel() : EditorPanel("Asset Browser", "asset_browser_panel") {}
 
@@ -492,6 +520,20 @@ namespace SparkEditor
                 {
                     SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Asset selected: %s", filename.c_str());
                     m_selectedAsset = asset;
+                }
+
+                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
+                {
+                    const std::string reference = IsContainedByProject(assetPath)
+                                                      ? AssetDragReference(assetPath, PathFromUtf8(m_projectPath))
+                                                      : std::string{};
+                    if (!reference.empty())
+                    {
+                        ImGui::SetDragDropPayload(kAssetDragPayload, reference.c_str(), reference.size() + 1);
+                        ImGui::Text("%s", filename.c_str());
+                        ImGui::TextDisabled("%s", reference.c_str());
+                    }
+                    ImGui::EndDragDropSource();
                 }
 
                 // Hover tooltip

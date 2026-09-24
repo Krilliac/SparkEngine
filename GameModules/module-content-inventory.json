@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 2,
+  "modules": [
+    {
+      "name": "SparkGame",
+      "directory": "GameModules/SparkGame",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGame/Source",
+      "sourceFileCount": 4,
+      "moduleLocalContentState": "unclassified",
+      "releaseClassification": "unclassified",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": null,
+      "assetManifest": null,
+      "assetFileCount": 0,
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
+      "sharedRootDependencies": []
+    },
+    {
+      "name": "SparkGameARPG",
+      "directory": "GameModules/SparkGameARPG",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGameARPG/Source",
+      "sourceFileCount": 20,
+      "moduleLocalContentState": "unclassified",
+      "releaseClassification": "unclassified",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": null,
+      "assetManifest": null,
+      "assetFileCount": 0,
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
+      "sharedRootDependencies": []
+    },
+    {
+      "name": "SparkGameFPS",
+      "directory": "GameModules/SparkGameFPS",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGameFPS/Source",
+      "sourceFileCount": 70,
+      "moduleLocalContentState": "root-dependent",
+      "releaseClassification": "shipping",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": null,
+      "assetManifest": null,
+      "assetFileCount": 0,
+      "profileApplicability": {
+        "stable-v1": "required"
+      },
+      "sharedRootDependencies": [
+        {
+          "path": "Assets/Models",
+          "buildDeclarationPresent": true,
+          "exists": true,
+          "fileCount": 307,
+          "integrityManifest": true,
+          "integrityCoveredFileCount": 307
+        },
+        {
+          "path": "Assets/Scenes",
+          "buildDeclarationPresent": true,
+          "exists": true,
+          "fileCount": 10,
+          "integrityManifest": true,
+          "integrityCoveredFileCount": 10
+        }
+      ]
+    },
+    {
+      "name": "SparkGameMMO",
+      "directory": "GameModules/SparkGameMMO",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGameMMO/Source",
+      "sourceFileCount": 39,
+      "moduleLocalContentState": "unclassified",
+      "releaseClassification": "unclassified",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": null,
+      "assetManifest": null,
+      "assetFileCount": 0,
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
+      "sharedRootDependencies": []
+    },
+    {
+      "name": "SparkGameMMOFPS",
+      "directory": "GameModules/SparkGameMMOFPS",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGameMMOFPS/Source",
+      "sourceFileCount": 310,
+      "moduleLocalContentState": "unclassified",
+      "releaseClassification": "unclassified",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": null,
+      "assetManifest": null,
+      "assetFileCount": 0,
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
+      "sharedRootDependencies": []
+    },
+    {
+      "name": "SparkGameOpenWorld",
+      "directory": "GameModules/SparkGameOpenWorld",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGameOpenWorld/Source",
+      "sourceFileCount": 21,
+      "moduleLocalContentState": "unclassified",
+      "releaseClassification": "unclassified",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": null,
+      "assetManifest": null,
+      "assetFileCount": 0,
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
+      "sharedRootDependencies": []
+    },
+    {
+      "name": "SparkGamePlatformer",
+      "directory": "GameModules/SparkGamePlatformer",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGamePlatformer/Source",
+      "sourceFileCount": 17,
+      "moduleLocalContentState": "unclassified",
+      "releaseClassification": "unclassified",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": null,
+      "assetManifest": null,
+      "assetFileCount": 0,
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
+      "sharedRootDependencies": []
+    },
+    {
+      "name": "SparkGameRacing",
+      "directory": "GameModules/SparkGameRacing",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGameRacing/Source",
+      "sourceFileCount": 21,
+      "moduleLocalContentState": "unclassified",
+      "releaseClassification": "unclassified",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": null,
+      "assetManifest": null,
+      "assetFileCount": 0,
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
+      "sharedRootDependencies": []
+    },
+    {
+      "name": "SparkGameRPG",
+      "directory": "GameModules/SparkGameRPG",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGameRPG/Source",
+      "sourceFileCount": 24,
+      "moduleLocalContentState": "unclassified",
+      "releaseClassification": "unclassified",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": null,
+      "assetManifest": null,
+      "assetFileCount": 0,
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
+      "sharedRootDependencies": []
+    },
+    {
+      "name": "SparkGameRTS",
+      "directory": "GameModules/SparkGameRTS",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGameRTS/Source",
+      "sourceFileCount": 22,
+      "moduleLocalContentState": "unclassified",
+      "releaseClassification": "unclassified",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": null,
+      "assetManifest": null,
+      "assetFileCount": 0,
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
+      "sharedRootDependencies": []
+    },
+    {
+      "name": "SparkGameVisualScript",
+      "directory": "GameModules/SparkGameVisualScript",
+      "cmakeLists": true,
+      "sourceDirectory": "GameModules/SparkGameVisualScript/Source",
+      "sourceFileCount": 3,
+      "moduleLocalContentState": "packaged",
+      "releaseClassification": "unclassified",
+      "cmakeDeclarationParseError": false,
+      "assetsDirectory": "GameModules/SparkGameVisualScript/Assets",
+      "assetManifest": "GameModules/SparkGameVisualScript/Assets/manifest.json",
+      "assetFileCount": 5,
+      "profileApplicability": {
+        "stable-v1": "outside"
+      },
+      "sharedRootDependencies": []
+    }
+  ]
+}

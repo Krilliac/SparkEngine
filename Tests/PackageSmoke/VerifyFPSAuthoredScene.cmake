@@ -1,0 +1,273 @@
+cmake_minimum_required(VERSION 3.25)
+
+# Exercise a copied FPS runtime bin directory with an isolated scene edit.
+# The input may be a build-output layout or a separate cmake --install stage;
+# callers must report which provenance they supplied. A hard-coded camera or
+# spawn must fail this probe.
+foreach(_required IN ITEMS SPARK_PACKAGE_BIN SPARK_TEST_ROOT SPARK_SOURCE_ROOT)
+    if(NOT DEFINED ${_required} OR NOT IS_ABSOLUTE "${${_required}}" OR
+       "${${_required}}" MATCHES "[\r\n;]")
+        message(FATAL_ERROR "${_required} must be a safe absolute path")
+    endif()
+endforeach()
+if(NOT EXISTS "${SPARK_PACKAGE_BIN}/SparkEngine.exe" OR
+   NOT EXISTS "${SPARK_PACKAGE_BIN}/SparkGameFPS.dll" OR
+   NOT EXISTS "${SPARK_PACKAGE_BIN}/Assets/Scenes/level1.scene" OR
+   NOT EXISTS "${SPARK_PACKAGE_BIN}/Assets/Materials/Arena_CenterBuilding.json")
+    message(FATAL_ERROR "FPS package-layout engine, module, scene, or center material is missing")
+endif()
+
+string(TIMESTAMP _stamp "%Y%m%dT%H%M%SZ" UTC)
+string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef _nonce)
+set(_run_root "${SPARK_TEST_ROOT}/fps-authored-${_stamp}-${_nonce}")
+if(EXISTS "${_run_root}" OR IS_SYMLINK "${_run_root}")
+    message(FATAL_ERROR "Generated FPS run root already exists")
+endif()
+file(MAKE_DIRECTORY "${_run_root}/bin")
+file(COPY "${SPARK_PACKAGE_BIN}/" DESTINATION "${_run_root}/bin")
+
+set(_scene_path "${_run_root}/bin/Assets/Scenes/level1.scene")
+file(READ "${_scene_path}" _scene)
+string(REGEX REPLACE "\\[Camera\\][\r\n]+position=0[.]0,2[.]0,-(5|20)[.]0"
+    "[Camera]\nposition=1.0,2.0,-20.0" _changed_scene "${_scene}")
+string(REPLACE "position=0.0,2.0,-20.0" "position=4.0,2.0,-19.0" _changed_scene "${_changed_scene}")
+string(REPLACE "position=20.0,1.0,20.0" "position=11.0,1.5,22.0" _changed_scene "${_changed_scene}")
+foreach(_edited_position IN ITEMS
+    "position=1.0,2.0,-20.0"
+    "position=4.0,2.0,-19.0"
+    "position=11.0,1.5,22.0")
+    if(NOT _changed_scene MATCHES "${_edited_position}")
+        message(FATAL_ERROR "Expected authored edit missing: ${_edited_position}")
+    endif()
+endforeach()
+string(REPLACE "projection=perspective" "projection=perspective\nrotation=0.0,5.0,0.0" _changed_scene "${_changed_scene}")
+string(REPLACE "nearPlane=0.1" "nearPlane=0.25" _changed_scene "${_changed_scene}")
+string(REPLACE "farPlane=1000.0" "farPlane=250.0" _changed_scene "${_changed_scene}")
+file(WRITE "${_scene_path}" "${_changed_scene}")
+set(_malformed_scene_path "${_run_root}/bin/Assets/Scenes/malformed.scene")
+# Keep malformed input inside the trusted directory so this reaches the
+# SceneManager transactional load/rollback path instead of only path policy.
+file(WRITE "${_malformed_scene_path}" "[Scene]\nname=Malformed\n")
+set(_exec_script "${_run_root}/scene-load.exec")
+file(WRITE "${_exec_script}"
+    "0 game_status\n"
+    "1 scene_load level1.scene\n"
+    "2 game_status\n"
+    "3 scene_load malformed.scene\n"
+    "4 scene_load ../level1.scene\n"
+    "5 scene_load C:/outside.scene\n"
+    "6 scene_load foreign.scene\n"
+    "7 game_status\n"
+    "8 wave_status\n8 gfx_screenshot fps-authored.png\n"
+    "10 wave_start\n11 game_status\n11 gfx_screenshot fps-survival.png\n")
+
+set(SPARK_LIFECYCLE_PARSER_INCLUDE_ONLY ON)
+include("${SPARK_SOURCE_ROOT}/cmake/RunSparkModuleProfileLifecycle.cmake")
+unset(SPARK_LIFECYCLE_PARSER_INCLUDE_ONLY)
+
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env
+        "SPARK_RHI_BACKEND=d3d11"
+        "SPARK_D3D11_DRIVER=warp"
+        "LOCALAPPDATA=${_run_root}/localappdata"
+        "${_run_root}/bin/SparkEngine.exe"
+        -game "${_run_root}/bin/SparkGameFPS.dll"
+        -require-game -test-frames 13 -threads 2 -window-size 640x360 -no-subprocess
+        -exec "${_exec_script}"
+    WORKING_DIRECTORY "${_run_root}"
+    RESULT_VARIABLE _result
+    OUTPUT_VARIABLE _stdout
+    ERROR_VARIABLE _stderr
+    TIMEOUT 120
+    ENCODING UTF-8)
+file(WRITE "${_run_root}/stdout.log" "${_stdout}")
+file(WRITE "${_run_root}/stderr.log" "${_stderr}")
+_spark_validate_lifecycle_result("${_result}" "${_stdout}" "${_stderr}" _lifecycle_ok _reason)
+if(NOT _lifecycle_ok)
+    message(FATAL_ERROR "FPS package-layout authored-scene run failed: ${_reason}; logs: ${_run_root}")
+endif()
+
+set(_audit "${_run_root}/exec_audit.log")
+if(NOT EXISTS "${_audit}")
+    message(FATAL_ERROR "FPS package-layout runtime did not execute game_status; logs: ${_run_root}")
+endif()
+file(READ "${_audit}" _status)
+if(NOT _status MATCHES "frame 1 [^\\n]*[|] ok  [|] scene_load")
+    message(FATAL_ERROR "FPS package-layout runtime did not dispatch installed scene_load; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Scene reloaded successfully: level1[.]scene")
+    message(FATAL_ERROR "FPS package-layout runtime did not reload a valid scene; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Scene reload failed: malformed[.]scene")
+    message(FATAL_ERROR "FPS package-layout runtime did not reject malformed scene; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Scene reload failed: \.\./level1[.]scene")
+    message(FATAL_ERROR "FPS package-layout runtime did not reject traversal; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Scene reload failed: C:/outside[.]scene")
+    message(FATAL_ERROR "FPS package-layout runtime did not reject absolute path; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Scene reload failed: foreign[.]scene")
+    message(FATAL_ERROR "FPS package-layout runtime did not reject foreign path; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Scene load rejected: scene traversal or empty path component is not permitted")
+    message(FATAL_ERROR "FPS package-layout runtime missed traversal rejection reason; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Scene load rejected: absolute scene paths are not permitted")
+    message(FATAL_ERROR "FPS package-layout runtime missed absolute-path rejection reason; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Scene load rejected: scene file does not exist")
+    message(FATAL_ERROR "FPS package-layout runtime missed foreign-path rejection reason; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Camera initialized from authored scene at \\(1[.]000000, 2[.]000000, -20[.]000000\\)")
+    message(FATAL_ERROR "FPS package-layout runtime ignored edited [Camera] position in live startup; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Camera authored state: rotation \\(0[.]0, 5[.]0, 0[.]0\\) near/far \\(0[.]25, 250[.]0\\)")
+    message(FATAL_ERROR "FPS package-layout runtime ignored edited [Camera] rotation/clipping; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "Scene-authored respawn points: 4; preferred at \\(4[.]000000, 2[.]000000, -19[.]000000\\)")
+    message(FATAL_ERROR "FPS package-layout runtime ignored edited [SpawnPoint] position; logs: ${_run_root}")
+endif()
+string(FIND "${_status}" "frame 7 " _post_frame_offset)
+if(_post_frame_offset LESS 0)
+    message(FATAL_ERROR "FPS package-layout runtime missed post-reload diagnostics; logs: ${_run_root}")
+endif()
+string(SUBSTRING "${_status}" ${_post_frame_offset} -1 _post_frame_status)
+if(NOT _post_frame_status MATCHES "Camera/Player XZ: \\(1[.]0, -20[.]0\\) / \\(1[.]0, -20[.]0\\)")
+    message(FATAL_ERROR "FPS package-layout runtime lost authored camera/player location after rejected reloads; logs: ${_run_root}")
+endif()
+if(NOT _post_frame_status MATCHES "Wave Spawn Points: 10; first \\(11[.]0, 1[.]5, 22[.]0\\)")
+    message(FATAL_ERROR "FPS package-layout runtime did not configure authored wave spawns; logs: ${_run_root}")
+endif()
+if(NOT _status MATCHES "frame 10 [^\n]*[|] ok  [|] wave_start")
+    message(FATAL_ERROR "FPS package-layout runtime did not start the survival match; logs: ${_run_root}")
+endif()
+string(FIND "${_status}" "frame 11 " _restart_frame_offset)
+if(_restart_frame_offset LESS 0)
+    message(FATAL_ERROR "FPS package-layout runtime missed post-restart game_status; logs: ${_run_root}")
+endif()
+string(SUBSTRING "${_status}" ${_restart_frame_offset} -1 _restart_frame_status)
+if(NOT _restart_frame_status MATCHES "Camera/Player XZ: \\(4[.]0, -19[.]0\\) / \\(4[.]0, -19[.]0\\)")
+    message(FATAL_ERROR "FPS package-layout restart did not use edited North_Spawn; logs: ${_run_root}")
+endif()
+set(_image "${_run_root}/fps-authored.png")
+if(NOT EXISTS "${_image}" OR IS_DIRECTORY "${_image}")
+    message(FATAL_ERROR "FPS package-layout runtime did not capture a rendered frame; logs: ${_run_root}")
+endif()
+execute_process(
+    COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+        -NoProfile -NonInteractive -File
+        "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CheckFPSVisibleFrame.ps1"
+        -ImagePath "${_image}"
+    RESULT_VARIABLE _visual_result
+    OUTPUT_VARIABLE _visual_stdout
+    ERROR_VARIABLE _visual_stderr
+    TIMEOUT 30)
+if(NOT _visual_result EQUAL 0)
+    message(FATAL_ERROR "FPS package-layout frame failed visual geometry check: ${_visual_stderr}; logs: ${_run_root}")
+endif()
+set(_survival_image "${_run_root}/fps-survival.png")
+if(NOT EXISTS "${_survival_image}" OR IS_DIRECTORY "${_survival_image}")
+    message(FATAL_ERROR "FPS package-layout survival frame was not captured; logs: ${_run_root}")
+endif()
+execute_process(
+    COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+        -NoProfile -NonInteractive -File
+        "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CheckFPSVisibleFrame.ps1"
+        -ImagePath "${_survival_image}"
+    RESULT_VARIABLE _survival_visual_result
+    ERROR_VARIABLE _survival_visual_stderr
+    TIMEOUT 30)
+if(NOT _survival_visual_result EQUAL 0)
+    message(FATAL_ERROR "FPS package-layout survival frame failed visual geometry check: ${_survival_visual_stderr}; logs: ${_run_root}")
+endif()
+
+# Center_Building is part of the procedural FPS arena, outside the authored
+# [Object] nodes. A copied package must visibly respond when only its material
+# albedo changes; the generic color-diversity smoke above cannot prove that.
+set(_baseline_image "${_run_root}/fps-center-baseline.png")
+file(COPY_FILE "${_image}" "${_baseline_image}")
+set(_center_material "${_run_root}/bin/Assets/Materials/Arena_CenterBuilding.json")
+file(READ "${_center_material}" _material_json)
+string(REPLACE "Textures/concrete_diffuse.png" "Textures/wood_diffuse.png"
+    _variant_material_json "${_material_json}")
+if(_variant_material_json STREQUAL _material_json)
+    message(FATAL_ERROR "FPS center material did not contain the expected baseline albedo; logs: ${_run_root}")
+endif()
+file(WRITE "${_center_material}" "${_variant_material_json}")
+
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env
+        "SPARK_RHI_BACKEND=d3d11"
+        "SPARK_D3D11_DRIVER=warp"
+        "LOCALAPPDATA=${_run_root}/localappdata"
+        "${_run_root}/bin/SparkEngine.exe"
+        -game "${_run_root}/bin/SparkGameFPS.dll"
+        -require-game -test-frames 13 -threads 2 -window-size 640x360 -no-subprocess
+        -exec "${_exec_script}"
+    WORKING_DIRECTORY "${_run_root}"
+    RESULT_VARIABLE _variant_result
+    OUTPUT_VARIABLE _variant_stdout
+    ERROR_VARIABLE _variant_stderr
+    TIMEOUT 120
+    ENCODING UTF-8)
+file(WRITE "${_run_root}/variant-stdout.log" "${_variant_stdout}")
+file(WRITE "${_run_root}/variant-stderr.log" "${_variant_stderr}")
+_spark_validate_lifecycle_result("${_variant_result}" "${_variant_stdout}" "${_variant_stderr}"
+    _variant_lifecycle_ok _variant_reason)
+if(NOT _variant_lifecycle_ok OR NOT EXISTS "${_image}")
+    message(FATAL_ERROR "FPS center-material variant run failed: ${_variant_reason}; logs: ${_run_root}")
+endif()
+execute_process(
+    COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+        -NoProfile -NonInteractive -File
+        "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CompareFPSMaterialFrames.ps1"
+        -BaselineImage "${_baseline_image}"
+        -VariantImage "${_image}"
+    RESULT_VARIABLE _material_visual_result
+    OUTPUT_VARIABLE _material_visual_stdout
+    ERROR_VARIABLE _material_visual_stderr
+    TIMEOUT 30)
+if(NOT _material_visual_result EQUAL 0)
+    message(FATAL_ERROR "FPS installed center material did not affect rendered pixels: ${_material_visual_stderr}; logs: ${_run_root}")
+endif()
+string(STRIP "${_material_visual_stdout}" _material_visual_summary)
+message(STATUS "${_material_visual_summary}")
+
+# A second fresh process proves startup material loading above. The documented
+# scene_load command must also refresh a changed material inside one live FPS
+# process; otherwise it leaves users looking at stale textures until restart.
+file(WRITE "${_center_material}" "${_material_json}")
+find_program(_spark_python NAMES python python3 REQUIRED)
+set(_live_root "${_run_root}/live-reload")
+execute_process(
+    COMMAND "${_spark_python}"
+        "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/RunFPSLiveMaterialReload.py"
+        --package-bin "${_run_root}/bin"
+        --work-root "${_live_root}"
+    RESULT_VARIABLE _live_result
+    OUTPUT_VARIABLE _live_stdout
+    ERROR_VARIABLE _live_stderr
+    TIMEOUT 75
+    ENCODING UTF-8)
+file(WRITE "${_run_root}/live-reload-runner.stdout.log" "${_live_stdout}")
+file(WRITE "${_run_root}/live-reload-runner.stderr.log" "${_live_stderr}")
+if(NOT _live_result EQUAL 0)
+    message(FATAL_ERROR "FPS installed same-process material reload failed: ${_live_stderr}; logs: ${_run_root}")
+endif()
+execute_process(
+    COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+        -NoProfile -NonInteractive -File
+        "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CompareFPSMaterialFrames.ps1"
+        -BaselineImage "${_live_root}/live-before.png"
+        -VariantImage "${_live_root}/live-after.png"
+    RESULT_VARIABLE _live_visual_result
+    OUTPUT_VARIABLE _live_visual_stdout
+    ERROR_VARIABLE _live_visual_stderr
+    TIMEOUT 30)
+if(NOT _live_visual_result EQUAL 0)
+    message(FATAL_ERROR "FPS scene_load kept stale material pixels: ${_live_visual_stderr}; logs: ${_run_root}")
+endif()
+string(STRIP "${_live_visual_stdout}" _live_visual_summary)
+message(STATUS "Same-process scene_load: ${_live_visual_summary}")
+message(STATUS "FPS package-layout runtime honored edited scene camera and spawns; logs: ${_run_root}")

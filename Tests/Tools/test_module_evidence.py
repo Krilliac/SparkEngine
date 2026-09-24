@@ -482,10 +482,29 @@ class TestTargetProof(FixtureCase):
         self.assertRejected(base_manifest(), "B02",
                             target_index=target_index(sources=[]))
 
+    def test_target_without_a_module_artifact_is_rejected(self) -> None:
+        evidence = target_index()
+        evidence["targets"][INCLUDED]["artifacts"] = []
+        errors = self.assertRejected(
+            base_manifest(), "B02c", target_index=evidence,
+        )
+        self.assertTrue(
+            any("output artifact" in error.lower() for error in errors),
+            errors,
+        )
+
     def test_B02b_sources_outside_declared_tree_are_rejected(self) -> None:
         self.assertRejected(
             base_manifest(), "B02b",
             target_index=target_index(sources=["SparkEngine/Source/Other.cpp"]),
+        )
+
+    def test_B02c_sibling_source_directory_prefix_is_rejected(self) -> None:
+        self.assertRejected(
+            base_manifest(), "B02c",
+            target_index=target_index(
+                source_directory=f"GameModules/{INCLUDED}Evil/Source",
+            ),
         )
 
     def test_target_of_wrong_type_is_rejected(self) -> None:
@@ -4698,6 +4717,11 @@ class TestCIWiring(unittest.TestCase):
         block = self._job_block("module-evidence")
         self.assertIn("collect_targets.py", block)
         self.assertIn("-DBUILD_GAME_MODULES=ON", block)
+        self.assertNotRegex(
+            block, r"--configure-arg\s+-D",
+            "CMake definitions must be attached to --configure-arg so argparse "
+            "does not treat a leading -D as another option",
+        )
 
     def test_module_evidence_gate_is_not_policy_only(self) -> None:
         """A --policy-only run must never be the release gate."""
@@ -5095,6 +5119,67 @@ class TestCMakeFileAPI(unittest.TestCase):
         self.assertEqual(index["SparkGameFPS"]["sources"],
                          ["GameModules/SparkGameFPS/Source/Main.cpp"])
 
+    def test_extract_from_reply_normalizes_absolute_codemodel_paths(self) -> None:
+        """Real CMake roots are absolute; evidence must remain portable."""
+        with tempfile.TemporaryDirectory(prefix="spark-absolute-reply-") as tmp:
+            root = Path(tmp)
+            source_root = root / "checkout"
+            build_root = root / "build"
+            target_source = source_root / "GameModules" / "SparkGameFPS"
+            target = {
+                "name": "SparkGameFPS",
+                "type": "SHARED_LIBRARY",
+                "nameOnDisk": "libSparkGameFPS.so",
+                "paths": {
+                    "source": str(target_source),
+                    "build": str(build_root / "GameModules" / "SparkGameFPS"),
+                },
+                "sources": [{
+                    "path": str(target_source / "Source" / "Main.cpp"),
+                }],
+                "artifacts": [{
+                    "path": str(build_root / "bin" / "libSparkGameFPS.so"),
+                }],
+            }
+            codemodel = {
+                "paths": {
+                    "source": str(source_root),
+                    "build": str(build_root),
+                },
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{
+                        "name": "SparkGameFPS",
+                        "jsonFile": "target-X.json",
+                    }],
+                }],
+            }
+            reply = root / "reply"
+            reply.mkdir()
+            (reply / "target-X.json").write_text(
+                json.dumps(target), encoding="utf-8",
+            )
+            (reply / "codemodel-v2-abc.json").write_text(
+                json.dumps(codemodel), encoding="utf-8",
+            )
+            (reply / "index-1.json").write_text(json.dumps({
+                "reply": {targets_mod.CLIENT_NAME: {"query.json": {
+                    "responses": [{
+                        "kind": "codemodel",
+                        "jsonFile": "codemodel-v2-abc.json",
+                    }]
+                }}}
+            }), encoding="utf-8")
+            index = targets_mod.extract_from_reply(reply)
+
+        captured = index["SparkGameFPS"]
+        self.assertEqual(captured["sourceDirectory"], "GameModules/SparkGameFPS")
+        self.assertEqual(
+            captured["sources"],
+            ["GameModules/SparkGameFPS/Source/Main.cpp"],
+        )
+        self.assertEqual(captured["artifacts"], ["bin/libSparkGameFPS.so"])
+
     def test_query_error_in_reply_raises(self) -> None:
         with tempfile.TemporaryDirectory(prefix="spark-reply-") as tmp:
             reply = Path(tmp)
@@ -5228,6 +5313,21 @@ class TestArtifactSemanticValidation(FixtureCase):
         errors = artifacts.validate_junit_xml(path, INCLUDED)
         self.assertEqual(errors, [], f"valid JUnit XML rejected: {errors}")
 
+    def test_ctest_junit_without_classname_is_accepted(self) -> None:
+        """CTest's JUnit producer omits the optional classname attribute."""
+        report = (
+            '<testsuites tests="3" failures="0" errors="0">'
+            '<testsuite name="SparkEngineTests" tests="3" failures="0" errors="0">'
+            '<testcase name="one"/><testcase name="two"/><testcase name="three"/>'
+            '</testsuite></testsuites>'
+        )
+        path_errors = artifacts.validate_junit_xml(self._junit_xml(report), INCLUDED)
+        byte_errors = artifacts.validate_junit_xml_bytes(
+            report.encode("utf-8"), "ctest-junit.xml", INCLUDED,
+        )
+        self.assertEqual(path_errors, [], path_errors)
+        self.assertEqual(byte_errors, [], byte_errors)
+
     def test_junit_xml_with_zero_tests_is_rejected(self) -> None:
         path = self._junit_xml(
             '<testsuites tests="0" failures="0" errors="0">'
@@ -5235,6 +5335,41 @@ class TestArtifactSemanticValidation(FixtureCase):
         )
         errors = artifacts.validate_junit_xml(path, INCLUDED)
         self.assertTrue(any("zero tests" in e for e in errors), errors)
+
+    def test_junit_xml_with_nonzero_failure_or_error_counts_is_rejected(self) -> None:
+        """A report recording failed tests cannot satisfy the evidence binding."""
+        for attribute in ("failures", "errors"):
+            with self.subTest(attribute=attribute):
+                report = self.VALID_JUNIT.replace(
+                    f'{attribute}="0"', f'{attribute}="1"',
+                )
+                path = self._junit_xml(report)
+                path_errors = artifacts.validate_junit_xml(path, INCLUDED)
+                byte_errors = artifacts.validate_junit_xml_bytes(
+                    report.encode("utf-8"), "test-junit.xml", INCLUDED,
+                )
+                self.assertTrue(path_errors, path_errors)
+                self.assertTrue(byte_errors, byte_errors)
+
+    def test_junit_xml_rejects_failure_or_error_children_with_zero_counts(self) -> None:
+        """Failure/error elements cannot hide behind false aggregate counters."""
+        for outcome in ("failure", "error"):
+            with self.subTest(outcome=outcome):
+                report = (
+                    '<testsuites tests="3" failures="0" errors="0">'
+                    '<testsuite name="SparkEngineTests" tests="3" failures="0" errors="0">'
+                    f'<testcase name="bad"><{outcome}>boom</{outcome}></testcase>'
+                    '<testcase name="two"/><testcase name="three"/>'
+                    '</testsuite></testsuites>'
+                )
+                path_errors = artifacts.validate_junit_xml(
+                    self._junit_xml(report), INCLUDED,
+                )
+                byte_errors = artifacts.validate_junit_xml_bytes(
+                    report.encode("utf-8"), "ctest-junit.xml", INCLUDED,
+                )
+                self.assertTrue(any(f"<{outcome}>" in e for e in path_errors), path_errors)
+                self.assertTrue(any(f"<{outcome}>" in e for e in byte_errors), byte_errors)
 
     def test_junit_xml_with_no_testcases_is_rejected(self) -> None:
         path = self._junit_xml(

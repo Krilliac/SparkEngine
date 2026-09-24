@@ -16,7 +16,7 @@
 
 #include <cstdint>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 namespace RTS
@@ -104,7 +104,8 @@ namespace RTS
 
         Spark::IEngineContext* m_context{nullptr};
 
-        std::unordered_map<uint32_t, UnitData> m_units;
+        // Ordered by id: every per-tick walk must visit units in the same order on every run and platform.
+        std::map<uint32_t, UnitData> m_units;
         std::vector<UnitTemplate> m_templates;
         uint32_t m_nextUnitId = 1;
     };

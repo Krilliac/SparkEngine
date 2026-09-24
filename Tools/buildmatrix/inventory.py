@@ -963,15 +963,15 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "Jolt",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 1652,
+            "line": 1659,
             "conditionFrames": [
-                {"id": "CMakeLists.txt:1558", "branch": 0, "branches": ["JOLT_FOUND"]},
+                {"id": "CMakeLists.txt:1565", "branch": 0, "branches": ["JOLT_FOUND"]},
                 {
-                    "id": "CMakeLists.txt:1650",
+                    "id": "CMakeLists.txt:1657",
                     "branch": 0,
                     "branches": ["SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"],
                 },
-                {"id": "CMakeLists.txt:1651", "branch": 0, "branches": ["MSVC"]},
+                {"id": "CMakeLists.txt:1658", "branch": 0, "branches": ["MSVC"]},
             ],
             "definitionScope": [],
             "origin": "required-target-reference",
@@ -994,6 +994,32 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             ],
             "definitionScope": [],
             "origin": "required-target-reference",
+            "resolved": True,
+        },
+    },
+}
+
+# These literal targets are created inside a called CMake function, so they are
+# absent from the top-level static target set even though the configured File
+# API reports them. Admit only this reviewed declaration in its active profile.
+_REVIEWED_CONFIGURED_FUNCTION_TARGET_CONTRACTS = {
+    "check-fuzz-policy": {
+        "profiles": frozenset({"windows-validation"}),
+        "requiredCache": {"SPARK_ENABLE_FUZZ_POLICY_CHECKS": "ON"},
+        "record": {
+            "target": "check-fuzz-policy",
+            "kind": "utility",
+            "file": "cmake/SparkFuzzPolicy.cmake",
+            "line": 19,
+            "conditionFrames": [
+                {
+                    "id": "cmake/SparkFuzzPolicy.cmake:18",
+                    "branch": 0,
+                    "branches": ["NOT TARGET check-fuzz-policy"],
+                }
+            ],
+            "definitionScope": ["spark_enable_fuzz_policy"],
+            "origin": "function-template",
             "resolved": True,
         },
     },
@@ -1144,6 +1170,30 @@ def reviewed_required_target_references(
         if target == "angelscript" and str(
             cache_variables.get("ENABLE_ANGELSCRIPT", "")
         ).upper() != "ON":
+            continue
+        if declaration == contract["record"]:
+            reviewed.add(str(target))
+    return reviewed
+
+
+def reviewed_configured_function_targets(
+    declarations: list[dict[str, Any]],
+    profile: str,
+    cache_variables: dict[str, Any],
+) -> set[str]:
+    """Corroborate an exact function-scoped declaration only when enabled."""
+    reviewed: set[str] = set()
+    for declaration in declarations:
+        if not isinstance(declaration, dict):
+            continue
+        target = declaration.get("target")
+        contract = _REVIEWED_CONFIGURED_FUNCTION_TARGET_CONTRACTS.get(str(target))
+        if contract is None or profile not in contract["profiles"]:
+            continue
+        if not all(
+            str(cache_variables.get(name, "")).upper() == required
+            for name, required in contract["requiredCache"].items()
+        ):
             continue
         if declaration == contract["record"]:
             reviewed.add(str(target))
@@ -1425,6 +1475,21 @@ def extract_workflow_presets(path: Path | None = None) -> list[str]:
 # Cache variables worth binding evidence to. Bounded on purpose: the reply's
 # cache is attacker-sized input, and an unbounded copy would bloat the artifact.
 _BOUND_CACHE_PREFIXES = ("SPARK_", "ENABLE_", "BUILD_")
+_MSVC_TOOLCHAIN_CACHE_NAMES = (
+    "CMAKE_GENERATOR_INSTANCE",
+    "CMAKE_AR",
+    "CMAKE_LINKER",
+)
+# Root Visual Studio profiles publish these values from CMake's measured
+# compiler variables. They are deliberately separate from the path identity
+# names above because installed SDK consumers do not configure the engine root.
+_MSVC_COMPILER_PROVENANCE_CACHE_NAMES = (
+    "SPARK_TOOLCHAIN_CXX_COMPILER",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_ID",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_VERSION",
+    "SPARK_TOOLCHAIN_CXX_ARCHITECTURE",
+    "SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION",
+)
 _BOUND_CACHE_NAMES = {
     "CMAKE_BUILD_TYPE",
     "CMAKE_GENERATOR",
@@ -1433,6 +1498,7 @@ _BOUND_CACHE_NAMES = {
     "CMAKE_HOME_DIRECTORY",
     "CMAKE_SYSTEM_NAME",
     "CMAKE_SIZEOF_VOID_P",
+    *_MSVC_TOOLCHAIN_CACHE_NAMES,
 }
 _MAX_CACHE_ENTRIES = 4096
 _MAX_REPLY_FILES = 8192
@@ -2405,7 +2471,7 @@ def parse_codemodel_targets(
     targets: dict[tuple[str, str], dict[str, Any]] = {}
     seen_configurations: set[str] = set()
     id_bindings: dict[tuple[str, str], tuple[str, str]] = {}
-    id_semantics: dict[str, tuple[str, str, bool]] = {}
+    id_semantics: dict[str, tuple[str, str, bool, bool]] = {}
     logical_targets: set[tuple[str, str]] = set()
     artifact_owners: dict[tuple[str, str], tuple[str, str]] = {}
     profile_data = load_stable_profile()
@@ -2485,7 +2551,14 @@ def parse_codemodel_targets(
                 raise InventoryError(
                     f"{profile}: codemodel target {name!r} has an invalid isGeneratorProvided marker"
                 )
-            semantics = (name, cmake_type, generator_provided)
+            imported_marker_present = "imported" in target
+            imported_value = target.get("imported", False)
+            if imported_marker_present and not isinstance(imported_value, bool):
+                raise InventoryError(
+                    f"{profile}: codemodel target {name!r} has an invalid imported marker"
+                )
+            imported = imported_value is True
+            semantics = (name, cmake_type, generator_provided, imported)
             previous_semantics = id_semantics.setdefault(reference_id, semantics)
             if previous_semantics != semantics:
                 raise InventoryError(
@@ -2594,15 +2667,16 @@ def parse_codemodel_targets(
                 raise InventoryError(
                     f"{profile}: utility target {name!r} declares linked artifact identity"
                 )
-            if generator_provided:
-                if kind != "utility":
-                    raise InventoryError(
-                        f"{profile}: generator-provided target {name!r} is not a utility"
-                    )
+            if generator_provided and kind != "utility":
+                raise InventoryError(
+                    f"{profile}: generator-provided target {name!r} is not a utility"
+                )
+            if generator_provided or imported:
                 # Generator plumbing remains cryptographically bound in the
                 # consumed raw reply and replyDigest, but is not a configured
-                # product. Omitting it prevents directory-scoped ALL_BUILD
-                # aggregates and ZERO_CHECK from fabricating product identity.
+                # product. Omitting it prevents imported dependencies,
+                # directory-scoped ALL_BUILD aggregates, and ZERO_CHECK from
+                # fabricating product identity.
                 continue
             key = (name, config_name)
             if key in logical_targets:
@@ -3212,6 +3286,16 @@ def _capture_material_errors(evidence: dict[str, Any], profile: str) -> list[str
         for name in preset.get("cacheVariables", {}):
             if not isinstance(cache, dict) or name not in cache:
                 errors.append(f"cacheVariables.{name}")
+    if (
+        str(evidence.get("generator", "")).casefold().startswith("visual studio")
+        or str(evidence.get("toolset", "")).casefold().startswith("v14")
+    ):
+        required_toolchain_names = list(_MSVC_TOOLCHAIN_CACHE_NAMES)
+        if config and config.get("preset"):
+            required_toolchain_names.extend(_MSVC_COMPILER_PROVENANCE_CACHE_NAMES)
+        for name in required_toolchain_names:
+            if not isinstance(cache, dict) or not cache.get(name):
+                errors.append(f"cacheVariables.{name}")
     return sorted(set(errors))
 
 
@@ -3573,7 +3657,7 @@ def _capture_plan(
         if not binary:
             raise InventoryError(f"capture preset {preset_name!r} has no binaryDir")
         expected_build = _absolute_directory(Path(binary.replace("${sourceDir}", str(source_dir))))
-        argv = [str(cmake_executable), "--preset", preset_name]
+        argv = [str(cmake_executable), "--fresh", "--preset", preset_name]
     else:
         source_dir = _absolute_directory(REPO_ROOT / str(config.get("sourceDirectory", "")))
         expected_build = _absolute_directory(REPO_ROOT / str(config.get("buildDirectory", "")))

@@ -76,7 +76,7 @@ trivially-green skip stub — see "The skip trap" below.
 | `DedicatedServer.{h,cpp}` | Standalone server loop; owns real sockets; trusted in-process RCON API | Implemented, tested |
 | `ITransport.h`, `UDPTransport.h`, `SteamTransport.h`, `NetworkIntegration.h` (`NetworkStack`) | Pluggable transport abstraction. **NetworkManager does NOT use it** — it opens raw sockets directly. `SteamTransport` is a fail-everything stub (see its 17-line `@warning`) | Implemented, **not wired**, tested |
 | `NetworkEncryption.{h,cpp}` | XOR stream cipher + truncated HMAC, `RateLimiter`, `ReplayProtection` | Implemented, **not wired** (test-only consumers), tested |
-| `NetworkSecurity.h` | Older XOR + connection-token helper used only by `NetworkStack` | Implemented, **not wired**, tested — and uses `std::mt19937`, not the CSPRNG |
+| `NetworkSecurity.h` | Older XOR + connection-token helper used only by `NetworkStack` | Implemented, **not wired**, tested — key/token bytes now come from `Spark::SecureRandom::Fill`; entropy failure leaves zeroed key material or an unqueued token |
 | `DeltaSnapshotManager`, `EntityReplicator`, `InterpolationBuffer`, `NetQuantize`, `ReplicationFields`, `ConnectionScope(Filter)` | Snapshot deltas, interpolation, quantization, interest scoping | Implemented, tested |
 | `InstabilitySimulator.{h,cpp}` | Deliberate packet loss/jitter injection for testing | Implemented, tested |
 | `INetworkRuntime.h`, `NetworkManagerRuntimeAdapter.{h,cpp}` | DedicatedServer-facing seam over NetworkManager | Implemented, wired |
@@ -120,7 +120,7 @@ This is the part most often misquoted. State it exactly:
 
 | Claim | Reality (verified) | Status |
 |---|---|---|
-| "CSPRNG everywhere" | `Spark::SecureRandom::Fill` is a real OS CSPRNG and **fails closed** (returns `false`, callers refuse to proceed). Used by `PasswordHash::Create` and `MMOAccountSystem::GenerateSessionToken`. **BUT** `NetworkSecurity.h:185-194` still seeds `std::mt19937` from `std::random_device` for its keys/tokens, and `NetworkEncryption.cpp:21-23` uses `std::mt19937_64` — neither is a CSPRNG. Both are currently unwired library code, so no live traffic depends on the weak RNG today. | Implemented + tested for SecureRandom; weak-RNG residue labeled **open** |
+| "CSPRNG everywhere" | `Spark::SecureRandom::Fill` is a real OS CSPRNG and **fails closed** (returns `false`, callers refuse to proceed). Used by `PasswordHash::Create`, `MMOAccountSystem::GenerateSessionToken`, and the currently unwired legacy networking helpers. The helpers now leave zeroed key/token material and do not queue a token when the OS source fails. This does not make the plaintext `NetworkManager` path secure. | Implemented + tested for SecureRandom; wire-level encryption remains **open** |
 | "PBKDF2 600k" | `Spark::PasswordHash` (`PasswordHash.cpp:21-23`): PBKDF2-HMAC-SHA256, `kIterations = 600000`, verify accepts 600k–1M only (older/lower work factors **fail closed**), 128-bit salt (`kSaltBytes = 16`), 256-bit derived key, constant-time compare, 1 KB password cap, self-describing `pbkdf2-sha256$iters$salt$dk` format. HMAC key prepared once (not per-iteration) to kill a password-length DoS. **Do not conflate with TERRAFRONT**: `GameModules/SparkGameMMOFPS/.../TFAccountSystem.cpp:39` uses its own `TFCrypto` PBKDF2 at **150,000** iterations with legacy-hash migration. Two systems, two work factors. | Implemented, wired, tested (`TestPasswordHash.cpp` incl. a published-vector construction check; `TestTFOnboarding.cpp` for TF) |
 | "128-bit tokens" | `MMOAccountSystem::GenerateSessionToken()` = `SecureRandom::HexToken(16)` → 128 random bits as 32 hex chars. Login retries up to 8 times on map collision, fails closed if the CSPRNG fails ("Unable to create a secure session"), and only replaces an existing session after a token is secured (`MMOAccountSystem.cpp:201-248`). Engine-side `NetworkEncryption` `ConnectionToken` is also 128-bit with constant-time `ValidateToken` — but unwired. | Implemented, wired (MMO), production-linked account tests in `TestMMOCredentialSecurity.cpp` |
 | "mutexes" | `MMOAccountSystem` guards every public method with a `std::recursive_mutex`; account-system `Update` is wired into `SparkGameMMOModule::OnUpdate` (`GameModules/SparkGameMMO/Source/Core/Main.cpp:402`), so the 30-min idle session timeout and 15-min lockout expiry actually run. `NetworkManager` serializes public lifecycle/state mutation with `m_apiMutex`, uses value snapshots for stats/clients/inputs, and invokes registered message/timeout/reconnect/replication callbacks without holding API or replication locks; lifecycle/mutation epochs prevent unsafe resume or lost dirtiness after unlocked callbacks. | Implemented, wired, callback-deadlock regressions tested |
@@ -185,9 +185,9 @@ field is intentionally empty — salt lives inside the self-describing hash stri
 - **Hashing anything password-like?** Use `Spark::PasswordHash::Create/Verify`. Never
   hand-roll, never lower the 600k floor, never store salt separately.
 - **Generating any token/nonce/key that matters?** Use `Spark::SecureRandom`. If `Fill`/`HexToken`
-  fails, fail the operation — do not fall back to `std::mt19937`/`rand()`. If you touch
-  `NetworkSecurity.h` or `NetworkEncryption.cpp`, migrating their RNG to `SecureRandom` is the
-  correct move (they are currently unwired, so this is low-risk).
+  fails, fail the operation — do not fall back to `std::mt19937`/`rand()`. The legacy
+  `NetworkSecurity.h` and `NetworkEncryption.cpp` helpers now use that source too, but remain
+  unwired prototypes and must not be treated as a production transport boundary.
 - **Wiring encryption for real?** That is a design task: replace XOR/HMAC-4 with a vetted AEAD,
   not a wiring-only change. Per the manifest's wiring rule ("wire it in or delete it"), the
   unwired `NetworkStack`/`NetworkEncryption` layers are standing exceptions — raise them in
@@ -273,8 +273,11 @@ grep -n "BCryptGenRandom\|getrandom\|arc4random_buf" SparkEngine/Source/Utils/Se
 # 128-bit session token + fail-closed login
 grep -n "HexToken(16)\|Unable to create a secure session" GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.cpp
 
-# Weak RNG residue in unwired security layers (if these return nothing, gap #1a is fixed)
-grep -n "mt19937" SparkEngine/Source/Engine/Networking/NetworkSecurity.h SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp
+# Legacy networking helper RNG policy (expect no output)
+if grep -nE "mt19937|random_device" SparkEngine/Source/Engine/Networking/NetworkSecurity.h SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp; then
+  echo "legacy networking security helpers still contain a non-CSPRNG source" >&2
+  exit 1
+fi
 
 # Encryption still unwired? (expect consumers only in NetworkIntegration.h and Tests/)
 grep -rln "EncryptPacket\|NetworkSecurity" SparkEngine/Source SparkEditor/Source GameModules --include=*.cpp --include=*.h | grep -v Tests

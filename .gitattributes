@@ -31,6 +31,10 @@ Templates/*/Assets/**/*.mtl text eol=lf
 # rewrite these on checkout and make the comparison fail for no real reason.
 docs/readiness/*.json text eol=lf
 docs/site/readiness.json text eol=lf
+# Fuzz corpus manifests hash seed bytes exactly. Keep JSON seeds LF-stable so
+# Windows autocrlf cannot invalidate the cross-platform content digest.
+Tests/fuzz-corpora/json-utils/*.json text eol=lf
+Tests/fuzz-corpora/crash-manifest/*.json text eol=lf
 # Unified-diff context markers intentionally contain leading spaces before
 # upstream tab indentation. Git-apply separately enforces target whitespace.
 ThirdParty/Scripting/patches/angelscript-packed-bytecode.patch text eol=lf -whitespace

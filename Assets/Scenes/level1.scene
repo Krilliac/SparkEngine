@@ -25,14 +25,14 @@ type=plane
 width=50.0
 depth=50.0
 position=0.0,-0.5,0.0
-material=ground_dirt
+material=Assets/Materials/Terrain_Dirt.json
 
 # ============================================================
 # CAMERA (was hardcoded in Game.cpp line 95)
 # ============================================================
 
 [Camera]
-position=0.0,2.0,-5.0
+position=0.0,2.0,-20.0
 projection=perspective
 nearPlane=0.1
 farPlane=1000.0
@@ -49,289 +49,345 @@ type=plane
 position=0.0,-0.5,0.0
 scale=50.0,1.0,50.0
 name=Arena_Floor_Main
+material=Assets/Materials/Terrain_Dirt.json
 
 [Object]
 type=plane
 position=25.0,4.0,0.0
 scale=10.0,1.0,10.0
 name=East_Platform_Floor
+material=Assets/Materials/Terrain_Dirt.json
 
 [Object]
 type=plane
 position=-25.0,4.0,0.0
 scale=10.0,1.0,10.0
 name=West_Platform_Floor
+material=Assets/Materials/Terrain_Dirt.json
 
 [Object]
 type=plane
 position=0.0,-3.0,0.0
 scale=10.0,1.0,30.0
 name=Underground_Corridor_Floor
+material=Assets/Materials/Concrete.json
 
 # --- Walls (ArenaBuilder::BuildWalls) ---
 [Object]
 type=wall
 position=-20.0,2.0,28.0
 name=North_Wall_1
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=-10.0,2.0,28.0
 name=North_Wall_2
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=10.0,2.0,28.0
 name=North_Wall_3
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=20.0,2.0,28.0
 name=North_Wall_4
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=-20.0,2.0,-28.0
 name=South_Wall_1
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=-10.0,2.0,-28.0
 name=South_Wall_2
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=10.0,2.0,-28.0
 name=South_Wall_3
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=20.0,2.0,-28.0
 name=South_Wall_4
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=28.0,2.0,-15.0
 name=East_Wall_1
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=28.0,2.0,15.0
 name=East_Wall_2
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=-28.0,2.0,-15.0
 name=West_Wall_1
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=-28.0,2.0,15.0
 name=West_Wall_2
+material=Assets/Materials/Concrete.json
 
 # --- Cover (ArenaBuilder::BuildCover) ---
 [Object]
 type=cube
 position=0.0,0.75,5.0
 name=Center_Cover_N
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=0.0,0.75,-5.0
 name=Center_Cover_S
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=5.0,0.75,0.0
 name=Center_Cover_E
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=-5.0,0.75,0.0
 name=Center_Cover_W
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=12.0,1.5,12.0
 name=Pillar_NE
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=-12.0,1.5,12.0
 name=Pillar_NW
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=12.0,1.5,-12.0
 name=Pillar_SE
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=-12.0,1.5,-12.0
 name=Pillar_SW
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=8.0,0.5,20.0
 name=Low_Cover_NE
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=-8.0,0.5,20.0
 name=Low_Cover_NW
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=8.0,0.5,-20.0
 name=Low_Cover_SE
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=-8.0,0.5,-20.0
 name=Low_Cover_SW
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=15.0,0.5,5.0
 name=Crate_E1
+material=Assets/Materials/Wood.json
 
 [Object]
 type=cube
 position=15.5,0.5,5.5
 name=Crate_E2
+material=Assets/Materials/Wood.json
 
 [Object]
 type=cube
 position=-15.0,0.5,-5.0
 name=Crate_W1
+material=Assets/Materials/Wood.json
 
 [Object]
 type=cube
 position=-15.5,0.5,-5.5
 name=Crate_W2
+material=Assets/Materials/Wood.json
 
 [Object]
 type=wall
 position=0.0,1.0,15.0
 name=Mid_Barrier_N
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=0.0,1.0,-15.0
 name=Mid_Barrier_S
+material=Assets/Materials/Concrete.json
 
 # --- Platforms (ArenaBuilder::BuildPlatforms) ---
 [Object]
 type=cube
 position=22.0,3.0,0.0
 name=East_Sniper_Base
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=24.0,3.0,0.0
 name=East_Sniper_Ext
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=22.0,3.0,2.0
 name=East_Sniper_Cover_N
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=22.0,3.0,-2.0
 name=East_Sniper_Cover_S
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=-22.0,3.0,0.0
 name=West_Sniper_Base
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=-24.0,3.0,0.0
 name=West_Sniper_Ext
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=-22.0,3.0,2.0
 name=West_Sniper_Cover_N
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=-22.0,3.0,-2.0
 name=West_Sniper_Cover_S
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=0.0,2.0,22.0
 name=North_Tower_Base
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=0.0,4.0,22.0
 name=North_Tower_Top
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=0.0,2.0,-22.0
 name=South_Tower_Base
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=cube
 position=0.0,4.0,-22.0
 name=South_Tower_Top
+material=Assets/Materials/Concrete.json
 
 # --- Ramps (ArenaBuilder::BuildRamps) ---
 [Object]
 type=ramp
 position=18.0,1.5,0.0
 name=Ramp_East
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=ramp
 position=-18.0,1.5,0.0
 name=Ramp_West
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=ramp
 position=3.0,1.0,22.0
 name=Ramp_North
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=ramp
 position=-3.0,1.0,-22.0
 name=Ramp_South
+material=Assets/Materials/Concrete.json
 
 # --- Corridors (ArenaBuilder::BuildCorridors) ---
 [Object]
 type=wall
 position=-5.0,1.5,25.0
 name=North_Corridor_L
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=5.0,1.5,25.0
 name=North_Corridor_R
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=-5.0,1.5,-25.0
 name=South_Corridor_L
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=wall
 position=5.0,1.5,-25.0
 name=South_Corridor_R
+material=Assets/Materials/Concrete.json
 
 [Object]
 type=sphere
 position=0.0,-2.0,10.0
 name=Underground_Light_1
+material=Assets/Materials/Metal.json
 
 [Object]
 type=sphere
 position=0.0,-2.0,-10.0
 name=Underground_Light_2
+material=Assets/Materials/Metal.json
 
 # ============================================================
 # SPAWN POINTS (was hardcoded in GameSetup.cpp lines 104-124)

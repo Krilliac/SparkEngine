@@ -62,5 +62,16 @@ namespace Spark
          * @return The absolute path encoded as UTF-8 (not the platform narrow encoding).
          */
         std::string ResolveUtf8(const std::string& relativeToAssetRoot);
+
+        /**
+         * @brief Resolve a user-provided scene name inside the trusted scene tree.
+         *
+         * Accepts `level1.scene`, `Scenes/level1.scene`, or
+         * `Assets/Scenes/level1.scene` for compatibility with staged package
+         * instructions. Absolute paths, traversal, non-scene files, missing
+         * files, and symlinks that resolve outside `<asset-root>/Scenes` are
+         * rejected.
+         */
+        bool ResolveScenePath(const std::string& userPath, std::filesystem::path& resolved, std::string& error);
     } // namespace FPSAssets
 } // namespace Spark

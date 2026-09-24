@@ -196,6 +196,15 @@ def render_handoff(contract: dict[str, Any]) -> str:
                 "",
                 profile["summary"],
                 "",
+                "Publication follows candidate qualification, protected publication, independent verification, then final readiness. "
+                "Only the typed finalization work declared in this profile may remain pending at publication; no technical gate is waived.",
+                "",
+                "- Publication environment: `" + profile.get("publicationFinalization", {}).get("environment", "undeclared") + "`",
+                "- Publication finalizers: " + ", ".join(
+                    f"`{value}`" for value in profile.get("publicationFinalization", {}).get("workItemIds", [])
+                ),
+                "- Procedure: `wiki/development/Release-Publication-Stages.md`",
+                "",
                 "| Dimension | Declared value | In-profile capabilities | Evidence |",
                 "|---|---|---|---|",
             ]

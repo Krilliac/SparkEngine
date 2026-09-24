@@ -9,10 +9,12 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock
 
 from recover_release_publication import (
     DurableAssetSnapshot,
     RecoveryError,
+    GitHubReleaseApi,
     main,
     recover_durable_publication,
     recover_release_publication,
@@ -26,9 +28,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 def release(**changes):
     value = {
         "id": 700,
-        "tag_name": "stable-v1",
+        "tag_name": "nightly",
         "draft": False,
-        "prerelease": False,
+        "prerelease": True,
         "immutable": False,
     }
     value.update(changes)
@@ -63,7 +65,7 @@ class FakeApi:
         self.get_calls += 1
         return copy.deepcopy(self.value)
 
-    def hide_release(self, release_id):
+    def hide_release(self, release_id, *, stable_tag=None):
         self.hide_calls += 1
         if self.hide_failures:
             self.hide_failures -= 1
@@ -89,12 +91,36 @@ class FakeApi:
 
 
 class RecoverReleasePublicationTests(unittest.TestCase):
+    def test_real_api_adapter_checks_mutable_policy_before_recovery_writes(self):
+        for operation in ("hide", "restore"):
+            api = GitHubReleaseApi("owner/repo", "generated-test-token")
+            api._request = Mock(return_value={"enabled": True, "enforced_by_owner": False})
+            with self.assertRaisesRegex(RecoveryError, "cannot mutate"):
+                if operation == "hide":
+                    api.hide_release(700)
+                else:
+                    api.publish_release(700, prerelease=True)
+            api._request.assert_called_once_with("GET", None)
+
+    def test_stable_quarantine_adapter_rechecks_exact_identity_before_patch(self):
+        for changes in ({"immutable": True}, {"immutable": None}, {"tag_name": "moved"}, {"prerelease": True}):
+            api = GitHubReleaseApi("owner/repo", "generated-test-token")
+            api._request = Mock(return_value=release(**{"tag_name": "v1.2.3", "prerelease": False, **changes}))
+            with self.assertRaises(RecoveryError):
+                api.hide_release(700, stable_tag="v1.2.3")
+            api._request.assert_called_once_with("GET", 700)
+        api = GitHubReleaseApi("owner/repo", "generated-test-token")
+        api._request = Mock(side_effect=[release(tag_name="v1.2.3", prerelease=False), {}])
+        api.hide_release(700, stable_tag="v1.2.3")
+        self.assertEqual(api._request.call_count, 2)
+        self.assertEqual(api._request.call_args.args, ("PATCH", 700, {"draft": True, "make_latest": "false"}))
+
     def _recover(self, api):
         return recover_release_publication(
             api,
             release_id=700,
-            release_tag="stable-v1",
-            expected_prerelease=False,
+            release_tag="nightly",
+            expected_prerelease=True,
             attempts=3,
             sleep_seconds=0,
         )
@@ -122,13 +148,13 @@ class RecoverReleasePublicationTests(unittest.TestCase):
         self.assertGreaterEqual(api.get_calls, 3)
 
     def test_tag_or_channel_drift_is_hidden_without_overwriting_that_drift(self):
-        api = FakeApi(release(tag_name="moved", prerelease=True))
+        api = FakeApi(release(tag_name="moved", prerelease=False))
         result = self._recover(api)
         self.assertTrue(result.mutated)
         self.assertFalse(result.tag_matches)
         self.assertFalse(result.channel_matches)
         self.assertEqual(api.value["tag_name"], "moved")
-        self.assertTrue(api.value["prerelease"])
+        self.assertFalse(api.value["prerelease"])
 
     def test_wrong_id_or_immutable_release_is_never_mutated(self):
         for value in (release(id=701), release(immutable=True)):
@@ -144,6 +170,23 @@ class RecoverReleasePublicationTests(unittest.TestCase):
             self._recover(api)
         self.assertEqual(api.hide_calls, 3)
         self.assertEqual(api.get_calls, 6)
+
+    def test_immutable_or_ambiguous_stable_release_is_never_redrafted(self):
+        for values in ({"immutable": True}, {"immutable": None}, {"tag_name": "moved"}, {"prerelease": True}):
+            api = FakeApi(release(**{"tag_name": "v1.2.3", "prerelease": False, **values}))
+            with self.assertRaises(RecoveryError):
+                recover_durable_publication(api, release_id=700, release_tag="v1.2.3",
+                                            expected_prerelease=False, action="inspect-stable", sleep_seconds=0)
+            self.assertEqual(api.hide_calls, 0)
+            self.assertEqual(api.publish_calls, 0)
+
+    def test_proven_mutable_stable_release_is_quarantined(self):
+        api = FakeApi(release(tag_name="v1.2.3", prerelease=False, immutable=False))
+        result = recover_durable_publication(api, release_id=700, release_tag="v1.2.3",
+                                            expected_prerelease=False, action="inspect-stable", sleep_seconds=0)
+        self.assertTrue(result.mutated)
+        self.assertTrue(api.value["draft"])
+        self.assertEqual(api.hide_calls, 1)
 
 
 class DurableRecoveryTargetTests(unittest.TestCase):
@@ -168,6 +211,7 @@ class DurableRecoveryTargetTests(unittest.TestCase):
         self.assertEqual(target.release_id, 700)
         self.assertEqual(target.release_tag, "v2.3.4")
         self.assertFalse(target.expected_prerelease)
+        self.assertEqual(target.action, "inspect-stable")
 
     def test_other_run_or_unstaged_operation_is_a_safe_noop(self):
         for pending in (

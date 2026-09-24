@@ -9,6 +9,13 @@ multiplayer result is required for the single-player slice.
 
 ## Play the arena
 
+For an installed Windows package, use `bin/PlaytestSparkFPS.cmd` to launch the
+real engine with the packaged FPS module. `check` verifies that both files are
+present and prints the engine version; `smoke` runs eight headless NullRHI
+frames; `report` opens the GitHub playtest issue form. The shipped
+`bin/PLAYTESTING.md` explains the workflow and safe report contents. These
+commands do not certify the still-blocked `stable-v1` release.
+
 - `WASD` moves, mouse looks, left mouse fires, `R` reloads, and `Space` jumps.
 - `1`-`4` select loadout slots; `F` and `G` activate class abilities.
 - `F5`-`F10` select a class, while `[` and `]` cycle classes.
@@ -47,3 +54,25 @@ enemy, weapon, progression, time-scale, and engine-service state.
 Build the `SparkGameFPS` target. CPU-only regression coverage is part of `SparkTests`; filter for `FPSInteg_`,
 `FPSRespawn_`, `FPSLocalProfile_`, `FPSProgression_`, `FPSAssets_`, `FPSStateRules_`, `FPSComponentsReal_`, and
 `WeaponMechanicsReal_` when running the test executable directly (`FPSMultiplayer_` covers the experimental LAN path).
+
+## SDK module boundary
+
+The module entrypoint implements only the installed `Spark::IModule` contract and receives services through its injected
+`Spark::IEngineContext`. The retired private `IGameModule` inheritance/factories and concrete `EngineContext::Get()`
+lookups are not part of SparkGameFPS. The installed-SDK consumer compiles `Core/SparkGameFPS.h` using only staged
+`Spark/` headers and a source-boundary regression rejects either legacy dependency if it returns.
+
+This proves the entrypoint boundary, not the complete DLL. Gameplay implementation files still include private engine
+headers, the Windows module still links `SparkEngineLib`, and full public-SDK-only build/link qualification remains open.
+
+## Installed persistence smoke
+
+`FPSPackage_InstalledRuntime` stages the MinSizeRel stable-v1 runtime, validates the real installed NullRHI module
+lifecycle, then launches two separate D3D11 WARP processes with isolated `LOCALAPPDATA`. The writer moves progression
+from 0 to 37 XP and writes `fps_quicksave`; the fresh reader proves an initial 0 XP state, loads the same slot, and
+restores 37 XP without changing the save bytes. The runner retains child output, semantic command audits, binary/save
+hashes, build configuration, source identity, and host metadata under its per-attempt test root.
+
+This is a bounded local progression-persistence slice, not stable-v1 certification. It does not yet prove every
+`FPSLocalProfile` field, spawn/move/kill/respawn/score acceptance, a public-SDK-only module build, NullRHI save/reload,
+clean-machine installation, recovery/soak, hardware rendering, or hosted exact-SHA qualification.

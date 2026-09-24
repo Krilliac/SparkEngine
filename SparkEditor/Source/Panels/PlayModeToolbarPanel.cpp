@@ -1,6 +1,6 @@
 /**
  * @file PlayModeToolbarPanel.cpp
- * @brief Implementation of the play-in-editor toolbar with transport controls and simulation options
+ * @brief Editor state-preview controls; gameplay is launched out of process
  * @author Spark Engine Team
  * @date 2025
  */
@@ -22,7 +22,7 @@ namespace SparkEditor
     // Construction / Lifecycle
     // ============================================================================
 
-    PlayModeToolbarPanel::PlayModeToolbarPanel() : EditorPanel("Play Mode Toolbar", "play_mode_toolbar_panel") {}
+    PlayModeToolbarPanel::PlayModeToolbarPanel() : EditorPanel("State Preview Toolbar", "play_mode_toolbar_panel") {}
 
     bool PlayModeToolbarPanel::Initialize()
     {
@@ -88,11 +88,14 @@ namespace SparkEditor
 
         if (!m_playModeManager)
         {
-            ImGui::TextDisabled(ICON_FA_INFO_CIRCLE " Play Mode Toolbar is available during play mode.");
+            ImGui::TextDisabled(ICON_FA_INFO_CIRCLE " State preview controls are unavailable.");
             ImGui::TextDisabled("Connect a PlayModeManager to enable controls.");
             EndPanel();
             return;
         }
+
+        ImGui::TextWrapped("State preview only: no gameplay systems tick here. "
+                           "Use Play Control > Launch Game to run the game.");
 
         RenderTransportControls();
         SparkEditor::VerticalSeparator();
@@ -204,7 +207,8 @@ namespace SparkEditor
         }
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip(isStopped ? "Play (Enter play mode)" : (isPaused ? "Resume" : "Playing..."));
+            ImGui::SetTooltip(isStopped ? "Start state preview (no gameplay tick)"
+                                        : (isPaused ? "Resume state preview" : "State preview active"));
         }
         ImGui::PopStyleColor(3);
 
@@ -271,7 +275,7 @@ namespace SparkEditor
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
-            ImGui::SetTooltip("Stop (Exit play mode)");
+            ImGui::SetTooltip("Stop state preview");
         }
         if (isStopped)
         {
@@ -293,7 +297,7 @@ namespace SparkEditor
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
-            ImGui::SetTooltip("Step one frame");
+            ImGui::SetTooltip("Step one preview state frame");
         }
         if (stepDisabled)
         {
@@ -316,7 +320,7 @@ namespace SparkEditor
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
             char tooltip[64];
-            snprintf(tooltip, sizeof(tooltip), "Step %d frames", m_multiStepCount);
+            snprintf(tooltip, sizeof(tooltip), "Step %d preview state frames", m_multiStepCount);
             ImGui::SetTooltip("%s", tooltip);
         }
         if (stepDisabled)
@@ -412,7 +416,7 @@ namespace SparkEditor
         }
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip("Simulation Subsystem Toggles");
+            ImGui::SetTooltip("Preview counter flags; no gameplay subsystems tick");
         }
 
         if (!m_showSubsystemToggles)
@@ -465,7 +469,7 @@ namespace SparkEditor
             if (ImGui::IsItemHovered())
             {
                 char tooltip[128];
-                snprintf(tooltip, sizeof(tooltip), "%s: %s (click to toggle)", subsys.label,
+                snprintf(tooltip, sizeof(tooltip), "%s preview counter: %s (not a gameplay toggle)", subsys.label,
                          enabled ? "Enabled" : "Disabled");
                 ImGui::SetTooltip("%s", tooltip);
             }
@@ -498,7 +502,8 @@ namespace SparkEditor
         }
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip("Camera Mode: %s", cameraModeLabels[currentIndex]);
+            ImGui::SetTooltip("Preview camera mode label: %s (does not start gameplay)",
+                              cameraModeLabels[currentIndex]);
         }
     }
 
@@ -525,7 +530,7 @@ namespace SparkEditor
         }
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip("Live Editing: %s\nEdit properties while playing", liveEditing ? "ON" : "OFF");
+            ImGui::SetTooltip("Live Editing: %s\nEdit the scene during state preview", liveEditing ? "ON" : "OFF");
         }
 
         if (liveEditing)
@@ -588,11 +593,11 @@ namespace SparkEditor
             break;
 
         case PlayModeState::Playing:
-            ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), ICON_FA_PLAY " Playing");
+            ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), ICON_FA_PLAY " State preview");
             break;
 
         case PlayModeState::Simulating:
-            ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), ICON_FA_CUBE " Simulating");
+            ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), ICON_FA_CUBE " Simulation preview");
             break;
 
         case PlayModeState::Paused:
@@ -622,24 +627,13 @@ namespace SparkEditor
 
             ImGui::SameLine();
             ImGui::Text(ICON_FA_FILM " %llu", static_cast<unsigned long long>(frameCount));
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Preview state frames; no game-system frames are counted");
 
             ImGui::SameLine();
-
-            // Color-code FPS
-            ImVec4 fpsColor;
-            if (fps >= 55.0f)
-            {
-                fpsColor = ImVec4(0.3f, 0.9f, 0.3f, 1.0f); // Green — good
-            }
-            else if (fps >= 30.0f)
-            {
-                fpsColor = ImVec4(1.0f, 0.8f, 0.2f, 1.0f); // Yellow — acceptable
-            }
-            else
-            {
-                fpsColor = ImVec4(1.0f, 0.3f, 0.3f, 1.0f); // Red — poor
-            }
-            ImGui::TextColored(fpsColor, ICON_FA_BOLT " %.1f FPS", fps);
+            ImGui::Text(ICON_FA_BOLT " %.1f/s", fps);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Preview state rate (state frames / scaled preview time); not gameplay FPS");
 
             // Show multi-step remaining if active
             uint32_t stepsRemaining = m_playModeManager->GetMultiStepRemaining();

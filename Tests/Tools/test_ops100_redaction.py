@@ -136,15 +136,16 @@ class ScannerCliTests(unittest.TestCase):
 
     def test_hardlink_returns_error_without_secret_preview(self) -> None:
         outside = self.root.parent / f"secret-outside-{self.root.name}.txt"
-        secret = "ghu_" + "A" * 40
-        outside.write_text(secret, encoding="utf-8")
+        # Deliberately generated token-shaped test data, never a credential.
+        token_shaped_fixture = "ghu_" + "A" * 40
+        outside.write_text(token_shaped_fixture, encoding="utf-8")
         try:
             os.link(outside, self.root / "artifact.txt")
             stdout = io.StringIO()
             with contextlib.redirect_stdout(stdout):
                 status = redactor.main(["--json", str(self.root)])
             self.assertEqual(status, 2)
-            self.assertNotIn(secret, stdout.getvalue())
+            self.assertNotIn(token_shaped_fixture, stdout.getvalue())
         finally:
             outside.unlink(missing_ok=True)
 
@@ -178,12 +179,13 @@ class ScannerCliTests(unittest.TestCase):
 
     def test_json_output_never_contains_secret_value(self) -> None:
         source = self.root / "artifact.json"
-        secret = "sk-proj-" + "A" * 30
-        source.write_text(json.dumps({"api_key": secret}), encoding="utf-8")
+        # Deliberately generated token-shaped test data, never a credential.
+        token_shaped_fixture = "sk-proj-" + "A" * 30
+        source.write_text(json.dumps({"api_key": token_shaped_fixture}), encoding="utf-8")
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             self.assertEqual(redactor.main(["--json", str(source)]), 1)
-        self.assertNotIn(secret, output.getvalue())
+        self.assertNotIn(token_shaped_fixture, output.getvalue())
 
     def test_malformed_json_is_a_structured_inspection_error(self) -> None:
         source = self.root / "artifact.json"

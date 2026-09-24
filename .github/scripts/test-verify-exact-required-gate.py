@@ -906,6 +906,14 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
                 api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
             )
 
+    def test_staged_build_only_rejects_skipped_required_job(self):
+        api = FakeApi()
+        api.source_jobs[2] = ordinary_job(conclusion="skipped")
+        with self.assertRaisesRegex(ValueError, "unexpected non-success Build job: ordinary required job"):
+            MODULE.verify_exact_staged_build(
+                api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
+            )
+
     def test_staged_build_only_rejects_a_required_job_downgraded_to_advisory(self):
         api = FakeApi()
         api.build_workflow = BUILD_WORKFLOW_YAML.replace(
@@ -1295,6 +1303,8 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
     def test_one_second_skipped_job_clock_skew_is_the_only_accepted_inversion(self):
         api = FakeApi()
         api.source_jobs[2] = ordinary_job(
+            id=504,
+            name="build-linux-msan",
             conclusion="skipped",
             started_at="2026-08-30T04:10:01Z",
             completed_at="2026-08-30T04:10:00Z",
@@ -1303,6 +1313,8 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
 
         api = FakeApi()
         api.source_jobs[2] = ordinary_job(
+            id=504,
+            name="build-linux-msan",
             conclusion="skipped",
             started_at="2026-08-30T04:10:02Z",
             completed_at="2026-08-30T04:10:00Z",
@@ -1974,8 +1986,8 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
         self.assertIn("      statuses: read", release)
         self.assertEqual(
             release.count("python3 .github/scripts/verify-exact-required-gate.py"),
-            3,
-            "publication must verify once at entry and immediately before both mutation boundaries",
+            4,
+            "publication must verify at entry, before both mutation boundaries, and from the independent consumer",
         )
         self.assertIn(
             "build-matrix-trusted-receipt-${{ github.event.workflow_run.head_sha }}-"

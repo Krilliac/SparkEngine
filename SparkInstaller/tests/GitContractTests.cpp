@@ -2,12 +2,16 @@
 #include "GitRunner.h"
 
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
+
+// Defined in PortableGitCacheTests.cpp; returns the number of failed checks.
+int RunPortableGitCacheTests();
 
 namespace
 {
@@ -54,9 +58,28 @@ namespace
         return 1;
     }
 
+    void SetFakeGitStatus(std::string_view value)
+    {
+#ifdef _WIN32
+        _putenv_s("SPARK_FAKE_GIT_STATUS", std::string(value).c_str());
+#else
+        setenv("SPARK_FAKE_GIT_STATUS", std::string(value).c_str(), 1);
+#endif
+    }
+
     int RunFakeGit(int argc, char* argv[])
     {
         const std::string command = argv[1];
+        if (command == "status")
+        {
+            if (const char* status = std::getenv("SPARK_FAKE_GIT_STATUS");
+                status && std::string_view(status) == "error")
+                return 47;
+            if (const char* status = std::getenv("SPARK_FAKE_GIT_STATUS");
+                status && std::string_view(status) == "dirty")
+                std::cout << " M user-change.txt\n";
+            return 0;
+        }
         if (command == "clone")
         {
             bool foundOptionTerminator = false;
@@ -119,6 +142,16 @@ int main(int argc, char* argv[])
     failures += Check(
         !git.Clone("https://github.com/Krilliac/SparkEngine.git", "Working", "--config=core.sshCommand=attacker", {}),
         "option-shaped clone destination was accepted");
+    SetFakeGitStatus("clean");
+    failures +=
+        Check(git.WorkingTreeClean((testRoot / "checkout").string(), {}), "clean install was not recognized as clean");
+    SetFakeGitStatus("dirty");
+    failures +=
+        Check(!git.WorkingTreeClean((testRoot / "checkout").string(), {}), "dirty install was accepted for update");
+    SetFakeGitStatus("error");
+    failures += Check(!git.WorkingTreeClean((testRoot / "checkout").string(), {}),
+                      "failed install status query was accepted for update");
+    SetFakeGitStatus("clean");
     failures += Check(git.Clone("./local-repository", "Working", (testRoot / "local clone").string(), {}),
                       "explicit local repository path was rejected");
     failures += Check(!git.CheckoutRef("release-branch", (testRoot / "checkout").string(), {}),
@@ -127,6 +160,8 @@ int main(int argc, char* argv[])
                       "detached tag checkout incorrectly required git pull");
 
     std::filesystem::remove_all(testRoot, filesystemError);
+
+    failures += RunPortableGitCacheTests();
 
     if (failures == 0)
         std::cout << "SparkInstaller git process contract tests passed\n";

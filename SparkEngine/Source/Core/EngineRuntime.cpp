@@ -46,6 +46,32 @@ void EngineRuntime::ShutdownHeadlessAssetServices()
     fileCache.reset();
 }
 
+bool EngineRuntime::InitializeHeadlessRhi()
+{
+    if (headlessRhiBridge)
+        return headlessRhiBridge->IsHeadless() && headlessRhiBridge->GetDevice() != nullptr;
+
+    auto bridge = std::make_unique<Spark::RHI::RHIBridge>();
+    if (!bridge->Initialize(nullptr, 1, 1, Spark::RHI::GraphicsBackend::None, false) || !bridge->IsHeadless() ||
+        bridge->GetActiveBackend() != Spark::RHI::GraphicsBackend::None || bridge->GetDevice() == nullptr)
+    {
+        bridge->Shutdown();
+        return false;
+    }
+
+    headlessRhiBridge = std::move(bridge);
+    return true;
+}
+
+void EngineRuntime::ShutdownHeadlessRhi() noexcept
+{
+    if (!headlessRhiBridge)
+        return;
+
+    headlessRhiBridge->Shutdown();
+    headlessRhiBridge.reset();
+}
+
 EngineRuntime& GetEngineRuntime()
 {
     static EngineRuntime s_runtime;

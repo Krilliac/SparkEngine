@@ -4,6 +4,7 @@
  */
 
 #include "CrashReporterApp.h"
+#include "CrashAutoIssues.h"
 
 #include <algorithm>
 #include <charconv>
@@ -886,6 +887,22 @@ namespace SparkCrashReporter
             return OpenArtifact(root, name, handle, actualIdentity) && SameIdentity(expectedIdentity, actualIdentity);
         }
 
+        bool ParseManifestJsonPayload(std::string_view json, CrashManifest& output)
+        {
+            if (json.empty() || json.size() > kMaxManifestBytes)
+                return false;
+
+            CrashManifest parsed;
+            ScopedManifestCredentialWiper wipeParsedCredentials(parsed);
+            ManifestJsonReader reader(json);
+            if (!reader.Parse(parsed))
+                return false;
+
+            SecureWipeTransportConfiguration(output);
+            output = std::move(parsed);
+            return true;
+        }
+
         bool LoadManifestFromPinnedDirectory(PinnedDirectory& root, const std::filesystem::path& manifestName,
                                              CrashManifest& output, bool consume = false)
         {
@@ -907,9 +924,8 @@ namespace SparkCrashReporter
                 return false;
 
             CrashManifest parsed;
-            ScopedManifestCredentialWiper wipeParsedCredentials(parsed);
-            ManifestJsonReader reader(json);
-            if (!reader.Parse(parsed) || parsed.logFile.empty() || !NormalizeManifestArtifacts(parsed, root))
+            if (!ParseManifestJsonPayload(json, parsed) || parsed.logFile.empty() ||
+                !NormalizeManifestArtifacts(parsed, root))
                 return false;
 
             if (consume && !RemoveOpenedArtifact(root, manifestName, manifestHandle.Get(), manifestIdentity))
@@ -1021,8 +1037,9 @@ namespace SparkCrashReporter
                 RemoveOpenedArtifact(root, claimedName, handle.Get(), identity);
         }
 
-        bool ClaimNextManifest(PinnedDirectory& root, CrashManifest& output)
+        bool ClaimNextManifest(PinnedDirectory& root, CrashManifest& output, bool& rejectedManifest)
         {
+            rejectedManifest = false;
             for (const std::filesystem::path& readyName : ListReadyManifests(root))
             {
                 std::filesystem::path claimedName;
@@ -1030,11 +1047,17 @@ namespace SparkCrashReporter
                     continue;
                 if (LoadManifestFromPinnedDirectory(root, claimedName, output, true))
                     return true;
+                rejectedManifest = true;
                 RemoveClaimedManifest(root, claimedName);
             }
             return false;
         }
     } // namespace
+
+    bool ParseManifestJson(std::string_view json, CrashManifest& out)
+    {
+        return ParseManifestJsonPayload(json, out);
+    }
 
     static std::string JsonEscape(const std::string& s)
     {
@@ -1151,6 +1174,30 @@ namespace SparkCrashReporter
         return message;
     }
 
+    bool ReadConsentAnswer(std::istream& input, bool emptyMeansYes)
+    {
+        // A detached watchdog, service, or CI job has stdin closed, redirected
+        // from /dev/null, or broken. That is nobody answering, never consent,
+        // so a failed read declines regardless of the prompt's default.
+        constexpr size_t kMaxAnswerBytes = 64;
+        std::string answer;
+        if (!input.good() || !std::getline(input, answer))
+            return false;
+        if (answer.size() > kMaxAnswerBytes)
+            return false;
+
+        const auto isSpace = [](char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; };
+        const auto first = std::find_if_not(answer.begin(), answer.end(), isSpace);
+        const auto last = std::find_if_not(answer.rbegin(), answer.rend(), isSpace).base();
+        std::string word = first < last ? std::string(first, last) : std::string{};
+        if (word.empty())
+            return emptyMeansYes; // Interactive Enter keeps the documented default.
+
+        std::transform(word.begin(), word.end(), word.begin(),
+                       [](unsigned char c) { return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c); });
+        return word == "y" || word == "yes";
+    }
+
     int RunCrashReporter(const CrashManifest& untrustedManifest)
     {
         CrashManifest manifest = untrustedManifest;
@@ -1193,19 +1240,47 @@ namespace SparkCrashReporter
             std::cerr << "Prebuilt archive: ignored by this read-only reporter\n";
         std::cerr << "\n";
 
+        // This setting is user-local. No manifest field, including the legacy
+        // transport fields or requireConsent, can opt a user into publishing.
+        const bool autoIssues = AutoIssuesEnabled();
+        if (autoIssues)
+            std::cerr << "Automatic GitHub Issues are enabled by this user's local setting. "
+                         "Issue metadata will be public; no crash artifacts will be sent.\n";
+        // The engine launches this reporter as a detached process on Windows,
+        // so stderr cannot be the only place a playtester sees delivery status.
+        const auto showIssueOutcome = [&](const std::string& message, bool confirmed)
+        {
+            std::cerr << message << '\n';
+#ifdef _WIN32
+            if (manifest.requireConsent)
+                MessageBoxA(nullptr, message.c_str(),
+                            confirmed ? "SparkEngine Issue created" : "SparkEngine Issue not confirmed",
+                            MB_OK | (confirmed ? MB_ICONINFORMATION : MB_ICONWARNING));
+#else
+            (void)confirmed;
+#endif
+        };
+        constexpr std::string_view manualIssueUrl = "https://github.com/Krilliac/SparkEngine/issues/new";
+
         // Consent
         bool shouldReview = true;
         if (manifest.requireConsent)
         {
 #ifdef _WIN32
-            const std::string consentMessage = BuildConsentMessage(manifest);
+            std::string consentMessage = BuildConsentMessage(manifest);
+            if (autoIssues)
+                consentMessage += "\n\nIf you continue, a metadata-only GitHub Issue will be attempted publicly. "
+                                  "No log, dump, screenshot, path, or description will be sent.";
             int result = MessageBoxA(nullptr, consentMessage.c_str(), "Crash Report", MB_YESNO | MB_ICONERROR);
             shouldReview = (result == IDYES);
 #else
-            std::cerr << BuildConsentMessage(manifest) << "\n[Y/n]: ";
-            std::string input;
-            std::getline(std::cin, input);
-            shouldReview = input.empty() || input[0] == 'Y' || input[0] == 'y';
+            std::cerr << BuildConsentMessage(manifest);
+            if (autoIssues)
+                std::cerr << "\n\nIf you continue, a metadata-only GitHub Issue will be attempted publicly. "
+                             "No log, dump, screenshot, path, or description will be sent.";
+            // A yes that authorizes a public post must be typed, not defaulted.
+            std::cerr << (autoIssues ? "\n[y/N]: " : "\n[Y/n]: ");
+            shouldReview = ReadConsentAnswer(std::cin, !autoIssues);
 #endif
         }
 
@@ -1227,9 +1302,7 @@ namespace SparkCrashReporter
             includeScreenshot = (ssResult == IDYES);
 #else
             std::cerr << "Include screenshot with report? [Y/n]: ";
-            std::string input;
-            std::getline(std::cin, input);
-            includeScreenshot = input.empty() || input[0] == 'Y' || input[0] == 'y';
+            includeScreenshot = ReadConsentAnswer(std::cin, true);
 #endif
         }
 
@@ -1247,7 +1320,140 @@ namespace SparkCrashReporter
             std::cerr << "This read-only reporter does not append descriptions to crash files.\n";
         }
 
-        std::cerr << "\nCrash report remains saved locally. No files were modified, archived, or uploaded.\n";
+        std::cerr << "\nCrash report remains saved locally. No crash artifacts were modified or uploaded.\n";
+        if (autoIssues)
+        {
+            const std::string receiptKey = CrashReceiptKey(manifest);
+            const std::string incidentId = GeneratePublicIncidentId();
+            if (incidentId.empty())
+            {
+                showIssueOutcome("Automatic issue not attempted: secure incident ID unavailable. Report manually at " +
+                                     std::string(manualIssueUrl),
+                                 false);
+                return 3;
+            }
+            const PreparedAutoIssue prepared = PrepareAutoIssue(manifest, incidentId);
+            if (!prepared.ready)
+            {
+                showIssueOutcome("Automatic issue not attempted: " + prepared.reason +
+                                     ". Local artifacts remain available. Incident ID: " + incidentId +
+                                     ". Report manually at " + std::string(manualIssueUrl) +
+                                     " or retry after GitHub CLI setup.",
+                                 false);
+                return 3;
+            }
+            // Claim before making an external request. A timeout or lost reply
+            // is uncertain, so automatic retry could create duplicate issues.
+            const std::filesystem::path receiptName = "issue_attempt_" + receiptKey + ".txt";
+            if (!WriteNewFileInDirectory(root, receiptName,
+                                         "Public incident: " + incidentId +
+                                             "\nAutomatic issue attempt started; outcome may be uncertain. "
+                                             "Do not retry automatically.\n"))
+            {
+                showIssueOutcome(
+                    "Automatic issue not attempted: incident already claimed or local receipt unavailable. "
+                    "Check existing GitHub Issues before reporting again.",
+                    false);
+                return 3;
+            }
+            const AutoIssueResult issue = SubmitPreparedAutoIssue(prepared);
+            const std::filesystem::path resultName = "issue_result_" + receiptKey + ".txt";
+            const std::string resultText = issue.delivered ? "confirmed\n" + issue.issueUrl + "\n" : "unconfirmed\n";
+            if (!WriteNewFileInDirectory(root, resultName, resultText))
+            {
+                showIssueOutcome("Automatic issue outcome could not be saved locally. Incident ID: " + incidentId +
+                                     ". Check GitHub Issues before any manual retry.",
+                                 false);
+                return 3;
+            }
+            if (issue.delivered)
+            {
+                showIssueOutcome("Automatic GitHub Issue created: " + issue.issueUrl + "\nIncident ID: " + incidentId,
+                                 true);
+                return 0;
+            }
+            showIssueOutcome("Automatic GitHub Issue not confirmed: " + issue.reason +
+                                 ". Local crash artifacts remain available. Incident ID: " + incidentId +
+                                 ". Check GitHub Issues before reporting manually.",
+                             false);
+            return 3;
+        }
+        std::cerr << "No files were modified, archived, or uploaded.\n";
+        return 0;
+    }
+
+    int ShowAutoIssueStatus(const std::string& crashDirectory)
+    {
+        PinnedDirectory root;
+        if (!OpenPinnedDirectory(PathFromUtf8(crashDirectory), root))
+        {
+            std::cerr << "Cannot open a private crash directory for issue status.\n";
+            return 2;
+        }
+        constexpr std::string_view prefix = "issue_attempt_";
+        constexpr std::string_view suffix = ".txt";
+        std::vector<std::filesystem::path> receipts;
+        std::error_code error;
+        size_t entries = 0;
+        for (const auto& entry : std::filesystem::directory_iterator(root.path, error))
+        {
+            if (++entries > 4096)
+                break;
+            const std::filesystem::path name = entry.path().filename();
+            const std::string text = PathToUtf8(name);
+            if (text.size() != prefix.size() + 16 + suffix.size() || !text.starts_with(prefix) ||
+                !text.ends_with(suffix))
+                continue;
+            if (!std::all_of(text.begin() + static_cast<std::ptrdiff_t>(prefix.size()),
+                             text.end() - static_cast<std::ptrdiff_t>(suffix.size()),
+                             [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }))
+                continue;
+            receipts.push_back(name);
+            if (receipts.size() == 32)
+                break;
+        }
+        if (error)
+        {
+            std::cerr << "Cannot enumerate issue receipts safely.\n";
+            return 2;
+        }
+        std::sort(receipts.begin(), receipts.end());
+        if (receipts.empty())
+        {
+            std::cout << "No automatic issue attempts found.\n";
+            return 0;
+        }
+        constexpr std::string_view urlPrefix = "https://github.com/Krilliac/SparkEngine/issues/";
+        for (const std::filesystem::path& receiptName : receipts)
+        {
+            ScopedNativeHandle receiptHandle;
+            ArtifactIdentity identity;
+            if (!OpenArtifact(root, receiptName, receiptHandle, identity))
+                continue;
+            const std::string key = PathToUtf8(receiptName).substr(prefix.size(), 16);
+            const std::filesystem::path resultName = "issue_result_" + key + ".txt";
+            ScopedNativeHandle resultHandle;
+            ArtifactIdentity resultIdentity;
+            std::uint64_t resultBytes = 0;
+            std::string status;
+            if (OpenArtifact(root, resultName, resultHandle, resultIdentity, &resultBytes) && resultBytes <= 256)
+                (void)ReadOpenedFile(resultHandle.Get(), resultBytes, 256, status);
+            std::cout << "Incident " << key << ": ";
+            if (status.starts_with("confirmed\n"))
+            {
+                std::string_view url(status.data() + 10, status.size() - 10);
+                if (!url.empty() && url.back() == '\n')
+                    url.remove_suffix(1);
+                if (url.starts_with(urlPrefix) && url.size() > urlPrefix.size() &&
+                    std::all_of(url.begin() + static_cast<std::ptrdiff_t>(urlPrefix.size()), url.end(),
+                                [](char c) { return c >= '0' && c <= '9'; }))
+                {
+                    std::cout << "confirmed " << url << '\n';
+                    continue;
+                }
+            }
+            std::cout << (status == "unconfirmed\n" ? "unconfirmed" : "outcome unavailable") << '\n';
+        }
         return 0;
     }
 
@@ -1302,7 +1508,14 @@ namespace SparkCrashReporter
         while (true)
         {
             CrashManifest manifest;
-            if (ClaimNextManifest(manifestRoot, manifest))
+            bool rejectedManifest = false;
+            const bool manifestLoaded = ClaimNextManifest(manifestRoot, manifest, rejectedManifest);
+            if (rejectedManifest)
+            {
+                std::cerr << "[CrashReporter] Crash manifest rejected.\n";
+                result = 2;
+            }
+            if (manifestLoaded)
             {
                 std::cerr << "[CrashReporter] Crash manifest detected!\n";
                 const int reportResult = RunCrashReporter(manifest);

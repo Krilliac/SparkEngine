@@ -50,7 +50,10 @@ void GraphicsEngine::SubmitMeshForRendering(std::string_view meshPath, std::stri
                                             const DirectX::XMMATRIX& worldMatrix, bool castShadows)
 {
     SPARK_WARN_IF(Spark::LogCategory::Graphics, meshPath.empty(), "SubmitMeshForRendering: empty meshPath");
-    SPARK_WARN_IF(Spark::LogCategory::Graphics, materialPath.empty(), "SubmitMeshForRendering: empty materialPath");
+    // An empty material path is a valid default-material selection. Starter
+    // scenes deliberately leave this empty for primitive and OBJ geometry;
+    // warning here turned every visible default-material mesh into a per-frame
+    // diagnostic storm while the renderer correctly used its default texture.
 
     MeshDrawCommand cmd;
     cmd.meshPath = meshPath;

@@ -22,8 +22,10 @@
 #ifdef SPARK_SDL2_AVAILABLE
 #include <SDL2/SDL.h>
 #endif
+#include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <sstream>
 
 namespace Spark
 {
@@ -31,6 +33,94 @@ namespace Spark
     {
         namespace OpenGL
         {
+
+            namespace
+            {
+                GLenum ConvertCompareOp(RHICompareOp op)
+                {
+                    switch (op)
+                    {
+                    case RHICompareOp::Never:
+                        return GL_NEVER;
+                    case RHICompareOp::Less:
+                        return GL_LESS;
+                    case RHICompareOp::Equal:
+                        return GL_EQUAL;
+                    case RHICompareOp::LessEqual:
+                        return GL_LEQUAL;
+                    case RHICompareOp::Greater:
+                        return GL_GREATER;
+                    case RHICompareOp::NotEqual:
+                        return GL_NOTEQUAL;
+                    case RHICompareOp::GreaterEqual:
+                        return GL_GEQUAL;
+                    case RHICompareOp::Always:
+                        return GL_ALWAYS;
+                    }
+                    return GL_ALWAYS;
+                }
+
+                GLenum ConvertStencilOp(RHIStencilOp op)
+                {
+                    switch (op)
+                    {
+                    case RHIStencilOp::Keep:
+                        return GL_KEEP;
+                    case RHIStencilOp::Zero:
+                        return GL_ZERO;
+                    case RHIStencilOp::Replace:
+                        return GL_REPLACE;
+                    case RHIStencilOp::IncrSat:
+                        return GL_INCR;
+                    case RHIStencilOp::DecrSat:
+                        return GL_DECR;
+                    case RHIStencilOp::Invert:
+                        return GL_INVERT;
+                    case RHIStencilOp::IncrWrap:
+                        return GL_INCR_WRAP;
+                    case RHIStencilOp::DecrWrap:
+                        return GL_DECR_WRAP;
+                    }
+                    return GL_KEEP;
+                }
+
+                /// D3D clears ignore the bound pipeline's write masks and scissor; GL clears
+                /// honor them. Force full writes for the clear and restore the pipeline state.
+                class ClearStateScope
+                {
+                  public:
+                    ClearStateScope()
+                    {
+                        glGetBooleanv(GL_COLOR_WRITEMASK, m_colorMask);
+                        glGetBooleanv(GL_DEPTH_WRITEMASK, &m_depthMask);
+                        glGetIntegerv(GL_STENCIL_WRITEMASK, &m_stencilMask);
+                        glGetIntegerv(GL_STENCIL_BACK_WRITEMASK, &m_stencilBackMask);
+                        m_scissor = glIsEnabled(GL_SCISSOR_TEST);
+                        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+                        glDepthMask(GL_TRUE);
+                        glStencilMask(0xFF);
+                        glDisable(GL_SCISSOR_TEST);
+                    }
+                    ~ClearStateScope()
+                    {
+                        glColorMask(m_colorMask[0], m_colorMask[1], m_colorMask[2], m_colorMask[3]);
+                        glDepthMask(m_depthMask);
+                        glStencilMaskSeparate(GL_FRONT, static_cast<GLuint>(m_stencilMask));
+                        glStencilMaskSeparate(GL_BACK, static_cast<GLuint>(m_stencilBackMask));
+                        if (m_scissor)
+                            glEnable(GL_SCISSOR_TEST);
+                    }
+                    ClearStateScope(const ClearStateScope&) = delete;
+                    ClearStateScope& operator=(const ClearStateScope&) = delete;
+
+                  private:
+                    GLboolean m_colorMask[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
+                    GLboolean m_depthMask = GL_TRUE;
+                    GLint m_stencilMask = 0xFF;
+                    GLint m_stencilBackMask = 0xFF;
+                    GLboolean m_scissor = GL_FALSE;
+                };
+            } // namespace
 
             // ============================================================================
             // GL BUFFER
@@ -184,40 +274,11 @@ namespace Spark
 
             void GLPipelineState::ApplyDepthStencilState() const
             {
-                // Depth test
-                if (m_desc.depthStencil.depthEnable)
+                const auto& ds = m_desc.depthStencil;
+                if (ds.depthEnable)
                 {
                     glEnable(GL_DEPTH_TEST);
-
-                    GLenum depthFunc = GL_LESS;
-                    switch (m_desc.depthStencil.depthFunc)
-                    {
-                    case RHICompareOp::Never:
-                        depthFunc = GL_NEVER;
-                        break;
-                    case RHICompareOp::Less:
-                        depthFunc = GL_LESS;
-                        break;
-                    case RHICompareOp::Equal:
-                        depthFunc = GL_EQUAL;
-                        break;
-                    case RHICompareOp::LessEqual:
-                        depthFunc = GL_LEQUAL;
-                        break;
-                    case RHICompareOp::Greater:
-                        depthFunc = GL_GREATER;
-                        break;
-                    case RHICompareOp::NotEqual:
-                        depthFunc = GL_NOTEQUAL;
-                        break;
-                    case RHICompareOp::GreaterEqual:
-                        depthFunc = GL_GEQUAL;
-                        break;
-                    case RHICompareOp::Always:
-                        depthFunc = GL_ALWAYS;
-                        break;
-                    }
-                    glDepthFunc(depthFunc);
+                    glDepthFunc(ConvertCompareOp(ds.depthFunc));
                 }
                 else
                 {
@@ -225,13 +286,21 @@ namespace Spark
                 }
 
                 // Depth write
-                glDepthMask(m_desc.depthStencil.depthWrite ? GL_TRUE : GL_FALSE);
+                glDepthMask(ds.depthWrite ? GL_TRUE : GL_FALSE);
 
-                // Stencil test
-                if (m_desc.depthStencil.stencilEnable)
+                // Stencil test: func/ops per face; reference is 0 to match the D3D11 backend
+                if (ds.stencilEnable)
                 {
                     glEnable(GL_STENCIL_TEST);
-                    glStencilMask(m_desc.depthStencil.stencilWriteMask);
+                    glStencilFuncSeparate(GL_FRONT, ConvertCompareOp(ds.frontFace.stencilFunc), 0, ds.stencilReadMask);
+                    glStencilOpSeparate(GL_FRONT, ConvertStencilOp(ds.frontFace.stencilFail),
+                                        ConvertStencilOp(ds.frontFace.stencilDepthFail),
+                                        ConvertStencilOp(ds.frontFace.stencilPass));
+                    glStencilFuncSeparate(GL_BACK, ConvertCompareOp(ds.backFace.stencilFunc), 0, ds.stencilReadMask);
+                    glStencilOpSeparate(GL_BACK, ConvertStencilOp(ds.backFace.stencilFail),
+                                        ConvertStencilOp(ds.backFace.stencilDepthFail),
+                                        ConvertStencilOp(ds.backFace.stencilPass));
+                    glStencilMask(ds.stencilWriteMask);
                 }
                 else
                 {
@@ -311,31 +380,14 @@ namespace Spark
             // GL SWAP CHAIN
             // ============================================================================
 
-            GLSwapChain::GLSwapChain(const RHISwapChainDesc& desc) : m_desc(desc)
+            GLSwapChain::GLSwapChain(const RHISwapChainDesc& desc, [[maybe_unused]] void* deviceDC,
+                                     [[maybe_unused]] void* deviceContext)
+                : m_desc(desc)
             {
-#if defined(__linux__)
-                if (desc.windowHandle != nullptr)
+                if (desc.windowHandle == nullptr)
                 {
-                    // Windowed mode: SDL2 created the GL context and owns the window.
-                    // Render to the default framebuffer (FBO 0) and use SDL_GL_SwapWindow.
-                    m_windowed = true;
-                    m_sdlWindow = desc.windowHandle;
-
-                    RHITextureDesc texDesc;
-                    texDesc.width = desc.width;
-                    texDesc.height = desc.height;
-                    texDesc.format = desc.format;
-                    texDesc.usage = RHITextureUsage::RenderTarget;
-                    texDesc.debugName = "DefaultFramebuffer";
-
-                    m_backBuffer = std::make_unique<GLTexture>(texDesc, 0, 0); // FBO 0 = default
-
-                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL swap chain: windowed mode (%ux%u)", desc.width,
-                                   desc.height);
-                }
-                else
-                {
-                    // Headless mode (EGL or GLX): create an FBO as the "swap chain" back buffer.
+                    // Headless mode (all platforms): an FBO stands in for the swap chain back buffer and
+                    // renders on the device's own context.
                     m_windowed = false;
 
                     GLuint colorTex = 0;
@@ -364,9 +416,10 @@ namespace Spark
 
                     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL swap chain: headless FBO mode (%ux%u)",
                                    desc.width, desc.height);
+                    return;
                 }
-#else
-                // Windows: render to the default framebuffer
+
+                // Windowed mode: render to the default framebuffer (FBO 0)
                 m_windowed = true;
 
                 RHITextureDesc texDesc;
@@ -378,39 +431,59 @@ namespace Spark
 
                 m_backBuffer = std::make_unique<GLTexture>(texDesc, 0, 0); // FBO 0 = default
 
-#ifdef _WIN32
-                HWND hwnd = static_cast<HWND>(desc.windowHandle);
-                m_hdc = GetDC(hwnd);
+#if defined(__linux__)
+                // SDL2 created the GL context and owns the window; Present uses SDL_GL_SwapWindow.
+                m_sdlWindow = desc.windowHandle;
+#elif defined(_WIN32)
+                // Rebind the device's context to the application window. wglMakeCurrent requires the
+                // window DC to use the same pixel format the context was created with, so copy the
+                // device DC's format instead of choosing a new one. A separate context here would not
+                // share any object the device already created.
+                m_hwnd = static_cast<HWND>(desc.windowHandle);
+                m_deviceDC = static_cast<HDC>(deviceDC);
+                m_deviceContext = static_cast<HGLRC>(deviceContext);
+                m_hdc = GetDC(m_hwnd);
 
-                PIXELFORMATDESCRIPTOR pfd = {};
-                pfd.nSize = sizeof(pfd);
-                pfd.nVersion = 1;
-                pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-                pfd.iPixelType = PFD_TYPE_RGBA;
-                pfd.cColorBits = 32;
-                pfd.cDepthBits = 24;
-                pfd.cStencilBits = 8;
-
-                int pixelFormat = ChoosePixelFormat(m_hdc, &pfd);
-                SetPixelFormat(m_hdc, pixelFormat, &pfd);
-
-                m_hglrc = wglCreateContext(m_hdc);
-                wglMakeCurrent(m_hdc, m_hglrc);
+                bool bound = false;
+                if (m_hdc && m_deviceDC && m_deviceContext)
+                {
+                    const int pixelFormat = GetPixelFormat(m_deviceDC);
+                    PIXELFORMATDESCRIPTOR pfd = {};
+                    DescribePixelFormat(m_deviceDC, pixelFormat, sizeof(pfd), &pfd);
+                    // SetPixelFormat may be called only once per window; a matching format is fine.
+                    if (GetPixelFormat(m_hdc) == pixelFormat || SetPixelFormat(m_hdc, pixelFormat, &pfd))
+                        bound = wglMakeCurrent(m_hdc, m_deviceContext) != FALSE;
+                }
+                if (!bound)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "OpenGL swap chain: could not bind the device context to the window (error %lu)",
+                                    GetLastError());
+                }
 #endif
-#endif
+
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL swap chain: windowed mode (%ux%u)", desc.width,
+                               desc.height);
             }
 
             GLSwapChain::~GLSwapChain()
             {
-#if defined(__linux__)
-                // FBO and texture are owned by the GLTexture destructor
-#elif defined(_WIN32)
-                if (m_hglrc)
+#if defined(_WIN32)
+                if (m_hdc)
                 {
-                    wglMakeCurrent(nullptr, nullptr);
-                    wglDeleteContext(m_hglrc);
+                    // Hand the device context back to the device's hidden window so the device keeps a
+                    // current context after the window goes away.
+                    if (wglGetCurrentDC() == m_hdc)
+                    {
+                        if (m_deviceDC && m_deviceContext)
+                            wglMakeCurrent(m_deviceDC, m_deviceContext);
+                        else
+                            wglMakeCurrent(nullptr, nullptr);
+                    }
+                    ReleaseDC(m_hwnd, m_hdc);
                 }
 #endif
+                // Linux: FBO and texture are owned by the GLTexture destructor
             }
 
             bool GLSwapChain::Present(bool vsync)
@@ -433,6 +506,12 @@ namespace Spark
                 if (m_hdc)
                 {
                     SwapBuffers(m_hdc);
+                    return true;
+                }
+                if (!m_windowed)
+                {
+                    // Headless: flush all pending GL commands (no window to swap to)
+                    glFlush();
                     return true;
                 }
 #endif
@@ -585,17 +664,38 @@ namespace Spark
                 }
             }
 
-            void GLCommandList::ClearRenderTarget(IRHITexture*, const float color[4])
+            void GLCommandList::ClearRenderTarget(IRHITexture* target, const float color[4])
             {
-                glClearColor(color[0], color[1], color[2], color[3]);
-                glClear(GL_COLOR_BUFFER_BIT);
+                if (!target)
+                    return;
+                auto* glTex = static_cast<GLTexture*>(target);
+                ClearStateScope scope;
+                if (glTex->GetGLFramebuffer() != 0 || glTex->GetGLTexture() == 0)
+                {
+                    // The texture's private FBO (or the default framebuffer) holds exactly this target
+                    glClearNamedFramebufferfv(glTex->GetGLFramebuffer(), GL_COLOR, 0, color);
+                }
+                else
+                {
+                    glClearTexImage(glTex->GetGLTexture(), 0, GL_RGBA, GL_FLOAT, color);
+                }
             }
 
-            void GLCommandList::ClearDepthStencil(IRHITexture*, float depth, uint8_t stencil)
+            void GLCommandList::ClearDepthStencil(IRHITexture* target, float depth, uint8_t stencil)
             {
-                glClearDepth(depth);
-                glClearStencil(stencil);
-                glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+                if (!target)
+                    return;
+                auto* glTex = static_cast<GLTexture*>(target);
+                ClearStateScope scope;
+                const GLuint fbo = glTex->GetGLFramebuffer();
+                if (HasStencilComponent(glTex->GetFormat()))
+                {
+                    glClearNamedFramebufferfi(fbo, GL_DEPTH_STENCIL, 0, depth, stencil);
+                }
+                else
+                {
+                    glClearNamedFramebufferfv(fbo, GL_DEPTH, 0, &depth);
+                }
             }
 
             void GLCommandList::SetViewport(const RHIViewport& viewport)
@@ -628,6 +728,14 @@ namespace Spark
 
                 glUseProgram(m_currentProgram);
                 glBindVertexArray(m_currentVAO);
+
+                // Vertex/index buffer bindings live on the VAO; carry them over to this pipeline's VAO
+                for (uint32_t slot = 0; slot < kMaxVertexBufferSlots; ++slot)
+                {
+                    if (m_vertexBuffers[slot].buffer != 0)
+                        ApplyVertexBuffer(slot);
+                }
+                glVertexArrayElementBuffer(m_currentVAO, m_boundIndexBuffer);
 
                 glPSO->ApplyRasterizerState();
                 glPSO->ApplyDepthStencilState();
@@ -664,34 +772,39 @@ namespace Spark
                 }
             }
 
-            void GLCommandList::SetVertexBuffer(IRHIBuffer* buffer, uint32_t, uint32_t)
+            void GLCommandList::ApplyVertexBuffer(uint32_t slot)
             {
-                if (!buffer)
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                                   "GL: SetVertexBuffer called with null buffer — binding zero buffer as fallback");
-                    glBindBuffer(GL_ARRAY_BUFFER, 0);
-                    return;
-                }
-                auto* glBuf = static_cast<GLBuffer*>(buffer);
-                glBindBuffer(GL_ARRAY_BUFFER, glBuf->GetGLBuffer());
+                const VertexBufferBinding& binding = m_vertexBuffers[slot];
+                uint32_t stride = binding.stride;
+                if (stride == 0 && m_lastBoundPipeline)
+                    stride = static_cast<GLPipelineState*>(m_lastBoundPipeline)->GetSlotStride(slot);
+                glVertexArrayVertexBuffer(m_currentVAO, slot, binding.buffer, static_cast<GLintptr>(binding.offset),
+                                          static_cast<GLsizei>(stride));
             }
 
-            void GLCommandList::SetIndexBuffer(IRHIBuffer* buffer, uint32_t)
+            void GLCommandList::SetVertexBuffer(IRHIBuffer* buffer, uint32_t slot, uint32_t offset)
             {
-                if (!buffer)
+                if (slot >= kMaxVertexBufferSlots)
                 {
-                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                                   "GL: SetIndexBuffer called with null buffer — binding zero buffer as fallback");
-                    m_boundIndexBuffer = 0;
-                    m_indexStride = 0;
-                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GL: SetVertexBuffer slot %u exceeds %u", slot,
+                                   kMaxVertexBufferSlots);
                     return;
                 }
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
-                m_boundIndexBuffer = glBuf->GetGLBuffer();
-                m_indexStride = glBuf->GetStride();
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_boundIndexBuffer);
+                m_vertexBuffers[slot] = {glBuf ? glBuf->GetGLBuffer() : 0, offset, glBuf ? glBuf->GetStride() : 0};
+                if (m_currentVAO != 0)
+                    ApplyVertexBuffer(slot);
+            }
+
+            void GLCommandList::SetIndexBuffer(IRHIBuffer* buffer, uint32_t offset)
+            {
+                auto* glBuf = static_cast<GLBuffer*>(buffer);
+                m_boundIndexBuffer = glBuf ? glBuf->GetGLBuffer() : 0;
+                m_indexStride = (glBuf && glBuf->GetStride() == 2) ? 2 : 4;
+                m_indexOffset = offset;
+                // GL_ELEMENT_ARRAY_BUFFER is VAO state; SetPipelineState re-applies it to the next VAO
+                if (m_currentVAO != 0)
+                    glVertexArrayElementBuffer(m_currentVAO, m_boundIndexBuffer);
             }
 
             void GLCommandList::SetConstantBuffer(RHIShaderStage, uint32_t slot, IRHIBuffer* buffer)
@@ -758,7 +871,7 @@ namespace Spark
             void GLCommandList::DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex)
             {
                 GLenum indexType = (m_indexStride == 4) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
-                size_t offset = static_cast<size_t>(startIndex) * m_indexStride;
+                size_t offset = m_indexOffset + static_cast<size_t>(startIndex) * m_indexStride;
                 glDrawElementsBaseVertex(m_currentTopology, indexCount, indexType, reinterpret_cast<void*>(offset),
                                          baseVertex);
                 if (m_statistics)
@@ -792,7 +905,7 @@ namespace Spark
                                                      int32_t baseVertex, uint32_t startInstance)
             {
                 GLenum indexType = (m_indexStride == 4) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
-                size_t offset = static_cast<size_t>(startIndex) * m_indexStride;
+                size_t offset = m_indexOffset + static_cast<size_t>(startIndex) * m_indexStride;
                 glDrawElementsInstancedBaseVertexBaseInstance(m_currentTopology, indexCount, indexType,
                                                               reinterpret_cast<void*>(offset), instanceCount,
                                                               baseVertex, startInstance);
@@ -874,8 +987,18 @@ namespace Spark
                 }
                 auto* glDst = static_cast<GLTexture*>(dst);
                 auto* glSrc = static_cast<GLTexture*>(src);
-                glCopyImageSubData(glSrc->GetGLTexture(), GL_TEXTURE_2D, 0, 0, 0, 0, glDst->GetGLTexture(),
-                                   GL_TEXTURE_2D, 0, 0, 0, 0, glSrc->GetWidth(), glSrc->GetHeight(), 1);
+                const RHITextureDesc& srcDesc = glSrc->GetDesc();
+                GLsizei depth = 1;
+                if (srcDesc.type == RHITextureType::Texture3D)
+                    depth = static_cast<GLsizei>(srcDesc.depth);
+                else if (srcDesc.type == RHITextureType::Texture2DArray)
+                    depth = static_cast<GLsizei>(srcDesc.arraySize);
+                else if (srcDesc.type == RHITextureType::TextureCube)
+                    depth = 6;
+                else if (srcDesc.type == RHITextureType::TextureCubeArray)
+                    depth = static_cast<GLsizei>(srcDesc.arraySize * 6);
+                glCopyImageSubData(glSrc->GetGLTexture(), glSrc->GetGLTarget(), 0, 0, 0, 0, glDst->GetGLTexture(),
+                                   glDst->GetGLTarget(), 0, 0, 0, 0, glSrc->GetWidth(), glSrc->GetHeight(), depth);
             }
 
             void GLCommandList::BeginEvent(const char* name)
@@ -964,8 +1087,24 @@ namespace Spark
                 EGLint minor = 0;
                 if (!eglInitialize(m_bootstrapDisplay, &major, &minor))
                 {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "eglInitialize failed: 0x%x", eglGetError());
-                    return false;
+                    // EGL_DEFAULT_DISPLAY needs X11/Wayland. With no display server (CI, containers)
+                    // Mesa's surfaceless platform still provides llvmpipe for FBO-only rendering.
+                    const EGLint defaultError = eglGetError();
+                    auto getPlatformDisplay = reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(
+                        eglGetProcAddress("eglGetPlatformDisplayEXT"));
+                    m_bootstrapDisplay = getPlatformDisplay ? getPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA,
+                                                                                 EGL_DEFAULT_DISPLAY, nullptr)
+                                                            : EGL_NO_DISPLAY;
+                    if (m_bootstrapDisplay == EGL_NO_DISPLAY || !eglInitialize(m_bootstrapDisplay, &major, &minor))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "eglInitialize failed: 0x%x (default display), 0x%x (surfaceless)",
+                                        defaultError, eglGetError());
+                        m_bootstrapDisplay = EGL_NO_DISPLAY;
+                        return false;
+                    }
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                                   "No EGL display server — using the Mesa surfaceless platform");
                 }
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "EGL %d.%d initialized", major, minor);
 
@@ -1022,11 +1161,13 @@ namespace Spark
                 }
 
                 // Request a Core Profile context (Mesa llvmpipe supports up to GL 4.5)
+                // A debug context guarantees KHR_debug output is delivered (enableDebugLayer)
                 // clang-format off
                 const EGLint contextAttribs[] = {
                     EGL_CONTEXT_MAJOR_VERSION, 4,
                     EGL_CONTEXT_MINOR_VERSION, 5,
                     EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+                    EGL_CONTEXT_OPENGL_DEBUG, m_debugEnabled ? EGL_TRUE : EGL_FALSE,
                     EGL_NONE
                 };
                 // clang-format on
@@ -1139,6 +1280,7 @@ namespace Spark
                         GLX_CONTEXT_MAJOR_VERSION_ARB, 4,
                         GLX_CONTEXT_MINOR_VERSION_ARB, 5,
                         GLX_CONTEXT_PROFILE_MASK_ARB,  GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+                        GLX_CONTEXT_FLAGS_ARB,         m_debugEnabled ? GLX_CONTEXT_DEBUG_BIT_ARB : 0,
                         0 // None
                     };
                     // clang-format on
@@ -1236,6 +1378,56 @@ namespace Spark
                 }
 
                 wglMakeCurrent(bootstrapDC, bootstrapContext);
+
+                // wglCreateContext only yields a legacy (compatibility, non-debug) context. Use it to
+                // reach WGL_ARB_create_context and create the real 4.5 core context — with the debug
+                // flag when the debug layer is requested, matching the EGL/GLX paths.
+                {
+                    constexpr int kWglContextMajorVersion = 0x2091;   // WGL_CONTEXT_MAJOR_VERSION_ARB
+                    constexpr int kWglContextMinorVersion = 0x2092;   // WGL_CONTEXT_MINOR_VERSION_ARB
+                    constexpr int kWglContextFlags = 0x2094;          // WGL_CONTEXT_FLAGS_ARB
+                    constexpr int kWglContextProfileMask = 0x9126;    // WGL_CONTEXT_PROFILE_MASK_ARB
+                    constexpr int kWglContextDebugBit = 0x0001;       // WGL_CONTEXT_DEBUG_BIT_ARB
+                    constexpr int kWglContextCoreProfileBit = 0x0001; // WGL_CONTEXT_CORE_PROFILE_BIT_ARB
+                    using PFNWGLCREATECONTEXTATTRIBSARB = HGLRC(WINAPI*)(HDC, HGLRC, const int*);
+                    auto wglCreateContextAttribsARB = reinterpret_cast<PFNWGLCREATECONTEXTATTRIBSARB>(
+                        reinterpret_cast<void*>(wglGetProcAddress("wglCreateContextAttribsARB")));
+
+                    HGLRC coreContext = nullptr;
+                    if (wglCreateContextAttribsARB)
+                    {
+                        const int attribs[] = {kWglContextMajorVersion,
+                                               4,
+                                               kWglContextMinorVersion,
+                                               5,
+                                               kWglContextProfileMask,
+                                               kWglContextCoreProfileBit,
+                                               kWglContextFlags,
+                                               m_debugEnabled ? kWglContextDebugBit : 0,
+                                               0};
+                        coreContext = wglCreateContextAttribsARB(bootstrapDC, nullptr, attribs);
+                    }
+
+                    if (coreContext && wglMakeCurrent(bootstrapDC, coreContext))
+                    {
+                        wglDeleteContext(bootstrapContext);
+                        bootstrapContext = coreContext;
+                    }
+                    else
+                    {
+                        if (coreContext)
+                            wglDeleteContext(coreContext);
+                        wglMakeCurrent(bootstrapDC, bootstrapContext);
+                        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                       "WGL_ARB_create_context unavailable — using a legacy GL context");
+                    }
+                }
+
+                // The hidden window's context stays current as the device's rendering context (as on
+                // EGL/GLX) until Shutdown; a windowed swap chain rebinds it to the application window.
+                m_wglWindow = bootstrapWindow;
+                m_wglDC = bootstrapDC;
+                m_wglContext = bootstrapContext;
 #endif
 
                 // GLAD can now load OpenGL function pointers from the current context
@@ -1254,11 +1446,7 @@ namespace Spark
                     glXDestroyPbuffer(m_glxDisplay, m_glxPbuffer);
                     XCloseDisplay(m_glxDisplay);
 #elif defined(_WIN32)
-                    wglMakeCurrent(nullptr, nullptr);
-                    wglDeleteContext(bootstrapContext);
-                    ReleaseDC(bootstrapWindow, bootstrapDC);
-                    DestroyWindow(bootstrapWindow);
-                    UnregisterClassA(wc.lpszClassName, wc.hInstance);
+                    DestroyWGLContext();
 #endif
                     return false;
                 }
@@ -1300,20 +1488,17 @@ namespace Spark
 
                 QueryCapabilities();
 
-                // Tear down the bootstrap context — the real context will be created by GLSwapChain.
-                // Exception: on Linux (EGL/GLX) we keep the bootstrap context alive as the
-                // rendering context, since headless mode uses FBOs for off-screen rendering.
+                // The bootstrap context stays alive as the device's rendering context on every
+                // platform: headless rendering uses FBOs, and resources created before a swap chain
+                // exists must land in a live context. (Windows used to delete it here, which left
+                // every later GL call with no current context.)
 #if defined(__linux__) && defined(SPARK_EGL_SUPPORT)
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics,
                                "EGL headless: keeping bootstrap context as rendering context");
 #elif defined(__linux__)
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLX: keeping bootstrap context as rendering context");
 #elif defined(_WIN32)
-                wglMakeCurrent(nullptr, nullptr);
-                wglDeleteContext(bootstrapContext);
-                ReleaseDC(bootstrapWindow, bootstrapDC);
-                DestroyWindow(bootstrapWindow);
-                UnregisterClassA(wc.lpszClassName, wc.hInstance);
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "WGL: keeping bootstrap context as rendering context");
 #endif
 
                 m_immediateCommandList = std::make_unique<GLCommandList>(true, &m_statistics);
@@ -1381,8 +1566,33 @@ namespace Spark
                     m_bootstrapContext = EGL_NO_CONTEXT;
                     m_bootstrapSurface = EGL_NO_SURFACE;
                 }
+#elif defined(_WIN32)
+                DestroyWGLContext();
 #endif
             }
+
+#if defined(_WIN32)
+            void GLDevice::DestroyWGLContext()
+            {
+                if (m_wglContext)
+                {
+                    if (wglGetCurrentContext() == m_wglContext)
+                        wglMakeCurrent(nullptr, nullptr);
+                    wglDeleteContext(m_wglContext);
+                    m_wglContext = nullptr;
+                }
+                if (m_wglWindow)
+                {
+                    if (m_wglDC)
+                        ReleaseDC(m_wglWindow, m_wglDC);
+                    DestroyWindow(m_wglWindow);
+                    // Fails harmlessly while another GLDevice still has a window of this class.
+                    UnregisterClassA("SparkGLBootstrap", GetModuleHandleA(nullptr));
+                }
+                m_wglDC = nullptr;
+                m_wglWindow = nullptr;
+            }
+#endif
 
             void GLDevice::QueryCapabilities()
             {
@@ -1402,9 +1612,22 @@ namespace Spark
                 glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &maxSamplers);
                 m_capabilities.maxSamplers = maxSamplers;
 
-                GLfloat maxAniso;
-                glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso);
+                // GL_MAX_TEXTURE_MAX_ANISOTROPY is core only in 4.6; 4.5 contexts need the extension
+                m_hasAnisotropicFiltering = GLAD_GL_VERSION_4_6 || GLAD_GL_ARB_texture_filter_anisotropic ||
+                                            GLAD_GL_EXT_texture_filter_anisotropic;
+                GLfloat maxAniso = 1.0f;
+                if (m_hasAnisotropicFiltering)
+                    glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso);
                 m_capabilities.maxAnisotropy = maxAniso;
+
+                // Since GL 3.3 the GLSL version equals the context version (4.5 -> 450); shaders
+                // declaring a newer #version are clamped in PrepareGLSLSource
+                GLint glMajor = 0;
+                GLint glMinor = 0;
+                glGetIntegerv(GL_MAJOR_VERSION, &glMajor);
+                glGetIntegerv(GL_MINOR_VERSION, &glMinor);
+                if (glMajor >= 4 || (glMajor == 3 && glMinor >= 3))
+                    m_maxGLSLVersion = glMajor * 100 + glMinor * 10;
 
                 m_capabilities.tessellationSupport = true;
                 m_capabilities.computeShaderSupport = true;
@@ -1433,7 +1656,11 @@ namespace Spark
 
             std::unique_ptr<IRHISwapChain> GLDevice::CreateSwapChain(const RHISwapChainDesc& desc)
             {
+#if defined(_WIN32)
+                return std::make_unique<GLSwapChain>(desc, m_wglDC, m_wglContext);
+#else
                 return std::make_unique<GLSwapChain>(desc);
+#endif
             }
 
             std::unique_ptr<IRHIBuffer> GLDevice::CreateBuffer(const RHIBufferDesc& desc)
@@ -1450,11 +1677,13 @@ namespace Spark
                     usage = GL_STATIC_DRAW;
                     break;
                 case RHIBufferAccess::Dynamic:
+                    // DYNAMIC_STORAGE: UpdateBuffer (glNamedBufferSubData) is the common constant-buffer
+                    // path. PERSISTENT: TransientBufferAllocator draws while the buffer stays mapped.
                     usage = GL_DYNAMIC_DRAW;
-                    flags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+                    flags = GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
                     break;
                 case RHIBufferAccess::Staging:
-                    flags = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT;
+                    flags = GL_DYNAMIC_STORAGE_BIT | GL_MAP_READ_BIT | GL_MAP_WRITE_BIT;
                     break;
                 case RHIBufferAccess::ReadBack:
                     flags = GL_MAP_READ_BIT;
@@ -1612,8 +1841,9 @@ namespace Spark
                 }
                 else if (!desc.sourceCode.empty())
                 {
-                    // GLSL source compilation
-                    const char* src = desc.sourceCode.c_str();
+                    // GLSL source compilation (stage macro, defines, #version clamp applied)
+                    const std::string prepared = PrepareGLSLSource(desc);
+                    const char* src = prepared.c_str();
                     glShaderSource(shader, 1, &src, nullptr);
                     glCompileShader(shader);
 
@@ -1637,6 +1867,78 @@ namespace Spark
                 }
 
                 return std::make_unique<GLShader>(desc, shader, desc.sourceCode);
+            }
+
+            std::string GLDevice::PrepareGLSLSource(const RHIShaderDesc& desc) const
+            {
+                // Shipped multi-stage files select their stage with #ifdef VERTEX_SHADER / FRAGMENT_SHADER,
+                // and variants with desc.defines ("NAME" or "NAME=VALUE"); both must follow #version.
+                const char* stageMacro = nullptr;
+                switch (desc.stage)
+                {
+                case RHIShaderStage::Vertex:
+                    stageMacro = "VERTEX_SHADER";
+                    break;
+                case RHIShaderStage::Pixel:
+                    stageMacro = "FRAGMENT_SHADER";
+                    break;
+                case RHIShaderStage::Geometry:
+                    stageMacro = "GEOMETRY_SHADER";
+                    break;
+                case RHIShaderStage::Hull:
+                    stageMacro = "TESS_CONTROL_SHADER";
+                    break;
+                case RHIShaderStage::Domain:
+                    stageMacro = "TESS_EVALUATION_SHADER";
+                    break;
+                case RHIShaderStage::Compute:
+                    stageMacro = "COMPUTE_SHADER";
+                    break;
+                default:
+                    break;
+                }
+
+                std::string preamble;
+                if (stageMacro)
+                    preamble += std::string("#define ") + stageMacro + "\n";
+                for (const std::string& define : desc.defines)
+                {
+                    const size_t eq = define.find('=');
+                    if (eq == std::string::npos)
+                        preamble += "#define " + define + "\n";
+                    else
+                        preamble += "#define " + define.substr(0, eq) + " " + define.substr(eq + 1) + "\n";
+                }
+
+                const std::string& source = desc.sourceCode;
+                const size_t versionPos = source.find("#version");
+                if (versionPos == std::string::npos)
+                    return preamble + source;
+
+                size_t lineEnd = source.find('\n', versionPos);
+                if (lineEnd == std::string::npos)
+                    lineEnd = source.size();
+                std::string versionLine = source.substr(versionPos, lineEnd - versionPos);
+
+                // Mesa llvmpipe and other 4.5 drivers reject "#version 460". The shipped shaders use
+                // no 4.6-only features, so clamp; genuine 4.6 usage still fails to compile explicitly.
+                std::istringstream versionStream(versionLine.substr(8));
+                int requested = 0;
+                std::string profile;
+                versionStream >> requested >> profile;
+                if (requested > m_maxGLSLVersion)
+                {
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                                   "GL: clamping GLSL #version %d to %d for '%s' (driver maximum)", requested,
+                                   m_maxGLSLVersion,
+                                   desc.debugName.empty() ? desc.filePath.c_str() : desc.debugName.c_str());
+                    versionLine =
+                        "#version " + std::to_string(m_maxGLSLVersion) + (profile.empty() ? "" : " " + profile);
+                }
+
+                const size_t afterVersion = lineEnd < source.size() ? lineEnd + 1 : lineEnd;
+                return source.substr(0, versionPos) + versionLine + "\n" + preamble + "#line 2\n" +
+                       source.substr(afterVersion);
             }
 
             std::unique_ptr<IRHISampler> GLDevice::CreateSampler(const RHISamplerDesc& desc)
@@ -1665,9 +1967,13 @@ namespace Spark
                 glSamplerParameterf(sampler, GL_TEXTURE_MIN_LOD, desc.minLod);
                 glSamplerParameterf(sampler, GL_TEXTURE_MAX_LOD, desc.maxLod);
 
-                if (desc.minFilter == RHIFilterMode::Anisotropic || desc.magFilter == RHIFilterMode::Anisotropic)
+                if (m_hasAnisotropicFiltering &&
+                    (desc.minFilter == RHIFilterMode::Anisotropic || desc.magFilter == RHIFilterMode::Anisotropic))
                 {
-                    glSamplerParameterf(sampler, GL_TEXTURE_MAX_ANISOTROPY, static_cast<float>(desc.maxAnisotropy));
+                    // GL rejects values below 1 (D3D callers often leave 0 meaning "off")
+                    const float aniso = std::clamp(static_cast<float>(desc.maxAnisotropy), 1.0f,
+                                                   std::max(1.0f, m_capabilities.maxAnisotropy));
+                    glSamplerParameterf(sampler, GL_TEXTURE_MAX_ANISOTROPY, aniso);
                 }
 
                 glSamplerParameterfv(sampler, GL_TEXTURE_BORDER_COLOR, desc.borderColor);
@@ -1711,127 +2017,108 @@ namespace Spark
                 GLuint vao;
                 glCreateVertexArrays(1, &vao);
 
-                uint32_t totalStride = 0;
-                for (const auto& elem : desc.inputLayout.elements)
-                {
-                    uint32_t elemSize = 0;
-                    switch (elem.format)
-                    {
-                    case RHIVertexFormat::Float1:
-                    case RHIVertexFormat::Int1:
-                    case RHIVertexFormat::UInt1:
-                        elemSize = 4;
-                        break;
-                    case RHIVertexFormat::Float2:
-                    case RHIVertexFormat::Int2:
-                    case RHIVertexFormat::UInt2:
-                        elemSize = 8;
-                        break;
-                    case RHIVertexFormat::Float3:
-                    case RHIVertexFormat::Int3:
-                    case RHIVertexFormat::UInt3:
-                        elemSize = 12;
-                        break;
-                    case RHIVertexFormat::Float4:
-                    case RHIVertexFormat::Int4:
-                    case RHIVertexFormat::UInt4:
-                        elemSize = 16;
-                        break;
-                    case RHIVertexFormat::UNorm8x4:
-                    case RHIVertexFormat::SNorm8x4:
-                        elemSize = 4;
-                        break;
-                    default:
-                        elemSize = 4;
-                        break;
-                    }
-                    totalStride = std::max(totalStride, elem.byteOffset + elemSize);
-                }
-
+                std::array<uint32_t, kMaxVertexBufferSlots> slotStrides{};
                 for (size_t i = 0; i < desc.inputLayout.elements.size(); ++i)
                 {
                     const auto& elem = desc.inputLayout.elements[i];
-                    GLuint index = static_cast<GLuint>(i);
-
-                    glEnableVertexArrayAttrib(vao, index);
-                    glVertexArrayAttribBinding(vao, index, elem.inputSlot);
+                    const GLuint index = static_cast<GLuint>(i);
 
                     GLint numComponents = 3;
                     GLenum type = GL_FLOAT;
-
+                    bool isInteger = false;
+                    GLboolean normalized = GL_FALSE;
                     switch (elem.format)
                     {
                     case RHIVertexFormat::Float1:
-                        numComponents = 1;
-                        type = GL_FLOAT;
-                        break;
                     case RHIVertexFormat::Float2:
-                        numComponents = 2;
-                        type = GL_FLOAT;
-                        break;
                     case RHIVertexFormat::Float3:
-                        numComponents = 3;
-                        type = GL_FLOAT;
-                        break;
                     case RHIVertexFormat::Float4:
-                        numComponents = 4;
-                        type = GL_FLOAT;
+                        numComponents =
+                            1 + static_cast<GLint>(elem.format) - static_cast<GLint>(RHIVertexFormat::Float1);
                         break;
                     case RHIVertexFormat::Int1:
-                        numComponents = 1;
-                        type = GL_INT;
-                        break;
                     case RHIVertexFormat::Int2:
-                        numComponents = 2;
-                        type = GL_INT;
-                        break;
                     case RHIVertexFormat::Int3:
-                        numComponents = 3;
-                        type = GL_INT;
-                        break;
                     case RHIVertexFormat::Int4:
-                        numComponents = 4;
+                        numComponents = 1 + static_cast<GLint>(elem.format) - static_cast<GLint>(RHIVertexFormat::Int1);
                         type = GL_INT;
+                        isInteger = true;
                         break;
                     case RHIVertexFormat::UInt1:
-                        numComponents = 1;
-                        type = GL_UNSIGNED_INT;
-                        break;
                     case RHIVertexFormat::UInt2:
-                        numComponents = 2;
-                        type = GL_UNSIGNED_INT;
-                        break;
                     case RHIVertexFormat::UInt3:
-                        numComponents = 3;
-                        type = GL_UNSIGNED_INT;
-                        break;
                     case RHIVertexFormat::UInt4:
-                        numComponents = 4;
+                        numComponents =
+                            1 + static_cast<GLint>(elem.format) - static_cast<GLint>(RHIVertexFormat::UInt1);
                         type = GL_UNSIGNED_INT;
+                        isInteger = true;
                         break;
                     case RHIVertexFormat::UNorm8x4:
                         numComponents = 4;
                         type = GL_UNSIGNED_BYTE;
+                        normalized = GL_TRUE;
                         break;
                     case RHIVertexFormat::SNorm8x4:
                         numComponents = 4;
                         type = GL_BYTE;
-                        break;
-                    default:
+                        normalized = GL_TRUE;
                         break;
                     }
+                    const uint32_t elemSize =
+                        (type == GL_UNSIGNED_BYTE || type == GL_BYTE) ? 4u : 4u * static_cast<uint32_t>(numComponents);
 
-                    glVertexArrayAttribFormat(vao, index, numComponents, type, GL_FALSE, elem.byteOffset);
+                    if (elem.inputSlot >= kMaxVertexBufferSlots)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "OpenGL CreatePipelineState: input slot %u exceeds %u ('%s')", elem.inputSlot,
+                                        kMaxVertexBufferSlots, elem.semanticName.c_str());
+                        glDeleteVertexArrays(1, &vao);
+                        glDeleteProgram(program);
+                        return nullptr;
+                    }
+                    slotStrides[elem.inputSlot] = std::max(slotStrides[elem.inputSlot], elem.byteOffset + elemSize);
+
+                    glEnableVertexArrayAttrib(vao, index);
+                    glVertexArrayAttribBinding(vao, index, elem.inputSlot);
+                    // Integer inputs (ivec/uvec in GLSL) must use the I-format entry point or the
+                    // shader reads float-converted garbage
+                    if (isInteger)
+                        glVertexArrayAttribIFormat(vao, index, numComponents, type, elem.byteOffset);
+                    else
+                        glVertexArrayAttribFormat(vao, index, numComponents, type, normalized, elem.byteOffset);
+
+                    // GL divisor 0 means per-vertex, so a per-instance element always steps at least once
+                    if (elem.perInstance)
+                        glVertexArrayBindingDivisor(vao, elem.inputSlot, std::max(1u, elem.instanceStepRate));
                 }
 
-                return std::make_unique<GLPipelineState>(desc, program, vao);
+                auto pipeline = std::make_unique<GLPipelineState>(desc, program, vao);
+                pipeline->SetSlotStrides(slotStrides);
+                return pipeline;
             }
 
 
             void* GLDevice::MapBuffer(IRHIBuffer* buffer)
             {
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
-                void* mapped = glMapNamedBuffer(glBuf->GetGLBuffer(), GL_WRITE_ONLY);
+                // Map access must be a subset of the immutable storage flags chosen in CreateBuffer
+                GLbitfield access = GL_MAP_WRITE_BIT;
+                switch (glBuf->GetDesc().access)
+                {
+                case RHIBufferAccess::Dynamic:
+                    access = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+                    break;
+                case RHIBufferAccess::Staging:
+                    access = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT;
+                    break;
+                case RHIBufferAccess::ReadBack:
+                    access = GL_MAP_READ_BIT;
+                    break;
+                case RHIBufferAccess::Static:
+                    break;
+                }
+                void* mapped =
+                    glMapNamedBufferRange(glBuf->GetGLBuffer(), 0, static_cast<GLsizeiptr>(glBuf->GetSize()), access);
                 if (!mapped)
                 {
                     SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
@@ -1852,16 +2139,48 @@ namespace Spark
                 glNamedBufferSubData(glBuf->GetGLBuffer(), offset, size, data);
             }
 
-            void GLDevice::UpdateTexture(IRHITexture* texture, const void* data, uint32_t mipLevel, uint32_t)
+            void GLDevice::UpdateTexture(IRHITexture* texture, const void* data, uint32_t mipLevel, uint32_t arraySlice)
             {
+                if (!texture || !data)
+                    return;
                 auto* glTex = static_cast<GLTexture*>(texture);
-                GLenum format = ConvertFormat(glTex->GetFormat());
-                GLenum type = ConvertFormatType(glTex->GetFormat());
+                const PixelFormat pixelFormat = glTex->GetFormat();
+                const RHITextureType type = glTex->GetDesc().type;
 
-                uint32_t w = std::max(1u, glTex->GetWidth() >> mipLevel);
-                uint32_t h = std::max(1u, glTex->GetHeight() >> mipLevel);
+                const uint32_t w = std::max(1u, glTex->GetWidth() >> mipLevel);
+                const uint32_t h = std::max(1u, glTex->GetHeight() >> mipLevel);
+                // Array layers and cube faces are the z coordinate of a DSA 3D upload
+                const bool layered = type == RHITextureType::Texture2DArray || type == RHITextureType::TextureCube ||
+                                     type == RHITextureType::TextureCubeArray;
+                const GLint layer = layered ? static_cast<GLint>(arraySlice) : 0;
 
-                glTextureSubImage2D(glTex->GetGLTexture(), mipLevel, 0, 0, w, h, format, type, data);
+                // Rows of RHI uploads are tightly packed; GL's default 4-byte alignment skews
+                // odd-width R8/RG8 rows
+                glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+                if (IsCompressedFormat(pixelFormat))
+                {
+                    const GLsizei imageSize =
+                        static_cast<GLsizei>(((w + 3) / 4) * ((h + 3) / 4) * GetFormatSize(pixelFormat));
+                    const GLenum internalFormat = ConvertInternalFormat(pixelFormat);
+                    if (layered)
+                        glCompressedTextureSubImage3D(glTex->GetGLTexture(), mipLevel, 0, 0, layer, w, h, 1,
+                                                      internalFormat, imageSize, data);
+                    else
+                        glCompressedTextureSubImage2D(glTex->GetGLTexture(), mipLevel, 0, 0, w, h, internalFormat,
+                                                      imageSize, data);
+                }
+                else
+                {
+                    const GLenum format = ConvertFormat(pixelFormat);
+                    const GLenum formatType = ConvertFormatType(pixelFormat);
+                    if (layered)
+                        glTextureSubImage3D(glTex->GetGLTexture(), mipLevel, 0, 0, layer, w, h, 1, format, formatType,
+                                            data);
+                    else
+                        glTextureSubImage2D(glTex->GetGLTexture(), mipLevel, 0, 0, w, h, format, formatType, data);
+                }
+                glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
             }
 
             void GLDevice::GenerateMips(IRHITexture* texture)
@@ -1935,8 +2254,9 @@ namespace Spark
                 case PixelFormat::B8G8R8A8_UNORM_SRGB:
                     return GL_BGRA;
                 case PixelFormat::R10G10B10A2_UNORM:
-                case PixelFormat::R11G11B10_FLOAT:
                     return GL_RGBA;
+                case PixelFormat::R11G11B10_FLOAT:
+                    return GL_RGB;
                 case PixelFormat::R16_FLOAT:
                     return GL_RED;
                 case PixelFormat::R16_UINT:
@@ -2050,13 +2370,14 @@ namespace Spark
             {
                 switch (format)
                 {
-                case PixelFormat::R8_UNORM:
                 case PixelFormat::R8_SNORM:
+                case PixelFormat::R8G8B8A8_SNORM:
+                    return GL_BYTE;
+                case PixelFormat::R8_UNORM:
                 case PixelFormat::R8_UINT:
                 case PixelFormat::R8G8_UNORM:
                 case PixelFormat::R8G8B8A8_UNORM:
                 case PixelFormat::R8G8B8A8_UNORM_SRGB:
-                case PixelFormat::R8G8B8A8_SNORM:
                 case PixelFormat::B8G8R8A8_UNORM:
                 case PixelFormat::B8G8R8A8_UNORM_SRGB:
                     return GL_UNSIGNED_BYTE;
@@ -2078,6 +2399,8 @@ namespace Spark
                     return GL_UNSIGNED_INT;
                 case PixelFormat::R10G10B10A2_UNORM:
                     return GL_UNSIGNED_INT_2_10_10_10_REV;
+                case PixelFormat::R11G11B10_FLOAT:
+                    return GL_UNSIGNED_INT_10F_11F_11F_REV;
                 case PixelFormat::D16_UNORM:
                     return GL_UNSIGNED_SHORT;
                 case PixelFormat::D24_UNORM_S8_UINT:

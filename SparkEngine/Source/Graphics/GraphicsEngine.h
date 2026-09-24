@@ -34,6 +34,7 @@
 #include "MakeDesc.h"
 #include "TerrainRenderer.h"
 #include "GPUTimestampQuery.h"
+#include "GraphicsBenchmarkStats.h"
 // Phase Q: activated Tier 2 graphics orphan — abstract denoiser
 // interface plus SoftwareDenoiser fallback. Pure CPU (joint bilateral
 // filter), no external SDK dependency, runs on every platform.
@@ -62,6 +63,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <atomic> // Thread-safe frame state management
@@ -281,7 +283,9 @@ class GraphicsEngine
      * the referenced strings outlive the current frame.
      *
      * @param meshPath      Asset path to the mesh resource (view into component storage).
-     * @param materialPath  Asset path to the material resource (view into component storage).
+     * @param materialPath  Optional asset path to the material resource (view into component
+     *                      storage). An empty path intentionally selects the mesh/engine
+     *                      default material; starter scenes use this for untextured geometry.
      * @param worldMatrix   World transformation matrix for the mesh instance.
      * @param castShadows   Whether this mesh should be included in the shadow pass.
      */
@@ -660,6 +664,7 @@ class GraphicsEngine
     void Console_EnableFeature(const std::string& feature, bool enabled);
     void Console_SetSetting(const std::string& setting, float value);
     bool Console_ReloadShaders();
+    /// Queue a backbuffer capture for the next frame, after overlays and before Present.
     bool Console_Screenshot(const std::string& filename);
     std::string Console_GetSystemInfo() const;
     std::string Console_Benchmark(int seconds = 10);
@@ -1036,6 +1041,20 @@ class GraphicsEngine
     std::chrono::high_resolution_clock::time_point m_lightingStartTime;
     std::chrono::high_resolution_clock::time_point m_postProcessStartTime;
 
+    // Console diagnostics are requested after Present by the game loop. The
+    // render thread consumes these requests at the next real frame boundary.
+    std::optional<std::string> m_pendingScreenshotFilename;
+    bool m_benchmarkActive = false;
+    int m_benchmarkSeconds = 0;
+    std::chrono::steady_clock::time_point m_benchmarkStart{};
+    uint64_t m_benchmarkPresentedFrames = 0;
+    uint32_t m_benchmarkGpuTimerId = UINT32_MAX;
+    uint32_t m_benchmarkGpuHistoryResetFrames = 0;
+    uint64_t m_benchmarkGpuLastSampleSequence = 0;
+    Spark::Graphics::GraphicsBenchmarkStats m_benchmarkCpuSamples;
+    Spark::Graphics::GraphicsBenchmarkStats m_benchmarkGpuSamples;
+    std::string m_benchmarkAdapterIdentity;
+
     ComPtr<ID3D11Query> m_disjointQuery;
     ComPtr<ID3D11Query> m_timestampStartQuery;
     ComPtr<ID3D11Query> m_timestampEndQuery;
@@ -1221,7 +1240,8 @@ class GraphicsEngine
     void SetViewport();                    ///< Set the D3D11 viewport to match window dimensions.
 
     // --- Per-frame state management ---
-    void UpdateMetrics();                          ///< Update basic render statistics (draw calls, triangles).
+    void UpdateMetrics(); ///< Update basic render statistics (draw calls, triangles).
+    bool CaptureScreenshotBeforePresent(const std::string& filename);
     void UpdateAdvancedMetrics();                  ///< Update GPU timing and memory usage metrics.
     void ApplyGraphicsState();                     ///< Bind rasterizer/depth/blend states based on current settings.
     void ApplyAdvancedGraphicsState();             ///< Configure advanced states (MSAA, HDR tone mapping).

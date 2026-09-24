@@ -76,6 +76,7 @@ void VRAMBudgetMonitor::Shutdown()
     m_adapter3.Reset();
     m_initialized = false;
     m_querySupported = false;
+    m_currentUsageValid = false;
 }
 
 void VRAMBudgetMonitor::Update()
@@ -91,6 +92,16 @@ void VRAMBudgetMonitor::Update()
     {
         m_currentUsage = static_cast<size_t>(info.CurrentUsage);
         m_budget = static_cast<size_t>(info.Budget);
+        m_currentUsageValid = true;
+    }
+    else
+    {
+        // Do not leave the previous sample looking current after a transient
+        // driver/WDDM query failure. Callers must distinguish unavailable
+        // telemetry from a valid zero-usage sample.
+        m_currentUsage = 0;
+        m_budget = 0;
+        m_currentUsageValid = false;
     }
 
     ComputePressure();
@@ -147,6 +158,7 @@ void VRAMBudgetMonitor::ComputePressure()
 HRESULT VRAMBudgetMonitor::Initialize(ID3D11Device* /*device*/)
 {
     m_initialized = true;
+    m_currentUsageValid = false;
     // No DXGI on non-Windows; keep defaults
     return S_OK;
 }

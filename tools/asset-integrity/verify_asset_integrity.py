@@ -14,6 +14,16 @@ TOCTOU limitations (honest boundary):
 - This is a repository-content gate, not proof that the verified snapshot was
   consumed atomically by package assembly. Immutable handoff requires a separate
   mechanism (e.g. content-addressed staging or sealed archive).
+
+Provenance (manifest schema v2):
+- Every v2 entry carries ``license`` and ``provenance``. Their values are never
+  typed into the manifest; ``generate`` resolves them from the reviewed policy
+  (tools/asset-integrity/provenance.json by default) and refuses to write when a
+  file is unclaimed, claimed ambiguously, or its hash-bound claim is stale.
+- ``NOASSERTION`` is a truthful "no tracked license record" value. The policy
+  must name the work item that owns closing each such gap.
+- Schema v1 (integrity only) still loads so that staged package fixtures remain
+  verifiable; any caller that passes ``require_provenance=True`` rejects it.
 """
 from __future__ import annotations
 
@@ -31,10 +41,24 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-MANIFEST_SCHEMA_VERSION = 1
+LEGACY_MANIFEST_SCHEMA_VERSION = 1
+MANIFEST_SCHEMA_VERSION = 2
+SUPPORTED_MANIFEST_VERSIONS = frozenset({LEGACY_MANIFEST_SCHEMA_VERSION, MANIFEST_SCHEMA_VERSION})
 HASH_ALGORITHM = "sha256"
 MANIFEST_FILENAME = "assets.integrity.json"
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_PROVENANCE_POLICY = REPO_ROOT / "tools" / "asset-integrity" / "provenance.json"
+PROVENANCE_POLICY_VERSION = 1
+NOASSERTION = "NOASSERTION"
+LEGACY_ENTRY_KEYS = frozenset({"path", "sha256", "size"})
+ENTRY_KEYS = frozenset({"path", "sha256", "size", "license", "provenance"})
+LICENSE_ID_RE = re.compile(r"(?:NOASSERTION|LicenseRef-[A-Za-z0-9.-]+|[A-Za-z0-9][A-Za-z0-9.+-]*)\Z")
+RULE_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
+GAP_ID_RE = re.compile(r"[A-Z]+-[0-9]{3}\Z")
+MAX_PROVENANCE_BYTES = 1024
+RULE_KEYS = frozenset({"id", "license", "provenance", "evidence", "gap", "files", "prefixes", "records"})
+RECORD_KEYS = frozenset({"path", "format", "exclude"})
+RECORD_FORMATS = frozenset({"terrafront-asset-manifest", "blender-provenance", "starter-model-manifest"})
 
 MAX_MANIFEST_BYTES = 64 * 1024 * 1024
 MAX_ENTRY_COUNT = 100_000
@@ -45,9 +69,13 @@ MAX_TOTAL_BYTES = 64 * 1024 * 1024 * 1024
 MAX_DIRECTORY_DEPTH = 128
 HASH_CHUNK_BYTES = 1024 * 1024
 
-KNOWN_MANIFESTS = (("Assets/assets.integrity.json", "Assets"),)
+# (manifest, asset root, provenance policy) — all repository-relative.
+KNOWN_MANIFESTS = (
+    ("Assets/assets.integrity.json", "Assets", "tools/asset-integrity/provenance.json"),
+)
 ROOT_IGNORES = frozenset({MANIFEST_FILENAME})
 TEMPLATE_ROOT_METADATA = frozenset({"README.md", "manifest.json"})
+TEMPLATE_COLLECTION_METADATA = frozenset({"README.md", "assets.lock.json"})
 INVALID_WINDOWS_CHARS = frozenset('<>:"|?*')
 RESERVED_WINDOWS_NAMES = frozenset(
     {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"}
@@ -447,16 +475,390 @@ def scan_directory(
     return entries, errors
 
 
-def generate_manifest(root: Path) -> tuple[dict[str, Any], list[IntegrityError]]:
+def _text_problem(value: Any, *, limit: int = MAX_PROVENANCE_BYTES) -> str | None:
+    if not isinstance(value, str) or not value:
+        return "must be a non-empty string"
+    if value != value.strip():
+        return "must not have leading or trailing whitespace"
+    if len(value.encode("utf-8")) > limit:
+        return f"exceeds {limit} UTF-8 bytes"
+    for char in value:
+        cp = ord(char)
+        if cp < 0x20 or cp == 0x7F:
+            return f"contains control character U+{cp:04X}"
+    return None
+
+
+def _require_canonical(value: Any, where: str) -> str:
+    canonical, problem = _canonical_relative_path(value)
+    if problem is not None or canonical is None:
+        raise ManifestFormatError(f"{where}: unsafe path {value!r}: {problem}")
+    return canonical
+
+
+def _validate_policy_rule(rule: Any, index: int, licenses: dict[str, Any], seen_ids: set[str]) -> None:
+    where = f"rules[{index}]"
+    if not isinstance(rule, dict):
+        raise ManifestFormatError(f"{where} must be an object")
+    unknown = set(rule) - RULE_KEYS
+    if unknown:
+        raise ManifestFormatError(f"{where} has unknown keys: {sorted(unknown)}")
+    for required in ("id", "license", "provenance", "evidence"):
+        if required not in rule:
+            raise ManifestFormatError(f"{where} is missing {required!r}")
+    rule_id = rule["id"]
+    if not isinstance(rule_id, str) or RULE_ID_RE.fullmatch(rule_id) is None:
+        raise ManifestFormatError(f"{where} id must match {RULE_ID_RE.pattern}")
+    if rule_id in seen_ids:
+        raise ManifestFormatError(f"duplicate rule id: {rule_id}")
+    seen_ids.add(rule_id)
+    where = f"rule {rule_id!r}"
+    if rule["license"] not in licenses:
+        raise ManifestFormatError(f"{where} license {rule['license']!r} is not declared in licenses")
+    problem = _text_problem(rule["provenance"])
+    if problem:
+        raise ManifestFormatError(f"{where} provenance {problem}")
+    evidence = rule["evidence"]
+    if not isinstance(evidence, list):
+        raise ManifestFormatError(f"{where} evidence must be an array")
+    canonical_evidence = [_require_canonical(item, f"{where} evidence") for item in evidence]
+    if len(set(canonical_evidence)) != len(canonical_evidence):
+        raise ManifestFormatError(f"{where} evidence has duplicates")
+    if rule["license"] == NOASSERTION:
+        gap = rule.get("gap")
+        if not isinstance(gap, str) or GAP_ID_RE.fullmatch(gap) is None:
+            raise ManifestFormatError(
+                f"{where} asserts no license and must name the owning work item in 'gap'")
+    else:
+        if "gap" in rule:
+            raise ManifestFormatError(f"{where} asserts a license and must not declare a gap")
+        if not canonical_evidence:
+            raise ManifestFormatError(f"{where} asserts a license and must cite tracked evidence")
+
+    files = rule.get("files", {})
+    if not isinstance(files, dict):
+        raise ManifestFormatError(f"{where} files must be an object of path -> sha256")
+    for path, digest in files.items():
+        _require_canonical(path, f"{where} files")
+        if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
+            raise ManifestFormatError(f"{where} files[{path!r}] must be a lowercase sha256")
+    prefixes = rule.get("prefixes", [])
+    if not isinstance(prefixes, list):
+        raise ManifestFormatError(f"{where} prefixes must be an array")
+    for prefix in prefixes:
+        if not isinstance(prefix, str) or not prefix.endswith("/"):
+            raise ManifestFormatError(f"{where} prefix {prefix!r} must be a directory ending in '/'")
+        _require_canonical(prefix[:-1], f"{where} prefixes")
+    records = rule.get("records", [])
+    if not isinstance(records, list):
+        raise ManifestFormatError(f"{where} records must be an array")
+    for record in records:
+        if not isinstance(record, dict) or set(record) - RECORD_KEYS or not {"path", "format"} <= set(record):
+            raise ManifestFormatError(f"{where} record must contain path, format, and optional exclude")
+        _require_canonical(record["path"], f"{where} record")
+        if record["format"] not in RECORD_FORMATS:
+            raise ManifestFormatError(f"{where} record format {record['format']!r} is not supported")
+        exclude = record.get("exclude", [])
+        if not isinstance(exclude, list):
+            raise ManifestFormatError(f"{where} record exclude must be an array")
+        excluded = [_require_canonical(item, f"{where} record exclude") for item in exclude]
+        if len(set(excluded)) != len(excluded):
+            raise ManifestFormatError(f"{where} record exclude has duplicates")
+    if not (files or prefixes or records):
+        raise ManifestFormatError(f"{where} claims no files, prefixes, or records")
+
+
+def load_provenance_policy(path: Path) -> dict[str, Any]:
+    """Load and structurally validate a provenance policy; filesystem checks come later."""
+    data = _read_bounded_json(path, limit=MAX_MANIFEST_BYTES)
+    if not isinstance(data, dict):
+        raise ManifestFormatError("provenance policy root must be an object")
+    if set(data) != {"version", "root", "licenses", "rules"}:
+        raise ManifestFormatError("provenance policy must contain exactly version, root, licenses, and rules")
+    if data["version"] != PROVENANCE_POLICY_VERSION:
+        raise ManifestFormatError(f"unsupported provenance policy version: {data['version']!r}")
+    if not isinstance(data["root"], str) or not data["root"]:
+        raise ManifestFormatError("provenance policy root must be a non-empty string")
+    licenses = data["licenses"]
+    if not isinstance(licenses, dict) or not licenses:
+        raise ManifestFormatError("provenance policy licenses must be a non-empty object")
+    for license_id, details in licenses.items():
+        if LICENSE_ID_RE.fullmatch(license_id) is None:
+            raise ManifestFormatError(f"invalid license identifier: {license_id!r}")
+        if not isinstance(details, dict) or set(details) != {"name"} or _text_problem(details["name"]):
+            raise ManifestFormatError(f"license {license_id!r} must be an object with exactly a non-empty name")
+    rules = data["rules"]
+    if not isinstance(rules, list) or not rules:
+        raise ManifestFormatError("provenance policy rules must be a non-empty array")
+    seen_ids: set[str] = set()
+    for index, rule in enumerate(rules):
+        _validate_policy_rule(rule, index, licenses, seen_ids)
+    return data
+
+
+def _record_claims(
+    fmt: str, data: Any, root_name: str
+) -> list[tuple[str, str | None, str | None, str | None]]:
+    """Return (root-relative path, detail, license, sha256) rows for one record file."""
+    rows: list[tuple[str, str | None, str | None, str | None]] = []
+    prefix = f"{root_name}/"
+    if not isinstance(data, dict):
+        raise ManifestFormatError("record root must be an object")
+    if fmt == "terrafront-asset-manifest":
+        files = data.get("files")
+        if not isinstance(files, list):
+            raise ManifestFormatError("record files must be an array")
+        for index, row in enumerate(files):
+            if not isinstance(row, dict):
+                raise ManifestFormatError(f"record files[{index}] must be an object")
+            pack, author, license_id = (row.get(key) for key in ("source_pack", "author", "license"))
+            if any(_text_problem(part) for part in (pack, author, license_id)):
+                raise ManifestFormatError(
+                    f"record files[{index}] must record source_pack, author, and license")
+            url = row.get("url", "")
+            if url != "" and _text_problem(url):
+                raise ManifestFormatError(f"record files[{index}] url must be a string")
+            path = _require_canonical(row.get("path"), f"record files[{index}]")
+            detail = f"{pack} by {author}" + (f" <{url}>" if url else "")
+            rows.append((path, detail, license_id, None))
+    elif fmt == "blender-provenance":
+        license_info = data.get("license")
+        license_name = license_info.get("name") if isinstance(license_info, dict) else None
+        if _text_problem(license_name):
+            raise ManifestFormatError("record must name its license")
+        assets = data.get("assets")
+        if not isinstance(assets, list):
+            raise ManifestFormatError("record assets must be an array")
+        for index, row in enumerate(assets):
+            if not isinstance(row, dict) or _text_problem(row.get("name")):
+                raise ManifestFormatError(f"record assets[{index}] must be an object with a name")
+            for path_key, hash_key in (("obj_path", "obj_sha256"), ("mtl_path", "mtl_sha256")):
+                value = row.get(path_key)
+                digest = row.get(hash_key)
+                if not isinstance(value, str) or not value.startswith(prefix):
+                    raise ManifestFormatError(f"record assets[{index}].{path_key} must be under {prefix}")
+                if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
+                    raise ManifestFormatError(f"record assets[{index}].{hash_key} must be a sha256")
+                path = _require_canonical(value[len(prefix):], f"record assets[{index}]")
+                rows.append((path, f"Blender-authored {row['name']}", license_name, digest))
+    elif fmt == "starter-model-manifest":
+        assets = data.get("assets")
+        if not isinstance(assets, list):
+            raise ManifestFormatError("record assets must be an array")
+        for index, row in enumerate(assets):
+            if not isinstance(row, dict) or not isinstance(row.get("path"), str):
+                raise ManifestFormatError(f"record assets[{index}] must be an object with a path")
+            value = row["path"]
+            if not value.startswith(prefix):
+                continue  # rows for other trees (e.g. Templates) are verified by their own manifests
+            if not value.endswith(".obj"):
+                raise ManifestFormatError(f"record assets[{index}] path must name an .obj model")
+            label = f"{row.get('pack')}/{row.get('name')}"
+            if _text_problem(label):
+                raise ManifestFormatError(f"record assets[{index}] must name its pack and model")
+            obj = _require_canonical(value[len(prefix):], f"record assets[{index}]")
+            for path, hash_key in ((obj, "sha256"), (obj[:-4] + ".mtl", "mtlSha256")):
+                digest = row.get(hash_key)
+                if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
+                    raise ManifestFormatError(f"record assets[{index}].{hash_key} must be a sha256")
+                rows.append((path, f"starter model {label}", None, digest))
+    else:  # pragma: no cover - load_provenance_policy rejects unknown formats first
+        raise ManifestFormatError(f"unsupported record format {fmt!r}")
+    seen: set[str] = set()
+    for path, *_ in rows:
+        if path in seen:
+            raise ManifestFormatError(f"record declares {path!r} twice")
+        seen.add(path)
+    return rows
+
+
+def resolve_provenance(
+    policy_path: Path,
+    root: Path,
+    entries: list[dict[str, Any]],
+    repo_root: Path | None = None,
+) -> tuple[dict[str, tuple[str, str]], list[IntegrityError]]:
+    """Resolve (license, provenance) for every scanned entry, failing closed.
+
+    Precedence: an exact claim (``files`` or a record row) beats any prefix, and
+    the longest matching prefix beats shorter ones. Two exact claims on one
+    path, or one prefix claimed twice, is ambiguous. Every file must be claimed
+    and every claim must govern at least one file.
+    """
+    policy_label = str(policy_path)
+    root = _absolute_lexical(root)
+    repo_root = _absolute_lexical(repo_root) if repo_root is not None else root.parent
+    try:
+        policy = load_provenance_policy(_absolute_lexical(policy_path))
+    except (ManifestFormatError, OSError) as exc:
+        return {}, [IntegrityError(policy_label, "provenance-policy", str(exc))]
+    if policy["root"] != root.name:
+        return {}, [IntegrityError(
+            policy_label, "provenance-policy",
+            f"policy root {policy['root']!r} does not exactly match asset root {root.name!r}")]
+    repo, repo_resolved, repo_errors = _prepare_root(repo_root)
+    if repo_errors or repo is None or repo_resolved is None:
+        return {}, [IntegrityError(policy_label, "provenance-policy", str(error)) for error in repo_errors]
+
+    errors: list[IntegrityError] = []
+    licenses: dict[str, Any] = policy["licenses"]
+    disk = {entry["path"]: entry["sha256"] for entry in entries}
+    exact: dict[str, tuple[dict[str, Any], str | None]] = {}
+    prefixes: dict[str, dict[str, Any]] = {}
+
+    def claim(path: str, rule: dict[str, Any], detail: str | None) -> None:
+        previous = exact.get(path)
+        if previous is not None:
+            errors.append(IntegrityError(
+                path, "provenance-ambiguous",
+                f"claimed by both rule {previous[0]['id']!r} and rule {rule['id']!r}"))
+            return
+        exact[path] = (rule, detail)
+
+    for rule in policy["rules"]:
+        rule_id = rule["id"]
+        for evidence in rule["evidence"]:
+            _, _, error = _checked_candidate(repo, repo_resolved, evidence, want_directory=False)
+            if error is not None:
+                errors.append(IntegrityError(
+                    evidence, "provenance-policy",
+                    f"rule {rule_id!r} evidence is missing or unsafe: [{error.category}] {error.message}"))
+        for path, digest in rule.get("files", {}).items():
+            if path not in disk:
+                errors.append(IntegrityError(
+                    path, "provenance-record-missing", f"rule {rule_id!r} claims a file that is absent"))
+                continue
+            if disk[path] != digest:
+                errors.append(IntegrityError(
+                    path, "provenance-stale",
+                    f"rule {rule_id!r} is bound to sha256 {digest}, actual {disk[path]}"))
+                continue
+            claim(path, rule, None)
+        for record in rule.get("records", []):
+            record_path = record["path"]
+            candidate, _, error = _checked_candidate(repo, repo_resolved, record_path, want_directory=False)
+            if error is not None or candidate is None:
+                errors.append(IntegrityError(
+                    record_path, "provenance-policy",
+                    f"rule {rule_id!r} record is missing or unsafe: {error.message if error else 'missing'}"))
+                continue
+            try:
+                rows = _record_claims(record["format"], _read_bounded_json(candidate), root.name)
+            except (ManifestFormatError, OSError) as exc:
+                errors.append(IntegrityError(record_path, "provenance-policy", f"rule {rule_id!r}: {exc}"))
+                continue
+            row_paths = {row[0] for row in rows}
+            excluded = set(record.get("exclude", []))
+            for path in sorted(excluded - row_paths):
+                errors.append(IntegrityError(
+                    path, "provenance-policy",
+                    f"rule {rule_id!r} excludes a path that {record_path} does not record"))
+            allowed_licenses = {rule["license"], licenses[rule["license"]]["name"]}
+            for path, detail, record_license, digest in rows:
+                if path in excluded:
+                    continue
+                if path not in disk:
+                    errors.append(IntegrityError(
+                        path, "provenance-record-missing", f"{record_path} records a file that is absent"))
+                    continue
+                if digest is not None and disk[path] != digest:
+                    errors.append(IntegrityError(
+                        path, "provenance-stale",
+                        f"{record_path} is bound to sha256 {digest}, actual {disk[path]}"))
+                    continue
+                if record_license is not None and record_license not in allowed_licenses:
+                    errors.append(IntegrityError(
+                        path, "provenance-record-conflict",
+                        f"{record_path} records license {record_license!r}; rule {rule_id!r} asserts "
+                        f"{rule['license']!r}"))
+                    continue
+                claim(path, rule, detail)
+        for prefix in rule.get("prefixes", []):
+            previous = prefixes.get(prefix)
+            if previous is not None:
+                errors.append(IntegrityError(
+                    prefix, "provenance-ambiguous",
+                    f"prefix claimed by both rule {previous['id']!r} and rule {rule_id!r}"))
+                continue
+            prefixes[prefix] = rule
+
+    ordered_prefixes = sorted(prefixes, key=lambda item: (-len(item), item))
+    used_prefixes: set[str] = set()
+    resolved: dict[str, tuple[str, str]] = {}
+    for path in sorted(disk):
+        governing = exact.get(path)
+        if governing is None:
+            match = next((prefix for prefix in ordered_prefixes if path.startswith(prefix)), None)
+            if match is None:
+                errors.append(IntegrityError(path, "provenance-unclaimed", "no provenance rule claims this file"))
+                continue
+            used_prefixes.add(match)
+            governing = (prefixes[match], None)
+        rule, detail = governing
+        text = rule["provenance"] if detail is None else f"{rule['provenance']}: {detail}"
+        if rule["license"] == NOASSERTION:
+            text += f" (license unasserted; gap {rule['gap']})"
+        text += f" [{rule['id']}]"
+        problem = _text_problem(text)
+        if problem:
+            errors.append(IntegrityError(path, "provenance-policy", f"resolved provenance {problem}"))
+            continue
+        resolved[path] = (rule["license"], text)
+    for prefix in sorted(set(prefixes) - used_prefixes):
+        errors.append(IntegrityError(
+            prefix, "provenance-unused-claim",
+            f"rule {prefixes[prefix]['id']!r} prefix governs no file"))
+    errors.sort(key=lambda error: (error.path, error.category, error.message))
+    return resolved, errors
+
+
+def generate_manifest(
+    root: Path,
+    provenance_policy: Path | None = None,
+    repo_root: Path | None = None,
+) -> tuple[dict[str, Any], list[IntegrityError]]:
+    """Snapshot ``root``. With a policy, emit schema v2 with per-entry provenance.
+
+    Without a policy the result is a legacy v1 integrity-only manifest, suitable
+    only for staged fixtures; repository gates require v2.
+    """
     entries, errors = scan_directory(root)
+    version = LEGACY_MANIFEST_SCHEMA_VERSION
+    if provenance_policy is not None:
+        version = MANIFEST_SCHEMA_VERSION
+        if not errors:
+            resolved, provenance_errors = resolve_provenance(provenance_policy, root, entries, repo_root)
+            errors.extend(provenance_errors)
+            entries = [
+                {**entry, "license": resolved[entry["path"]][0], "provenance": resolved[entry["path"]][1]}
+                for entry in entries
+                if entry["path"] in resolved
+            ]
     manifest = {
-        "version": MANIFEST_SCHEMA_VERSION,
+        "version": version,
         "algorithm": HASH_ALGORITHM,
         "root": _absolute_lexical(root).name,
         "fileCount": len(entries),
         "entries": entries,
     }
     return manifest, errors
+
+
+def provenance_summary(manifest: dict[str, Any]) -> dict[str, Any]:
+    entries = manifest.get("entries", [])
+    unasserted = [entry for entry in entries if entry.get("license") == NOASSERTION]
+    gaps = sorted({
+        match.group(1)
+        for entry in unasserted
+        for match in [re.search(r"\(license unasserted; gap ([A-Z]+-[0-9]{3})\)", entry.get("provenance", ""))]
+        if match
+    })
+    return {
+        "entries": len(entries),
+        "asserted": sum(1 for entry in entries if entry.get("license") not in (None, NOASSERTION)),
+        "unasserted": len(unasserted),
+        "gaps": gaps,
+    }
 
 
 def manifest_bytes(manifest: dict[str, Any]) -> bytes:
@@ -472,8 +874,10 @@ def load_manifest(path: Path) -> dict[str, Any]:
     data = _read_bounded_json(path)
     if not isinstance(data, dict):
         raise ManifestFormatError("manifest root must be an object")
-    if data.get("version") != MANIFEST_SCHEMA_VERSION:
-        raise ManifestFormatError(f"unsupported manifest version: {data.get('version')!r}")
+    version = data.get("version")
+    if isinstance(version, bool) or version not in SUPPORTED_MANIFEST_VERSIONS:
+        raise ManifestFormatError(f"unsupported manifest version: {version!r}")
+    entry_keys = ENTRY_KEYS if version == MANIFEST_SCHEMA_VERSION else LEGACY_ENTRY_KEYS
     if data.get("algorithm") != HASH_ALGORITHM:
         raise ManifestFormatError(f"unsupported algorithm: {data.get('algorithm')!r}")
     root_metadata = data.get("root")
@@ -497,8 +901,17 @@ def load_manifest(path: Path) -> dict[str, Any]:
     for index, entry in enumerate(entries):
         if not isinstance(entry, dict):
             raise ManifestFormatError(f"entry {index} must be an object")
-        if set(entry) != {"path", "sha256", "size"}:
-            raise ManifestFormatError(f"entry {index} must contain exactly path, sha256, and size")
+        if set(entry) != entry_keys:
+            raise ManifestFormatError(
+                f"entry {index} must contain exactly {', '.join(sorted(entry_keys))} "
+                f"for manifest version {version}")
+        if version == MANIFEST_SCHEMA_VERSION:
+            license_id = entry.get("license")
+            if not isinstance(license_id, str) or LICENSE_ID_RE.fullmatch(license_id) is None:
+                raise ManifestFormatError(f"entry {index} license must be a license identifier")
+            problem = _text_problem(entry.get("provenance"))
+            if problem:
+                raise ManifestFormatError(f"entry {index} provenance {problem}")
         relative, problem = _canonical_relative_path(entry.get("path"))
         if problem is not None or relative is None:
             raise ManifestFormatError(f"entry {index} has unsafe path: {problem}")
@@ -527,8 +940,20 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return data
 
 
-def verify_manifest(manifest_path: Path, root: Path) -> list[IntegrityError]:
-    """Verify a manifest against a caller-authorized root in one disk scan."""
+def verify_manifest(
+    manifest_path: Path,
+    root: Path,
+    *,
+    provenance_policy: Path | None = None,
+    repo_root: Path | None = None,
+    require_provenance: bool = False,
+) -> list[IntegrityError]:
+    """Verify a manifest against a caller-authorized root in one disk scan.
+
+    ``require_provenance`` rejects a legacy v1 manifest. ``provenance_policy``
+    additionally proves every entry's license/provenance equals what the policy
+    resolves for the bytes on disk.
+    """
     try:
         manifest = load_manifest(_absolute_lexical(manifest_path))
     except (ManifestFormatError, OSError) as exc:
@@ -540,13 +965,35 @@ def verify_manifest(manifest_path: Path, root: Path) -> list[IntegrityError]:
             str(manifest_path), "root-metadata",
             f"manifest root {manifest['root']!r} does not exactly match caller root {absolute_root.name!r}")]
 
+    errors: list[IntegrityError] = []
+    has_provenance = manifest["version"] == MANIFEST_SCHEMA_VERSION
+    if (require_provenance or provenance_policy is not None) and not has_provenance:
+        errors.append(IntegrityError(
+            str(manifest_path), "provenance-missing",
+            f"manifest version {manifest['version']} carries no license/provenance; "
+            f"regenerate schema v{MANIFEST_SCHEMA_VERSION} with the provenance policy"))
+
     disk_entries, scan_errors = scan_directory(absolute_root)
     if scan_errors:
-        return scan_errors
+        return errors + scan_errors
 
     declared = {entry["path"]: entry for entry in manifest["entries"]}
     disk = {entry["path"]: entry for entry in disk_entries}
-    errors: list[IntegrityError] = []
+    if provenance_policy is not None and has_provenance:
+        resolved, provenance_errors = resolve_provenance(
+            provenance_policy, absolute_root, disk_entries, repo_root)
+        errors.extend(provenance_errors)
+        for relative in sorted(declared.keys() & resolved.keys()):
+            expected_license, expected_provenance = resolved[relative]
+            entry = declared[relative]
+            if entry["license"] != expected_license:
+                errors.append(IntegrityError(
+                    relative, "provenance-mismatch",
+                    f"manifest license {entry['license']!r}, policy resolves {expected_license!r}"))
+            if entry["provenance"] != expected_provenance:
+                errors.append(IntegrityError(
+                    relative, "provenance-mismatch",
+                    f"manifest provenance {entry['provenance']!r}, policy resolves {expected_provenance!r}"))
     for relative in sorted(declared.keys() - disk.keys()):
         errors.append(IntegrityError(relative, "missing", "declared file is absent from snapshot"))
     for relative in sorted(disk.keys() - declared.keys()):
@@ -601,8 +1048,8 @@ def _validate_template_manifest(path: Path, template_name: str) -> dict[str, str
         raise ManifestFormatError(
             f"package {data.get('package')!r} does not exactly match {template_name!r}")
     assets = data.get("assets")
-    if not isinstance(assets, list):
-        raise ManifestFormatError("template manifest assets must be an array")
+    if not isinstance(assets, list) or not assets:
+        raise ManifestFormatError("template manifest assets must be a non-empty array")
     if len(assets) > MAX_ENTRY_COUNT:
         raise ManifestFormatError(f"template manifest exceeds {MAX_ENTRY_COUNT} entries")
     result: dict[str, str] = {}
@@ -660,7 +1107,22 @@ def verify_template_manifests(repo_root: Path) -> list[IntegrityError]:
         except OSError as exc:
             errors.append(IntegrityError(f"Templates/{child.name}", "io-error", str(exc)))
             continue
+        relative = f"Templates/{child.name}"
+        if child.name in TEMPLATE_COLLECTION_METADATA:
+            if _stat_is_reparse(info) or not stat.S_ISREG(info.st_mode):
+                errors.append(IntegrityError(
+                    relative,
+                    "concealed-payload",
+                    "template collection metadata is not a regular file",
+                ))
+            continue
+        if _stat_is_reparse(info):
+            errors.append(IntegrityError(
+                relative, "reparse", "template directory is a reparse point"))
+            continue
         if not stat.S_ISDIR(info.st_mode):
+            errors.append(IntegrityError(
+                relative, "undeclared", "template root entry is not a template directory"))
             continue
         template_name, problem = _canonical_relative_path(child.name)
         if problem is not None or template_name is None:
@@ -728,8 +1190,14 @@ def verify_template_manifests(repo_root: Path) -> list[IntegrityError]:
 def verify_repository(repo_root: Path) -> list[IntegrityError]:
     repo_root = _absolute_lexical(repo_root)
     errors: list[IntegrityError] = []
-    for manifest_relative, root_relative in KNOWN_MANIFESTS:
-        errors.extend(verify_manifest(repo_root / manifest_relative, repo_root / root_relative))
+    for manifest_relative, root_relative, policy_relative in KNOWN_MANIFESTS:
+        errors.extend(verify_manifest(
+            repo_root / manifest_relative,
+            repo_root / root_relative,
+            provenance_policy=repo_root / policy_relative,
+            repo_root=repo_root,
+            require_provenance=True,
+        ))
     errors.extend(verify_template_manifests(repo_root))
     return errors
 
@@ -749,9 +1217,11 @@ def cmd_generate(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    manifest, errors = generate_manifest(root)
+    policy_arg = getattr(args, "provenance", None)
+    policy = _absolute_lexical(Path(policy_arg)) if policy_arg else DEFAULT_PROVENANCE_POLICY
+    manifest, errors = generate_manifest(root, provenance_policy=policy)
     if errors:
-        print(f"Refusing generation after {len(errors)} scan error(s):", file=sys.stderr)
+        print(f"Refusing generation after {len(errors)} scan/provenance error(s):", file=sys.stderr)
         _print_errors(errors)
         return 1
     payload = manifest_bytes(manifest)
@@ -787,14 +1257,28 @@ def cmd_generate(args: argparse.Namespace) -> int:
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
-    errors = verify_manifest(Path(args.manifest), Path(args.root))
+    policy = getattr(args, "provenance", None)
+    errors = verify_manifest(
+        Path(args.manifest),
+        Path(args.root),
+        provenance_policy=Path(policy) if policy else None,
+        require_provenance=bool(getattr(args, "require_provenance", False)),
+    )
     if errors:
         print(f"FAILED: {len(errors)} error(s)", file=sys.stderr)
         _print_errors(errors)
         return 1
     manifest = load_manifest(_absolute_lexical(Path(args.manifest)))
-    print(f"OK: {manifest['fileCount']} entries verified")
+    print(f"OK: {manifest['fileCount']} entries verified (manifest v{manifest['version']})")
     return 0
+
+
+def _format_summary(summary: dict[str, Any]) -> str:
+    gaps = ", ".join(summary["gaps"]) or "none"
+    return (
+        f"provenance: {summary['entries']} entries, {summary['asserted']} license-asserted, "
+        f"{summary['unasserted']} NOASSERTION (owning gaps: {gaps})"
+    )
 
 
 def cmd_check_all(args: argparse.Namespace) -> int:
@@ -805,6 +1289,14 @@ def cmd_check_all(args: argparse.Namespace) -> int:
         _print_errors(errors)
         return 1
     print("OK: first-party and template asset integrity checks passed")
+    unasserted = 0
+    for manifest_relative, _, _ in KNOWN_MANIFESTS:
+        summary = provenance_summary(load_manifest(_absolute_lexical(Path(repo_root) / manifest_relative)))
+        unasserted += summary["unasserted"]
+        print(f"{manifest_relative} {_format_summary(summary)}")
+    if getattr(args, "strict_provenance", False) and unasserted:
+        print(f"FAILED: --strict-provenance and {unasserted} entries assert no license", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -815,15 +1307,25 @@ def main() -> int:
     generate = commands.add_parser("generate", help="Generate the fixed-root manifest")
     generate.add_argument("root", help="Caller-authorized asset root")
     generate.add_argument("-o", "--output", help="Must equal <root>/assets.integrity.json")
+    generate.add_argument(
+        "--provenance",
+        help=f"Provenance policy (default: {DEFAULT_PROVENANCE_POLICY.relative_to(REPO_ROOT).as_posix()})")
     generate.set_defaults(handler=cmd_generate)
 
     verify = commands.add_parser("verify", help="Verify a manifest and explicit root")
     verify.add_argument("manifest", help="Manifest JSON path")
     verify.add_argument("--root", required=True, help="Caller-authorized asset root")
+    verify.add_argument("--provenance", help="Also prove license/provenance against this policy")
+    verify.add_argument(
+        "--require-provenance", action="store_true",
+        help="Reject a legacy v1 manifest that carries no license/provenance")
     verify.set_defaults(handler=cmd_verify)
 
     check_all = commands.add_parser("check-all", help="Verify all repository asset contracts")
     check_all.add_argument("--repo-root", help="Repository root (default: auto-detect)")
+    check_all.add_argument(
+        "--strict-provenance", action="store_true",
+        help="Also fail while any entry asserts NOASSERTION (release-promotion gate)")
     check_all.set_defaults(handler=cmd_check_all)
 
     args = parser.parse_args()

@@ -362,6 +362,15 @@ namespace Spark::RemoteDebug
         void RegisterCommandHandler(const std::string& type, RemoteDebugCapability requiredCapability,
                                     CommandHandler handler)
         {
+            if (IsBuiltinCommandType(type))
+            {
+                // Built-in handlers own their authority boundary. Allowing a
+                // public registration to replace one could downgrade a
+                // privileged command to a weaker capability declaration.
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "RemoteDebugServer: refusing to rebind reserved command type='%s'", type.c_str());
+                return;
+            }
             std::unique_lock executionLock(m_executionMutex);
             RegisterCommandHandlerUnlocked(type, requiredCapability, std::move(handler));
         }
@@ -438,6 +447,12 @@ namespace Spark::RemoteDebug
                                               : requiredCapability;
         }
 
+        [[nodiscard]] static bool IsBuiltinCommandType(const std::string& type)
+        {
+            return type == "console_cmd" || type == "property_get" || type == "property_set" ||
+                   type == "profile_data" || type == "heartbeat";
+        }
+
         [[nodiscard]] static RemoteCommand AccessDeniedResponse(const RemoteCommand& cmd)
         {
             // Deliberately avoid distinguishing anonymous, expired, replayed,
@@ -458,8 +473,9 @@ namespace Spark::RemoteDebug
                 // An authenticated caller can receive the historical
                 // unknown-command response. Raw callers remain denied before
                 // type details are exposed.
-                const auto authorization = m_accessControl.Authorize(
-                    principal, cmd.type, cmd.requestId, cmd.payload.size(), RemoteDebugCapability::Inspect);
+                const auto authorization =
+                    m_accessControl.Authorize(principal, cmd.type, cmd.requestId, cmd.payload.size(), cmd.timestamp,
+                                              RemoteDebugCapability::Inspect);
                 if (!authorization.allowed)
                     return AccessDeniedResponse(cmd);
 
@@ -473,8 +489,8 @@ namespace Spark::RemoteDebug
             const RemoteDebugCapability requiredCapability = capabilityIt == m_handlerCapabilities.end()
                                                                  ? RemoteDebugCapability::ExecuteConsole
                                                                  : capabilityIt->second;
-            const auto authorization =
-                m_accessControl.Authorize(principal, cmd.type, cmd.requestId, cmd.payload.size(), requiredCapability);
+            const auto authorization = m_accessControl.Authorize(principal, cmd.type, cmd.requestId, cmd.payload.size(),
+                                                                 cmd.timestamp, requiredCapability);
             if (!authorization.allowed)
                 return AccessDeniedResponse(cmd);
 
@@ -543,8 +559,7 @@ namespace Spark::RemoteDebug
                 "property_set", RemoteDebugCapability::ModifyProperties, [](const RemoteCommand& c)
                 { return RemoteCommand{"property_set_result", R"({"status":"ok"})", c.requestId, 0.0f}; });
             RegisterCommandHandlerUnlocked("profile_data", RemoteDebugCapability::Inspect,
-                                           [](const RemoteCommand& c)
-                                           {
+                                           [](const RemoteCommand& c) {
                                                return RemoteCommand{"profile_data",
                                                                     R"({"fps":0,"cpuMs":0,"gpuMs":0,"memoryMB":0})",
                                                                     c.requestId, 0.0f};

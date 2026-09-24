@@ -1,6 +1,6 @@
 # Spark Engine
 
-**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine with a broad source inventory spanning FPS, RPG, MMO, open-world, and other genres. That inventory includes a multi-backend RHI (DirectX 11/12, Vulkan, OpenGL, Metal, NullRHI), rendering experiments, Jolt Physics, audio paths, scripting tools, an EnTT-based ECS architecture, an ImGui editor, world streaming, server architecture, and collaborative-editing prototypes. Presence in the source tree is not a support or release claim; non-profile breadth remains experimental unless the readiness contract says otherwise.
+**Spark Engine** is a free, source-available 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine with a broad source inventory spanning FPS, RPG, MMO, open-world, and other genres. That inventory includes a multi-backend RHI (DirectX 11/12, Vulkan, OpenGL, Metal, NullRHI), rendering experiments, Jolt Physics, audio paths, scripting tools, an EnTT-based ECS architecture, an ImGui editor, world streaming, server architecture, and collaborative-editing prototypes. Presence in the source tree is not a support or release claim; non-profile breadth remains experimental unless the readiness contract says otherwise.
 
 > **Release hardening in progress** — SparkEngine is currently source-usable,
 > but no versioned release has been published. The repository's readiness gates
@@ -36,7 +36,7 @@ footprint, and the build toggles that move the needle.
 - **Animation** — Skeletal animation, state machines, multi-layer blending, IK (two-bone, look-at, FABRIK), root motion, retargeting, ragdoll blending, cloth simulation, [cinematic sequencer](gameplay-tools/Cinematic-Sequencer.md), FBX/glTF import.
 - **Scripting** — Experimental AngelScript integration includes hot reload, lifecycle callbacks, partial engine bindings, and client/server-oriented source paths. [Visual scripting](subsystems/Visual-Scripting.md), Lua-related source paths, and the [mod system](subsystems/Mod-System.md) are implementation inventory, not certified support.
 - **Networking** — UDP client/server, entity replication, client-side prediction, lag compensation (hitbox rewinding), delta snapshots. [HeroEngine-inspired MMO architecture](subsystems/Area-Server-Architecture.md) with AreaServers, WorldServer, seamless entity migration, and dynamic load balancing.
-- **Editor** — ImGui-powered visual editor with 65 `*Panel.h` classes in the source inventory; registration and default visibility are separate. It includes scene hierarchy, inspector, gizmos, [Shader Graph](graphics/Shader-Graph.md), [visual scripting](subsystems/Visual-Scripting.md), and other experimental tooling. Required command-backed world editing and undo coverage are inside the release profile but remain blocked; collaborative editing stays outside it.
+- **Editor** — ImGui-powered visual editor with 64 `*Panel.h` classes in the source inventory; registration and default visibility are separate. It includes scene hierarchy, inspector, gizmos, [Shader Graph](graphics/Shader-Graph.md), [visual scripting](subsystems/Visual-Scripting.md), and other experimental tooling. Required command-backed world editing and undo coverage are inside the release profile but remain blocked; collaborative editing stays outside it.
 
 ## Get the Source
 
@@ -96,11 +96,11 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 <!-- AUTO:stats -->
 | Metric | Count |
 |--------|-------|
-| Header files | 1005 |
+| Header files | 1016 |
 | Struct declarations in 17 component headers | 79 |
 | Engine System Classes | 75 |
 | `*Panel.h` class inventory | 64 |
-| Test-bearing `.cpp`/`.mm` files | 604 |
-| Source-level test definitions | 7328 |
-| Wiki pages | 201 |
+| Test-bearing `.cpp`/`.mm` files | 632 |
+| Source-level test definitions | 7567 |
+| Wiki pages | 202 |
 <!-- /AUTO:stats -->

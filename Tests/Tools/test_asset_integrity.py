@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -212,6 +213,7 @@ class SnapshotSafetyTests(unittest.TestCase):
             with mock.patch.object(vai, "MAX_ENTRY_COUNT", 1):
                 _, errors = vai.scan_directory(root)
                 self.assertTrue(any(e.category == "resource-limit" for e in errors))
+
             with mock.patch.object(vai, "MAX_FILE_BYTES", 1):
                 _, errors = vai.scan_directory(root)
                 self.assertTrue(any(e.category == "resource-limit" for e in errors))
@@ -221,6 +223,152 @@ class SnapshotSafetyTests(unittest.TestCase):
             with mock.patch.object(vai, "MAX_DIRECTORY_ENTRY_COUNT", 1):
                 _, errors = vai.scan_directory(root)
                 self.assertTrue(any(e.category == "resource-limit" for e in errors))
+
+
+class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
+    """Exercise the installed-package CMake asset-integrity helper contract."""
+
+    HELPER = REPO_ROOT / "Tests" / "PackageSmoke" / "ValidateInstalledFPSAssets.cmake"
+
+    def _fixture(self, temporary: str | os.PathLike[str]) -> Path:
+        assets = Path(temporary) / "Assets"
+        assets.mkdir(parents=True)
+        payload = b"installed FPS package fixture\n"
+        (assets / "payload.bin").write_bytes(payload)
+        write_manifest(
+            assets,
+            [{"path": "payload.bin", "sha256": digest(payload), "size": len(payload)}],
+        )
+        return assets
+
+    def _run_helper(self, assets: Path) -> subprocess.CompletedProcess[str]:
+        cmake = shutil.which("cmake")
+        self.assertIsNotNone(cmake, "cmake is required for installed-package helper tests")
+        return subprocess.run(
+            [
+                cmake,
+                f"-DSPARK_ASSETS_ROOT={assets}",
+                f"-DSPARK_ASSET_VERIFIER={SCRIPT}",
+                "-P",
+                str(self.HELPER),
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+
+    def test_installed_package_asset_helper_accepts_matching_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            result = self._run_helper(self._fixture(temporary))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_installed_package_asset_helper_rejects_missing_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / vai.MANIFEST_FILENAME).unlink()
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)manifest")
+
+    def test_installed_package_asset_helper_rejects_missing_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / "payload.bin").unlink()
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)missing.*payload\.bin")
+
+    def test_installed_package_asset_helper_rejects_tampered_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / "payload.bin").write_bytes(b"tampered package payload\n")
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)(hash|size).*payload\.bin")
+
+    def test_installed_package_asset_helper_rejects_case_mismatched_manifest_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            manifest = assets / vai.MANIFEST_FILENAME
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data["entries"][0]["path"] = "Payload.bin"
+            manifest.write_bytes(vai.manifest_bytes(data))
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)(missing|undeclared).*payload\.bin")
+
+    def test_installed_package_asset_helper_rejects_undeclared_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / "undeclared.bin").write_bytes(b"undeclared package payload\n")
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)undeclared.*undeclared\.bin")
+
+    def test_installed_package_asset_helper_rejects_link_like_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            assets = self._fixture(temporary)
+            outside = root / "outside"
+            outside.mkdir()
+            (outside / "payload.bin").write_bytes(b"external package payload\n")
+            linked = assets / "linked"
+            create_reparse(linked, outside)
+            try:
+                result = self._run_helper(assets)
+            finally:
+                remove_reparse(linked)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)(reparse|symlink|junction).*linked")
+
+    def test_installed_fps_package_wires_asset_helper_before_module_validation(self) -> None:
+        package_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSPackage.cmake"
+        text = package_script.read_text(encoding="utf-8")
+        helper_position = text.find("ValidateInstalledFPSAssets.cmake")
+        module_position = text.find("ValidateStagedPackageExecutables.cmake")
+        self.assertGreaterEqual(helper_position, 0, "installed FPS package must invoke asset helper")
+        self.assertGreaterEqual(module_position, 0, "installed FPS package must invoke module validator")
+        self.assertLess(
+            helper_position,
+            module_position,
+            "asset integrity must be validated before module validation",
+        )
+
+    def test_installed_fps_package_wires_d3d11_smoke_after_module_validation(self) -> None:
+        package_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSPackage.cmake"
+        smoke_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSD3D11.cmake"
+        package_text = package_script.read_text(encoding="utf-8")
+        smoke_text = smoke_script.read_text(encoding="utf-8")
+        module_position = package_text.find("ValidateStagedPackageExecutables.cmake")
+        d3d11_position = package_text.find("RunInstalledFPSD3D11.cmake")
+        save_position = package_text.find("RunInstalledFPSSaveReload.cmake")
+        self.assertGreaterEqual(module_position, 0, "installed FPS package must invoke module validator")
+        self.assertGreaterEqual(d3d11_position, 0, "installed FPS package must invoke D3D11 smoke")
+        self.assertGreaterEqual(save_position, 0, "installed FPS package must retain save/reload smoke")
+        self.assertLess(module_position, d3d11_position)
+        self.assertLess(d3d11_position, save_position)
+        self.assertIn('"SPARK_RHI_BACKEND=d3d11"', smoke_text)
+        self.assertIn('"SPARK_D3D11_DRIVER=warp"', smoke_text)
+        self.assertIn("_spark_validate_lifecycle_result", smoke_text)
+        self.assertIn("asset_root_guard=installed-bin", smoke_text)
+        self.assertIn("installed root is the source tree", smoke_text)
+        self.assertIn("ReparsePoint", smoke_text)
+        self.assertIn("IS_SYMLINK", smoke_text)
+        self.assertIn("-test-frames 8", smoke_text)
+
+    def test_installed_fps_d3d11_path_policy_contract(self) -> None:
+        script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSD3D11.cmake"
+        result = subprocess.run(
+            ["cmake", "-DSPARK_FPS_D3D11_PATH_POLICY_SELF_TEST=ON", "-P", str(script)],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("path policy contract passed", result.stdout)
 
 
 class ManifestValidationTests(unittest.TestCase):
@@ -302,7 +450,7 @@ class ManifestValidationTests(unittest.TestCase):
                 vai._read_bounded_json(path, limit=4)
 
     def test_generation_is_deterministic_and_refuses_every_scan_error(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as policy_dir:
             root = Path(directory)
             (root / "b").write_bytes(b"b")
             (root / "a").write_bytes(b"a")
@@ -311,9 +459,25 @@ class ManifestValidationTests(unittest.TestCase):
             self.assertEqual(errors_one, [])
             self.assertEqual(errors_two, [])
             self.assertEqual(vai.manifest_bytes(one), vai.manifest_bytes(two))
-            args = argparse.Namespace(root=str(root), output=None)
+            # The CLI always emits schema v2, so it needs a policy claiming every file.
+            policy = Path(policy_dir) / "provenance.json"
+            policy.write_text(json.dumps({
+                "version": 1,
+                "root": root.name,
+                "licenses": {"NOASSERTION": {"name": "No license asserted"}},
+                "rules": [{
+                    "id": "fixture",
+                    "license": "NOASSERTION",
+                    "provenance": "Test fixture bytes",
+                    "evidence": [],
+                    "gap": "RDY-020",
+                    "files": {"a": digest(b"a"), "b": digest(b"b")},
+                }],
+            }), encoding="utf-8")
+            args = argparse.Namespace(root=str(root), output=None, provenance=str(policy))
             self.assertEqual(vai.cmd_generate(args), 0)
             first_bytes = (root / vai.MANIFEST_FILENAME).read_bytes()
+            self.assertEqual(json.loads(first_bytes)["version"], vai.MANIFEST_SCHEMA_VERSION)
             self.assertEqual(vai.cmd_generate(args), 0)
             self.assertEqual((root / vai.MANIFEST_FILENAME).read_bytes(), first_bytes)
 
@@ -352,6 +516,40 @@ class TemplateCompletenessTests(unittest.TestCase):
             root = Path(directory)
             self._fixture(root)
             self.assertEqual(vai.verify_template_manifests(root), [])
+
+    def test_unexpected_template_root_file_is_not_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._fixture(root)
+            unexpected = root / "Templates" / "unexpected.bin"
+            unexpected.write_bytes(b"concealed payload")
+            errors = vai.verify_template_manifests(root)
+        self.assertTrue(any(
+            error.category == "undeclared" and error.path == "Templates/unexpected.bin"
+            for error in errors
+        ), errors)
+
+    def test_empty_template_manifest_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assets, manifest, lock = self._fixture(root)
+            (assets / "asset.bin").unlink()
+            manifest.write_text(json.dumps({
+                "manifestVersion": 1,
+                "package": "Starter",
+                "assets": [],
+            }), encoding="utf-8")
+            lock.write_text(json.dumps({
+                "version": 1,
+                "algorithm": "sha256",
+                "assets": {},
+            }), encoding="utf-8")
+            errors = vai.verify_template_manifests(root)
+        self.assertTrue(any(
+            error.category == "manifest-load"
+            and error.path == "Templates/Starter/Assets/manifest.json"
+            for error in errors
+        ), errors)
 
     def test_undeclared_disk_file_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
