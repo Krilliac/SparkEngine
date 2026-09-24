@@ -11,8 +11,8 @@
 
 | Item | Value |
 |---|---|
-| Base commit | `b5debbd43` (`claude/stable-v1-release`) |
-| Evidence head | `claude/cloud-plt-210`. The fixes are commits `5a823b2`, `9e41a4c`, `8cb50f1` and `3e5da14`, on top of the base. The "after" run below was built from `3e5da14`; this document was added in the next commit. |
+| Base commit | `b5debbd43` (`claude/stable-v1-release`) for the before/after runs; branch later rebased onto `8738dff59` and re-verified (§4) |
+| Evidence head | `claude/cloud-plt-210`. After the rebase, the fixes are commits `f68b23b`, `b68ae53`, `d5c770d` and `7cbba1f` on `8738dff59`. The before/after runs were built on the pre-rebase base `b5debbd`, where the same fixes were `5a823b2`…`3e5da14`. |
 | Host OS | Ubuntu 24.04.4 LTS, kernel 6.18.44, x86_64, **gVisor (runsc) sandbox** (the engine logs this at startup) |
 | CPU / RAM | 4 vCPU / 15 GiB, no GPU, no `/dev/dri` |
 | Compiler | GCC 13.3.0 (`Ubuntu 13.3.0-6ubuntu2~24.04.1`), GNU ld 2.42 |
@@ -67,15 +67,15 @@ Vulkan SDK was found).
 ## 4. Test results
 
 "Before" means base `b5debbd` (the `ProcessLinux.cpp` object was rebuilt from
-the base source before this run). "After" means head `3e5da14`.
+the base source before this run). "After" means head `3e5da14` (the same fixes on `b5debbd`). "Rebased" means the fixes on `8738dff59` (tip `7cbba1f`).
 
-| Suite | Before | After |
-|---|---|---|
-| CTest entries | **83 / 83 passed**, 0 failed, 0 not run (65.6 s) | **83 / 83 passed**, 0 failed, 0 not run (63.2 s) |
-| `SparkEngineTests` (in-binary tests, JUnit) | 7277 run, **0 failed, 9 skipped** | 7289 run (+12 new PLT-210 tests), **0 failed, 9 skipped** |
-| `SparkEngineLoadTests` (load lane) | 22 / 22 | 22 / 22 |
+| Suite | Before | After | Rebased |
+|---|---|---|---|
+| CTest entries | **83 / 83 passed**, 0 failed, 0 not run (65.6 s) | **83 / 83 passed**, 0 failed, 0 not run (63.2 s) | **86 / 86 passed** (base added 3 entries; 63.9 s) |
+| `SparkEngineTests` (in-binary tests, JUnit) | 7277 run, **0 failed, 9 skipped** | 7289 run (+12 new PLT-210 tests), **0 failed, 9 skipped** | 7306 run, **0 failed, 9 skipped**; all 12 PLT-210 tests pass |
+| `SparkEngineLoadTests` (load lane) | 22 / 22 | 22 / 22 | 22 / 22 |
 
-The 9 skips are the same before and after. All are declared skips:
+The 9 skips are the same in all three runs. After the rebase the stock `SparkTests` link still fails the same way (two whole-archive groups). All are declared skips:
 Windows-only regressions (`GatewayAreaControl_*` ×2,
 `SceneManager_UnicodePathRoundTripsWithCacheAndAsciiControl`,
 `ShaderDiskCachePhaseV_UnicodeDirectoryRoundTripsOnWindows`), MSan canaries
@@ -172,6 +172,6 @@ GPUs, audio and input are **unverified**. Linux therefore remains
 ## Source & Freshness
 
 Produced by the PLT-210 cloud lane on 2026-09-24 from `claude/cloud-plt-210`
-(base `b5debbd43`, fixes through `3e5da14`) on the host described in §1. The
+(base `b5debbd43`, rebased onto `8738dff59`) on the host described in §1. The
 counts come from CTest JUnit and `SparkTests-junit.xml` on that host; this is
 not CI evidence and not same-SHA CI evidence. Re-run §2 to refresh.
