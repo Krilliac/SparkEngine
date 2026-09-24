@@ -18,11 +18,14 @@
 
 #include <chrono>
 #include <csignal>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <thread>
 
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <unistd.h>
@@ -135,6 +138,38 @@ TEST(PLT210_ProcessPosix_DetachedChildLeavesNoZombie)
     // Give the detached child ample time to exit; a direct child would now be a zombie of this process.
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
     EXPECT_EQ(CountZombieChildren("sleep"), zombiesBefore);
+}
+
+TEST(PLT210_ProcessPosix_DetachedChildDoesNotHoldLauncherStdout)
+{
+    // Stand in for a supervisor reading this process's stdout: point fd 1 at
+    // a pipe while launching a long-lived detached child, then check that the
+    // pipe reaches EOF as soon as this process's own copy is closed.
+    int pipeFds[2] = {-1, -1};
+    ASSERT_EQ(pipe(pipeFds), 0);
+    std::cout.flush();
+    std::fflush(stdout);
+    const int savedStdout = dup(STDOUT_FILENO);
+    ASSERT_TRUE(savedStdout >= 0);
+    dup2(pipeFds[1], STDOUT_FILENO);
+    close(pipeFds[1]);
+
+    auto result = Spark::Process::Builder("/bin/sleep").Arg("3").Detached().Launch();
+
+    dup2(savedStdout, STDOUT_FILENO);
+    close(savedStdout);
+    ASSERT_TRUE(result.has_value());
+
+    pollfd readEnd{pipeFds[0], POLLIN, 0};
+    const int ready = poll(&readEnd, 1, 1000);
+    char byte = 0;
+    const ssize_t readResult = ready > 0 ? read(pipeFds[0], &byte, 1) : -1;
+    close(pipeFds[0]);
+
+    // Before the fix the detached sleep inherited the write end, so poll timed
+    // out (ready == 0) and a reader blocked until the child exited.
+    EXPECT_EQ(ready, 1);
+    EXPECT_EQ(readResult, static_cast<ssize_t>(0));
 }
 
 #endif // __linux__
