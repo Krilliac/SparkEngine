@@ -110,8 +110,16 @@ void Game::InitializeInteractionObjects()
 
 void Game::InitializeRespawnAndVehicles()
 {
-    m_respawnSystem = std::make_unique<Spark::RespawnSystem>();
-    m_respawnSystem->Initialize();
+    // scene_load re-enters here through RefreshAuthoredSceneRuntimeState. The
+    // respawn system owns live match state (score, kill history, and a pending
+    // death with its countdown), so it is created once and only its spawn table
+    // is rebound. Recreating it dropped a pending death, leaving a player who
+    // died before scene_load dead forever, and zeroed the scoreboard.
+    if (!m_respawnSystem)
+    {
+        m_respawnSystem = std::make_unique<Spark::RespawnSystem>();
+        m_respawnSystem->Initialize();
+    }
     m_respawnSystem->SetEventBus(m_eventBus);
 
     // Close the death -> respawn -> score loop: without this callback a death
@@ -128,40 +136,12 @@ void Game::InitializeRespawnAndVehicles()
             });
     }
 
-    int authoredRespawns = 0;
+    // BindSpawnPoints keeps the built-in fallback when no valid authored point
+    // exists, so absent/invalid scenes still remain playable.
+    std::vector<Spark::RespawnPoint> authoredSpawns;
     if (m_sceneManager)
-    {
-        for (int i = 0; i < m_sceneManager->GetNodeCount(); ++i)
-        {
-            const SceneNode* node = m_sceneManager->GetNode(i);
-            if (!node || node->type != "SpawnPoint")
-                continue;
-            const auto tag = node->properties.find("tag");
-            if (tag == node->properties.end() || tag->second != "default")
-                continue;
-
-            int priority = 0;
-            if (const auto property = node->properties.find("priority"); property != node->properties.end())
-            {
-                const std::string& value = property->second;
-                const auto result = std::from_chars(value.data(), value.data() + value.size(), priority);
-                if (result.ec != std::errc{} || result.ptr != value.data() + value.size())
-                    continue;
-            }
-
-            Spark::RespawnPoint spawn;
-            spawn.name = node->name;
-            spawn.position = node->position;
-            spawn.rotation = node->rotation;
-            spawn.priority = priority;
-            if (m_respawnSystem->AddSpawnPoint(spawn) >= 0)
-                ++authoredRespawns;
-        }
-    }
-    // RespawnSystem::Initialize installs a safe fallback. Replace it only once
-    // valid authored points exist, so absent/invalid scenes still remain playable.
-    if (authoredRespawns > 0)
-        m_respawnSystem->RemoveSpawnPoint(0);
+        authoredSpawns = Spark::RespawnSystem::CollectAuthoredSpawnPoints(*m_sceneManager);
+    const int authoredRespawns = m_respawnSystem->BindSpawnPoints(authoredSpawns);
     const Spark::RespawnPoint preferred = m_respawnSystem->GetBestSpawnPoint(-1);
     LOG_TO_CONSOLE_IMMEDIATE(L"Scene-authored respawn points: " + std::to_wstring(authoredRespawns) +
                                  L"; preferred at (" + std::to_wstring(preferred.position.x) + L", " +
@@ -585,6 +565,11 @@ bool Game::StartWaves()
         m_player->Console_SetArmor(0.0f);
         m_player->Console_SetPosition(spawn.position.x, spawn.position.y, spawn.position.z);
         m_player->SetActive(true);
+        if (m_camera)
+        {
+            m_camera->Console_SetPosition(spawn.position.x, spawn.position.y, spawn.position.z);
+            m_camera->Console_SetRotation(spawn.rotation.x, spawn.rotation.y, spawn.rotation.z);
+        }
     }
 
     if (m_hudSystem)

@@ -504,6 +504,14 @@ void Game::SetEventBus(Spark::EventBus* bus)
             if (m_camera)
             {
                 m_camera->Console_SetPosition(e.spawnX, e.spawnY, e.spawnZ);
+                // The event carries only a position; face the authored spawn
+                // rotation of the point the respawn system actually used.
+                if (m_respawnSystem && m_respawnSystem->HasLastRespawnPoint())
+                {
+                    const Spark::RespawnPoint& spawn = m_respawnSystem->GetLastRespawnPoint();
+                    if (spawn.position.x == e.spawnX && spawn.position.y == e.spawnY && spawn.position.z == e.spawnZ)
+                        m_camera->Console_SetRotation(spawn.rotation.x, spawn.rotation.y, spawn.rotation.z);
+                }
             }
             if (m_player)
             {
