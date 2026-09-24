@@ -380,31 +380,14 @@ namespace Spark
             // GL SWAP CHAIN
             // ============================================================================
 
-            GLSwapChain::GLSwapChain(const RHISwapChainDesc& desc) : m_desc(desc)
+            GLSwapChain::GLSwapChain(const RHISwapChainDesc& desc, [[maybe_unused]] void* deviceDC,
+                                     [[maybe_unused]] void* deviceContext)
+                : m_desc(desc)
             {
-#if defined(__linux__)
-                if (desc.windowHandle != nullptr)
+                if (desc.windowHandle == nullptr)
                 {
-                    // Windowed mode: SDL2 created the GL context and owns the window.
-                    // Render to the default framebuffer (FBO 0) and use SDL_GL_SwapWindow.
-                    m_windowed = true;
-                    m_sdlWindow = desc.windowHandle;
-
-                    RHITextureDesc texDesc;
-                    texDesc.width = desc.width;
-                    texDesc.height = desc.height;
-                    texDesc.format = desc.format;
-                    texDesc.usage = RHITextureUsage::RenderTarget;
-                    texDesc.debugName = "DefaultFramebuffer";
-
-                    m_backBuffer = std::make_unique<GLTexture>(texDesc, 0, 0); // FBO 0 = default
-
-                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL swap chain: windowed mode (%ux%u)", desc.width,
-                                   desc.height);
-                }
-                else
-                {
-                    // Headless mode (EGL or GLX): create an FBO as the "swap chain" back buffer.
+                    // Headless mode (all platforms): an FBO stands in for the swap chain back buffer and
+                    // renders on the device's own context.
                     m_windowed = false;
 
                     GLuint colorTex = 0;
@@ -433,9 +416,10 @@ namespace Spark
 
                     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL swap chain: headless FBO mode (%ux%u)",
                                    desc.width, desc.height);
+                    return;
                 }
-#else
-                // Windows: render to the default framebuffer
+
+                // Windowed mode: render to the default framebuffer (FBO 0)
                 m_windowed = true;
 
                 RHITextureDesc texDesc;
@@ -447,39 +431,59 @@ namespace Spark
 
                 m_backBuffer = std::make_unique<GLTexture>(texDesc, 0, 0); // FBO 0 = default
 
-#ifdef _WIN32
-                HWND hwnd = static_cast<HWND>(desc.windowHandle);
-                m_hdc = GetDC(hwnd);
+#if defined(__linux__)
+                // SDL2 created the GL context and owns the window; Present uses SDL_GL_SwapWindow.
+                m_sdlWindow = desc.windowHandle;
+#elif defined(_WIN32)
+                // Rebind the device's context to the application window. wglMakeCurrent requires the
+                // window DC to use the same pixel format the context was created with, so copy the
+                // device DC's format instead of choosing a new one. A separate context here would not
+                // share any object the device already created.
+                m_hwnd = static_cast<HWND>(desc.windowHandle);
+                m_deviceDC = static_cast<HDC>(deviceDC);
+                m_deviceContext = static_cast<HGLRC>(deviceContext);
+                m_hdc = GetDC(m_hwnd);
 
-                PIXELFORMATDESCRIPTOR pfd = {};
-                pfd.nSize = sizeof(pfd);
-                pfd.nVersion = 1;
-                pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-                pfd.iPixelType = PFD_TYPE_RGBA;
-                pfd.cColorBits = 32;
-                pfd.cDepthBits = 24;
-                pfd.cStencilBits = 8;
-
-                int pixelFormat = ChoosePixelFormat(m_hdc, &pfd);
-                SetPixelFormat(m_hdc, pixelFormat, &pfd);
-
-                m_hglrc = wglCreateContext(m_hdc);
-                wglMakeCurrent(m_hdc, m_hglrc);
+                bool bound = false;
+                if (m_hdc && m_deviceDC && m_deviceContext)
+                {
+                    const int pixelFormat = GetPixelFormat(m_deviceDC);
+                    PIXELFORMATDESCRIPTOR pfd = {};
+                    DescribePixelFormat(m_deviceDC, pixelFormat, sizeof(pfd), &pfd);
+                    // SetPixelFormat may be called only once per window; a matching format is fine.
+                    if (GetPixelFormat(m_hdc) == pixelFormat || SetPixelFormat(m_hdc, pixelFormat, &pfd))
+                        bound = wglMakeCurrent(m_hdc, m_deviceContext) != FALSE;
+                }
+                if (!bound)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "OpenGL swap chain: could not bind the device context to the window (error %lu)",
+                                    GetLastError());
+                }
 #endif
-#endif
+
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL swap chain: windowed mode (%ux%u)", desc.width,
+                               desc.height);
             }
 
             GLSwapChain::~GLSwapChain()
             {
-#if defined(__linux__)
-                // FBO and texture are owned by the GLTexture destructor
-#elif defined(_WIN32)
-                if (m_hglrc)
+#if defined(_WIN32)
+                if (m_hdc)
                 {
-                    wglMakeCurrent(nullptr, nullptr);
-                    wglDeleteContext(m_hglrc);
+                    // Hand the device context back to the device's hidden window so the device keeps a
+                    // current context after the window goes away.
+                    if (wglGetCurrentDC() == m_hdc)
+                    {
+                        if (m_deviceDC && m_deviceContext)
+                            wglMakeCurrent(m_deviceDC, m_deviceContext);
+                        else
+                            wglMakeCurrent(nullptr, nullptr);
+                    }
+                    ReleaseDC(m_hwnd, m_hdc);
                 }
 #endif
+                // Linux: FBO and texture are owned by the GLTexture destructor
             }
 
             bool GLSwapChain::Present(bool vsync)
@@ -502,6 +506,12 @@ namespace Spark
                 if (m_hdc)
                 {
                     SwapBuffers(m_hdc);
+                    return true;
+                }
+                if (!m_windowed)
+                {
+                    // Headless: flush all pending GL commands (no window to swap to)
+                    glFlush();
                     return true;
                 }
 #endif
@@ -1368,6 +1378,56 @@ namespace Spark
                 }
 
                 wglMakeCurrent(bootstrapDC, bootstrapContext);
+
+                // wglCreateContext only yields a legacy (compatibility, non-debug) context. Use it to
+                // reach WGL_ARB_create_context and create the real 4.5 core context — with the debug
+                // flag when the debug layer is requested, matching the EGL/GLX paths.
+                {
+                    constexpr int kWglContextMajorVersion = 0x2091;   // WGL_CONTEXT_MAJOR_VERSION_ARB
+                    constexpr int kWglContextMinorVersion = 0x2092;   // WGL_CONTEXT_MINOR_VERSION_ARB
+                    constexpr int kWglContextFlags = 0x2094;          // WGL_CONTEXT_FLAGS_ARB
+                    constexpr int kWglContextProfileMask = 0x9126;    // WGL_CONTEXT_PROFILE_MASK_ARB
+                    constexpr int kWglContextDebugBit = 0x0001;       // WGL_CONTEXT_DEBUG_BIT_ARB
+                    constexpr int kWglContextCoreProfileBit = 0x0001; // WGL_CONTEXT_CORE_PROFILE_BIT_ARB
+                    using PFNWGLCREATECONTEXTATTRIBSARB = HGLRC(WINAPI*)(HDC, HGLRC, const int*);
+                    auto wglCreateContextAttribsARB = reinterpret_cast<PFNWGLCREATECONTEXTATTRIBSARB>(
+                        reinterpret_cast<void*>(wglGetProcAddress("wglCreateContextAttribsARB")));
+
+                    HGLRC coreContext = nullptr;
+                    if (wglCreateContextAttribsARB)
+                    {
+                        const int attribs[] = {kWglContextMajorVersion,
+                                               4,
+                                               kWglContextMinorVersion,
+                                               5,
+                                               kWglContextProfileMask,
+                                               kWglContextCoreProfileBit,
+                                               kWglContextFlags,
+                                               m_debugEnabled ? kWglContextDebugBit : 0,
+                                               0};
+                        coreContext = wglCreateContextAttribsARB(bootstrapDC, nullptr, attribs);
+                    }
+
+                    if (coreContext && wglMakeCurrent(bootstrapDC, coreContext))
+                    {
+                        wglDeleteContext(bootstrapContext);
+                        bootstrapContext = coreContext;
+                    }
+                    else
+                    {
+                        if (coreContext)
+                            wglDeleteContext(coreContext);
+                        wglMakeCurrent(bootstrapDC, bootstrapContext);
+                        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                       "WGL_ARB_create_context unavailable — using a legacy GL context");
+                    }
+                }
+
+                // The hidden window's context stays current as the device's rendering context (as on
+                // EGL/GLX) until Shutdown; a windowed swap chain rebinds it to the application window.
+                m_wglWindow = bootstrapWindow;
+                m_wglDC = bootstrapDC;
+                m_wglContext = bootstrapContext;
 #endif
 
                 // GLAD can now load OpenGL function pointers from the current context
@@ -1386,11 +1446,7 @@ namespace Spark
                     glXDestroyPbuffer(m_glxDisplay, m_glxPbuffer);
                     XCloseDisplay(m_glxDisplay);
 #elif defined(_WIN32)
-                    wglMakeCurrent(nullptr, nullptr);
-                    wglDeleteContext(bootstrapContext);
-                    ReleaseDC(bootstrapWindow, bootstrapDC);
-                    DestroyWindow(bootstrapWindow);
-                    UnregisterClassA(wc.lpszClassName, wc.hInstance);
+                    DestroyWGLContext();
 #endif
                     return false;
                 }
@@ -1432,20 +1488,17 @@ namespace Spark
 
                 QueryCapabilities();
 
-                // Tear down the bootstrap context — the real context will be created by GLSwapChain.
-                // Exception: on Linux (EGL/GLX) we keep the bootstrap context alive as the
-                // rendering context, since headless mode uses FBOs for off-screen rendering.
+                // The bootstrap context stays alive as the device's rendering context on every
+                // platform: headless rendering uses FBOs, and resources created before a swap chain
+                // exists must land in a live context. (Windows used to delete it here, which left
+                // every later GL call with no current context.)
 #if defined(__linux__) && defined(SPARK_EGL_SUPPORT)
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics,
                                "EGL headless: keeping bootstrap context as rendering context");
 #elif defined(__linux__)
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLX: keeping bootstrap context as rendering context");
 #elif defined(_WIN32)
-                wglMakeCurrent(nullptr, nullptr);
-                wglDeleteContext(bootstrapContext);
-                ReleaseDC(bootstrapWindow, bootstrapDC);
-                DestroyWindow(bootstrapWindow);
-                UnregisterClassA(wc.lpszClassName, wc.hInstance);
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "WGL: keeping bootstrap context as rendering context");
 #endif
 
                 m_immediateCommandList = std::make_unique<GLCommandList>(true, &m_statistics);
@@ -1513,8 +1566,33 @@ namespace Spark
                     m_bootstrapContext = EGL_NO_CONTEXT;
                     m_bootstrapSurface = EGL_NO_SURFACE;
                 }
+#elif defined(_WIN32)
+                DestroyWGLContext();
 #endif
             }
+
+#if defined(_WIN32)
+            void GLDevice::DestroyWGLContext()
+            {
+                if (m_wglContext)
+                {
+                    if (wglGetCurrentContext() == m_wglContext)
+                        wglMakeCurrent(nullptr, nullptr);
+                    wglDeleteContext(m_wglContext);
+                    m_wglContext = nullptr;
+                }
+                if (m_wglWindow)
+                {
+                    if (m_wglDC)
+                        ReleaseDC(m_wglWindow, m_wglDC);
+                    DestroyWindow(m_wglWindow);
+                    // Fails harmlessly while another GLDevice still has a window of this class.
+                    UnregisterClassA("SparkGLBootstrap", GetModuleHandleA(nullptr));
+                }
+                m_wglDC = nullptr;
+                m_wglWindow = nullptr;
+            }
+#endif
 
             void GLDevice::QueryCapabilities()
             {
@@ -1578,7 +1656,11 @@ namespace Spark
 
             std::unique_ptr<IRHISwapChain> GLDevice::CreateSwapChain(const RHISwapChainDesc& desc)
             {
+#if defined(_WIN32)
+                return std::make_unique<GLSwapChain>(desc, m_wglDC, m_wglContext);
+#else
                 return std::make_unique<GLSwapChain>(desc);
+#endif
             }
 
             std::unique_ptr<IRHIBuffer> GLDevice::CreateBuffer(const RHIBufferDesc& desc)

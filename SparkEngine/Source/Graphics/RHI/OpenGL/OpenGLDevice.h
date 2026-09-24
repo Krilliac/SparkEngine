@@ -292,7 +292,9 @@ namespace Spark
             class GLSwapChain : public IRHISwapChain
             {
               public:
-                GLSwapChain(const RHISwapChainDesc& desc);
+                /// @param deviceDC,deviceContext Windows only: the GLDevice's HDC/HGLRC. A windowed swap
+                ///        chain makes that context current on the window instead of creating its own.
+                GLSwapChain(const RHISwapChainDesc& desc, void* deviceDC = nullptr, void* deviceContext = nullptr);
                 ~GLSwapChain() override;
 
                 bool Present(bool vsync) override;
@@ -309,8 +311,10 @@ namespace Spark
                 bool m_windowed = false; ///< True when rendering to an on-screen window
 
 #ifdef _WIN32
-                HDC m_hdc = nullptr;
-                HGLRC m_hglrc = nullptr;
+                HWND m_hwnd = nullptr;
+                HDC m_hdc = nullptr;             ///< Application window DC (windowed mode)
+                HDC m_deviceDC = nullptr;        ///< GLDevice's hidden-window DC, restored on destruction
+                HGLRC m_deviceContext = nullptr; ///< GLDevice-owned context (never deleted here)
 #elif defined(__linux__)
                 void* m_sdlWindow = nullptr; ///< SDL_Window* for windowed Present
 #ifdef SPARK_EGL_SUPPORT
@@ -449,6 +453,9 @@ namespace Spark
                 GLenum GetDepthAttachmentType(PixelFormat format) const;
 
                 void QueryCapabilities();
+#if defined(_WIN32)
+                void DestroyWGLContext();
+#endif
                 std::string PrepareGLSLSource(const RHIShaderDesc& desc) const;
 
                 std::unique_ptr<GLCommandList> m_immediateCommandList;
@@ -467,6 +474,14 @@ namespace Spark
                 EGLContext m_bootstrapContext = EGL_NO_CONTEXT;
                 EGLSurface m_bootstrapSurface = EGL_NO_SURFACE;
                 bool m_ownsEglContext = true; ///< False when host (e.g. SDL2) created the context
+#elif defined(_WIN32)
+                // The device's rendering context lives on a hidden 1x1 window for the device's
+                // whole lifetime, so resources can be created and rendered off-screen before (or
+                // without) a swap chain. A windowed swap chain rebinds this same context to the
+                // application window's DC, so every object stays in one namespace.
+                HWND m_wglWindow = nullptr;
+                HDC m_wglDC = nullptr;
+                HGLRC m_wglContext = nullptr;
 #endif
             };
 
