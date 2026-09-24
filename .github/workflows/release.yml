@@ -572,7 +572,7 @@ jobs:
           }
           $packageRoot = $roots[0].FullName
         }
-        python .github/scripts/validate-extracted-package.py --package-root "$packageRoot" --stage-root "${{ github.workspace }}/stage" --archive "$($archives[0].FullName)"
+        python .github/scripts/validate-extracted-package.py --package-root "$packageRoot" --stage-root "${{ github.workspace }}/stage" --archive "$($archives[0].FullName)" --package-profile ${{ matrix.profile }}
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake -DSPARK_PACKAGE_ROOT="$packageRoot" -DSPARK_PACKAGE_PROFILE=${{ matrix.profile }} -DSPARK_EXECUTABLE_SUFFIX:STRING=.exe -P cmake/ValidateStagedPackageExecutables.cmake
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

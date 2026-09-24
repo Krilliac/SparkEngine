@@ -178,6 +178,37 @@ non-regular files, incomplete declarations, resource-limit violations, and a
 file that changes while it is read. This is a repository-content gate, not yet
 proof that the same verified snapshot was consumed by package assembly.
 
+### stable-v1 package asset profile (OD-09)
+
+Entries whose license is `NOASSERTION` (the TERRAFRONT content with no tracked
+origin record) stay in the repository but are excluded from the stable-v1
+package. The focused FPS shipping selector (`SPARK_GAME_MODULES=SparkGameFPS`,
+the `windows-shipping` preset) installs runtime assets through
+`cmake/SparkRuntimeAssets.cmake`, which derives the stable-v1 manifest at
+configure time, skips exactly the excluded files, and installs the derived
+manifest as `bin/Assets/assets.integrity.json`. Other selectors keep the full
+manifest (`default` profile).
+
+```bash
+# Derive the stable-v1 manifest and install exclusions (what CMake runs)
+python3 tools/asset-integrity/verify_asset_integrity.py package-profile Assets/assets.integrity.json \
+    --profile stable-v1 --output stable.json --exclusions excluded.txt
+# Check an installed stable-v1 tree
+python3 tools/asset-integrity/verify_asset_integrity.py verify <pkg>/bin/Assets/assets.integrity.json \
+    --root <pkg>/bin/Assets --profile stable-v1
+```
+
+`--profile stable-v1` fails on any `NOASSERTION` entry (`profile-excluded`),
+on an entry the repository manifest records as `NOASSERTION` even if the
+package relabels it, on a file the repository manifest does not declare
+(`profile-unreviewed`), and on an entry that differs from the repository
+entry (`profile-mismatch`). The installed FPS package smoke and the release
+workflow's extracted-package check (`--package-profile ${{ matrix.profile }}`)
+run it. `PackageAssets_StableV1ExcludesNoAssertion` covers derivation, the
+check, and the install rules. Asserted TERRAFRONT scenes and materials that
+point at excluded files still ship, with dangling references. They are not
+loaded by the stable-v1 FPS module.
+
 ```
 Assets/
 ├── Models/          # 3D model files (.obj, .fbx, .gltf)

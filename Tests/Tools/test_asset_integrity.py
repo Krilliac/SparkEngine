@@ -230,15 +230,28 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
 
     HELPER = REPO_ROOT / "Tests" / "PackageSmoke" / "ValidateInstalledFPSAssets.cmake"
 
-    def _fixture(self, temporary: str | os.PathLike[str]) -> Path:
+    def _fixture(self, temporary: str | os.PathLike[str], license_id: str = "CC0-1.0") -> Path:
+        # The helper applies the stable-v1 package profile, so the fixture is a
+        # schema v2 manifest whose entries match a reviewed source manifest.
         assets = Path(temporary) / "Assets"
         assets.mkdir(parents=True)
         payload = b"installed FPS package fixture\n"
         (assets / "payload.bin").write_bytes(payload)
-        write_manifest(
-            assets,
-            [{"path": "payload.bin", "sha256": digest(payload), "size": len(payload)}],
-        )
+        manifest = {
+            "version": 2,
+            "algorithm": "sha256",
+            "root": "Assets",
+            "fileCount": 1,
+            "entries": [{
+                "path": "payload.bin",
+                "sha256": digest(payload),
+                "size": len(payload),
+                "license": license_id,
+                "provenance": "Installed-package helper fixture",
+            }],
+        }
+        (assets / vai.MANIFEST_FILENAME).write_bytes(vai.manifest_bytes(manifest))
+        (Path(temporary) / "source.integrity.json").write_bytes(vai.manifest_bytes(manifest))
         return assets
 
     def _run_helper(self, assets: Path) -> subprocess.CompletedProcess[str]:
@@ -249,6 +262,7 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
                 cmake,
                 f"-DSPARK_ASSETS_ROOT={assets}",
                 f"-DSPARK_ASSET_VERIFIER={SCRIPT}",
+                f"-DSPARK_ASSET_SOURCE_MANIFEST={assets.parent / 'source.integrity.json'}",
                 "-P",
                 str(self.HELPER),
             ],
@@ -263,6 +277,13 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             result = self._run_helper(self._fixture(temporary))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_installed_package_asset_helper_rejects_noassertion_asset(self) -> None:
+        # OD-09: the stable-v1 package must not ship an asset without a license record.
+        with tempfile.TemporaryDirectory() as temporary:
+            result = self._run_helper(self._fixture(temporary, license_id="NOASSERTION"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"\[profile-excluded\] payload\.bin")
 
     def test_installed_package_asset_helper_rejects_missing_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

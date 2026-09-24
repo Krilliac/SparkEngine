@@ -2916,23 +2916,24 @@ endif()
 # Mirror the runtime asset set copied beside SparkEngine after a normal build.
 # MMOFPS/Data is required for TerraFront module initialization and command
 # registration, while Engine contains startup branding used before project load.
-foreach(_spark_runtime_asset_dir Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${_spark_runtime_asset_dir}")
-        spark_install_tracked_directory(
-            SOURCE "Assets/${_spark_runtime_asset_dir}"
-            DESTINATION "bin/Assets/${_spark_runtime_asset_dir}"
-            COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
-        )
-    endif()
-endforeach()
-foreach(_spark_runtime_asset_root_file IN ITEMS README.md assets.integrity.json)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${_spark_runtime_asset_root_file}")
-        install(FILES "${CMAKE_SOURCE_DIR}/Assets/${_spark_runtime_asset_root_file}"
-            DESTINATION bin/Assets
-            COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
-        )
-    endif()
-endforeach()
+# The focused FPS shipping selector is the stable-v1 package: per OD-09 it ships
+# no asset whose license is NOASSERTION and installs the derived stable-v1
+# manifest instead of the full repository manifest.
+if(SPARK_GAME_MODULES STREQUAL "SparkGameFPS")
+    set(_spark_runtime_asset_profile stable-v1)
+else()
+    set(_spark_runtime_asset_profile default)
+endif()
+include("${CMAKE_SOURCE_DIR}/cmake/SparkRuntimeAssets.cmake")
+spark_install_runtime_assets(
+    ROOT Assets
+    DESTINATION bin/Assets
+    COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+    PROFILE ${_spark_runtime_asset_profile}
+    VERIFIER "${CMAKE_SOURCE_DIR}/tools/asset-integrity/verify_asset_integrity.py"
+    DIRECTORIES Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine
+    ROOT_FILES README.md
+)
 if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Resources/Config")
     spark_install_tracked_directory(
         SOURCE SparkEngine/Resources/Config

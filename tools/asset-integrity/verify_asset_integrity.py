@@ -74,6 +74,11 @@ KNOWN_MANIFESTS = (
     ("Assets/assets.integrity.json", "Assets", "tools/asset-integrity/provenance.json"),
 )
 ROOT_IGNORES = frozenset({MANIFEST_FILENAME})
+# Package profiles. OD-09: the stable-v1 package ships no asset whose license is
+# NOASSERTION. Those files stay in the repository and in the default package;
+# their provenance remains open outside stable-v1.
+PACKAGE_PROFILES = frozenset({"default", "stable-v1"})
+NOASSERTION_EXCLUDED_PROFILES = frozenset({"stable-v1"})
 TEMPLATE_ROOT_METADATA = frozenset({"README.md", "manifest.json"})
 TEMPLATE_COLLECTION_METADATA = frozenset({"README.md", "assets.lock.json"})
 INVALID_WINDOWS_CHARS = frozenset('<>:"|?*')
@@ -861,6 +866,149 @@ def provenance_summary(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def derive_package_manifest(manifest: dict[str, Any], profile: str) -> tuple[dict[str, Any], list[str]]:
+    """Return ``(package manifest, excluded paths)`` for one package profile.
+
+    The input must already have passed ``load_manifest``. A profile in
+    ``NOASSERTION_EXCLUDED_PROFILES`` drops every NOASSERTION entry (OD-09) and
+    requires schema v2, because a v1 manifest cannot show which files lack a
+    license record. Entry objects are copied unchanged, so the result stays
+    sorted and verifiable against an installed root.
+    """
+    if profile not in PACKAGE_PROFILES:
+        raise ManifestFormatError(f"unknown package profile: {profile!r}")
+    entries = manifest["entries"]
+    excluded: list[str] = []
+    if profile in NOASSERTION_EXCLUDED_PROFILES:
+        if manifest["version"] != MANIFEST_SCHEMA_VERSION:
+            raise ManifestFormatError(
+                f"package profile {profile!r} needs a schema v{MANIFEST_SCHEMA_VERSION} manifest "
+                "that records each entry's license")
+        excluded = [entry["path"] for entry in entries if entry["license"] == NOASSERTION]
+        entries = [entry for entry in entries if entry["license"] != NOASSERTION]
+    derived = {
+        "version": manifest["version"],
+        "algorithm": manifest["algorithm"],
+        "root": manifest["root"],
+        "fileCount": len(entries),
+        "entries": [dict(entry) for entry in entries],
+    }
+    return derived, excluded
+
+
+def package_exclusion_prefixes(all_paths: Iterable[str], excluded: Iterable[str]) -> list[str]:
+    """Collapse excluded files into the fewest directory prefixes and file paths.
+
+    A directory (returned with a trailing ``/``) is used only when no kept file
+    lives anywhere beneath it, so an install rule built from the result cannot
+    drop a kept file. Files in mixed directories are returned individually.
+    """
+    excluded_set = set(excluded)
+    kept_directories: set[str] = set()
+    for path in all_paths:
+        if path in excluded_set:
+            continue
+        parts = path.split("/")
+        for depth in range(1, len(parts)):
+            kept_directories.add("/".join(parts[:depth]))
+    result: set[str] = set()
+    for path in excluded_set:
+        parts = path.split("/")
+        chosen = path
+        for depth in range(1, len(parts)):
+            directory = "/".join(parts[:depth])
+            if directory not in kept_directories:
+                chosen = f"{directory}/"
+                break
+        result.add(chosen)
+    return sorted(result)
+
+
+def package_profile_errors(
+    manifest: dict[str, Any],
+    profile: str,
+    label: str,
+    source_manifest: dict[str, Any] | None = None,
+) -> list[IntegrityError]:
+    """Reject a package manifest that ships content its profile excludes.
+
+    For a NOASSERTION-excluding profile every packaged entry must assert a
+    license. With ``source_manifest`` (the reviewed repository manifest) every
+    packaged entry must also equal a source entry exactly, so a package cannot
+    relabel an excluded file or add a file whose provenance was never reviewed.
+    """
+    if profile not in PACKAGE_PROFILES:
+        return [IntegrityError(label, "package-profile", f"unknown package profile {profile!r}")]
+    if profile not in NOASSERTION_EXCLUDED_PROFILES:
+        return []
+    for candidate, name in ((manifest, "package"), (source_manifest, "source")):
+        if candidate is not None and candidate["version"] != MANIFEST_SCHEMA_VERSION:
+            return [IntegrityError(
+                label, "provenance-missing",
+                f"{name} manifest version {candidate['version']} records no license; package profile "
+                f"{profile!r} needs schema v{MANIFEST_SCHEMA_VERSION}")]
+    source = None if source_manifest is None else {entry["path"]: entry for entry in source_manifest["entries"]}
+    errors: list[IntegrityError] = []
+    for entry in manifest["entries"]:
+        path = entry["path"]
+        if entry["license"] == NOASSERTION:
+            errors.append(IntegrityError(
+                path, "profile-excluded",
+                f"package profile {profile!r} must not ship an asset whose license is NOASSERTION (OD-09)"))
+            continue
+        if source is None:
+            continue
+        reviewed = source.get(path)
+        if reviewed is None:
+            errors.append(IntegrityError(
+                path, "profile-unreviewed",
+                f"package profile {profile!r} ships a file the source manifest does not declare"))
+        elif reviewed["license"] == NOASSERTION:
+            errors.append(IntegrityError(
+                path, "profile-excluded",
+                f"source manifest records NOASSERTION for this file; package profile {profile!r} excludes it"))
+        elif reviewed != entry:
+            errors.append(IntegrityError(
+                path, "profile-mismatch",
+                "packaged entry differs from the source manifest entry"))
+    return errors
+
+
+def verify_package_manifest(
+    manifest_path: Path,
+    root: Path,
+    profile: str,
+    *,
+    source_manifest_path: Path | None = None,
+    provenance_policy: Path | None = None,
+    require_provenance: bool = False,
+) -> list[IntegrityError]:
+    """Verify an installed package root, then apply its package profile.
+
+    For a NOASSERTION-excluding profile the source manifest defaults to the
+    repository manifest beside this verifier.
+    """
+    if profile not in PACKAGE_PROFILES:
+        return [IntegrityError(str(manifest_path), "package-profile", f"unknown package profile {profile!r}")]
+    excludes = profile in NOASSERTION_EXCLUDED_PROFILES
+    errors = verify_manifest(
+        manifest_path, root,
+        provenance_policy=provenance_policy,
+        require_provenance=require_provenance or excludes)
+    if not excludes:
+        return errors
+    # A manifest that did not load, or records no license, already failed.
+    if any(error.category in ("manifest-load", "provenance-missing") for error in errors):
+        return errors
+    source_path = source_manifest_path or (REPO_ROOT / KNOWN_MANIFESTS[0][0])
+    try:
+        manifest = load_manifest(_absolute_lexical(manifest_path))
+        source = load_manifest(_absolute_lexical(source_path))
+    except (ManifestFormatError, OSError) as exc:
+        return errors + [IntegrityError(str(source_path), "manifest-load", str(exc))]
+    return errors + package_profile_errors(manifest, profile, str(manifest_path), source)
+
+
 def manifest_bytes(manifest: dict[str, Any]) -> bytes:
     return (json.dumps(manifest, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
 
@@ -1258,18 +1406,62 @@ def cmd_generate(args: argparse.Namespace) -> int:
 
 def cmd_verify(args: argparse.Namespace) -> int:
     policy = getattr(args, "provenance", None)
-    errors = verify_manifest(
-        Path(args.manifest),
-        Path(args.root),
-        provenance_policy=Path(policy) if policy else None,
-        require_provenance=bool(getattr(args, "require_provenance", False)),
-    )
+    profile = getattr(args, "profile", None)
+    source = getattr(args, "source_manifest", None)
+    if source and not profile:
+        print("--source-manifest requires --profile", file=sys.stderr)
+        return 1
+    options = {
+        "provenance_policy": Path(policy) if policy else None,
+        "require_provenance": bool(getattr(args, "require_provenance", False)),
+    }
+    if profile:
+        errors = verify_package_manifest(
+            Path(args.manifest), Path(args.root), profile,
+            source_manifest_path=Path(source) if source else None, **options)
+    else:
+        errors = verify_manifest(Path(args.manifest), Path(args.root), **options)
     if errors:
         print(f"FAILED: {len(errors)} error(s)", file=sys.stderr)
         _print_errors(errors)
         return 1
     manifest = load_manifest(_absolute_lexical(Path(args.manifest)))
-    print(f"OK: {manifest['fileCount']} entries verified (manifest v{manifest['version']})")
+    suffix = f", package profile {profile}" if profile else ""
+    print(f"OK: {manifest['fileCount']} entries verified (manifest v{manifest['version']}{suffix})")
+    return 0
+
+
+def cmd_package_profile(args: argparse.Namespace) -> int:
+    """Write the package manifest and install exclusion list for one profile."""
+    source = _absolute_lexical(Path(args.manifest))
+    output = _absolute_lexical(Path(args.output))
+    exclusions_output = _absolute_lexical(Path(args.exclusions))
+    if len({source, output, exclusions_output}) != 3:
+        print("Refusing: source, --output, and --exclusions must be three different files", file=sys.stderr)
+        return 1
+    try:
+        manifest = load_manifest(source)
+        derived, excluded = derive_package_manifest(manifest, args.profile)
+    except (ManifestFormatError, OSError) as exc:
+        print(f"Cannot derive package profile {args.profile!r}: {exc}", file=sys.stderr)
+        return 1
+    # Defense in depth: the derived manifest must pass the same check a
+    # staged package will face.
+    errors = package_profile_errors(derived, args.profile, str(output), manifest)
+    if errors:
+        print(f"FAILED: derived {args.profile} manifest violates its profile", file=sys.stderr)
+        _print_errors(errors)
+        return 1
+    prefixes = package_exclusion_prefixes((entry["path"] for entry in manifest["entries"]), excluded)
+    try:
+        output.write_bytes(manifest_bytes(derived))
+        exclusions_output.write_bytes("".join(f"{prefix}\n" for prefix in prefixes).encode("utf-8"))
+    except OSError as exc:
+        print(f"Cannot write package profile outputs: {exc}", file=sys.stderr)
+        return 1
+    print(
+        f"Package profile {args.profile}: {derived['fileCount']} of {manifest['fileCount']} entries kept, "
+        f"{len(excluded)} NOASSERTION entries excluded as {len(prefixes)} install exclusion(s)")
     return 0
 
 
@@ -1294,6 +1486,17 @@ def cmd_check_all(args: argparse.Namespace) -> int:
         summary = provenance_summary(load_manifest(_absolute_lexical(Path(repo_root) / manifest_relative)))
         unasserted += summary["unasserted"]
         print(f"{manifest_relative} {_format_summary(summary)}")
+    source_manifest = load_manifest(_absolute_lexical(Path(repo_root) / KNOWN_MANIFESTS[0][0]))
+    for profile in sorted(NOASSERTION_EXCLUDED_PROFILES):
+        derived, excluded = derive_package_manifest(source_manifest, profile)
+        profile_errors = package_profile_errors(derived, profile, profile, source_manifest)
+        if profile_errors:
+            print(f"FAILED: derived {profile} package manifest violates its profile", file=sys.stderr)
+            _print_errors(profile_errors)
+            return 1
+        print(
+            f"package profile {profile}: {derived['fileCount']} entries packaged, "
+            f"{len(excluded)} NOASSERTION entries excluded (OD-09)")
     if getattr(args, "strict_provenance", False) and unasserted:
         print(f"FAILED: --strict-provenance and {unasserted} entries assert no license", file=sys.stderr)
         return 1
@@ -1320,6 +1523,24 @@ def main() -> int:
         "--require-provenance", action="store_true",
         help="Reject a legacy v1 manifest that carries no license/provenance")
     verify.set_defaults(handler=cmd_verify)
+
+    verify.add_argument(
+        "--profile", choices=sorted(PACKAGE_PROFILES),
+        help="Also enforce this package profile; stable-v1 rejects NOASSERTION entries (OD-09)")
+    verify.add_argument(
+        "--source-manifest",
+        help="Reviewed repository manifest every packaged entry must match "
+             f"(default for NOASSERTION-excluding profiles: {KNOWN_MANIFESTS[0][0]})")
+
+    package_profile = commands.add_parser(
+        "package-profile", help="Derive a package manifest and install exclusions for a profile")
+    package_profile.add_argument("manifest", help="Reviewed source manifest (schema v2)")
+    package_profile.add_argument("--profile", required=True, choices=sorted(PACKAGE_PROFILES))
+    package_profile.add_argument("--output", required=True, help="Derived package manifest path")
+    package_profile.add_argument(
+        "--exclusions", required=True,
+        help="Root-relative excluded files and directories (trailing '/'), one per line")
+    package_profile.set_defaults(handler=cmd_package_profile)
 
     check_all = commands.add_parser("check-all", help="Verify all repository asset contracts")
     check_all.add_argument("--repo-root", help="Repository root (default: auto-detect)")

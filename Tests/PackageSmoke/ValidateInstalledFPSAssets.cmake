@@ -53,10 +53,28 @@ if(NOT EXISTS "${_asset_manifest}" OR
         "Installed FPS asset integrity manifest is missing or link-like: ${_asset_manifest}")
 endif()
 
+# OD-09: the stable-v1 package ships no NOASSERTION asset, and every packaged
+# entry must equal the reviewed source manifest entry. The source manifest
+# defaults to the verifier checkout's Assets/assets.integrity.json.
+set(_asset_source_arguments "")
+if(DEFINED SPARK_ASSET_SOURCE_MANIFEST AND NOT "${SPARK_ASSET_SOURCE_MANIFEST}" STREQUAL "")
+    if("${SPARK_ASSET_SOURCE_MANIFEST}" MATCHES "[\r\n;]" OR
+       NOT IS_ABSOLUTE "${SPARK_ASSET_SOURCE_MANIFEST}" OR
+       NOT EXISTS "${SPARK_ASSET_SOURCE_MANIFEST}" OR
+       IS_DIRECTORY "${SPARK_ASSET_SOURCE_MANIFEST}" OR
+       IS_SYMLINK "${SPARK_ASSET_SOURCE_MANIFEST}")
+        message(FATAL_ERROR
+            "SPARK_ASSET_SOURCE_MANIFEST must be an absolute regular non-link file: "
+            "${SPARK_ASSET_SOURCE_MANIFEST}")
+    endif()
+    set(_asset_source_arguments --source-manifest "${SPARK_ASSET_SOURCE_MANIFEST}")
+endif()
+
 find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
 execute_process(
     COMMAND "${Python3_EXECUTABLE}" -B "${_asset_verifier}"
         verify "${_asset_manifest}" --root "${_assets_root}"
+        --profile stable-v1 ${_asset_source_arguments}
     RESULT_VARIABLE _asset_result
     OUTPUT_VARIABLE _asset_output
     ERROR_VARIABLE _asset_error

@@ -1957,6 +1957,17 @@ set_tests_properties(FPSSceneMaterialContract PROPERTIES
     LABELS "module;stable-v1;fps;asset;unit"
     TIMEOUT 30)
 
+# RDY-020 / OD-09: the stable-v1 package derives its asset manifest without any
+# NOASSERTION entry, installs only that set, and the package check rejects a
+# manifest that ships, relabels, or adds an unreviewed asset.
+add_test(
+    NAME PackageAssets_StableV1ExcludesNoAssertion
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_asset_package_profile.py)
+set_tests_properties(PackageAssets_StableV1ExcludesNoAssertion PROPERTIES
+    LABELS "stable-v1;asset;packaging;unit;python"
+    TIMEOUT 300)
+
 # RDY-010: ModuleDiscovery_* drive the production ModuleManager and the real ABI
 # fixture DLL. The exact count fails closed if the family stops being compiled
 # in; the contract test keeps the file from regressing to a test-local mirror.

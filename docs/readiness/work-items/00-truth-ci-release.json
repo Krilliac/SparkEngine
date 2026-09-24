@@ -221,7 +221,7 @@
       "wave": 0,
       "area": "content",
       "owner": "unassigned",
-      "rationale": "Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked. 2026-09-12 progress: runtime packages now install Assets/assets.integrity.json under bin/Assets, and extracted-package validation rejects a missing, link-like, or tampered runtime asset manifest/payload using the repository verifier with case-correct paths. 2026-09-21 progress: the installed FPS profile-package smoke now stages the manifest's root README and verifies all 882 staged bin/Assets entries before module lifecycle and save/reload; adversarial helper tests reject missing manifests, missing or tampered payloads, exact-case mismatches, undeclared files, and link-like paths. The fail-closed module inventory covers all 11 GameModules, with FPS root Models/Scenes integrity coverage at 317/317; content outside the in-profile FPS root remains unclassified. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. Clean Windows 11/archive, profile-wide package, provenance, exact-SHA proof, and remaining module content debt still remain open.",
+      "rationale": "Several modules reference missing music/models/scenes, depend on path case that differs from the tree, or work only through procedural fallbacks and repository-relative content. The asset-integrity CI job exists in site-data.yml, legacy per-package manifests remain validated, and a fail-closed first-party root integrity manifest is now tracked. 2026-09-12 progress: runtime packages now install Assets/assets.integrity.json under bin/Assets, and extracted-package validation rejects a missing, link-like, or tampered runtime asset manifest/payload using the repository verifier with case-correct paths. 2026-09-21 progress: the installed FPS profile-package smoke now stages the manifest's root README and verifies all 882 staged bin/Assets entries before module lifecycle and save/reload; adversarial helper tests reject missing manifests, missing or tampered payloads, exact-case mismatches, undeclared files, and link-like paths. The fail-closed module inventory covers all 11 GameModules, with FPS root Models/Scenes integrity coverage at 317/317; content outside the in-profile FPS root remains unclassified. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. 2026-09-23 local progress: the source and installed Release asset manifest now verify 883/883 entries, including the FPS center-building material; the package-layout smoke proves a controlled material albedo edit changes rendered pixels. 2026-09-24 local progress (OD-09): the stable-v1 runtime package (SparkGameFPS selector) now installs through cmake/SparkRuntimeAssets.cmake, which derives the stable-v1 manifest at configure time and excludes all 475 NOASSERTION TERRAFRONT entries (408 of 883 entries ship); verify --profile stable-v1 rejects any NOASSERTION, relabelled, unreviewed, or altered packaged entry and runs in the installed FPS package smoke and the release extracted-package check. The excluded files stay in the repository and their provenance stays open outside stable-v1. Clean Windows 11/archive, profile-wide package, provenance, exact-SHA proof, and remaining module content debt still remain open.",
       "dependencies": [
         "RDY-000"
       ],
@@ -269,6 +269,7 @@
         "python3 tools/asset-integrity/verify_asset_integrity.py verify Assets/assets.integrity.json --root Assets",
         "python3 tools/site-data/validate.py --assets",
         "python3 Tests/Tools/test_asset_integrity.py",
+        "python3 Tests/Tools/test_asset_package_profile.py",
         "ctest --test-dir build/windows-release -C Release -L profile-package --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
@@ -314,7 +315,6 @@
       "plannedCiJobs": [],
       "plannedTestSelectors": [
         "AssetManifest_*",
-        "PackageAssets_*",
         "PathCase_*"
       ],
       "evidence": {
@@ -328,7 +328,8 @@
         "templateCrossValidation": "Cross-validates template manifests against assets.lock.json and disk",
         "siteDataIntegration": "validate.py --assets invokes the root integrity verifier fail-closed",
         "testCoverage": "Focused asset-integrity tests cover safety categories and site-data integration",
-        "determinism": "Two clean generations produce byte-identical output"
+        "determinism": "Two clean generations produce byte-identical output",
+        "stableV1NoAssertionExclusion": "OD-09 local evidence 2026-09-24 (not same-SHA hosted CI): verify_asset_integrity.py package-profile derives the stable-v1 manifest (408/883 entries, 475 NOASSERTION excluded); an install of the real Assets tree through cmake/SparkRuntimeAssets.cmake with PROFILE stable-v1 verified 408 entries with --profile stable-v1, while the default-profile install failed it with 475 profile-excluded errors; PackageAssets_StableV1ExcludesNoAssertion (Tests/Tools/test_asset_package_profile.py) and the stable-v1 cases in .github/scripts/test_validate_extracted_package.py pass locally. The Windows installed-package smoke with the stable-v1 profile check has not run."
       }
     },
     {
