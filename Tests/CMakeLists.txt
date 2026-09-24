@@ -584,6 +584,7 @@ add_executable(SparkTests
     TestGameModulePlatformerARPG.cpp
     TestMOD340PlatformerCompletionReal.cpp
     TestMOD330ARPGDungeonReal.cpp
+    TestMOD350RPGQuestSliceReal.cpp
     # TERRAFRONT (SparkGameMMOFPS) — header-only wire protocol, standalone
     # rule math, and validation of the real Assets/MMOFPS/Data tables.
     # Module .cpp sources are NOT compiled into SparkTests by design.
@@ -1128,6 +1129,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Quest/RPGQuestSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/World/RPGWorldSetup.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Gameplay/RPGGameplayBridge.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Core/RPGEngineSystems.cpp"
     )
 
@@ -2023,6 +2025,18 @@ add_test(
 set_tests_properties(ModuleDiscoveryProductionSourceContract PROPERTIES
     LABELS "module;module-profile;stable-v1;unit"
     TIMEOUT 30)
+
+# MOD-350: RPGQuestSlice_* drive the real RPGDemoSession with the RPGGameplayBridge
+# quest policy installed (Talk -> AcceptQuest -> Travel -> Attack -> loot -> reward).
+# The module sources compile into SparkTests only when ImGui is available.
+if(TARGET imgui)
+    add_test(NAME RPGQuestSlice COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(RPGQuestSlice PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=RPGQuestSlice_;SPARK_TEST_EXPECT_COUNT=2"
+        LABELS "module;rpg;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
 
 # RDY-010: no stable-v1/module-profile CTest that runs SparkTests may select a
 # mirror-file or tautological TEST. Checks every platform branch of this file

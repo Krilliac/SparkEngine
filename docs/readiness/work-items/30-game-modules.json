@@ -1006,7 +1006,6 @@
         "module-RPG"
       ],
       "plannedTestSelectors": [
-        "RPGQuestSlice_*",
         "RPGPersistence_*"
       ]
     },

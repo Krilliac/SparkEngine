@@ -10,7 +10,11 @@ combat, inventory, NPC, and world-area systems into one live loop.
 1. Start as Rowan the Warrior, or choose another class with rpg_restart.
 2. Talk to Oakhollow NPCs, inspect the quest journal, and travel to a connected area.
 3. Fight deterministic area encounters, manage cooldowns, health, mana, and potions.
+   When the class ability costs more mana than remains, rpg_attack falls back to a
+   mana-free weapon strike.
 4. Loot Moonpetal herbs, earn XP, complete objectives, and unlock the chained quests.
+   Quest item rewards land in Rowan's pack before the quest is marked complete; a
+   pack too full to hold them keeps the quest active so the reward is not lost.
 5. Flee to Oakhollow when overwhelmed, rest at the inn, then continue toward the
    Shadow Crypt and Thornwall Castle.
 
@@ -35,4 +39,7 @@ rpg_items, rpg_quests, rpg_npcs, rpg_save, rpg_load, rpg_weather, and rpg_time.
 ## Build and test
 
 Build the SparkGameRPG and SparkTests targets. The focused regression source is
-Tests/TestGameModuleRPG.cpp.
+Tests/TestGameModuleRPG.cpp. Tests/TestMOD350RPGQuestSliceReal.cpp drives the
+quest chain (Shadow Wolves, Healing Herbs, The Dark Below) end to end through the
+session API with the real RPGGameplayBridge quest policy installed; run it with
+`ctest --test-dir build/linux-gcc-release -R RPGQuestSlice --output-on-failure`.

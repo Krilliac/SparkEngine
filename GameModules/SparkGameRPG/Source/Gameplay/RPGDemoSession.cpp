@@ -21,6 +21,9 @@ namespace RPG
 {
     namespace
     {
+        /// Base damage of the mana-free weapon strike used when the primary ability is unaffordable.
+        constexpr float kWeaponStrikeBaseDamage = 12.0f;
+
         const char* GetClassName(CharacterClass characterClass)
         {
             switch (characterClass)
@@ -364,28 +367,33 @@ namespace RPG
         {
             return "Rowan is defeated; rest in Oakhollow or restart the adventure";
         }
-        if (character->currentMana < ability->manaCost)
+
+        // Out of mana, the hero falls back to a mana-free weapon strike instead of being locked out of the
+        // fight: a level-1 Warrior holds 24 MP against a 10 MP Power Strike and could otherwise never finish
+        // the 65 HP Shadow Wolf its starting quest requires.
+        const bool useAbility = character->currentMana >= ability->manaCost;
+        if (useAbility)
         {
-            return "Not enough mana for " + ability->name;
-        }
-        if (!m_combat->UseAbility(m_playerCharacterId, ability->id, ability->cooldown))
-        {
-            return ability->name + " is still on cooldown";
+            if (!m_combat->UseAbility(m_playerCharacterId, ability->id, ability->cooldown))
+            {
+                return ability->name + " is still on cooldown";
+            }
+            character->currentMana -= ability->manaCost;
         }
 
-        character->currentMana -= ability->manaCost;
         const auto stats = m_characters->ComputeEffectiveStats(m_playerCharacterId);
         const auto* combo = m_combat->GetComboState(m_playerCharacterId);
         const ComboState noCombo{};
         const ResistanceProfile noResistance{};
-        const auto result = m_combat->CalculateDamage(ability->baseDamage, ability->damageType, stats.strength, 8.0f,
-                                                      noResistance, combo ? *combo : noCombo);
+        const auto result = m_combat->CalculateDamage(useAbility ? ability->baseDamage : kWeaponStrikeBaseDamage,
+                                                      useAbility ? ability->damageType : DamageType::Physical,
+                                                      stats.strength, 8.0f, noResistance, combo ? *combo : noCombo);
         m_combat->RegisterHit(m_playerCharacterId);
         m_activeEnemyHealth = std::max(0.0f, m_activeEnemyHealth - result.mitigatedDamage);
 
         std::ostringstream message;
-        message << ability->name << " hit " << m_activeEnemyName << " for " << static_cast<int>(result.mitigatedDamage)
-                << " damage";
+        message << (useAbility ? ability->name : std::string("Weapon strike")) << " hit " << m_activeEnemyName
+                << " for " << static_cast<int>(result.mitigatedDamage) << " damage";
         if (result.isCritical)
         {
             message << " (critical)";
@@ -449,18 +457,49 @@ namespace RPG
             m_inventory->AddItem(m_playerInventory, 200, 1);
             quests.ReportProgress(m_playerCharacterId, Spark::Gameplay::QuestObjective::Type::Collect, 200, 1);
         }
-        for (const uint32_t questId : quests.GetActiveQuests(m_playerCharacterId))
-        {
-            if (quests.IsQuestComplete(m_playerCharacterId, questId))
-            {
-                quests.CompleteQuest(m_playerCharacterId, questId);
-            }
-        }
+        CompleteFinishedQuests();
 
         m_activeEncounterId = 0;
         m_activeEnemyId = 0;
         m_activeEnemyName.clear();
         m_activeEnemyHealth = 0.0f;
+    }
+
+    void RPGDemoSession::CompleteFinishedQuests()
+    {
+        auto& quests = Spark::Gameplay::QuestSystem::GetInstance();
+        for (const uint32_t questId : quests.GetActiveQuests(m_playerCharacterId))
+        {
+            if (!quests.IsQuestComplete(m_playerCharacterId, questId))
+            {
+                continue;
+            }
+
+            // With a quest policy installed (the RPG gameplay bridge in the shipped module) the engine
+            // leaves item rewards to the module, and the session owns the player's pack. Pay the items
+            // before committing the completion and restore the pack if any of them do not fit, so a full
+            // pack keeps the quest active and retryable instead of destroying the reward.
+            const RPGInventoryData packBeforeReward = m_playerInventory;
+            const Spark::Gameplay::QuestDefinition* definition = quests.GetQuestDef(questId);
+            bool rewardDelivered = true;
+            if (definition && quests.GetPolicy() != nullptr)
+            {
+                for (const auto& [itemId, count] : definition->itemRewards)
+                {
+                    const int wanted = static_cast<int>(count);
+                    if (m_inventory->AddItem(m_playerInventory, itemId, wanted) != wanted)
+                    {
+                        rewardDelivered = false;
+                        break;
+                    }
+                }
+            }
+
+            if (!rewardDelivered || !quests.CompleteQuest(m_playerCharacterId, questId))
+            {
+                m_playerInventory = packBeforeReward;
+            }
+        }
     }
 
     std::string RPGDemoSession::Rest()
@@ -500,13 +539,7 @@ namespace RPG
 
         auto& quests = Spark::Gameplay::QuestSystem::GetInstance();
         quests.ReportProgress(m_playerCharacterId, Spark::Gameplay::QuestObjective::Type::Talk, npcId, 1);
-        for (const uint32_t questId : quests.GetActiveQuests(m_playerCharacterId))
-        {
-            if (quests.IsQuestComplete(m_playerCharacterId, questId))
-            {
-                quests.CompleteQuest(m_playerCharacterId, questId);
-            }
-        }
+        CompleteFinishedQuests();
 
         m_lastAction = "Talked with " + npc->name;
         if (npc->questId != 0)
