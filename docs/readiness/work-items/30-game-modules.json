@@ -1096,8 +1096,7 @@
         "module-OpenWorld"
       ],
       "plannedTestSelectors": [
-        "OpenWorldTraversal_*",
-        "OpenWorldPersistence_*"
+        "OpenWorldTraversal_*"
       ]
     },
     {

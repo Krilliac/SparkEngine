@@ -1042,6 +1042,7 @@ target_sources(SparkTests PRIVATE
     TestSEC100RemoteAdminUnavailableReal.cpp
     TestSaveSystemRoundTripReal.cpp
     TestSAVE230NewerFormatSlotReal.cpp
+    TestMOD360OpenWorldPersistenceReal.cpp
     TestSecurityParsersReal.cpp
     TestTextureStexBoundsReal.cpp
     TestShaderCompilerReal.cpp
