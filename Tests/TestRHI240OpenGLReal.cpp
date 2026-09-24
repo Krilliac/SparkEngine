@@ -102,7 +102,18 @@ namespace
     void RequireGL(GLTestDevice& gl)
     {
         if (gl.Start())
+        {
+            // These tests exercise the GL 4.5 core backend (#version 450 shaders, DSA-era
+            // state). A context below 4.5 -- macOS caps OpenGL at 4.1 -- cannot run them.
+            GLint major = 0;
+            GLint minor = 0;
+            glGetIntegerv(GL_MAJOR_VERSION, &major);
+            glGetIntegerv(GL_MINOR_VERSION, &minor);
+            if (major < 4 || (major == 4 && minor < 5))
+                SKIP_TEST("OpenGL 4.5 core required; context reports " + std::to_string(major) + "." +
+                          std::to_string(minor));
             return;
+        }
         const char* required = std::getenv("SPARK_REQUIRE_OPENGL");
         if (required && std::string(required) == "1")
             throw std::runtime_error("SPARK_REQUIRE_OPENGL=1 but GLDevice::Initialize failed");
