@@ -27,6 +27,9 @@ RELEASE_RECOVERY_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-recov
 LOC_COUNTER_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "loc-counter.yml"
 SITE_DATA_PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "site-data-publish.yml"
 TRUSTED_CI_AGGREGATE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "trusted-ci-aggregate.yml"
+CHECK_FORMAT_SCRIPT = REPO_ROOT / ".github" / "scripts" / "check-format-changed.sh"
+CHECK_FORMAT_COMMAND = "bash .github/scripts/check-format-changed.sh"
+CHECK_FORMAT_TEST_COMMAND = "bash .github/scripts/test-check-format-changed.sh"
 README = REPO_ROOT / "README.md"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
 CMAKE_ROOT = REPO_ROOT / "CMakeLists.txt"
@@ -128,7 +131,6 @@ CLANG_TIDY_SOURCE_ROOTS = (
 # reporting lines belong here. A suppression on a line that produces gate
 # evidence (a scan, test, count, or validator) must be fixed, never listed.
 REVIEWED_REQUIRED_JOB_SUPPRESSIONS = frozenset({
-    ("check-format", "Check formatting", "BASE_SHA=$(git rev-parse HEAD^ 2>/dev/null || true)"),
     ("check-format", "Extract check-format error summary", "check-format-output.log || true"),
     ("build-linux-asan", "Configure CMake (ASan + UBSan + LSan)", 'command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"'),
     ("build-linux-asan", "Print ccache stats", 'command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"'),
@@ -1319,14 +1321,74 @@ def experimental_mingw_lane_errors(document: dict) -> list[str]:
     return errors
 
 
-def format_filter_suffixes(workflow: str) -> set[str]:
-    """Return the file suffixes routed to clang-format by the check-format case arm."""
+def format_filter_suffixes(script: str) -> set[str]:
+    """Return the file suffixes routed to clang-format by check-format-changed.sh's case arm."""
 
-    step = named_step(yaml_section(workflow, "check-format", indent=2), "Check formatting")
-    arms = re.findall(r"(?m)^\s+((?:\*\.[A-Za-z0-9]+\|?)+)\)\s*$", step)
+    arms = re.findall(r"(?m)^\s+((?:\*\.[A-Za-z0-9]+\|?)+)\)\s*$", script)
     if len(arms) != 1:
         raise AssertionError(f"check-format must have exactly one source-suffix case arm, found {arms}")
     return {"." + part.split(".", 1)[1] for part in arms[0].split("|") if part}
+
+
+def check_format_gate_errors(document: dict, script: str) -> list[str]:
+    """check-format must run the tested script fail-closed, and validate-ci-tools must test it.
+
+    The script is the only place the format gate's logic lives, so the job step
+    must invoke exactly that script with no step condition, no continue-on-error,
+    and an errexit shell, and the script itself must start under errexit.
+    """
+
+    errors: list[str] = []
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    for job_id, step_name, command in (
+        ("check-format", "Check formatting", CHECK_FORMAT_COMMAND),
+        ("validate-ci-tools", "Test check-format controlled failures", CHECK_FORMAT_TEST_COMMAND),
+    ):
+        job = jobs.get(job_id)
+        if not isinstance(job, dict):
+            errors.append(f"{job_id} job is missing")
+            continue
+        for field in ("if", "continue-on-error"):
+            if field in job:
+                errors.append(f"{job_id} declares job-level {field}")
+        steps = [step for step in job.get("steps") or [] if isinstance(step, dict) and step.get("name") == step_name]
+        if len(steps) != 1:
+            errors.append(f"{job_id} has {len(steps)} {step_name!r} steps")
+            continue
+        step = steps[0]
+        if step.get("run") != command:
+            errors.append(f"{job_id}/{step_name} must run exactly {command!r}, found {str(step.get('run'))[:80]!r}")
+        for field in ("if", "continue-on-error"):
+            if field in step:
+                errors.append(f"{job_id}/{step_name} declares {field}")
+        shell_sources = (
+            ("step", step.get("shell")),
+            ("job defaults.run.shell", ((job.get("defaults") or {}).get("run") or {}).get("shell")),
+            ("workflow defaults.run.shell", ((document.get("defaults") or {}).get("run") or {}).get("shell")),
+        )
+        for origin, shell in shell_sources:
+            if shell is not None and not shell_is_errexit(shell):
+                errors.append(f"{job_id}/{step_name} {origin} uses shell {shell!r} without errexit")
+    format_step = next(
+        (
+            step
+            for step in (jobs.get("check-format") or {}).get("steps") or []
+            if isinstance(step, dict) and step.get("name") == "Check formatting"
+        ),
+        {},
+    )
+    if "FORMAT_BASE_SHA" not in (format_step.get("env") or {}):
+        errors.append("check-format/Check formatting no longer passes FORMAT_BASE_SHA to the script")
+    code = [line.strip() for line in script.splitlines() if line.strip() and not line.strip().startswith("#")]
+    if not code or code[0] != "set -euo pipefail":
+        errors.append("check-format-changed.sh must start with 'set -euo pipefail'")
+    if len(re.findall(r"(?m)^\s*exit\s+0\b", script)) != 1:
+        errors.append("check-format-changed.sh may exit 0 only for an empty source selection")
+    if re.search(r"\|\|\s*(?:exit\s+0|:)", script):
+        errors.append("check-format-changed.sh suppresses a failure")
+    return errors
 
 
 class WorkflowFailurePropagationTests(unittest.TestCase):
@@ -1473,13 +1535,13 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         )
 
     def test_check_format_routes_every_tracked_cxx_suffix(self) -> None:
-        step = named_step(yaml_section(self.build, "check-format", indent=2), "Check formatting")
-        roots_match = re.search(r"(?m)^\s+FORMAT_ROOTS=\((?P<roots>[^)]*)\)\s*$", step)
+        script = CHECK_FORMAT_SCRIPT.read_text(encoding="utf-8")
+        roots_match = re.search(r"(?m)^FORMAT_ROOTS=\((?P<roots>[^)]*)\)\s*$", script)
         self.assertIsNotNone(roots_match)
         assert roots_match is not None
         self.assertEqual(tuple(roots_match.group("roots").split()), FORMAT_ROOTS)
 
-        routed = format_filter_suffixes(self.build)
+        routed = format_filter_suffixes(script)
         present: dict[str, str] = {}
         for root in FORMAT_ROOTS:
             for directory, _dirs, files in os.walk(REPO_ROOT / root):
@@ -1492,6 +1554,47 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn(".cpp", present)
         missing = {suffix: example for suffix, example in present.items() if suffix not in routed}
         self.assertEqual(missing, {}, "check-format silently skips tracked C/C++ sources")
+
+    def test_check_format_runs_the_tested_script_fail_closed(self) -> None:
+        script = CHECK_FORMAT_SCRIPT.read_text(encoding="utf-8")
+        self.assertEqual(check_format_gate_errors(parse_workflow_yaml(self.build), script), [])
+
+    def test_check_format_gate_contract_rejects_each_bypass(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        script = CHECK_FORMAT_SCRIPT.read_text(encoding="utf-8")
+
+        def step(jobs: dict, job_id: str, name: str) -> dict:
+            return next(item for item in jobs[job_id]["steps"] if item.get("name") == name)
+
+        def mutate(change, mutated_script: str = script) -> list[str]:
+            document = copy.deepcopy(baseline)
+            change(document["jobs"])
+            return check_format_gate_errors(document, mutated_script)
+
+        format_step = lambda jobs: step(jobs, "check-format", "Check formatting")  # noqa: E731
+        test_step = lambda jobs: step(jobs, "validate-ci-tools", "Test check-format controlled failures")  # noqa: E731
+        cases = (
+            (lambda jobs: format_step(jobs).update({"continue-on-error": True}), "declares continue-on-error"),
+            (lambda jobs: format_step(jobs).update({"if": "success()"}), "declares if"),
+            (lambda jobs: format_step(jobs).update({"shell": "bash {0}"}), "without errexit"),
+            (lambda jobs: format_step(jobs).update({"run": CHECK_FORMAT_COMMAND + " || true"}), "must run exactly"),
+            (lambda jobs: format_step(jobs).update({"run": "echo skipped"}), "must run exactly"),
+            (lambda jobs: format_step(jobs).pop("env"), "FORMAT_BASE_SHA"),
+            (lambda jobs: jobs["check-format"].update({"continue-on-error": True}), "job-level continue-on-error"),
+            (lambda jobs: test_step(jobs).update({"continue-on-error": True}), "declares continue-on-error"),
+            (lambda jobs: jobs["validate-ci-tools"]["steps"].remove(test_step(jobs)), "has 0"),
+        )
+        for change, expected in cases:
+            with self.subTest(expected=expected):
+                errors = mutate(change)
+                self.assertTrue(any(expected in error for error in errors), errors)
+
+        no_errexit = script.replace("set -euo pipefail\n", "set -uo pipefail\n", 1)
+        self.assertIn("must start with 'set -euo pipefail'", " ".join(mutate(lambda jobs: None, no_errexit)))
+        swallowed = script.replace('exit "$FORMAT_STATUS"', 'exit "$FORMAT_STATUS" || :')
+        self.assertIn("suppresses a failure", " ".join(mutate(lambda jobs: None, swallowed)))
+        early_pass = script.replace("set -euo pipefail\n", "set -euo pipefail\nexit 0\n", 1)
+        self.assertIn("exit 0 only", " ".join(mutate(lambda jobs: None, early_pass)))
 
     def test_clang_tidy_inventory_covers_all_shipped_source_roots(self) -> None:
         block = self.build[self.build.index("\n  clang-tidy:\n"):]
