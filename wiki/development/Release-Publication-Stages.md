@@ -32,6 +32,25 @@ Every profile and global state stays `candidate`, with an assigned owner and
 reviewed qualification sign-off. Nothing in this procedure promotes the current
 blocked ledger or substitutes fixture tests for real qualification evidence.
 
+## Contract reference rules
+
+`validate.py` also enforces these rules on every run. A capability can be
+`ready` only if it names at least one required gate and has evidence. A gate can
+be `passing` only if it has evidence. Every work-item ID (such as `RDY-000`) and
+gate ID (such as `G00`) named in contract text must be declared, including
+rationale, summaries, limitations and website copy. `FUTURE_ACCEPTANCE_PATHS` in
+`validate.py` may list only paths that are still missing on disk and still named
+by an unfinished work item's `entryPoints`/`documentationUpdates` or by the docs
+catalog; a reference from a `done` item does not count. When a path lands,
+delete its entry in the same change. A work item marked `done` never resolves a
+reference through that list.
+
+CTest runs the whole contract suite as `site-data-contract`. The faster
+`readiness-cross-references` runs the strict live validation plus the dependency,
+promotion, selector, future-path, prose-reference and handoff cases. Both carry
+the `readiness` and `site-data` labels and are registered on non-Windows hosts
+only; the Linux `site-data` workflow is the suite's CI home.
+
 ## Protected publication authority
 
 The repository owner must create the `stable-release` GitHub environment before
@@ -211,3 +230,6 @@ Predecessor identity and source-lineage review updated 2026-09-22; see the
 [release API immutable field](https://docs.github.com/en/rest/releases/releases).
 Recheck live environment protection, approval history, signing authority, and
 exact-SHA run/artifact identities before each release.
+Contract reference rules added 2026-09-24 from
+[`validate.py`](../../tools/site-data/validate.py) and
+[`test_site_data_contract.py`](../../Tests/Tools/test_site_data_contract.py).

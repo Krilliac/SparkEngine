@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import fnmatch
 import json
 import os
 import re
@@ -75,8 +76,15 @@ class ContractTestCase(unittest.TestCase):
             site_data_validate.Validator(contract).validate()
         self.assertIn(fragment, str(raised.exception))
 
-    def promote_ready(self, contract: dict[str, Any]) -> None:
-        """Create a valid ready mutation without closing excluded work or gates."""
+    def promote_ready(self, contract: dict[str, Any]) -> set[str]:
+        """Create a valid ready mutation without closing excluded work or gates.
+
+        Returns the FUTURE_ACCEPTANCE_PATHS entries the promotion delivered. A
+        done item must not reference a path that is still missing, and the suite
+        must not create repository files, so each undelivered output of a newly
+        done item is dropped here. The caller patches the returned entries out
+        of the allowlist, as the pull request that delivered them would.
+        """
         profile = self.profile_of(contract)
         profile["state"] = "ready"
         profile["owner"] = "release-engineering"
@@ -97,8 +105,26 @@ class ContractTestCase(unittest.TestCase):
                 item["status"] = "done"
                 if item["id"] == "GOV-400":
                     contract["content"]["legal"]["policyGaps"] = []
+                for key in ("entryPoints", "documentationUpdates"):
+                    item[key] = [
+                        path for path in item[key]
+                        if (REPO_ROOT / path).exists() or not site_data_validate.Validator.is_future_path(path)
+                    ]
         contract["readiness"]["execution"]["firstUnblockedWorkItemId"] = None
         contract["readiness"]["globalRelease"]["state"] = "ready"
+        still_planned = [
+            path
+            for item in contract["workItems"]
+            if item["status"] != "done"
+            for key in ("entryPoints", "documentationUpdates")
+            for path in item[key]
+        ]
+        still_planned.extend(contract["docsCatalog"].get("featuredSourcePaths", []))
+        still_planned.extend(contract["docsCatalog"].get("routeOverrides", {}))
+        return {
+            entry for entry in site_data_validate.FUTURE_ACCEPTANCE_PATHS
+            if not any(fnmatch.fnmatchcase(path, entry) for path in still_planned)
+        }
 
     @staticmethod
     def item_text(item: dict[str, Any], *fields: str) -> str:
@@ -523,16 +549,21 @@ class ReadyPromotionTests(ContractTestCase):
     """Frozen case 5: ready derives from profiles, not every ledger gate."""
 
     def test_excluded_gates_and_work_may_remain_open_when_ready(self) -> None:
-        self.promote_ready(self.mutable)
+        delivered = self.promote_ready(self.mutable)
         gates = self.gates_of(self.mutable)
         items = self.items_of(self.mutable)
         self.assertEqual(gates["G11"]["state"], "blocked")
         self.assertEqual(gates["G12"]["state"], "blocked")
         self.assertEqual(items["MOD-315"]["status"], "open")
         self.assertEqual(items["NET-100"]["status"], "open")
-        site_data_validate.Validator(self.mutable, allow_legacy_contract=True).validate(
-            require_ready=True
-        )
+        with mock.patch.object(
+            site_data_validate,
+            "FUTURE_ACCEPTANCE_PATHS",
+            site_data_validate.FUTURE_ACCEPTANCE_PATHS - delivered,
+        ):
+            site_data_validate.Validator(self.mutable, allow_legacy_contract=True).validate(
+                require_ready=True
+            )
 
     def test_a_required_gate_still_blocks_ready(self) -> None:
         self.promote_ready(self.mutable)
@@ -2153,6 +2184,229 @@ class LegacyContractDebtTests(ContractTestCase):
         self.assert_rejected(
             self.mutable, "no CTest test, label, or SparkTests definition matches"
         )
+
+
+class FutureAcceptancePathTests(ContractTestCase):
+    """FUTURE_ACCEPTANCE_PATHS excuses only paths that are planned and still missing."""
+
+    # Synthetic, never-planned paths: a real planned path would stop testing the
+    # "missing" case the moment its work item lands the file.
+    UNPLANNED_PATH = "docs/specs/never-planned-probe.md"
+
+    def with_live(self, *extra: str) -> set[str]:
+        return {*site_data_validate.FUTURE_ACCEPTANCE_PATHS, *extra}
+
+    def future_path_errors(self, allowlist: set[str]) -> list[str]:
+        with mock.patch.object(site_data_validate, "FUTURE_ACCEPTANCE_PATHS", allowlist):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_future_acceptance_paths()
+        return validator.errors
+
+    def work_item_errors(self, allowlist: set[str]) -> list[str]:
+        with mock.patch.object(site_data_validate, "FUTURE_ACCEPTANCE_PATHS", allowlist):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_work_items()
+        return validator.errors
+
+    def open_item(self) -> dict[str, Any]:
+        item = self.items_of(self.mutable)["ENG-200"]
+        self.assertNotEqual("done", item["status"])
+        return item
+
+    def test_live_allowlist_is_missing_on_disk_and_referenced(self) -> None:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_future_acceptance_paths()
+        self.assertEqual([], validator.errors)
+
+    def test_allowlist_entry_that_now_exists_must_be_removed(self) -> None:
+        self.open_item()["documentationUpdates"].append("README.md")
+        errors = self.future_path_errors({"README.md"})
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("README.md", errors[0])
+        self.assertIn("now exists and must be removed from FUTURE_ACCEPTANCE_PATHS", errors[0])
+
+    def test_allowlist_entry_nothing_references_is_rejected(self) -> None:
+        errors = self.future_path_errors({self.UNPLANNED_PATH})
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn(self.UNPLANNED_PATH, errors[0])
+        self.assertIn("referenced by no unfinished work item entryPoints/documentationUpdates", errors[0])
+
+    def test_reference_from_a_done_work_item_does_not_keep_an_entry(self) -> None:
+        item = self.open_item()
+        item["documentationUpdates"].append(self.UNPLANNED_PATH)
+        item["status"] = "done"
+        errors = self.future_path_errors({self.UNPLANNED_PATH})
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("referenced by no unfinished work item", errors[0])
+
+    def test_docs_catalog_reference_counts_as_a_planned_use(self) -> None:
+        self.mutable["docsCatalog"].setdefault("featuredSourcePaths", []).append(self.UNPLANNED_PATH)
+        self.assertEqual([], self.future_path_errors({self.UNPLANNED_PATH}))
+
+    def test_missing_referenced_entry_is_accepted_for_unfinished_work(self) -> None:
+        self.open_item()["documentationUpdates"].append(self.UNPLANNED_PATH)
+        self.assertEqual([], self.future_path_errors(self.with_live(self.UNPLANNED_PATH)))
+        # Only this path's resolution is under test; unrelated live-contract errors
+        # belong to LiveContractTests.
+        path_errors = [
+            error for error in self.work_item_errors(self.with_live(self.UNPLANNED_PATH))
+            if self.UNPLANNED_PATH in error
+        ]
+        self.assertEqual([], path_errors)
+
+    def test_done_work_item_cannot_resolve_through_the_future_allowlist(self) -> None:
+        item = self.open_item()
+        item["documentationUpdates"].append(self.UNPLANNED_PATH)
+        item["status"] = "done"
+        errors = self.work_item_errors(self.with_live(self.UNPLANNED_PATH))
+        self.assertTrue(
+            any(
+                "workItems.ENG-200.documentationUpdates" in error
+                and f"referenced path does not exist: {self.UNPLANNED_PATH}" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+
+class ReadyAndPassingEvidenceTests(ContractTestCase):
+    """Direct blockers and required gates stop promotion; promotion needs evidence.
+
+    These drive validate_readiness directly: validate() always runs it, and the
+    full pipeline would add seconds per case to a suite CI bounds at five minutes.
+    """
+
+    def readiness_errors(self) -> str:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_readiness({item["id"] for item in self.mutable["workItems"]})
+        return "\n".join(validator.errors)
+
+    def ready_console(self) -> dict[str, Any]:
+        """platform.console made ready with a passing gate and evidence, all else unchanged."""
+        capability = self.capabilities_of(self.mutable)["platform.console"]
+        gate = self.gates_of(self.mutable)["G00"]
+        gate["state"] = "passing"
+        gate["blockingWorkItemIds"] = []
+        gate["evidence"] = [{"type": "document", "label": "Test-only gate evidence", "path": "README.md"}]
+        capability["release"] = "ready"
+        capability["requiredGateIds"] = ["G00"]
+        capability["blockingWorkItemIds"] = []
+        capability["evidence"] = [
+            {"type": "document", "label": "Test-only capability evidence", "path": "README.md"}
+        ]
+        return capability
+
+    def test_control_ready_capability_with_gate_and_evidence_is_accepted(self) -> None:
+        self.ready_console()
+        self.assertEqual("", self.readiness_errors())
+
+    def test_ready_capability_rejects_an_open_direct_blocker(self) -> None:
+        capability = self.ready_console()
+        self.assertNotEqual("done", self.items_of(self.mutable)["RDY-000"]["status"])
+        capability["blockingWorkItemIds"] = ["RDY-000"]
+        self.assertIn(
+            "capabilities.platform.console: ready capability has unfinished blockers: ['RDY-000']",
+            self.readiness_errors(),
+        )
+
+    def test_ready_capability_rejects_a_non_passing_required_gate(self) -> None:
+        capability = self.ready_console()
+        self.assertNotEqual("passing", self.gates_of(self.mutable)["G09"]["state"])
+        capability["requiredGateIds"] = ["G00", "G09"]
+        self.assertIn(
+            "capabilities.platform.console: ready capability has non-passing gates: ['G09']",
+            self.readiness_errors(),
+        )
+
+    def test_passing_gate_rejects_an_open_direct_blocker(self) -> None:
+        self.ready_console()
+        self.gates_of(self.mutable)["G00"]["blockingWorkItemIds"] = ["RDY-000"]
+        self.assertIn("gates.G00: passing gate has unfinished blockers: ['RDY-000']", self.readiness_errors())
+
+    def test_ready_capability_requires_a_required_gate(self) -> None:
+        self.ready_console()["requiredGateIds"] = []
+        self.assertIn(
+            "capabilities.platform.console: ready capability must name at least one required gate",
+            self.readiness_errors(),
+        )
+
+    def test_ready_capability_requires_evidence(self) -> None:
+        self.ready_console()["evidence"] = []
+        self.assertIn(
+            "capabilities.platform.console: ready capability requires evidence", self.readiness_errors()
+        )
+
+    def test_passing_gate_requires_evidence(self) -> None:
+        self.ready_console()
+        self.gates_of(self.mutable)["G00"]["evidence"] = []
+        self.assertIn("gates.G00: passing gate requires evidence", self.readiness_errors())
+
+
+class LiveContractTests(ContractTestCase):
+    """The checked-in contract passes the strict validator, which runs every cross-reference check.
+
+    Each full validate() costs seconds and CI bounds this suite at five minutes,
+    so the wiring of the cross-reference checks shares one hostile run.
+    """
+
+    def test_live_contract_validates_strictly(self) -> None:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate()
+        self.assertEqual([], validator.legacy)
+
+    def test_validate_runs_the_future_path_and_prose_reference_checks(self) -> None:
+        unplanned = FutureAcceptancePathTests.UNPLANNED_PATH
+        self.gates_of(self.mutable)["G00"]["summary"] += " Tracked by DOC-999."
+        with mock.patch.object(
+            site_data_validate,
+            "FUTURE_ACCEPTANCE_PATHS",
+            {*site_data_validate.FUTURE_ACCEPTANCE_PATHS, unplanned},
+        ):
+            with self.assertRaises(SiteDataError) as raised:
+                site_data_validate.Validator(self.mutable).validate()
+        message = str(raised.exception)
+        self.assertIn(f"FUTURE_ACCEPTANCE_PATHS[{unplanned!r}]: referenced by no unfinished work item", message)
+        self.assertIn("gates.G00.summary: names unknown work item DOC-999", message)
+
+
+class ProseCrossReferenceTests(ContractTestCase):
+    """Work-item and gate IDs named in free text must resolve to declared records."""
+
+    def prose_errors(self) -> list[str]:
+        validator = site_data_validate.Validator(self.mutable)
+        item_ids = {item["id"] for item in self.mutable["workItems"]}
+        gate_ids = {gate["id"] for gate in self.mutable["readiness"]["gates"]}
+        validator.validate_prose_references(item_ids, gate_ids)
+        return validator.errors
+
+    def test_live_contract_prose_references_all_resolve(self) -> None:
+        self.assertEqual([], self.prose_errors())
+
+    def test_unknown_gate_in_readiness_changes_is_rejected(self) -> None:
+        self.items_of(self.mutable)["RDY-000"]["readinessChanges"].append("Moves G99 to passing.")
+        errors = self.prose_errors()
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("workItems.RDY-000.readinessChanges", errors[0])
+        self.assertIn("unknown gate G99", errors[0])
+
+    def test_unknown_work_item_in_capability_limitations_is_rejected(self) -> None:
+        capability = self.capabilities_of(self.mutable)["platform.console"]
+        capability["limitations"].append("Waits on RDY-999 before any claim.")
+        errors = self.prose_errors()
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("capabilities.platform.console.limitations", errors[0])
+        self.assertIn("unknown work item RDY-999", errors[0])
+
+    def test_unknown_work_item_in_gate_summary_is_rejected(self) -> None:
+        self.gates_of(self.mutable)["G00"]["summary"] += " Tracked by DOC-999."
+        errors = self.prose_errors()
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("gates.G00.summary: names unknown work item DOC-999", errors[0])
+
+    def test_hash_names_and_unprefixed_tokens_are_not_references(self) -> None:
+        item = self.items_of(self.mutable)["RDY-000"]
+        item["risks"].append("SHA-256 digests, UTF-8 text, and X-100 are not work-item IDs; nor is G100.")
+        self.assertEqual([], self.prose_errors())
 
 
 class PublishedMetricTests(unittest.TestCase):

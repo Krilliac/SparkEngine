@@ -463,7 +463,6 @@
         "site-runtime-contract"
       ],
       "plannedTestSelectors": [
-        "site-data-contract",
         "runtime-bundle-validation",
         "live-docs-parity",
         "no-hardcoded-claims"

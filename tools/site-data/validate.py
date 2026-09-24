@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import functools
 import hashlib
 import html
 import re
@@ -166,36 +167,25 @@ REQUIRED_NULLRHI_CONFLICTS = {
 }
 
 # Deliberate outputs of unfinished work items. A missing path not listed here is
-# a contract error, not a soft warning.
+# a contract error, not a soft warning. The list prunes itself: an entry that now
+# exists, or that no work item or docs-catalog entry still references, is an
+# error (Validator.validate_future_acceptance_paths), and a done work item never
+# resolves a reference through it.
 FUTURE_ACCEPTANCE_PATHS = {
     "GameModules/SparkGame/README.md",
-    "GameModules/SparkGameARPG/README.md",
-    "GameModules/SparkGameFPS/README.md",
     "GameModules/SparkGameFPS/Source/Multiplayer",
     "GameModules/SparkGameMMO/README.md",
     "GameModules/SparkGameOpenWorld/README.md",
     "GameModules/SparkGamePlatformer/README.md",
-    "GameModules/SparkGameRPG/README.md",
-    "GameModules/SparkGameRTS/README.md",
     "GameModules/SparkGameRTS/Source/AI",
     "GameModules/SparkGameRTS/Source/Fog",
-    "GameModules/SparkGameRacing/README.md",
-    "GameModules/SparkGameVisualScript/README.md",
     "SparkEditor/Source/Commands",
     "SparkEngine/Source/Platform",
-    "SparkSDK/README.md",
-    "THIRD_PARTY_NOTICES",
     "Tests/Benchmarks",
-    "Tests/Fixtures/Compatibility",
-    "Tests/Fuzz",
     "Tests/ModuleKit",
-    "ThirdParty/README.md",
-    "Tools/spark-cli/README.md",
     "docs/operations/server-runbook.md",
     "docs/specs/online-services.md",
     "docs/specs/persistence.md",
-    "docs/specs/telemetry.md",
-    "wiki/advanced/Crash-Reporting.md",
     "wiki/gameplay-tools/Visual-Scripting.md",
     "wiki/getting-started/Building-from-Source.md",
     "wiki/subsystems/Scripting.md",
@@ -420,6 +410,10 @@ def _html_accessibility_text(value: str) -> str:
     return " ".join(parser.rendered)
 
 
+# Claim normalization is a pure function of its input and one validate() pass
+# normalizes the same public strings tens of thousands of times; the cache keeps
+# the contract suite inside its CI time bound without changing any result.
+@functools.lru_cache(maxsize=65536)
 def _normalized_claim_text(value: str) -> str:
     accessibility_text = _html_accessibility_text(value)
     source = f"{value}\n{accessibility_text}" if accessibility_text else value
@@ -460,6 +454,7 @@ def _normalized_claim_text(value: str) -> str:
     return re.sub(r"\s+", " ", normalized).strip()
 
 
+@functools.lru_cache(maxsize=4096)
 def _claim_phrase_pattern(value: str) -> str:
     normalized = _normalized_claim_text(value)
     tokens = [token for token in re.split(r"[\s-]+", normalized) if token]
@@ -1165,9 +1160,12 @@ class Validator:
                 self.require(parallel != identifier, location, "cannot be parallel with itself")
             for index, source_path in enumerate(item.get("sourceContext", [])):
                 self.require_path(source_path, f"{location}.sourceContext[{index}]")
+            # A done item has delivered its outputs, so the future allowlist no
+            # longer excuses any of them.
+            allow_future = item.get("status") != "done"
             for key in ("entryPoints", "documentationUpdates"):
                 for index, target_path in enumerate(item.get(key, [])):
-                    self.require_path(target_path, f"{location}.{key}[{index}]", allow_future=True)
+                    self.require_path(target_path, f"{location}.{key}[{index}]", allow_future=allow_future)
             self.validate_selectors(item, location)
 
         visiting: set[str] = set()
@@ -1253,6 +1251,13 @@ class Validator:
                 ]
                 self.require(not unfinished, location, f"ready capability has unfinished blockers: {unfinished}")
                 self.require(not nonpassing, location, f"ready capability has non-passing gates: {nonpassing}")
+                # Without a gate or evidence, "ready" would rest on nothing checkable.
+                self.require(
+                    bool(capability.get("requiredGateIds")),
+                    location,
+                    "ready capability must name at least one required gate",
+                )
+                self.require(bool(capability.get("evidence")), location, "ready capability requires evidence")
                 transitive = self.unfinished_dependency_paths(capability.get("blockingWorkItemIds", []), item_by_id)
                 self.require(
                     not transitive,
@@ -1276,6 +1281,7 @@ class Validator:
                     if work_id in item_by_id and item_by_id[work_id].get("status") != "done"
                 ]
                 self.require(not unfinished, location, f"passing gate has unfinished blockers: {unfinished}")
+                self.require(bool(gate.get("evidence")), location, "passing gate requires evidence")
                 transitive = self.unfinished_dependency_paths(gate.get("blockingWorkItemIds", []), item_by_id)
                 self.require(
                     not transitive,
@@ -2274,6 +2280,79 @@ class Validator:
         for path in catalog.get("routeOverrides", {}):
             self.require_path(path, f"docsCatalog.routeOverrides.{path}", allow_future=True)
 
+    def validate_prose_references(self, item_ids: set[str], gate_ids: set[str]) -> None:
+        """Require every work-item or gate ID named in contract text to be declared.
+
+        Structured ID fields are checked where they are declared; this covers the
+        free text (rationale, readinessChanges, summaries, limitations, website
+        copy) where a renamed or deleted item would otherwise linger unnoticed.
+        Work-item prefixes come from the declared IDs, so "SHA-256" or "UTF-8"
+        never read as references.
+        """
+        prefixes = sorted({identifier.split("-", 1)[0] for identifier in item_ids if "-" in identifier})
+        if not prefixes:
+            return
+        reference = re.compile(rf"\b(?:(?:{'|'.join(map(re.escape, prefixes))})-\d{{3}}|G\d{{2}})\b")
+
+        def walk(value: Any, location: str) -> None:
+            if isinstance(value, str):
+                for token in dict.fromkeys(reference.findall(value)):
+                    if "-" not in token:
+                        self.require(token in gate_ids, location, f"names unknown gate {token}")
+                    else:
+                        self.require(token in item_ids, location, f"names unknown work item {token}")
+            elif isinstance(value, list):
+                for entry in value:
+                    walk(entry, location)
+            elif isinstance(value, dict):
+                for key, entry in value.items():
+                    walk(entry, f"{location}.{key}")
+
+        for item in self.contract["workItems"]:
+            walk(item, f"workItems.{item.get('id', '?')}")
+        readiness = self.contract["readiness"]
+        for capability in readiness.get("capabilities", []):
+            walk(capability, f"capabilities.{capability.get('id', '?')}")
+        for gate in readiness.get("gates", []):
+            walk(gate, f"gates.{gate.get('id', '?')}")
+        for profile in readiness.get("releaseProfiles", []):
+            walk(profile, f"releaseProfiles.{profile.get('id', '?')}")
+        for key, value in readiness.items():
+            if key not in {"capabilities", "gates", "releaseProfiles"}:
+                walk(value, f"readiness.{key}")
+        walk(self.contract["content"], "content")
+
+    def validate_future_acceptance_paths(self) -> None:
+        """Keep FUTURE_ACCEPTANCE_PATHS limited to planned outputs that are still missing.
+
+        Mirrors the plannedTestSelectors promotion rule: once a path exists, or
+        once nothing plans it any more, its allowlist entry is stale debt that
+        would silently excuse a later deletion or a typo.
+        """
+        catalog = self.contract["docsCatalog"]
+        # A done item never resolves through the allowlist (require_path rejects
+        # it), so only unfinished work keeps an entry alive.
+        references = [
+            path
+            for item in self.contract["workItems"]
+            if item.get("status") != "done"
+            for key in ("entryPoints", "documentationUpdates")
+            for path in item.get(key, [])
+            if isinstance(path, str)
+        ]
+        references.extend(path for path in catalog.get("featuredSourcePaths", []) if isinstance(path, str))
+        references.extend(path for path in catalog.get("routeOverrides", {}) if isinstance(path, str))
+        for entry in sorted(FUTURE_ACCEPTANCE_PATHS):
+            location = f"FUTURE_ACCEPTANCE_PATHS[{entry!r}]"
+            if any(REPO_ROOT.glob(entry)):
+                self.error(location, f"{entry} now exists and must be removed from FUTURE_ACCEPTANCE_PATHS")
+            if not any(fnmatch.fnmatchcase(reference, entry) for reference in references):
+                self.error(
+                    location,
+                    "referenced by no unfinished work item entryPoints/documentationUpdates or "
+                    "docs catalog path; remove the entry",
+                )
+
     def validate_modules(self) -> None:
         discovered = sorted(
             path.name for path in (REPO_ROOT / "GameModules").glob("SparkGame*")
@@ -2305,6 +2384,7 @@ class Validator:
         self.validate_modules()
         item_ids = self.validate_work_items()
         capability_ids, gate_ids = self.validate_readiness(item_ids)
+        self.validate_prose_references(item_ids, gate_ids)
         profile_ids = self.validate_release_profiles(item_ids, capability_ids, gate_ids)
         for message in finalization_contract_errors(self.contract):
             self.error("publicationFinalization", message)
@@ -2321,6 +2401,7 @@ class Validator:
         for location, message in validate_module_content(REPO_ROOT):
             self.error(location, message)
         self.validate_docs_catalog()
+        self.validate_future_acceptance_paths()
         self.validate_build_matrix_evidence()
         self.validate_legal(strict_public_wording=legal)
         if assets:
