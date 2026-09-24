@@ -520,11 +520,11 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `build-linux-msan` | ubuntu-24.04 | Clang + MSan-instrumented libc++ 18.1.3 (built in-job, cached) | Debug | MSan + ignorelist, `-DENABLE_VULKAN=OFF`, `continue-on-error` |
 | `build-windows-vs2022` | windows-2022 | MSVC v143 | Debug, Release | Ninja Multi-Config + sccache, `-DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON` |
 | `build-windows-vs2026` | windows-2025-vs2026 | MSVC v145 | Debug, Release | Ninja Multi-Config + sccache, `continue-on-error` |
-| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error` |
+| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error`, experimental |
 | `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job (individual diagnostics advisory) |
-| `todo-count` | ubuntu-24.04 | -- | -- | warn-only above 20 |
+| `todo-count` | ubuntu-24.04 | -- | -- | fails above 20 (required) |
 
 **Enforcement truth (verified 2026-09-12):** legacy branch protection is not
 configured on `Working` (`branches/Working/protection` is 404), but repository
@@ -534,7 +534,19 @@ check with no bypass actors. The exact-source gate accepts a failed Build job on
 `build.yml` at that exact commit declares the job `continue-on-error`; the
 required set is cross-checked between `required-ci-gate.needs` and
 `EXPECTED_REQUIRED_JOBS_JSON`, and a required job marked `continue-on-error` is
-rejected outright. A Build Matrix Verifier run conclusion is never evidence (each
+rejected outright. A non-required job may also be `skipped` when its exact
+committed job-level `if:` is an allowlisted event-only guard that is false for
+the verified source event. Today that covers `build-linux-mingw-wine`
+(`workflow_dispatch` only) and `Coverage PR Comment` (`pull_request` only) on a
+push. Any other `if:` expression, a required job, or a guard that is true for
+the event still rejects the skip. Re-verified 2026-09-24 with
+`python3 .github/scripts/verify-working-ruleset.py --live`. That command asserts
+that ruleset `21968740` is active, has no bypass actors, and requires exactly
+`Required CI Gate` from integration 15368. CI runs its fixture tests in
+`validate-ci-tools`. Every `tools/validate-all.sh` check except the advisory
+`check-bloat.sh` and warn-only `check-wiki-quality.sh` now runs fail-closed in a
+required job. `test-workflow-failure-propagation.py` enforces that mapping.
+A Build Matrix Verifier run conclusion is never evidence (each
 source attempt fires the workflow twice; the `in_progress` run skips verification
 and still concludes success; never add `run-name` to that workflow, because GitHub
 then returns it as the run's API name, which the exact gate compares to the
@@ -696,7 +708,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*632 test-bearing `.cpp`/`.mm` files, 7567 source-level test definitions*
+*631 test-bearing `.cpp`/`.mm` files, 7564 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -812,8 +824,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCpuDebuggerPhaseGG` | 8 |
 | `TestCpuNeuralInference` | 14 |
 | `TestCpuNeuralTraining` | 13 |
-| `TestCrashHandlerGatingReal` | 11 |
-| `TestCrashReportUploader` | 12 |
+| `TestCrashHandlerGatingReal` | 8 |
 | `TestCrossSystemIntegration` | 4 |
 | `TestD3D11DeviceContractsReal` | 14 |
 | `TestDATA120PersistenceReal` | 5 |
@@ -836,7 +847,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestDecalSystem` | 7 |
 | `TestDedicatedServer` | 27 |
 | `TestDedicatedServerProcessController` | 5 |
-| `TestDedicatedServerRuntime` | 10 |
+| `TestDedicatedServerRuntime` | 13 |
 | `TestDeferredDeletion` | 6 |
 | `TestDeferredDeletionReal` | 6 |
 | `TestDeferredQueue` | 6 |
@@ -890,7 +901,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEngineMonitor` | 10 |
 | `TestEngineSettingsEdgeCases` | 45 |
 | `TestEngineSettingsParser` | 28 |
-| `TestEngineSettingsReal` | 13 |
+| `TestEngineSettingsReal` | 14 |
 | `TestEngineWiringReal` | 9 |
 | `TestEntityArchetype` | 5 |
 | `TestEntityEventBus` | 11 |
@@ -959,7 +970,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplaySystemExtension` | 6 |
 | `TestGameplayTags` | 14 |
 | `TestGameplayTagsReal` | 7 |
-| `TestGatewayAreaControl` | 13 |
+| `TestGatewayAreaControl` | 17 |
 | `TestGatewaySecurity` | 14 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 17 |
@@ -1130,7 +1141,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestReflectionReal` | 22 |
 | `TestRegionMapDataSource` | 7 |
 | `TestReliableChannel` | 22 |
-| `TestRemoteDebugSystem` | 20 |
+| `TestRemoteDebugSystem` | 22 |
 | `TestRenderCommandRing` | 8 |
 | `TestRenderECSIntegration` | 8 |
 | `TestRenderGraph` | 36 |
@@ -1208,7 +1219,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkGameRacing` | 5 |
 | `TestSparkGatewayCoordinator` | 7 |
 | `TestSparkPak` | 19 |
-| `TestSparkServerApplication` | 25 |
+| `TestSparkServerApplication` | 27 |
 | `TestSpatialGrid` | 16 |
 | `TestSpatialGridReal` | 7 |
 | `TestSplineMath` | 24 |

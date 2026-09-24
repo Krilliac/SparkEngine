@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 7567 test definitions across 632 files, CTest
+Tests/                                   — 7564 test definitions across 631 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -307,16 +307,16 @@ To reproduce CI failures locally, see `wiki/development/CI-Reproducible-Builds.m
 | `build-linux-msan` | ubuntu-24.04 | Clang + MSan-instrumented libc++ 18.1.3 (built in-job, cached) | Debug | MSan + ignorelist, `-DENABLE_VULKAN=OFF`, `continue-on-error` |
 | `build-windows-vs2022` | windows-2022 | MSVC v143 | Debug, Release | Ninja Multi-Config + sccache (hash-pinned, `SCCACHE_DIR` restore/save), `-DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON` |
 | `build-windows-vs2026` | windows-2025-vs2026 | MSVC v145 | Debug, Release | Ninja Multi-Config + sccache, `continue-on-error` |
-| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error` |
+| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `workflow_dispatch` only, `continue-on-error`, experimental |
 | `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov, per-subsystem thresholds |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | blocking job; individual diagnostics advisory |
-| `todo-count` | ubuntu-24.04 | — | — | warn-only above 20 |
+| `todo-count` | ubuntu-24.04 | — | — | fails above 20 (required) |
 | `build-windows-shipping` | windows-2022 | MSVC v143 | MinSizeRel | `windows-shipping` preset (Visual Studio generator, no compiler cache), module-profile lifecycle |
 
 `build-linux-msan`, `build-windows-vs2026`, `build-linux-mingw-wine` (manual `workflow_dispatch` only), and `build-macos` are job-level `continue-on-error` — failures are warnings, not blockers. `clang-tidy` is a blocking dependency of `required-ci-gate` (its configure/compile failures block; individual diagnostics are advisory).
 
-Legacy branch protection is not configured on `Working` (`branches/Working/protection` is 404). The repository's `Working integrity` ruleset (21968740) is active, protects against deletion and non-fast-forward updates, and requires the GitHub Actions `Required CI Gate` check with no bypass actors. Exact-SHA evidence and controlled-failure behavior remain release gates tracked as `CI-100`; do not present a green check list alone as release proof.
+Legacy branch protection is not configured on `Working` (`branches/Working/protection` is 404). The repository's `Working integrity` ruleset (21968740) is active, protects against deletion and non-fast-forward updates, and requires the GitHub Actions `Required CI Gate` check with no bypass actors. Re-verify with `python3 .github/scripts/verify-working-ruleset.py --live` (last run 2026-09-24). Exact-SHA evidence and controlled-failure behavior remain release gates tracked as `CI-100`; do not present a green check list alone as release proof.
 
 ## Documentation
 

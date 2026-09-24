@@ -500,8 +500,6 @@ add_executable(SparkTests
     TestSparkGameRTS.cpp
     TestSparkGameRacing.cpp
     TestSparkGamePlatformer.cpp
-    # Crash reporting
-    TestCrashReportUploader.cpp
     # Security
     TestMemoryIntegrity.cpp
     TestMemoryIntegrityLifecycle.cpp
@@ -1443,6 +1441,14 @@ set_tests_properties(TelemetrySpool PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 30)
 
+# OPS-100: retired crash-transport credentials are dropped on settings load and never saved.
+add_test(NAME CrashSettingsCredentials COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(CrashSettingsCredentials PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=CrashSettings_;SPARK_TEST_EXPECT_COUNT=1"
+    LABELS "crash-security;security;unit"
+    RUN_SERIAL TRUE
+    TIMEOUT 30)
+
 add_test(NAME LifecyclePartialInit COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(LifecyclePartialInit PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=PartialInit_EngineContext;SPARK_TEST_EXPECT_COUNT=4"
@@ -1466,6 +1472,7 @@ foreach(_remote_admin_selector IN ITEMS
         RemoteAdmin_RoleMatrix
         RemoteAdmin_ReplayDenied
         RemoteAdmin_RateLimited
+        RemoteAdmin_ExpiredDenied
         RemoteAdmin_ReservedCommandsCannotBeRebound)
     add_test(NAME ${_remote_admin_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(${_remote_admin_selector} PROPERTIES
@@ -1485,6 +1492,24 @@ foreach(_remote_debug_epoch_selector IN ITEMS
         RUN_SERIAL TRUE
         TIMEOUT 30)
 endforeach()
+
+# SEC-100: gateway area-control fail-closed and audit cases, one selector each
+# so a hostile-frame regression names the exact rejection that stopped holding.
+if(TARGET SparkGatewayCore)
+    foreach(_gateway_area_control_selector IN ITEMS
+            GatewayAreaControl_RejectsWrongKeyMac
+            GatewayAreaControl_RejectsStaleAndFutureTimestamp
+            GatewayAreaControl_RejectsReplayedNonce
+            GatewayAreaControl_RejectsNewNoncesWhenReplayLedgerIsFull
+            GatewayAreaControl_AuditRecordOmitsSecrets)
+        add_test(NAME ${_gateway_area_control_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(${_gateway_area_control_selector} PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME=${_gateway_area_control_selector};SPARK_TEST_EXPECT_COUNT=1"
+            LABELS "gateway;security;network"
+            RUN_SERIAL TRUE
+            TIMEOUT 30)
+    endforeach()
+endif()
 
 # RHI-210: D3D11 golden-frame and render-target resource contracts. Exact
 # counts so a filter that silently selects nothing (or a skip) cannot pass.
@@ -2207,6 +2232,38 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(SparkCTestTimeoutPolicy PROPERTIES
         LABELS "ci;test-policy;unit;python"
         TIMEOUT 60)
+
+    # RDY-000: the whole fail-closed site-data/readiness contract suite (about one
+    # minute locally). Its CI home is the Linux site-data workflow; it drives git
+    # and POSIX path handling that no Windows lane has qualified, so it is not
+    # registered there.
+    if(NOT WIN32)
+        add_test(
+            NAME site-data-contract
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_contract.py)
+        set_tests_properties(site-data-contract PROPERTIES
+            LABELS "readiness;site-data;unit;python"
+            TIMEOUT 300)
+
+        # RDY-000: the fast cross-reference subset -- the checked-in contract under
+        # the strict validator, dependency closure, promotion evidence, selector and
+        # future-path resolution, prose ID references, and the handoff being current.
+        add_test(
+            NAME readiness-cross-references
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_contract.py
+                LiveContractTests
+                TransitiveDependencyTests
+                ReadyPromotionTests
+                ReadyAndPassingEvidenceTests
+                SelectorResolutionTests
+                FutureAcceptancePathTests
+                ProseCrossReferenceTests
+                GenerationAndCiTests)
+        set_tests_properties(readiness-cross-references PROPERTIES
+            LABELS "readiness;site-data;unit;python"
+            TIMEOUT 180)
+    endif()
+
     add_test(
         NAME SparkCliContract
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
