@@ -26,6 +26,9 @@
 #include "TestFramework.h"
 #include "GatewayApplication.h"
 #include "GatewaySecurity.h"
+#include "ScopedLoggerBaseline.h"
+#include "Utils/DaemonClient.h"
+#include "Utils/Logger.h"
 // Keep the private-member access limited to this test translation unit; the
 // production header never exposes a test friend or macro-controlled authority.
 // clang-format off
@@ -57,6 +60,68 @@ namespace
     uint16_t UniquePort(uint16_t offset)
     {
         return static_cast<uint16_t>(20000 + ((ProcessId() * 17 + offset) % 30000));
+    }
+
+    int64_t WallClockMilliseconds()
+    {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::system_clock::now().time_since_epoch())
+            .count();
+    }
+
+    std::string LowerHex(const std::vector<uint8_t>& bytes)
+    {
+        static constexpr char Digits[] = "0123456789abcdef";
+        std::string text;
+        for (const uint8_t byte : bytes)
+        {
+            text.push_back(Digits[byte >> 4]);
+            text.push_back(Digits[byte & 0x0f]);
+        }
+        return text;
+    }
+
+    // Independent encoder for the documented area-control wire format, so the
+    // hostile tests can forge frames the production client would never emit.
+    std::vector<uint8_t> ForgeAreaControlFrame(const std::vector<uint8_t>& key, AreaControlPhase phase,
+                                               const HandoffCommand& command, int64_t timestamp, uint64_t nonce,
+                                               std::string* macHex = nullptr)
+    {
+        const std::string body = std::to_string(GatewayProtocolMajor) + "\n" + std::to_string(GatewayProtocolMinor) +
+                                 "\n" + std::to_string(timestamp) + "\n" + std::to_string(nonce) + "\n" +
+                                 std::to_string(static_cast<unsigned int>(phase)) + "\n" +
+                                 std::to_string(command.epoch) + "\n" + std::to_string(command.sourceArea) + "\n" +
+                                 std::to_string(command.targetArea) + "\n" + command.sessionId;
+        const std::string mac = LowerHex(ComputeGatewayMac(key, body));
+        if (macHex)
+            *macHex = mac;
+        const std::string frame = body + "\n" + mac;
+        return {frame.begin(), frame.end()};
+    }
+
+    HandoffOperationResult SendRawAreaControlFrame(const std::string& endpoint, AreaControlPhase phase,
+                                                   const std::vector<uint8_t>& payload)
+    {
+#ifdef _WIN32
+        const std::string address = endpoint;
+#else
+        const std::string address = "/tmp/" + endpoint + ".sock";
+#endif
+        Spark::Daemon::DaemonClient client;
+        if (!client.Connect(address))
+            return HandoffOperationResult::Unavailable;
+        auto response = client.Request(Spark::Daemon::ServiceId::Orchestration, static_cast<uint16_t>(phase), payload);
+        if (!response || response->payload.size() != 1)
+            return HandoffOperationResult::Unavailable;
+        return static_cast<HandoffOperationResult>(response->payload[0]);
+    }
+
+    uint64_t TotalAuditCount(const LocalAreaControlService& service)
+    {
+        uint64_t total = 0;
+        for (size_t index = 0; index < static_cast<size_t>(AreaControlAuditReason::Count); ++index)
+            total += service.GetAuditCount(static_cast<AreaControlAuditReason>(index));
+        return total;
     }
 } // namespace
 
@@ -145,8 +210,161 @@ TEST(GatewayAreaControl_RejectsNewNoncesWhenReplayLedgerIsFull)
     client.RegisterEndpoint(7, area);
 
     EXPECT_FALSE(client.IsEndpointReady(7));
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::LedgerFull), 1u);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 0u);
 
     service.Stop();
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RejectsWrongKeyMac)
+{
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-wrong-mac") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x52);
+    const std::vector<uint8_t> attackerKey(32, 0x53);
+    const std::string endpoint = UniqueName("spark-area-control-wrong-mac");
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    const HandoffCommand command{"wrong-key-session", 1, 7, 7};
+    const auto forged =
+        ForgeAreaControlFrame(attackerKey, AreaControlPhase::Prepare, command, WallClockMilliseconds(), 0x1001);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, forged) ==
+                HandoffOperationResult::Rejected);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::MacInvalid), 1u);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 0u);
+    EXPECT_EQ(TotalAuditCount(service), 1u);
+    // The forged frame never reached the epoch fence, so nothing was persisted.
+    EXPECT_FALSE(std::filesystem::exists(state));
+
+    // The same command under the real key is a first Prepare (Applied), not a
+    // Duplicate, which proves the forged frame left no fence behind.
+    const auto genuine =
+        ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, WallClockMilliseconds(), 0x1002);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, genuine) ==
+                HandoffOperationResult::Applied);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 1u);
+
+    service.Stop();
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RejectsStaleAndFutureTimestamp)
+{
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-timestamp") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x54);
+    const std::string endpoint = UniqueName("spark-area-control-timestamp");
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    const HandoffCommand command{"timestamp-session", 1, 7, 7};
+    const int64_t now = WallClockMilliseconds();
+    const auto stale = ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, now - 61000, 0x2001);
+    const auto future = ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, now + 61000, 0x2002);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, stale) ==
+                HandoffOperationResult::Rejected);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, future) ==
+                HandoffOperationResult::Rejected);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::TimestampWindow), 2u);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 0u);
+    EXPECT_FALSE(std::filesystem::exists(state));
+
+    const auto fresh = ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, WallClockMilliseconds(), 0x2003);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, fresh) == HandoffOperationResult::Applied);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 1u);
+
+    service.Stop();
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_RejectsReplayedNonce)
+{
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-replay") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x55);
+    const std::string endpoint = UniqueName("spark-area-control-replay");
+    LocalAreaControlService service(endpoint, key, state);
+    ASSERT_TRUE(service.Start());
+
+    const HandoffCommand command{"replay-session", 1, 7, 7};
+    const auto frame = ForgeAreaControlFrame(key, AreaControlPhase::Prepare, command, WallClockMilliseconds(), 0x3001);
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, frame) == HandoffOperationResult::Applied);
+    // Without the nonce ledger the byte-identical frame would reach the fence
+    // and come back Duplicate; the ledger must reject it before that.
+    EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Prepare, frame) ==
+                HandoffOperationResult::Rejected);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Accepted), 1u);
+    EXPECT_EQ(service.GetAuditCount(AreaControlAuditReason::Replay), 1u);
+    EXPECT_EQ(TotalAuditCount(service), 2u);
+
+    service.Stop();
+    std::filesystem::remove(state, error);
+}
+
+TEST(GatewayAreaControl_AuditRecordOmitsSecrets)
+{
+    // Restores TestMain's full logger baseline (level, category mask, sinks)
+    // on entry and on every exit path, so a neighbour's leaked filter cannot
+    // hide the Warn/Network record and this test cannot leak its sink.
+    ScopedLoggerBaseline loggerBaseline;
+    const auto state = std::filesystem::temp_directory_path() / (UniqueName("spark-gateway-audit-log") + ".txt");
+    std::error_code error;
+    std::filesystem::remove(state, error);
+    const std::vector<uint8_t> key(32, 0x56);
+    const std::vector<uint8_t> attackerKey(32, 0x57);
+    const std::string endpoint = UniqueName("spark-area-control-audit-log");
+
+    // The sink owns the capture state, so it stays valid for as long as the
+    // sink is installed, including until the baseline removes it on exit.
+    struct CapturedRecords
+    {
+        std::mutex mutex;
+        std::vector<std::string> records;
+    };
+    const auto captured = std::make_shared<CapturedRecords>();
+    auto& logger = Spark::Logger::Get();
+    logger.ClearSinks();
+    logger.AddSink(std::make_unique<Spark::CallbackSink>(
+        [captured](const Spark::LogMessage& message)
+        {
+            if (message.message.find("GatewayAreaControl:") == std::string::npos)
+                return;
+            std::lock_guard lock(captured->mutex);
+            captured->records.push_back(message.message);
+        }));
+
+    {
+        LocalAreaControlService service(endpoint, key, state);
+        ASSERT_TRUE(service.Start());
+        // A carriage return and spaces in the claimed session must not reach
+        // the log verbatim, and the long tail must be truncated.
+        const HandoffCommand command{"audit session\rINJECTED-long-session-tail", 9, 7, 7};
+        const uint64_t nonce = 987654321987ull;
+        std::string forgedMacHex;
+        const auto forged = ForgeAreaControlFrame(attackerKey, AreaControlPhase::Commit, command,
+                                                  WallClockMilliseconds(), nonce, &forgedMacHex);
+        EXPECT_TRUE(SendRawAreaControlFrame(endpoint, AreaControlPhase::Commit, forged) ==
+                    HandoffOperationResult::Rejected);
+        service.Stop();
+        logger.FlushAll();
+
+        std::lock_guard lock(captured->mutex);
+        ASSERT_EQ(captured->records.size(), static_cast<size_t>(1));
+        const std::string& record = captured->records.front();
+        EXPECT_STR_CONTAINS(record, "GatewayAreaControl: reason=mac_invalid phase=3 epoch=9 "
+                                    "session=audit?session?IN~ outcome=rejected");
+        EXPECT_TRUE(record.find(forgedMacHex) == std::string::npos);
+        EXPECT_TRUE(record.find(LowerHex(key)) == std::string::npos);
+        EXPECT_TRUE(record.find(LowerHex(attackerKey)) == std::string::npos);
+        EXPECT_TRUE(record.find(std::to_string(nonce)) == std::string::npos);
+        EXPECT_TRUE(record.find('\r') == std::string::npos);
+        EXPECT_TRUE(record.find("long-session-tail") == std::string::npos);
+    }
     std::filesystem::remove(state, error);
 }
 

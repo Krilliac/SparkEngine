@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdint>
 #include <functional>
@@ -384,6 +386,9 @@ namespace Spark::RemoteDebug
             return m_accessControl.GetAuditEvents();
         }
 
+        /** @brief Audit events evicted from the bounded ring; see RemoteDebugAccessControl. */
+        [[nodiscard]] uint64_t GetDroppedAuditEventCount() const { return m_accessControl.GetDroppedAuditEventCount(); }
+
         /**
          * @brief Install or clear the data-free deterministic test seam.
          * @note Configure only from local test code; callbacks must not re-enter this server.
@@ -428,11 +433,16 @@ namespace Spark::RemoteDebug
          * or macro-controlled API for a caller to mint an Operator or
          * Administrator principal; a future authenticated transport must add a
          * separately reviewed server-owned enrollment path.
+         *
+         * @param lifetime Requested grant lifetime, clamped to
+         *        [1 ms, kDefaultLoopbackLifetimeMilliseconds]. It can only
+         *        shorten authority; it never changes the Observer role.
          */
-        [[nodiscard]] RemoteDebugPrincipal IssueLoopbackObserverPrincipal()
+        [[nodiscard]] RemoteDebugPrincipal IssueLoopbackObserverPrincipal(std::chrono::milliseconds lifetime)
         {
-            return m_accessControl.IssueLoopbackPrincipal(
-                RemoteDebugRole::Observer, RemoteDebugAccessControl::kDefaultLoopbackLifetimeMilliseconds);
+            const auto maximum = static_cast<int64_t>(RemoteDebugAccessControl::kDefaultLoopbackLifetimeMilliseconds);
+            const auto bounded = static_cast<uint64_t>(std::clamp<int64_t>(lifetime.count(), 1, maximum));
+            return m_accessControl.IssueLoopbackPrincipal(RemoteDebugRole::Observer, bounded);
         }
 
         void RegisterCommandHandlerUnlocked(const std::string& type, RemoteDebugCapability requiredCapability,
@@ -786,8 +796,11 @@ namespace Spark::RemoteDebug
         /**
      * @brief Enable in-process loopback (shared queues, no sockets).
      * @details Client send -> server receive, server send -> client receive.
+     * @param lifetime Observer grant lifetime, clamped to [1 ms, 5 min]; the
+     *        default keeps the full five-minute loopback grant.
      */
-        void EnableLoopback()
+        void EnableLoopback(std::chrono::milliseconds lifetime = std::chrono::milliseconds(
+                                RemoteDebugAccessControl::kDefaultLoopbackLifetimeMilliseconds))
         {
             if (!m_initialized || !m_server || !m_client)
                 return;
@@ -801,7 +814,7 @@ namespace Spark::RemoteDebug
             // Public loopback is intentionally observation-only. It is retained
             // for local tests and inspection but cannot acquire console or
             // property-mutation authority by following the public client API.
-            m_loopbackPrincipal = m_server->IssueLoopbackObserverPrincipal();
+            m_loopbackPrincipal = m_server->IssueLoopbackObserverPrincipal(lifetime);
             m_server->GetSession().SetState(SessionState::Connected);
             m_client->GetSession().SetState(SessionState::Connected);
             m_loopbackEnabled = true;

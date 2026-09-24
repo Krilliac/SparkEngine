@@ -57,7 +57,7 @@ input services, while the Linux headless entry initializes no graphics/audio pat
 
 ### Separate SparkServer Process
 
-The `SparkServer` approach builds a separate executable linked against the full `SparkEngineLib`. At runtime it constructs a headless `EngineContext` with graphics and input set to `nullptr`, initializes selected headless asset services, and dynamically loads the requested game module or manifest. The current target does not prove compile-time removal of graphics, audio, or input code.
+The `SparkServer` approach builds a separate executable linked against the full `SparkEngineLib`. At runtime it constructs a headless `EngineContext` with graphics and input set to `nullptr`, initializes selected headless asset services, and dynamically loads the requested game module or manifest. `ServerApplication::Start()` initializes `Spark::Logger` with a stderr-only sink when the host has not configured one, because the process never runs the gameplay lifecycle that installs the engine sinks; stdout stays reserved for the health JSON. The current target does not prove compile-time removal of graphics, audio, or input code.
 
 ```
 ┌─────────────────────────────────┐
@@ -305,7 +305,23 @@ Remote callers require a separate authenticated transport before invoking it.
 |--------|-------------|
 | `void RegisterRconCommand(name, description, handler)` | Register a local admin command |
 | `string ExecuteRcon(const string& commandLine)` | Dispatch a command from trusted host code |
-| `const vector<RconCommand>& GetRconCommands() const` | List registered commands |
+| `vector<RconCommand> GetRconCommands() const` | Snapshot of registered commands, copied under the registry lock |
+
+`InitializeOnly()` logs that `rconPassword`/`rconPort` are reserved but inactive
+and securely clears its copy of `rconPassword`, so `GetConfig()` never returns it.
+
+**Audit record.** Every `ExecuteRcon` call writes exactly one server-log line
+(also delivered to `ServerCallbacks::onLogMessage`):
+
+```text
+RCON: command=<name|<redacted>|<unknown>> disposition=<dispatched|failed|unknown_command>
+```
+
+`<name>` is written only when it is 1-64 characters of `[A-Za-z0-9_.-]`;
+otherwise it is `<redacted>`. Arguments, response bodies and exception text are
+never logged. A handler that throws yields `disposition=failed` and the caller
+receives `Command failed: <name>`; the audit line is written before
+`onRconCommand` runs, so a throwing host callback cannot erase it.
 
 ### LAN Discovery
 

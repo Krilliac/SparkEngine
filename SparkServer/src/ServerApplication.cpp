@@ -20,6 +20,7 @@
 #include "Graphics/RHI/RHIBridge.h"
 #include "Utils/ConfigParser.h"
 #include "Utils/ConsoleProcessManager.h"
+#include "Utils/Logger.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Timer.h"
 
@@ -533,6 +534,24 @@ namespace Spark::Server
             SetError("SparkServer is already running");
             return false;
         }
+
+        // SparkServer does not run the gameplay lifecycle that installs the
+        // engine's log sinks, and Logger::Log drops every record while the
+        // logger is uninitialized. Without this, DedicatedServer diagnostics
+        // and the gateway area-control audit records would never leave the
+        // process. Stderr only: stdout carries the health JSON the supervisor
+        // reads, and the supervisor owns log capture and retention. A host
+        // that already configured the logger (tests, an embedding process)
+        // keeps its own sinks.
+        auto& logger = Spark::Logger::Get();
+        if (!logger.IsInitialized())
+        {
+            logger.Initialize(false);
+            Spark::Logger::SinkSetup sinkSetup;
+            sinkSetup.enableFile = false;
+            logger.InstallDefaultSinks(sinkSetup);
+        }
+
         auto& runtime = GetEngineRuntime();
         runtime.timer = std::make_unique<Timer>();
         runtime.timer->Start();

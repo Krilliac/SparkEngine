@@ -66,6 +66,57 @@ The following are **not** in scope:
 - Issues requiring physical access to the machine
 - Vulnerabilities in third-party dependencies (report these to the upstream project)
 
+## Remote Administration
+
+SEC-100 tracks remote administration and remains open. The current trust
+boundaries and audit records are listed here so they can be reviewed; this
+section is not a review sign-off, and the security owner and reviewer for the
+threat model are **unassigned (required for SEC-100 closure)**.
+
+Trust boundaries:
+
+- **Chat is not administration.** Network chat is relayed and logged as one
+  escaped field; it never reaches `DedicatedServer::ExecuteRcon`.
+- **`ExecuteRcon` is in-process only.** No network transport calls it.
+  `ServerConfig::rconPassword` and `rconPort` are reserved but inactive, are off
+  by default, and `InitializeOnly()` securely clears the password copy.
+- **RemoteDebug loopback is in-process only.** `StartListening` binds no socket,
+  and loopback mints an Observer principal whose lifetime can only be shortened
+  (at most 5 minutes). Anonymous, invalid, expired, malformed, replayed,
+  rate-limited and under-privileged requests are denied and audited.
+- **Gateway area control is same-user local IPC.** Frames are accepted only from
+  the same operating-system user and must carry an HMAC-SHA256 tag (verified in
+  constant time), a timestamp within 60 seconds, and a nonce not already in the
+  bounded replay ledger. A full ledger fails closed.
+
+No authenticated remote-administration channel exists. Closing SEC-100 needs
+either that channel (credential enrollment, expiry and roles) or an
+owner-reviewed decision that `stable-v1` ships without remote administration.
+
+Audit records are written one per attempt through `Spark::Logger`.
+`SparkServer` initializes that logger with a stderr sink when it starts (stdout
+carries the health JSON), so the records reach whatever captures the server's
+stderr; the per-reason counters are not exported outside the process. No record
+carries a key, password, MAC, nonce, RCON argument, response body or exception
+text. Chat text is
+player-visible content and is logged escaped in one quoted field.
+
+```text
+RCON: command=<name|<redacted>|<unknown>> disposition=<dispatched|failed|unknown_command>
+Chat: client=<id> bytes=<n> text="<escaped>"
+GatewayAreaControl: reason=<reason> phase=<n> epoch=<n> session=<prefix> outcome=<applied|duplicate|rejected|unavailable>
+```
+
+Gateway `reason` is one of `accepted`, `incomplete`, `peer_mismatch`,
+`oversize`, `wrong_service`, `decode_failed`, `phase_mismatch`,
+`timestamp_window`, `mac_invalid`, `replay` or `ledger_full`. Denials are logged
+at warning level, accepted handoff phases at info level, and readiness probes at
+debug level. Before the MAC verifies, `phase`, `epoch` and `session` are
+unauthenticated claims. `session` is cut to its first 16 characters, and any
+character outside `[A-Za-z0-9._-]` becomes `?`. RemoteDebug keeps its newest 256
+audit events in memory and counts every evicted event
+(`GetDroppedAuditEventCount`).
+
 ## Supply-Chain Security
 
 Third-party dependencies are governed by [`ThirdParty/POLICY.md`](ThirdParty/POLICY.md)

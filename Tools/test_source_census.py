@@ -165,7 +165,6 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestGameObjectTransforms.cpp",
         "Tests/TestGamepadInputProcessing.cpp",
         "Tests/TestGameplayExtensionRegistry.cpp",
-        "Tests/TestGatewayAreaControl.cpp",
         "Tests/TestGizmoMath.cpp",
         "Tests/TestGroupAI.cpp",
         "Tests/TestHitchDetector.cpp",

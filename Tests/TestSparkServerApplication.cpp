@@ -7,6 +7,8 @@
 #include "Core/EngineRuntime.h"
 #include "Graphics/RHI/RHIBridge.h"
 #include "ServerApplication.h"
+#include "ScopedLoggerBaseline.h"
+#include "Utils/Logger.h"
 
 #include <array>
 #include <cstdlib>
@@ -133,6 +135,52 @@ TEST(SparkServerApplication_LiveLifecycleOwnsRealNullRhi)
 
     EXPECT_TRUE(application.Stop());
     EXPECT_TRUE(runtime.headlessRhiBridge == nullptr);
+}
+
+TEST(SparkServerApplication_StartInstallsLogSinkWhenHostHasNone)
+{
+    // The SparkServer executable never runs the gameplay lifecycle, so without
+    // Start() configuring the logger every SPARK_LOG_* record, including the
+    // gateway area-control audit trail, is silently dropped.
+    ScopedLoggerBaseline loggerBaseline;
+    auto& logger = Spark::Logger::Get();
+    logger.ClearSinks();
+    logger.Shutdown();
+    ASSERT_FALSE(logger.IsInitialized());
+
+    const ScopedEnvironmentVariable gameKind("SPARK_MODULE_ABI_KIND_GAME", "1");
+    ServerOptions options;
+    options.modulePath = SPARK_TEST_COMPATIBLE_MODULE_PATH;
+    options.server.port = 0;
+    options.server.endpointPolicy = Spark::Net::NetworkEndpointPolicy::Loopback();
+    options.server.enableLogging = false;
+
+    ServerApplication application(std::move(options));
+    ASSERT_TRUE(application.Start());
+    EXPECT_TRUE(logger.IsInitialized());
+    EXPECT_EQ(logger.GetSinkCount(), size_t{1});
+    EXPECT_TRUE(logger.GetInstalledLogFilePath().empty());
+    EXPECT_TRUE(application.Stop());
+}
+
+TEST(SparkServerApplication_StartKeepsHostConfiguredLogSinks)
+{
+    ScopedLoggerBaseline loggerBaseline;
+    auto& logger = Spark::Logger::Get();
+    ASSERT_TRUE(logger.IsInitialized());
+    const size_t sinksBefore = logger.GetSinkCount();
+
+    const ScopedEnvironmentVariable gameKind("SPARK_MODULE_ABI_KIND_GAME", "1");
+    ServerOptions options;
+    options.modulePath = SPARK_TEST_COMPATIBLE_MODULE_PATH;
+    options.server.port = 0;
+    options.server.endpointPolicy = Spark::Net::NetworkEndpointPolicy::Loopback();
+    options.server.enableLogging = false;
+
+    ServerApplication application(std::move(options));
+    ASSERT_TRUE(application.Start());
+    EXPECT_EQ(logger.GetSinkCount(), sinksBefore);
+    EXPECT_TRUE(application.Stop());
 }
 
 TEST(SparkServerOptions_RequiresDynamicGameSelection)

@@ -92,6 +92,8 @@ namespace Spark::Net
         // Reserved for source/config compatibility. No remote RCON transport
         // currently consumes these fields; use ExecuteRcon only from trusted
         // host code until an authenticated administration channel is added.
+        // InitializeOnly() securely clears its copy of rconPassword, so
+        // GetConfig() never returns the unused secret.
         std::string rconPassword;
         uint16_t rconPort = 0;
         bool enableLogging = true;
@@ -289,11 +291,13 @@ namespace Spark::Net
         /// @brief Execute a trusted in-process RCON command string, e.g. "kick 3 cheating".
         /// Network chat is intentionally not an RCON transport; a future remote
         /// administration channel must authenticate before calling this API.
-        /// @return The command response text.
+        /// Every call writes exactly one audit line, including when the handler
+        /// throws; the exception text is never logged or returned.
+        /// @return The command response text, or "Command failed: <name>" when the handler threw.
         std::string ExecuteRcon(const std::string& commandLine);
 
-        /// @brief Get all registered administration commands.
-        const std::vector<RconCommand>& GetRconCommands() const { return m_rconCommands; }
+        /// @brief Snapshot of all registered administration commands, taken under the registry lock.
+        std::vector<RconCommand> GetRconCommands() const;
 
         // -- LAN Discovery --
 
