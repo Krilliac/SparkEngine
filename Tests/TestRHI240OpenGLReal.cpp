@@ -154,7 +154,9 @@ namespace
 
     std::filesystem::path GLSLDir()
     {
-        return std::filesystem::path(__FILE__).parent_path().parent_path() / "Shaders" / "GLSL";
+        // Not __FILE__: reproducible optimized builds trim the source-root prefix
+        // (/d1trimfile, -ffile-prefix-map), so __FILE__ is no longer absolute.
+        return std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Shaders" / "GLSL";
     }
 
     const char* kColorVS = R"(#version 450 core
