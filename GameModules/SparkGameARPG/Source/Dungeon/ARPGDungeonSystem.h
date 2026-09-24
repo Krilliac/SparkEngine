@@ -72,6 +72,9 @@ namespace ARPG
         int GetCurrentFloorNumber() const;
         std::string GetDungeonStatusString() const;
 
+        /// Floors between boss encounters; the first boss floor is also the demo run's final floor.
+        static constexpr int BOSS_FLOOR_INTERVAL = 5;
+
       private:
         void RegisterTierConfigs();
 
@@ -83,7 +86,6 @@ namespace ARPG
 
         static constexpr float BASE_ELITE_CHANCE = 0.15f;
         static constexpr float ELITE_CHANCE_PER_FLOOR = 0.03f;
-        static constexpr int BOSS_FLOOR_INTERVAL = 5;
     };
 
 } // namespace ARPG

@@ -69,6 +69,7 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 - **Source:** `GameModules/SparkGameARPG/Source/`
 - **Notable:** `Combat/ARPGCombatSystem.h`, `Dungeon/ARPGDungeonSystem.h`, `Hero/ARPGHeroSystem.h`, `Loot/ARPGLootSystem.h`.
 - **Wires:** [Loot and Crafting](../gameplay-tools/Loot-And-Crafting-System.md), ability system, procedural dungeon generation.
+- **Playable loop:** `Demo/ARPGDemoEncounter` runs a finite dungeon: three kills clear each regular floor, and defeating the boss on the first boss floor (`ARPGDungeonSystem::BOSS_FLOOR_INTERVAL`, floor 5) completes the run. Loot rolls on the defeated monster's rank table, so the boss drops Boss-rank loot. `arpg_save`/`arpg_load` persist an `ARPGDEMO 3` snapshot that stores the current target in full (name, rank, affixes, stats). A reload restores that exact boss through `ARPGMonsterSystem::RestoreMonster` instead of rolling a new one. Legacy `ARPGDEMO 2` and truncated snapshots are rejected, and a rejected load leaves the run unchanged. Covered by the `ARPGDungeon_*`/`ARPGBoss_*` tests in `Tests/TestMOD330ARPGDungeonReal.cpp`.
 
 ## SparkGameOpenWorld
 

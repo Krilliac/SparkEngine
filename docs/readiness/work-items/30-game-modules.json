@@ -829,10 +829,7 @@
       "plannedCiJobs": [
         "module-ARPG"
       ],
-      "plannedTestSelectors": [
-        "ARPGDungeon_*",
-        "ARPGBoss_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-340",

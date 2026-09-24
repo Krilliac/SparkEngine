@@ -86,6 +86,14 @@ namespace ARPG
         std::vector<MonsterData> SpawnElitePack(int level, int packSize = 4);
         MonsterData SpawnBoss(int level);
 
+        /// True when a persisted monster instance is internally consistent (finite stats, valid enums,
+        /// unique affixes, 0 < health <= maxHealth) and can be restored verbatim.
+        [[nodiscard]] static bool IsRestorableMonster(const MonsterData& monster);
+
+        /// Re-register a persisted monster exactly as saved (no template lookup, no RNG rolls).
+        /// The instance receives a fresh encounter ID. Returns that ID, or 0 if the data is rejected.
+        uint32_t RestoreMonster(const MonsterData& monster);
+
         /// Find a live monster by its stable encounter ID.
         MonsterData* GetMonster(uint32_t monsterId);
         const MonsterData* GetMonster(uint32_t monsterId) const;
