@@ -355,6 +355,9 @@
     "anchore/sbom-action": [
       "3ad7283483fc7af8ff2b4ea19663c2d5ca935e26"
     ],
+    "anchore/scan-action": [
+      "27805bf3b4e84b4a5c980df22ed233c00390a439"
+    ],
     "github/codeql-action": [
       "cdf488f595d80d6e07e03d4674febd5ab45fa938"
     ],

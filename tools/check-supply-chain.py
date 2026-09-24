@@ -31,7 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-from datetime import date
+from datetime import date, datetime, timezone
 import hashlib
 import json
 import os
@@ -130,6 +130,12 @@ VALID_SEVERITIES = frozenset({"ERROR", "WARN"})
 EXCEPTION_FIELDS = frozenset({"id", "scope", "owner", "justification", "expires"})
 EXCEPTION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
 EXCEPTION_SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{1,127}$")
+# A vulnerability exception names the package exactly as grype reports it, and
+# grype reports names such as "libstdc++", "@scope/pkg" or
+# "Microsoft Visual C++ 2022 X64 Minimum Runtime" (from PE version resources),
+# so the package part admits any printable text without edge whitespace.
+VULNERABILITY_SCOPE_PREFIX = "vulnerability:"
+MAX_VULNERABILITY_PACKAGE_LENGTH = 256
 EXCEPTION_PLACEHOLDER_OWNERS = frozenset({"", "none", "n/a", "tbd", "todo", "unknown", "unassigned"})
 
 # ── License policy (SEC-110) ──────────────────────────────────────────
@@ -641,57 +647,102 @@ def validate_lockfile_schema(data: dict[str, Any]) -> None:
             if not isinstance(sha, str) or not SHA40_HEX_RE.match(sha):
                 _fatal(f"action_pins[{repo!r}]: invalid SHA: {sha!r}")
 
-    exceptions = data.get("exceptions")
-    if not isinstance(exceptions, list):
-        _fatal("lockfile missing or invalid list field: exceptions")
-    if len(exceptions) > MAX_EXCEPTIONS:
-        _fatal(f"exception count exceeds MAX_EXCEPTIONS ({MAX_EXCEPTIONS})")
+    exception_errors = validate_exception_records(data.get("exceptions"))
+    if exception_errors:
+        _fatal(exception_errors[0])
 
-    seen_ids: set[str] = set()
+    _validate_license_policy_schema(data)
+
+
+def _is_valid_exception_scope(scope: Any) -> bool:
+    if not isinstance(scope, str):
+        return False
+    if scope.startswith(VULNERABILITY_SCOPE_PREFIX):
+        package = scope[len(VULNERABILITY_SCOPE_PREFIX):]
+        return (0 < len(package) <= MAX_VULNERABILITY_PACKAGE_LENGTH and package == package.strip()
+                and package.isprintable())
+    return EXCEPTION_SCOPE_RE.fullmatch(scope) is not None
+
+
+def validate_exception_records(exceptions: Any) -> list[str]:
+    """Return schema errors for a reviewed-exception list; empty means valid.
+
+    This is the single definition of the exception record contract.  The
+    lockfile loader treats the first error as a checker failure, and the
+    release vulnerability gate (.github/scripts/verify_vulnerability_findings.py)
+    imports this function so both consumers accept exactly the same records.
+    Expiry against today's date is a separate policy check, not schema.
+    """
+    if not isinstance(exceptions, list):
+        return ["lockfile missing or invalid list field: exceptions"]
+    if len(exceptions) > MAX_EXCEPTIONS:
+        return [f"exception count exceeds MAX_EXCEPTIONS ({MAX_EXCEPTIONS})"]
+
+    errors: list[str] = []
+    # Reviewed-exception ids are unique across the lockfile, except that one
+    # advisory can affect several packages (zlib and zlib-ng, or one library
+    # cataloged under two names): vulnerability records are unique on their
+    # (id, scope) pair, so each affected package gets its own owned record.
+    other_ids: set[str] = set()
+    vulnerability_ids: set[str] = set()
+    vulnerability_keys: set[tuple[str, str]] = set()
     for index, exception in enumerate(exceptions):
         label = f"exceptions[{index}]"
         if not isinstance(exception, dict):
-            _fatal(f"{label}: entry must be an object")
+            errors.append(f"{label}: entry must be an object")
+            continue
         missing = sorted(EXCEPTION_FIELDS - exception.keys())
         unknown = sorted(exception.keys() - EXCEPTION_FIELDS)
         if missing or unknown:
-            _fatal(f"{label}: invalid fields; missing={missing}, unknown={unknown}")
+            errors.append(f"{label}: invalid fields; missing={missing}, unknown={unknown}")
+            continue
 
         exception_id = exception["id"]
-        if not isinstance(exception_id, str) or not EXCEPTION_ID_RE.fullmatch(exception_id):
-            _fatal(f"{label}.id: invalid exception id: {exception_id!r}")
-        normalized_id = exception_id.casefold()
-        if normalized_id in seen_ids:
-            _fatal(f"{label}: duplicate exception id: {exception_id!r}")
-        seen_ids.add(normalized_id)
+        id_valid = isinstance(exception_id, str) and EXCEPTION_ID_RE.fullmatch(exception_id) is not None
+        if not id_valid:
+            errors.append(f"{label}.id: invalid exception id: {exception_id!r}")
 
         scope = exception["scope"]
-        if not isinstance(scope, str) or not EXCEPTION_SCOPE_RE.fullmatch(scope):
-            _fatal(f"{label}.scope: invalid exception scope: {scope!r}")
+        scope_valid = _is_valid_exception_scope(scope)
+        if not scope_valid:
+            errors.append(f"{label}.scope: invalid exception scope: {scope!r}")
+
+        if id_valid and scope_valid:
+            normalized_id = exception_id.casefold()
+            is_vulnerability = scope.startswith(VULNERABILITY_SCOPE_PREFIX)
+            if is_vulnerability:
+                key = (normalized_id, scope.casefold())
+                duplicate = key in vulnerability_keys or normalized_id in other_ids
+                vulnerability_keys.add(key)
+                vulnerability_ids.add(normalized_id)
+            else:
+                duplicate = normalized_id in other_ids or normalized_id in vulnerability_ids
+                other_ids.add(normalized_id)
+            if duplicate:
+                errors.append(f"{label}: duplicate exception id: {exception_id!r} (scope {scope!r})")
 
         owner = exception["owner"]
         if (not isinstance(owner, str) or not owner.strip() or
                 owner.strip().casefold() in EXCEPTION_PLACEHOLDER_OWNERS):
-            _fatal(f"{label}.owner: exception must be owned by a named maintainer")
-        if len(owner.strip()) > 128:
-            _fatal(f"{label}.owner: owner is too long")
+            errors.append(f"{label}.owner: exception must be owned by a named maintainer")
+        elif len(owner.strip()) > 128:
+            errors.append(f"{label}.owner: owner is too long")
 
         justification = exception["justification"]
         if not isinstance(justification, str) or len(justification.strip()) < 16:
-            _fatal(f"{label}.justification: justification must contain at least 16 characters")
-        if len(justification) > 2048:
-            _fatal(f"{label}.justification: justification is too long")
+            errors.append(f"{label}.justification: justification must contain at least 16 characters")
+        elif len(justification) > 2048:
+            errors.append(f"{label}.justification: justification is too long")
 
         expires = exception["expires"]
         if not isinstance(expires, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", expires):
-            _fatal(f"{label}.expires: expected an ISO date YYYY-MM-DD")
-        try:
-            date.fromisoformat(expires)
-        except ValueError:
-            _fatal(f"{label}.expires: invalid ISO date: {expires!r}")
-
-
-    _validate_license_policy_schema(data)
+            errors.append(f"{label}.expires: expected an ISO date YYYY-MM-DD")
+        else:
+            try:
+                date.fromisoformat(expires)
+            except ValueError:
+                errors.append(f"{label}.expires: invalid ISO date: {expires!r}")
+    return errors
 
 
 def _validate_license_policy_schema(data: dict[str, Any]) -> None:
@@ -887,7 +938,8 @@ def check_license_policy(
 
 
 def check_exception_expiry(lockfile: dict[str, Any], result: CheckResult) -> None:
-    today = date.today()
+    # UTC, the same day boundary the release vulnerability gate applies.
+    today = datetime.now(timezone.utc).date()
     for index, exception in enumerate(lockfile["exceptions"]):
         expiry = date.fromisoformat(exception["expires"])
         if expiry < today:

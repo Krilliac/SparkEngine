@@ -49,6 +49,29 @@ and an expired record is a policy violation (exit 1). Exception records document
 reviewed risk; they never waive an inventory, hash, license, action-pin, or
 manifest check. The checker bounds the collection at 256 records.
 
+The same records are the only way to accept a Critical or High vulnerability in
+a release. The release job scans the generated SPDX SBOM with grype, and
+`.github/scripts/verify_vulnerability_findings.py` blocks publication unless
+every Critical/High finding is covered by a record whose `scope` is
+`vulnerability:<package name>` (the package name as grype reports it) and whose
+`id` is the advisory id grype reports (for example `GHSA-...`) or a related id
+it lists (for example the `CVE-...` behind it). Both must match. The package
+part of the scope is any printable text without leading or trailing whitespace,
+so names such as `libstdc++`, `@scope/pkg` or a PE-derived
+`Microsoft Visual C++ ... Runtime` are written exactly as grype prints them;
+every other scope keeps the path-like form. Records are unique on the pair
+(`id`, `scope`), compared case-insensitively, so one advisory reported against
+two packages (for example `zlib` and `zlib-ng`) takes one record per package. A
+record is current through its `expires` date (UTC); `tools/check-supply-chain.py`
+uses the same UTC day. The gate also fails on an expired vulnerability record,
+on one that names a package present in the scanned SBOM but matches no
+Critical/High finding (remove it once the package is fixed), on an SBOM with no
+packages, and on a failed or incomplete scan. The stable channel scans only the
+Windows Shipping packages while nightly scans every platform, so a current
+record whose package is absent from the scanned SBOM is reported as not
+applicable to that run instead of unused; its expiry still bounds it. It validates records with the same
+`validate_exception_records` function as `tools/check-supply-chain.py`.
+
 ## Adding a New Dependency
 
 1. **Justify the addition.** A new dependency must solve a problem that cannot

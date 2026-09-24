@@ -2119,6 +2119,15 @@ if(Python3_Interpreter_FOUND)
         LABELS "ci;test-evidence;unit"
         TIMEOUT 30)
 
+    # REL-110: release SBOM vulnerability gate (owned, expiring exceptions)
+    # and its fail-closed wiring in release.yml.
+    add_test(
+        NAME ArtifactIntegrity_VulnerabilityGate
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_vulnerability_findings.py)
+    set_tests_properties(ArtifactIntegrity_VulnerabilityGate PROPERTIES
+        LABELS "release;security;supply-chain;unit;python"
+        TIMEOUT 60)
+
     add_test(
         NAME SparkNetworkBoundaryStatic
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tools/check_network_boundary.py)

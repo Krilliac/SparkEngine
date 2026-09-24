@@ -1292,6 +1292,28 @@ jobs:
         upload-artifact: false
         upload-release-assets: false
 
+    # REL-110: scan exactly the SBOM generated above. The action itself never
+    # fails the build on severity; the gate below decides, so a Critical or
+    # High finding can pass only through an owned, unexpired exception in
+    # ThirdParty/supply-chain.lock. A scanner or vulnerability-database failure
+    # fails this step, and an empty or incomplete report fails the gate.
+    - name: Scan SBOM for known vulnerabilities
+      uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+      with:
+        sbom: SparkEngine-SBOM.spdx.json
+        output-format: json
+        output-file: SparkEngine-vulnerabilities.grype.json
+        fail-build: false
+
+    - name: Enforce vulnerability policy on the release SBOM
+      run: |
+        set -euo pipefail
+        python3 .github/scripts/verify_vulnerability_findings.py \
+          --report "SparkEngine-vulnerabilities.grype.json" \
+          --sbom "SparkEngine-SBOM.spdx.json" \
+          --lockfile "ThirdParty/supply-chain.lock" \
+          --summary "$GITHUB_STEP_SUMMARY"
+
     - name: Collect release assets
       id: assets
       env:
