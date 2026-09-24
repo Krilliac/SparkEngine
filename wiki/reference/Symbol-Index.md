@@ -4782,11 +4782,11 @@
 | `ColorKey` | struct | SparkEngine | [GPUParticleTypes.h:L69](../../SparkEngine/Source/Graphics/GPUParticleTypes.h#L69) | Color gradient keyframe |
 | `ColorKey` | struct | SparkEngine | [ParticleSystem.h:L78](../../SparkEngine/Source/Graphics/ParticleSystem.h#L78) | Color gradient keyframe |
 | `colorPatch` | function | SparkEngine | [NeuralPostProcessing.cpp:L171](../../SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.cpp#L171) |  |
-| `ColorPipelineDesc` | function | Tests | [TestRHI240OpenGLReal.cpp:L179](../../Tests/TestRHI240OpenGLReal.cpp#L179) |  |
+| `ColorPipelineDesc` | function | Tests | [TestRHI240OpenGLReal.cpp:L181](../../Tests/TestRHI240OpenGLReal.cpp#L181) |  |
 | `ColorRGB` | struct | SparkEngine | [TemporalEffectsTypes.h:L274](../../SparkEngine/Source/Graphics/TemporalEffectsTypes.h#L274) | RGB color for clamping operations |
 | `ColorRGB` | struct | SparkEngine | [TemporalTypes.h:L277](../../SparkEngine/Source/Graphics/TemporalTypes.h#L277) | RGB color for clamping operations |
 | `ColorToImGui` | function | SparkEditor | [EditorTheme.h:L299](../../SparkEditor/Source/Core/EditorTheme.h#L299) |  |
-| `ColorVertex` | struct | Tests | [TestRHI240OpenGLReal.cpp:L173](../../Tests/TestRHI240OpenGLReal.cpp#L173) |  |
+| `ColorVertex` | struct | Tests | [TestRHI240OpenGLReal.cpp:L175](../../Tests/TestRHI240OpenGLReal.cpp#L175) |  |
 | `ColumnCount` | function | Tests | [TestAsyncDatabase.cpp:L53](../../Tests/TestAsyncDatabase.cpp#L53) |  |
 | `ColumnType` | enum | SparkEngine | [DataTableSystem.h:L27](../../SparkEngine/Source/Engine/DataTable/DataTableSystem.h#L27) | Supported column value types. |
 | `ComApartment` | struct | SparkEngine | [GraphicsDeviceResourcesWindowsTextures.cpp:L327](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsTextures.cpp#L327) |  |
@@ -7256,9 +7256,9 @@
 | `data` | function | Tests | [TestMaterialSystemIntegration.cpp:L158](../../Tests/TestMaterialSystemIntegration.cpp#L158) |  |
 | `data` | function | Tests | [TestMaterialSystemIntegration.cpp:L172](../../Tests/TestMaterialSystemIntegration.cpp#L172) |  |
 | `data` | function | Tests | [TestNetworkSecurity.cpp:L78](../../Tests/TestNetworkSecurity.cpp#L78) |  |
-| `data` | function | Tests | [TestRHI240OpenGLReal.cpp:L515](../../Tests/TestRHI240OpenGLReal.cpp#L515) |  |
-| `data` | function | Tests | [TestRHI240OpenGLReal.cpp:L526](../../Tests/TestRHI240OpenGLReal.cpp#L526) |  |
-| `data` | function | Tests | [TestRHI240OpenGLReal.cpp:L588](../../Tests/TestRHI240OpenGLReal.cpp#L588) |  |
+| `data` | function | Tests | [TestRHI240OpenGLReal.cpp:L517](../../Tests/TestRHI240OpenGLReal.cpp#L517) |  |
+| `data` | function | Tests | [TestRHI240OpenGLReal.cpp:L528](../../Tests/TestRHI240OpenGLReal.cpp#L528) |  |
+| `data` | function | Tests | [TestRHI240OpenGLReal.cpp:L590](../../Tests/TestRHI240OpenGLReal.cpp#L590) |  |
 | `data` | function | Tests | [TestSparkPak.cpp:L231](../../Tests/TestSparkPak.cpp#L231) |  |
 | `Datablock` | struct | SparkEngine | [DatablockRegistry.h:L60](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L60) | An immutable set of named properties describing a game object template. |
 | `DatablockID` | alias | SparkEngine | [DatablockRegistry.h:L50](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h#L50) | Unique identifier for a datablock (assigned at registration time) |
@@ -29714,7 +29714,7 @@
 | `ProfilingDataCallback` | alias | SparkEditor | [IntegrationTypes.h:L161](../../SparkEditor/Source/Integration/IntegrationTypes.h#L161) | Callback function types |
 | `ProfilingDataCallback` | alias | SparkEditor | [SparkEngineIntegration.h:L171](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L171) | Callback function types |
 | `Prog` | struct | GameModules | [TFProgressionSystem.h:L232](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h#L232) |  |
-| `Program` | struct | Tests | [TestRHI240OpenGLReal.cpp:L620](../../Tests/TestRHI240OpenGLReal.cpp#L620) |  |
+| `Program` | struct | Tests | [TestRHI240OpenGLReal.cpp:L622](../../Tests/TestRHI240OpenGLReal.cpp#L622) |  |
 | `progressFrac` | function | SparkEditor | [BuildPipelineProcess.cpp:L415](../../SparkEditor/Source/Panels/BuildPipelineProcess.cpp#L415) |  |
 | `ProgressionCallbacks` | struct | GameModules | [ProgressionSystem.h:L60](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L60) | Callbacks for progression events |
 | `ProgressionSystem` | class | GameModules | [ProgressionSystem.h:L72](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L72) | XP and leveling progression system |
@@ -40214,7 +40214,7 @@
 | `std::filesystem::path` | method | SparkLauncher | [LauncherPaths.cpp:L27](../../SparkLauncher/src/LauncherPaths.cpp#L27) |  |
 | `std::filesystem::path` | method | SparkLauncher | [LauncherPaths.cpp:L47](../../SparkLauncher/src/LauncherPaths.cpp#L47) |  |
 | `std::filesystem::path` | method | Tests | [TestENG220ObjImportReal.cpp:L190](../../Tests/TestENG220ObjImportReal.cpp#L190) |  |
-| `std::filesystem::path` | method | Tests | [TestRHI240OpenGLReal.cpp:L157](../../Tests/TestRHI240OpenGLReal.cpp#L157) |  |
+| `std::filesystem::path` | method | Tests | [TestRHI240OpenGLReal.cpp:L159](../../Tests/TestRHI240OpenGLReal.cpp#L159) |  |
 | `std::filesystem::path` | method | Tests | [TestTemplateRuntimeReal.cpp:L66](../../Tests/TestTemplateRuntimeReal.cpp#L66) |  |
 | `std::filesystem::path` | method | Tests | [TestTemplatesCompile.cpp:L72](../../Tests/TestTemplatesCompile.cpp#L72) |  |
 | `std::filesystem::path` | method | Tests | [TestTemplatesCompile.cpp:L77](../../Tests/TestTemplatesCompile.cpp#L77) |  |
