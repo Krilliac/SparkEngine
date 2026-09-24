@@ -1363,7 +1363,7 @@ ctest --test-dir build/linux-gcc-release -R RemoteAdmin --output-on-failure --no
 **Priority:** P0 · **Status:** in-progress · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. 2026-09-13 progress: the supply-chain lock now requires a bounded, case-insensitive-unique, non-waiving exception schema with named owners, valid expiries, adversarial tests, and required legal-compliance CI wiring. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open.
+Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. 2026-09-13 progress: the supply-chain lock now requires a bounded, case-insensitive-unique, non-waiving exception schema with named owners, valid expiries, adversarial tests, and required legal-compliance CI wiring. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open. 2026-09-24 progress: tools/generate-sbom.py generates a deterministic, --check-reproducible SPDX 2.3 SBOM from dependencies.lock and supply-chain.lock (license_policy SPDX, gitlinks, vendored tree digests), bound to the source SHA and the committed dependency-lock digest that REL-100 provenance records; its reconcile mode classifies an install manifest or staged package with the GOV-400 package rule set and fails on unmapped or unlocked third-party payload, a locked shipped dependency that is absent, or a notice inventory from a different lock. A local Linux GCC Release install (2515 files) reconciles; Windows and hosted package reconciliation evidence and release.yml wiring remain open.
 
 **Dependency contract**
 
@@ -1415,6 +1415,9 @@ python3 -m pytest Tests/test_check_supply_chain.py -v
 bash tools/check-thirdparty-manifest-sync.sh
 python3 Tests/Tools/test_check_thirdparty_manifest_sync.py
 syft packages dir:.
+python3 tools/generate-sbom.py --out sbom.spdx.json
+python3 tools/generate-sbom.py reconcile --install-manifest build/linux-gcc-release/install_manifest.txt
+python3 -m unittest Tests.Tools.test_generate_sbom -v
 osv-scanner --lockfile ThirdParty/dependencies.lock
 ```
 

@@ -2018,6 +2018,17 @@ set_tests_properties(LicenseInventory_ThirdPartyNotices PROPERTIES
     LABELS "governance;unit;python"
     TIMEOUT 300)
 
+# SEC-110: lock-derived SPDX 2.3 SBOM generation (commit and dependency-lock
+# binding, --check reproducibility) and package-inventory reconciliation
+# against forged, unlocked, and missing third-party payload.
+add_test(
+    NAME SupplyChain_SbomAndPackageReconciliation
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_generate_sbom -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(SupplyChain_SbomAndPackageReconciliation PROPERTIES
+    LABELS "governance;security;unit;python"
+    TIMEOUT 300)
+
 # RDY-010: ModuleDiscovery_* drive the production ModuleManager and the real ABI
 # fixture DLL. The exact count fails closed if the family stops being compiled
 # in; the contract test keeps the file from regressing to a test-local mirror.

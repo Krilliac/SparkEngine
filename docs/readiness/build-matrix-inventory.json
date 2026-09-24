@@ -7250,7 +7250,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 4,
+        "stepCount": 6,
         "steps": [
           {
             "index": 0,
@@ -7299,6 +7299,30 @@
             "hasRun": true,
             "env": [],
             "runDigest": "d7a7780b5f1ef6cd"
+          },
+          {
+            "index": 4,
+            "name": "Generate and reproduce lock-derived SPDX SBOM",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "303dfb386a64b0c1"
+          },
+          {
+            "index": 5,
+            "name": "SBOM and package-reconciliation tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "8ca2e477087667f4"
           }
         ],
         "envNames": [],

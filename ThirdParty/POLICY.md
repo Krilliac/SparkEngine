@@ -193,6 +193,33 @@ those forms can carry an unpinned reference past the check.
 A missing `.github/workflows` directory is an error, not a warning — a check
 that did not run is not a check that passed.
 
+## SBOM and Package Reconciliation
+
+`tools/generate-sbom.py` renders the two lockfiles as a deterministic SPDX 2.3
+JSON document: one package per `dependencies.lock` entry with its locked
+version, source location, the SPDX license resolved through `license_policy`,
+and its integrity pin (submodule gitlink or vendored tree digest). The document
+names the source commit and the SHA-256 of the committed `dependencies.lock`
+blob, the same digest REL-100 build provenance records, so an SBOM and a
+provenance record for one release join on that value. Generation refuses a
+checkout whose lockfiles differ from their committed blobs, and `--check FILE`
+regenerates and requires byte equality, which lets a consumer holding the
+source verify an SBOM it was given.
+
+`generate-sbom.py reconcile` compares a shipped package with the lock. It takes
+a CMake `install_manifest.txt` (`--install-manifest`) or a staged package tree
+(`--package-root`) and classifies each file with
+`cmake/PackageNoticeCoverageRules.json`, the rule set the package
+notice-coverage gate uses. It fails when a third-party install path maps to no
+rule, a file or rule names a component the lock does not lock, a locked
+component with install payload rules ships no file, or the package's
+`THIRD_PARTY_NOTICES.txt` inventory differs from the locked names and versions.
+A configuration that legitimately omits a component names it with
+`--not-configured NAME`; the declaration fails if that component is present,
+so it cannot outlive the configuration it describes. Header-only dependencies
+compiled into binaries install no file of their own and are reported as
+`compiledInOnly`, never as verified.
+
 ## Enforcement
 
 - **CI:** `check-supply-chain` job in `.github/workflows/build.yml`, plus the

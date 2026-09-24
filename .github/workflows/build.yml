@@ -506,6 +506,17 @@ jobs:
     - name: Supply-chain adversarial tests
       run: python3 -m unittest Tests.test_check_supply_chain -v
 
+    # SEC-110: the lock-derived SPDX SBOM must generate from this exact commit
+    # (lockfiles equal to their committed blobs) and reproduce byte for byte.
+    - name: Generate and reproduce lock-derived SPDX SBOM
+      run: |
+        set -euo pipefail
+        python3 tools/generate-sbom.py --out "$RUNNER_TEMP/SparkEngine-lock.spdx.json"
+        python3 tools/generate-sbom.py --check "$RUNNER_TEMP/SparkEngine-lock.spdx.json"
+
+    - name: SBOM and package-reconciliation tests
+      run: python3 -m unittest Tests.Tools.test_generate_sbom -v
+
   license-compliance:
     name: "License compliance"
     runs-on: ubuntu-24.04
