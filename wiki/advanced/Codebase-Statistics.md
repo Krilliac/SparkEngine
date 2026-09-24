@@ -11,26 +11,26 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 326248 |
+| **SparkEngine/Source** | 326518 |
 | **SparkEditor/Source** | 104078 |
-| **GameModules** | 144206 |
+| **GameModules** | 144209 |
 | **External services** | 11305 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 193469 |
+| **Tests** | 194023 |
 | **SparkConsole/src** | 1800 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~798847** |
+| **Total C++ (excl. ThirdParty)** | **~799674** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hh/.hpp/.hxx/.inl) | 1074 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1630 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1632 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 632 |
+| Test-bearing implementation files (.cpp/.mm) | 634 |
 | Wiki pages (.md) | 202 |
 
 ### Largest Top-Level Source Section
@@ -44,15 +44,15 @@ Graphics contains 123488 lines, or 37% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 123488 | 37.8% |
-| Engine (all subsystems) | 90475 | 27.7% |
+| Engine (all subsystems) | 90616 | 27.7% |
 | Utils | 46450 | 14.2% |
-| Core | 30919 | 9.4% |
+| Core | 30955 | 9.4% |
 | Physics | 10812 | 3.3% |
 | Audio | 6884 | 2.1% |
 | Input | 3997 | 1.2% |
 | SceneManager | 3513 | 1.0% |
 | Enums | 1383 | 0.4% |
-| Game | 2937 | 0.9% |
+| Game | 2937 | 0.8% |
 | Camera | 999 | 0.3% |
 
 ### Engine Subsystems (SparkEngine/Source/Engine/)
@@ -65,7 +65,7 @@ Graphics contains 123488 lines, or 37% of `SparkEngine/Source`. This is a source
 | Gameplay | 7925 |
 | Animation | 6876 |
 | Scripting | 5210 |
-| SaveSystem | 3958 |
+| SaveSystem | 4099 |
 | UI | 2522 |
 | Streaming | 2123 |
 | Editor | 1737 |
@@ -110,8 +110,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| Test files | 632 |
-| TEST() definitions | 7567 |
+| Test files | 634 |
+| TEST() definitions | 7574 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -157,9 +157,9 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `SaveSystem.cpp` | 2582 |
+| `SaveSystem.cpp` | 2673 |
 | `OpenGLDevice.cpp` | 2483 |
-| `ModuleManager.cpp` | 2107 |
+| `ModuleManager.cpp` | 2143 |
 | `VulkanDevice.cpp` | 2088 |
 | `CrashHandler.cpp` | 2085 |
 | `D3D11Device.cpp` | 2079 |
@@ -178,8 +178,8 @@ inventory is implementation evidence, not support certification.
 | `GraphicsEngine.h` | 1297 |
 | `EngineSettings.h` | 1152 |
 | `NetworkManager.h` | 943 |
+| `SaveSystem.h` | 922 |
 | `RemoteDebugSystem.h` | 874 |
-| `SaveSystem.h` | 872 |
 | `ECSystems.h` | 846 |
 | `PhysicsTypes.h` | 828 |
 

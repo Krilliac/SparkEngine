@@ -482,8 +482,8 @@
 | `Mode` | enum | Tests | [TestFreezeSystem.cpp:L18](../../Tests/TestFreezeSystem.cpp#L18) |  |
 | `ModState` | enum | SparkEngine | [ModSystem.h:L60](../../SparkEngine/Source/Engine/Modding/ModSystem.h#L60) |  |
 | `ModuleChangeType` | enum | SparkEngine | [ModuleHotReload.h:L26](../../SparkEngine/Source/Core/ModuleHotReload.h#L26) |  |
-| `ModuleCompatibilityStatus` | enum | SparkSDK | [ModuleABI.h:L109](../../SparkSDK/Include/Spark/ModuleABI.h#L109) |  |
-| `ModuleKind` | enum | SparkSDK | [IModule.h:L46](../../SparkSDK/Include/Spark/IModule.h#L46) |  |
+| `ModuleCompatibilityStatus` | enum | SparkSDK | [ModuleABI.h:L130](../../SparkSDK/Include/Spark/ModuleABI.h#L130) |  |
+| `ModuleKind` | enum | SparkSDK | [IModule.h:L47](../../SparkSDK/Include/Spark/IModule.h#L47) |  |
 | `MotionBlurType` | enum | SparkEngine | [TemporalEffectsTypes.h:L80](../../SparkEngine/Source/Graphics/TemporalEffectsTypes.h#L80) | Motion blur technique types |
 | `MotionBlurType` | enum | SparkEngine | [TemporalTypes.h:L83](../../SparkEngine/Source/Graphics/TemporalTypes.h#L83) | Motion blur technique types |
 | `MotionQuality` | enum | SparkEngine | [PhysicsComponents.h:L39](../../SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h#L39) |  |
