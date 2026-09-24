@@ -159,6 +159,9 @@ target_include_directories(SparkFuzzTextureStex PRIVATE
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
 )
 target_compile_features(SparkFuzzTextureStex PRIVATE cxx_std_23)
+# Logger.cpp routes warnings/errors through DebugHookManager unless
+# SPARK_SHIPPING compiles the hooks out; the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzTextureStex PRIVATE SPARK_SHIPPING=1)
 target_compile_options(SparkFuzzTextureStex PRIVATE
     -fsanitize=fuzzer,address,undefined
     -fno-sanitize-recover=undefined
