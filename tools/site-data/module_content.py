@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 INVENTORY_RELATIVE = Path("GameModules/module-content-inventory.json")
 EVIDENCE_RELATIVE = Path("tools/module-evidence/manifest.json")
 PROFILE_STATES = {"required", "shared", "outside"}
@@ -184,7 +184,32 @@ def generate(repo_root: Path) -> dict[str, Any]:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "modules": [_module_payload(path, repo_root, applicability.get(path.name, {})) for path in sorted(modules_root.iterdir(), key=lambda item: item.name.casefold()) if path.is_dir() and path.name != "__pycache__"],
+        "fallbackSites": _regenerated_fallback_sites(repo_root, {module["name"]: module for module in evidence["modules"]}),
     }
+
+
+def _regenerated_fallback_sites(repo_root: Path, authoritative: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Refresh detected site files while keeping the reviewed policy of each declared site.
+
+    Policies are review input, not derived facts, so regeneration never invents
+    one: an undeclared site stays absent and validation reports it.
+    """
+    try:
+        existing = json.loads((repo_root / INVENTORY_RELATIVE).read_text(encoding="utf-8")).get("fallbackSites")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        existing = None
+    declared = {}
+    for entry in existing if isinstance(existing, list) else []:
+        key = (entry.get("module"), entry.get("kind"), entry.get("symbol")) if isinstance(entry, dict) else None
+        # Malformed entries are dropped here and reported by validate_fallback_sites.
+        if key is not None and all(isinstance(part, str) for part in key):
+            declared[key] = entry
+    sites = []
+    for site in scan_fallback_sites(repo_root, _in_profile_modules(authoritative)):
+        review = declared.get((site["module"], site["kind"], site["symbol"]))
+        if review is not None:
+            sites.append(site | {key: review[key] for key in ("policy", "owner", "reason") if key in review})
+    return sites
 
 
 def validate(repo_root: Path) -> list[tuple[str, str]]:
@@ -265,6 +290,7 @@ def validate(repo_root: Path) -> list[tuple[str, str]]:
         if profile_id == "stable-v1" and included != {"SparkGameFPS"}:
             findings.append((EVIDENCE_RELATIVE.as_posix(), "stable-v1 must include exactly SparkGameFPS"))
     findings.extend(validate_module_manifests(repo_root, actual, authoritative))
+    findings.extend(validate_fallback_sites(repo_root, payload.get("fallbackSites"), authoritative))
     return findings
 
 
@@ -535,6 +561,194 @@ def validate_module_manifests(
             findings.append((f"{location}.docs", f"module README is missing: {readme}"))
         if dimensions:
             findings.extend(_validate_manifest_parity(name, manifest["parity"], dimensions, scores, f"{location}.parity"))
+    return findings
+
+
+# RDY-020: asset-load fallback and procedural-substitution sites in in-profile
+# modules must be declared with a reviewed policy. The pattern set is kept
+# deliberately narrow (each pattern has mutation tests) because a broad
+# "fallback" word search over-matches comments, log text and unrelated locals.
+FALLBACK_SOURCE_SUFFIXES = {".h", ".hpp", ".cpp", ".inl"}
+FALLBACK_POLICIES = {"intentional", "gap", "tracked"}
+FALLBACK_SITE_KEYS = {"module", "kind", "symbol", "files", "policy", "reason"}
+FALLBACK_HELPER_PATTERN = re.compile(r"\b(\w*Fallback\w*)\s*\(")
+PROCEDURAL_HELPER_PATTERN = re.compile(r"\b(\w*Procedural\w*)\s*\(")
+# `m_shotgunModel->LoadObj(Resolve(L"Models/rifle.obj"), ...)`: the receiver
+# names the asset it stands for, so a different .obj stem is a substitution.
+# The lexer below rewrites every string literal (raw or prefixed) as a plain
+# quoted literal, so the pattern needs no prefix or raw-string handling.
+MODEL_SUBSTITUTION_PATTERN = re.compile(
+    r"\b(?:m_)?([A-Za-z][A-Za-z0-9]*?)Model\s*(?:->|\.)\s*LoadObj\s*\([^;]*?\"(?:[^\"]*/)?([A-Za-z0-9_]+)\.obj\""
+)
+STRING_PREFIXES = {"L", "u8", "u", "U", "R", "LR", "u8R", "uR", "UR"}
+RAW_STRING_PATTERN = re.compile(r'"([^()\\\s]{0,16})\(')
+LITERAL_KEPT_CHARACTER = re.compile(r"[A-Za-z0-9_./\-]")
+CPP_WORD_PATTERN = re.compile(r"\w+")
+# pp-number, including C++14 digit separators such as 1'000'000.
+CPP_NUMBER_PATTERN = re.compile(r"\d(?:'?[\w.]|[eEpP][+-])*")
+
+
+def _lex_cpp(text: str) -> tuple[str, str]:
+    """Remove comments and normalize literals in one pass that understands both.
+
+    Returns ``(code, code_without_literals)``. In ``code`` each string literal,
+    including raw and encoding-prefixed ones, becomes a plain ``"..."`` holding
+    only path-safe characters, so literal text can neither open a comment nor
+    close the literal early. In ``code_without_literals`` every literal is
+    ``""``. Newlines are preserved so line structure survives.
+    """
+    code: list[str] = []
+    bare: list[str] = []
+    index, length = 0, len(text)
+
+    def emit(both: str, *, literal: str | None = None) -> None:
+        code.append(both if literal is None else literal)
+        bare.append(both)
+
+    while index < length:
+        char = text[index]
+        if text.startswith("//", index):
+            end = text.find("\n", index)
+            index = length if end < 0 else end
+        elif text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            end = length if end < 0 else end + 2
+            emit(" " + "\n" * text.count("\n", index, end))
+            index = end
+        elif char.isalpha() or char == "_":
+            match = CPP_WORD_PATTERN.match(text, index)
+            word = match.group(0)
+            index = match.end()
+            if word in STRING_PREFIXES and index < length and text[index] == '"':
+                index = _lex_string(text, index, word.endswith("R"), emit)
+            else:
+                emit(word)
+        elif char.isdigit():
+            match = CPP_NUMBER_PATTERN.match(text, index)
+            emit(match.group(0))
+            index = match.end()
+        elif char == '"':
+            index = _lex_string(text, index, False, emit)
+        elif char == "'":
+            end = index + 1
+            while end < length and text[end] not in "'\n":
+                end += 2 if text[end] == "\\" else 1
+            emit("''")
+            index = min(end + 1, length)
+        else:
+            emit(char)
+            index += 1
+    return "".join(code), "".join(bare)
+
+
+def _lex_string(text: str, index: int, raw: bool, emit: Any) -> int:
+    """Consume the string literal whose opening quote is at ``index``; return the index after it."""
+    if raw:
+        opener = RAW_STRING_PATTERN.match(text, index)
+        if opener is not None:
+            terminator = ")" + opener.group(1) + '"'
+            end = text.find(terminator, opener.end())
+            end = len(text) if end < 0 else end
+            body = text[opener.end():end]
+            newlines = "\n" * body.count("\n")
+            emit('""' + newlines, literal='"' + "".join(LITERAL_KEPT_CHARACTER.findall(body)) + '"' + newlines)
+            return min(end + len(terminator), len(text))
+    end = index + 1
+    while end < len(text) and text[end] not in '"\n':
+        end += 2 if text[end] == "\\" else 1
+    body = text[index + 1:end]
+    emit('""', literal='"' + "".join(LITERAL_KEPT_CHARACTER.findall(body)) + '"')
+    return min(end + 1, len(text))
+
+
+def _in_profile_modules(authoritative: dict[str, dict[str, Any]]) -> list[str]:
+    return sorted(
+        name for name, module in authoritative.items()
+        if any(state in {"required", "shared"} for state in module.get("profileApplicability", {}).values())
+    )
+
+
+def scan_fallback_sites(repo_root: Path, modules: list[str]) -> list[dict[str, Any]]:
+    """Return detected fallback/procedural sites keyed by (module, kind, symbol)."""
+    sites: dict[tuple[str, str, str], set[str]] = {}
+    for module in modules:
+        source = repo_root / "GameModules" / module / "Source"
+        if not source.is_dir():
+            continue
+        for path in sorted(source.rglob("*")):
+            if not path.is_file() or path.suffix not in FALLBACK_SOURCE_SUFFIXES:
+                continue
+            relative = path.relative_to(repo_root).as_posix()
+            code, code_without_literals = _lex_cpp(path.read_text(encoding="utf-8", errors="replace"))
+            found = [("fallback-helper", match.group(1)) for match in FALLBACK_HELPER_PATTERN.finditer(code_without_literals)]
+            found += [("procedural-helper", match.group(1)) for match in PROCEDURAL_HELPER_PATTERN.finditer(code_without_literals)]
+            for match in MODEL_SUBSTITUTION_PATTERN.finditer(code):
+                stand_in, loaded = match.group(1), match.group(2)
+                if stand_in.casefold() != loaded.casefold():
+                    found.append(("model-substitution", f"{stand_in[0].lower()}{stand_in[1:]} -> {loaded}.obj"))
+            for kind, symbol in found:
+                sites.setdefault((module, kind, symbol), set()).add(relative)
+    return [
+        {"module": module, "kind": kind, "symbol": symbol, "files": sorted(files)}
+        for (module, kind, symbol), files in sorted(sites.items())
+    ]
+
+
+def _work_item_ids(repo_root: Path) -> set[str]:
+    ids: set[str] = set()
+    for path in sorted((repo_root / WORK_ITEMS_RELATIVE).glob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        items = document.get("workItems") if isinstance(document, dict) else None
+        ids.update(item["id"] for item in items or [] if isinstance(item, dict) and isinstance(item.get("id"), str))
+    return ids
+
+
+def validate_fallback_sites(
+    repo_root: Path, declared: Any, authoritative: dict[str, dict[str, Any]]
+) -> list[tuple[str, str]]:
+    """Require every detected in-profile fallback site to carry exactly one reviewed policy."""
+    location = f"{INVENTORY_RELATIVE.as_posix()}.fallbackSites"
+    if not isinstance(declared, list):
+        return [(location, "fallbackSites must be a list of declared fallback/procedural sites")]
+    findings: list[tuple[str, str]] = []
+    detected = {(site["module"], site["kind"], site["symbol"]): site for site in scan_fallback_sites(repo_root, _in_profile_modules(authoritative))}
+    work_items = _work_item_ids(repo_root)
+    seen: set[tuple[str, str, str]] = set()
+    for index, entry in enumerate(declared):
+        entry_location = f"{location}[{index}]"
+        allowed = FALLBACK_SITE_KEYS | {"owner"}
+        if not isinstance(entry, dict) or not FALLBACK_SITE_KEYS <= set(entry) or not set(entry) <= allowed:
+            findings.append((entry_location, f"fallback site must contain {sorted(FALLBACK_SITE_KEYS)} and optionally owner"))
+            continue
+        scalars = ("module", "kind", "symbol", "policy", "reason") + (("owner",) if "owner" in entry else ())
+        files = entry["files"]
+        if not all(isinstance(entry[key], str) for key in scalars) or not isinstance(files, list) or not all(
+            isinstance(value, str) for value in files
+        ):
+            findings.append((entry_location, f"fallback site fields {list(scalars)} must be strings and files a list of strings"))
+            continue
+        key = (entry["module"], entry["kind"], entry["symbol"])
+        if key in seen:
+            findings.append((entry_location, f"duplicate fallback site declaration: {key}"))
+        seen.add(key)
+        site = detected.get(key)
+        if site is None:
+            findings.append((entry_location, f"declared fallback site no longer exists in in-profile sources: {key}"))
+        elif entry["files"] != site["files"]:
+            findings.append((entry_location, f"files drift for fallback site {key}: expected {site['files']!r}"))
+        policy, owner = entry["policy"], entry.get("owner")
+        if policy not in FALLBACK_POLICIES:
+            findings.append((entry_location, f"policy must be one of {sorted(FALLBACK_POLICIES)}: {policy!r}"))
+        elif policy == "tracked" and owner not in work_items:
+            findings.append((entry_location, f"tracked fallback site needs an owner naming an existing work item: {owner!r}"))
+        elif policy != "tracked" and "owner" in entry:
+            findings.append((entry_location, "only a tracked fallback site may name an owner work item"))
+        _require_reason(entry["reason"], f"{entry_location}.reason", findings)
+    for key in sorted(set(detected) - seen):
+        findings.append((location, f"undeclared fallback site in {detected[key]['files'][0]}: {key}"))
     return findings
 
 

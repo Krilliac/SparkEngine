@@ -16,6 +16,11 @@ import assets as site_assets  # noqa: E402
 from unittest import mock
 
 
+def _evidence_modules(root: Path) -> dict:
+    evidence = json.loads((root / module_content.EVIDENCE_RELATIVE).read_text(encoding="utf-8"))
+    return {module["name"]: module for module in evidence["modules"]}
+
+
 class ModuleContentInventoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(prefix="module-content-inventory-")
@@ -267,6 +272,164 @@ class ModuleContentInventoryTests(unittest.TestCase):
         messages = self.messages()
         self.assertTrue(any("differs only by case" in message for message in messages), messages)
         self.assertTrue(any("module directory is missing" in message for message in messages), messages)
+
+    # RDY-020: fallback-policy inventory for in-profile modules.
+
+    SUBSTITUTION_SOURCE = (
+        'void Load()\n{\n'
+        '    m_rifleModel->LoadObj(Resolve(L"Models/rifle.obj"), device);\n'
+        '    m_shotgunModel->LoadObj(Resolve(L"Models/rifle.obj"), device);\n'
+        '}\n'
+    )
+
+    def _write_source(self, relative: str, text: str, module: str = "SparkGameFPS") -> None:
+        path = self.root / "GameModules" / module / "Source" / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def _declare(self, **overrides: object) -> dict:
+        entry = {
+            "module": "SparkGameFPS",
+            "kind": "model-substitution",
+            "symbol": "shotgun -> rifle.obj",
+            "files": ["GameModules/SparkGameFPS/Source/Player.cpp"],
+            "policy": "tracked",
+            "owner": "MOD-310",
+            "reason": "Shotgun renders the rifle model until the authored shotgun.obj is wired in.",
+        }
+        entry.update(overrides)
+        payload = module_content.generate(self.root)
+        payload["fallbackSites"] = [{key: value for key, value in entry.items() if value is not None}]
+        self.write(payload)
+        return entry
+
+    def _add_owner_work_item(self) -> None:
+        path = self.root / "docs" / "readiness" / "work-items" / "30-game-modules.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["workItems"] = [{"id": "MOD-310"}]
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    def test_undeclared_model_substitution_is_rejected(self) -> None:
+        self._write_source("Player.cpp", self.SUBSTITUTION_SOURCE)
+        messages = self.messages()
+        self.assertTrue(any("undeclared fallback site" in message and "shotgun -> rifle.obj" in message for message in messages), messages)
+        self.assertFalse(any("rifle -> rifle.obj" in message for message in messages), messages)
+
+    def test_declared_tracked_substitution_passes(self) -> None:
+        self._add_owner_work_item()
+        self._write_source("Player.cpp", self.SUBSTITUTION_SOURCE)
+        self._declare()
+        self.assertEqual([], self.messages())
+
+    def test_regeneration_keeps_reviewed_policy_and_never_invents_one(self) -> None:
+        self._add_owner_work_item()
+        self._write_source("Player.cpp", self.SUBSTITUTION_SOURCE)
+        declared = self._declare()
+        self._write_source("Extra.cpp", "int UseFallbackMesh();\n")
+        self.write(module_content.generate(self.root))
+        self.assertEqual([declared], self.payload()["fallbackSites"])
+        self.assertTrue(any("undeclared fallback site" in message and "UseFallbackMesh" in message for message in self.messages()))
+
+    def test_tracked_policy_requires_existing_owner_work_item(self) -> None:
+        self._write_source("Player.cpp", self.SUBSTITUTION_SOURCE)
+        self._declare()
+        self.assertTrue(any("existing work item: 'MOD-310'" in message for message in self.messages()))
+        self._add_owner_work_item()
+        self._declare(owner=None)
+        self.assertTrue(any("existing work item: None" in message for message in self.messages()))
+
+    def test_invalid_policy_short_reason_and_stray_owner_are_rejected(self) -> None:
+        self._add_owner_work_item()
+        self._write_source("Player.cpp", self.SUBSTITUTION_SOURCE)
+        self._declare(policy="accepted")
+        self.assertTrue(any("policy must be one of" in message for message in self.messages()))
+        self._declare(policy="intentional")
+        self.assertTrue(any("only a tracked fallback site may name an owner" in message for message in self.messages()))
+        self._declare(reason="todo")
+        self.assertTrue(any("reason must be a written explanation" in message for message in self.messages()))
+
+    def test_stale_declaration_and_file_drift_are_rejected(self) -> None:
+        self._add_owner_work_item()
+        self._write_source("Player.cpp", self.SUBSTITUTION_SOURCE)
+        self._declare(files=["GameModules/SparkGameFPS/Source/Other.cpp"])
+        self.assertTrue(any("files drift for fallback site" in message for message in self.messages()))
+        self._write_source("Player.cpp", self.SUBSTITUTION_SOURCE.replace("rifle.obj\"), device);\n}", "shotgun.obj\"), device);\n}"))
+        self._declare()
+        self.assertTrue(any("no longer exists in in-profile sources" in message for message in self.messages()))
+
+    def test_fallback_and_procedural_helpers_are_detected_outside_comments_and_strings(self) -> None:
+        self._write_source(
+            "Helpers.cpp",
+            "RespawnPoint MakeFallbackSpawnPoint();\n"
+            "std::string ProceduralMaterialFor(const wchar_t* path);\n"
+            "// UseFallbackTexture(path);\n"
+            "/* BuildProceduralMesh(); */\n"
+            "Log(\"using FallbackModel(\");\n"
+            "RespawnPoint fallback; fallback.name = \"Fallback\";\n",
+        )
+        symbols = {site["symbol"] for site in module_content.scan_fallback_sites(self.root, ["SparkGameFPS"])}
+        self.assertEqual({"MakeFallbackSpawnPoint", "ProceduralMaterialFor"}, symbols)
+
+    def test_leading_fallback_and_procedural_identifiers_are_detected(self) -> None:
+        self._write_source("Leading.cpp", "Mesh m = FallbackMesh(path);\nFallback(path);\nProcedural(seed);\n")
+        symbols = {site["symbol"] for site in module_content.scan_fallback_sites(self.root, ["SparkGameFPS"])}
+        self.assertEqual({"FallbackMesh", "Fallback", "Procedural"}, symbols)
+
+    def test_comment_markers_inside_literals_cannot_hide_code(self) -> None:
+        self._write_source(
+            "Literals.cpp",
+            'Log("x//y"); auto z = MakeFallbackZ(1);\n'
+            'Log("open /* here"); UseFallbackBlock();\n'
+            'Log(R"raw(a // b /* c)raw"); UseFallbackRaw();\n'
+            "char quote = '\"'; UseFallbackChar();\n"
+            "int count = 1'000; UseFallbackNumber();\n"
+            "/* \"UseFallbackCommented();\" */ // UseFallbackLine();\n",
+        )
+        symbols = {site["symbol"] for site in module_content.scan_fallback_sites(self.root, ["SparkGameFPS"])}
+        self.assertEqual({"MakeFallbackZ", "UseFallbackBlock", "UseFallbackRaw", "UseFallbackChar", "UseFallbackNumber"}, symbols)
+
+    def test_raw_and_prefixed_string_model_substitutions_are_detected(self) -> None:
+        self._write_source(
+            "Player.cpp",
+            'm_rocketModel->LoadObj(R"(Models/rifle.obj)", device);\n'
+            'm_grenadeModel->LoadObj(LR"obj(Models/rifle.obj)obj", device);\n'
+            'm_shotgunModel->LoadObj(u8"Models/rifle.obj", device);\n'
+            'm_rifleModel->LoadObj(R"(Models/rifle.obj)", device);\n',
+        )
+        symbols = {site["symbol"] for site in module_content.scan_fallback_sites(self.root, ["SparkGameFPS"])}
+        self.assertEqual({"rocket -> rifle.obj", "grenade -> rifle.obj", "shotgun -> rifle.obj"}, symbols)
+
+    def test_non_string_fallback_site_fields_are_reported_not_raised(self) -> None:
+        self._write_source("Player.cpp", self.SUBSTITUTION_SOURCE)
+        for field, value in (("module", ["SparkGameFPS"]), ("symbol", {"a": 1}), ("policy", ["tracked"]), ("files", "Player.cpp"), ("files", [1])):
+            self._declare(**{field: value})
+            messages = self.messages()
+            self.assertTrue(any("must be strings and files a list of strings" in message for message in messages), (field, messages))
+
+    def test_out_of_profile_module_sites_are_not_required(self) -> None:
+        evidence = self.root / module_content.EVIDENCE_RELATIVE
+        data = json.loads(evidence.read_text(encoding="utf-8"))
+        data["modules"].append({"name": "SparkGameOther", "profileApplicability": {"stable-v1": "outside"}})
+        evidence.write_text(json.dumps(data), encoding="utf-8")
+        self._write_source("Player.cpp", self.SUBSTITUTION_SOURCE, module="SparkGameOther")
+        in_profile = module_content._in_profile_modules(_evidence_modules(self.root))
+        self.assertEqual(["SparkGameFPS"], in_profile)
+        self.assertEqual([], module_content.scan_fallback_sites(self.root, in_profile))
+        self.assertEqual(1, len(module_content.scan_fallback_sites(self.root, ["SparkGameOther"])))
+
+    def test_missing_fallback_sites_list_is_rejected(self) -> None:
+        payload = self.payload()
+        del payload["fallbackSites"]
+        self.write(payload)
+        self.assertTrue(any("fallbackSites must be a list" in message for message in self.messages()))
+
+    def test_repository_fallback_inventory_matches_fps_sources(self) -> None:
+        inventory = json.loads((ROOT / module_content.INVENTORY_RELATIVE).read_text(encoding="utf-8"))
+        findings = module_content.validate_fallback_sites(ROOT, inventory.get("fallbackSites"), _evidence_modules(ROOT))
+        self.assertEqual([], findings)
+        substitutions = {site["symbol"]: site for site in inventory["fallbackSites"] if site["kind"] == "model-substitution"}
+        self.assertEqual({"grenade -> rifle.obj", "rocket -> rifle.obj", "shotgun -> rifle.obj"}, set(substitutions))
+        self.assertTrue(all(site["policy"] == "tracked" and site["owner"] == "MOD-310" for site in substitutions.values()))
 
     def test_profile_classification_drift_is_rejected(self) -> None:
         payload = self.payload()

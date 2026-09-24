@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "modules": [
     {
       "name": "SparkGame",
@@ -204,6 +204,72 @@
         "stable-v1": "outside"
       },
       "sharedRootDependencies": []
+    }
+  ],
+  "fallbackSites": [
+    {
+      "module": "SparkGameFPS",
+      "kind": "fallback-helper",
+      "symbol": "MakeFallbackSpawnPoint",
+      "files": [
+        "GameModules/SparkGameFPS/Source/Game/GameMechanics.h",
+        "GameModules/SparkGameFPS/Source/Game/GameMechanicsRespawn.cpp"
+      ],
+      "policy": "intentional",
+      "reason": "RespawnSystem uses this single spawn only until BindSpawnPoints receives authored spawns from Assets/Scenes/level1.scene; it mirrors the authored North_Spawn position, so no asset is substituted."
+    },
+    {
+      "module": "SparkGameFPS",
+      "kind": "fallback-helper",
+      "symbol": "MakeFallbackWaveSpawnPoints",
+      "files": [
+        "GameModules/SparkGameFPS/Source/Game/WaveSpawner.cpp"
+      ],
+      "policy": "intentional",
+      "reason": "WaveSpawner::Initialize uses these eight code-placed perimeter spawns only when the loaded scene has no SpawnPoint nodes tagged wave_spawn; Assets/Scenes/level1.scene authors ten, so the shipped level never reaches it and no asset is substituted."
+    },
+    {
+      "module": "SparkGameFPS",
+      "kind": "model-substitution",
+      "symbol": "grenade -> rifle.obj",
+      "files": [
+        "GameModules/SparkGameFPS/Source/Game/Player.cpp"
+      ],
+      "policy": "tracked",
+      "owner": "MOD-310",
+      "reason": "Player::Initialize loads Models/rifle.obj for the grenade launcher because no grenade launcher model is authored under Assets/Models; a dedicated asset or an explicit shared-model decision belongs to MOD-310."
+    },
+    {
+      "module": "SparkGameFPS",
+      "kind": "model-substitution",
+      "symbol": "rocket -> rifle.obj",
+      "files": [
+        "GameModules/SparkGameFPS/Source/Game/Player.cpp"
+      ],
+      "policy": "tracked",
+      "owner": "MOD-310",
+      "reason": "Player::Initialize loads Models/rifle.obj for the rocket launcher because no rocket launcher model is authored under Assets/Models; a dedicated asset or an explicit shared-model decision belongs to MOD-310."
+    },
+    {
+      "module": "SparkGameFPS",
+      "kind": "model-substitution",
+      "symbol": "shotgun -> rifle.obj",
+      "files": [
+        "GameModules/SparkGameFPS/Source/Game/Player.cpp"
+      ],
+      "policy": "tracked",
+      "owner": "MOD-310",
+      "reason": "Player::Initialize loads Models/rifle.obj for the shotgun even though Assets/Models/shotgun.obj exists and is integrity-covered; switching the load to the authored model is FPS slice work owned by MOD-310."
+    },
+    {
+      "module": "SparkGameFPS",
+      "kind": "procedural-helper",
+      "symbol": "ProceduralMaterialFor",
+      "files": [
+        "GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp"
+      ],
+      "policy": "intentional",
+      "reason": "The code-placed arena layout binds each placed model to an authored material JSON under Assets/Materials (Wood, Metal, Concrete, Arena_CenterBuilding) by model name; it selects existing assets and generates no substitute content."
     }
   ]
 }
