@@ -48,6 +48,22 @@
         "max_corpus_bytes": 4096,
         "smoke_seconds": 10
       }
+    },
+    {
+      "id": "texture-stex-corpus",
+      "parser_id": "texture-stex-compressor",
+      "corpus_dir": "Tests/fuzz-corpora/texture-stex",
+      "last_verified": "2026-09-23",
+      "content_digest": "0077cb0381400f1a1f0ce3e74b8008630a029449ecbb7ff42f31af89926b3b9c",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 15,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      }
     }
   ]
 }

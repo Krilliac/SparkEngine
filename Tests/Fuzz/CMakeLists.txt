@@ -144,7 +144,7 @@ add_executable(SparkFuzzTextureStex
     FuzzTextureStexProduction.cpp
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/TextureCompressor.cpp"
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/TextureBlockCompression.cpp"
-    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
 )
 # Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzTextureStex.cpp
 # use libstdc++; the production loader, its logger, and the adapter use libc++
@@ -188,7 +188,7 @@ add_test(
         # Replay every reviewed seed exactly once; mutation campaigns belong
         # to scheduled jobs and must not make this merge gate time-dependent.
         -runs=8
-        "${SPARK_FUZZ_PROJECT_ROOT}/Tests/Fuzz/corpus/texture-stex"
+        "${SPARK_FUZZ_PROJECT_ROOT}/Tests/fuzz-corpora/texture-stex"
 )
 set_tests_properties(FuzzTextureStexSmoke PROPERTIES
     LABELS "fuzz;fuzz-smoke;security"

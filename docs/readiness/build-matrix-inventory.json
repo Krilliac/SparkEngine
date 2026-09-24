@@ -1395,7 +1395,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1779,
+      "line": 1808,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1481,7 +1481,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1322,
+      "line": 1326,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2455,7 +2455,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 713,
+      "line": 714,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2512,6 +2512,31 @@
           "branch": 0,
           "branches": [
             "REPORTER_SOURCES"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkCrashReporterConsentTests",
+      "kind": "executable",
+      "file": "SparkCrashReporter/CMakeLists.txt",
+      "line": 120,
+      "conditionFrames": [
+        {
+          "id": "SparkCrashReporter/CMakeLists.txt:29",
+          "branch": 0,
+          "branches": [
+            "REPORTER_SOURCES"
+          ]
+        },
+        {
+          "id": "SparkCrashReporter/CMakeLists.txt:62",
+          "branch": 0,
+          "branches": [
+            "BUILD_TESTS"
           ]
         }
       ],
@@ -2626,7 +2651,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 679,
+      "line": 680,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2750,7 +2775,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 820,
+      "line": 821,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2940,10 +2965,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 700,
+      "line": 701,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:699",
+          "id": "Tests/CMakeLists.txt:700",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -3071,7 +3096,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 717,
+      "line": 718,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3081,7 +3106,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 711,
+      "line": 712,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3091,7 +3116,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 719,
+      "line": 720,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3121,10 +3146,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 692,
+      "line": 693,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:691",
+          "id": "Tests/CMakeLists.txt:692",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -3161,7 +3186,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 715,
+      "line": 716,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3171,7 +3196,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 825,
+      "line": 826,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3221,7 +3246,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 721,
+      "line": 722,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3253,7 +3278,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 815,
+      "line": 816,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3263,7 +3288,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 668,
+      "line": 669,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4141,7 +4166,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 713,
+          "line": 714,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4216,6 +4241,24 @@
         {
           "file": "SparkCrashReporter/CMakeLists.txt",
           "line": 30,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkCrashReporterConsentTests",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "SparkCrashReporter/CMakeLists.txt",
+          "line": 120,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4323,7 +4366,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 679,
+          "line": 680,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4449,7 +4492,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 820,
+          "line": 821,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4791,7 +4834,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 700,
+          "line": 701,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4927,7 +4970,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 717,
+          "line": 718,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4945,7 +4988,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 711,
+          "line": 712,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4963,7 +5006,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 719,
+          "line": 720,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5001,7 +5044,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 692,
+          "line": 693,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5057,7 +5100,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 715,
+          "line": 716,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5075,7 +5118,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 825,
+          "line": 826,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5165,7 +5208,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 721,
+          "line": 722,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5221,7 +5264,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 815,
+          "line": 816,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5239,7 +5282,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 668,
+          "line": 669,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6162,7 +6205,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "1ad01b7477c30790"
+            "runDigest": "7905637febc73966"
           },
           {
             "index": 5,
@@ -11004,12 +11047,13 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex",
         "commandProvenance": "literal",
         "targets": [
           "SparkFuzzCrashManifest",
           "SparkFuzzJsonUtils",
-          "SparkFuzzNeuralWeights"
+          "SparkFuzzNeuralWeights",
+          "SparkFuzzTextureStex"
         ],
         "configuration": "",
         "buildDir": "build/fuzz-policy",
@@ -14010,12 +14054,13 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex",
         "commandProvenance": "literal",
         "targets": [
           "SparkFuzzCrashManifest",
           "SparkFuzzJsonUtils",
-          "SparkFuzzNeuralWeights"
+          "SparkFuzzNeuralWeights",
+          "SparkFuzzTextureStex"
         ],
         "configuration": "",
         "buildDir": "build/fuzz-policy",
