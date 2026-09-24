@@ -186,6 +186,28 @@ class SceneManager
     bool SaveScene(const std::wstring& filepath) const;
 
     /**
+     * @brief Save to `root / relativePath` without letting any path component redirect the write.
+     *
+     * For user-supplied destinations (the FPS `scene_save` command). `root` is a
+     * trusted, existing scene directory. `relativePath` must be a relative
+     * `.scene`/`.json` path with no empty, `.` or `..` components; every
+     * directory below `root` must already exist and must not be a symlink,
+     * junction or other reparse point.
+     *
+     * Race-free by construction: each directory is opened one component at a
+     * time and kept open (POSIX `openat(O_NOFOLLOW)`; Windows handles opened
+     * with `FILE_FLAG_OPEN_REPARSE_POINT` and without `FILE_SHARE_DELETE`, so
+     * the component cannot be renamed while held). The temporary file is created
+     * exclusively inside that held directory and atomically renamed over the
+     * destination there, and the final location is re-verified after the rename.
+     * A component swapped for a link is refused, never followed out of `root`.
+     *
+     * @return `true` when the scene was written inside `root`; the dirty flag is
+     *         cleared on success, as with `SaveScene()`.
+     */
+    bool SaveSceneWithinRoot(const std::filesystem::path& root, const std::filesystem::path& relativePath) const;
+
+    /**
      * @brief Begin loading a scene on a background thread.
      *
      * Returns immediately. The scene file is parsed off the main thread; when
@@ -516,6 +538,14 @@ class SceneManager
      * @return      `true` on success; `false` on I/O error.
      */
     bool SaveJSON(const std::wstring& path) const;
+
+    /**
+     * @brief Validate the live graph and render it as versioned scene text.
+     *
+     * Shared by `SaveJSON()` and `SaveSceneWithinRoot()` so both write the
+     * same format. `pathForLog` is only used in the error message.
+     */
+    bool SerializeSceneText(std::string& text, const std::wstring& pathForLog) const;
 
     /**
      * @brief Create `GameObject` instances for all nodes in `m_sceneNodes`.
