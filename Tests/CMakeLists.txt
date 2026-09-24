@@ -1011,6 +1011,7 @@ target_sources(SparkTests PRIVATE
     TestEditorGizmoTransformReal.cpp
     TestEditorProjectMaterializationReal.cpp
     TestEditorUndoHierarchyReal.cpp
+    TestEDT210InspectorEditCommitReal.cpp
     TestFPSComponentsReal.cpp
     TestLoggerSinksReal.cpp
     TestModuleLifecycleReal.cpp
