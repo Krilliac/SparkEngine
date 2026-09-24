@@ -3162,6 +3162,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("--previous-packages $previousPackages", block)
         self.assertIn("--previous-version $previousVersion", block)
         self.assertIn("--previous-package-manifest $previousManifest", block)
+        self.assertIn("--previous-receipt $previousReceipt", block)
         self.assertIn('--runner-temp "${{ runner.temp }}"', block)
         self.assertIn('--source-sha "${{ github.sha }}"', block)
         self.assertTrue(block.rstrip().endswith("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"))

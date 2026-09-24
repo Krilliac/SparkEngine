@@ -9,6 +9,11 @@ An old-to-new transaction requires --previous-signer-thumbprint from the
 caller's protected trust configuration. The private predecessor copy must
 have a valid timestamped Authenticode signature from that publisher before
 any Windows Installer command. This does not authorize bootstrap admission.
+It also requires --previous-receipt, the provisioner's selection receipt; its
+tag, commit and asset identity must match the private predecessor copy and are
+recorded in the qualification report. A predecessor whose version, commit or
+MSI digest is not distinct from (and, for version, strictly lower than) the
+candidate is rejected before any Windows Installer command.
 """
 from __future__ import annotations
 
@@ -268,12 +273,89 @@ def _validate_shipping_package_manifest(path, source_sha, version, msi_name, msi
             raise ValueError(
                 f"shipping package manifest {label} does not match the selected MSI identity"
             )
+    # Callers that bind the manifest to an external receipt need the identity
+    # of the exact bytes parsed here, not a second read that could race.
+    return document, hashlib.sha256(data).hexdigest(), len(data)
+
+
+_PREVIOUS_RECEIPT_SCHEMA = "spark-previous-windows-msi-v1"
+_PREVIOUS_RECEIPT_KEYS = frozenset({
+    "schema", "repository", "current_version", "previous_version", "tag", "tag_commit_sha",
+    "release_id", "release_immutable", "msi", "manifest",
+})
+_PREVIOUS_RECEIPT_MSI_KEYS = frozenset({"id", "name", "size", "digest", "downloaded_sha256", "path"})
+_PREVIOUS_RECEIPT_MANIFEST_KEYS = frozenset({"id", "name", "size", "digest", "path"})
+_MAX_PREVIOUS_RECEIPT_BYTES = 64 * 1024
+
+
+def _release_version(value):
+    return tuple(int(part) for part in value.split("."))
+
+
+def _validate_previous_receipt(path, *, version, previous_version, source_sha, old_msi, old_digest,
+                               previous_manifest_commit, previous_manifest_sha256, previous_manifest_size):
+    """Bind the provisioner's selection receipt to the exact predecessor bytes being qualified.
+
+    The provisioner (provision-previous-windows-msi.py) selects the published
+    release by tag, commit, digest and asset id. The qualifier must consume
+    that same identity rather than trusting whatever MSI and manifest sit in
+    the predecessor directory, so every field is cross-checked here before
+    any Windows Installer command runs.
+    """
+    try:
+        data = strict_json.read_file_no_follow_bytes(Path(path).absolute(), max_bytes=_MAX_PREVIOUS_RECEIPT_BYTES)
+        receipt = json.loads(data.decode("utf-8"), object_pairs_hook=_reject_duplicate_json_keys)
+    except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError, strict_json.StrictJSONError) as exc:
+        raise ValueError(f"previous-release provisioning receipt is unreadable JSON: {exc}") from exc
+    if not isinstance(receipt, dict) or set(receipt) != _PREVIOUS_RECEIPT_KEYS:
+        raise ValueError("previous-release provisioning receipt does not have the closed required schema")
+    msi = receipt["msi"]
+    manifest = receipt["manifest"]
+    if (not isinstance(msi, dict) or set(msi) != _PREVIOUS_RECEIPT_MSI_KEYS
+            or not isinstance(manifest, dict) or set(manifest) != _PREVIOUS_RECEIPT_MANIFEST_KEYS):
+        raise ValueError("previous-release provisioning receipt asset records do not have the closed required schema")
+    for asset in (msi, manifest):
+        if type(asset["id"]) is not int or asset["id"] <= 0 or type(asset["size"]) is not int or asset["size"] <= 0:
+            raise ValueError("previous-release provisioning receipt asset id or size is invalid")
+    if type(receipt["release_id"]) is not int or receipt["release_id"] <= 0 or receipt["release_immutable"] is not True:
+        raise ValueError("previous-release provisioning receipt does not identify an immutable release")
+    if (receipt["schema"] != _PREVIOUS_RECEIPT_SCHEMA
+            or not isinstance(receipt["repository"], str)
+            or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", receipt["repository"])):
+        raise ValueError("previous-release provisioning receipt schema or repository is invalid")
+    if receipt["current_version"] != version:
+        raise ValueError("previous-release provisioning receipt was issued for a different candidate version")
+    if receipt["previous_version"] != previous_version or receipt["tag"] != f"v{previous_version}":
+        raise ValueError("previous-release provisioning receipt version or tag does not match the predecessor")
+    commit = receipt["tag_commit_sha"]
+    if not isinstance(commit, str) or not _SOURCE_SHA_RE.fullmatch(commit):
+        raise ValueError("previous-release provisioning receipt tag commit is not an exact source SHA")
+    if commit != previous_manifest_commit:
+        raise ValueError("previous-release provisioning receipt tag commit does not match the predecessor manifest")
+    if commit == source_sha:
+        raise ValueError("previous-release provisioning receipt tag commit equals the candidate source SHA")
+    old_size = old_msi.stat().st_size
+    if (msi["name"] != old_msi.name or msi["path"] != f"packages/{old_msi.name}"
+            or msi["digest"] != old_digest or msi["downloaded_sha256"] != old_digest or msi["size"] != old_size):
+        raise ValueError("previous-release provisioning receipt MSI identity does not match the private predecessor copy")
+    if (manifest["name"] != "shipping-package-manifest.json" or manifest["path"] != "shipping-package-manifest.json"
+            or manifest["digest"] != previous_manifest_sha256 or manifest["size"] != previous_manifest_size):
+        raise ValueError("previous-release provisioning receipt manifest identity does not match the predecessor manifest")
+    return {
+        "receipt_sha256": hashlib.sha256(data).hexdigest(),
+        "repository": receipt["repository"],
+        "tag": receipt["tag"],
+        "tag_commit_sha": commit,
+        "release_id": receipt["release_id"],
+        "msi_asset_id": msi["id"],
+        "manifest_asset_id": manifest["id"],
+    }
 
 
 def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_command,
                   msiexec, powershell, cmake, source_sha=None, package_manifest=None,
                   previous_packages=None, previous_version=None, previous_package_manifest=None,
-                  previous_signer_thumbprint=None, bootstrap_repair=False):
+                  previous_signer_thumbprint=None, previous_receipt=None, bootstrap_repair=False):
     logs = Path(logs)
     if os.path.lexists(logs):
         raise ValueError("package-evidence log directory must be fresh")
@@ -281,7 +363,7 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
     errors = []
     transaction = any(value is not None for value in
                       (previous_packages, previous_version, previous_package_manifest,
-                       previous_signer_thumbprint))
+                       previous_signer_thumbprint, previous_receipt))
     if bootstrap_repair and transaction:
         raise ValueError("bootstrap_repair cannot be combined with predecessor transaction inputs")
     report = {"scope": ("hosted-windows-msi-upgrade-repair-rollback-uninstall"
@@ -396,17 +478,20 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
         report["shipping_package_manifest"] = str(package_manifest)
         old_package = old_digest = None
         if transaction:
-            if any(value is None for value in (previous_packages, previous_version,
-                                              previous_package_manifest, previous_signer_thumbprint)):
+            if any(value is None for value in (previous_packages, previous_version, previous_package_manifest,
+                                              previous_signer_thumbprint, previous_receipt)):
                 raise ValueError(
-                    "previous_packages, previous_version, previous_package_manifest, and "
-                    "previous_signer_thumbprint must be supplied together"
+                    "previous_packages, previous_version, previous_package_manifest, "
+                    "previous_signer_thumbprint, and previous_receipt must be supplied together"
                 )
             if (not isinstance(previous_signer_thumbprint, str)
                     or not re.fullmatch(r"[0-9a-fA-F]{40}", previous_signer_thumbprint)):
                 raise ValueError("previous_signer_thumbprint must be the trusted publisher's 40-hex thumbprint")
             if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", previous_version):
                 raise ValueError("Invalid previous MSI release version")
+            # A candidate must never qualify as its own predecessor.
+            if _release_version(previous_version) >= _release_version(version):
+                raise ValueError("previous MSI release version must be strictly lower than the candidate version")
             previous_packages = Path(previous_packages)
             if not previous_packages.is_dir() or previous_packages.is_symlink():
                 raise ValueError("previous shipping package directory must be a real directory")
@@ -423,9 +508,29 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
             old_package, old_digest = package_evidence_io.copy_private_verified_file(
                 previous_source, previous_private_dir, previous_source.name,
             )
-            _validate_shipping_package_manifest(
-                previous_package_manifest, None, previous_version, old_package.name, old_digest,
+            if old_digest == digest:
+                raise ValueError("previous MSI digest equals the candidate MSI digest")
+            previous_document, previous_manifest_sha256, previous_manifest_size = (
+                _validate_shipping_package_manifest(
+                    previous_package_manifest, None, previous_version, old_package.name, old_digest,
+                )
             )
+            if previous_document["commitSHA"] == source_sha:
+                raise ValueError("previous shipping package manifest commitSHA equals the candidate source SHA")
+            previous_release = _validate_previous_receipt(
+                previous_receipt, version=version, previous_version=previous_version, source_sha=source_sha,
+                old_msi=old_package, old_digest=old_digest,
+                previous_manifest_commit=previous_document["commitSHA"],
+                previous_manifest_sha256=previous_manifest_sha256,
+                previous_manifest_size=previous_manifest_size,
+            )
+            report["previous_release"] = previous_release
+            # Success publishes no secondary result.json, so the bound receipt
+            # identity is its own evidence file, written before any installer command.
+            _write_result_report(logs / "previous-release.json", {
+                "scope": "previous-windows-msi-provisioning-receipt", "previous_version": previous_version,
+                "msi": old_package.name, "sha256": old_digest, **previous_release, "passed": True,
+            })
             report.update(previous_msi=old_package.name, previous_sha256=old_digest,
                           previous_shipping_package_manifest=str(previous_package_manifest))
         scratch = Path(tempfile.mkdtemp(prefix="spark-msi-", dir=runner_temp)).resolve()
@@ -659,7 +764,7 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
 def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_command,
             msiexec, powershell, cmake, source_sha=None, package_manifest=None,
             previous_packages=None, previous_version=None, previous_package_manifest=None,
-            previous_signer_thumbprint=None, bootstrap_repair=False):
+            previous_signer_thumbprint=None, previous_receipt=None, bootstrap_repair=False):
     """Run native MSI qualification on Windows.
 
     The platform-independent transaction state machine lives in the private
@@ -675,6 +780,7 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         previous_packages=previous_packages, previous_version=previous_version,
         previous_package_manifest=previous_package_manifest,
         previous_signer_thumbprint=previous_signer_thumbprint,
+        previous_receipt=previous_receipt,
         bootstrap_repair=bootstrap_repair,
     )
 
@@ -692,14 +798,16 @@ def main():
     parser.add_argument("--previous-version")
     parser.add_argument("--previous-package-manifest", type=Path)
     parser.add_argument("--previous-signer-thumbprint", help="Trusted Authenticode publisher for the predecessor MSI")
+    parser.add_argument("--previous-receipt", type=Path,
+                        help="provision-previous-windows-msi.py receipt that selected the predecessor")
     parser.add_argument("--bootstrap-repair", action="store_true",
                         help="run repair after a fresh install without an N-1 predecessor")
     args = parser.parse_args()
     previous_values = (args.previous_packages, args.previous_version, args.previous_package_manifest,
-                       args.previous_signer_thumbprint)
+                       args.previous_signer_thumbprint, args.previous_receipt)
     if any(value is not None for value in previous_values) and not all(value is not None for value in previous_values):
-        parser.error("--previous-packages, --previous-version, --previous-package-manifest, and "
-                     "--previous-signer-thumbprint must be supplied together")
+        parser.error("--previous-packages, --previous-version, --previous-package-manifest, "
+                     "--previous-signer-thumbprint, and --previous-receipt must be supplied together")
     if args.bootstrap_repair and any(value is not None for value in previous_values):
         parser.error("--bootstrap-repair cannot be combined with predecessor transaction inputs")
     if os.name != "nt" or not re.fullmatch(r"[0-9a-f]{40}", args.source_sha):
@@ -712,6 +820,7 @@ def main():
                    previous_packages=args.previous_packages, previous_version=args.previous_version,
                    previous_package_manifest=args.previous_package_manifest,
                    previous_signer_thumbprint=args.previous_signer_thumbprint,
+                   previous_receipt=args.previous_receipt,
                    bootstrap_repair=args.bootstrap_repair)
 
 
