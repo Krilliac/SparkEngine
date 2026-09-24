@@ -28,7 +28,8 @@ from common import (
     load_json,
     read_bytes_stable,
 )
-from contract_selectors import cmake_preset_index, preset_references, resolve_ci_job, resolve_test_selector
+from contract_selectors import (cmake_preset_index, preset_references, required_gate_jobs, resolve_ci_job,
+                                resolve_test_selector)
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
                             predecessor_candidate_readiness_errors)
@@ -2791,6 +2792,85 @@ class Validator:
             self.require(len(values) == len(dimensions), f"parity.{module}", "score count differs from dimensions")
             for value in values:
                 self.require(value in {0, 1, 2, 3, "N/A"}, f"parity.{module}", f"invalid score {value!r}")
+        self.validate_parity_evidence(dimensions, scores, parity.get("parityEvidence", {}))
+
+    def validate_parity_evidence(self, dimensions: list[Any], scores: dict[str, Any], evidence: Any) -> None:
+        """A score of 3 ("validated shipping candidate") must be backed by evidence.
+
+        Hand-written scores cost nothing to raise, so a 3 is accepted only when the
+        module is included in a release profile and parityEvidence names, for that
+        module and dimension, a registered test selector and a CI job that the
+        required-ci-gate aggregate depends on. Every evidence entry must resolve,
+        whatever the score it sits under, so stale evidence cannot linger.
+        """
+        location = "parityDimensions.parityEvidence"
+        if not isinstance(evidence, dict):
+            self.error(location, "must be an object keyed by module")
+            return
+        required_jobs = required_gate_jobs()
+        manifest = load_json(REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
+        in_profile = {
+            module
+            for profile in manifest.get("profiles", [])
+            for module in profile.get("includedModules", [])
+        }
+        resolved: dict[tuple[str, str], dict[str, list[str]]] = {}
+        for module, by_dimension in evidence.items():
+            module_location = f"{location}.{module}"
+            if module not in scores:
+                self.error(module_location, "names no scored module")
+                continue
+            if not isinstance(by_dimension, dict) or not by_dimension:
+                self.error(module_location, "must be a non-empty object keyed by dimension")
+                continue
+            for dimension, entry in by_dimension.items():
+                entry_location = f"{module_location}.{dimension}"
+                if dimension not in dimensions:
+                    self.error(entry_location, "names no parity dimension")
+                    continue
+                if not isinstance(entry, dict) or set(entry) - {"testSelectors", "requiredCiJobs"}:
+                    self.error(entry_location, "must be an object with only testSelectors and requiredCiJobs")
+                    continue
+                accepted: dict[str, list[str]] = {"testSelectors": [], "requiredCiJobs": []}
+                for key, resolves, reason in (
+                    ("testSelectors", resolve_test_selector, "no CTest test, label, or SparkTests definition matches"),
+                    ("requiredCiJobs", resolve_ci_job, "no workflow job is defined with this id"),
+                ):
+                    values = entry.get(key, [])
+                    if not isinstance(values, list):
+                        self.error(f"{entry_location}.{key}", "must be an array")
+                        continue
+                    for index, value in enumerate(values):
+                        value_location = f"{entry_location}.{key}[{index}]"
+                        if not isinstance(value, str) or not value:
+                            self.error(value_location, "must be a non-empty string")
+                        elif not resolves(value):
+                            self.error(value_location, f"{value!r} resolves to nothing: {reason}")
+                        elif key == "requiredCiJobs" and value not in required_jobs:
+                            self.error(value_location, f"{value!r} is not a need of required-ci-gate")
+                        else:
+                            accepted[key].append(value)
+                resolved[(module, dimension)] = accepted
+        for module, values in scores.items():
+            if not isinstance(values, list):
+                continue
+            for dimension, value in zip(dimensions, values):
+                if value != 3:
+                    continue
+                cell = f"parity.{module}.{dimension}"
+                self.require(
+                    module in in_profile,
+                    cell,
+                    "score 3 (validated shipping candidate) requires the module to be included in a release "
+                    "profile in tools/module-evidence/manifest.json",
+                )
+                accepted = resolved.get((module, dimension), {})
+                self.require(
+                    bool(accepted.get("testSelectors")) and bool(accepted.get("requiredCiJobs")),
+                    cell,
+                    "score 3 (validated shipping candidate) requires parityEvidence naming at least one resolving "
+                    "test selector and one required-ci-gate job",
+                )
 
     def validate(
         self,

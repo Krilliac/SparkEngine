@@ -348,7 +348,7 @@ Scores are evidence pointers, not percentages: `0` absent/dead, `1` data-model/m
 
 | Module | lifecycle | gameplayLoop | networking | persistence | ai | assets | editorDebug | testsDocs |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `SparkGameMMOFPS` | 3 | 3 | 2 | 2 | 3 | 3 | 2 | 2 |
+| `SparkGameMMOFPS` | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
 | `SparkGameFPS` | 2 | 2 | 1 | 1 | 2 | 2 | 1 | 1 |
 | `SparkGameMMO` | 2 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
 | `SparkGame` | 2 | 1 | N/A | 2 | 0 | 0 | 1 | 1 |
@@ -2987,7 +2987,7 @@ ctest --test-dir build/linux-gcc-release -L observability --output-on-failure --
 **Priority:** P1 · **Status:** open · **Wave:** 4 · **Area:** modules · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295. 2026-09-12 progress: FPS package-smoke now requires SparkSDK.h, IModule.h, and Version.h in the installed public SDK and rejects an incomplete package during reconfiguration. Full module lifecycle, package, and hosted evidence remains open. 2026-09-24 progress: every discovered module now has a GameModules/<Name>/module.json (per-module facts only; profile policy stays in tools/module-evidence/manifest.json), and module_content.validate fails on a missing manifest, a nonexistent source, asset, or test path, an unregistered test source, a TEST prefix with no definition, a missing README, or parity N/A cells that disagree with the declared N/A dimensions; ModuleManifest_Contract runs the mutation cases.
+Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295. 2026-09-12 progress: FPS package-smoke now requires SparkSDK.h, IModule.h, and Version.h in the installed public SDK and rejects an incomplete package during reconfiguration. Full module lifecycle, package, and hosted evidence remains open. 2026-09-24 progress: every discovered module now has a GameModules/<Name>/module.json (per-module facts only; profile policy stays in tools/module-evidence/manifest.json), and module_content.validate fails on a missing manifest, a nonexistent source, asset, or test path, an unregistered test source, a TEST prefix with no definition, a missing README, or parity N/A cells that disagree with the declared N/A dimensions; ModuleManifest_Contract runs the mutation cases. 2026-09-24 progress: parity scores of 3 now need evidence; validate_modules rejects a 3 unless the module is included in a release profile in tools/module-evidence/manifest.json and parityDimensions.parityEvidence names a resolving test selector and a job that required-ci-gate needs for that cell, and every parityEvidence entry must resolve. SparkGameMMOFPS claimed 3 for lifecycle, gameplayLoop, ai and assets with no bound evidence while outside every release profile; those cells are corrected to 2 (integrated but not release-gated). Parity is still hand-scored below 3, so "Parity is generated" remains open.
 
 **Dependency contract**
 

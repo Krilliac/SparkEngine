@@ -7,6 +7,7 @@ named error that module_content.validate_module_manifests reports.
 
 from __future__ import annotations
 
+import copy
 import json
 import shutil
 import subprocess
@@ -18,6 +19,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "site-data"))
 import module_content  # noqa: E402
+import validate as site_data_validate  # noqa: E402
+from common import load_contract  # noqa: E402
+from contract_selectors import required_gate_jobs, workflow_job_ids  # noqa: E402
 
 
 def _discovered(root: Path) -> dict[str, Path]:
@@ -206,6 +210,100 @@ class ManifestMutationTests(unittest.TestCase):
     def test_short_reason_is_rejected(self) -> None:
         self.edit("SparkGameRTS", lambda manifest: manifest["parity"]["notApplicable"][0].update(reason="n/a"))
         self.assert_named_error("reason must be a written explanation")
+
+
+class ParityEvidenceTests(unittest.TestCase):
+    """A parity score of 3 needs a release profile plus resolving, required evidence."""
+
+    contract: dict
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.contract = load_contract()
+
+    def setUp(self) -> None:
+        self.mutable = copy.deepcopy(self.contract)
+        self.parity = self.mutable["parityDimensions"]
+        self.parity.setdefault("parityEvidence", {})
+
+    def messages(self) -> list[str]:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_modules()
+        return validator.errors
+
+    def set_score(self, module: str, dimension: str, value) -> None:
+        self.parity["currentScores"][module][self.parity["dimensions"].index(dimension)] = value
+
+    def bind(self, module: str, dimension: str, *, selectors: list[str], jobs: list[str]) -> None:
+        self.parity["parityEvidence"].setdefault(module, {})[dimension] = {
+            "testSelectors": selectors,
+            "requiredCiJobs": jobs,
+        }
+
+    def assert_named_error(self, fragment: str) -> None:
+        messages = self.messages()
+        self.assertTrue(any(fragment in message for message in messages), messages)
+
+    def test_checked_in_scores_validate(self) -> None:
+        self.assertEqual([], self.messages())
+
+    def test_required_gate_jobs_are_parsed_from_the_aggregate(self) -> None:
+        jobs = required_gate_jobs()
+        self.assertIn("module-evidence", jobs)
+        self.assertIn("module-profile-package-smoke", jobs)
+        self.assertIn("build-macos", workflow_job_ids())
+        self.assertNotIn("build-macos", jobs)
+
+    def test_unevidenced_three_fails(self) -> None:
+        self.set_score("SparkGameFPS", "lifecycle", 3)
+        self.assert_named_error("parity.SparkGameFPS.lifecycle: score 3 (validated shipping candidate) requires parityEvidence")
+
+    def test_reverted_mmofps_claim_fails(self) -> None:
+        self.set_score("SparkGameMMOFPS", "ai", 3)
+        messages = self.messages()
+        self.assertTrue(any("parity.SparkGameMMOFPS.ai: score 3" in m and "release profile" in m for m in messages), messages)
+        self.assertTrue(any("parity.SparkGameMMOFPS.ai: score 3" in m and "parityEvidence" in m for m in messages), messages)
+
+    def test_evidence_does_not_excuse_a_module_outside_every_profile(self) -> None:
+        self.set_score("SparkGameMMOFPS", "ai", 3)
+        self.bind("SparkGameMMOFPS", "ai", selectors=["ModuleManifest_Contract"], jobs=["module-evidence"])
+        messages = self.messages()
+        self.assertEqual(1, len(messages), messages)
+        self.assertIn("requires the module to be included in a release profile", messages[0])
+
+    def test_evidenced_three_in_profile_passes(self) -> None:
+        self.set_score("SparkGameFPS", "lifecycle", 3)
+        self.bind("SparkGameFPS", "lifecycle", selectors=["ModuleManifest_Contract"], jobs=["module-evidence"])
+        self.assertEqual([], self.messages())
+
+    def test_selector_only_evidence_fails(self) -> None:
+        self.set_score("SparkGameFPS", "lifecycle", 3)
+        self.bind("SparkGameFPS", "lifecycle", selectors=["ModuleManifest_Contract"], jobs=[])
+        self.assert_named_error("requires parityEvidence naming at least one resolving test selector and one required-ci-gate job")
+
+    def test_job_outside_required_gate_fails(self) -> None:
+        self.set_score("SparkGameFPS", "lifecycle", 3)
+        self.bind("SparkGameFPS", "lifecycle", selectors=["ModuleManifest_Contract"], jobs=["build-macos"])
+        self.assert_named_error("'build-macos' is not a need of required-ci-gate")
+        self.assert_named_error("parity.SparkGameFPS.lifecycle: score 3")
+
+    def test_unresolved_selector_fails_even_below_three(self) -> None:
+        self.bind("SparkGameRTS", "ai", selectors=["RTSNoSuchSuite_*"], jobs=["module-evidence"])
+        self.assert_named_error("'RTSNoSuchSuite_*' resolves to nothing")
+
+    def test_unknown_job_fails(self) -> None:
+        self.bind("SparkGameRTS", "ai", selectors=["ModuleManifest_Contract"], jobs=["no-such-parity-job"])
+        self.assert_named_error("'no-such-parity-job' resolves to nothing: no workflow job is defined with this id")
+
+    def test_unknown_module_and_dimension_fail(self) -> None:
+        self.bind("SparkGameMissing", "ai", selectors=["ModuleManifest_Contract"], jobs=["module-evidence"])
+        self.bind("SparkGameRTS", "graphics", selectors=["ModuleManifest_Contract"], jobs=["module-evidence"])
+        self.assert_named_error("parityDimensions.parityEvidence.SparkGameMissing: names no scored module")
+        self.assert_named_error("parityDimensions.parityEvidence.SparkGameRTS.graphics: names no parity dimension")
+
+    def test_unknown_evidence_key_fails(self) -> None:
+        self.parity["parityEvidence"]["SparkGameRTS"] = {"ai": {"testSelectors": [], "notes": "mutation"}}
+        self.assert_named_error("must be an object with only testSelectors and requiredCiJobs")
 
 
 if __name__ == "__main__":

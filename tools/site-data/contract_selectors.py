@@ -114,6 +114,54 @@ def resolve_ci_job(value: str) -> bool:
     return value in workflow_job_ids()
 
 
+REQUIRED_GATE_WORKFLOW = WORKFLOW_ROOT / "build.yml"
+REQUIRED_GATE_JOB = "required-ci-gate"
+_NEEDS_INLINE = re.compile(r"^    needs:\s*\[([^\]]*)\]\s*(?:#.*)?$")
+_NEEDS_BLOCK = re.compile(r"^    needs:\s*(?:#.*)?$")
+_NEEDS_ENTRY = re.compile(r"^      -\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*(?:#.*)?$")
+
+
+@functools.lru_cache(maxsize=1)
+def required_gate_jobs() -> frozenset[str]:
+    """Jobs the aggregate ``required-ci-gate`` job in build.yml needs.
+
+    A job outside this set can be skipped, cancelled, or fail without turning the
+    required aggregate red, so it cannot be the CI evidence behind a claim that
+    something is release-validated.
+    """
+    if not REQUIRED_GATE_WORKFLOW.is_file():
+        raise SiteDataError(f"{REQUIRED_GATE_WORKFLOW.relative_to(REPO_ROOT).as_posix()} does not exist")
+    text = read_bytes_stable(REQUIRED_GATE_WORKFLOW, MAX_WORKFLOW_BYTES, "workflow build.yml").decode(
+        "utf-8", errors="replace"
+    )
+    lines = text.splitlines()
+    header = f"  {REQUIRED_GATE_JOB}:"
+    start = next((index for index, line in enumerate(lines) if line.split("#", 1)[0].rstrip() == header), None)
+    if start is None:
+        raise SiteDataError(f"build.yml defines no {REQUIRED_GATE_JOB} job")
+    jobs: set[str] = set()
+    in_needs = False
+    for line in lines[start + 1:]:
+        if _JOB_KEY.match(line) or _TOP_LEVEL_KEY.match(line):
+            break
+        inline = _NEEDS_INLINE.match(line)
+        if inline:
+            jobs.update(entry.strip() for entry in inline.group(1).split(",") if entry.strip())
+            break
+        if _NEEDS_BLOCK.match(line):
+            in_needs = True
+            continue
+        if in_needs:
+            entry = _NEEDS_ENTRY.match(line)
+            if entry:
+                jobs.add(entry.group(1))
+            elif line.strip() and not line.lstrip().startswith("#"):
+                break
+    if not jobs:
+        raise SiteDataError(f"{REQUIRED_GATE_JOB} in build.yml needs no jobs")
+    return frozenset(jobs)
+
+
 @functools.lru_cache(maxsize=4096)
 def resolve_test_selector(value: str) -> bool:
     """A test selector may be an exact name or a glob over selectable names.

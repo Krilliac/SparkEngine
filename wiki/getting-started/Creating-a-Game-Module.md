@@ -354,6 +354,18 @@ Every directory under `GameModules/` must carry a `module.json` that records per
 | `docs.readme` | Must be `GameModules/<Name>/README.md`, and the file must exist |
 | `parity.notApplicable` | Exactly the dimensions whose cell is `"N/A"` in `parityDimensions.currentScores` (`docs/readiness/work-items/30-game-modules.json`), each with a written reason |
 
+Parity scores in `parityDimensions.currentScores` are written by hand, so the top score ("validated shipping candidate") is accepted only with evidence. `validate.py --modules` rejects that score unless the module is in a release profile's `includedModules` (`tools/module-evidence/manifest.json`) and `parityDimensions.parityEvidence.<Module>.<dimension>` names at least one resolving test selector and one job that `required-ci-gate` needs in `.github/workflows/build.yml`:
+
+```json
+"parityEvidence": {
+    "SparkGameFPS": {
+        "lifecycle": { "testSelectors": ["ModuleProfileLifecycle_SparkGameFPS_D3D11"], "requiredCiJobs": ["module-profile-lifecycle"] }
+    }
+}
+```
+
+Every evidence entry must resolve, even under a lower score, so evidence cannot go stale. Lower scores need no evidence binding.
+
 ### One Game Module Plus Addons
 
 The loader rejects a second `ModuleKind::Game` module because two games would own the same simulation. A manifest can include the selected Game module plus compatible `ModuleKind::Addon` modules (library/extension-style modules); their kinds and lifecycle dependencies come from their `ModuleInfo`, not manifest `loadOrder` metadata:
