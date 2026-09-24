@@ -691,15 +691,106 @@ namespace Spark
         return instance;
     }
 
+    ComponentSerializerRegistry::ScopedRegistrationOwner::ScopedRegistrationOwner(ComponentSerializerRegistry& registry,
+                                                                                  std::string ownerId)
+        : m_registry(registry), m_previousOwner(std::move(registry.m_registrationOwner))
+    {
+        registry.m_registrationOwner = std::move(ownerId);
+    }
+
+    ComponentSerializerRegistry::ScopedRegistrationOwner::~ScopedRegistrationOwner()
+    {
+        m_registry.m_registrationOwner = std::move(m_previousOwner);
+    }
+
     void ComponentSerializerRegistry::Register(const std::string& typeName, SerializeFunc serialize,
                                                DeserializeFunc deserialize)
     {
-        m_serializers[typeName] = {std::move(serialize), std::move(deserialize)};
+        Registration registration{std::move(serialize), std::move(deserialize), m_registrationOwner};
+        auto existing = m_serializers.find(typeName);
+        if (existing != m_serializers.end() && !existing->second.ownerId.empty() && !m_registrationOwner.empty() &&
+            existing->second.ownerId != m_registrationOwner)
+        {
+            // A hot-reload replacement registers while the outgoing image is
+            // still live. Keep the outgoing entry underneath so its owner-scoped
+            // teardown removes exactly its own callbacks, never the replacement's.
+            m_shadowedSerializers[typeName].push_back(std::move(existing->second));
+            existing->second = std::move(registration);
+            return;
+        }
+        m_serializers[typeName] = std::move(registration);
     }
 
     bool ComponentSerializerRegistry::Unregister(const std::string& typeName)
     {
-        return m_serializers.erase(typeName) != 0;
+        if (m_registrationOwner.empty())
+        {
+            m_shadowedSerializers.erase(typeName);
+            return m_serializers.erase(typeName) != 0;
+        }
+        return RemoveOwnedRegistration(typeName, m_registrationOwner);
+    }
+
+    bool ComponentSerializerRegistry::RemoveOwnedRegistration(const std::string& typeName, const std::string& ownerId)
+    {
+        auto active = m_serializers.find(typeName);
+        auto shadowed = m_shadowedSerializers.find(typeName);
+        if (active != m_serializers.end() && active->second.ownerId == ownerId)
+        {
+            if (shadowed != m_shadowedSerializers.end() && !shadowed->second.empty())
+            {
+                active->second = std::move(shadowed->second.back());
+                shadowed->second.pop_back();
+                if (shadowed->second.empty())
+                    m_shadowedSerializers.erase(shadowed);
+            }
+            else
+            {
+                m_serializers.erase(active);
+            }
+            return true;
+        }
+        if (shadowed == m_shadowedSerializers.end())
+            return false;
+        const size_t removed = std::erase_if(shadowed->second, [&](const Registration& registration)
+                                             { return registration.ownerId == ownerId; });
+        if (shadowed->second.empty())
+            m_shadowedSerializers.erase(shadowed);
+        return removed != 0;
+    }
+
+    size_t ComponentSerializerRegistry::UnregisterByOwner(const std::string& ownerId)
+    {
+        // The empty token is the engine's own; it must never sweep built-ins.
+        if (ownerId.empty())
+            return 0;
+        std::vector<std::string> typeNames;
+        for (const auto& [typeName, registration] : m_serializers)
+        {
+            if (registration.ownerId == ownerId)
+                typeNames.push_back(typeName);
+        }
+        for (const auto& [typeName, stack] : m_shadowedSerializers)
+        {
+            for (const auto& registration : stack)
+            {
+                if (registration.ownerId == ownerId)
+                    typeNames.push_back(typeName);
+            }
+        }
+        size_t removed = 0;
+        for (const auto& typeName : typeNames)
+        {
+            if (RemoveOwnedRegistration(typeName, ownerId))
+                ++removed;
+        }
+        return removed;
+    }
+
+    std::string ComponentSerializerRegistry::GetSerializerOwner(const std::string& typeName) const
+    {
+        auto it = m_serializers.find(typeName);
+        return it == m_serializers.end() ? std::string{} : it->second.ownerId;
     }
 
     ComponentSerializerRegistry::RegistrationHandle ComponentSerializerRegistry::TakeRegistration(

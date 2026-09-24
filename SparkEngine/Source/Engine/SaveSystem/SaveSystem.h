@@ -190,6 +190,7 @@ namespace Spark
         {
             SerializeFunc serialize;
             DeserializeFunc deserialize;
+            std::string ownerId; ///< Registering module image; empty for the engine
         };
 
         using RegistrationMap = std::unordered_map<std::string, Registration>;
@@ -214,6 +215,31 @@ namespace Spark
             friend class ComponentSerializerRegistry;
             explicit RegistrationHandle(RegistrationMap::node_type node) : m_node(std::move(node)) {}
             RegistrationMap::node_type m_node;
+        };
+
+        /**
+         * @brief Attribute registrations and name-based removals to one module image.
+         *
+         * While a scope is active, Register() records its owner and Unregister()
+         * removes only that owner's entry. A hot-reload replacement registers
+         * the same type names before the outgoing image tears down, so the
+         * outgoing entry is kept underneath the replacement rather than being
+         * overwritten, and the outgoing teardown can never remove the
+         * replacement's callbacks.
+         * @note Game-thread only.
+         */
+        class ScopedRegistrationOwner final
+        {
+          public:
+            ScopedRegistrationOwner(ComponentSerializerRegistry& registry, std::string ownerId);
+            ~ScopedRegistrationOwner();
+
+            ScopedRegistrationOwner(const ScopedRegistrationOwner&) = delete;
+            ScopedRegistrationOwner& operator=(const ScopedRegistrationOwner&) = delete;
+
+          private:
+            ComponentSerializerRegistry& m_registry;
+            std::string m_previousOwner;
         };
 
         /**
@@ -248,6 +274,9 @@ namespace Spark
          * otherwise point into an unmapped module image during later use or
          * process-static destruction.
          *
+         * Inside a ScopedRegistrationOwner only the scope owner's entry is
+         * removed; a shadowed entry of another owner becomes active again.
+         *
          * @param typeName  Component type name to remove.
          * @return          @c true when an entry was removed; @c false when no
          *                  entry with that name existed.
@@ -255,6 +284,21 @@ namespace Spark
          * @note [game thread] Call during single-threaded module teardown.
          */
         bool Unregister(const std::string& typeName);
+
+        /**
+         * @brief Remove every active or shadowed registration owned by @p ownerId.
+         *
+         * Called while the owning module image is still mapped, so each removed
+         * callback is destroyed before its code can be unloaded. An empty token
+         * (the engine's own) removes nothing.
+         *
+         * @return Number of type names from which an owned entry was removed.
+         * @note [game thread]
+         */
+        size_t UnregisterByOwner(const std::string& ownerId);
+
+        /** @brief Owner of the active registration; empty for engine entries and unknown names. */
+        std::string GetSerializerOwner(const std::string& typeName) const;
 
         /** @note Game-thread only. Remove and return one exact registration. */
         RegistrationHandle TakeRegistration(const std::string& typeName);
@@ -334,6 +378,12 @@ namespace Spark
      * Keyed by the same `typeName` string used in SerializedComponent::typeName.
      */
         RegistrationMap m_serializers;
+
+        /// Owned registrations hidden by a later owner's Register(), newest last.
+        std::unordered_map<std::string, std::vector<Registration>> m_shadowedSerializers;
+        std::string m_registrationOwner;
+
+        bool RemoveOwnedRegistration(const std::string& typeName, const std::string& ownerId);
     };
 
     // ============================================================================
