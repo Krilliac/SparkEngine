@@ -11,6 +11,8 @@
  * - Level unlock progression
  * - Secret area tracking
  * - Speedrun timer
+ * - Platform simulation (moving, falling, disappearing, rotating) and the
+ *   module-local AABB colliders the player controller resolves against
  */
 
 #pragma once
@@ -24,7 +26,12 @@
 namespace Platformer
 {
 
-    /// @brief A single platform placement within a level
+    /**
+     * @brief A single platform placement within a level
+     *
+     * posX/posZ are the centre of the platform footprint and posY is its top
+     * (walkable) surface; the box extends @c height below that surface.
+     */
     struct PlatformDef
     {
         PlatformType type{PlatformType::Static};
@@ -54,6 +61,32 @@ namespace Platformer
 
         // Bouncy platform launch force
         float bounceForce = 15.0f;
+
+        // Rotating platform spin about the vertical axis, in degrees per second
+        float rotationSpeed = 45.0f;
+    };
+
+    /**
+     * @brief World-space collision box for one platform of the loaded level
+     *
+     * Platformer collision is module-local axis-aligned boxes, not Jolt bodies.
+     * Colliders are indexed identically to LevelDef::platforms.
+     */
+    struct PlatformCollider
+    {
+        PlatformType type{PlatformType::Static};
+        float minX = 0.0f;
+        float maxX = 0.0f;
+        float minY = 0.0f;
+        float maxY = 0.0f; ///< Top (walkable) surface
+        float minZ = 0.0f;
+        float maxZ = 0.0f;
+        float deltaX = 0.0f; ///< Displacement during the last StepPlatforms call (carries riders)
+        float deltaY = 0.0f;
+        float deltaZ = 0.0f;
+        float surfaceVelocityX = 0.0f; ///< Conveyor belt surface speed along X
+        float bounceForce = 0.0f;      ///< Launch speed for Bouncy platforms (0 for every other type)
+        bool solid = true;             ///< False while a Disappearing platform is hidden
     };
 
     /// @brief Spawn point definition
@@ -85,6 +118,7 @@ namespace Platformer
         StarThresholds starThresholds{};
         uint32_t requiredStarsToUnlock = 0;
         bool hasSecretArea = false;
+        float killPlaneY = -15.0f; ///< Falling below this height costs a life and respawns the player
     };
 
     /// @brief Per-level progress tracking
@@ -147,7 +181,37 @@ namespace Platformer
         /// @brief Get current level timer
         float GetLevelTimer() const { return m_levelTimer; }
 
+        /// @brief Advance moving, falling, disappearing, and rotating platforms by one fixed step.
+        void StepPlatforms(float fixedDeltaTime);
+
+        /// @brief Colliders of the loaded level (empty until LoadLevel succeeds).
+        const std::vector<PlatformCollider>& GetActiveColliders() const { return m_colliders; }
+
+        /// @brief Height below which the player is out of the loaded level.
+        float GetKillPlaneY() const;
+
+        /// @brief Report that the player is standing on a platform (starts a Falling platform's collapse).
+        void NotifyPlatformStoodOn(size_t colliderIndex);
+
       private:
+        /// @brief Simulation state for one platform of the loaded level
+        struct PlatformRuntime
+        {
+            float x = 0.0f; ///< Current footprint centre / top surface
+            float y = 0.0f;
+            float z = 0.0f;
+            float travel = 0.0f;          ///< Moving: distance travelled along the start->end segment
+            float travelDirection = 1.0f; ///< Moving: +1 towards end, -1 back to start
+            bool triggered = false;       ///< Falling: player has stood on it
+            float collapseTimer = 0.0f;   ///< Falling: time since triggered, then time since collapse
+            bool collapsed = false;       ///< Falling: dropping away
+            float fallVelocity = 0.0f;    ///< Falling: downward speed while collapsed
+            float cycleTimer = 0.0f;      ///< Disappearing: position within the visible+hidden cycle
+            float angleDegrees = 0.0f;    ///< Rotating: yaw of the footprint
+        };
+
+        void ResetPlatformRuntime();
+        void RebuildColliders();
         void BuildLevelDefinitions();
         void BuildGrasslandsLevel();
         void BuildDesertLevel();
@@ -157,6 +221,8 @@ namespace Platformer
         Spark::IEngineContext* m_context{nullptr};
         std::vector<LevelDef> m_levels;
         std::vector<LevelProgress> m_progress;
+        std::vector<PlatformRuntime> m_platformRuntime;
+        std::vector<PlatformCollider> m_colliders;
         uint32_t m_currentLevel{0};
         float m_levelTimer{0.0f};
         int m_levelDeaths{0};

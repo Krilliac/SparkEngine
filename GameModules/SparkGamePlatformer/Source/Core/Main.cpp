@@ -83,7 +83,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
 
     // Initialize player controller (movement, jumping, abilities)
     m_playerController = std::make_unique<Platformer::PlatformerPlayerController>();
-    if (!m_playerController->Initialize(context, m_checkpointSystem.get()))
+    if (!m_playerController->Initialize(context, m_checkpointSystem.get(), m_levelSystem.get()))
     {
         console.LogError("[Platformer] Failed to initialize player controller");
         return false;
@@ -287,6 +287,8 @@ void SparkGamePlatformerModule::OnFixedUpdate(float fixedDeltaTime)
     if (!m_initialized || m_paused || !std::isfinite(fixedDeltaTime) || fixedDeltaTime <= 0.0f)
         return;
 
+    // Platforms move first so the player rides and collides with this step's positions.
+    m_levelSystem->StepPlatforms(fixedDeltaTime);
     m_playerController->FixedUpdate(fixedDeltaTime);
 
     const auto playerPosition = m_playerController->GetPlayerPosition();

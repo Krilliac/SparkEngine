@@ -12,12 +12,15 @@
  * - Variable jump height (hold for higher, tap for lower)
  * - Ability unlock system (abilities start locked, unlocked by AbilityOrbs)
  * - Lives and respawn at last checkpoint
+ * - Swept AABB collision against the loaded level's platforms, a kill plane,
+ *   and automatic restart at the last checkpoint after a fall or game over
  */
 
 #pragma once
 
 #include "Spark/IEngineContext.h"
 #include "Enums/PlatformerEnums.h"
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -25,6 +28,7 @@ namespace Platformer
 {
 
     class PlatformerCheckpointSystem;
+    class PlatformerLevelSystem;
 
     /// @brief Player position as a simple 3D vector
     struct PlayerPosition
@@ -66,7 +70,11 @@ namespace Platformer
         PlatformerPlayerController() = default;
         ~PlatformerPlayerController() = default;
 
-        bool Initialize(Spark::IEngineContext* context, PlatformerCheckpointSystem* checkpoints);
+        /// @brief Bind the controller to its checkpoint and level systems.
+        /// @param level Source of platform colliders and the kill plane. Without a level the player has no
+        ///              ground to stand on and no kill plane.
+        bool Initialize(Spark::IEngineContext* context, PlatformerCheckpointSystem* checkpoints,
+                        PlatformerLevelSystem* level = nullptr);
         void Update(float deltaTime);
         void FixedUpdate(float fixedDeltaTime);
         void Render();
@@ -86,7 +94,10 @@ namespace Platformer
         /// @brief Current number of lives remaining
         int GetLives() const { return m_lives; }
 
-        /// @brief Respawn at last activated checkpoint
+        /// @brief True while the player stands on a level platform
+        bool IsGrounded() const { return m_grounded; }
+
+        /// @brief Respawn at last activated checkpoint (also runs automatically after a fall or game over)
         void Respawn();
 
         /// @brief Apply damage to the player (from hazards).
@@ -124,6 +135,13 @@ namespace Platformer
         void ProcessInput(float deltaTime);
         void ApplyGravity(float fixedDeltaTime);
         void ApplyMovement(float fixedDeltaTime);
+        void ApplyPlatformCarry(float fixedDeltaTime);
+        void ResolvePlatformPenetration();
+        void MoveAndCollide(float dx, float dy, float dz);
+        float SweepHorizontal(float start, float delta, bool alongX);
+        void LandOn(size_t colliderIndex, float surfaceY);
+        bool HandleKillPlane();
+        void EnterDeadState();
         void UpdateState();
         void CheckGrounded();
         void HandleJump();
@@ -138,6 +156,7 @@ namespace Platformer
 
         Spark::IEngineContext* m_context{nullptr};
         PlatformerCheckpointSystem* m_checkpoints{nullptr};
+        PlatformerLevelSystem* m_level{nullptr};
 
         // Position and physics
         PlayerPosition m_position{};
@@ -184,6 +203,8 @@ namespace Platformer
         bool m_grounded{false};
         bool m_wasGrounded{false};
         bool m_touchingWall{false};
+        static constexpr size_t NO_PLATFORM = static_cast<size_t>(-1);
+        size_t m_groundPlatform{NO_PLATFORM}; ///< Collider index stood on, or NO_PLATFORM when airborne
         bool m_hasDoubleJumped{false};
         bool m_hasDashed{false};
         bool m_jumpHeld{false};
@@ -205,6 +226,10 @@ namespace Platformer
         float m_invincibilityDuration{1.5f};
         float m_invincibilityTimer{0.0f};
         bool m_invincible{false};
+
+        // Automatic restart after game over
+        float m_deathRestartDelay{1.5f};
+        float m_deathRestartTimer{0.0f};
 
         // Active power-ups
         float m_speedBoostTimer{0.0f};

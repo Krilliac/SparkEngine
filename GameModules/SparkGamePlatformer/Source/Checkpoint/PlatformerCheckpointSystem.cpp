@@ -61,17 +61,20 @@ namespace Platformer
         cp.posZ = 0.0f;
         m_checkpoints.push_back(cp);
 
-        // Level 1 (Scorching Sands) checkpoints
+        // Level 1 (Scorching Sands) checkpoints. Every checkpoint must sit above a platform: a respawn
+        // over empty space falls straight through the kill plane again.
+        // On the rest ledge after the conveyor (x 25..31, top 1)
         cp.id = m_nextId++;
         cp.levelIndex = 1;
-        cp.posX = 30.0f;
-        cp.posY = 1.0f;
+        cp.posX = 29.0f;
+        cp.posY = 2.0f;
         cp.posZ = 0.0f;
         m_checkpoints.push_back(cp);
 
+        // Over the rotating platform's pivot, which its collider covers at every angle
         cp.id = m_nextId++;
         cp.levelIndex = 1;
-        cp.posX = 70.0f;
+        cp.posX = 65.0f;
         cp.posY = 7.0f;
         cp.posZ = 0.0f;
         m_checkpoints.push_back(cp);

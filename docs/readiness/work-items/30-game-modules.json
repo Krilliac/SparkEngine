@@ -914,9 +914,7 @@
       "plannedCiJobs": [
         "module-Platformer"
       ],
-      "plannedTestSelectors": [
-        "PlatformerCompletion_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-350",

@@ -58,6 +58,9 @@ namespace Platformer
         /// @brief Total checkpoints across all levels
         size_t GetCheckpointCount() const { return m_checkpoints.size(); }
 
+        /// @brief Every checkpoint across all levels (placement data for level validation)
+        const std::vector<CheckpointData>& GetCheckpoints() const { return m_checkpoints; }
+
         /// @brief Number of activated checkpoints
         size_t GetActivatedCount() const;
 
