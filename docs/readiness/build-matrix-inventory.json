@@ -598,7 +598,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2536,
+      "line": 2543,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -625,10 +625,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3386,
+      "line": 3393,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3382",
+          "id": "CMakeLists.txt:3389",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1386,7 +1386,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2536,
+      "line": 2543,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1446,10 +1446,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3386,
+      "line": 3393,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3382",
+          "id": "CMakeLists.txt:3389",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2106,10 +2106,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1681,
+      "line": 1688,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1667",
+          "id": "CMakeLists.txt:1674",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2144,24 +2144,24 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1652,
+      "line": 1659,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1558",
+          "id": "CMakeLists.txt:1565",
           "branch": 0,
           "branches": [
             "JOLT_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:1650",
+          "id": "CMakeLists.txt:1657",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1651",
+          "id": "CMakeLists.txt:1658",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2255,10 +2255,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1669,
+      "line": 1676,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1667",
+          "id": "CMakeLists.txt:1674",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2710,10 +2710,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1424,
+      "line": 1431,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1423",
+          "id": "CMakeLists.txt:1430",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2728,10 +2728,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1426,
+      "line": 1433,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1423",
+          "id": "CMakeLists.txt:1430",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2747,10 +2747,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1407,
+      "line": 1414,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1406",
+          "id": "CMakeLists.txt:1413",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2765,7 +2765,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1380,
+      "line": 1387,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3206,7 +3206,7 @@
       "target": "SparkRuntimeShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1786,
+      "line": 1793,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3402,17 +3402,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2258,
+      "line": 2265,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2253",
+          "id": "CMakeLists.txt:2260",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2257",
+          "id": "CMakeLists.txt:2264",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -3764,7 +3764,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1681,
+          "line": 1688,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3818,7 +3818,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1652,
+          "line": 1659,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -3926,7 +3926,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1669,
+          "line": 1676,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4430,7 +4430,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1424,
+          "line": 1431,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4438,7 +4438,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1426,
+          "line": 1433,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4456,7 +4456,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1407,
+          "line": 1414,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4474,7 +4474,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1380,
+          "line": 1387,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5136,7 +5136,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1786,
+          "line": 1793,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -5428,7 +5428,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2258,
+          "line": 2265,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],

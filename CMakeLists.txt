@@ -1024,6 +1024,13 @@ if(ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE)
             target_compile_options(angelscript PRIVATE -w)
         endif()
     endif()
+    # AngelScript's VM keeps pointer-sized values in its 4-byte asDWORD script
+    # stack by design (e.g. asCContext::SetObject writes *(asPWORD*)&stackFramePointer[0]),
+    # so UBSan's alignment check fires as soon as a script runs. Exempt only this
+    # vendored target from that one check; engine code keeps -fsanitize=undefined.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*undefined")
+        target_compile_options(angelscript PRIVATE -fno-sanitize=alignment)
+    endif()
 
     list(APPEND THIRDPARTY_INCLUDE_DIRS "${SPARK_ANGELSCRIPT_ADDON_DIR}")
     set(SPARK_ANGELSCRIPT_AVAILABLE TRUE)
