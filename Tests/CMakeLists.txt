@@ -2213,6 +2213,47 @@ if(Python3_Interpreter_FOUND)
         LABELS "release;security;supply-chain;unit;python"
         TIMEOUT 60)
 
+    # REL-110: the existing release integrity suites (stable-publication
+    # consumer verifier, detached-signature bundle verify/extract, release
+    # asset boundary, build provenance). They exercise POSIX publication
+    # boundaries and the openssl CLI, so they run in the Linux ctest lanes;
+    # Windows keeps its native Authenticode gate in the release workflow.
+    if(NOT WIN32)
+        add_test(
+            NAME ArtifactIntegrity_PublishedStableRelease
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_published_stable_release.py)
+        set_tests_properties(ArtifactIntegrity_PublishedStableRelease PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120)
+        add_test(
+            NAME ArtifactIntegrity_ReleaseBundle
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_release_bundle.py)
+        set_tests_properties(ArtifactIntegrity_ReleaseBundle PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120
+            # Every case needs the openssl CLI; a host without it reports the
+            # suite as skipped rather than as a passing cryptographic check.
+            SKIP_REGULAR_EXPRESSION "OK \\(skipped=")
+        add_test(
+            NAME ArtifactIntegrity_SignatureBundleExtract
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_extract_release_signature_bundle.py)
+        set_tests_properties(ArtifactIntegrity_SignatureBundleExtract PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120)
+        add_test(
+            NAME ArtifactIntegrity_ReleaseAssetBoundary
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_release_asset_boundary.py)
+        set_tests_properties(ArtifactIntegrity_ReleaseAssetBoundary PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120)
+        add_test(
+            NAME ArtifactIntegrity_BuildProvenance
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_release_build_provenance.py)
+        set_tests_properties(ArtifactIntegrity_BuildProvenance PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120)
+    endif()
+
     # REL-110: protected stable-release approval event recorder, its consumer
     # digest binding, and the release.yml wiring.
     add_test(
