@@ -22,7 +22,6 @@
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/ContainerUtils.h"
 #include "../../Utils/LogMacros.h"
-#include "../../Utils/SecureMemory.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -81,14 +80,6 @@ namespace Spark::Net
             return false;
 
         m_config = config;
-        if (!m_config.rconPassword.empty() || m_config.rconPort != 0)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Network,
-                           "rconPassword/rconPort are reserved but inactive; no remote RCON transport is enabled");
-            // Nothing consumes the secret, so do not keep it in process memory
-            // or hand it back through GetConfig(), even when startup fails below.
-            Spark::SecureClear(m_config.rconPassword);
-        }
 
         {
             std::lock_guard<std::mutex> lock(m_stateMutex);
@@ -363,8 +354,8 @@ namespace Spark::Net
 
                                               // Chat is never an administration transport. In particular, a
                                               // leading slash must never reach privileged commands. ExecuteRcon is
-                                              // a trusted in-process API until a separate authenticated
-                                              // remote-admin protocol exists.
+                                              // a trusted in-process API only: remote administration is
+                                              // permanently unavailable in stable-v1 (OD-05).
                                               NetworkMessage broadcast;
                                               broadcast.type = MessageType::ChatMessage;
                                               broadcast.channel = ChannelType::Reliable;

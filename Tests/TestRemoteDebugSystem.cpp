@@ -235,7 +235,7 @@ TEST(RemoteAdmin_AnonymousDenied)
 {
     using namespace Spark::RemoteDebug;
     RemoteDebugServer server;
-    server.StartListening(0);
+    server.StartListening();
 
     bool directHandlerCalled = false;
     server.RegisterCommandHandler("direct_probe",
@@ -631,7 +631,7 @@ namespace
             [&]
             {
                 if (transition == ResponseEpochTransition::StartListening)
-                    server->StartListening(0);
+                    server->StartListening();
                 else
                     server->StopListening();
                 transitionReturned.store(true, std::memory_order_release);

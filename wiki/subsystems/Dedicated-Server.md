@@ -138,8 +138,6 @@ The `Spark::Net::ServerConfig` struct controls all aspects of the dedicated serv
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `rconPassword` | `string` | `""` | Reserved compatibility field; currently ignored |
-| `rconPort` | `uint16_t` | `0` | Reserved compatibility field; currently ignored |
 | `enableLogging` | `bool` | `true` | Write server log file |
 | `logFilePath` | `string` | `"server.log"` | Path to the log file |
 
@@ -321,18 +319,25 @@ server.Stop();
 
 ### Local Administration Commands (legacy RCON API names)
 
-`ExecuteRcon` is an in-process command dispatcher. Network chat is not an
-administration transport, and `rconPassword`/`rconPort` do not enable one.
-Remote callers require a separate authenticated transport before invoking it.
+`ExecuteRcon` is an in-process command dispatcher for trusted host code.
+Remote administration is permanently unavailable in stable-v1 (owner decision
+OD-05): network chat is not an administration transport, and `ServerConfig` has
+no RCON password or port field, so no configuration or command-line switch can
+enable one. The stable-v1 Windows Shipping product builds with
+`ENABLE_NETWORKING=OFF`, which compiles `DedicatedServer` out entirely.
+`Tests/TestSEC100RemoteAdminUnavailableReal.cpp` fails the build if the
+`ServerConfig` fields `rconPassword`, `rconPort`, `enableRcon` or
+`enableRemoteAdministration` return (the check is by field name).
+`Tests/Fixtures/NetworkingDisabledCompileContract.cpp` fails to compile if
+`DedicatedServer` or `ServerConfig` is declared in a networking-off
+configuration; it is a local compile contract, and no hosted CI lane builds it
+yet.
 
 | Method | Description |
 |--------|-------------|
 | `void RegisterRconCommand(name, description, handler)` | Register a local admin command |
 | `string ExecuteRcon(const string& commandLine)` | Dispatch a command from trusted host code |
 | `vector<RconCommand> GetRconCommands() const` | Snapshot of registered commands, copied under the registry lock |
-
-`InitializeOnly()` logs that `rconPassword`/`rconPort` are reserved but inactive
-and securely clears its copy of `rconPassword`, so `GetConfig()` never returns it.
 
 **Audit record.** Every `ExecuteRcon` call writes exactly one server-log line
 (also delivered to `ServerCallbacks::onLogMessage`):

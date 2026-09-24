@@ -688,7 +688,8 @@
       "limitations": [
         "Credentials can cross the protocol in plaintext",
         "Transport security is placeholder-grade",
-        "Existing tests often mirror logic instead of running independent production clients"
+        "Existing tests often mirror logic instead of running independent production clients",
+        "Remote administration is unavailable (OD-05): there is no remote RCON or RemoteDebug network access, and administration is trusted local only"
       ],
       "evidence": [
         {
@@ -1359,7 +1360,7 @@
       "area": "security",
       "state": "blocked",
       "blocking": true,
-      "summary": "Stable-v1 remote-administration and file/package parser paths are unclosed. The structural policy inventory records 3 production-bound fuzzed parsers, 3 corpora, 102 blocked parser targets, and 151 deferred candidates; exact-SHA hosted sanitizer evidence and runtime coverage remain open. Packet transport and script-language campaigns remain with the excluded networking and scripting surfaces.",
+      "summary": "Remote administration is permanently unavailable in stable-v1 (OD-05) and has no enabling switch, but its threat-model review and hosted evidence are unclosed, as are file/package parser paths. The structural policy inventory records 3 production-bound fuzzed parsers, 3 corpora, 102 blocked parser targets, and 151 deferred candidates; exact-SHA hosted sanitizer evidence and runtime coverage remain open. Packet transport and script-language campaigns remain with the excluded networking and scripting surfaces.",
       "acceptanceCriteria": [
         "Threat model and security ownership are current",
         "Shipped remote administration is disabled by default and cannot expose credentials",

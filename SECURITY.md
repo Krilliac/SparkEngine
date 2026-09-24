@@ -75,30 +75,55 @@ The following are **not** in scope:
 
 ## Remote Administration
 
-SEC-100 tracks remote administration and remains open. The current trust
-boundaries and audit records are listed here so they can be reviewed; this
-section is not a review sign-off, and the security owner and reviewer for the
-threat model are **unassigned (required for SEC-100 closure)**.
+**Remote administration is unavailable in stable-v1, permanently.** Owner
+decision OD-05 (`docs/readiness/OWNER-DECISIONS.md`) records that no
+authenticated remote-administration channel is built for stable-v1. SparkEngine
+has no remote RCON, no RemoteDebug network listener or remote connect entry
+point, and no configuration value or command-line switch that enables either.
+Administration is trusted local only.
+
+SEC-100 tracks this and remains open. The current trust boundaries and audit
+records are listed here so they can be reviewed; this section is not a review
+sign-off, and the security owner and reviewer for the threat model are
+**unassigned (required for SEC-100 closure)**.
 
 Trust boundaries:
 
 - **Chat is not administration.** Network chat is relayed and logged as one
   escaped field; it never reaches `DedicatedServer::ExecuteRcon`.
-- **`ExecuteRcon` is in-process only.** No network transport calls it.
-  `ServerConfig::rconPassword` and `rconPort` are reserved but inactive, are off
-  by default, and `InitializeOnly()` securely clears the password copy.
-- **RemoteDebug loopback is in-process only.** `StartListening` binds no socket,
-  and loopback mints an Observer principal whose lifetime can only be shortened
-  (at most 5 minutes). Anonymous, invalid, expired, malformed, replayed,
-  rate-limited and under-privileged requests are denied and audited.
-- **Gateway area control is same-user local IPC.** Frames are accepted only from
+- **`ExecuteRcon` is in-process only.** No network transport calls it, and
+  `ServerConfig` has no RCON password or port field that could enable one. The
+  stable-v1 Windows Shipping product builds with `ENABLE_NETWORKING=OFF`, which
+  compiles `DedicatedServer` out entirely.
+- **RemoteDebug loopback is in-process only.** There is no `StartServer(port)`,
+  `ConnectToTarget` or remote client `Connect`; `StartListening()` takes no port
+  and binds no socket. Loopback mints an Observer principal whose lifetime can
+  only be shortened (at most 5 minutes). Anonymous (including every raw queue
+  call), invalid, expired, malformed, replayed, rate-limited and
+  under-privileged requests are denied and audited.
+- **Gateway area control is same-user local IPC, not remote administration.**
+  It carries SparkServer/SparkGateway handoff phases only, and neither process
+  ships in stable-v1 (`ENABLE_SERVER_PROCESSES=OFF`). Frames are accepted only from
   the same operating-system user and must carry an HMAC-SHA256 tag (verified in
   constant time), a timestamp within 60 seconds, and a nonce not already in the
   bounded replay ledger. A full ledger fails closed.
 
-No authenticated remote-administration channel exists. Closing SEC-100 needs
-either that channel (credential enrollment, expiry and roles) or an
-owner-reviewed decision that `stable-v1` ships without remote administration.
+`Tests/TestSEC100RemoteAdminUnavailableReal.cpp` holds compile-time checks
+that fail the build if any of these named entry points or fields returns:
+`RemoteDebugSystem::StartServer`/`ConnectToTarget`,
+`RemoteDebugClient::Connect`, a port-taking `RemoteDebugServer::StartListening`,
+an endpoint on `RemoteSession`, and the `ServerConfig` fields `rconPassword`,
+`rconPort`, `enableRcon` and `enableRemoteAdministration`. The field check is by
+name and does not detect a differently named switch. Its runtime selectors
+(`RemoteAdmin_Unavailable*`) prove a raw principal-less queue call is denied and
+audited and the single local grant cannot reach an administrative command.
+`Tests/Fixtures/NetworkingDisabledCompileContract.cpp` fails to compile in a
+networking-off configuration if `DedicatedServer` or `ServerConfig` is declared
+there. It is a local compile contract only: no hosted CI lane configures a
+networking-off tree with tests enabled, so nothing enforces it on pull
+requests yet. Closing SEC-100
+still needs the reviewed threat model with a named security owner and reviewer,
+and exact-SHA hosted `security-runtime`/`network-integration` evidence.
 
 Audit records are written one per attempt through `Spark::Logger`.
 `SparkServer` initializes that logger with a stderr sink when it starts (stdout

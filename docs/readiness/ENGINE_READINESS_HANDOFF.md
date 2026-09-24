@@ -1283,7 +1283,7 @@ grype sbom:sbom.spdx.json
 **Priority:** P0 · **Status:** open · **Wave:** 1 · **Area:** security · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. 2026-09-12 progress: built-in RemoteDebug command types are now reserved against public handler rebinding, with a hostile probe and RemoteAdmin regression proving a replacement cannot downgrade authorization. 2026-09-13 progress: the local area-control HMAC replay ledger now fails closed at the existing 4,096-entry bound on Windows and POSIX, with a capacity regression. 2026-09-14 progress: the Multiplayer Quick Start now labels administration as trusted local-only, removes the sample password, and states that remote RCON is unavailable. 2026-09-14 additional progress: stale Memory Integrity documentation now names the trusted local administration boundary and is protected by a site-contract regression against chat/remote RCON wording. 2026-09-24 progress: gateway area-control writes one bounded, secret-free audit record per frame (reason, phase, epoch, sanitized session prefix, outcome) with per-reason counters, SparkServer now initializes Spark::Logger with a stderr sink at Start() so those records leave the process (SparkServerApplication_StartInstallsLogSinkWhenHostHasNone), and live loopback regressions prove wrong-key MAC, stale/future timestamp and replayed-nonce frames are rejected before the epoch fence; ExecuteRcon audits handler exceptions as disposition=failed without exception text, GetRconCommands returns a locked snapshot, and the inactive rconPassword is securely cleared at startup; RemoteAdmin_ExpiredDenied exercises a bounded loopback lifetime and RemoteDebug counts audit-ring evictions; SECURITY.md now lists remote-administration trust boundaries and audit record formats with the security owner and reviewer explicitly unassigned. These are local results only. SEC-100 remains open because the declared authenticated remote-admin channel, reviewed threat model/security owner/audit format, and exact-SHA hosted security-runtime/network-integration evidence are still absent.
+Dedicated-server chat no longer dispatches RCON: messages are broadcast only, and rconPassword/rconPort are reserved and inactive. A direct slash-chat regression proves that boundary, while RemoteDebug unit tests cover loopback authorization. 2026-09-12 progress: built-in RemoteDebug command types are now reserved against public handler rebinding, with a hostile probe and RemoteAdmin regression proving a replacement cannot downgrade authorization. 2026-09-13 progress: the local area-control HMAC replay ledger now fails closed at the existing 4,096-entry bound on Windows and POSIX, with a capacity regression. 2026-09-14 progress: the Multiplayer Quick Start now labels administration as trusted local-only, removes the sample password, and states that remote RCON is unavailable. 2026-09-14 additional progress: stale Memory Integrity documentation now names the trusted local administration boundary and is protected by a site-contract regression against chat/remote RCON wording. 2026-09-24 progress: gateway area-control writes one bounded, secret-free audit record per frame (reason, phase, epoch, sanitized session prefix, outcome) with per-reason counters, SparkServer now initializes Spark::Logger with a stderr sink at Start() so those records leave the process (SparkServerApplication_StartInstallsLogSinkWhenHostHasNone), and live loopback regressions prove wrong-key MAC, stale/future timestamp and replayed-nonce frames are rejected before the epoch fence; ExecuteRcon audits handler exceptions as disposition=failed without exception text, GetRconCommands returns a locked snapshot, and the inactive rconPassword is securely cleared at startup; RemoteAdmin_ExpiredDenied exercises a bounded loopback lifetime and RemoteDebug counts audit-ring evictions; SECURITY.md now lists remote-administration trust boundaries and audit record formats with the security owner and reviewer explicitly unassigned. 2026-09-24 OD-05 progress: the owner decided remote administration stays permanently unavailable in stable-v1 and no authenticated remote-admin channel is built. Every remote entry point is now compiled out rather than reserved: ServerConfig no longer has rconPassword/rconPort, RemoteDebugSystem no longer has StartServer(port)/ConnectToTarget, RemoteDebugClient no longer has Connect(address, port), and RemoteDebugServer::StartListening() takes no port, so no config value or CLI switch can enable remote administration. Tests/TestSEC100RemoteAdminUnavailableReal.cpp holds this with compile-time requires-expression checks on those named entry points and on the ServerConfig field names rconPassword/rconPort/enableRcon/enableRemoteAdministration (verified to fail all six against the prior headers; a differently named field would not be detected) plus runtime selectors proving a raw principal-less queue call is denied and audited as AnonymousDenied and the only local grant cannot reach console_cmd/property_set (AuthorizationDenied); the ENABLE_NETWORKING=OFF contract fixture now fails to compile if DedicatedServer or ServerConfig is declared in a networking-off configuration; it is a local compile contract only, because no hosted CI lane configures a networking-off tree with tests enabled. Gateway area control is same-user SparkServer/SparkGateway IPC, not remote administration, and neither process ships in stable-v1. SECURITY.md, the wiki and site-data label remote administration unavailable. These are local results only. SEC-100 remains open because the reviewed threat model with a named security owner and reviewer, and exact-SHA hosted security-runtime/network-integration evidence, are still absent.
 
 **Dependency contract**
 
@@ -1293,6 +1293,7 @@ Dedicated-server chat no longer dispatches RCON: messages are broadcast only, an
 **Source context**
 
 - `SparkEngine/Source/Engine/Networking/DedicatedServer.cpp`
+- `SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h`
 - `SparkEngine/Source/Engine/Networking/NetworkSecurity.h`
 - `SECURITY.md`
 
@@ -1303,7 +1304,7 @@ Dedicated-server chat no longer dispatches RCON: messages are broadcast only, an
 **Implementation scope**
 
 - Disable chat-triggered RCON immediately
-- Create a separate authenticated admin channel
+- Keep remote administration permanently unavailable in stable-v1 (OD-05): no remote-admin channel, entry point, or enabling config/CLI switch
 - Validate tokens/secrets in constant time
 - Add roles, least privilege, expiry, replay protection, rate limits, and audit logs
 - Separate local console and remotely invocable command registries
@@ -1314,7 +1315,7 @@ Dedicated-server chat no longer dispatches RCON: messages are broadcast only, an
 1. Anonymous and normal clients cannot invoke any administrative command
 2. Invalid, expired, replayed, downgraded, or rate-limited credentials fail closed
 3. Every attempt is auditable without logging reusable secrets
-4. Remote administration is disabled by default
+4. Remote administration is permanently unavailable in stable-v1 and no configuration or command-line switch enables it (OD-05)
 
 **Required commands**
 
@@ -1325,7 +1326,7 @@ ctest --test-dir build/linux-gcc-release -R RemoteAdmin --output-on-failure --no
 
 **Automated evidence**
 
-- Test selectors: `RemoteAdmin_AnonymousDenied`, `RemoteAdmin_RoleMatrix`, `RemoteAdmin_ReplayDenied`, `RemoteAdmin_RateLimited`, `RemoteAdmin_ExpiredDenied`, `GatewayAreaControl_*`
+- Test selectors: `RemoteAdmin_AnonymousDenied`, `RemoteAdmin_RoleMatrix`, `RemoteAdmin_ReplayDenied`, `RemoteAdmin_RateLimited`, `RemoteAdmin_ExpiredDenied`, `RemoteAdmin_Unavailable*`, `GatewayAreaControl_*`
 - Required CI jobs: `security-runtime`, `network-integration`
 - Performance / reliability budgets:
   - Admin authentication does not block the simulation thread
@@ -1337,6 +1338,7 @@ ctest --test-dir build/linux-gcc-release -R RemoteAdmin --output-on-failure --no
   - `wiki/subsystems/Dedicated-Server.md`
   - `wiki/subsystems/Memory-Integrity.md`
   - `wiki/advanced/Memory-Integrity-System.md`
+  - `wiki/gameplay-tools/Remote-Debug-System.md`
 - Readiness contract:
   - G07
   - G12

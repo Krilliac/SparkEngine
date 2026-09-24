@@ -4,12 +4,14 @@
  * @author Spark Engine Team
  * @date 2026
  *
- * Bidirectional command channel for inspecting/modifying a running game from
- * the editor.  This header provides queue and in-process loopback plumbing;
- * it does not implement a socket listener or credential protocol. Raw
- * transport calls reach dispatch anonymously and are denied until a future
- * authenticated transport adapter is implemented. For testing, EnableLoopback()
- * uses a server-owned local grant through private queues.
+ * Bidirectional command channel for inspecting a running game in-process.
+ * Remote administration is permanently unavailable in stable-v1 (owner
+ * decision OD-05): there is no socket listener, remote connect entry point,
+ * port, or credential protocol, and no configuration or command-line switch
+ * adds one. Raw queue calls carry no principal, so they reach dispatch
+ * anonymously and are denied and audited. EnableLoopback() is the only way to
+ * obtain authority: a server-owned, bounded Observer grant through private
+ * in-process queues.
  */
 
 #pragma once
@@ -57,8 +59,7 @@ namespace Spark::RemoteDebug
     enum class SessionState
     {
         Disconnected,
-        Listening,
-        Connecting,
+        Listening, ///< Local in-process authority epoch; never a network listener.
         Connected
     };
 
@@ -71,13 +72,6 @@ namespace Spark::RemoteDebug
             std::lock_guard lk(m_mtx);
             return m_state;
         } ///< @brief Current state
-
-        void SetAddress(const std::string& a) { m_address = a; }    ///< @brief Set target address
-        const std::string& GetAddress() const { return m_address; } ///< @brief Get target address
-        void SetPort(uint16_t p) { m_port = p; }                    ///< @brief Set target port
-        uint16_t GetPort() const { return m_port; }                 ///< @brief Get target port
-        void SetName(const std::string& n) { m_name = n; }          ///< @brief Set session name
-        const std::string& GetName() const { return m_name; }       ///< @brief Get session name
 
         float GetUptime() const { return m_uptime; } ///< @brief Uptime in seconds
         void AddUptime(float dt) { m_uptime += dt; } ///< @brief Accumulate uptime
@@ -95,12 +89,12 @@ namespace Spark::RemoteDebug
             return true;
         }
 
-        /** @brief Enqueue a received command (called by transport layer) */
+        /** @brief Enqueue a received command without a principal (always denied and audited). */
         void EnqueueReceived(const RemoteCommand& c)
         {
-            // A public/raw queue call has no authenticated principal.  It is
-            // retained for API compatibility but deliberately reaches server
-            // dispatch as anonymous and therefore fails closed.
+            // A public/raw queue call has no authenticated principal. No
+            // transport exists to call it (OD-05), and anything that does
+            // reaches server dispatch as anonymous and therefore fails closed.
             EnqueueReceivedWithPrincipal(c, RemoteDebugPrincipal{});
         }
 
@@ -127,9 +121,6 @@ namespace Spark::RemoteDebug
         {
             std::lock_guard lk(m_mtx);
             m_state = SessionState::Disconnected;
-            m_address.clear();
-            m_name.clear();
-            m_port = 0;
             m_uptime = 0.0f;
             m_pingMs = 0.0f;
             m_sendQ = {};
@@ -189,9 +180,6 @@ namespace Spark::RemoteDebug
 
         mutable std::mutex m_mtx;
         SessionState m_state{SessionState::Disconnected};
-        std::string m_address;
-        std::string m_name;
-        uint16_t m_port{0};
         float m_uptime{0.0f};
         float m_pingMs{0.0f};
         std::queue<RemoteCommand> m_sendQ;
@@ -264,11 +252,12 @@ namespace Spark::RemoteDebug
     {
       public:
         /**
-     * @brief Enter the logical listen state for a future authenticated transport.
-     * @param port Configured port for an external adapter (default 9090).
-     * @return True if the logical listen state was entered; this does not bind a socket.
+     * @brief Begin a new local in-process authority epoch.
+     * @details Takes no port and binds no socket: remote administration is
+     *          permanently unavailable in stable-v1 (OD-05).
+     * @return True once the new epoch is active.
      */
-        bool StartListening(uint16_t port = 9090)
+        bool StartListening()
         {
             // A restart starts a new authority epoch. Preserve the monotonically
             // increasing grant id in the access-control object so a stale copied
@@ -278,12 +267,10 @@ namespace Spark::RemoteDebug
             auto executionLock = AcquireEpochTransitionLease();
             m_session.Reset();
             m_accessControl.RevokeAll();
-            m_session.SetPort(port);
             m_session.SetState(SessionState::Listening);
             RegisterBuiltinHandlers();
             SPARK_LOG_INFO(Spark::LogCategory::Network,
-                           "RemoteDebugServer: logical listen state configured for port %d (no transport adapter)",
-                           port);
+                           "RemoteDebugServer: local authority epoch started (remote transport unavailable)");
             return true;
         }
 
@@ -431,8 +418,8 @@ namespace Spark::RemoteDebug
          *
          * Public loopback intentionally gets Observer only. There is no public
          * or macro-controlled API for a caller to mint an Operator or
-         * Administrator principal; a future authenticated transport must add a
-         * separately reviewed server-owned enrollment path.
+         * Administrator principal, and no remote enrollment path exists:
+         * remote administration is permanently unavailable in stable-v1 (OD-05).
          *
          * @param lifetime Requested grant lifetime, clamped to
          *        [1 ms, kDefaultLoopbackLifetimeMilliseconds]. It can only
@@ -593,29 +580,14 @@ namespace Spark::RemoteDebug
     // RemoteDebugClient — runs in the editor
     // ============================================================================
 
-    /** @brief Connects to a running game and provides convenience debug methods. */
+    /**
+     * @brief In-process client with convenience debug methods.
+     * @details There is no remote connect entry point (OD-05); the client
+     *          reaches a server only through RemoteDebugSystem::EnableLoopback().
+     */
     class RemoteDebugClient
     {
       public:
-        /**
-     * @brief Record an intent to connect to a game instance.
-     * @param address Hostname or IP of the target.
-     * @param port    Port configured by a future transport adapter.
-     * @return True after recording intent; no network handshake is implemented here.
-     */
-        bool Connect(const std::string& address, uint16_t port = 9090)
-        {
-            // A new target starts a new connection epoch. Commands and replies
-            // queued for a previous target must never inherit the next target's
-            // eventual authenticated connection.
-            m_session.Reset();
-            m_session.SetAddress(address);
-            m_session.SetPort(port);
-            m_session.SetName("Editor@" + address);
-            m_session.SetState(SessionState::Connecting);
-            return true; // A future authenticated transport begins its handshake here.
-        }
-
         /** @brief Disconnect from the game instance */
         void Disconnect() { m_session.Reset(); }
 
@@ -731,30 +703,10 @@ namespace Spark::RemoteDebug
             m_initialized = false;
         }
 
-        /**
-     * @brief Enter logical server state for a future authenticated transport.
-     * @param port Configured port for that future adapter (default 9090).
-     */
-        bool StartServer(uint16_t port = 9090)
-        {
-            if (!m_initialized || !m_server)
-                return false;
-            // Starting an external transport epoch must not retain the local
-            // loopback authority from a prior test/debug session.
-            m_loopbackEnabled = false;
-            m_loopbackPrincipal.reset();
-            return m_server->StartListening(port);
-        }
-
-        /**
-     * @brief Connect the client to a running game instance.
-     * @param address Hostname or IP of the target.
-     * @param port    Port the server is listening on.
-     */
-        bool ConnectToTarget(const std::string& address, uint16_t port = 9090)
-        {
-            return m_initialized && m_client && m_client->Connect(address, port);
-        }
+        // Remote administration is permanently unavailable in stable-v1
+        // (OD-05). There is deliberately no StartServer(port) or
+        // ConnectToTarget(address, port); the SEC-100 source tests fail if
+        // either entry point reappears.
 
         /** @brief True if either side has an active connection */
         bool IsConnected() const
@@ -810,7 +762,7 @@ namespace Spark::RemoteDebug
             m_loopbackEnabled = false;
             m_loopbackPrincipal.reset();
             m_client->Disconnect();
-            m_server->StartListening(0);
+            m_server->StartListening();
             // Public loopback is intentionally observation-only. It is retained
             // for local tests and inspection but cannot acquire console or
             // property-mutation authority by following the public client API.
@@ -836,8 +788,7 @@ namespace Spark::RemoteDebug
             {
                 auto st = m_server->GetSession().GetState();
                 if (st == SessionState::Listening)
-                    s += " | server: logical-listen:" + std::to_string(m_server->GetSession().GetPort()) +
-                         " (no transport)";
+                    s += " | server: local epoch (remote transport unavailable)";
                 else if (st == SessionState::Connected)
                     s += " | server: connected";
                 else
@@ -846,9 +797,7 @@ namespace Spark::RemoteDebug
             if (m_client)
             {
                 auto st = m_client->GetSession().GetState();
-                if (st == SessionState::Connecting)
-                    s += " | client: connecting to " + m_client->GetSession().GetAddress();
-                else if (st == SessionState::Connected)
+                if (st == SessionState::Connected)
                     s += " | client: connected (ping " +
                          std::to_string(static_cast<int>(m_client->GetSession().GetPing())) + " ms)";
                 else

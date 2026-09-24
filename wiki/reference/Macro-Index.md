@@ -180,7 +180,7 @@
 | `CommandArgs` | alias | SparkConsole | [CommandRegistry.h:L20](../../SparkConsole/src/CommandRegistry.h#L20) |  |
 | `CommandHandler` | alias | SparkConsole | [CommandRegistry.h:L23](../../SparkConsole/src/CommandRegistry.h#L23) |  |
 | `CommandHandler` | alias | SparkEditor | [EditorConsoleBridge.h:L57](../../SparkEditor/Source/Utils/EditorConsoleBridge.h#L57) |  |
-| `CommandHandler` | alias | SparkEngine | [RemoteDebugSystem.h:L247](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L247) | Command handler callback: receives a command, returns a response |
+| `CommandHandler` | alias | SparkEngine | [RemoteDebugSystem.h:L235](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L235) | Command handler callback: receives a command, returns a response |
 | `CommandHandler` | alias | SparkEngine | [ConsoleProcessManager.h:L157](../../SparkEngine/Source/Utils/ConsoleProcessManager.h#L157) | Simple command registry for console commands |
 | `CommandHandler` | alias | SparkEngine | [SparkConsole.h:L78](../../SparkEngine/Source/Utils/SparkConsole.h#L78) |  |
 | `CommandHandler` | alias | Tests | [TestSubsystemConsoleCommands.cpp:L107](../../Tests/TestSubsystemConsoleCommands.cpp#L107) |  |
@@ -645,7 +645,7 @@
 | `KeyStateProvider` | alias | SparkEngine | [InputActionSystem.h:L116](../../SparkEngine/Source/Input/InputActionSystem.h#L116) | Callback for action state queries (used by external key state provider) |
 | `KillcamMirror` | alias | GameModules | [TFDamageSystem.h:L230](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.h#L230) |  |
 | `KillcamNotifyFn` | alias | GameModules | [TFDeathRecap.h:L80](../../GameModules/SparkGameMMOFPS/Source/UI/TFDeathRecap.h#L80) |  |
-| `LanBroadcastSocketFactory` | alias | SparkEngine | [DedicatedServer.h:L193](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L193) | Immutable state consumed by one LAN broadcast iteration. |
+| `LanBroadcastSocketFactory` | alias | SparkEngine | [DedicatedServer.h:L191](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h#L191) | Immutable state consumed by one LAN broadcast iteration. |
 | `LayerEvalFunc` | alias | SparkEngine | [CpuNeuralInference.cpp:L32](../../SparkEngine/Source/Graphics/Neural/CpuNeuralInference.cpp#L32) |  |
 | `Limits` | alias | Tests | [Test_persistence_SaveSystem.cpp:L1511](../../Tests/harden/Test_persistence_SaveSystem.cpp#L1511) |  |
 | `List` | alias | Tests | [TestTypeTraits.cpp:L102](../../Tests/TestTypeTraits.cpp#L102) |  |

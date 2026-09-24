@@ -589,9 +589,8 @@ struct ServerConfig
     std::vector<std::string> mapRotation;
     bool randomizeMapOrder = false;
 
-    // Administration
-    std::string rconPassword;                  // Reserved; currently ignored
-    uint16_t rconPort = 0;                     // Reserved; currently ignored
+    // Administration: trusted in-process only. Remote RCON is permanently
+    // unavailable in stable-v1 (OD-05), so there is no password or port field.
     bool enableLogging = true;
     std::string logFilePath = "server.log";
 
@@ -660,9 +659,10 @@ struct ServerCallbacks
 
 ### Local Administration Commands (legacy RCON API names)
 
-There is currently no remote RCON listener. `ExecuteRcon` is for trusted
+There is no remote RCON listener, and remote administration is permanently
+unavailable in stable-v1 (owner decision OD-05). `ExecuteRcon` is for trusted
 in-process host/control code only; network chat never dispatches admin commands,
-and the compatibility fields `rconPassword`/`rconPort` are inactive.
+and `ServerConfig` has no RCON password or port field.
 
 ```cpp
 // Register custom local administration commands

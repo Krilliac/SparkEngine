@@ -425,41 +425,6 @@ TEST(DedicatedServerRuntime_RconRegistrySnapshotIsSafeDuringRegistration)
     server.Stop();
 }
 
-TEST(DedicatedServerRuntime_InactiveRconSecretIsNotRetained)
-{
-    const std::string secret = "SEC100_FAKE_RCON_SECRET_63A42";
-    const auto logPath =
-        std::filesystem::temp_directory_path() /
-        ("spark-rcon-secret-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".log");
-    std::error_code error;
-    std::filesystem::remove(logPath, error);
-
-    MockNetworkRuntime runtime;
-    DedicatedServer server(runtime);
-    ServerConfig config;
-    config.enableLogging = true;
-    config.logFilePath = logPath.string();
-    config.rconPassword = secret;
-    ASSERT_TRUE(server.InitializeOnly(config));
-    EXPECT_TRUE(server.GetConfig().rconPassword.empty());
-    // The rest of the captured configuration is untouched.
-    EXPECT_EQ(server.GetConfig().logFilePath, logPath.string());
-    server.Stop();
-
-    // Startup that is refused still must not retain the secret.
-    MockNetworkRuntime refusedRuntime;
-    refusedRuntime.initializeResult = false;
-    DedicatedServer refused(refusedRuntime);
-    EXPECT_FALSE(refused.InitializeOnly(config));
-    EXPECT_TRUE(refused.GetConfig().rconPassword.empty());
-
-    std::ifstream logFile(logPath);
-    const std::string logText{std::istreambuf_iterator<char>(logFile), std::istreambuf_iterator<char>()};
-    EXPECT_TRUE(logText.find(secret) == std::string::npos);
-    logFile.close();
-    std::filesystem::remove(logPath, error);
-}
-
 TEST(DedicatedServerRuntime_StopClearsHandlersAndShutsDownRuntime)
 {
     MockNetworkRuntime runtime;

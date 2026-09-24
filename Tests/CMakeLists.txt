@@ -715,7 +715,8 @@ if(NOT ENABLE_NETWORKING)
         Fixtures/NetworkingDisabledCompileContract.cpp)
     target_compile_features(SparkNetworkingDisabledCompileContract PRIVATE cxx_std_23)
     target_include_directories(SparkNetworkingDisabledCompileContract PRIVATE
-        "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+        "${CMAKE_SOURCE_DIR}/SparkSDK/Include")
 endif()
 
 if(TARGET SparkGatewayCore)
@@ -1037,6 +1038,7 @@ target_sources(SparkTests PRIVATE
     TestModuleLifecycleReal.cpp
     TestRunnerSemanticsReal.cpp
     TestSEC100ChatAuditLogReal.cpp
+    TestSEC100RemoteAdminUnavailableReal.cpp
     TestSaveSystemRoundTripReal.cpp
     TestSAVE230NewerFormatSlotReal.cpp
     TestSecurityParsersReal.cpp
@@ -1526,7 +1528,10 @@ foreach(_remote_admin_selector IN ITEMS
         RemoteAdmin_ReplayDenied
         RemoteAdmin_RateLimited
         RemoteAdmin_ExpiredDenied
-        RemoteAdmin_ReservedCommandsCannotBeRebound)
+        RemoteAdmin_ReservedCommandsCannotBeRebound
+        # OD-05: remote administration is permanently unavailable in stable-v1.
+        RemoteAdmin_UnavailableRawTransportDeniedAndAudited
+        RemoteAdmin_UnavailableLocalGrantCannotAdminister)
     add_test(NAME ${_remote_admin_selector} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(${_remote_admin_selector} PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=${_remote_admin_selector};SPARK_TEST_EXPECT_COUNT=1"

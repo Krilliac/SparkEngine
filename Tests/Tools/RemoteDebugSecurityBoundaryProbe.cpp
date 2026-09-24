@@ -143,7 +143,7 @@ namespace
     [[nodiscard]] bool RawDispatchAndQueueAreDenied()
     {
         RemoteDebugServer server;
-        server.StartListening(0);
+        server.StartListening();
         std::atomic_uint32_t effectCount{0};
         server.RegisterCommandHandler("raw_exec", RemoteDebugCapability::ExecuteConsole,
                                       [&effectCount](const RemoteCommand& command)

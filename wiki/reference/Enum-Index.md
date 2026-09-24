@@ -711,7 +711,7 @@
 | `ServerBuildProfile` | enum | SparkEditor | [DedicatedServerPanel.h:L56](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L56) |  |
 | `ServerPlatform` | enum | SparkEditor | [DedicatedServerPanel.h:L47](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L47) | Editor panel for dedicated server configuration, cooking, and PIE launching |
 | `ServiceId` | enum | SparkEngine | [DaemonProtocol.h:L38](../../SparkEngine/Source/Utils/DaemonProtocol.h#L38) |  |
-| `SessionState` | enum | SparkEngine | [RemoteDebugSystem.h:L57](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L57) | Connection lifecycle states |
+| `SessionState` | enum | SparkEngine | [RemoteDebugSystem.h:L59](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L59) | Connection lifecycle states |
 | `SessionState` | enum | SparkGateway | [GatewayCoordinator.h:L94](../../SparkGateway/src/GatewayCoordinator.h#L94) |  |
 | `SettingsFlags` | enum | SparkEngine | [EngineSettings.h:L88](../../SparkEngine/Source/Core/EngineSettings.h#L88) |  |
 | `SettlementType` | enum | GameModules | [OpenWorldEnums.h:L129](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L129) | Settlement types in the world |
