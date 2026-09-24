@@ -55,6 +55,7 @@ if(SPARK_VULKAN_AVAILABLE)
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanCommandList.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanFormatHelpers.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/Vulkan/VulkanSwapChain.cpp"
     )
 endif()
 
