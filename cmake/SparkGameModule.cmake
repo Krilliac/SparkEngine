@@ -44,17 +44,55 @@ if(NOT _spark_sdk_version_header)
 endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${_spark_sdk_version_header}")
-file(STRINGS "${_spark_sdk_version_header}" _spark_sdk_version_lines
-    REGEX "^#[ \t]*define[ \t]+SPARK_SDK_VERSION[ \t]+[0-9]+")
-list(LENGTH _spark_sdk_version_lines _spark_sdk_version_line_count)
-if(NOT _spark_sdk_version_line_count EQUAL 1 OR
-   NOT _spark_sdk_version_lines MATCHES
-   "SPARK_SDK_VERSION[ \t]+([0-9]+)")
+
+# Reads `#define NAME <integer>` (decimal or 0x hex, optional u suffix) from
+# HEADER as a decimal string; the header must define NAME exactly once.
+function(_spark_read_sdk_define HEADER NAME OUTPUT_VARIABLE)
+    file(STRINGS "${HEADER}" _lines
+        REGEX "^#[ \t]*define[ \t]+${NAME}[ \t]+(0[xX][0-9A-Fa-f]+|[0-9]+)[uU]?([ \t]|$)")
+    list(LENGTH _lines _count)
+    file(STRINGS "${HEADER}" _all_definitions REGEX "^#[ \t]*define[ \t]+${NAME}([ \t]|$)")
+    list(LENGTH _all_definitions _all_count)
+    if(NOT _count EQUAL 1 OR NOT _all_count EQUAL 1 OR
+       NOT _lines MATCHES "${NAME}[ \t]+(0[xX][0-9A-Fa-f]+|[0-9]+)")
+        message(FATAL_ERROR
+            "SparkGameModule: ${HEADER} must contain exactly one ${NAME} definition")
+    endif()
+    math(EXPR _value "${CMAKE_MATCH_1}" OUTPUT_FORMAT DECIMAL)
+    set(${OUTPUT_VARIABLE} "${_value}" PARENT_SCOPE)
+endfunction()
+
+_spark_read_sdk_define("${_spark_sdk_version_header}" SPARK_SDK_VERSION _spark_sdk_version)
+set_property(GLOBAL PROPERTY SPARK_MODULE_CURRENT_SDK_VERSION "${_spark_sdk_version}")
+
+# The descriptor format, size, magic and runtime ABI version live next to it in
+# Spark/ModuleABI.h. Deriving them here (rather than passing literals to the
+# sidecar writer) keeps a header bump from leaving every new module advertising
+# the previous descriptor and being rejected before load.
+get_filename_component(_spark_sdk_header_dir "${_spark_sdk_version_header}" DIRECTORY)
+set(_spark_module_abi_header "${_spark_sdk_header_dir}/ModuleABI.h")
+if(NOT EXISTS "${_spark_module_abi_header}")
     message(FATAL_ERROR
-        "SparkGameModule: ${_spark_sdk_version_header} must contain exactly one "
-        "SPARK_SDK_VERSION definition")
+        "SparkGameModule: could not locate ${_spark_module_abi_header} to determine the module "
+        "compatibility descriptor")
 endif()
-set_property(GLOBAL PROPERTY SPARK_MODULE_CURRENT_SDK_VERSION "${CMAKE_MATCH_1}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_spark_module_abi_header}")
+
+foreach(_spark_abi_field IN ITEMS DESCRIPTOR_VERSION DESCRIPTOR_SIZE MAGIC)
+    _spark_read_sdk_define("${_spark_module_abi_header}" SPARK_MODULE_ABI_${_spark_abi_field} _spark_abi_value)
+    set_property(GLOBAL PROPERTY SPARK_MODULE_ABI_${_spark_abi_field} "${_spark_abi_value}")
+endforeach()
+_spark_read_sdk_define("${_spark_module_abi_header}" SPARK_MODULE_RUNTIME_ABI_VERSION _spark_abi_value)
+set_property(GLOBAL PROPERTY SPARK_MODULE_RUNTIME_ABI_VERSION "${_spark_abi_value}")
+
+# WriteSparkModuleABI.cmake stamps the FourCC itself; refuse to emit sidecars
+# the host would reject with "bad magic" if the header's value ever moves.
+get_property(_spark_abi_magic GLOBAL PROPERTY SPARK_MODULE_ABI_MAGIC)
+if(NOT _spark_abi_magic EQUAL 1263685715)
+    message(FATAL_ERROR
+        "SparkGameModule: SPARK_MODULE_ABI_MAGIC in ${_spark_module_abi_header} is ${_spark_abi_magic}, but "
+        "WriteSparkModuleABI.cmake writes magic=1263685715; update both together")
+endif()
 
 function(_spark_detect_cxx_language_abi OUTPUT_VARIABLE)
     if(DEFINED SPARK_MODULE_CXX_LANGUAGE_ABI)
@@ -116,6 +154,14 @@ function(spark_configure_module_abi TARGET_NAME)
         set(_sdk_version "${SPARK_ABI_SDK_VERSION}")
     endif()
 
+    get_property(_descriptor_version GLOBAL PROPERTY SPARK_MODULE_ABI_DESCRIPTOR_VERSION)
+    get_property(_descriptor_size GLOBAL PROPERTY SPARK_MODULE_ABI_DESCRIPTOR_SIZE)
+    get_property(_runtime_abi_version GLOBAL PROPERTY SPARK_MODULE_RUNTIME_ABI_VERSION)
+    if(NOT _descriptor_version OR NOT _descriptor_size OR NOT _runtime_abi_version)
+        message(FATAL_ERROR
+            "spark_configure_module_abi: Spark module ABI descriptor values were not initialized")
+    endif()
+
     if(MSVC)
         set(_compiler_family 1)
         set(_compiler_abi_version "${MSVC_VERSION}")
@@ -171,10 +217,10 @@ function(spark_configure_module_abi TARGET_NAME)
         COMMAND ${CMAKE_COMMAND}
             "-DMODULE_PATH=$<TARGET_FILE:${TARGET_NAME}>"
             "-DSIDECAR_PATH=$<TARGET_FILE:${TARGET_NAME}>.sparkabi"
-            "-DDESCRIPTOR_VERSION=1"
-            "-DDESCRIPTOR_SIZE=64"
+            "-DDESCRIPTOR_VERSION=${_descriptor_version}"
+            "-DDESCRIPTOR_SIZE=${_descriptor_size}"
             "-DSDK_VERSION=${_sdk_version}"
-            "-DRUNTIME_ABI_VERSION=1"
+            "-DRUNTIME_ABI_VERSION=${_runtime_abi_version}"
             "-DCOMPILER_FAMILY=${_compiler_family}"
             "-DCOMPILER_ABI_VERSION=${_compiler_abi_version}"
             "-DCXX_LANGUAGE_LEVEL=${_cxx_language_abi}"

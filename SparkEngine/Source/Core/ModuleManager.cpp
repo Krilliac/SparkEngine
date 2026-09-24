@@ -359,6 +359,26 @@ namespace
         return true;
     }
 
+    // SDK-240: name the failing field with the module's and the host's value, plus
+    // both SDK versions, so a rejection says what to rebuild against.
+    std::string DescribeModuleCompatibilityFailure(const SparkModuleCompatibilityDescriptor* descriptor,
+                                                   Spark::ModuleCompatibilityStatus status)
+    {
+        std::string text = Spark::ModuleCompatibilityStatusName(status);
+        const Spark::ModuleCompatibilityMismatch mismatch = Spark::GetModuleCompatibilityMismatch(descriptor, status);
+        if (!mismatch.field)
+            return text;
+        text += std::format(" (module {0}={1}, host {0}={2}", mismatch.field, mismatch.moduleValue, mismatch.hostValue);
+        // sdkVersion is only safe to read from a descriptor at least as large as ours.
+        if (status != Spark::ModuleCompatibilityStatus::SDKVersionMismatch &&
+            status != Spark::ModuleCompatibilityStatus::DescriptorTooSmall)
+        {
+            text +=
+                std::format("; module sdk_version={}, host sdk_version={}", descriptor->sdkVersion, SPARK_SDK_VERSION);
+        }
+        return text + ")";
+    }
+
     bool ValidateModuleSidecar(const std::filesystem::path& modulePath, std::string& error)
     {
         const std::filesystem::path sidecarPath = SidecarPath(modulePath);
@@ -419,7 +439,7 @@ namespace
         const Spark::ModuleCompatibilityStatus status = Spark::CheckModuleCompatibility(&descriptor);
         if (status != Spark::ModuleCompatibilityStatus::Compatible)
         {
-            error = Spark::ModuleCompatibilityStatusName(status);
+            error = DescribeModuleCompatibilityFailure(&descriptor, status);
             return false;
         }
 
@@ -712,6 +732,7 @@ bool ModuleManager::LoadModule(const std::string& path)
     const auto failLoad = [&](std::string message)
     {
         m_lastLoadError = std::move(message);
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "%s", m_lastLoadError.c_str());
         console.LogError(m_lastLoadError);
         return false;
     };
@@ -817,7 +838,7 @@ bool ModuleManager::LoadModule(const std::string& path)
         const std::string message =
             std::format("Module '{}' rejected before injection/factory: {}. Rebuild it with the same "
                         "Spark SDK, compiler ABI, C++ mode, architecture, and runtime configuration.",
-                        path, Spark::ModuleCompatibilityStatusName(compatibilityStatus));
+                        path, DescribeModuleCompatibilityFailure(compatibility, compatibilityStatus));
         CloseModuleLibrary(handle);
         return failLoad(message);
     }

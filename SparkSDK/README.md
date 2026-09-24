@@ -46,6 +46,22 @@ module factory, so an incompatible module is rejected before module code runs.
 Use `SPARK_IMPLEMENT_MODULE` in exactly one source file to provide the exported
 `CreateModule`, `DestroyModule`, and compatibility entry points.
 
+### Changing the SDK ABI (maintainers)
+
+The binary surface a module compiles against — every SDK interface's virtuals
+in vtable order, the `ModuleInfo` and compatibility-descriptor layouts, the
+module-ABI macros and factory typedefs — is pinned in
+`SparkSDK/ABI/sdk-abi-surface.json` and checked by
+`python3 SparkSDK/Tools/sdk_abi_surface.py check` (ctest `SparkSDKABISurface`).
+It fails when that surface changes without a `SPARK_SDK_VERSION` bump, when a
+bump was not re-pinned, when `EngineContextVirtualCount` is stale, or when
+`Spark/Version.h` lacks a `// vN:` note for the current version. To make an ABI
+change: bump `SPARK_SDK_VERSION`, add the `// vN:` note, re-pin the
+`static_assert` layout blocks in `Spark/IModule.h` and `Spark/ModuleABI.h`, then
+run `python3 SparkSDK/Tools/sdk_abi_surface.py update`. The `.sparkabi` sidecar
+values are derived from `Spark/Version.h` and `Spark/ModuleABI.h` by
+`cmake/SparkGameModule.cmake`, so no CMake edit is needed.
+
 ## Package contents
 
 The SDK component is self-contained and includes:
@@ -68,6 +84,8 @@ that every engine subsystem or game module is stable on every platform.
 When a module is rejected, inspect the host's module-load diagnostic and the
 module's `.sparkabi` sidecar. The diagnostic identifies the failing descriptor
 field (for example SDK version, compiler ABI, runtime library, iterator-debug
-level, or pointer size). Recompile the module with the same supported toolchain
+level, or pointer size) and names the module's and the host's value, e.g.
+`SDK ABI version mismatch (module sdk_version=5, host sdk_version=4)`. It is
+written to the engine log as well as the in-engine console. Recompile the module with the same supported toolchain
 and SDK package; do not work around the check by copying private engine headers
 or libraries into the consumer project.
