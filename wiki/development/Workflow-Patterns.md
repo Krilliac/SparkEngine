@@ -54,6 +54,17 @@ The lock defaults to `build/.spark-build.lock` (`--lock` / `SPARK_BUILD_LOCK` ov
 
 Do not guard a shared lock with a detached waiter that matches processes by command line (`pgrep -f` / `pkill -f`): the waiters' own command lines match the pattern. On 2026-09-24 such a helper inherited the build lock, waited for "no `cmake --build build/...` process", and deadlocked every queued build — including itself, since `pkill -f` on the same pattern also killed the invoking shell. Wait on a PID (`kill -0 $PID`) and hold locks only in the process that took them. Regression coverage: `Tests/Tools/test_build_lock.py` (CI job `validate-ci-tools`).
 
+## Exploring the Codebase in 3D (Code City)
+
+`tools/architecture-viz/generate_code_city.py` renders the tracked source tree as an interactive three.js city: projects are blocks, subsystem directories are districts, and each file is a building whose footprint and height grow with its line count. Selecting a building draws its resolved includes (blue) and includers (orange) and lists the readiness work items whose entry points name it; the color modes cover project, file kind, size, 180-day churn, readiness status and include fan-in.
+
+```bash
+python3 tools/architecture-viz/generate_code_city.py          # writes build/code-city/index.html
+python3 Tests/Tools/test_code_city.py                         # layout, include resolution, embedded data
+```
+
+The page loads three.js from jsDelivr and embeds all data, so it opens straight from disk. The `Code City Pages` workflow (`.github/workflows/code-city-pages.yml`) regenerates it on pushes to `Working` and deploys it to GitHub Pages, which the README links to; Pages must be enabled with **Settings → Pages → Source: GitHub Actions**. Useful for orientation before a cross-subsystem change: search a file or class, then follow its include arcs.
+
 ## Documentation Sync After Structural Changes
 
 After any change that adds, renames, or removes public headers, ECS components, systems, editor panels, or tests — run the doc scripts before committing. The fastest reliable option is the master script:
@@ -204,6 +215,7 @@ Skipping steps 4-5 means starting each session without accumulated knowledge. Sk
 
 - Original entry: `Effective SparkEngine Development Workflows`, last updated 2026-03-14.
 - Verified against codebase 2026-06-08.
+- 2026-09-24: added the Code City section (`tools/architecture-viz`).
 - 2026-09-24: added the shared-build-directory lock section (`tools/build-lock.sh`) after a parallel-agent build deadlock.
 - Updated / found stale:
   - Doc-sync section now leads with `docs/update-all-docs.sh` (the master script), which is the current recommended one-shot; the two-script combo is kept as a faster subset.

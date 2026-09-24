@@ -143,6 +143,9 @@ jobs:
     - name: Test shared build-directory lock
       run: python3 Tests/Tools/test_build_lock.py
 
+    - name: Test code city generator
+      run: python3 Tests/Tools/test_code_city.py
+
     - name: Test required-job gate
       run: python3 .github/scripts/test-verify-required-jobs.py
 

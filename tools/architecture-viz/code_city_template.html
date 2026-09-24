@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SparkEngine Code City</title>
+<meta name="description" content="Interactive 3D map of the SparkEngine source tree: projects, subsystems, files and include dependencies.">
+<style>
+  :root {
+    --bg: #0d1117; --panel: rgba(22, 27, 34, 0.92); --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --accent: #58a6ff; --in: #f0883e; --out: #58a6ff; --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  #view { position: fixed; inset: 0; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; backdrop-filter: blur(6px); z-index: 10; }
+  #controls { top: 12px; left: 12px; width: 300px; max-height: calc(100% - 24px); overflow: auto; }
+  #details { top: 12px; right: 12px; width: 340px; max-height: calc(100% - 24px); overflow: auto; display: none; }
+  h1 { font-size: 15px; margin: 0 0 2px; }
+  h2 { font-size: 12px; margin: 14px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .meta { color: var(--muted); font-size: 12px; }
+  input[type=search], select { width: 100%; background: #0d1117; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; font: inherit; }
+  label.row { display: flex; align-items: center; gap: 6px; margin: 4px 0; cursor: pointer; }
+  .results { margin-top: 6px; max-height: 220px; overflow: auto; }
+  .result, .link { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text);
+    padding: 3px 4px; border-radius: 4px; cursor: pointer; font: inherit; word-break: break-all; }
+  .result:hover, .link:hover { background: #21262d; }
+  .result small { color: var(--muted); }
+  #legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  #legend div { margin: 2px 0; }
+  #legend { max-height: 180px; overflow: auto; }
+  #tooltip { position: fixed; pointer-events: none; z-index: 20; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; font-size: 12px; display: none; max-width: 420px; word-break: break-all; }
+  .kv { display: grid; grid-template-columns: 96px 1fr; gap: 2px 8px; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  .pill { display: inline-block; padding: 0 6px; border-radius: 10px; border: 1px solid var(--border); margin: 1px 2px 1px 0; font-size: 11px; }
+  .label3d { color: #fff; font-weight: 600; text-shadow: 0 0 4px #000, 0 0 2px #000; white-space: nowrap; pointer-events: none; }
+  .label3d.project { font-size: 14px; }
+  .label3d.district { font-size: 11px; font-weight: 500; opacity: .9; }
+  .close { position: absolute; top: 6px; right: 8px; background: none; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; }
+  .hint { color: var(--muted); font-size: 11px; margin-top: 10px; }
+  #error { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; }
+  @media (max-width: 760px) {
+    #controls { width: calc(100% - 24px); max-height: 42%; }
+    #details { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; max-height: 45%; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="view"></div>
+<div id="tooltip"></div>
+<div id="error"><div><h1>Could not start the 3D view</h1><p class="meta" id="error-text"></p></div></div>
+
+<section id="controls" class="panel" aria-label="Code city controls">
+  <h1>SparkEngine Code City</h1>
+  <div class="meta" id="summary"></div>
+  <h2>Find</h2>
+  <input id="search" type="search" placeholder="File, class or district…" autocomplete="off">
+  <div class="results" id="results"></div>
+  <h2>Color by</h2>
+  <select id="colorMode">
+    <option value="project">Project</option>
+    <option value="kind">File kind</option>
+    <option value="loc">Size (lines)</option>
+    <option value="churn">Recent churn</option>
+    <option value="readiness">Readiness work items</option>
+    <option value="deps">Include fan-in</option>
+  </select>
+  <div id="legend" style="margin-top:8px"></div>
+  <h2>Show</h2>
+  <label class="row"><input type="checkbox" id="showEdges" checked> Subsystem dependency arcs</label>
+  <label class="row"><input type="checkbox" id="showDistrictLabels" checked> District labels</label>
+  <h2>Projects</h2>
+  <div id="projectFilters"></div>
+  <div class="hint">Drag to orbit · right-drag to pan · scroll to zoom · click a building for its includes (blue) and includers (orange) · Esc clears.</div>
+</section>
+
+<section id="details" class="panel" aria-live="polite">
+  <button class="close" id="closeDetails" aria-label="Close details">×</button>
+  <div id="detailsBody"></div>
+</section>
+
+<script>window.CODE_CITY = /*__CODE_CITY_DATA__*/null;</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+
+const DATA = window.CODE_CITY;
+const files = DATA.files, districts = DATA.districts, projects = DATA.projects;
+const $ = (id) => document.getElementById(id);
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (n) => n.toLocaleString("en-US");
+
+// ----------------------------------------------------------------------------- derived data
+const includedBy = files.map(() => []);
+files.forEach((f, i) => f.inc.forEach((t) => includedBy[t].push(i)));
+const maxLoc = Math.max(...files.map((f) => f.loc));
+const maxChurn = Math.max(1, ...files.map((f) => f.churn));
+const maxFanIn = Math.max(1, ...includedBy.map((l) => l.length));
+const PLATE_PROJECT = 0.6, PLATE_DISTRICT = 0.9;
+
+$("summary").innerHTML = `${escapeHtml(DATA.meta.branch)} @ <code>${escapeHtml(DATA.meta.commit)}</code><br>` +
+  `${fmt(DATA.meta.files)} files · ${fmt(DATA.meta.loc)} lines · ${districts.length} districts · ${fmt(DATA.meta.includeEdges)} include edges`;
+
+// ----------------------------------------------------------------------------- scene
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+} catch (error) {
+  $("error").style.display = "flex";
+  $("error-text").textContent = "WebGL is not available in this browser: " + error.message;
+  throw error;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+$("view").appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+Object.assign(labelRenderer.domElement.style, { position: "fixed", inset: "0", pointerEvents: "none" });
+$("view").appendChild(labelRenderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1117);
+const citySize = Math.max(...projects.map((p) => Math.max(Math.abs(p.rect[0]) + p.rect[2], Math.abs(p.rect[1]) + p.rect[3])));
+scene.fog = new THREE.Fog(0x0d1117, citySize * 2.2, citySize * 5.5);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.5, citySize * 12);
+camera.position.set(citySize * 0.9, citySize * 0.95, citySize * 1.25);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.target.set(0, 0, 0);
+
+scene.add(new THREE.HemisphereLight(0xdde8ff, 0x1b1f24, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.position.set(citySize * 0.6, citySize * 1.2, citySize * 0.35);
+scene.add(sun);
+
+const PALETTE = [0x58a6ff, 0x3fb950, 0xd29922, 0xf778ba, 0xa371f7, 0x39c5cf, 0xff7b72, 0x79c0ff, 0x56d364,
+  0xe3b341, 0xdb61a2, 0xbc8cff, 0x76e3ea, 0xffa198, 0x8ddb8c, 0xf2cc60, 0xff9bce, 0xd2a8ff, 0xb3f0ff, 0xffc680];
+const projectColor = (p) => new THREE.Color(PALETTE[p % PALETTE.length]);
+
+// Project and district plates.
+const plateGeometry = new THREE.BoxGeometry(1, 1, 1);
+projects.forEach((p, i) => {
+  const [x, z, w, h] = p.rect;
+  const mesh = new THREE.Mesh(plateGeometry, new THREE.MeshLambertMaterial({ color: projectColor(i).multiplyScalar(0.22) }));
+  mesh.scale.set(w - 0.6, PLATE_PROJECT, h - 0.6);
+  mesh.position.set(x + w / 2, PLATE_PROJECT / 2, z + h / 2);
+  mesh.userData.project = i;
+  scene.add(mesh);
+  p.mesh = mesh;
+  const el = document.createElement("div");
+  el.className = "label3d project";
+  el.textContent = p.name;
+  const label = new CSS2DObject(el);
+  label.position.set(x + w / 2, PLATE_PROJECT + 1, z + 1.4);
+  scene.add(label);
+  p.label = label;
+});
+districts.forEach((d) => {
+  const [x, z, w, h] = d.rect;
+  const mesh = new THREE.Mesh(plateGeometry, new THREE.MeshLambertMaterial({ color: projectColor(d.project).multiplyScalar(0.38) }));
+  mesh.scale.set(Math.max(w - 0.5, 0.3), PLATE_DISTRICT - PLATE_PROJECT, Math.max(h - 0.5, 0.3));
+  mesh.position.set(x + w / 2, (PLATE_DISTRICT + PLATE_PROJECT) / 2, z + h / 2);
+  scene.add(mesh);
+  d.mesh = mesh;
+  d.center = new THREE.Vector3(x + w / 2, PLATE_DISTRICT, z + h / 2);
+  const el = document.createElement("div");
+  el.className = "label3d district";
+  el.textContent = d.name;
+  const label = new CSS2DObject(el);
+  label.position.set(x + w / 2, PLATE_DISTRICT + 0.4, z + h / 2);
+  scene.add(label);
+  d.label = label;
+});
+
+// Buildings: one instanced draw call for every file.
+const buildingGeometry = new THREE.BoxGeometry(1, 1, 1);
+buildingGeometry.translate(0, 0.5, 0);
+const buildings = new THREE.InstancedMesh(buildingGeometry, new THREE.MeshLambertMaterial(), files.length);
+const matrix = new THREE.Matrix4();
+const visibleProjects = new Set(projects.map((_, i) => i));
+function placeBuildings() {
+  files.forEach((f, i) => {
+    const visible = visibleProjects.has(districts[f.d].project);
+    matrix.makeScale(visible ? f.s : 0, visible ? f.h : 0, visible ? f.s : 0);
+    matrix.setPosition(f.x, PLATE_DISTRICT, f.z);
+    buildings.setMatrixAt(i, matrix);
+  });
+  buildings.instanceMatrix.needsUpdate = true;
+  buildings.computeBoundingSphere();
+}
+placeBuildings();
+scene.add(buildings);
+
+// ----------------------------------------------------------------------------- coloring
+const STATUS_COLORS = { blocked: 0xf85149, open: 0xd29922, "in-progress": 0x58a6ff, done: 0x3fb950 };
+const STATUS_RANK = { blocked: 3, open: 2, "in-progress": 1, done: 0 };
+const KIND_COLORS = { header: 0x79c0ff, source: 0x3fb950, test: 0xd29922, shader: 0xa371f7, script: 0xf778ba };
+const ramp = (t) => new THREE.Color().setHSL(0.62 - 0.62 * Math.min(Math.max(t, 0), 1), 0.75, 0.55);
+const DIM = new THREE.Color(0x30363d);
+
+function worstStatus(f) {
+  let best = null;
+  for (const w of f.work) {
+    const s = DATA.workItems[w].status;
+    if (best === null || STATUS_RANK[s] > STATUS_RANK[best]) best = s;
+  }
+  return best;
+}
+const colorFns = {
+  project: (f) => projectColor(districts[f.d].project),
+  kind: (f) => new THREE.Color(KIND_COLORS[f.kind] ?? 0x8b949e),
+  loc: (f) => ramp(Math.log(f.loc + 1) / Math.log(maxLoc + 1)),
+  churn: (f) => (f.churn ? ramp(Math.log(f.churn + 1) / Math.log(maxChurn + 1)) : new THREE.Color(0x484f58)),
+  readiness: (f) => { const s = worstStatus(f); return s ? new THREE.Color(STATUS_COLORS[s] ?? 0x8b949e) : new THREE.Color(0x484f58); },
+  deps: (f, i) => (includedBy[i].length ? ramp(Math.log(includedBy[i].length + 1) / Math.log(maxFanIn + 1)) : new THREE.Color(0x484f58)),
+};
+function legendFor(mode) {
+  const swatch = (c, text) => `<div><span class="swatch" style="background:#${new THREE.Color(c).getHexString()}"></span>${escapeHtml(text)}</div>`;
+  const gradient = (lo, hi) => `<div style="height:8px;border-radius:4px;background:linear-gradient(90deg,#${ramp(0).getHexString()},#${ramp(0.5).getHexString()},#${ramp(1).getHexString()})"></div>` +
+    `<div class="meta" style="display:flex;justify-content:space-between"><span>${escapeHtml(lo)}</span><span>${escapeHtml(hi)}</span></div>`;
+  switch (mode) {
+    case "project": return projects.map((p, i) => swatch(projectColor(i), `${p.name} (${fmt(p.files)})`)).join("");
+    case "kind": return Object.entries(KIND_COLORS).map(([k, c]) => swatch(c, k)).join("");
+    case "loc": return gradient("1 line", `${fmt(maxLoc)} lines`);
+    case "churn": return gradient("1 commit", `${maxChurn} commits`) + `<div class="meta">Commits touching the file in the last ${DATA.meta.churnDays} days; grey = none.</div>`;
+    case "readiness": return Object.entries(STATUS_COLORS).map(([s, c]) => swatch(c, `worst linked work item: ${s}`)).join("") + swatch(0x484f58, "not an entry point of any work item");
+    case "deps": return gradient("1 includer", `${maxFanIn} includers`) + `<div class="meta">How many files include this one; grey = none.</div>`;
+  }
+  return "";
+}
+let colorMode = "project";
+let focus = null; // { self, out:Set, in:Set } while a building is selected
+function applyColors() {
+  const fn = colorFns[colorMode];
+  files.forEach((f, i) => {
+    let c = fn(f, i);
+    if (focus && i !== focus.self && !focus.out.has(i) && !focus.in.has(i)) c = c.clone().lerp(DIM, 0.8);
+    buildings.setColorAt(i, c);
+  });
+  buildings.instanceColor.needsUpdate = true;
+  $("legend").innerHTML = legendFor(colorMode);
+}
+applyColors();
+$("colorMode").addEventListener("change", (e) => { colorMode = e.target.value; applyColors(); });
+
+// ----------------------------------------------------------------------------- dependency arcs
+function arcPoints(a, b, lift, segments = 18) {
+  const mid = a.clone().add(b).multiplyScalar(0.5);
+  mid.y += lift;
+  return new THREE.QuadraticBezierCurve3(a, mid, b).getPoints(segments);
+}
+function buildArcs(pairs, colorOf, opacityOf) {
+  const positions = [], colors = [];
+  for (const [a, b, weight] of pairs) {
+    const pts = arcPoints(a, b, 4 + a.distanceTo(b) * 0.28);
+    const c = colorOf(weight);
+    const o = opacityOf(weight);
+    for (let k = 0; k < pts.length - 1; k++) {
+      positions.push(pts[k].x, pts[k].y, pts[k].z, pts[k + 1].x, pts[k + 1].y, pts[k + 1].z);
+      const t = k / (pts.length - 1);
+      const c0 = c.clone().multiplyScalar(o * (0.35 + 0.65 * t)), c1 = c.clone().multiplyScalar(o * (0.35 + 0.65 * (t + 1 / (pts.length - 1))));
+      colors.push(c0.r, c0.g, c0.b, c1.r, c1.g, c1.b);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+}
+const maxEdge = Math.max(1, ...DATA.edges.map((e) => e[2]));
+let districtArcs = null;
+function rebuildDistrictArcs() {
+  if (districtArcs) { scene.remove(districtArcs); districtArcs.geometry.dispose(); }
+  const pairs = DATA.edges
+    .filter(([a, b]) => visibleProjects.has(districts[a].project) && visibleProjects.has(districts[b].project))
+    .map(([a, b, w]) => [districts[a].center, districts[b].center, w]);
+  districtArcs = buildArcs(pairs, () => new THREE.Color(0x8ab4f8), (w) => 0.18 + 0.82 * Math.sqrt(w / maxEdge));
+  districtArcs.visible = $("showEdges").checked && !focus;
+  scene.add(districtArcs);
+}
+rebuildDistrictArcs();
+$("showEdges").addEventListener("change", () => { if (districtArcs) districtArcs.visible = $("showEdges").checked && !focus; });
+
+let focusArcs = null;
+const topOf = (i) => new THREE.Vector3(files[i].x, PLATE_DISTRICT + files[i].h, files[i].z);
+
+// ----------------------------------------------------------------------------- project filters
+projects.forEach((p, i) => {
+  const row = document.createElement("label");
+  row.className = "row";
+  row.innerHTML = `<input type="checkbox" checked data-project="${i}"><span class="swatch" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#${projectColor(i).getHexString()}"></span>${escapeHtml(p.name)} <span class="meta">${fmt(p.loc)}</span>`;
+  row.querySelector("input").addEventListener("change", (e) => {
+    e.target.checked ? visibleProjects.add(i) : visibleProjects.delete(i);
+    p.mesh.visible = p.label.visible = e.target.checked;
+    districts.forEach((d) => { if (d.project === i) d.mesh.visible = e.target.checked; });
+    placeBuildings();
+    rebuildDistrictArcs();
+    updateDistrictLabels();
+  });
+  $("projectFilters").appendChild(row);
+});
+
+// ----------------------------------------------------------------------------- selection & details
+function fileLink(i) {
+  return `<button class="link" data-file="${i}">${escapeHtml(files[i].path)} <small class="meta">${fmt(files[i].loc)}</small></button>`;
+}
+function select(i, fly = false) {
+  if (focusArcs) { scene.remove(focusArcs); focusArcs.geometry.dispose(); focusArcs = null; }
+  if (i === null) {
+    focus = null;
+    $("details").style.display = "none";
+    if (districtArcs) districtArcs.visible = $("showEdges").checked;
+    applyColors();
+    return;
+  }
+  const f = files[i];
+  focus = { self: i, out: new Set(f.inc), in: new Set(includedBy[i]) };
+  const pairs = [...f.inc.map((t) => [topOf(i), topOf(t), "out"]), ...includedBy[i].map((s) => [topOf(s), topOf(i), "in"])];
+  focusArcs = buildArcs(pairs, (kind) => new THREE.Color(kind === "out" ? 0x58a6ff : 0xf0883e), () => 1);
+  scene.add(focusArcs);
+  if (districtArcs) districtArcs.visible = false;
+  applyColors();
+
+  const d = districts[f.d], p = projects[d.project];
+  const work = f.work.map((w) => DATA.workItems[w]);
+  $("detailsBody").innerHTML = `
+    <h1 style="padding-right:20px;word-break:break-all">${escapeHtml(f.path.split("/").pop())}</h1>
+    <div class="meta" style="word-break:break-all">${escapeHtml(f.path)}</div>
+    <h2>File</h2>
+    <div class="kv"><span>Project</span><span>${escapeHtml(p.name)}</span><span>District</span><span>${escapeHtml(d.name)}</span>
+      <span>Lines</span><span>${fmt(f.loc)}</span><span>Kind</span><span>${escapeHtml(f.kind)}</span>
+      <span>Churn</span><span>${f.churn} commit(s) / ${DATA.meta.churnDays}d</span>
+      <span>Types</span><span>${f.classCount}</span></div>
+    ${f.classes.length ? `<h2>Classes / structs</h2><div>${f.classes.map((c) => `<span class="pill">${escapeHtml(c)}</span>`).join("")}${f.classCount > f.classes.length ? " …" : ""}</div>` : ""}
+    ${work.length ? `<h2>Readiness work items</h2>${work.map((w) => `<div><span class="pill" style="border-color:#${new THREE.Color(STATUS_COLORS[w.status] ?? 0x8b949e).getHexString()}">${escapeHtml(w.status)}</span><b>${escapeHtml(w.id)}</b> ${escapeHtml(w.priority)} — ${escapeHtml(w.title)}</div>`).join("")}` : ""}
+    <h2 style="color:var(--out)">Includes (${f.inc.length})</h2>${f.inc.map(fileLink).join("") || '<div class="meta">none resolved</div>'}
+    <h2 style="color:var(--in)">Included by (${includedBy[i].length})</h2>${includedBy[i].map(fileLink).join("") || '<div class="meta">none</div>'}`;
+  $("details").style.display = "block";
+  $("details").querySelectorAll("[data-file]").forEach((b) => b.addEventListener("click", () => select(Number(b.dataset.file), true)));
+  if (fly) flyTo(new THREE.Vector3(f.x, PLATE_DISTRICT + f.h * 0.5, f.z), Math.max(40, f.h * 3));
+}
+$("closeDetails").addEventListener("click", () => select(null));
+window.addEventListener("keydown", (e) => { if (e.key === "Escape") select(null); });
+
+// ----------------------------------------------------------------------------- camera fly-to
+let flight = null;
+function flyTo(target, distance) {
+  const direction = camera.position.clone().sub(controls.target).normalize();
+  flight = { t: 0, fromTarget: controls.target.clone(), toTarget: target.clone(), fromPos: camera.position.clone(),
+    toPos: target.clone().add(direction.multiplyScalar(distance)) };
+}
+
+// ----------------------------------------------------------------------------- search
+const districtSearch = districts.map((d, i) => ({ i, text: `${projects[d.project].name}/${d.name}`.toLowerCase() }));
+$("search").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  const out = [];
+  if (q.length >= 2) {
+    for (const d of districtSearch) {
+      if (d.text.includes(q)) out.push(`<button class="result" data-district="${d.i}">▦ ${escapeHtml(projects[districts[d.i].project].name)} / ${escapeHtml(districts[d.i].name)} <small>${districts[d.i].files} files</small></button>`);
+      if (out.length >= 8) break;
+    }
+    for (let i = 0; i < files.length && out.length < 40; i++) {
+      const f = files[i];
+      const cls = f.classes.find((c) => c.toLowerCase().includes(q));
+      if (f.path.toLowerCase().includes(q) || cls) out.push(`<button class="result" data-file="${i}">${escapeHtml(f.path)} ${cls ? `<small>· ${escapeHtml(cls)}</small>` : ""}</button>`);
+    }
+  }
+  $("results").innerHTML = out.join("") || (q.length >= 2 ? '<div class="meta">No matches</div>' : "");
+  $("results").querySelectorAll("[data-file]").forEach((b) => b.addEventListener("click", () => select(Number(b.dataset.file), true)));
+  $("results").querySelectorAll("[data-district]").forEach((b) => b.addEventListener("click", () => {
+    const d = districts[Number(b.dataset.district)];
+    flyTo(d.center, Math.max(60, Math.max(d.rect[2], d.rect[3]) * 1.6));
+  }));
+});
+
+// ----------------------------------------------------------------------------- hover & click
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let hovered = -1, downAt = null;
+function pick(event) {
+  pointer.set((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObject(buildings, false)[0];
+  return hit ? hit.instanceId : -1;
+}
+renderer.domElement.addEventListener("pointermove", (event) => {
+  hovered = pick(event);
+  const tip = $("tooltip");
+  if (hovered < 0) { tip.style.display = "none"; renderer.domElement.style.cursor = ""; return; }
+  const f = files[hovered];
+  tip.innerHTML = `<b>${escapeHtml(f.path)}</b><br>${fmt(f.loc)} lines · ${f.kind} · ${f.inc.length} includes · ${includedBy[hovered].length} includers`;
+  tip.style.display = "block";
+  tip.style.left = Math.min(event.clientX + 14, window.innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = Math.min(event.clientY + 14, window.innerHeight - tip.offsetHeight - 8) + "px";
+  renderer.domElement.style.cursor = "pointer";
+});
+renderer.domElement.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return; // it was a drag
+  const i = pick(e);
+  select(i >= 0 ? i : null);
+});
+
+// ----------------------------------------------------------------------------- labels & loop
+function updateDistrictLabels() {
+  const show = $("showDistrictLabels").checked;
+  const distance = camera.position.distanceTo(controls.target);
+  // Project labels only when the block is big enough on screen, so the cluster of small
+  // tool projects does not stack a dozen names on top of each other.
+  projects.forEach((p, i) => {
+    const size = Math.max(p.rect[2], p.rect[3]);
+    const center = new THREE.Vector3(p.rect[0] + p.rect[2] / 2, 0, p.rect[1] + p.rect[3] / 2);
+    p.label.visible = visibleProjects.has(i) && size / Math.max(center.distanceTo(camera.position), 1) > 0.09;
+  });
+  districts.forEach((d) => {
+    const visible = show && visibleProjects.has(d.project);
+    const near = d.center.distanceTo(camera.position) < Math.max(120, Math.sqrt(d.rect[2] * d.rect[3]) * 9) || distance < citySize * 0.35;
+    d.label.visible = visible && near;
+  });
+}
+$("showDistrictLabels").addEventListener("change", updateDistrictLabels);
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+let frame = 0;
+renderer.setAnimationLoop(() => {
+  if (flight) {
+    flight.t = Math.min(1, flight.t + 0.035);
+    const k = 1 - Math.pow(1 - flight.t, 3);
+    controls.target.lerpVectors(flight.fromTarget, flight.toTarget, k);
+    camera.position.lerpVectors(flight.fromPos, flight.toPos, k);
+    if (flight.t >= 1) flight = null;
+  }
+  controls.update();
+  if (++frame % 10 === 0) updateDistrictLabels();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
