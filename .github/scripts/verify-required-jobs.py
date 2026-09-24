@@ -1,12 +1,28 @@
 #!/usr/bin/env python3
-"""Fail unless every GitHub Actions job supplied through needs succeeded."""
+"""Fail unless every GitHub Actions job supplied through needs succeeded.
+
+With ``--json-out PATH`` the verifier also writes a normalized, exact-SHA
+record of the gate decision (schema ``REQUIRED_GATE_RECORD_SCHEMA``). The
+record is written for both passing and failing verdicts so a red gate still
+publishes machine-readable evidence; it is never written when the needs
+evidence or run identity is invalid (exit 2). The exit code is unchanged by
+the option: 0 pass, 1 a required job did not succeed, 2 invalid evidence.
+"""
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
+import re
 import sys
+import tempfile
+from pathlib import Path
 from typing import Any
+
+REQUIRED_GATE_RECORD_SCHEMA = "sparkengine.required-ci-gate.v1"
+_SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
+_POSITIVE_INTEGER_PATTERN = re.compile(r"[1-9][0-9]*")
 
 
 def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -103,7 +119,93 @@ def markdown(
     return "\n".join(lines)
 
 
-def main() -> int:
+def run_identity(environment: dict[str, str]) -> dict[str, Any]:
+    """Return the exact GitHub Actions run identity the gate record is bound to."""
+
+    sha = environment.get("GITHUB_SHA", "")
+    if not _SHA_PATTERN.fullmatch(sha):
+        raise ValueError("GITHUB_SHA must be a 40-character lowercase hex commit SHA")
+    identity: dict[str, Any] = {"sha": sha}
+    for key, variable in (("run_id", "GITHUB_RUN_ID"), ("run_attempt", "GITHUB_RUN_ATTEMPT")):
+        value = environment.get(variable, "")
+        if not _POSITIVE_INTEGER_PATTERN.fullmatch(value):
+            raise ValueError(f"{variable} must be a positive integer")
+        identity[key] = int(value)
+    for key, variable in (
+        ("repository", "GITHUB_REPOSITORY"),
+        ("event", "GITHUB_EVENT_NAME"),
+        ("ref", "GITHUB_REF"),
+    ):
+        value = environment.get(variable, "")
+        if not value or value != value.strip():
+            raise ValueError(f"{variable} must be a non-empty string")
+        identity[key] = value
+    return identity
+
+
+def gate_record(
+    identity: dict[str, Any],
+    needs: dict[str, Any],
+    expected_jobs: list[str],
+    passed: list[str],
+    deferred: list[tuple[str, str]],
+    failed: list[tuple[str, str]],
+) -> dict[str, Any]:
+    """Build the normalized gate record from an already-validated verification."""
+
+    status_by_job = {job: "success" for job in passed}
+    status_by_job.update({job: "deferred" for job, _result in deferred})
+    status_by_job.update({job: "failed" for job, _result in failed})
+    jobs = []
+    for job in sorted(needs):
+        raw_result = needs[job].get("result")
+        jobs.append(
+            {
+                "job": job,
+                "result": None if raw_result is None else str(raw_result),
+                "status": status_by_job[job],
+            }
+        )
+    return {
+        "schema": REQUIRED_GATE_RECORD_SCHEMA,
+        **identity,
+        "expected_jobs": list(expected_jobs),
+        "jobs": jobs,
+        "deferred": [{"job": job, "result": result} for job, result in deferred],
+        "failed": [{"job": job, "reason": reason} for job, reason in failed],
+        "counts": {"success": len(passed), "deferred": len(deferred), "failed": len(failed)},
+        "verdict": "fail" if failed else "pass",
+    }
+
+
+def write_record(path: Path, record: dict[str, Any]) -> None:
+    """Atomically write the canonical JSON record (sorted keys, LF, trailing newline)."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(record, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+    handle, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(text)
+        os.replace(temporary, path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--json-out",
+        type=Path,
+        help="write the normalized exact-SHA gate record to this path",
+    )
+    arguments = parser.parse_args(argv)
+    if arguments.json_out is not None:
+        # A stale record from an earlier invocation must never be published
+        # as this run's evidence when the current evidence turns out invalid.
+        arguments.json_out.unlink(missing_ok=True)
+
     raw = os.environ.get("NEEDS_JSON", "")
     try:
         needs = json.loads(raw, object_pairs_hook=_reject_duplicate_json_keys)
@@ -123,9 +225,16 @@ def main() -> int:
             deferred_failures=deferred_failures,
             expected_jobs=expected_jobs,
         )
+        identity = run_identity(dict(os.environ)) if arguments.json_out is not None else None
     except (json.JSONDecodeError, ValueError) as exc:
         print(f"error: invalid required-job evidence: {exc}", file=sys.stderr)
         return 2
+
+    if identity is not None:
+        write_record(
+            arguments.json_out,
+            gate_record(identity, needs, expected_jobs, passed, deferred, failed),
+        )
 
     report = markdown(passed, failed, deferred)
     print(report)

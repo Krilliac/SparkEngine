@@ -1225,10 +1225,33 @@ def required_workflow_errors(workflow: str) -> list[str]:
             if not exact_field(
                 verifier,
                 "run",
-                "python3 .github/scripts/verify-required-jobs.py",
+                "python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json",
                 indent=8,
             ):
                 errors.append("required-ci-gate verifier must run the exact required-job script")
+        try:
+            upload = named_step(gate, "Upload Required CI Gate record")
+        except AssertionError as exc:
+            errors.append(str(exc))
+        else:
+            # The record must survive a red gate: the upload runs under
+            # always() after the verifier exits non-zero, targets the exact
+            # SHA, and fails loudly if the verifier produced no record.
+            required_upload_fields = (
+                ("if", "always()"),
+                ("name", "required-ci-gate-${{ github.sha }}-${{ github.run_attempt }}"),
+                ("path", "required-ci-gate.json"),
+                ("if-no-files-found", "error"),
+            )
+            for field, value in required_upload_fields:
+                indent = 8 if field == "if" else 10
+                if not exact_field(upload, field, value, indent=indent):
+                    errors.append(f"required-ci-gate record upload must set exact {field}: {value}")
+            if "continue-on-error" in upload:
+                errors.append("required-ci-gate record upload must not suppress its own failure")
+            verifier_position = gate.find("- name: Verify every required job succeeded")
+            if verifier_position < 0 or gate.index("- name: Upload Required CI Gate record") < verifier_position:
+                errors.append("required-ci-gate record upload must run after the verifier")
     return errors
 
 
@@ -1981,7 +2004,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             1,
         )
         mutations["required gate verifier bypassed"] = self.build.replace(
-            "        run: python3 .github/scripts/verify-required-jobs.py",
+            "        run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json",
             "        run: 'true'",
             1,
         )
@@ -2016,6 +2039,56 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             with self.subTest(mutation=label):
                 self.assertNotEqual(mutated, self.build, "mutation fixture did not alter YAML")
                 self.assertTrue(required_workflow_errors(mutated), label)
+
+    def test_required_gate_record_upload_survives_gate_failure(self) -> None:
+        self.assertEqual(required_workflow_errors(self.build), [])
+        gate = yaml_section(self.build, "required-ci-gate", indent=2)
+        upload = named_step(gate, "Upload Required CI Gate record")
+        self.assertIn("actions/upload-artifact@", upload)
+        record_marker = "\n      - name: Upload Required CI Gate record\n        if: always()\n"
+        name_marker = "name: required-ci-gate-${{ github.sha }}-${{ github.run_attempt }}"
+        cases = {
+            "upload skipped on red gate": (
+                record_marker,
+                record_marker.replace("if: always()", "if: success()"),
+                "exact if: always()",
+            ),
+            "upload silently optional": (
+                "          path: required-ci-gate.json\n"
+                "          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}\n"
+                "          if-no-files-found: error\n",
+                "          path: required-ci-gate.json\n"
+                "          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}\n"
+                "          if-no-files-found: warn\n",
+                "exact if-no-files-found: error",
+            ),
+            "upload not bound to exact sha": (
+                name_marker,
+                "name: required-ci-gate-latest",
+                "exact name:",
+            ),
+            "upload suppresses failure": (
+                record_marker,
+                record_marker + "        continue-on-error: true\n",
+                "must not suppress its own failure",
+            ),
+            "verifier writes no record": (
+                "        run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json\n",
+                "        run: python3 .github/scripts/verify-required-jobs.py\n",
+                "must run the exact required-job script",
+            ),
+            "upload removed": (
+                "      - name: Upload Required CI Gate record\n",
+                "      - name: Upload gate notes\n",
+                "Upload Required CI Gate record",
+            ),
+        }
+        for label, (old, new, message) in cases.items():
+            with self.subTest(mutation=label):
+                self.assertEqual(self.build.count(old), 1, label)
+                mutated = self.build.replace(old, new, 1)
+                errors = required_workflow_errors(mutated)
+                self.assertTrue(any(message in error for error in errors), errors)
 
     def test_detector_rejects_failed_producer_hidden_by_tee(self) -> None:
         fixture = """jobs:

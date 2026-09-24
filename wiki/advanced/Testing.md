@@ -562,6 +562,19 @@ observing that required dependency; this red run is proof of failure propagation
 not release evidence. The input defaults to false, and push/PR runs cannot enable
 the probe.
 
+`Required CI Gate` also publishes a machine-readable record of its decision.
+`verify-required-jobs.py --json-out required-ci-gate.json` writes a canonical
+`sparkengine.required-ci-gate.v1` JSON document with sorted keys. It holds the
+exact `sha`, `run_id`, `run_attempt`, `repository`, `event` and `ref`, the
+expected job list, each job's raw `result` and `status`, the deferred and failed
+entries, and the `verdict` (`pass`/`fail`). The record is written on pass and on
+fail, and the exit code is unchanged (0 pass, 1 failed job, 2 invalid evidence).
+Invalid needs evidence or a malformed run identity writes no record and removes
+any stale one. The gate uploads it under `if: always()` as
+`required-ci-gate-<sha>-<run_attempt>` with `if-no-files-found: error`, so a red
+gate still publishes the record. It is additive: no consumer reads it yet, and
+none should until a hosted run has published one.
+
 ### Code Coverage
 
 The `coverage` CI job produces lcov reports showing line and branch coverage. To generate coverage locally:

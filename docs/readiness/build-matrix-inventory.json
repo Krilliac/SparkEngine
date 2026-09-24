@@ -11092,7 +11092,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 2,
+        "stepCount": 3,
         "steps": [
           {
             "index": 0,
@@ -11120,7 +11120,19 @@
               "EXPECTED_REQUIRED_JOBS_JSON",
               "NEEDS_JSON"
             ],
-            "runDigest": "eb386ea75b2903a9"
+            "runDigest": "b3adf85dd5eee268"
+          },
+          {
+            "index": 2,
+            "name": "Upload Required CI Gate record",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
           }
         ],
         "envNames": [],

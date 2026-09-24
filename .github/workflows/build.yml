@@ -3773,4 +3773,17 @@ jobs:
           NEEDS_JSON: ${{ toJSON(needs) }}
           EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
-        run: python3 .github/scripts/verify-required-jobs.py
+        run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
+
+      # Normalized exact-SHA gate record (sha, run id/attempt, event, ref,
+      # expected jobs, per-job results, deferred entries, verdict). Uploaded on
+      # pass and fail; a missing record means the needs evidence was invalid.
+      # Additive only: no consumer may depend on it until a hosted run proves it.
+      - name: Upload Required CI Gate record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: required-ci-gate-${{ github.sha }}-${{ github.run_attempt }}
+          path: required-ci-gate.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: error
