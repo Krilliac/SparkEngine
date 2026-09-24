@@ -120,6 +120,6 @@ if(BUILD_TESTS)
     set_tests_properties(SparkServerVersion PROPERTIES
         PASS_REGULAR_EXPRESSION
             "^SparkServer ${_spark_server_version_regex} ([0-9a-f]+|unknown) [(](clean|dirty|unknown)[)]"
-        LABELS "server;observability"
+        LABELS "server;observability;integration;process"
         TIMEOUT 10)
 endif()

@@ -204,6 +204,26 @@ from being reported as a zero-failure test run. Repository badges count source
 test definitions separately because platform and feature gates affect the
 runtime set.
 
+**CTest registration policy (CI-110).** Every `add_test` must carry a positive
+`TIMEOUT` (at most 3600 s) and non-empty `LABELS` set in the same file: the
+project never includes `CTest.cmake`, so an unbounded test that hangs stalls the
+whole run instead of failing, and an unlabelled one is invisible to
+`ctest -L unit|integration|process`. Label product registrations with the
+product (`console`, `server`, `sparkbuild`, ...) plus `unit`, `integration`, or
+`process`; the validator enforces only a non-empty set, so that category is a
+review convention (fuzz and policy registrations keep `fuzz`/`security`). `python3 Tools/validate_ctest_policy.py` (no arguments) checks every
+git-tracked first-party `CMakeLists.txt` and `*.cmake` that calls `add_test`,
+outside `ThirdParty/`. Because loops, functions, and platform branches are only
+resolved by CMake, `build-linux-gcc` and `build-windows-vs2022` also run
+`ctest --show-only=json-v1` on the configured tree and pass it to
+`validate_ctest_policy.py --ctest-json`. That step fails the job on any
+violation or an empty inventory. To reproduce locally:
+
+```bash
+ctest --test-dir build/linux-gcc-release --show-only=json-v1 > ctest.json
+python3 Tools/validate_ctest_policy.py --ctest-json ctest.json
+```
+
 `cmake/RunSparkTests.cmake` **requires** `-DSPARK_TEST_TIMEOUT_SECONDS=<n>`; any
 script that invokes it directly must pass one (the 180 s default is gone so no
 configuration can inherit the fast configuration's wall clock).

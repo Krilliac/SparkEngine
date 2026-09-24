@@ -166,7 +166,9 @@ endif()
                 "-DSPARK_VERSION_EXECUTABLE=$<TARGET_FILE:SparkConsole>"
                 "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkConsole ${SPARK_ENGINE_VERSION}"
                 -P "${_sparkconsole_version_test_script}")
-        set_tests_properties(SparkConsoleVersion PROPERTIES TIMEOUT 10)
+        set_tests_properties(SparkConsoleVersion PROPERTIES
+            TIMEOUT 10
+            LABELS "console;cli;version;integration;process")
         unset(_sparkconsole_version_test_script)
 
         set(_sparkconsole_batch_test_script
@@ -208,7 +210,9 @@ endif()
                 "-DSPARK_EXPECTED_VERSION=${SPARK_ENGINE_VERSION}"
                 "-DSPARK_WORKING_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/SparkConsoleBatchSmoke"
                 -P "${_sparkconsole_batch_test_script}")
-        set_tests_properties(SparkConsoleBatchSmoke PROPERTIES TIMEOUT 15)
+        set_tests_properties(SparkConsoleBatchSmoke PROPERTIES
+            TIMEOUT 15
+            LABELS "console;cli;integration;process")
         unset(_sparkconsole_batch_test_script)
     endif()
 

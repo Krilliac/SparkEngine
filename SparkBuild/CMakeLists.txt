@@ -106,7 +106,7 @@ if(SPARKBUILD_BUILD_TESTS)
         target_compile_options(SparkBuildProcessRunnerTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkBuildProcessRunnerTests COMMAND SparkBuildProcessRunnerTests)
-    set_tests_properties(SparkBuildProcessRunnerTests PROPERTIES TIMEOUT 25)
+    set_tests_properties(SparkBuildProcessRunnerTests PROPERTIES TIMEOUT 25 LABELS "sparkbuild;unit")
 
     add_executable(SparkBuildDownloaderTests
         tests/DownloaderTests.cpp
@@ -116,7 +116,7 @@ if(SPARKBUILD_BUILD_TESTS)
         target_compile_options(SparkBuildDownloaderTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkBuildDownloaderTests COMMAND SparkBuildDownloaderTests)
-    set_tests_properties(SparkBuildDownloaderTests PROPERTIES TIMEOUT 10)
+    set_tests_properties(SparkBuildDownloaderTests PROPERTIES TIMEOUT 10 LABELS "sparkbuild;unit")
 
     if(WIN32)
         set(_sparkbuild_platform "Windows")
@@ -158,7 +158,9 @@ endif()
             "-DSPARK_VERSION_EXECUTABLE=$<TARGET_FILE:SparkBuild>"
             "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkBuild v${PROJECT_VERSION} (${_sparkbuild_platform})"
             -P "${_sparkbuild_version_test_script}")
-    set_tests_properties(SparkBuildVersion PROPERTIES TIMEOUT 10)
+    set_tests_properties(SparkBuildVersion PROPERTIES
+        TIMEOUT 10
+        LABELS "sparkbuild;cli;version;integration;process")
     unset(_sparkbuild_version_test_script)
     unset(_sparkbuild_platform)
 
@@ -171,7 +173,9 @@ endif()
             "-DSPARK_PLAN_SOURCE=${CMAKE_SOURCE_DIR}"
             "-DSPARK_PLAN_BUILD=${CMAKE_CURRENT_BINARY_DIR}/sparkbuild-plan-smoke"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/VerifySparkBuildPlan.cmake")
-    set_tests_properties(SparkBuildPlan PROPERTIES TIMEOUT 10)
+    set_tests_properties(SparkBuildPlan PROPERTIES
+        TIMEOUT 10
+        LABELS "sparkbuild;cli;integration;process")
 endif()
 
 # Standalone consumers retain the historical flat output. The SparkEngine

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,27 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = REPO_ROOT / "Tools" / "validate_ctest_policy.py"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
+BUILD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build.yml"
+
+# Registrations outside Tests/CMakeLists.txt that the configured Linux tree
+# evaluates. Each once lacked TIMEOUT or LABELS; the default static scan must
+# keep reaching every one of these files.
+PRODUCT_TEST_SOURCES = (
+    "CMakeLists.txt",
+    "SparkAssetPipelineCore/CMakeLists.txt",
+    "SparkAutomation/CMakeLists.txt",
+    "SparkBuild/CMakeLists.txt",
+    "SparkConsole/CMakeLists.txt",
+    "SparkCrashReporter/CMakeLists.txt",
+    "SparkDaemon/CMakeLists.txt",
+    "SparkGateway/CMakeLists.txt",
+    "SparkLauncher/CMakeLists.txt",
+    "SparkServer/CMakeLists.txt",
+    "Tests/FPSGameplayEvents/CMakeLists.txt",
+    "Tests/PackageSmoke/CMakeLists.txt",
+    "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+    "cmake/SparkFuzzPolicy.cmake",
+)
 
 GOOD_CMAKE = """\
 add_test(NAME Alpha COMMAND alpha)
@@ -158,6 +180,96 @@ class CTestPolicyValidator(unittest.TestCase):
         result = self.check_json(json.dumps({"kind": "somethingElse"}))
         self.assertEqual(result.returncode, 1)
         self.assertIn("missing 'tests' list", result.stderr)
+
+    # -- first-party discovery ----------------------------------------------------
+
+    def test_discovery_skips_vendored_build_trees_and_commented_registrations(self) -> None:
+        policy = self._policy_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            files = {
+                "CMakeLists.txt": "add_subdirectory(Product)\n",
+                "Product/CMakeLists.txt": "add_test(NAME Hangs COMMAND hang)\n",
+                "cmake/Helper.cmake": "# add_test(NAME Ghost COMMAND ghost)\n",
+                "cmake/Policy.cmake": "function(f)\n  add_test(NAME Fn COMMAND fn)\nendfunction()\n",
+                "ThirdParty/lib/CMakeLists.txt": "add_test(NAME Vendored COMMAND vendored)\n",
+                "build/tree/CMakeCache.txt": "",
+                "build/tree/_deps/x/CMakeLists.txt": "add_test(NAME Fetched COMMAND fetched)\n",
+                "Product/notes.txt": "add_test(NAME NotCMake COMMAND x)\n",
+            }
+            for relative, content in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            found = [path.relative_to(root).as_posix() for path in policy.discover_cmake_sources(root)]
+        self.assertEqual(found, ["Product/CMakeLists.txt", "cmake/Policy.cmake"])
+
+    def test_discovery_walks_an_untracked_tree_nested_inside_another_repository(self) -> None:
+        # git ls-files from a nested, untracked copy succeeds but lists nothing;
+        # discovery must fall back to the walk instead of reporting no files.
+        policy = self._policy_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary)
+            init = subprocess.run(["git", "init", "-q", str(outer)], capture_output=True, check=False)
+            if init.returncode != 0:
+                self.skipTest("git is unavailable to create the enclosing repository")
+            root = outer / "copy"
+            (root / "Product").mkdir(parents=True)
+            (root / "CMakeLists.txt").write_text("add_subdirectory(Product)\n", encoding="utf-8")
+            (root / "Product" / "CMakeLists.txt").write_text("add_test(NAME Hangs COMMAND hang)\n", encoding="utf-8")
+            found = [path.relative_to(root).as_posix() for path in policy.discover_cmake_sources(root)]
+        self.assertEqual(found, ["Product/CMakeLists.txt"])
+
+    def test_default_static_view_scans_every_first_party_registration_file(self) -> None:
+        policy = self._policy_module()
+        found = {path.relative_to(REPO_ROOT).as_posix() for path in policy.discover_cmake_sources()}
+        self.assertIn("Tests/CMakeLists.txt", found)
+        for relative in PRODUCT_TEST_SOURCES:
+            self.assertIn(relative, found, f"default static view no longer scans {relative}")
+        self.assertFalse(any(path.startswith("ThirdParty/") for path in found), sorted(found))
+
+    def test_default_static_view_passes_on_the_repository(self) -> None:
+        result = self.run_validator()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        count = int(result.stdout.split("OK (", 1)[1].split(" ", 1)[0])
+        tests_only = len(self._policy_module().parse_cmake(TESTS_CMAKE.read_text(encoding="utf-8"))[0])
+        # Product registrations must be counted on top of Tests/CMakeLists.txt.
+        self.assertGreater(count, tests_only + len(PRODUCT_TEST_SOURCES), result.stdout)
+
+    def test_every_product_registration_file_is_bounded_and_labelled(self) -> None:
+        for relative in PRODUCT_TEST_SOURCES:
+            with self.subTest(file=relative):
+                result = self.run_validator("--cmake-lists", str(REPO_ROOT / relative))
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    # -- CI wiring ------------------------------------------------------------------
+
+    def test_configured_tree_policy_is_enforced_in_linux_gcc_and_windows_lanes(self) -> None:
+        workflow = BUILD_WORKFLOW.read_text(encoding="utf-8")
+        for job in ("build-linux-gcc", "build-windows-vs2022"):
+            with self.subTest(job=job):
+                body = self._job_body(workflow, job)
+                step = body.split("- name: Enforce configured-tree CTest policy", 1)
+                self.assertEqual(len(step), 2, f"{job} has no configured-tree CTest policy step")
+                script = step[1].split("\n    - name:", 1)[0]
+                self.assertIn("set -euo pipefail", script)
+                self.assertIn("--no-tests=error", script)
+                self.assertIn("--show-only=json-v1 > build/ctest-policy-inventory.json", script)
+                self.assertIn("Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json", script)
+                self.assertNotIn("continue-on-error", script)
+                self.assertNotIn("|| true", script)
+
+    def test_static_policy_runs_in_ci_tool_validation(self) -> None:
+        body = self._job_body(BUILD_WORKFLOW.read_text(encoding="utf-8"), "validate-ci-tools")
+        self.assertIn("run: python3 Tools/validate_ctest_policy.py\n", body)
+        self.assertIn("run: python3 Tests/Tools/test_validate_ctest_policy.py\n", body)
+
+    @staticmethod
+    def _job_body(workflow: str, job: str) -> str:
+        marker = f"\n  {job}:\n"
+        start = workflow.index(marker) + len(marker)
+        next_job = re.search(r"\n  [A-Za-z0-9_-]+:\n", workflow[start:])
+        return workflow[start : start + next_job.start()] if next_job else workflow[start:]
 
     # -- the real tree ----------------------------------------------------------
 

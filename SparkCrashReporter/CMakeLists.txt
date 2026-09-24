@@ -82,7 +82,9 @@ if(REPORTER_SOURCES)
         endif()
         add_test(NAME SparkCrashReporter.ProductionTimeout
                  COMMAND SparkCrashReporterProductionTimeoutTests $<TARGET_FILE:SparkCrashReporterFakeGh>)
-        set_tests_properties(SparkCrashReporter.ProductionTimeout PROPERTIES TIMEOUT 5)
+        set_tests_properties(SparkCrashReporter.ProductionTimeout PROPERTIES
+                             TIMEOUT 5
+                             LABELS "crash-reporter;unit")
 
         add_executable(SparkCrashReporterManifestTests
             tests/CrashReporterManifestTests.cpp
@@ -158,7 +160,8 @@ if(REPORTER_SOURCES)
                          -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/spark-crash-reporter-executable-smoke
                          -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/CrashReporterExecutableSmoke.cmake)
         set_tests_properties(SparkCrashReporter.ExecutableSmoke PROPERTIES
-                             TIMEOUT 30)
+                             TIMEOUT 30
+                             LABELS "crash-reporter;integration;process")
     endif()
 else()
     message(STATUS "SparkCrashReporter: no source files found, skipping")

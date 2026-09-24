@@ -625,10 +625,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3393,
+      "line": 3394,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3389",
+          "id": "CMakeLists.txt:3390",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1395,7 +1395,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1946,
+      "line": 1943,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1446,10 +1446,10 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3393,
+      "line": 3394,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:3389",
+          "id": "CMakeLists.txt:3390",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -1481,7 +1481,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1360,
+      "line": 1357,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2455,7 +2455,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 737,
+      "line": 736,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2523,7 +2523,7 @@
       "target": "SparkCrashReporterConsentTests",
       "kind": "executable",
       "file": "SparkCrashReporter/CMakeLists.txt",
-      "line": 125,
+      "line": 127,
       "conditionFrames": [
         {
           "id": "SparkCrashReporter/CMakeLists.txt:29",
@@ -2573,7 +2573,7 @@
       "target": "SparkCrashReporterManifestTests",
       "kind": "executable",
       "file": "SparkCrashReporter/CMakeLists.txt",
-      "line": 87,
+      "line": 89,
       "conditionFrames": [
         {
           "id": "SparkCrashReporter/CMakeLists.txt:29",
@@ -2651,7 +2651,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 702,
+      "line": 701,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2775,7 +2775,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 844,
+      "line": 843,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2965,10 +2965,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 724,
+      "line": 723,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:723",
+          "id": "Tests/CMakeLists.txt:722",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -3096,7 +3096,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 741,
+      "line": 740,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3106,7 +3106,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 735,
+      "line": 734,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3116,7 +3116,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 743,
+      "line": 742,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3146,10 +3146,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 715,
+      "line": 714,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:714",
+          "id": "Tests/CMakeLists.txt:713",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -3186,7 +3186,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 739,
+      "line": 738,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3196,7 +3196,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 849,
+      "line": 848,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3256,7 +3256,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 745,
+      "line": 744,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3288,7 +3288,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 839,
+      "line": 838,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3298,7 +3298,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 691,
+      "line": 690,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3556,7 +3556,7 @@
       "target": "spark_fps_abilities_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 141,
+      "line": 152,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3566,7 +3566,7 @@
       "target": "spark_fps_assets_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 69,
+      "line": 72,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3586,7 +3586,7 @@
       "target": "spark_fps_inventory_quests_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 153,
+      "line": 165,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3606,7 +3606,7 @@
       "target": "spark_fps_progression_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 50,
+      "line": 52,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3616,7 +3616,7 @@
       "target": "spark_fps_weapons_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 92,
+      "line": 98,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3626,7 +3626,7 @@
       "target": "spark_package_module_header_smoke",
       "kind": "module_library",
       "file": "Tests/PackageSmoke/CMakeLists.txt",
-      "line": 22,
+      "line": 23,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4176,7 +4176,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 737,
+          "line": 736,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4268,7 +4268,7 @@
       "declarations": [
         {
           "file": "SparkCrashReporter/CMakeLists.txt",
-          "line": 125,
+          "line": 127,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4304,7 +4304,7 @@
       "declarations": [
         {
           "file": "SparkCrashReporter/CMakeLists.txt",
-          "line": 87,
+          "line": 89,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4376,7 +4376,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 702,
+          "line": 701,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4502,7 +4502,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 844,
+          "line": 843,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4844,7 +4844,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 724,
+          "line": 723,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4980,7 +4980,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 741,
+          "line": 740,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4998,7 +4998,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 735,
+          "line": 734,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5016,7 +5016,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 743,
+          "line": 742,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5054,7 +5054,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 715,
+          "line": 714,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5110,7 +5110,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 739,
+          "line": 738,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5128,7 +5128,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 849,
+          "line": 848,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5236,7 +5236,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 745,
+          "line": 744,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5292,7 +5292,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 839,
+          "line": 838,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5310,7 +5310,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 691,
+          "line": 690,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5554,7 +5554,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 141,
+          "line": 152,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5572,7 +5572,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 69,
+          "line": 72,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5608,7 +5608,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 153,
+          "line": 165,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5644,7 +5644,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 50,
+          "line": 52,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5662,7 +5662,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 92,
+          "line": 98,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5680,7 +5680,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/CMakeLists.txt",
-          "line": 22,
+          "line": 23,
           "kind": "module_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6290,7 +6290,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 54,
+        "stepCount": 56,
         "steps": [
           {
             "index": 0,
@@ -6366,6 +6366,30 @@
           },
           {
             "index": 6,
+            "name": "Validate CTest timeout and label policy",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "068f2b3f3a22cd67"
+          },
+          {
+            "index": 7,
+            "name": "Test CTest timeout and label policy",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "e1543995fa47480c"
+          },
+          {
+            "index": 8,
             "name": "Test shared build-directory lock",
             "id": "",
             "uses": "",
@@ -6377,7 +6401,7 @@
             "runDigest": "26638c369cdf526a"
           },
           {
-            "index": 7,
+            "index": 9,
             "name": "Test required-job gate",
             "id": "",
             "uses": "",
@@ -6389,7 +6413,7 @@
             "runDigest": "a688de9d2e6d4cfe"
           },
           {
-            "index": 8,
+            "index": 10,
             "name": "Test Working ruleset verifier",
             "id": "",
             "uses": "",
@@ -6401,7 +6425,7 @@
             "runDigest": "b480628af459a794"
           },
           {
-            "index": 9,
+            "index": 11,
             "name": "Test exact-commit release gate",
             "id": "",
             "uses": "",
@@ -6413,7 +6437,7 @@
             "runDigest": "b660839f28f576e8"
           },
           {
-            "index": 10,
+            "index": 12,
             "name": "Test release acceptance publication gate",
             "id": "",
             "uses": "",
@@ -6425,7 +6449,7 @@
             "runDigest": "cbb77367c2125ead"
           },
           {
-            "index": 11,
+            "index": 13,
             "name": "Test candidate and protected publication stages",
             "id": "",
             "uses": "",
@@ -6437,7 +6461,7 @@
             "runDigest": "a0dbfb27cd9206ee"
           },
           {
-            "index": 12,
+            "index": 14,
             "name": "Test the build-matrix exact-source status gate",
             "id": "",
             "uses": "",
@@ -6449,7 +6473,7 @@
             "runDigest": "49a6266d08a82878"
           },
           {
-            "index": 13,
+            "index": 15,
             "name": "Test crash-consistent release download counters",
             "id": "",
             "uses": "",
@@ -6461,7 +6485,7 @@
             "runDigest": "660224552d6751a4"
           },
           {
-            "index": 14,
+            "index": 16,
             "name": "Test Windows package signature orchestration",
             "id": "",
             "uses": "",
@@ -6473,7 +6497,7 @@
             "runDigest": "4ecaca6b345e4746"
           },
           {
-            "index": 15,
+            "index": 17,
             "name": "Test owner-run signing precursor contract",
             "id": "",
             "uses": "",
@@ -6485,7 +6509,7 @@
             "runDigest": "01da044626efd297"
           },
           {
-            "index": 16,
+            "index": 18,
             "name": "Test native MSI qualification orchestration",
             "id": "",
             "uses": "",
@@ -6497,7 +6521,7 @@
             "runDigest": "9c8bed06b88ba1bd"
           },
           {
-            "index": 17,
+            "index": 19,
             "name": "Test exact release asset publication boundary",
             "id": "",
             "uses": "",
@@ -6509,7 +6533,7 @@
             "runDigest": "c1cda3d75fd3d19c"
           },
           {
-            "index": 18,
+            "index": 20,
             "name": "Test detached stable signature bundle contracts",
             "id": "",
             "uses": "",
@@ -6521,7 +6545,7 @@
             "runDigest": "060c512ac0d124b9"
           },
           {
-            "index": 19,
+            "index": 21,
             "name": "Test release publication recovery",
             "id": "",
             "uses": "",
@@ -6533,7 +6557,7 @@
             "runDigest": "b5a4aee105620528"
           },
           {
-            "index": 20,
+            "index": 22,
             "name": "Test extracted portable-package validation",
             "id": "",
             "uses": "",
@@ -6545,7 +6569,7 @@
             "runDigest": "3cede89fce1f5dba"
           },
           {
-            "index": 21,
+            "index": 23,
             "name": "Test coverage evidence semantics",
             "id": "",
             "uses": "",
@@ -6557,7 +6581,7 @@
             "runDigest": "b870b844a6e610de"
           },
           {
-            "index": 22,
+            "index": 24,
             "name": "Test sanitizer pipeline exit propagation",
             "id": "",
             "uses": "",
@@ -6569,7 +6593,7 @@
             "runDigest": "e9e9310a91486157"
           },
           {
-            "index": 23,
+            "index": 25,
             "name": "Test check-format controlled failures",
             "id": "",
             "uses": "",
@@ -6581,7 +6605,7 @@
             "runDigest": "fe7c915b78c7dbeb"
           },
           {
-            "index": 24,
+            "index": 26,
             "name": "Test workflow failure-propagation contract",
             "id": "",
             "uses": "",
@@ -6593,7 +6617,7 @@
             "runDigest": "f7233b3f14c1a94a"
           },
           {
-            "index": 25,
+            "index": 27,
             "name": "Test granular SparkTests wrapper failure recovery",
             "id": "",
             "uses": "",
@@ -6605,7 +6629,7 @@
             "runDigest": "326ef3bd02bde17a"
           },
           {
-            "index": 26,
+            "index": 28,
             "name": "Test Spark CLI",
             "id": "",
             "uses": "",
@@ -6617,7 +6641,7 @@
             "runDigest": "409c9f97b4a909ab"
           },
           {
-            "index": 27,
+            "index": 29,
             "name": "Test ThirdParty manifest-sync gate",
             "id": "",
             "uses": "",
@@ -6629,7 +6653,7 @@
             "runDigest": "20b1682609fdd8b9"
           },
           {
-            "index": 28,
+            "index": 30,
             "name": "Platform certification validator",
             "id": "",
             "uses": "",
@@ -6641,7 +6665,7 @@
             "runDigest": "6b643bc930292a59"
           },
           {
-            "index": 29,
+            "index": 31,
             "name": "Validate certification matrix",
             "id": "",
             "uses": "",
@@ -6653,7 +6677,7 @@
             "runDigest": "edbea8f70422546c"
           },
           {
-            "index": 30,
+            "index": 32,
             "name": "Verify every test source is registered",
             "id": "",
             "uses": "",
@@ -6665,7 +6689,7 @@
             "runDigest": "4033bf80ea364bbe"
           },
           {
-            "index": 31,
+            "index": 33,
             "name": "Verify every header uses pragma once",
             "id": "",
             "uses": "",
@@ -6677,7 +6701,7 @@
             "runDigest": "3e22424b6d339456"
           },
           {
-            "index": 32,
+            "index": 34,
             "name": "Verify every editor panel is registered",
             "id": "",
             "uses": "",
@@ -6689,7 +6713,7 @@
             "runDigest": "12c59134db92ca55"
           },
           {
-            "index": 33,
+            "index": 35,
             "name": "Verify no deprecated submodules are referenced",
             "id": "",
             "uses": "",
@@ -6701,7 +6725,7 @@
             "runDigest": "daf685300deeabce"
           },
           {
-            "index": 34,
+            "index": 36,
             "name": "Verify wiki pages match the sidebar",
             "id": "",
             "uses": "",
@@ -6713,7 +6737,7 @@
             "runDigest": "55e5d0b6e188e893"
           },
           {
-            "index": 35,
+            "index": 37,
             "name": "Verify initialized systems are wired in",
             "id": "",
             "uses": "",
@@ -6725,7 +6749,7 @@
             "runDigest": "5a18916291787b7f"
           },
           {
-            "index": 36,
+            "index": 38,
             "name": "Verify header Doxygen coverage",
             "id": "",
             "uses": "",
@@ -6737,7 +6761,7 @@
             "runDigest": "e3a2b71dad02b530"
           },
           {
-            "index": 37,
+            "index": 39,
             "name": "Verify cross-utilization boundaries",
             "id": "",
             "uses": "",
@@ -6749,7 +6773,7 @@
             "runDigest": "129fc75ec2a94f39"
           },
           {
-            "index": 38,
+            "index": 40,
             "name": "Verify DI singleton guardrails",
             "id": "",
             "uses": "",
@@ -6761,7 +6785,7 @@
             "runDigest": "449e94a99a2aa9dd"
           },
           {
-            "index": 39,
+            "index": 41,
             "name": "Test asset integrity verifier",
             "id": "",
             "uses": "",
@@ -6773,7 +6797,7 @@
             "runDigest": "c18e5af256707318"
           },
           {
-            "index": 40,
+            "index": 42,
             "name": "Verify repository asset integrity baseline",
             "id": "",
             "uses": "",
@@ -6785,7 +6809,7 @@
             "runDigest": "24c6f12eaf03dec2"
           },
           {
-            "index": 41,
+            "index": 43,
             "name": "Verify authored FPS material coverage",
             "id": "",
             "uses": "",
@@ -6797,7 +6821,7 @@
             "runDigest": "51b7760d2528df36"
           },
           {
-            "index": 42,
+            "index": 44,
             "name": "Validate module evidence manifest (declarative layer)",
             "id": "",
             "uses": "",
@@ -6809,7 +6833,7 @@
             "runDigest": "3207d199801cc28d"
           },
           {
-            "index": 43,
+            "index": 45,
             "name": "Run module evidence adversarial tests",
             "id": "",
             "uses": "",
@@ -6821,7 +6845,7 @@
             "runDigest": "1593673681e72374"
           },
           {
-            "index": 44,
+            "index": 46,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -6833,7 +6857,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 45,
+            "index": 47,
             "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
@@ -6845,7 +6869,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 46,
+            "index": 48,
             "name": "Test strict Shipping and reproducible-build contract",
             "id": "",
             "uses": "",
@@ -6857,7 +6881,7 @@
             "runDigest": "f482dd9880b51693"
           },
           {
-            "index": 47,
+            "index": 49,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -6869,7 +6893,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 48,
+            "index": 50,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -6881,7 +6905,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 49,
+            "index": 51,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6893,7 +6917,7 @@
             "runDigest": ""
           },
           {
-            "index": 50,
+            "index": 52,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -6905,7 +6929,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 51,
+            "index": 53,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -6920,7 +6944,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 52,
+            "index": 54,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6932,7 +6956,7 @@
             "runDigest": ""
           },
           {
-            "index": 53,
+            "index": 55,
             "name": "Controlled required-job failure probe",
             "id": "",
             "uses": "",
@@ -8172,7 +8196,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 23,
+        "stepCount": 24,
         "steps": [
           {
             "index": 0,
@@ -8299,6 +8323,18 @@
           },
           {
             "index": 10,
+            "name": "Enforce configured-tree CTest policy",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "bb0710612000959e"
+          },
+          {
+            "index": 11,
             "name": "Build",
             "id": "",
             "uses": "",
@@ -8310,7 +8346,7 @@
             "runDigest": "07847ccc2fa9f873"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Print sccache stats",
             "id": "",
             "uses": "",
@@ -8324,7 +8360,7 @@
             "runDigest": "ac023990345bb5e5"
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Save sccache cache",
             "id": "",
             "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -8336,7 +8372,7 @@
             "runDigest": ""
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -8348,7 +8384,7 @@
             "runDigest": "5db485c42c212495"
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -8360,7 +8396,7 @@
             "runDigest": "04d1482b4a194b41"
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Census of production-source vs mirror tests",
             "id": "",
             "uses": "",
@@ -8372,7 +8408,7 @@
             "runDigest": "dcf673dbd92d4a69"
           },
           {
-            "index": 16,
+            "index": 17,
             "name": "Upload exact-commit CTest report",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -8384,7 +8420,7 @@
             "runDigest": ""
           },
           {
-            "index": 17,
+            "index": 18,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -8396,7 +8432,7 @@
             "runDigest": ""
           },
           {
-            "index": 18,
+            "index": 19,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -8408,7 +8444,7 @@
             "runDigest": "fe715c78b7a4aa4e"
           },
           {
-            "index": 19,
+            "index": 20,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -8420,7 +8456,7 @@
             "runDigest": ""
           },
           {
-            "index": 20,
+            "index": 21,
             "name": "Upload sccache server log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -8432,7 +8468,7 @@
             "runDigest": ""
           },
           {
-            "index": 21,
+            "index": 22,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -8444,7 +8480,7 @@
             "runDigest": "2eb3edeb34e3cec9"
           },
           {
-            "index": 22,
+            "index": 23,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -8973,7 +9009,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 17,
+        "stepCount": 18,
         "steps": [
           {
             "index": 0,
@@ -9049,6 +9085,18 @@
           },
           {
             "index": 6,
+            "name": "Enforce configured-tree CTest policy",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "3445e3140f2cb7af"
+          },
+          {
+            "index": 7,
             "name": "Build all targets",
             "id": "",
             "uses": "",
@@ -9060,7 +9108,7 @@
             "runDigest": "8cbb4339854162af"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Print ccache stats",
             "id": "",
             "uses": "",
@@ -9072,7 +9120,7 @@
             "runDigest": "09e0dc05b951a397"
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -9084,7 +9132,7 @@
             "runDigest": "5cb377af7e1d2af2"
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -9096,7 +9144,7 @@
             "runDigest": "8d7518b4302271f9"
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9108,7 +9156,7 @@
             "runDigest": ""
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Assert Vulkan preset is enabled (Release gate)",
             "id": "",
             "uses": "",
@@ -9120,7 +9168,7 @@
             "runDigest": "4057c17ae774e6c1"
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Assert Vulkan shader compile parity test ran (Release gate)",
             "id": "",
             "uses": "",
@@ -9132,7 +9180,7 @@
             "runDigest": "e568db7ded40b153"
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -9144,7 +9192,7 @@
             "runDigest": "216085f38b450ddc"
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9156,7 +9204,7 @@
             "runDigest": ""
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -9168,7 +9216,7 @@
             "runDigest": "d59243a20fca28e4"
           },
           {
-            "index": 16,
+            "index": 17,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11735,8 +11783,33 @@
       },
       {
         "job": "build-windows-vs2022",
-        "step": "Build",
+        "step": "Enforce configured-tree CTest policy",
         "stepIndex": 10,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Debug --no-tests=error  --show-only=json-v1 > build/ctest-policy-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Debug",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
+        "step": "Build",
+        "stepIndex": 11,
         "matrix": {
           "config": "Debug"
         },
@@ -11765,7 +11838,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 13,
+        "stepIndex": 14,
         "matrix": {
           "config": "Debug"
         },
@@ -11790,7 +11863,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 15,
+        "stepIndex": 16,
         "matrix": {
           "config": "Debug"
         },
@@ -11871,8 +11944,33 @@
       },
       {
         "job": "build-windows-vs2022",
-        "step": "Build",
+        "step": "Enforce configured-tree CTest policy",
         "stepIndex": 10,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release --no-tests=error  --show-only=json-v1 > build/ctest-policy-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
+        "step": "Build",
+        "stepIndex": 11,
         "matrix": {
           "config": "Release"
         },
@@ -11901,7 +11999,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 13,
+        "stepIndex": 14,
         "matrix": {
           "config": "Release"
         },
@@ -11926,7 +12024,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 15,
+        "stepIndex": 16,
         "matrix": {
           "config": "Release"
         },
@@ -12416,8 +12514,33 @@
       },
       {
         "job": "build-linux-gcc",
-        "step": "Build all targets",
+        "step": "Enforce configured-tree CTest policy",
         "stepIndex": 6,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Debug --no-tests=error  --show-only=json-v1 > build/ctest-policy-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Debug",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-gcc",
+        "step": "Build all targets",
+        "stepIndex": 7,
         "matrix": {
           "config": "Debug"
         },
@@ -12446,7 +12569,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 8,
+        "stepIndex": 9,
         "matrix": {
           "config": "Debug"
         },
@@ -12501,8 +12624,33 @@
       },
       {
         "job": "build-linux-gcc",
-        "step": "Build all targets",
+        "step": "Enforce configured-tree CTest policy",
         "stepIndex": 6,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release --no-tests=error  --show-only=json-v1 > build/ctest-policy-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-gcc",
+        "step": "Build all targets",
+        "stepIndex": 7,
         "matrix": {
           "config": "Release"
         },
@@ -12531,7 +12679,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 8,
+        "stepIndex": 9,
         "matrix": {
           "config": "Release"
         },
@@ -14497,7 +14645,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 10,
+        "stepIndex": 11,
         "matrix": {
           "config": "Debug"
         },
@@ -14526,7 +14674,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 10,
+        "stepIndex": 11,
         "matrix": {
           "config": "Release"
         },
@@ -14694,7 +14842,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Build all targets",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {
           "config": "Debug"
         },
@@ -14723,7 +14871,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Build all targets",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {
           "config": "Release"
         },
@@ -15135,8 +15283,33 @@
       },
       {
         "job": "build-windows-vs2022",
+        "step": "Enforce configured-tree CTest policy",
+        "stepIndex": 10,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Debug --no-tests=error  --show-only=json-v1 > build/ctest-policy-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Debug",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 13,
+        "stepIndex": 14,
         "matrix": {
           "config": "Debug"
         },
@@ -15161,7 +15334,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 15,
+        "stepIndex": 16,
         "matrix": {
           "config": "Debug"
         },
@@ -15185,8 +15358,33 @@
       },
       {
         "job": "build-windows-vs2022",
+        "step": "Enforce configured-tree CTest policy",
+        "stepIndex": 10,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release --no-tests=error  --show-only=json-v1 > build/ctest-policy-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 13,
+        "stepIndex": 14,
         "matrix": {
           "config": "Release"
         },
@@ -15211,7 +15409,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 15,
+        "stepIndex": 16,
         "matrix": {
           "config": "Release"
         },
@@ -15308,8 +15506,33 @@
       },
       {
         "job": "build-linux-gcc",
+        "step": "Enforce configured-tree CTest policy",
+        "stepIndex": 6,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Debug --no-tests=error  --show-only=json-v1 > build/ctest-policy-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Debug",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 8,
+        "stepIndex": 9,
         "matrix": {
           "config": "Debug"
         },
@@ -15333,8 +15556,33 @@
       },
       {
         "job": "build-linux-gcc",
+        "step": "Enforce configured-tree CTest policy",
+        "stepIndex": 6,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release --no-tests=error  --show-only=json-v1 > build/ctest-policy-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 8,
+        "stepIndex": 9,
         "matrix": {
           "config": "Release"
         },
@@ -15573,7 +15821,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 47,
+        "stepIndex": 49,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -15601,7 +15849,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 48,
+        "stepIndex": 50,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -15805,7 +16053,7 @@
       "pathFilteredEventCount": 0,
       "configureCount": 26,
       "buildCount": 27,
-      "testCount": 20,
+      "testCount": 24,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,

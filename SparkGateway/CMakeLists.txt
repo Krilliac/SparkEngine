@@ -55,4 +55,5 @@ install(FILES config/gateway.example.ini DESTINATION share/SparkEngine/examples 
 if(BUILD_TESTS)
     enable_testing()
     add_test(NAME SparkGatewayHelp COMMAND $<TARGET_FILE:SparkGateway> --help)
+    set_tests_properties(SparkGatewayHelp PROPERTIES TIMEOUT 10 LABELS "gateway;cli;integration;process")
 endif()

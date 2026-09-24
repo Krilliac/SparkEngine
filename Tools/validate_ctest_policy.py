@@ -9,9 +9,12 @@ test that hung. ``TIMEOUT 0`` is worse: CTest reads it as "no timeout".
 
 Two views of the same rule:
 
-* static (default): parse Tests/CMakeLists.txt and require every
-  ``add_test`` name to be covered by a ``set_tests_properties`` call that sets a
-  positive TIMEOUT and non-empty LABELS. Runs with no configure or build.
+* static (default): parse every first-party CMakeLists.txt and ``*.cmake``
+  file that calls ``add_test`` (git-tracked, outside ThirdParty/) and require
+  every ``add_test`` name to be covered by a ``set_tests_properties`` call in the
+  same file that sets a positive TIMEOUT and non-empty LABELS. CTest test
+  properties are directory-scoped, so a property set in another file cannot
+  cover the registration. Runs with no configure or build.
 * ``--ctest-json FILE``: validate ``ctest --show-only=json-v1`` output from a
   configured tree. This sees tests registered from subdirectories, loops and
   functions after CMake evaluated them, and rejects an empty inventory so a
@@ -24,14 +27,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CMAKE_LISTS = REPO_ROOT / "Tests" / "CMakeLists.txt"
+
+# Vendored trees follow their upstream's test conventions and are never
+# registered by SparkEngine's configure (their tests stay off).
+EXCLUDED_TOP_LEVEL_DIRS = frozenset({"ThirdParty"})
 
 # Longest single-test budget the policy accepts. SparkInstalledTemplates builds
 # every template against an installed SDK and is the current ceiling.
@@ -133,6 +141,82 @@ def parse_cmake(text: str) -> tuple[list[str], dict[str, TestPolicy]]:
     return names, policies
 
 
+def _is_cmake_source(relative: str) -> bool:
+    name = relative.rsplit("/", 1)[-1]
+    return name == "CMakeLists.txt" or name.endswith(".cmake")
+
+
+def _git_tracked_cmake_sources(root: Path) -> list[str] | None:
+    """Tracked CMake files when ``root`` is itself a git work-tree top level.
+
+    Returns None (use the filesystem walk) when git is unavailable or ``root``
+    is merely nested inside some other repository, whose ``ls-files`` would
+    report nothing for the untracked tree and silently hide every registration.
+    """
+    try:
+        toplevel = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    if Path(toplevel.stdout.decode("utf-8").strip()).resolve() != root.resolve():
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--", "CMakeLists.txt", "*.cmake", "*/CMakeLists.txt"],
+            capture_output=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return [entry for entry in result.stdout.decode("utf-8").split("\0") if entry]
+
+
+def _walked_cmake_sources(root: Path) -> list[str]:
+    """Filesystem fallback for a source tree without git metadata (an archive)."""
+    found: list[str] = []
+    for directory, subdirectories, files in os.walk(root):
+        # Build trees (anything holding a CMakeCache.txt) carry generated and
+        # fetched CMake files that are not first-party registrations.
+        if "CMakeCache.txt" in files:
+            subdirectories[:] = []
+            continue
+        at_root = Path(directory) == root
+        subdirectories[:] = sorted(
+            entry
+            for entry in subdirectories
+            if not entry.startswith(".") and not (at_root and entry in EXCLUDED_TOP_LEVEL_DIRS)
+        )
+        for name in files:
+            relative = Path(directory, name).relative_to(root).as_posix()
+            if _is_cmake_source(relative):
+                found.append(relative)
+    return found
+
+
+def discover_cmake_sources(root: Path = REPO_ROOT) -> list[Path]:
+    """First-party CMake files that call add_test, in stable path order.
+
+    A file only qualifies once comment stripping still finds an ``add_test``
+    call, so a commented-out registration neither adds a file nor hides one.
+    """
+    candidates = _git_tracked_cmake_sources(root)
+    if candidates is None:
+        candidates = _walked_cmake_sources(root)
+    sources: list[Path] = []
+    for relative in sorted(set(candidates)):
+        if relative.split("/", 1)[0] in EXCLUDED_TOP_LEVEL_DIRS or not _is_cmake_source(relative):
+            continue
+        path = root / relative
+        if not path.is_file():
+            continue
+        if parse_cmake(path.read_text(encoding="utf-8"))[0]:
+            sources.append(path)
+    return sources
+
+
 def _timeout_error(name: str, value: str) -> str | None:
     if _VARIABLE_REF_RE.match(value):
         return None
@@ -195,13 +279,20 @@ def check_ctest_json(document: object, origin: str) -> list[str]:
     return errors
 
 
+def _display_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--cmake-lists",
         action="append",
         type=Path,
-        help="CMakeLists.txt to check statically (default: Tests/CMakeLists.txt)",
+        help="CMake file to check statically (default: every first-party file that calls add_test)",
     )
     parser.add_argument(
         "--ctest-json",
@@ -213,11 +304,18 @@ def main(argv: list[str] | None = None) -> int:
 
     errors: list[str] = []
     checked = 0
-    cmake_lists = args.cmake_lists or ([] if args.ctest_json else [DEFAULT_CMAKE_LISTS])
     try:
+        if args.cmake_lists:
+            cmake_lists = args.cmake_lists
+        elif args.ctest_json:
+            cmake_lists = []
+        else:
+            cmake_lists = discover_cmake_sources()
+            if not cmake_lists:
+                errors.append(f"{REPO_ROOT}: no first-party CMake file registers a test; discovery found nothing")
         for path in cmake_lists:
             text = path.read_text(encoding="utf-8")
-            errors.extend(check_cmake_text(text, str(path)))
+            errors.extend(check_cmake_text(text, _display_path(path)))
             checked += len(parse_cmake(text)[0])
         for path in args.ctest_json or []:
             document = json.loads(path.read_text(encoding="utf-8"))

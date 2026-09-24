@@ -2552,7 +2552,8 @@ if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
             -DSPARK_TEST_OUTPUT_DIR=${CMAKE_BINARY_DIR}/spark-version-info-test
             -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkWindowsVersionInfo.cmake)
     set_tests_properties(SparkWindowsVersionInfo.Metadata PROPERTIES
-        LABELS "cmake;packaging")
+        LABELS "cmake;packaging;unit"
+        TIMEOUT 30)
     add_test(
         NAME SparkTrackedInstall.Contract
         COMMAND ${CMAKE_COMMAND}

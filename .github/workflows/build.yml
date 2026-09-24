@@ -132,6 +132,14 @@ jobs:
     - name: Test flaky warning ownership and expiry policy
       run: python3 Tests/Tools/test_validate_test_warnings.py
 
+    # CI-110: static view over every first-party CMakeLists.txt / *.cmake that
+    # calls add_test. The configured-tree view runs in the build lanes below.
+    - name: Validate CTest timeout and label policy
+      run: python3 Tools/validate_ctest_policy.py
+
+    - name: Test CTest timeout and label policy
+      run: python3 Tests/Tools/test_validate_ctest_policy.py
+
     - name: Test shared build-directory lock
       run: python3 Tests/Tools/test_build_lock.py
 
@@ -1350,6 +1358,17 @@ jobs:
           -DGENERATE_DEBUG_SYMBOLS=OFF \
           -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log
 
+    # CI-110: every test this configured tree registers (subdirectories, loops
+    # and WIN32-only branches included) must carry a positive TIMEOUT and
+    # LABELS, so one hang fails its own test and label lanes can select it.
+    - name: Enforce configured-tree CTest policy
+      shell: bash
+      run: |
+        set -euo pipefail
+        ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
+          --show-only=json-v1 > build/ctest-policy-inventory.json
+        python Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json
+
     - name: Build
       shell: bash
       run: |
@@ -2115,6 +2134,16 @@ jobs:
           -DCMAKE_CXX_COMPILER=g++-14 \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
+
+    # CI-110: every test this configured tree registers (subdirectories, loops
+    # and non-Windows branches included) must carry a positive TIMEOUT and
+    # LABELS, so one hang fails its own test and label lanes can select it.
+    - name: Enforce configured-tree CTest policy
+      run: |
+        set -euo pipefail
+        ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
+          --show-only=json-v1 > build/ctest-policy-inventory.json
+        python3 Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json
 
     - name: Build all targets
       run: |
