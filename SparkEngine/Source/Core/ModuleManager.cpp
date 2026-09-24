@@ -10,6 +10,7 @@
 #include "IGameModule.h"
 #include "Spark/ModuleABI.h"
 #include "Spark/Version.h"
+#include "Engine/SaveSystem/SaveSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/InvalidStateDetector.h"
 #include "Utils/LocalFileCache.h"
@@ -65,6 +66,23 @@ namespace
         return std::string(moduleName) + "#" +
                std::to_string(s_moduleRegistrationSerial.fetch_add(1, std::memory_order_relaxed));
     }
+
+    /// Attributes every host registry write and name-based removal to one module image.
+    /// Module teardown removes registrations by shared names; this scope keeps an
+    /// outgoing image from removing what its hot-reload replacement registered.
+    struct ModuleRegistrationScope final
+    {
+        explicit ModuleRegistrationScope(const std::string& ownerId)
+            : console(Spark::SimpleConsole::GetInstance(), ownerId),
+              detector(Spark::InvalidStateDetector::GetInstance(), ownerId),
+              serializers(Spark::ComponentSerializerRegistry::GetInstance(), ownerId)
+        {
+        }
+
+        Spark::SimpleConsole::ScopedRegistrationOwner console;
+        Spark::InvalidStateDetector::ScopedRegistrationOwner detector;
+        Spark::ComponentSerializerRegistry::ScopedRegistrationOwner serializers;
+    };
 
     void AccumulateLifecycleEvidence(ModuleManager::LifecycleEvidence& target,
                                      const ModuleManager::LifecycleEvidence& source)
@@ -1320,9 +1338,7 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
 
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Initializing module: %s", entry.name.c_str());
         console.LogInfo("Initializing module: " + entry.name);
-        Spark::SimpleConsole::ScopedRegistrationOwner consoleOwner(console, entry.registrationOwner);
-        auto& detector = Spark::InvalidStateDetector::GetInstance();
-        Spark::InvalidStateDetector::ScopedRegistrationOwner detectorOwner(detector, entry.registrationOwner);
+        ModuleRegistrationScope registrationScope(entry.registrationOwner);
         bool loadSucceeded = false;
         try
         {
@@ -1566,9 +1582,7 @@ void ModuleManager::ShutdownAllAfterPreflight()
         if (it->initialized && it->instance)
         {
             console.LogInfo("Shutting down module: " + it->name);
-            Spark::SimpleConsole::ScopedRegistrationOwner consoleOwner(console, it->registrationOwner);
-            auto& detector = Spark::InvalidStateDetector::GetInstance();
-            Spark::InvalidStateDetector::ScopedRegistrationOwner detectorOwner(detector, it->registrationOwner);
+            ModuleRegistrationScope registrationScope(it->registrationOwner);
             it->instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
             if (!it->isLegacyAdapter)
@@ -1747,9 +1761,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         // Commit only after the replacement is fully usable.
         if (entry.initialized && entry.instance)
         {
-            Spark::SimpleConsole::ScopedRegistrationOwner consoleOwner(console, entry.registrationOwner);
-            auto& detector = Spark::InvalidStateDetector::GetInstance();
-            Spark::InvalidStateDetector::ScopedRegistrationOwner detectorOwner(detector, entry.registrationOwner);
+            ModuleRegistrationScope registrationScope(entry.registrationOwner);
             entry.instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
             if (!entry.isLegacyAdapter)
@@ -1951,11 +1963,14 @@ void ModuleManager::UnregisterModuleRegistrations(const LoadedModule& entry)
     auto& console = Spark::SimpleConsole::GetInstance();
     const size_t removedCommands = console.UnregisterCommandsByOwner(entry.registrationOwner);
     const size_t removedRules = Spark::InvalidStateDetector::GetInstance().RemoveRulesByOwner(entry.registrationOwner);
-    if (removedCommands != 0 || removedRules != 0)
+    const size_t removedSerializers =
+        Spark::ComponentSerializerRegistry::GetInstance().UnregisterByOwner(entry.registrationOwner);
+    if (removedCommands != 0 || removedRules != 0 || removedSerializers != 0)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core,
-                       "Removed %zu console command(s) and %zu invalid-state rule(s) owned by module '%s'",
-                       removedCommands, removedRules, entry.name.c_str());
+                       "Removed %zu console command(s), %zu invalid-state rule(s) and %zu save serializer(s) owned by "
+                       "module '%s'",
+                       removedCommands, removedRules, removedSerializers, entry.name.c_str());
     }
 }
 

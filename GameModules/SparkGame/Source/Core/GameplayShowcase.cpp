@@ -210,8 +210,11 @@ void GameplayShowcase::RegisterCustomSerializer()
     // Register a custom serializer for TagComponent as a showcase example.
     // Built-in components (Transform, Health, Name) are already registered
     // by SaveSystem::Initialize(). Game modules register their own custom types here.
+    // Never replace an engine serializer. A module-owned one may be the
+    // outgoing image during hot reload; the host keeps it underneath ours and
+    // removes it with that image, so register ours on top.
     auto& registry = Spark::ComponentSerializerRegistry::GetInstance();
-    if (!registry.HasSerializer("TagComponent"))
+    if (!registry.HasSerializer("TagComponent") || !registry.GetSerializerOwner("TagComponent").empty())
     {
         registry.Register(
             "TagComponent",

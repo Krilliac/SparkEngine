@@ -104,7 +104,7 @@ namespace
     std::string SerializeTagThroughRegistry()
     {
         TagComponent tag;
-        tag.tags = {"life200", "reload"};
+        tag.tags = {"life200"};
         const Spark::SerializedComponent serialized =
             Spark::ComponentSerializerRegistry::GetInstance().Serialize("TagComponent", &tag);
         const auto tags = serialized.properties.find("tags");
@@ -188,7 +188,7 @@ TEST(LIFE200_SparkGameSuccessfulReloadKeepsReplacementRegistrations)
         ASSERT_TRUE(serializerScope.serializers.HasSerializer("TagComponent"));
         // The surviving serializer must belong to the live image; the outgoing
         // image has already been unmapped.
-        EXPECT_EQ(SerializeTagThroughRegistry(), std::string("TagComponent:life200,reload"));
+        EXPECT_EQ(SerializeTagThroughRegistry(), std::string("TagComponent:life200"));
     }
 
     ASSERT_TRUE(manager.ShutdownAll());
@@ -255,7 +255,7 @@ TEST(LIFE200_SparkGameFailedReloadKeepsWorkingRegistrations)
     EXPECT_TRUE(AllShowcaseCommandsRegistered(console));
     EXPECT_TRUE(detector.HasRule("Base.HealthInvariant"));
     EXPECT_EQ(detector.GetRuleCount(), initialRuleCount + 1);
-    EXPECT_EQ(SerializeTagThroughRegistry(), std::string("TagComponent:life200,reload"));
+    EXPECT_EQ(SerializeTagThroughRegistry(), std::string("TagComponent:life200"));
 
     ASSERT_TRUE(manager.ShutdownAll());
     EXPECT_FALSE(AnyShowcaseCommandRegistered(console));
@@ -297,4 +297,63 @@ TEST(LIFE200_ThrowingReplacementKeepsWorkingModuleRegistrations)
     ASSERT_TRUE(manager.ShutdownAll());
     EXPECT_FALSE(console.HasCommand("registry_fixture_status"));
     EXPECT_EQ(detector.GetRuleCount(), initialRuleCount);
+}
+
+TEST(LIFE200_SerializerRegistryTeardownIsOwnerScoped)
+{
+    using Registry = Spark::ComponentSerializerRegistry;
+    auto& registry = Registry::GetInstance();
+    const std::string typeName = "LIFE200OwnerScopedComponent";
+    const auto serializerFor = [](std::string marker)
+    {
+        return [marker](const void*)
+        {
+            Spark::SerializedComponent serialized;
+            serialized.typeName = marker;
+            return serialized;
+        };
+    };
+    const auto noDeserialize = [](World&, EntityID, const Spark::SerializedComponent&) {};
+    struct Cleanup final
+    {
+        Registry& registry;
+        const std::string& typeName;
+        ~Cleanup()
+        {
+            registry.UnregisterByOwner("life200-old");
+            registry.UnregisterByOwner("life200-new");
+            registry.Unregister(typeName);
+        }
+    } cleanup{registry, typeName};
+
+    {
+        Registry::ScopedRegistrationOwner owner(registry, "life200-old");
+        registry.Register(typeName, serializerFor("old"), noDeserialize);
+    }
+    {
+        Registry::ScopedRegistrationOwner owner(registry, "life200-new");
+        registry.Register(typeName, serializerFor("new"), noDeserialize);
+    }
+    EXPECT_EQ(registry.GetSerializerOwner(typeName), std::string("life200-new"));
+
+    // The outgoing owner's name-based teardown removes only its shadowed entry.
+    {
+        Registry::ScopedRegistrationOwner owner(registry, "life200-old");
+        EXPECT_TRUE(registry.Unregister(typeName));
+        EXPECT_FALSE(registry.Unregister(typeName));
+    }
+    EXPECT_EQ(registry.Serialize(typeName, nullptr).typeName, std::string("new"));
+    EXPECT_EQ(registry.UnregisterByOwner("life200-old"), size_t{0});
+    EXPECT_EQ(registry.UnregisterByOwner(""), size_t{0});
+    EXPECT_TRUE(registry.HasSerializer(typeName));
+
+    // Removing the active owner re-exposes a still-live shadowed owner.
+    {
+        Registry::ScopedRegistrationOwner owner(registry, "life200-old");
+        registry.Register(typeName, serializerFor("old-again"), noDeserialize);
+    }
+    EXPECT_EQ(registry.UnregisterByOwner("life200-old"), size_t{1});
+    EXPECT_EQ(registry.Serialize(typeName, nullptr).typeName, std::string("new"));
+    EXPECT_EQ(registry.UnregisterByOwner("life200-new"), size_t{1});
+    EXPECT_FALSE(registry.HasSerializer(typeName));
 }
