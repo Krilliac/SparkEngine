@@ -118,6 +118,17 @@ All macros use `do { ... } while(0)` for safe use in if/else blocks. Failed asse
   unowned, or expired entries fail the workflow. Prefer `EXPECT_WARN_ONLY` for
   a single environment-sensitive assertion so unrelated assertions remain
   strict.
+- Per-assertion `EXPECT_WARN_ONLY` waivers are held to the same rule. The
+  validator inventories every call site in `Tests/**/*.cpp` (comments and
+  string literals are ignored) and attributes it to its enclosing `TEST` /
+  `TEST_F` body (fixture tests are keyed `Fixture.Name`). Each (file, test)
+  pair needs a schema-2 `assertionWaivers` entry with the exact number of
+  `sites`, a named `owner`, and a future `expires` date. Unregistered, stale,
+  expired, ownerless, miscounted, and out-of-test-body sites fail the workflow.
+  The only exempt sites are the `RunnerSemanticsReal_*` probes in
+  `Tests/TestRunnerSemanticsReal.cpp`, which exercise the macro itself.
+  Schema-1 metadata (whole-test waivers only) is still accepted and declares
+  no per-assertion waivers.
 
 ### Production-source census
 

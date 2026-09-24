@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "waivers": [
     {
       "pattern": "ScopedTimer_MeasuresTime",
@@ -39,6 +39,15 @@
     {
       "pattern": "Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation",
       "owner": "networking",
+      "expires": "2026-12-31"
+    }
+  ],
+  "assertionWaivers": [
+    {
+      "file": "Tests/TestEngineLoadTest.cpp",
+      "test": "LoadTest_FullEngine_3000Frames",
+      "sites": 1,
+      "owner": "engine-core",
       "expires": "2026-12-31"
     }
   ]
