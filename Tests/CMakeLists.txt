@@ -1022,6 +1022,7 @@ target_sources(SparkTests PRIVATE
     TestTemplateRuntimeReal.cpp
     TestUserDataPathsReal.cpp
     TestSceneManagerUnicodeReal.cpp
+    TestSceneSaveConfinedReal.cpp
     TestWeaponMechanicsReal.cpp
 )
 
