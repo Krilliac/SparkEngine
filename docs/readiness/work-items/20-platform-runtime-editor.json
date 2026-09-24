@@ -628,8 +628,6 @@
         "d3d11-stress"
       ],
       "plannedTestSelectors": [
-        "D3D11_Golden_*",
-        "D3D11_Resource_*",
         "D3D11_DeviceLoss_*"
       ]
     },
@@ -886,10 +884,7 @@
         "vulkan-lavapipe",
         "vulkan-hardware"
       ],
-      "plannedTestSelectors": [
-        "VulkanGolden_*",
-        "VulkanValidation_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "RHI-240",
@@ -973,10 +968,7 @@
         "opengl-hardware",
         "opengl-llvmpipe"
       ],
-      "plannedTestSelectors": [
-        "OpenGL_*",
-        "ShaderTranslation_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "ENG-220",
@@ -1350,7 +1342,6 @@
         "editor-package-roundtrip"
       ],
       "plannedTestSelectors": [
-        "EditorUndo_*",
         "EditorAssetDrag_*",
         "EditorCookPackage_*"
       ]
@@ -1738,7 +1729,6 @@
         "visual-script-package"
       ],
       "plannedTestSelectors": [
-        "ScriptLifecycle_*",
         "ScriptBindings_*",
         "VisualScriptRuntime_*"
       ]
