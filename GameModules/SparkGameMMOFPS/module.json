@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameMMOFPS",
+  "cmakeTarget": "SparkGameMMOFPS",
+  "sourceDirectory": "GameModules/SparkGameMMOFPS/Source",
+  "assets": {
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/MMOFPS/Data",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Models/MMOFPS",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Textures/MMOFPS",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Audio/MMOFPS",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Materials/MMOFPS",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Scenes/MMOFPS",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
+  },
+  "tests": {
+    "files": [
+      "Tests/TestTFAbilityWire.cpp",
+      "Tests/TestTFChatRules.cpp",
+      "Tests/TestTFDataTables.cpp",
+      "Tests/TestTFDamageModel.cpp",
+      "Tests/TestTFDeathRecapWire.cpp",
+      "Tests/TestTFFixedStep.cpp",
+      "Tests/TestTFNetProtocolLayout.cpp",
+      "Tests/TestTFOnboarding.cpp",
+      "Tests/TestTFOutfitStore.cpp",
+      "Tests/TestTFRedeployRules.cpp",
+      "Tests/TestTFSecondaryMotion.cpp",
+      "Tests/TestTFServerValidation.cpp",
+      "Tests/TestTFSocialStore.cpp"
+    ],
+    "prefixes": [
+      "TFAbility_",
+      "TFChat_",
+      "TFData_",
+      "TFAssetPaths_",
+      "TFSavePaths_",
+      "TFDamage_",
+      "TFDeathRecap_",
+      "TerrafrontFixedStep_",
+      "TFNetProtocol_",
+      "TFRepProtocol_",
+      "TFAccountSystem_",
+      "TFCharacterSystem_",
+      "TFCrypto_",
+      "TFDatabase_",
+      "TFOutfitStore_",
+      "TFRedeploy_",
+      "TFSecondaryMotion_",
+      "TFServerValidation_",
+      "TFSocialStore_"
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameMMOFPS/README.md"
+  },
+  "parity": {
+    "notApplicable": []
+  }
+}

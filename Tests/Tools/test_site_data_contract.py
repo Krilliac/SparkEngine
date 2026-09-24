@@ -2122,7 +2122,7 @@ class SelectorResolutionTests(ContractTestCase):
 
     def test_glob_entry_point_must_match_a_real_file(self) -> None:
         validator = site_data_validate.Validator(self.mutable)
-        validator.require_path("GameModules/*/module.json", "probe.entryPoints[0]", allow_future=True)
+        validator.require_path("GameModules/*/probe-that-matches-nothing.json", "probe.entryPoints[0]", allow_future=True)
         self.assertEqual(1, len(validator.errors))
         self.assertIn("path pattern matches no file", validator.errors[0])
 

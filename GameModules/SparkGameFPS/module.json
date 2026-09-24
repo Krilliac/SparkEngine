@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameFPS",
+  "cmakeTarget": "SparkGameFPS",
+  "sourceDirectory": "GameModules/SparkGameFPS/Source",
+  "assets": {
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Scenes",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
+  },
+  "tests": {
+    "files": [
+      "Tests/TestSparkGameFPSLoopReal.cpp",
+      "Tests/TestMOD310FPSSceneReloadRespawnReal.cpp",
+      "Tests/TestFPSGameplayIntegration.cpp",
+      "Tests/TestGameModeReal.cpp",
+      "Tests/TestFPSMultiplayer.cpp",
+      "Tests/TestFPSWeatherPort.cpp"
+    ],
+    "prefixes": [
+      "FPSAssets_",
+      "FPSLocalProfile_",
+      "FPSProgression_",
+      "FPSRespawn_",
+      "FPSScene_",
+      "FPSStateRules_",
+      "FPSInteg_",
+      "GameModeReal_",
+      "FPSMultiplayer_",
+      "FPSWeatherPort_",
+      "FPSWeatherIntegration_"
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameFPS/README.md"
+  },
+  "parity": {
+    "notApplicable": []
+  }
+}

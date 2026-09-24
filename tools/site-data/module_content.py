@@ -15,6 +15,18 @@ EVIDENCE_RELATIVE = Path("tools/module-evidence/manifest.json")
 PROFILE_STATES = {"required", "shared", "outside"}
 FPS_ROOT_DEPENDENCIES = ("Assets/Models", "Assets/Scenes")
 
+# Per-module GameModules/<Name>/module.json holds per-module facts only. Profile
+# policy (profileApplicability, evidenceBindings) stays in the authoritative
+# evidence manifest, so an unknown key is rejected instead of silently becoming
+# a second place where policy can be declared.
+MODULE_MANIFEST_NAME = "module.json"
+MODULE_MANIFEST_SCHEMA_VERSION = 1
+MODULE_MANIFEST_KEYS = {"schemaVersion", "name", "cmakeTarget", "sourceDirectory", "assets", "tests", "docs", "parity"}
+WORK_ITEMS_RELATIVE = Path("docs/readiness/work-items")
+TESTS_CMAKE_RELATIVE = Path("Tests/CMakeLists.txt")
+TEST_PREFIX_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+TEST_DEFINITION_PATTERN = re.compile(r"\bTEST\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)")
+
 
 def _cmake_copy_declarations(text: str) -> tuple[set[str], bool]:
     """Return asset roots in actual add_custom_command(copy_directory ...) bodies."""
@@ -252,6 +264,277 @@ def validate(repo_root: Path) -> list[tuple[str, str]]:
                 findings.append((EVIDENCE_RELATIVE.as_posix(), f"profile {profile_id} applicability mismatch for {name}"))
         if profile_id == "stable-v1" and included != {"SparkGameFPS"}:
             findings.append((EVIDENCE_RELATIVE.as_posix(), "stable-v1 must include exactly SparkGameFPS"))
+    findings.extend(validate_module_manifests(repo_root, actual, authoritative))
+    return findings
+
+
+MIN_REASON_LENGTH = 20
+
+
+def _parity_rows(repo_root: Path) -> tuple[list[str], dict[str, Any], list[tuple[str, str]]]:
+    """Return (dimensions, currentScores) from the one work-item file that declares parity."""
+    location = WORK_ITEMS_RELATIVE.as_posix()
+    for path in sorted((repo_root / WORK_ITEMS_RELATIVE).glob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            return [], {}, [(path.relative_to(repo_root).as_posix(), f"work-item file is unreadable: {error}")]
+        if not isinstance(document, dict) or "parityDimensions" not in document:
+            continue
+        parity = document["parityDimensions"]
+        dimensions = parity.get("dimensions") if isinstance(parity, dict) else None
+        scores = parity.get("currentScores") if isinstance(parity, dict) else None
+        if not isinstance(dimensions, list) or not isinstance(scores, dict):
+            return [], {}, [(path.relative_to(repo_root).as_posix(), "parityDimensions needs dimensions and currentScores")]
+        return dimensions, scores, []
+    return [], {}, [(location, "no work-item file declares parityDimensions")]
+
+
+def _strip_cpp_comments(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", lambda match: "\n" * match.group(0).count("\n"), text, flags=re.DOTALL)
+    return re.sub(r"//[^\n]*", "", text)
+
+
+def _strip_cmake_comments(text: str) -> str:
+    text = re.sub(r"#\[(=*)\[.*?\]\1\]", "", text, flags=re.DOTALL)
+    return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+
+
+def _is_registered_test_source(cmake_text: str, relative: str) -> bool:
+    """True when Tests/CMakeLists.txt names the Tests-relative source as its own token."""
+    pattern = r'(?:^|[\s"(]|\$\{CMAKE_CURRENT_SOURCE_DIR\}/)' + re.escape(relative) + r'(?=$|[\s")])'
+    return re.search(pattern, cmake_text, re.MULTILINE) is not None
+
+
+def _manifest_path(repo_root: Path, value: Any, location: str, findings: list[tuple[str, str]], *, kind: str) -> Path | None:
+    if not isinstance(value, str) or not value:
+        findings.append((location, "path must be a non-empty string"))
+        return None
+    candidate = Path(value)
+    if candidate.is_absolute() or ".." in candidate.parts or "\\" in value:
+        findings.append((location, f"path must be repository-relative without traversal: {value!r}"))
+        return None
+    resolved = repo_root / candidate
+    exists = resolved.is_dir() if kind == "directory" else resolved.is_file()
+    if not exists:
+        findings.append((location, f"referenced {kind} does not exist: {value}"))
+        return None
+    return resolved
+
+
+def _require_reason(value: Any, location: str, findings: list[tuple[str, str]]) -> None:
+    if not isinstance(value, str) or len(value.strip()) < MIN_REASON_LENGTH:
+        findings.append((location, f"reason must be a written explanation of at least {MIN_REASON_LENGTH} characters"))
+
+
+def _asset_root_coverage(repo_root: Path, directory: Path, manifest: Path, location: str) -> list[tuple[str, str]]:
+    """Require the named manifest to list every file under the asset root.
+
+    Two manifest shapes can prove coverage: the repository integrity manifest
+    (``root`` plus ``entries[].path``) and a module package manifest
+    (``assets[].path`` relative to the manifest's directory).
+    """
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        return [(f"{location}.manifest", f"asset manifest is not readable JSON: {error}")]
+    if isinstance(payload, dict) and isinstance(payload.get("root"), str) and isinstance(payload.get("entries"), list):
+        base, listed = repo_root / payload["root"], payload["entries"]
+    elif isinstance(payload, dict) and isinstance(payload.get("assets"), list):
+        base, listed = manifest.parent, payload["assets"]
+    else:
+        return [(f"{location}.manifest", "asset manifest must be an integrity manifest (root, entries) or a package manifest (assets)")]
+    covered = {
+        (base / entry["path"]).resolve() for entry in listed
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+    }
+    uncovered = sorted(
+        path.relative_to(repo_root).as_posix() for path in directory.rglob("*")
+        if path.is_file() and path != manifest and path.resolve() not in covered
+    )
+    if uncovered:
+        return [(f"{location}.manifest", f"asset manifest does not list {len(uncovered)} file(s) under the root, first: {uncovered[0]}")]
+    return []
+
+
+def _module_shared_asset_roots(repo_root: Path, name: str) -> set[str]:
+    """Return shared Assets/ roots named after the module (SparkGameMMO -> MMO) that contain files.
+
+    Two layouts exist: Assets/<Kind>/<Suffix> (Assets/Models/MMO) and subdirectories of
+    Assets/<Suffix> (Assets/MMOFPS/Data). Either one means the module ships content there.
+    """
+    suffix = name.removeprefix("SparkGame")
+    assets_root = repo_root / "Assets"
+    if not suffix or not assets_root.is_dir():
+        return set()
+    candidates = [kind / suffix for kind in assets_root.iterdir() if kind.is_dir() and kind.name != suffix]
+    module_root = assets_root / suffix
+    if module_root.is_dir():
+        candidates.extend(child for child in module_root.iterdir() if child.is_dir())
+    return {
+        candidate.relative_to(repo_root).as_posix() for candidate in candidates
+        if candidate.is_dir() and any(path.is_file() for path in candidate.rglob("*"))
+    }
+
+
+def _validate_manifest_assets(repo_root: Path, module_dir: Path, assets: Any, location: str) -> list[tuple[str, str]]:
+    findings: list[tuple[str, str]] = []
+    name = module_dir.name
+    local_assets = module_dir / "Assets"
+    local_payload = local_assets.is_dir() and any(
+        path.is_file() and path.name not in {"manifest.json", "README.md"} for path in local_assets.rglob("*")
+    )
+    required_roots = set(FPS_ROOT_DEPENDENCIES) if name == "SparkGameFPS" else set()
+    required_roots |= _module_shared_asset_roots(repo_root, name)
+    if local_payload:
+        required_roots.add(local_assets.relative_to(repo_root).as_posix())
+    if not isinstance(assets, dict) or assets.get("state") not in {"none", "declared"}:
+        return [(location, "assets.state must be 'none' or 'declared'")]
+    if assets["state"] == "none":
+        if set(assets) != {"state", "reason"}:
+            findings.append((location, "assets with state 'none' must contain exactly state and reason"))
+        _require_reason(assets.get("reason"), f"{location}.reason", findings)
+        for root in sorted(required_roots):
+            findings.append((location, f"assets declared 'none' but the module ships asset root {root}"))
+        return findings
+    roots = assets.get("roots")
+    if set(assets) != {"state", "roots"} or not isinstance(roots, list) or not roots:
+        return [(location, "assets with state 'declared' must contain exactly state and a non-empty roots list")]
+    declared: set[str] = set()
+    for index, root in enumerate(roots):
+        root_location = f"{location}.roots[{index}]"
+        if not isinstance(root, dict) or set(root) != {"directory", "manifest"}:
+            findings.append((root_location, "asset root must contain exactly directory and manifest"))
+            continue
+        directory = _manifest_path(repo_root, root["directory"], f"{root_location}.directory", findings, kind="directory")
+        if directory is not None:
+            declared.add(root["directory"])
+            if not any(path.is_file() for path in directory.rglob("*")):
+                findings.append((f"{root_location}.directory", f"asset root contains no files: {root['directory']}"))
+        manifest = _manifest_path(repo_root, root["manifest"], f"{root_location}.manifest", findings, kind="file")
+        if directory is not None and manifest is not None:
+            findings.extend(_asset_root_coverage(repo_root, directory, manifest, root_location))
+    for root in sorted(required_roots - declared):
+        findings.append((location, f"asset root shipped by the module is not declared: {root}"))
+    return findings
+
+
+def _validate_manifest_tests(repo_root: Path, tests: Any, location: str) -> list[tuple[str, str]]:
+    if not isinstance(tests, dict) or set(tests) != {"files", "prefixes"}:
+        return [(location, "tests must contain exactly files and prefixes")]
+    files, prefixes = tests["files"], tests["prefixes"]
+    findings: list[tuple[str, str]] = []
+    if not isinstance(files, list) or not files or len(files) != len(set(map(str, files))):
+        return [(f"{location}.files", "must be a non-empty list of unique test source paths")]
+    if not isinstance(prefixes, list) or not prefixes or len(prefixes) != len(set(map(str, prefixes))):
+        return [(f"{location}.prefixes", "must be a non-empty list of unique TEST-name prefixes")]
+    cmake_path = repo_root / TESTS_CMAKE_RELATIVE
+    cmake_text = _strip_cmake_comments(cmake_path.read_text(encoding="utf-8")) if cmake_path.is_file() else ""
+    names_by_file: dict[str, list[str]] = {}
+    for index, value in enumerate(files):
+        file_location = f"{location}.files[{index}]"
+        source = _manifest_path(repo_root, value, file_location, findings, kind="file")
+        if source is None:
+            continue
+        if not value.startswith("Tests/") or source.suffix != ".cpp":
+            findings.append((file_location, f"test source must be a .cpp file under Tests/: {value}"))
+            continue
+        if not _is_registered_test_source(cmake_text, value[len("Tests/"):]):
+            findings.append((file_location, f"test source is not registered in {TESTS_CMAKE_RELATIVE.as_posix()}: {value}"))
+        text = _strip_cpp_comments(source.read_text(encoding="utf-8", errors="replace"))
+        names_by_file[value] = TEST_DEFINITION_PATTERN.findall(text)
+    valid_prefixes = []
+    for index, prefix in enumerate(prefixes):
+        if not isinstance(prefix, str) or not TEST_PREFIX_PATTERN.match(prefix):
+            findings.append((f"{location}.prefixes[{index}]", f"invalid TEST-name prefix: {prefix!r}"))
+            continue
+        valid_prefixes.append(prefix)
+        if not any(name.startswith(prefix) for names in names_by_file.values() for name in names):
+            findings.append((f"{location}.prefixes[{index}]", f"test prefix matches no TEST( definition in the listed files: {prefix}"))
+    for value, names in names_by_file.items():
+        if not any(name.startswith(prefix) for name in names for prefix in valid_prefixes):
+            findings.append((location, f"listed test source defines no TEST( matching a declared prefix: {value}"))
+    return findings
+
+
+def _validate_manifest_parity(
+    module: str, parity: Any, dimensions: list[str], scores: dict[str, Any], location: str
+) -> list[tuple[str, str]]:
+    entries = parity.get("notApplicable") if isinstance(parity, dict) and set(parity) == {"notApplicable"} else None
+    if not isinstance(entries, list):
+        return [(location, "parity must contain exactly a notApplicable list")]
+    findings: list[tuple[str, str]] = []
+    declared: set[str] = set()
+    for index, entry in enumerate(entries):
+        entry_location = f"{location}.notApplicable[{index}]"
+        if not isinstance(entry, dict) or set(entry) != {"dimension", "reason"}:
+            findings.append((entry_location, "N/A entry must contain exactly dimension and reason"))
+            continue
+        dimension = entry["dimension"]
+        if dimension not in dimensions:
+            findings.append((entry_location, f"unknown parity dimension: {dimension!r}"))
+        elif dimension in declared:
+            findings.append((entry_location, f"duplicate parity dimension: {dimension}"))
+        declared.add(dimension)
+        _require_reason(entry["reason"], f"{entry_location}.reason", findings)
+    row = scores.get(module)
+    if not isinstance(row, list) or len(row) != len(dimensions):
+        findings.append((location, f"parity row for {module} is missing or does not match the dimensions"))
+        return findings
+    marked = {dimension for dimension, value in zip(dimensions, row) if value == "N/A"}
+    if marked != declared:
+        findings.append((
+            location,
+            f"parity N/A cells disagree with declared notApplicable dimensions for {module}: "
+            f"row={sorted(marked)} declared={sorted(declared)}",
+        ))
+    return findings
+
+
+def validate_module_manifests(
+    repo_root: Path, actual: dict[str, Path], authoritative: dict[str, dict[str, Any]]
+) -> list[tuple[str, str]]:
+    """Validate GameModules/<Name>/module.json for every discovered module directory."""
+    dimensions, scores, findings = _parity_rows(repo_root)
+    for name in sorted(actual, key=str.casefold):
+        module_dir = actual[name]
+        path = module_dir / MODULE_MANIFEST_NAME
+        location = path.relative_to(repo_root).as_posix()
+        if not path.is_file():
+            findings.append((location, f"module manifest is missing: {name}"))
+            continue
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            findings.append((location, f"module manifest is unreadable or malformed: {error}"))
+            continue
+        if not isinstance(manifest, dict):
+            findings.append((location, "module manifest must be a JSON object"))
+            continue
+        if set(manifest) != MODULE_MANIFEST_KEYS:
+            missing, unknown = MODULE_MANIFEST_KEYS - set(manifest), set(manifest) - MODULE_MANIFEST_KEYS
+            findings.append((location, f"module manifest keys differ: missing={sorted(missing)} unknown={sorted(unknown)}"))
+            continue
+        if manifest["schemaVersion"] != MODULE_MANIFEST_SCHEMA_VERSION:
+            findings.append((location, f"schemaVersion must be {MODULE_MANIFEST_SCHEMA_VERSION}"))
+        evidence = authoritative.get(name, {})
+        if manifest["name"] != name:
+            findings.append((location, f"name must equal the module directory: expected {name!r}"))
+        for key in ("cmakeTarget", "sourceDirectory"):
+            if manifest[key] != evidence.get(key):
+                findings.append((location, f"{key} disagrees with {EVIDENCE_RELATIVE.as_posix()}: expected {evidence.get(key)!r}"))
+        _manifest_path(repo_root, manifest["sourceDirectory"], f"{location}.sourceDirectory", findings, kind="directory")
+        findings.extend(_validate_manifest_assets(repo_root, module_dir, manifest["assets"], f"{location}.assets"))
+        findings.extend(_validate_manifest_tests(repo_root, manifest["tests"], f"{location}.tests"))
+        docs = manifest["docs"]
+        readme = docs.get("readme") if isinstance(docs, dict) and set(docs) == {"readme"} else None
+        expected_readme = f"{module_dir.relative_to(repo_root).as_posix()}/README.md"
+        if readme != expected_readme:
+            findings.append((f"{location}.docs", f"docs must contain exactly readme: {expected_readme!r}"))
+        elif not (repo_root / readme).is_file():
+            findings.append((f"{location}.docs", f"module README is missing: {readme}"))
+        if dimensions:
+            findings.extend(_validate_manifest_parity(name, manifest["parity"], dimensions, scores, f"{location}.parity"))
     return findings
 
 

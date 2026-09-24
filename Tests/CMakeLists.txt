@@ -1955,6 +1955,17 @@ set_tests_properties(ModuleDiscoveryProductionSourceContract PROPERTIES
     LABELS "module;module-profile;stable-v1;unit"
     TIMEOUT 30)
 
+# MOD-290: every discovered module's GameModules/<Name>/module.json must name
+# existing source, assets, registered tests with live TEST prefixes, a README,
+# and the parity N/A cells it declares; the mutations must each fail by name.
+add_test(
+    NAME ModuleManifest_Contract
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_module_manifest.py)
+set_tests_properties(ModuleManifest_Contract PROPERTIES
+    LABELS "module;module-kit;readiness;unit;python"
+    TIMEOUT 120)
+
 if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkCrashReporter)
     add_dependencies(SparkTests SparkCrashReporter)
     add_test(

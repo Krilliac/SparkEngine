@@ -329,6 +329,31 @@ Module manifest whose loader consumes each non-empty `path` entry:
 
 For the engine-directory fallback, place `spark.modules.json` next to the executable: `build/bin/<Config>/` for a multi-config root build and `build/bin/` for a single-config root build. An explicit `-manifest <path>` may name a regular manifest file elsewhere.
 
+### `GameModules/<Name>/module.json` (in-tree modules)
+
+Every directory under `GameModules/` must carry a `module.json` that records per-module facts. The runtime loader does not read it; `python3 tools/site-data/validate.py --modules` (through `tools/site-data/module_content.py`) and the `ModuleManifest_Contract` CTest do. Release-profile policy (`profileApplicability`, evidence bindings) lives only in `tools/module-evidence/manifest.json`, so any key outside the schema below is rejected.
+
+```json
+{
+    "schemaVersion": 1,
+    "name": "SparkGameRTS",
+    "cmakeTarget": "SparkGameRTS",
+    "sourceDirectory": "GameModules/SparkGameRTS/Source",
+    "assets": { "state": "none", "reason": "No asset root exists for this module: the Audio/Music/RTS/*.ogg tracks its sources register are not in the repository." },
+    "tests": { "files": ["Tests/TestGameModuleRTS.cpp"], "prefixes": ["RTS_"] },
+    "docs": { "readme": "GameModules/SparkGameRTS/README.md" },
+    "parity": { "notApplicable": [ { "dimension": "networking", "reason": "Single-player module: ..." } ] }
+}
+```
+
+| Field | Rule the validator enforces |
+|-------|-----------------------------|
+| `name`, `cmakeTarget`, `sourceDirectory` | Equal to the directory name and to the module's entry in `tools/module-evidence/manifest.json`; the source directory must exist |
+| `assets` | `state: "none"` with a written reason, or `state: "declared"` with `roots` of `{directory, manifest}`. Each directory must exist and hold files, and its manifest (the `Assets/assets.integrity.json` integrity manifest or a module package `manifest.json`) must list every file under it. A module must declare every root it ships: a `GameModules/<Name>/Assets` payload, any non-empty shared root named after the module (`Assets/<Kind>/<Suffix>` or a subdirectory of `Assets/<Suffix>`, where `<Suffix>` is the name without `SparkGame`, e.g. `Assets/Models/MMO`, `Assets/MMOFPS/Data`), and FPS's shared `Assets/Models` and `Assets/Scenes` roots. A module with any of these cannot declare `state: "none"`. The rule cannot check that a `none` reason is truthful about assets the sources reference but the repository lacks |
+| `tests` | Every file exists under `Tests/`, is registered in `Tests/CMakeLists.txt`, and defines at least one `TEST(` matching a declared prefix; every prefix matches at least one `TEST(` in the listed files |
+| `docs.readme` | Must be `GameModules/<Name>/README.md`, and the file must exist |
+| `parity.notApplicable` | Exactly the dimensions whose cell is `"N/A"` in `parityDimensions.currentScores` (`docs/readiness/work-items/30-game-modules.json`), each with a written reason |
+
 ### One Game Module Plus Addons
 
 The loader rejects a second `ModuleKind::Game` module because two games would own the same simulation. A manifest can include the selected Game module plus compatible `ModuleKind::Addon` modules (library/extension-style modules); their kinds and lifecycle dependencies come from their `ModuleInfo`, not manifest `loadOrder` metadata:

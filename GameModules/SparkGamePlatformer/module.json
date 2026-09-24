@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGamePlatformer",
+  "cmakeTarget": "SparkGamePlatformer",
+  "sourceDirectory": "GameModules/SparkGamePlatformer/Source",
+  "assets": {
+    "state": "none",
+    "reason": "No asset root exists for this module: the Assets/Audio/Music tracks and Data/Localization/platformer_*.json files its sources reference are not in the repository."
+  },
+  "tests": {
+    "files": [
+      "Tests/TestGameModulePlatformerARPG.cpp"
+    ],
+    "prefixes": [
+      "Platformer_"
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGamePlatformer/README.md"
+  },
+  "parity": {
+    "notApplicable": [
+      {
+        "dimension": "networking",
+        "reason": "Single-player module: no source file uses the engine networking layer, and MOD-290 rules out forcing networking into single-player modules."
+      }
+    ]
+  }
+}

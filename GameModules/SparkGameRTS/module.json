@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameRTS",
+  "cmakeTarget": "SparkGameRTS",
+  "sourceDirectory": "GameModules/SparkGameRTS/Source",
+  "assets": {
+    "state": "none",
+    "reason": "No asset root exists for this module: the Audio/Music/RTS/*.ogg tracks its sources register are not in the repository."
+  },
+  "tests": {
+    "files": [
+      "Tests/TestGameModuleRTS.cpp",
+      "Tests/TestMOD370SkirmishDeterminismReal.cpp"
+    ],
+    "prefixes": [
+      "RTS_",
+      "RTSSkirmish_"
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameRTS/README.md"
+  },
+  "parity": {
+    "notApplicable": [
+      {
+        "dimension": "networking",
+        "reason": "Single-player module: no source file uses the engine networking layer, and MOD-290 rules out forcing networking into single-player modules."
+      }
+    ]
+  }
+}

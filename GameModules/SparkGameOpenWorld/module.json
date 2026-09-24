@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameOpenWorld",
+  "cmakeTarget": "SparkGameOpenWorld",
+  "sourceDirectory": "GameModules/SparkGameOpenWorld/Source",
+  "assets": {
+    "state": "none",
+    "reason": "No asset root exists for this module: the Assets/Scenes/OpenWorld, Assets/OpenWorld and Assets/Audio/Music paths its sources reference are not in the repository."
+  },
+  "tests": {
+    "files": [
+      "Tests/TestOpenWorldModule.cpp"
+    ],
+    "prefixes": [
+      "OW_",
+      "Gated_OW"
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameOpenWorld/README.md"
+  },
+  "parity": {
+    "notApplicable": [
+      {
+        "dimension": "networking",
+        "reason": "Single-player module: no source file uses the engine networking layer, and MOD-290 rules out forcing networking into single-player modules."
+      }
+    ]
+  }
+}

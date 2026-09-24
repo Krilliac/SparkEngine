@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameRPG",
+  "cmakeTarget": "SparkGameRPG",
+  "sourceDirectory": "GameModules/SparkGameRPG/Source",
+  "assets": {
+    "state": "none",
+    "reason": "No asset root exists for this module: the Assets/Scenes/RPG scenes and Assets/Audio/Music tracks its sources reference are not in the repository."
+  },
+  "tests": {
+    "files": [
+      "Tests/TestGameModuleRPG.cpp"
+    ],
+    "prefixes": [
+      "RPG_"
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameRPG/README.md"
+  },
+  "parity": {
+    "notApplicable": [
+      {
+        "dimension": "networking",
+        "reason": "Single-player module: no source file uses the engine networking layer, and MOD-290 rules out forcing networking into single-player modules."
+      }
+    ]
+  }
+}

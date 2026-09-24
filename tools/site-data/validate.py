@@ -172,11 +172,7 @@ REQUIRED_NULLRHI_CONFLICTS = {
 # error (Validator.validate_future_acceptance_paths), and a done work item never
 # resolves a reference through it.
 FUTURE_ACCEPTANCE_PATHS = {
-    "GameModules/SparkGame/README.md",
     "GameModules/SparkGameFPS/Source/Multiplayer",
-    "GameModules/SparkGameMMO/README.md",
-    "GameModules/SparkGameOpenWorld/README.md",
-    "GameModules/SparkGamePlatformer/README.md",
     "GameModules/SparkGameRTS/Source/AI",
     "GameModules/SparkGameRTS/Source/Fog",
     "SparkEditor/Source/Commands",

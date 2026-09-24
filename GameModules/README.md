@@ -30,6 +30,8 @@ library/extension modules must be declared as add-ons and can coexist with it.
 GameModules/
   MyGame/
     CMakeLists.txt
+    README.md           # Required: what runs, release classification, known limits
+    module.json         # Required: per-module facts checked by site-data validation
     Source/
       Core/
         Main.cpp        # DLL entry point + IModule implementation
@@ -37,6 +39,15 @@ GameModules/
       Game/
         ...             # Your game logic
 ```
+
+`module.json` names the module's CMake target, source directory, asset roots
+(or `"state": "none"` with a reason), the registered test sources and `TEST`
+name prefixes that cover it, its README, and any parity dimensions it declares
+N/A. Release-profile policy stays in `tools/module-evidence/manifest.json`.
+`python3 tools/site-data/validate.py --modules` and the `ModuleManifest_Contract`
+CTest fail when a discovered module has no manifest or any referenced path,
+test prefix, README, or N/A declaration does not hold. The field rules are in
+[Creating a Game Module](../wiki/getting-started/Creating-a-Game-Module.md#gamemodulesnamemodulejson-in-tree-modules).
 
 ### 2. Implement `Spark::IModule`
 

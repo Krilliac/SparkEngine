@@ -217,7 +217,7 @@
       "wave": 4,
       "area": "modules",
       "owner": "unassigned",
-      "rationale": "Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295. 2026-09-12 progress: FPS package-smoke now requires SparkSDK.h, IModule.h, and Version.h in the installed public SDK and rejects an incomplete package during reconfiguration. Full module lifecycle, package, and hosted evidence remains open.",
+      "rationale": "Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295. 2026-09-12 progress: FPS package-smoke now requires SparkSDK.h, IModule.h, and Version.h in the installed public SDK and rejects an incomplete package during reconfiguration. Full module lifecycle, package, and hosted evidence remains open. 2026-09-24 progress: every discovered module now has a GameModules/<Name>/module.json (per-module facts only; profile policy stays in tools/module-evidence/manifest.json), and module_content.validate fails on a missing manifest, a nonexistent source, asset, or test path, an unregistered test source, a TEST prefix with no definition, a missing README, or parity N/A cells that disagree with the declared N/A dimensions; ModuleManifest_Contract runs the mutation cases.",
       "dependencies": [
         "RDY-010",
         "RDY-020",
@@ -297,8 +297,7 @@
         "module-package-smoke"
       ],
       "plannedTestSelectors": [
-        "ModuleKit_*",
-        "ModuleManifest_*"
+        "ModuleKit_*"
       ]
     },
     {

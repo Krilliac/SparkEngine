@@ -2977,7 +2977,7 @@ ctest --test-dir build/linux-shipping -L recovery-drill --output-on-failure --no
 **Priority:** P1 · **Status:** open · **Wave:** 4 · **Area:** modules · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295. 2026-09-12 progress: FPS package-smoke now requires SparkSDK.h, IModule.h, and Version.h in the installed public SDK and rejects an incomplete package during reconfiguration. Full module lifecycle, package, and hosted evidence remains open.
+Every discovered module needs a truthful manifest, while stable-v1 needs a small public-SDK-only module kit for SparkGameFPS; prototype gameplay helpers are owned separately by MOD-295. 2026-09-12 progress: FPS package-smoke now requires SparkSDK.h, IModule.h, and Version.h in the installed public SDK and rejects an incomplete package during reconfiguration. Full module lifecycle, package, and hosted evidence remains open. 2026-09-24 progress: every discovered module now has a GameModules/<Name>/module.json (per-module facts only; profile policy stays in tools/module-evidence/manifest.json), and module_content.validate fails on a missing manifest, a nonexistent source, asset, or test path, an unregistered test source, a TEST prefix with no definition, a missing README, or parity N/A cells that disagree with the declared N/A dimensions; ModuleManifest_Contract runs the mutation cases.
 
 **Dependency contract**
 

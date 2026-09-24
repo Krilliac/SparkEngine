@@ -26,7 +26,12 @@ class ModuleContentInventoryTests(unittest.TestCase):
         evidence.write_text(json.dumps({
             "schemaVersion": "stable-v2",
             "profiles": [{"id": "stable-v1", "includedModules": ["SparkGameFPS"], "excludedModules": []}],
-            "modules": [{"name": "SparkGameFPS", "profileApplicability": {"stable-v1": "required"}}],
+            "modules": [{
+                "name": "SparkGameFPS",
+                "cmakeTarget": "SparkGameFPS",
+                "sourceDirectory": "GameModules/SparkGameFPS/Source",
+                "profileApplicability": {"stable-v1": "required"},
+            }],
         }), encoding="utf-8")
         (self.root / "GameModules" / "SparkGameFPS" / "Source").mkdir(parents=True)
         (self.root / "GameModules" / "SparkGameFPS" / "Source" / "Main.cpp").write_text("// source\n", encoding="utf-8")
@@ -38,13 +43,40 @@ class ModuleContentInventoryTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("fixture\n", encoding="utf-8")
         integrity = self.root / "Assets" / "assets.integrity.json"
-        integrity.write_text(json.dumps({"entries": [{"path": "Models/model.obj"}, {"path": "Scenes/scene.scene"}]}), encoding="utf-8")
+        integrity.write_text(json.dumps({"root": "Assets", "entries": [{"path": "Models/model.obj"}, {"path": "Scenes/scene.scene"}]}), encoding="utf-8")
+        self._write_module_manifest_fixture()
         # The fixture profile has one module, so the evidence partition is exact.
         # Its empty excluded list is corrected after the module directory exists.
         data = json.loads(evidence.read_text(encoding="utf-8"))
         data["profiles"][0]["excludedModules"] = []
         evidence.write_text(json.dumps(data), encoding="utf-8")
         self.write(module_content.generate(self.root))
+
+    def _write_module_manifest_fixture(self) -> None:
+        """MOD-290: the per-module module.json and everything it references."""
+        module_dir = self.root / "GameModules" / "SparkGameFPS"
+        (module_dir / "README.md").write_text("# SparkGameFPS\n", encoding="utf-8")
+        (self.root / "Tests").mkdir()
+        (self.root / "Tests" / "CMakeLists.txt").write_text("add_executable(SparkTests\n    TestFixtureFPS.cpp\n)\n", encoding="utf-8")
+        (self.root / "Tests" / "TestFixtureFPS.cpp").write_text("TEST(FPSFixture_Runs)\n{\n}\n", encoding="utf-8")
+        work_items = self.root / "docs" / "readiness" / "work-items"
+        work_items.mkdir(parents=True)
+        (work_items / "30-game-modules.json").write_text(json.dumps({
+            "parityDimensions": {"dimensions": ["networking"], "currentScores": {"SparkGameFPS": [1]}},
+        }), encoding="utf-8")
+        (module_dir / module_content.MODULE_MANIFEST_NAME).write_text(json.dumps({
+            "schemaVersion": 1,
+            "name": "SparkGameFPS",
+            "cmakeTarget": "SparkGameFPS",
+            "sourceDirectory": "GameModules/SparkGameFPS/Source",
+            "assets": {"state": "declared", "roots": [
+                {"directory": "Assets/Models", "manifest": "Assets/assets.integrity.json"},
+                {"directory": "Assets/Scenes", "manifest": "Assets/assets.integrity.json"},
+            ]},
+            "tests": {"files": ["Tests/TestFixtureFPS.cpp"], "prefixes": ["FPSFixture_"]},
+            "docs": {"readme": "GameModules/SparkGameFPS/README.md"},
+            "parity": {"notApplicable": []},
+        }), encoding="utf-8")
 
     def write(self, payload: dict) -> None:
         path = self.root / module_content.INVENTORY_RELATIVE

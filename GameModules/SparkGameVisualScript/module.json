@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameVisualScript",
+  "cmakeTarget": "SparkGameVisualScript",
+  "sourceDirectory": "GameModules/SparkGameVisualScript/Source",
+  "assets": {
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "GameModules/SparkGameVisualScript/Assets",
+        "manifest": "GameModules/SparkGameVisualScript/Assets/manifest.json"
+      }
+    ]
+  },
+  "tests": {
+    "files": [
+      "Tests/TestVisualScriptCompiler.cpp"
+    ],
+    "prefixes": [
+      "VisualScriptDemo_"
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameVisualScript/README.md"
+  },
+  "parity": {
+    "notApplicable": [
+      {
+        "dimension": "networking",
+        "reason": "Single-player module: no source file uses the engine networking layer, and MOD-290 rules out forcing networking into single-player modules."
+      }
+    ]
+  }
+}

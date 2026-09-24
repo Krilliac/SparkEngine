@@ -1,0 +1,29 @@
+# SparkGamePlatformer
+
+SparkGamePlatformer is a prototype of platformer systems: levels, a player controller with unlockable
+abilities, checkpoints, collectibles, hazards, and a camera system.
+
+**Release classification:** experimental prototype, outside the stable-v1 release profile
+(`tools/module-evidence/manifest.json`). Finishing it as a complete level slice is tracked under MOD-340.
+
+## What runs
+
+`Source/Core/Main.cpp` creates the level, checkpoint, player-controller, collectible, hazard, camera, and
+engine-bridge systems on load. The `platformer_*` console commands inspect and drive the level and player
+(`platformer_status`, `platformer_level`, `platformer_next`, `platformer_respawn`, `platformer_restart`, and
+others). `plat_save` and `plat_load` save and restore progress through the engine bridge, and
+`plat_replay_start`, `plat_replay_stop`, and `plat_ghost` record a run and toggle ghost playback.
+
+## Known limitations
+
+- Localization resources are missing. `PlatformerEngineSystems::SetupLocalization()` loads
+  `Data/Localization/platformer_en.json`, `_fr`, `_de`, and `_ja`, and then logs that four languages loaded, but
+  none of those files exists anywhere in the repository.
+- The `Assets/Audio/Music/*.ogg` tracks it registers do not exist either. The module ships no asset root and has
+  no networking.
+
+## Tests
+
+`Tests/TestGameModulePlatformerARPG.cpp` (`Platformer_*`) compiles the module's real player-controller,
+checkpoint, and engine-bridge sources into SparkTests and covers checkpoints, player damage and respawn,
+deterministic movement, jump buffering, and dash.

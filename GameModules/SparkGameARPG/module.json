@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "name": "SparkGameARPG",
+  "cmakeTarget": "SparkGameARPG",
+  "sourceDirectory": "GameModules/SparkGameARPG/Source",
+  "assets": {
+    "state": "none",
+    "reason": "The ARPG module ships no asset root; its sources reference no asset files."
+  },
+  "tests": {
+    "files": [
+      "Tests/TestGameModulePlatformerARPG.cpp"
+    ],
+    "prefixes": [
+      "ARPG_"
+    ]
+  },
+  "docs": {
+    "readme": "GameModules/SparkGameARPG/README.md"
+  },
+  "parity": {
+    "notApplicable": [
+      {
+        "dimension": "networking",
+        "reason": "Single-player module: no source file uses the engine networking layer, and MOD-290 rules out forcing networking into single-player modules."
+      }
+    ]
+  }
+}
