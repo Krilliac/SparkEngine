@@ -143,7 +143,7 @@ The interface is synchronous and is called from the game thread. The contract fo
 | Per-call time on the game thread | A call MUST return within **5 ms**. An adapter that talks to a remote backend MUST do the network work off the game thread, and it MUST return cached state or queue the request. It drains completions in `OnlineServiceManager::Update` | No. There is no watchdog, and a blocking adapter stalls the frame |
 | Remote request timeout (adapter-internal) | **10 s** per remote request, then the operation fails | Adapter responsibility. None exists in the tree |
 | Retries | Idempotent reads (`FindSessions`, `QueryScores`, `QueryAchievements`, `ListCloudSaves`, `LoadFromCloud`, `GetFriendsList`) MAY retry at most **2** times with exponential backoff starting at **500 ms** and capped at **4 s**. Mutations (`Login`, `CreateSession`, `JoinSession`, `SubmitScore`, `UnlockAchievement`, `SetAchievementProgress`, `SaveToCloud`, `DeleteCloudSave`, `SetPresence`, `InviteToSession`) MUST NOT retry automatically unless the backend deduplicates them | Adapter responsibility |
-| Circuit breaker | After **5** consecutive failures of one capability, calls to that capability fail immediately for **30 s**, then one probe call is allowed | No. Planned as `OnlineServices_Degraded` in `OnlineServiceManager` (`NET-110`) |
+| Circuit breaker | After **5** consecutive failures of one capability, calls to that capability fail immediately for **30 s**, then one probe call is allowed | Yes, for every adapter installed with `SetPlatform()`. `OnlineServiceManager::GetPlatform()` returns `GuardedOnlinePlatform`, which counts failures per capability and runs the cooldown on the `Update()` clock. A probe that fails reopens the circuit. `Logout()` and `LeaveSession()` always reach the adapter. The circuit is disabled for the in-process `NullOnlinePlatform`: it has no remote dependency, so its failures are caller errors, and they are only counted. Tested by `OnlineServices_Degraded_*` |
 
 Failure semantics that every adapter MUST follow. The `OnlineServices_Contract_*` conformance suite (section 8) checks
 the first three rules on every shipped adapter: fail-closed capabilities, a failure reason that is present and never
@@ -156,14 +156,20 @@ no-throw and no-local-corruption rules:
   return an empty value, and no call may fabricate success.
 - Every failed call MUST leave a non-empty, human-readable, secret-free `GetLastError()`.
 - `Logout()` and `LeaveSession()` MUST be safe to call in any state, including when no session exists.
-- An adapter MUST NOT throw out of an interface call. Until the degraded-dependency work lands in
-  `OnlineServiceManager`, an exception propagates to the caller.
+- An adapter MUST NOT throw out of an interface call. `GuardedOnlinePlatform` contains any exception that an
+  adapter throws anyway, so it never reaches a caller that goes through `GetPlatform()`. The call fails, it counts
+  as a failure of its capability, and `GetLastError()` reports `<call> failed: adapter threw: <what>`. A login token in
+  the exception text is replaced with `<redacted>`.
 - A failure MUST NOT corrupt local game state. Callers treat online results as optional. Local saves go through the
   [Save System](../../wiki/gameplay-tools/Save-System.md), not through `SaveToCloud`.
 
 Observability: `OnlineServiceManager::Console_GetStatus()` reports the active adapter name, whether it has any
-capability, the last error, and the logged-in display name. Per-capability failure counters and circuit state are
-still to be added (see section 8).
+capability, the last error, per-capability health, and the logged-in display name. The health field is `ok`, or it lists
+each capability that has failed since its last success, with its consecutive-failure count and circuit state (for example
+`leaderboards 5 consecutive failures (circuit open, retry in 30.0s)`). `GetCapabilityHealth()` returns the consecutive,
+total and rejected-call counters for one capability. A mutation counts as failed when it returns `false`. A query counts as
+failed when it throws, or when it returns nothing and the adapter reports a `GetLastError()` reason for that call. An empty
+result with no reason, such as an empty leaderboard, is a success. Opening and closing a circuit is logged.
 
 ### 5.2 Gateway admission and authentication (boundaries B3, B4)
 
@@ -228,7 +234,7 @@ same change.
 |---|---|---|
 | No hosted-service claim on public surfaces | `python3 tools/site-data/validate.py` (`validate_online_service_boundary`) governs this document, the two wiki pages, `docs/site/readiness.json`, and every public claim surface. `Tests/Tools/test_site_data_contract.py` `OnlineServiceBoundaryTests` | none |
 | Null adapter deterministic, stubs fail closed | `Tests/TestOnlineServices.cpp` `OnlineServices_Null*` and stub tests. The `OnlineServices_Contract_*` conformance suite (ctest `OnlineServicesContract`, label `online-services`, exact count 5) runs the section 5.1 failure semantics and the section 6 labels against `NullOnlinePlatform`, `SteamPlatform`, `EpicPlatform` and `ConsolePlatform`, checks `Console_GetStatus()` for each, and compares two fresh runs of the Null adapter against one fixed expected transcript. Friends and presence are checked for success and failure only: the Null adapter has no friends to read back and `SetPresence()` has no getter | A new adapter must be added to the suite before it is shipped |
-| Degraded-dependency budgets (section 5.1 circuit breaker) | none | `OnlineServices_Degraded_*` tests and failure accounting in `OnlineServiceManager` |
+| Degraded-dependency budgets (section 5.1 circuit breaker) | `Tests/TestOnlineServices.cpp` `OnlineServices_Degraded_*` (ctest `OnlineServicesDegraded`, label `online-services`, exact count 7) drives a fault-injecting adapter through `SetPlatform()` / `GetPlatform()`. It covers exception containment and token redaction, opening after 5 consecutive failures, fail-fast without reaching the adapter, per-capability isolation, the probe after the cooldown, reset on success and on platform change, the Logout bypass, the Null-adapter exemption, and the `Console_GetStatus()` health field | The 5 ms game-thread budget has no watchdog, and the 10 s remote timeout and retry budgets remain adapter responsibilities with no production adapter to measure |
 | Versioned client/server compatibility | Gateway protocol constants only | `SessionCompatibility_*` tests after `NET-100` protocol negotiation |
 | Hosted CI | none | `service-contract` and `network-integration` jobs (planned) |
 

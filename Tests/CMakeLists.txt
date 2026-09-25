@@ -1549,6 +1549,15 @@ set_tests_properties(OnlineServicesContract PROPERTIES
 
 # LIFE-200: the production LifecycleCompositionRoot fails closed on injected
 # stage failures (false return, std::exception, unknown throw, throwing shutdown).
+# NET-110: degraded-dependency semantics in OnlineServiceManager (docs/specs/online-services.md
+# 5.1): adapter exceptions become failures, per-capability circuit breaker (5 failures, 30 s,
+# one probe), state reported by Console_GetStatus. Exact count: a dropped test fails.
+add_test(NAME OnlineServicesDegraded COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(OnlineServicesDegraded PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OnlineServices_Degraded_;SPARK_TEST_EXPECT_COUNT=7"
+    LABELS "online-services;unit"
+    TIMEOUT 30)
+
 add_test(NAME LifecycleCompositionRootFailure COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(LifecycleCompositionRootFailure PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=PartialInit_CompositionRoot;SPARK_TEST_EXPECT_COUNT=8"

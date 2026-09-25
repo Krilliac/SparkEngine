@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <iostream>
+#include <limits>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -597,4 +599,328 @@ TEST(OnlineServices_Contract_NullAdapterDeterministic)
     }
     EXPECT_EQ(first, expected);
     EXPECT_EQ(second, expected);
+}
+
+// ============================================================================
+// OnlineServices_Degraded — degraded-dependency semantics in OnlineServiceManager
+// (docs/specs/online-services.md section 5.1). A fault-injecting adapter is installed
+// through SetPlatform() and driven through GetPlatform(), the same path game code uses:
+// adapter exceptions become failed calls, 5 consecutive failures of one capability open
+// its circuit for 30 s, one probe is allowed after the cooldown, and the state is
+// reported by Console_GetStatus(). Registered under the online-services ctest label.
+// ============================================================================
+
+namespace
+{
+    using Spark::OnlineServices::OnlineCapability;
+    using Spark::OnlineServices::OnlineServiceManager;
+
+    enum class Fault
+    {
+        None,
+        ReturnFailure,
+        ThrowStd,
+        ThrowNonStd
+    };
+
+    // Null adapter with injectable faults and per-call counters. Non-const: the manager owns it,
+    // and the test keeps a raw pointer to steer it.
+    class FaultInjectingPlatform final : public Spark::OnlineServices::NullOnlinePlatform
+    {
+      public:
+        std::string GetPlatformName() const override { return "FaultInjecting (Test)"; }
+        std::string GetLastError() const override
+        {
+            return fault == Fault::ReturnFailure ? "backend unreachable" : NullOnlinePlatform::GetLastError();
+        }
+
+        bool Login(const std::string& username, const std::string& token) override
+        {
+            ++loginCalls;
+            if (fault == Fault::ThrowStd)
+            {
+                throw std::runtime_error("auth backend rejected token " + token);
+            }
+            return Inject() && NullOnlinePlatform::Login(username, token);
+        }
+        void Logout() override
+        {
+            ++logoutCalls;
+            if (throwOnLogout)
+            {
+                throw std::runtime_error("logout backend down");
+            }
+            NullOnlinePlatform::Logout();
+        }
+        bool SubmitScore(const std::string& boardName, int64_t score) override
+        {
+            ++submitCalls;
+            return Inject() && NullOnlinePlatform::SubmitScore(boardName, score);
+        }
+        std::vector<Spark::OnlineServices::LeaderboardEntry> QueryScores(const std::string& boardName,
+                                                                         uint32_t maxResults) override
+        {
+            ++queryCalls;
+            if (!Inject())
+            {
+                return {};
+            }
+            return NullOnlinePlatform::QueryScores(boardName, maxResults);
+        }
+
+        Fault fault = Fault::None;
+        bool throwOnLogout = false;
+        int loginCalls = 0;
+        int logoutCalls = 0;
+        int submitCalls = 0;
+        int queryCalls = 0;
+
+      private:
+        bool Inject() const
+        {
+            if (fault == Fault::ThrowStd)
+            {
+                throw std::runtime_error("backend exploded");
+            }
+            if (fault == Fault::ThrowNonStd)
+            {
+                throw 42;
+            }
+            return fault != Fault::ReturnFailure;
+        }
+    };
+
+    // Initializes the manager with a fresh fault-injecting adapter and returns it.
+    FaultInjectingPlatform* InstallFaultInjectingPlatform()
+    {
+        auto& manager = OnlineServiceManager::GetInstance();
+        manager.Initialize();
+        auto adapter = std::make_unique<FaultInjectingPlatform>();
+        FaultInjectingPlatform* raw = adapter.get();
+        manager.SetPlatform(std::move(adapter));
+        return raw;
+    }
+
+    // Drives SubmitScore failures until the leaderboards circuit is open.
+    void OpenLeaderboardCircuit(Spark::OnlineServices::IOnlinePlatform& platform, FaultInjectingPlatform& adapter)
+    {
+        adapter.fault = Fault::ReturnFailure;
+        for (int i = 0; i < 5; ++i)
+        {
+            EXPECT_FALSE(platform.SubmitScore("Board", i));
+        }
+    }
+} // namespace
+
+TEST(OnlineServices_Degraded_AdapterExceptionBecomesFailure)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+
+    adapter->fault = Fault::ThrowStd;
+    bool loggedIn = true;
+    try
+    {
+        loggedIn = platform->Login("Alice", "degraded-secret-token");
+    }
+    catch (...)
+    {
+        EXPECT_TRUE(false); // An adapter exception must never reach the caller.
+    }
+    EXPECT_FALSE(loggedIn);
+    EXPECT_STR_CONTAINS(platform->GetLastError(), std::string("Login failed: adapter threw:"));
+    EXPECT_TRUE(platform->GetLastError().find("degraded-secret-token") == std::string::npos);
+    EXPECT_TRUE(manager.Console_GetStatus().find("degraded-secret-token") == std::string::npos);
+
+    adapter->fault = Fault::ThrowNonStd;
+    EXPECT_FALSE(platform->SubmitScore("Board", 1));
+    EXPECT_EQ(platform->GetLastError(), std::string("SubmitScore failed: adapter threw a non-standard exception"));
+    EXPECT_TRUE(platform->QueryScores("Board", 5).empty());
+    EXPECT_STR_CONTAINS(platform->GetLastError(), std::string("QueryScores failed"));
+
+    const auto& auth = manager.GetCapabilityHealth(OnlineCapability::Authentication);
+    EXPECT_EQ(auth.consecutiveFailures, 1u);
+    EXPECT_EQ(auth.totalFailures, 1u);
+    EXPECT_EQ(manager.GetCapabilityHealth(OnlineCapability::Leaderboards).consecutiveFailures, 2u);
+
+    // A throwing Logout is contained too, including during Shutdown.
+    adapter->throwOnLogout = true;
+    platform->Logout();
+    EXPECT_STR_CONTAINS(platform->GetLastError(), std::string("Logout failed: adapter threw: logout backend down"));
+    manager.Shutdown();
+    EXPECT_TRUE(manager.GetPlatform() == nullptr);
+}
+
+TEST(OnlineServices_Degraded_CircuitOpensAfterConsecutiveFailures)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+
+    OpenLeaderboardCircuit(*platform, *adapter);
+    EXPECT_EQ(adapter->submitCalls, 5);
+    const auto& board = manager.GetCapabilityHealth(OnlineCapability::Leaderboards);
+    EXPECT_TRUE(board.circuitOpen);
+    EXPECT_EQ(board.consecutiveFailures, 5u);
+
+    // Open: both leaderboard calls fail fast without reaching the adapter, even though it has recovered.
+    adapter->fault = Fault::None;
+    EXPECT_FALSE(platform->SubmitScore("Board", 99));
+    EXPECT_TRUE(platform->QueryScores("Board", 5).empty());
+    EXPECT_EQ(adapter->submitCalls, 5);
+    EXPECT_EQ(adapter->queryCalls, 0);
+    EXPECT_EQ(board.rejectedCalls, 2u);
+    EXPECT_STR_CONTAINS(platform->GetLastError(),
+                        std::string("QueryScores failed: leaderboards circuit open after 5 consecutive failures"));
+
+    // Circuits are per capability: authentication still reaches the adapter.
+    EXPECT_TRUE(platform->Login("Bob", ""));
+    EXPECT_EQ(adapter->loginCalls, 1);
+
+    const std::string status = manager.Console_GetStatus();
+    EXPECT_STR_CONTAINS(status, std::string("FaultInjecting (Test)"));
+    EXPECT_STR_CONTAINS(status,
+                        std::string("Health: leaderboards 5 consecutive failures (circuit open, retry in 30.0s)"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_ProbeAfterCooldown)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+    OpenLeaderboardCircuit(*platform, *adapter);
+    const auto& board = manager.GetCapabilityHealth(OnlineCapability::Leaderboards);
+
+    // The cooldown runs on the Update() clock; invalid frame times do not advance it.
+    manager.Update(29.0f);
+    manager.Update(-5.0f);
+    manager.Update(std::numeric_limits<float>::quiet_NaN());
+    EXPECT_FALSE(platform->SubmitScore("Board", 1));
+    EXPECT_EQ(adapter->submitCalls, 5);
+
+    // Cooldown elapsed: one probe reaches the still-failing adapter and reopens the circuit.
+    manager.Update(1.5f);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("(circuit open, probe allowed)"));
+    EXPECT_FALSE(platform->SubmitScore("Board", 2));
+    EXPECT_EQ(adapter->submitCalls, 6);
+    EXPECT_TRUE(board.circuitOpen);
+    EXPECT_FALSE(platform->SubmitScore("Board", 3));
+    EXPECT_EQ(adapter->submitCalls, 6);
+
+    // The backend recovers: the next probe succeeds and closes the circuit.
+    adapter->fault = Fault::None;
+    manager.Update(30.0f);
+    EXPECT_TRUE(platform->SubmitScore("Board", 4));
+    EXPECT_EQ(adapter->submitCalls, 7);
+    EXPECT_FALSE(board.circuitOpen);
+    EXPECT_EQ(board.consecutiveFailures, 0u);
+    EXPECT_EQ(board.totalFailures, 6u);
+    EXPECT_EQ(board.rejectedCalls, 2u);
+    EXPECT_TRUE(platform->SubmitScore("Board", 5));
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("Health: ok"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_SuccessResetsAndQueriesNeedAReason)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+    const auto& board = manager.GetCapabilityHealth(OnlineCapability::Leaderboards);
+
+    // Failures must be consecutive: a success in between resets the count.
+    adapter->fault = Fault::ReturnFailure;
+    for (int i = 0; i < 4; ++i)
+    {
+        EXPECT_FALSE(platform->SubmitScore("Board", i));
+    }
+    adapter->fault = Fault::None;
+    EXPECT_TRUE(platform->SubmitScore("Board", 10));
+    EXPECT_EQ(board.consecutiveFailures, 0u);
+
+    // An empty board is an answer, not a failure; an empty result with a reason is a failure.
+    EXPECT_TRUE(platform->QueryScores("EmptyBoard", 5).empty());
+    EXPECT_EQ(board.consecutiveFailures, 0u);
+    adapter->fault = Fault::ReturnFailure;
+    EXPECT_TRUE(platform->QueryScores("Board", 5).empty());
+    EXPECT_EQ(platform->GetLastError(), std::string("backend unreachable"));
+    EXPECT_EQ(board.consecutiveFailures, 1u);
+    EXPECT_EQ(board.totalFailures, 5u);
+    EXPECT_FALSE(board.circuitOpen);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("Health: leaderboards 1 consecutive failures"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_LogoutBypassesOpenCircuit)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    FaultInjectingPlatform* adapter = InstallFaultInjectingPlatform();
+    auto* platform = manager.GetPlatform();
+
+    adapter->fault = Fault::ReturnFailure;
+    for (int i = 0; i < 5; ++i)
+    {
+        EXPECT_FALSE(platform->Login("Carol", ""));
+    }
+    EXPECT_TRUE(manager.GetCapabilityHealth(OnlineCapability::Authentication).circuitOpen);
+    EXPECT_FALSE(platform->Login("Carol", ""));
+    EXPECT_EQ(adapter->loginCalls, 5);
+
+    // Local cleanup is never blocked by an open circuit.
+    platform->Logout();
+    platform->LeaveSession();
+    EXPECT_EQ(adapter->logoutCalls, 1);
+    EXPECT_FALSE(platform->IsLoggedIn());
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_StateResetsOnPlatformChange)
+{
+    auto& manager = OnlineServiceManager::GetInstance();
+    manager.Initialize();
+    manager.SetPlatform(std::make_unique<Spark::OnlineServices::SteamPlatform>());
+    auto* platform = manager.GetPlatform();
+
+    // A fail-closed stub trips its circuits like any unavailable backend.
+    for (int i = 0; i < 5; ++i)
+    {
+        EXPECT_FALSE(platform->Login("Dave", ""));
+    }
+    EXPECT_TRUE(manager.GetCapabilityHealth(OnlineCapability::Authentication).circuitOpen);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("authentication 5 consecutive failures"));
+
+    manager.SetPlatform(std::make_unique<Spark::OnlineServices::EpicPlatform>());
+    EXPECT_FALSE(manager.GetCapabilityHealth(OnlineCapability::Authentication).circuitOpen);
+    EXPECT_EQ(manager.GetCapabilityHealth(OnlineCapability::Authentication).totalFailures, 0u);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("Health: ok"));
+    manager.Shutdown();
+}
+
+TEST(OnlineServices_Degraded_NullAdapterNeverOpensCircuit)
+{
+    // The in-process Null adapter has no dependency to degrade: repeated caller errors are
+    // counted but must not lock out a later valid call.
+    auto& manager = OnlineServiceManager::GetInstance();
+    manager.Initialize();
+    auto* platform = manager.GetPlatform();
+    for (int i = 0; i < 7; ++i)
+    {
+        EXPECT_FALSE(platform->JoinSession("missing"));
+        EXPECT_EQ(platform->GetLastError(), std::string("Session not found: missing"));
+    }
+    const auto& sessions = manager.GetCapabilityHealth(OnlineCapability::Sessions);
+    EXPECT_EQ(sessions.totalFailures, 7u);
+    EXPECT_FALSE(sessions.circuitOpen);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(),
+                        std::string("Health: sessions 7 consecutive failures (circuit disabled: local adapter)"));
+
+    Spark::OnlineServices::SessionInfo settings;
+    settings.mapName = "DegradedMap";
+    EXPECT_TRUE(platform->CreateSession(settings));
+    EXPECT_TRUE(platform->JoinSession(platform->GetCurrentSession().sessionId));
+    EXPECT_EQ(sessions.consecutiveFailures, 0u);
+    EXPECT_STR_CONTAINS(manager.Console_GetStatus(), std::string("Health: ok (circuit disabled: local adapter)"));
+    manager.Shutdown();
 }

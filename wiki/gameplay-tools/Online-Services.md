@@ -90,10 +90,13 @@ public:
 | `GetInstance()` | Get the singleton instance |
 | `Initialize()` | Initialize with NullOnlinePlatform |
 | `Shutdown()` | Log out and release all platforms |
-| `Update(float dt)` | Per-frame update for async callbacks |
-| `GetPlatform()` | Get the active `IOnlinePlatform*` |
+| `Update(float dt)` | Per-frame update; advances the clock that open circuits cool down on |
+| `GetPlatform()` | Get the active platform through the `GuardedOnlinePlatform` front (see Degraded Dependencies) |
 | `SetPlatform(unique_ptr)` | Switch to a custom platform (takes ownership) |
 | `ResetToNullPlatform()` | Revert to the offline platform |
+| `GetCapabilityHealth(capability)` | Consecutive, total and rejected-call counters and circuit state for one capability |
+| `SetCircuitPolicy(policy)` | Replace the circuit budget (default: 5 consecutive failures, 30 s cooldown) |
+| `Console_GetStatus()` | Adapter, capabilities, last error, per-capability health, and player |
 
 ### IOnlinePlatform
 
@@ -113,6 +116,18 @@ Every adapter in `OnlineServices.h` runs the same `OnlineServices_Contract_*` su
 ```bash
 ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure --no-tests=error
 ```
+
+## Degraded Dependencies
+
+`GetPlatform()` returns `GuardedOnlinePlatform`, a front over the active adapter that applies the degraded-dependency rules in section 5.1 of [`docs/specs/online-services.md`](../../docs/specs/online-services.md):
+
+- An exception thrown by the adapter never reaches the caller. The call fails, and `GetLastError()` reports `<call> failed: adapter threw: <what>`. A login token in the exception text is redacted.
+- Each capability (authentication, sessions, leaderboards, achievements, cloud save, friends, presence) counts consecutive failures. After 5 of them its circuit opens, and calls fail immediately without reaching the adapter for 30 s on the `Update()` clock. The next call after that is a probe: success closes the circuit, and failure reopens it for another 30 s.
+- `Logout()` and `LeaveSession()` always reach the adapter, so local cleanup is never blocked.
+- The circuit is disabled for the in-process Null platform, because it has no remote dependency. Its failures, such as joining an unknown session, are caller errors and are only counted.
+- `Console_GetStatus()` adds `Health: ok`, or each failing capability with its count and circuit state, such as `leaderboards 5 consecutive failures (circuit open, retry in 30.0s)`.
+
+The `OnlineServices_Degraded_*` tests (ctest `OnlineServicesDegraded`, label `online-services`) drive a fault-injecting adapter through the manager to cover these rules.
 
 ## Configuration
 
