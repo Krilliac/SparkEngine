@@ -723,10 +723,12 @@ jobs:
     - name: Build
       run: cmake --build build --parallel $(nproc)
 
+    # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence published by
+    # build.yml's advisory experimental-module-lifecycle job, never a release gate.
     - name: Run Tests
       run: |
         cd build
-        ctest --output-on-failure --no-tests=error
+        ctest --label-exclude '^experimental-modules$' --output-on-failure --no-tests=error
         if [ -f bin/SparkTests ]; then ./bin/SparkTests; fi
 
     - name: Validate external package consumption

@@ -2205,10 +2205,13 @@ jobs:
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
+    # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence with its own
+    # advisory experimental-module-lifecycle job; this required lane excludes it.
     - name: Run Tests
       run: |
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
+          --label-exclude '^experimental-modules$' \
           --output-on-failure --no-tests=error --parallel 2 \
           --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
@@ -2387,10 +2390,13 @@ jobs:
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
+    # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence with its own
+    # advisory experimental-module-lifecycle job; this required lane excludes it.
     - name: Run Tests
       run: |
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
+          --label-exclude '^experimental-modules$' \
           --output-on-failure --no-tests=error --parallel 2 \
           --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
@@ -3841,6 +3847,107 @@ jobs:
             tools/module-evidence/evidence-gaps.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
+
+  # ===========================================================================
+  # RDY-015. Real-source lifecycle evidence for every experimental game module
+  # (tools/module-evidence/manifest.json entries tracked under RDY-015): the
+  # production Linux SDL host runs each module with -require-game and every
+  # phase must report at least once with no faults. Advisory by design: a
+  # failure here never fails the workflow, the job is absent from
+  # required-ci-gate, a failing module stays visible here and in its JUnit
+  # artifact, and no result feeds the stable-v1 profile. Required full-ctest
+  # lanes exclude the label.
+  # ===========================================================================
+  experimental-module-lifecycle:
+    name: "Experimental module lifecycle (prototype, advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+
+      - name: Setup ccache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.ccache
+          key: ccache-experimental-module-lifecycle-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-experimental-module-lifecycle-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+            ccache-experimental-module-lifecycle-
+
+      - name: Configure CMake
+        run: |
+          set -euo pipefail
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=ON \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
+
+      - name: Build the host and every experimental module
+        run: |
+          set -euo pipefail
+          mapfile -t modules < <(python3 -c 'import json; [print(m["cmakeTarget"]) for m in json.load(open("tools/module-evidence/manifest.json"))["modules"] if (m.get("experimentalSeparation") or {}).get("trackedUnder") == "RDY-015"]')
+          test "${#modules[@]}" -gt 0
+          cmake --build build --parallel "$(nproc)" --target SparkEngine "${modules[@]}" 2>&1 | tee cmake-build.log
+
+      - name: Require one prototype-only test per experimental module
+        run: |
+          set -euo pipefail
+          ctest --test-dir build --no-tests=error -L '^experimental-modules$' --show-only=json-v1 \
+            > build/experimental-module-inventory.json
+          python3 - <<'PY'
+          import json
+          manifest = json.load(open("tools/module-evidence/manifest.json"))
+          expected = {
+              f"ExperimentalModuleLifecycle_{m['cmakeTarget']}"
+              for m in manifest["modules"]
+              if (m.get("experimentalSeparation") or {}).get("trackedUnder") == "RDY-015"
+          }
+          tests = json.load(open("build/experimental-module-inventory.json"))["tests"]
+          registered = {test["name"] for test in tests}
+          if registered != expected:
+              raise SystemExit(f"experimental-modules tests {sorted(registered)} != manifest {sorted(expected)}")
+          for test in tests:
+              labels = next(
+                  (p["value"] for p in test.get("properties", []) if p.get("name") == "LABELS"), []
+              )
+              promoted = {"stable-v1", "module-profile"} & set(labels)
+              if promoted:
+                  raise SystemExit(f"{test['name']} carries stable profile label(s) {sorted(promoted)}")
+          print(f"{len(registered)} experimental module lifecycle tests registered, none stable-labeled")
+          PY
+
+      - name: Run experimental module lifecycle tests
+        run: |
+          set -euo pipefail
+          ctest --test-dir build -L '^experimental-modules$' \
+            --output-on-failure --no-tests=error \
+            --output-junit experimental-module-lifecycle-junit.xml 2>&1 | tee experimental-module-lifecycle.log
+
+      - name: Upload experimental module lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: experimental-module-lifecycle-${{ github.sha }}
+          path: |
+            build/experimental-module-lifecycle-junit.xml
+            build/experimental-module-inventory.json
+            experimental-module-lifecycle.log
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: warn
 
   # ===========================================================================
   # One stable branch-protection target. A cancelled, skipped, or missing

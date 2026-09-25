@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1997,
+      "line": 2050,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1465,7 +1465,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1362,
+      "line": 1364,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2439,7 +2439,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 737,
+      "line": 738,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2635,7 +2635,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 702,
+      "line": 703,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2759,7 +2759,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 844,
+      "line": 845,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2959,10 +2959,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 724,
+      "line": 725,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:723",
+          "id": "Tests/CMakeLists.txt:724",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -3090,7 +3090,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 741,
+      "line": 742,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3100,7 +3100,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 735,
+      "line": 736,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3110,7 +3110,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 743,
+      "line": 744,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3140,10 +3140,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 715,
+      "line": 716,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:714",
+          "id": "Tests/CMakeLists.txt:715",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -3180,7 +3180,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 739,
+      "line": 740,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3190,7 +3190,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 849,
+      "line": 850,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3250,7 +3250,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 745,
+      "line": 746,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3282,7 +3282,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 839,
+      "line": 840,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3292,7 +3292,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 691,
+      "line": 692,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4170,7 +4170,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 737,
+          "line": 738,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4370,7 +4370,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 702,
+          "line": 703,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4496,7 +4496,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 844,
+          "line": 845,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -4856,7 +4856,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 724,
+          "line": 725,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4992,7 +4992,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 741,
+          "line": 742,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5010,7 +5010,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 735,
+          "line": 736,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5028,7 +5028,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 743,
+          "line": 744,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5066,7 +5066,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 715,
+          "line": 716,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5122,7 +5122,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 739,
+          "line": 740,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5140,7 +5140,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 849,
+          "line": 850,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5248,7 +5248,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 745,
+          "line": 746,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5304,7 +5304,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 839,
+          "line": 840,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5322,7 +5322,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 691,
+          "line": 692,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6158,7 +6158,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 32,
+    "jobCount": 33,
     "jobs": [
       {
         "id": "fuzz-policy",
@@ -9270,7 +9270,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "5cb377af7e1d2af2"
+            "runDigest": "579e1945c3f11982"
           },
           {
             "index": 10,
@@ -9510,7 +9510,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "5cb377af7e1d2af2"
+            "runDigest": "579e1945c3f11982"
           },
           {
             "index": 9,
@@ -11288,6 +11288,131 @@
         "gating": "blocking"
       },
       {
+        "id": "experimental-module-lifecycle",
+        "name": "Experimental module lifecycle (prototype, advisory)",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": true,
+        "timeoutMinutes": 90,
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
+        "stepCount": 8,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Install dependencies",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "009d7471ba99b4f8"
+          },
+          {
+            "index": 2,
+            "name": "Setup ccache",
+            "id": "",
+            "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 3,
+            "name": "Configure CMake",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "8caaa2b80f4bf2df"
+          },
+          {
+            "index": 4,
+            "name": "Build the host and every experimental module",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "08981145c0e2e354"
+          },
+          {
+            "index": 5,
+            "name": "Require one prototype-only test per experimental module",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "7fbed446e8bd7596"
+          },
+          {
+            "index": 6,
+            "name": "Run experimental module lifecycle tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "b9a4d68b11610c0d"
+          },
+          {
+            "index": 7,
+            "name": "Upload experimental module lifecycle evidence",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          }
+        ],
+        "envNames": [],
+        "gating": "advisory"
+      },
+      {
         "id": "required-ci-gate",
         "name": "Required CI Gate",
         "runsOn": "ubuntu-24.04",
@@ -12727,7 +12852,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
@@ -12837,7 +12962,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
@@ -12926,7 +13051,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
@@ -13015,7 +13140,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
@@ -13739,6 +13864,109 @@
         "testDir": "build-installer/build",
         "noTestsAction": "error",
         "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "experimental-module-lifecycle",
+        "step": "Configure CMake",
+        "stepIndex": 3,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "commandProvenance": "literal",
+        "options": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "BUILD_TESTS": "ON",
+          "CMAKE_C_COMPILER": "gcc-14",
+          "CMAKE_CXX_COMPILER": "g++-14",
+          "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+          "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+        },
+        "buildDir": "build",
+        "commandIndex": 0
+      },
+      {
+        "job": "experimental-module-lifecycle",
+        "step": "Build the host and every experimental module",
+        "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build --parallel \"$(nproc)\" --target SparkEngine \"${modules[@]}\" 2>&1 | tee cmake-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "${modules[@]}",
+          "2>",
+          "SparkEngine"
+        ],
+        "configuration": "",
+        "buildDir": "build",
+        "preset": "",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
+        "job": "experimental-module-lifecycle",
+        "step": "Require one prototype-only test per experimental module",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build --no-tests=error -L '^experimental-modules$' --show-only=json-v1  > build/experimental-module-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "experimental-module-lifecycle",
+        "step": "Run experimental module lifecycle tests",
+        "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -L '^experimental-modules$'  --output-on-failure --no-tests=error  --output-junit experimental-module-lifecycle-junit.xml 2>&1 | tee experimental-module-lifecycle.log",
+        "commandProvenance": "literal",
+        "configuration": "",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "experimental-module-lifecycle-junit.xml",
         "commandIndex": 0
       }
     ],
@@ -14561,6 +14789,34 @@
         "sourceDir": "build-installer",
         "buildDir": "build-installer/build",
         "commandIndex": 0
+      },
+      {
+        "job": "experimental-module-lifecycle",
+        "step": "Configure CMake",
+        "stepIndex": 3,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "commandProvenance": "literal",
+        "options": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "BUILD_TESTS": "ON",
+          "CMAKE_C_COMPILER": "gcc-14",
+          "CMAKE_CXX_COMPILER": "g++-14",
+          "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+          "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+        },
+        "buildDir": "build",
+        "commandIndex": 0
       }
     ],
     "buildInvocations": [
@@ -15354,6 +15610,35 @@
         "parallel": "auto",
         "buildsAllTargets": false,
         "commandIndex": 0
+      },
+      {
+        "job": "experimental-module-lifecycle",
+        "step": "Build the host and every experimental module",
+        "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build --parallel \"$(nproc)\" --target SparkEngine \"${modules[@]}\" 2>&1 | tee cmake-build.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "${modules[@]}",
+          "2>",
+          "SparkEngine"
+        ],
+        "configuration": "",
+        "buildDir": "build",
+        "preset": "",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 0
       }
     ],
     "testInvocations": [
@@ -15691,7 +15976,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
@@ -15741,7 +16026,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
@@ -15766,7 +16051,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Debug  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Debug  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Debug",
         "testDir": "build",
@@ -15791,7 +16076,7 @@
         "gating": "blocking",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build -C Release  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
+        "command": "ctest --test-dir build -C Release  --label-exclude '^experimental-modules$'  --output-on-failure --no-tests=error --parallel 2  --output-junit ctest-junit.xml 2>&1 | tee test-results.log",
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build",
@@ -15959,6 +16244,52 @@
         "testDir": "build-installer/build",
         "noTestsAction": "error",
         "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "experimental-module-lifecycle",
+        "step": "Require one prototype-only test per experimental module",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build --no-tests=error -L '^experimental-modules$' --show-only=json-v1  > build/experimental-module-inventory.json",
+        "commandProvenance": "literal",
+        "configuration": "",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "experimental-module-lifecycle",
+        "step": "Run experimental module lifecycle tests",
+        "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -L '^experimental-modules$'  --output-on-failure --no-tests=error  --output-junit experimental-module-lifecycle-junit.xml 2>&1 | tee experimental-module-lifecycle.log",
+        "commandProvenance": "literal",
+        "configuration": "",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "experimental-module-lifecycle-junit.xml",
         "commandIndex": 0
       }
     ],
@@ -16193,17 +16524,17 @@
       }
     ],
     "summary": {
-      "jobCount": 32,
-      "matrixLegCount": 40,
+      "jobCount": 33,
+      "matrixLegCount": 41,
       "pathFilteredEventCount": 0,
-      "configureCount": 26,
-      "buildCount": 27,
-      "testCount": 24,
+      "configureCount": 27,
+      "buildCount": 28,
+      "testCount": 26,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,
       "blockingJobCount": 24,
-      "advisoryJobCount": 4,
+      "advisoryJobCount": 5,
       "conditionalJobCount": 4,
       "builtOsConfigurationPairs": [
         "linux:Release",
@@ -17047,6 +17378,34 @@
       },
       "sourceDir": "build-installer",
       "buildDir": "build-installer/build",
+      "commandIndex": 0
+    },
+    {
+      "job": "experimental-module-lifecycle",
+      "step": "Configure CMake",
+      "stepIndex": 3,
+      "matrix": {},
+      "matrixResolved": true,
+      "runnerOs": "linux",
+      "shell": "bash",
+      "jobIf": "absent",
+      "jobContinueOnError": true,
+      "stepIf": "absent",
+      "stepContinueOnError": "absent",
+      "gating": "advisory",
+      "tool": "cmake",
+      "kind": "configure",
+      "command": "cmake -B build  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "commandProvenance": "literal",
+      "options": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTS": "ON",
+        "CMAKE_C_COMPILER": "gcc-14",
+        "CMAKE_CXX_COMPILER": "g++-14",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+      },
+      "buildDir": "build",
       "commandIndex": 0
     }
   ],

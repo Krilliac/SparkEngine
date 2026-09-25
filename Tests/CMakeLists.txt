@@ -1664,6 +1664,57 @@ set_tests_properties(NullRHIWindowsLifecycleParserContract PROPERTIES
     LABELS "nullrhi-headless;stable-v1;unit"
     TIMEOUT 10)
 
+# RDY-015: real-source lifecycle evidence for every experimental game module.
+# The parser contract is deterministic and runs in every lane; the per-module
+# runs launch the production Linux SDL host with -require-game and carry the
+# experimental-modules label, which every full-ctest lane excludes (-LE) and
+# only the advisory experimental-module-lifecycle job selects. The module list
+# is every tools/module-evidence/manifest.json entry tracked under RDY-015, so
+# these tests never carry a stable-v1 or module-profile label.
+add_test(
+    NAME ExperimentalModuleLifecycleParserContract
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_EXPERIMENTAL_LIFECYCLE_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkExperimentalModuleLifecycle.cmake
+)
+set_tests_properties(ExperimentalModuleLifecycleParserContract PROPERTIES
+    LABELS "prototype;lifecycle;unit"
+    TIMEOUT 10)
+if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND TARGET SparkEngine)
+    set(_spark_module_evidence_manifest "${CMAKE_SOURCE_DIR}/tools/module-evidence/manifest.json")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_spark_module_evidence_manifest}")
+    file(READ "${_spark_module_evidence_manifest}" _spark_module_evidence_json)
+    string(JSON _spark_manifest_module_count LENGTH "${_spark_module_evidence_json}" modules)
+    math(EXPR _spark_manifest_module_last "${_spark_manifest_module_count} - 1")
+    foreach(_spark_manifest_index RANGE ${_spark_manifest_module_last})
+        string(JSON _spark_experimental_tracker ERROR_VARIABLE _spark_not_experimental
+            GET "${_spark_module_evidence_json}" modules ${_spark_manifest_index} experimentalSeparation trackedUnder)
+        if(_spark_not_experimental OR NOT _spark_experimental_tracker STREQUAL "RDY-015")
+            continue()
+        endif()
+        string(JSON _spark_experimental_module GET "${_spark_module_evidence_json}"
+            modules ${_spark_manifest_index} cmakeTarget)
+        # SPARK_GAME_MODULES may select a subset (e.g. the stable-v1 FPS-only
+        # profile); the advisory job asserts the full set is registered.
+        if(NOT TARGET ${_spark_experimental_module})
+            continue()
+        endif()
+        add_test(
+            NAME ExperimentalModuleLifecycle_${_spark_experimental_module}
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+                "-DSPARK_GAME_MODULE=$<TARGET_FILE:${_spark_experimental_module}>"
+                "-DSPARK_MODULE_TARGET=${_spark_experimental_module}"
+                "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+                -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkExperimentalModuleLifecycle.cmake
+        )
+        set_tests_properties(ExperimentalModuleLifecycle_${_spark_experimental_module} PROPERTIES
+            LABELS "experimental-modules;prototype"
+            RUN_SERIAL TRUE
+            TIMEOUT 60)
+    endforeach()
+endif()
+
 # HEAD-220: NullRHIDevice live-resource accounting follows resource lifetime
 # (leak/soak signal for packaged headless runs).
 add_test(NAME NullRHIResourceLifetime COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)

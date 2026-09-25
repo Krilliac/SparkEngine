@@ -166,6 +166,7 @@ CXX_SOURCE_SUFFIXES = frozenset({".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".
 sys.path.insert(0, str(REPO_ROOT / "Tools"))
 
 from buildmatrix.workflow import WorkflowError, parse_workflow_yaml  # noqa: E402
+from validate_ctest_policy import parse_cmake  # noqa: E402
 
 
 def bash_executable() -> str:
@@ -1407,6 +1408,126 @@ def experimental_mingw_lane_errors(document: dict) -> list[str]:
     return errors
 
 
+EXPERIMENTAL_MODULE_JOB = "experimental-module-lifecycle"
+EXPERIMENTAL_MODULE_LABEL = "experimental-modules"
+EXPERIMENTAL_MODULE_EXCLUDE = "--label-exclude '^experimental-modules$'"
+EXPERIMENTAL_MODULE_TEST_PREFIX = "ExperimentalModuleLifecycle_"
+STABLE_PROFILE_LABELS = frozenset({"stable-v1", "module-profile"})
+# Prototype lifecycle tests carry only these labels. A generic lane label such
+# as "integration" or "linux" would pull a failing prototype into a label-selected
+# required command (for example CI-110's `ctest -L integration`).
+EXPERIMENTAL_MODULE_ALLOWED_LABELS = frozenset({EXPERIMENTAL_MODULE_LABEL, "prototype"})
+# Lanes whose "Run Tests" step runs the whole configured Linux CTest inventory.
+# Each must exclude the prototype label so a failing experimental module cannot
+# turn them red.
+FULL_CTEST_LINUX_LANES = (
+    (".github/workflows/build.yml", "build-linux-gcc"),
+    (".github/workflows/build.yml", "build-linux-clang"),
+    (".github/workflows/release.yml", "build-linux"),
+)
+
+
+def _job_run_commands(job: dict) -> list[str]:
+    return [step["run"] for step in job.get("steps") or [] if isinstance(step, dict) and isinstance(step.get("run"), str)]
+
+
+def experimental_module_lifecycle_errors(workflows: dict[str, dict], tests_cmake: str) -> list[str]:
+    """RDY-015: prototype lifecycle tests stay advisory, excluded, and never stable-labeled."""
+
+    errors: list[str] = []
+    build = workflows[".github/workflows/build.yml"]
+    jobs = build.get("jobs") if isinstance(build, dict) else None
+    if not isinstance(jobs, dict):
+        return ["build workflow has no jobs mapping"]
+
+    lane = jobs.get(EXPERIMENTAL_MODULE_JOB)
+    if not isinstance(lane, dict):
+        errors.append(f"{EXPERIMENTAL_MODULE_JOB} job is missing")
+    else:
+        if lane.get("continue-on-error") is not True:
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} does not declare job-level continue-on-error: true")
+        if "advisory" not in str(lane.get("name") or ""):
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} display name does not say advisory")
+        runs = _job_run_commands(lane)
+        if not any(
+            "ctest" in run and f"-L '^{EXPERIMENTAL_MODULE_LABEL}$'" in run and "--output-junit" in run
+            for run in runs
+        ):
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} does not run the {EXPERIMENTAL_MODULE_LABEL} label with JUnit")
+        if any(EXPERIMENTAL_MODULE_EXCLUDE in run or "-LE" in run for run in runs):
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} excludes the tests it exists to run")
+        uploads = [
+            step
+            for step in lane.get("steps") or []
+            if isinstance(step, dict) and str(step.get("uses") or "").startswith("actions/upload-artifact@")
+        ]
+        if not any(
+            step.get("if") == "always()" and "experimental-module-lifecycle-junit.xml" in str(step.get("with"))
+            for step in uploads
+        ):
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} does not publish its JUnit on failure (if: always())")
+
+    gate = jobs.get("required-ci-gate")
+    if not isinstance(gate, dict):
+        errors.append("required-ci-gate job is missing")
+    else:
+        if EXPERIMENTAL_MODULE_JOB in (gate.get("needs") or []):
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} is a required-ci-gate dependency")
+        for step in gate.get("steps") or []:
+            env = step.get("env") if isinstance(step, dict) else None
+            inventory = env.get("EXPECTED_REQUIRED_JOBS_JSON") if isinstance(env, dict) else None
+            if isinstance(inventory, str) and EXPERIMENTAL_MODULE_JOB in json.loads(inventory):
+                errors.append(f"{EXPERIMENTAL_MODULE_JOB} is in EXPECTED_REQUIRED_JOBS_JSON")
+    for key, job in jobs.items():
+        if key != EXPERIMENTAL_MODULE_JOB and isinstance(job, dict):
+            needs = job.get("needs") or []
+            if EXPERIMENTAL_MODULE_JOB in ([needs] if isinstance(needs, str) else needs):
+                errors.append(f"{key} depends on the advisory {EXPERIMENTAL_MODULE_JOB} job")
+
+    for workflow_path, job_key in FULL_CTEST_LINUX_LANES:
+        document = workflows.get(workflow_path) or {}
+        job = (document.get("jobs") or {}).get(job_key)
+        if not isinstance(job, dict):
+            errors.append(f"{workflow_path}: full-ctest Linux lane {job_key} is missing")
+            continue
+        full_runs = [
+            step["run"]
+            for step in job.get("steps") or []
+            if isinstance(step, dict)
+            and step.get("name") == "Run Tests"
+            and isinstance(step.get("run"), str)
+            and "ctest" in step["run"]
+        ]
+        if not full_runs:
+            errors.append(f"{workflow_path}: {job_key} no longer runs the full CTest inventory")
+        for run in full_runs:
+            if EXPERIMENTAL_MODULE_EXCLUDE not in run:
+                errors.append(f"{workflow_path}: {job_key} full ctest run does not exclude {EXPERIMENTAL_MODULE_LABEL}")
+
+    names, policies = parse_cmake(tests_cmake)
+    experimental_names = [name for name in names if name.startswith(EXPERIMENTAL_MODULE_TEST_PREFIX)]
+    if not experimental_names:
+        errors.append(f"Tests/CMakeLists.txt registers no {EXPERIMENTAL_MODULE_TEST_PREFIX}* test")
+    for name, policy in policies.items():
+        labels = {label for value in policy.labels for label in value.split(";") if label}
+        if EXPERIMENTAL_MODULE_LABEL in labels:
+            if not name.startswith(EXPERIMENTAL_MODULE_TEST_PREFIX):
+                errors.append(f"{name} carries the {EXPERIMENTAL_MODULE_LABEL} label reserved for RDY-015")
+            promoted = sorted(labels & STABLE_PROFILE_LABELS)
+            if promoted:
+                errors.append(f"{name} combines {EXPERIMENTAL_MODULE_LABEL} with stable label(s) {promoted}")
+        elif name.startswith(EXPERIMENTAL_MODULE_TEST_PREFIX):
+            errors.append(f"{name} does not carry the {EXPERIMENTAL_MODULE_LABEL} label")
+        if name.startswith(EXPERIMENTAL_MODULE_TEST_PREFIX):
+            generic = sorted(labels - EXPERIMENTAL_MODULE_ALLOWED_LABELS - STABLE_PROFILE_LABELS)
+            if generic:
+                errors.append(f"{name} carries generic lane label(s) {generic} outside the prototype label set")
+        if name.startswith(EXPERIMENTAL_MODULE_TEST_PREFIX) and labels & STABLE_PROFILE_LABELS:
+            if EXPERIMENTAL_MODULE_LABEL not in labels:
+                errors.append(f"{name} is an experimental module test with a stable profile label")
+    return errors
+
+
 def format_filter_suffixes(script: str) -> set[str]:
     """Return the file suffixes routed to clang-format by check-format-changed.sh's case arm."""
 
@@ -2485,6 +2606,107 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         for change, message in cases:
             with self.subTest(message=message):
                 errors = mutate(change)
+                self.assertTrue(any(message in error for error in errors), errors)
+
+    def _experimental_workflows(self) -> dict[str, dict]:
+        return {
+            ".github/workflows/build.yml": parse_workflow_yaml(self.build),
+            ".github/workflows/release.yml": parse_workflow_yaml(self.release),
+        }
+
+    def test_experimental_module_lifecycle_is_advisory_excluded_and_never_stable(self) -> None:
+        self.assertNotIn(EXPERIMENTAL_MODULE_JOB, REQUIRED_CI_JOBS)
+        self.assertEqual(experimental_module_lifecycle_errors(self._experimental_workflows(), self.tests_cmake), [])
+
+    def test_experimental_module_lifecycle_contract_rejects_each_regression(self) -> None:
+        baseline = self._experimental_workflows()
+        build_key = ".github/workflows/build.yml"
+        release_key = ".github/workflows/release.yml"
+
+        def lane_steps(jobs):
+            return jobs[EXPERIMENTAL_MODULE_JOB]["steps"]
+
+        def strip_exclusion(document, job_key):
+            for step in document["jobs"][job_key]["steps"]:
+                if isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(EXPERIMENTAL_MODULE_EXCLUDE, "")
+
+        def set_gate_inventory(jobs):
+            for step in jobs["required-ci-gate"]["steps"]:
+                if isinstance(step.get("env"), dict) and "EXPECTED_REQUIRED_JOBS_JSON" in step["env"]:
+                    step["env"]["EXPECTED_REQUIRED_JOBS_JSON"] = json.dumps(
+                        [*REQUIRED_CI_JOBS, EXPERIMENTAL_MODULE_JOB], separators=(",", ":")
+                    )
+
+        workflow_cases = (
+            (lambda docs: docs[build_key]["jobs"].pop(EXPERIMENTAL_MODULE_JOB), "job is missing"),
+            (
+                lambda docs: docs[build_key]["jobs"][EXPERIMENTAL_MODULE_JOB].pop("continue-on-error"),
+                "continue-on-error: true",
+            ),
+            (
+                lambda docs: docs[build_key]["jobs"][EXPERIMENTAL_MODULE_JOB].update({"name": "Experimental"}),
+                "does not say advisory",
+            ),
+            (
+                lambda docs: docs[build_key]["jobs"]["required-ci-gate"]["needs"].append(EXPERIMENTAL_MODULE_JOB),
+                "is a required-ci-gate dependency",
+            ),
+            (lambda docs: set_gate_inventory(docs[build_key]["jobs"]), "is in EXPECTED_REQUIRED_JOBS_JSON"),
+            (
+                lambda docs: docs[build_key]["jobs"]["module-evidence"]["needs"].append(EXPERIMENTAL_MODULE_JOB),
+                "depends on the advisory",
+            ),
+            (
+                lambda docs: [
+                    step.update({"run": step["run"].replace("--output-junit", "--output-log")})
+                    for step in lane_steps(docs[build_key]["jobs"])
+                    if isinstance(step.get("run"), str)
+                ],
+                "label with JUnit",
+            ),
+            (
+                lambda docs: [
+                    step.pop("if", None)
+                    for step in lane_steps(docs[build_key]["jobs"])
+                    if str(step.get("uses") or "").startswith("actions/upload-artifact@")
+                ],
+                "publish its JUnit on failure",
+            ),
+            (lambda docs: strip_exclusion(docs[build_key], "build-linux-gcc"), "build-linux-gcc full ctest"),
+            (lambda docs: strip_exclusion(docs[build_key], "build-linux-clang"), "build-linux-clang full ctest"),
+            (lambda docs: strip_exclusion(docs[release_key], "build-linux"), "build-linux full ctest"),
+        )
+        for change, message in workflow_cases:
+            with self.subTest(message=message):
+                documents = copy.deepcopy(baseline)
+                change(documents)
+                errors = experimental_module_lifecycle_errors(documents, self.tests_cmake)
+                self.assertTrue(any(message in error for error in errors), errors)
+
+        label_line = 'LABELS "experimental-modules;prototype"'
+        self.assertIn(label_line, self.tests_cmake)
+        cmake_cases = (
+            (self.tests_cmake.replace(label_line, 'LABELS "experimental-modules;stable-v1;linux"'), "stable label"),
+            (self.tests_cmake.replace(label_line, 'LABELS "experimental-modules;module-profile"'), "stable label"),
+            (self.tests_cmake.replace(label_line, 'LABELS "prototype;integration;linux"'), "does not carry"),
+            (
+                self.tests_cmake.replace(label_line, 'LABELS "experimental-modules;prototype;integration"'),
+                "generic lane label",
+            ),
+            (self.tests_cmake.replace(label_line, 'LABELS "experimental-modules;prototype;linux"'), "generic lane label"),
+            (
+                self.tests_cmake.replace(
+                    'LABELS "nullrhi-headless;stable-v1;unit"', 'LABELS "nullrhi-headless;experimental-modules;unit"', 1
+                ),
+                "reserved for RDY-015",
+            ),
+            (self.tests_cmake.replace(EXPERIMENTAL_MODULE_TEST_PREFIX, "PrototypeLifecycle_"), "registers no"),
+        )
+        for mutated, message in cmake_cases:
+            with self.subTest(message=message):
+                self.assertNotEqual(mutated, self.tests_cmake)
+                errors = experimental_module_lifecycle_errors(baseline, mutated)
                 self.assertTrue(any(message in error for error in errors), errors)
 
     def test_msan_is_verified_but_remains_optional(self) -> None:

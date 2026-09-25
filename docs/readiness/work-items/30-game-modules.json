@@ -202,12 +202,8 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "experimental-module-lifecycle"
-      ],
-      "plannedTestSelectors": [
-        "ExperimentalModuleLifecycle_*"
-      ]
+      "plannedCiJobs": [],
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-290",

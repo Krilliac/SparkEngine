@@ -190,6 +190,33 @@ Engine shutdown
  10. DestroyModule() and unload each loaded library
 ```
 
+### Experimental module lifecycle evidence (RDY-015)
+
+Each experimental module (every `tools/module-evidence/manifest.json` entry
+tracked under RDY-015) has an `ExperimentalModuleLifecycle_<Module>` CTest on
+Linux. The test runs `cmake/RunSparkExperimentalModuleLifecycle.cmake`, which
+launches the real `SparkEngine` host on the SDL path with NullRHI and
+`-require-game`. The run passes only if the host exits 0, prints one
+`SPARK_MODULE_READY count=1` line, and then prints one post-teardown
+`SPARK_MODULE_LIFECYCLE module=<Module> ...` record in which every phase
+(create, load, update, fixed, render, unload, destroy) is at least 1 and
+`faults=0`. The runner sets 120000 frames because fixed steps follow a 60 Hz
+wall clock, and a shorter NullRHI run can finish before one fixed step elapses.
+
+```bash
+ctest --test-dir build/linux-gcc-release -L experimental-modules --output-on-failure --no-tests=error
+ctest --test-dir build/linux-gcc-release -R ExperimentalModuleLifecycleParserContract
+```
+
+These tests are prototype evidence and never certify a module. They carry the
+`experimental-modules;prototype` labels and never `stable-v1`
+or `module-profile`. The required full-ctest Linux lanes exclude them with
+`--label-exclude '^experimental-modules$'`. Only the advisory
+`experimental-module-lifecycle` job in `build.yml` runs them. That job is
+`continue-on-error`, is not a `required-ci-gate` dependency, and uploads its JUnit
+even when a module fails. A failing module stays visible there without changing
+stable-v1 support. `test-workflow-failure-propagation.py` enforces this separation.
+
 ## Module Dependencies
 
 If your module depends on another module being loaded first:
