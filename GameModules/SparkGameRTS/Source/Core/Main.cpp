@@ -261,6 +261,7 @@ void SparkGameRTSModule::OnUpdate(float deltaTime)
     m_demoPresentation->UpdateInput();
     // Frame time only decides how many whole fixed ticks run; the simulated outcome never depends on it.
     m_simulation->Advance(deltaTime);
+    m_demoPresentation->SyncKitProps();
     if (m_engineSystems)
         m_engineSystems->Update(deltaTime);
 }

@@ -58,7 +58,7 @@ MAX_ASSET_BYTES = 256 * 1024 * 1024
 
 # Modules whose references gate the check. Adding a module here is a promise that
 # every asset its source names exists and is recorded in its module manifest.
-ENFORCED_MODULES = frozenset({"SparkGame", "SparkGameARPG", "SparkGameOpenWorld", "SparkGameRPG"})
+ENFORCED_MODULES = frozenset({"SparkGame", "SparkGameARPG", "SparkGameOpenWorld", "SparkGameRPG", "SparkGameRTS"})
 
 
 def _load_closure_module() -> Any:

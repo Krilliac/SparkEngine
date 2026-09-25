@@ -29,6 +29,19 @@ toward the point but stops to fight whatever enters range. The Swarm AI keeps it
 sends its idle army at the oldest surviving Human structure once four units are ready. A faction with no units and
 no structures is eliminated; the match reports **Victory** or **Defeat** from the local (non-AI) player's side.
 
+## 3D kit
+
+With a world available, `RTSDemoPresentation::SyncKitProps` stages the skirmish in 3D with the Blender RTS kit in
+`Assets/Models/RTS/Kit/`. It runs after every simulation advance, at 2.5 m per grid cell, and places:
+- command center and barracks meshes: Azure for the Human player and the `_crimson` variants for the opponent;
+- a rally flag on each barracks' unit spawn cell;
+- a crystal cluster on each resource node that still holds resources;
+- a marker ring under each selected unit.
+
+Props are removed when their building, node or selection goes away. The kit's source, budgets and limits are in
+`Art/Blender/SparkGameRTS/README.md`. The six music cues `RTSEngineSystems` registers live in
+`Assets/Audio/RTS/Music/`. `asset-references.json` records every asset path the source names.
+
 ## Movement and pathfinding
 
 `Move` and attack-move orders are routed by `Source/Navigation/RTSGridPathfinder` on the 96 × 96 map grid, where

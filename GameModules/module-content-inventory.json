@@ -96,9 +96,9 @@
           "path": "Assets/Models",
           "buildDeclarationPresent": true,
           "exists": true,
-          "fileCount": 483,
+          "fileCount": 531,
           "integrityManifest": true,
-          "integrityCoveredFileCount": 483
+          "integrityCoveredFileCount": 531
         },
         {
           "path": "Assets/Scenes",

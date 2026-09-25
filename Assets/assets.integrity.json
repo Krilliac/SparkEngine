@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 1073,
+  "fileCount": 1127,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -1184,6 +1184,48 @@
       "path": "Audio/RPG/Music/rpg_village.wav",
       "sha256": "96fb78264a83a0995ca78bbe301690a0343a0972724c241a36e4ff26cea88d90",
       "size": 445686,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/RTS/Music/battle_music.wav",
+      "sha256": "33f704264b4ed14a8771ef185b21b77f93d9c2bc1fbf84ad44674ad79d24dd48",
+      "size": 604844,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/RTS/Music/defeat.wav",
+      "sha256": "d235ffac459c7167c58ee88972afa87fcb421baf61df3a36852a5cbe94c32bd5",
+      "size": 152188,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/RTS/Music/faction_1_theme.wav",
+      "sha256": "eb55a1e0047a3b057c5e2505a48b44ffd6e613bcdda829ecf50d4e2353fcf332",
+      "size": 705644,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/RTS/Music/faction_2_theme.wav",
+      "sha256": "d696b9ce18ea5ead5ec1f596b9df7f8052b7523eacfaa9525d5f83979425cb6c",
+      "size": 705644,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/RTS/Music/faction_3_theme.wav",
+      "sha256": "103abb57c61715da4242ffc6ad2296418eef8ff3b802927eacc59b4b4a129c01",
+      "size": 705644,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/RTS/Music/victory.wav",
+      "sha256": "d302acf73dedbc09c84d1df21c9b3776e3db3b8653616bdf7a03c403fcd69606",
+      "size": 149984,
       "license": "CC0-1.0",
       "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
     },
@@ -4777,6 +4819,342 @@
       "size": 14165,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks.mtl",
+      "sha256": "f81e8ee09d7de6d530cd7cb03a434068235b76c3e9f6f4a5f4a9dcd4fdc1ffa5",
+      "size": 982,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored barracks [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks.obj",
+      "sha256": "334564540dfd18d21c7dba1f52f3adaa936bfde44409a1f42d78ea4a3d0d5ed4",
+      "size": 68910,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored barracks [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks_collision.mtl",
+      "sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks_collision.obj",
+      "sha256": "cfb0fe1ff966726772db56041ca4b3a108def7398960c9855fa7a8604a681209",
+      "size": 6343,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks_crimson.mtl",
+      "sha256": "6f155843b8f7989645568f4ccd4a2d16847aaede3aad74d6bc48eb667de51a96",
+      "size": 986,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored barracks_crimson [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks_crimson.obj",
+      "sha256": "aae6cc732e8ce6926f30e044262c062842387d54d452f79e5f9dcdabb3d6fc5c",
+      "size": 68930,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored barracks_crimson [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks_crimson_collision.mtl",
+      "sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks_crimson_collision.obj",
+      "sha256": "6447b48e6321945206761b7aab020fa0b8af492121747cfb1d11de92f3c36ff2",
+      "size": 6359,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks_crimson_lod1.mtl",
+      "sha256": "6f155843b8f7989645568f4ccd4a2d16847aaede3aad74d6bc48eb667de51a96",
+      "size": 986,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks_crimson_lod1.obj",
+      "sha256": "1033c343966eee419af95476e6d44d720988062ffe3ff91bafa56242352ab69d",
+      "size": 33574,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks_lod1.mtl",
+      "sha256": "f81e8ee09d7de6d530cd7cb03a434068235b76c3e9f6f4a5f4a9dcd4fdc1ffa5",
+      "size": 982,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/barracks_lod1.obj",
+      "sha256": "f4a0db3390ec452ae68cb7a52211e791acd839c65c410c6d0f9f798d9952b4ff",
+      "size": 33554,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center.mtl",
+      "sha256": "f81e8ee09d7de6d530cd7cb03a434068235b76c3e9f6f4a5f4a9dcd4fdc1ffa5",
+      "size": 982,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored command_center [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center.obj",
+      "sha256": "a351e4b8a0003eb6e9f0784743aca4bdfb991d3b5a66e11080d4e55dbe288c92",
+      "size": 97842,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored command_center [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center_collision.mtl",
+      "sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center_collision.obj",
+      "sha256": "0a21811a78f0ee48838d59c39d4991c2c05618dcecea49cb012c33e9a03abe1a",
+      "size": 7952,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center_crimson.mtl",
+      "sha256": "6f155843b8f7989645568f4ccd4a2d16847aaede3aad74d6bc48eb667de51a96",
+      "size": 986,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored command_center_crimson [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center_crimson.obj",
+      "sha256": "728da7ed6840c996f5e1ec085eb5490080280c3a3df107ed901c3ef3f8219896",
+      "size": 97862,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored command_center_crimson [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center_crimson_collision.mtl",
+      "sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center_crimson_collision.obj",
+      "sha256": "bcfbbdaa53fe9b9e4753904122eabec2394b1e1ebeac99abd621f53a1a2448cd",
+      "size": 7968,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center_crimson_lod1.mtl",
+      "sha256": "6f155843b8f7989645568f4ccd4a2d16847aaede3aad74d6bc48eb667de51a96",
+      "size": 986,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center_crimson_lod1.obj",
+      "sha256": "ae718cd03ab87b89792ca6de2c95944a441dd2eb7448c290544f0fac6bb0b479",
+      "size": 44746,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center_lod1.mtl",
+      "sha256": "f81e8ee09d7de6d530cd7cb03a434068235b76c3e9f6f4a5f4a9dcd4fdc1ffa5",
+      "size": 982,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/command_center_lod1.obj",
+      "sha256": "acaa0707bdd54099b7eccd74792cf811b6119268bdb4a769b7bb7510e7b8212e",
+      "size": 44726,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag.mtl",
+      "sha256": "764ad7ecd0cf574f43d0a4a57253dfb50722e7b9fa54708e53f6943cb6d96218",
+      "size": 791,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored rally_flag [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag.obj",
+      "sha256": "e9a25ca2756a5bfb6a90feb903e219e40540d7ad6a2155fcf68c2a285f803843",
+      "size": 15667,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored rally_flag [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag_collision.mtl",
+      "sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag_collision.obj",
+      "sha256": "19b5603c8ae0d3ea8ac0fb4a1f3bc463dca8f1576dbeb058347dfc5f747d02b7",
+      "size": 1232,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag_crimson.mtl",
+      "sha256": "db67ba9ce00670f9affbc4ae304d1de23d85a53460c22fd3c1d9a46b3b5a6940",
+      "size": 795,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored rally_flag_crimson [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag_crimson.obj",
+      "sha256": "6efea6371c9a4526e32bb2f1ad4f9b868882875f8d2d82594d0694092b618553",
+      "size": 15687,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored rally_flag_crimson [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag_crimson_collision.mtl",
+      "sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag_crimson_collision.obj",
+      "sha256": "74871b7bed03e05e54b0a37b3c61288f67c65a505325a0b3924231e665010711",
+      "size": 1248,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag_crimson_lod1.mtl",
+      "sha256": "db67ba9ce00670f9affbc4ae304d1de23d85a53460c22fd3c1d9a46b3b5a6940",
+      "size": 795,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag_crimson_lod1.obj",
+      "sha256": "6ff1cea403459d91063b7e465b3b370d5c780f4b24dc3eeb3b3375573e332e00",
+      "size": 7216,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag_lod1.mtl",
+      "sha256": "764ad7ecd0cf574f43d0a4a57253dfb50722e7b9fa54708e53f6943cb6d96218",
+      "size": 791,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/rally_flag_lod1.obj",
+      "sha256": "57d8679f49e3ff5d922c4fefccda33818292452459212ed695fa0fbcda25c510",
+      "size": 7196,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/resource_node.mtl",
+      "sha256": "e8a72f6685657da14a6e0285c6bda73823ddd9a4f53f8e8775497d959497c16e",
+      "size": 609,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored resource_node [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/resource_node.obj",
+      "sha256": "9f1a3e047d4029bb5d767da818a3a44afa8d5a52a6c29bb8ea1e5437682c70af",
+      "size": 43082,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored resource_node [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/resource_node_collision.mtl",
+      "sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/resource_node_collision.obj",
+      "sha256": "d2f1c4e59bb5e857b6b8cd6b67745fbb91b90cfdab5aab0fb012cf0f9235a1dd",
+      "size": 7315,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/resource_node_lod1.mtl",
+      "sha256": "e8a72f6685657da14a6e0285c6bda73823ddd9a4f53f8e8775497d959497c16e",
+      "size": 609,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/resource_node_lod1.obj",
+      "sha256": "2847b0b5d482752c973cf589668dc827d8339aacefa0f3422af497aad371ee85",
+      "size": 19485,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/unit_marker.mtl",
+      "sha256": "fd48f3a5a451301e4db0c1ecd675383b0530c9ca26256a4fde60cf66bfc81477",
+      "size": 609,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored unit_marker [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/unit_marker.obj",
+      "sha256": "d7f0906691cdd8cadd9a777266420aa07b6adf3b3adad674dd3b73f71aa5e7e6",
+      "size": 18671,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json: Blender-authored unit_marker [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/unit_marker_collision.mtl",
+      "sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/unit_marker_collision.obj",
+      "sha256": "b1235d03979360ebfa55b52728866e8b67abc8ee14031a7c19fdd129dbf77663",
+      "size": 1234,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/unit_marker_lod1.mtl",
+      "sha256": "fd48f3a5a451301e4db0c1ecd675383b0530c9ca26256a4fde60cf66bfc81477",
+      "size": 609,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
+    },
+    {
+      "path": "Models/RTS/Kit/unit_marker_lod1.obj",
+      "sha256": "6d8a2f570a294fd22f225508bc7aa3352b50613e4f8f99f20af40e2acf1e4269",
+      "size": 8826,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json [rts-blender-kit]"
     },
     {
       "path": "Models/Ramp.mtl",

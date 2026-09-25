@@ -225,39 +225,39 @@ namespace RTS
         // Register faction themes
         Spark::Audio::MusicTrack faction1Theme;
         faction1Theme.name = "faction_1_theme";
-        faction1Theme.filepath = "Audio/Music/RTS/faction_1_theme.ogg";
+        faction1Theme.filepath = "Assets/Audio/RTS/Music/faction_1_theme.wav";
         faction1Theme.loop = true;
         music->RegisterTrack(faction1Theme);
 
         Spark::Audio::MusicTrack faction2Theme;
         faction2Theme.name = "faction_2_theme";
-        faction2Theme.filepath = "Audio/Music/RTS/faction_2_theme.ogg";
+        faction2Theme.filepath = "Assets/Audio/RTS/Music/faction_2_theme.wav";
         faction2Theme.loop = true;
         music->RegisterTrack(faction2Theme);
 
         Spark::Audio::MusicTrack faction3Theme;
         faction3Theme.name = "faction_3_theme";
-        faction3Theme.filepath = "Audio/Music/RTS/faction_3_theme.ogg";
+        faction3Theme.filepath = "Assets/Audio/RTS/Music/faction_3_theme.wav";
         faction3Theme.loop = true;
         music->RegisterTrack(faction3Theme);
 
         // Combat and outcome tracks
         Spark::Audio::MusicTrack battleTrack;
         battleTrack.name = "battle_music";
-        battleTrack.filepath = "Audio/Music/RTS/battle_music.ogg";
+        battleTrack.filepath = "Assets/Audio/RTS/Music/battle_music.wav";
         battleTrack.loop = true;
         battleTrack.bpm = 140.0f;
         music->RegisterTrack(battleTrack);
 
         Spark::Audio::MusicTrack victoryTrack;
         victoryTrack.name = "victory";
-        victoryTrack.filepath = "Audio/Music/RTS/victory.ogg";
+        victoryTrack.filepath = "Assets/Audio/RTS/Music/victory.wav";
         victoryTrack.loop = false;
         music->RegisterTrack(victoryTrack);
 
         Spark::Audio::MusicTrack defeatTrack;
         defeatTrack.name = "defeat";
-        defeatTrack.filepath = "Audio/Music/RTS/defeat.ogg";
+        defeatTrack.filepath = "Assets/Audio/RTS/Music/defeat.wav";
         defeatTrack.loop = false;
         music->RegisterTrack(defeatTrack);
 

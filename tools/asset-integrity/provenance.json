@@ -345,6 +345,27 @@
       ]
     },
     {
+      "id": "rts-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRTS/rts_kit.blend via tools/blender/author_rts_kit.py; hash-bound by Art/Blender/SparkGameRTS/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameRTS/provenance.json",
+        "Art/Blender/SparkGameRTS/rts_kit.blend",
+        "tools/blender/author_rts_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameRTS/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/RTS/Kit/"
+      ]
+    },
+    {
       "id": "module-music-composer",
       "license": "CC0-1.0",
       "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound",
@@ -357,7 +378,13 @@
         "Audio/RPG/Music/rpg_dungeon.wav": "4394267ac3ef463ab3d0236f40866dfebd4b5d3aad06466d812ace0539863f04",
         "Audio/RPG/Music/rpg_forest.wav": "b904a8b4bd8499ed928835e37b99d27df560815d6d194413ac39c8116f0e64d9",
         "Audio/RPG/Music/rpg_victory.wav": "4124febe99eb7cad11ab606a46ab3bf88ec6f08078c88f05ebb227366aeae17a",
-        "Audio/RPG/Music/rpg_village.wav": "96fb78264a83a0995ca78bbe301690a0343a0972724c241a36e4ff26cea88d90"
+        "Audio/RPG/Music/rpg_village.wav": "96fb78264a83a0995ca78bbe301690a0343a0972724c241a36e4ff26cea88d90",
+        "Audio/RTS/Music/battle_music.wav": "33f704264b4ed14a8771ef185b21b77f93d9c2bc1fbf84ad44674ad79d24dd48",
+        "Audio/RTS/Music/defeat.wav": "d235ffac459c7167c58ee88972afa87fcb421baf61df3a36852a5cbe94c32bd5",
+        "Audio/RTS/Music/faction_1_theme.wav": "eb55a1e0047a3b057c5e2505a48b44ffd6e613bcdda829ecf50d4e2353fcf332",
+        "Audio/RTS/Music/faction_2_theme.wav": "d696b9ce18ea5ead5ec1f596b9df7f8052b7523eacfaa9525d5f83979425cb6c",
+        "Audio/RTS/Music/faction_3_theme.wav": "103abb57c61715da4242ffc6ad2296418eef8ff3b802927eacc59b4b4a129c01",
+        "Audio/RTS/Music/victory.wav": "d302acf73dedbc09c84d1df21c9b3776e3db3b8653616bdf7a03c403fcd69606"
       }
     },
     {

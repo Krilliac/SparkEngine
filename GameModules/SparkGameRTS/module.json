@@ -4,8 +4,17 @@
   "cmakeTarget": "SparkGameRTS",
   "sourceDirectory": "GameModules/SparkGameRTS/Source",
   "assets": {
-    "state": "none",
-    "reason": "No asset root exists for this module: the Audio/Music/RTS/*.ogg tracks its sources register are not in the repository."
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/RTS",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Audio/RTS",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
   },
   "tests": {
     "files": [
