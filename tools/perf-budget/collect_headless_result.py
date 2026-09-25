@@ -171,6 +171,11 @@ def check_against_budget(result: dict[str, Any], budget_dir: Path, expected_sha:
         raise CollectionError("result failed validation: " + "; ".join(errors))
 
 
+def engine_command(engine: Path, module: Path, frames: int) -> list[str]:
+    """The headless NullRHI launch line shared with run_nullrhi_soak.py."""
+    return [str(engine), "-headless", "-game", str(module), "-require-game", "-test-frames", str(frames)]
+
+
 def run_engine(engine: Path, module: Path, frames: int, timeout_s: float) -> tuple[str, int]:
     """Run the headless host to completion; return (stdout text, wait4 ru_maxrss in KiB).
 
@@ -179,7 +184,7 @@ def run_engine(engine: Path, module: Path, frames: int, timeout_s: float) -> tup
     """
     if not sys.platform.startswith("linux"):
         raise CollectionError("peak-RSS collection is implemented for the Linux linux-nullrhi-ci row only")
-    command = [str(engine), "-headless", "-game", str(module), "-require-game", "-test-frames", str(frames)]
+    command = engine_command(engine, module, frames)
     with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
         process = subprocess.Popen(command, cwd=engine.parent, stdin=subprocess.DEVNULL, stdout=stdout_file,
                                    stderr=stderr_file)

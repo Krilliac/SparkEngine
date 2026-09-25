@@ -988,8 +988,7 @@
         "soak-scheduled"
       ],
       "plannedTestSelectors": [
-        "GoldenImage_*",
-        "Soak_*"
+        "GoldenImage_*"
       ]
     }
   ]

@@ -1795,6 +1795,16 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(HeadlessTickCollector_Parser PROPERTIES
         LABELS "benchmark;perf-budget;unit;python"
         TIMEOUT 60)
+    # PERF-100 soak harness: leak fit, result schema, and every failure mode
+    # (leak, crash, deadlock, spin, never-ready) against a stand-in host. Not
+    # labelled nullrhi-soak: only a real-host soak may satisfy that label.
+    add_test(
+        NAME NullRHISoak_Harness
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py LeakFitTests ResultTests HarnessTests)
+    set_tests_properties(NullRHISoak_Harness PROPERTIES
+        LABELS "perf-budget;unit;python"
+        TIMEOUT 120)
     if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
        TARGET SparkEngine AND TARGET SparkGame)
         add_dependencies(SparkTests SparkEngine SparkGame)
@@ -1807,6 +1817,17 @@ if(Python3_Interpreter_FOUND)
             LABELS "benchmark;nullrhi-headless;integration;process"
             RUN_SERIAL TRUE
             TIMEOUT 180)
+        # ~120 s real-host soak; scheduled long soaks run
+        # tools/perf-budget/run_nullrhi_soak.py --duration directly.
+        add_test(
+            NAME Soak_NullRHIHeadlessSmoke
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py SoakNullRHIHeadlessSmoke)
+        set_tests_properties(Soak_NullRHIHeadlessSmoke PROPERTIES
+            ENVIRONMENT "SPARK_HEADLESS_ENGINE=$<TARGET_FILE:SparkEngine>;SPARK_HEADLESS_MODULE=$<TARGET_FILE:SparkGame>"
+            LABELS "nullrhi-soak;nullrhi-headless;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 480)
     endif()
 endif()
 
