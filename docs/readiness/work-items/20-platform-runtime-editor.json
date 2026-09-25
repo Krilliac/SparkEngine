@@ -5,7 +5,7 @@
       "id": "PLT-200",
       "title": "Certify the primary Windows support row",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "platform",
@@ -45,6 +45,31 @@
         "Every declared row has exact-SHA build, install, launch, renderer, content, save, crash, upgrade, rollback, and uninstall evidence",
         "Unsupported combinations stay experimental",
         "Runtime dependency closure is recorded"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:6157460e42c8",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No physical Windows evidence exists for either declared row. This needs clean-host exact-SHA runs."
+        },
+        {
+          "criterionDigest": "sha256:6c6b9e8e94ea",
+          "state": "implemented",
+          "evidence": [
+            "Tools/platform-cert/validate_certification.py",
+            "Tests/Tools/test_platform_certification.py",
+            "docs/certification/support-matrix.json",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "CTest PlatformCertification and PlatformCertMatrixOnly reject extra certifiable rows, tier changes and unknown profiles on the committed two-row matrix."
+        },
+        {
+          "criterionDigest": "sha256:4f1864e49dd0",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No runtime dependency closure is recorded. It depends on Windows certification evidence that has not been collected."
+        }
       ],
       "commands": [
         "cmake --preset windows-shipping -DBUILD_TESTS=ON",
@@ -136,7 +161,7 @@
       "id": "PLT-210",
       "title": "Certify or explicitly bound Linux support",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "platform",
@@ -173,6 +198,33 @@
         "Every supported Linux row passes the complete certification suite",
         "Experimental rows are never summarized as supported",
         "Package has no repository/toolchain dependency at runtime"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:8577e4293478",
+          "state": "unmet",
+          "evidence": [
+            "docs/readiness/OWNER-DECISIONS.md",
+            "wiki/platform/System-Requirements.md"
+          ],
+          "note": "OD-10 limits scope to Ubuntu 24.04 x86-64. There is no Linux certification suite, no LinuxCertification tests and no clean-host evidence."
+        },
+        {
+          "criterionDigest": "sha256:0c8c1f94727a",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py",
+            "docs/site/readiness.json"
+          ],
+          "note": "Partial: the validator rejects Linux in stable-v1 claims. Generic 'Linux is supported' wording is not caught, and there is no Linux row matrix."
+        },
+        {
+          "criterionDigest": "sha256:2889e6c2676e",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no Linux package and no clean-host or RPATH runtime-dependency check."
+        }
       ],
       "commands": [
         "cmake --preset linux-shipping -DBUILD_TESTS=ON",
@@ -260,6 +312,28 @@
         "A notarized package passes on clean supported Macs",
         "Metal/render/content/runtime evidence is blocking",
         "Minimum-version documentation matches binaries and CI"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1df84ec3f212",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no notarized macOS package. Clean Mac hardware runs are needed. Deferred by OD-11."
+        },
+        {
+          "criterionDigest": "sha256:2257d1838d14",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestMetalRayTracing.cpp"
+          ],
+          "note": "build-macos is continue-on-error. The Metal tests are lifecycle smoke tests only, with no blocking render or content evidence."
+        },
+        {
+          "criterionDigest": "sha256:415123b513a2",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No checker ties the documented minimum macOS version to the binary deployment target or CI."
+        }
       ],
       "commands": [
         "cmake --preset macos-shipping",
@@ -350,6 +424,24 @@
         "If supported, packaged sample installs, resumes, renders, saves, handles input/audio, and meets budgets on declared devices",
         "If deferred, all public wording remains planned/unsupported"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:0f617b06e0ee",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Mobile is unsupported. There is no packaged sample, device matrix or mobile lifecycle tests."
+        },
+        {
+          "criterionDigest": "sha256:bf1959f18749",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py",
+            "docs/site/readiness.json"
+          ],
+          "note": "Partial: Android/iOS profile claims are rejected. Mobile-supported wording outside a profile, or a flip to 'supported', is not blocked."
+        }
+      ],
       "commands": [
         "python3 tools/site-data/validate.py --capability platform.mobile"
       ],
@@ -429,6 +521,23 @@
       "acceptanceCriteria": [
         "If supported, a packaged sample initializes, tracks, interacts, renders both eyes, recovers focus, and meets budgets",
         "Otherwise wording remains framework/planned"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:f23d762818e0",
+          "state": "unmet",
+          "evidence": [],
+          "note": "VR is a stub. There is no OpenXR runtime, no packaged headset sample and no OpenXR tests."
+        },
+        {
+          "criterionDigest": "sha256:e6a6acf179e6",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "docs/site/readiness.json"
+          ],
+          "note": "The data marks VR as stub/unsupported, but no validator rule enforces framework/planned wording in public text."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py --capability platform.vr"
@@ -511,6 +620,30 @@
         "No public source or CI implies certification",
         "Authorized work has separate confidential controls"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:df3e3df35bc9",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py",
+            "docs/site/readiness.json"
+          ],
+          "note": "Only the generic check exists: a 'ready' capability needs closed blockers and passing gates. Setting support to 'supported' is not blocked, and authority is not modelled."
+        },
+        {
+          "criterionDigest": "sha256:d496fb3ab4b9",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No checker scans source or CI for console SDK or certification implications."
+        },
+        {
+          "criterionDigest": "sha256:0f1ac5c1b8e3",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There are no confidential controls. This needs platform agreements and owner action."
+        }
+      ],
       "commands": [
         "python3 tools/site-data/validate.py --capability platform.console"
       ],
@@ -545,7 +678,7 @@
       "id": "RHI-210",
       "title": "Certify D3D11 as the primary renderer",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "rendering",
@@ -584,6 +717,34 @@
         "Device loss/resize/resource stress recover",
         "GPU validation is clean",
         "Packaged scene passes on every supported Windows row"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:f339929ecf90",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestRHI210D3D11GoldenReal.cpp"
+          ],
+          "note": "Only a uniform frame and a triangle golden are checked. No primary-pass or representative-content goldens with reviewed thresholds."
+        },
+        {
+          "criterionDigest": "sha256:745ccd700288",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There are no D3D11 device-loss, resize or stress-recovery tests."
+        },
+        {
+          "criterionDigest": "sha256:ab52617664c9",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no GPU debug-layer validation gate. Windows GPU runs are needed."
+        },
+        {
+          "criterionDigest": "sha256:0a3989a189ef",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a packaged scene on every supported Windows row, on hardware, with exact-SHA evidence."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -L d3d11-golden --output-on-failure --no-tests=error",
@@ -677,6 +838,35 @@
         "Packaged Metal scene passes on certified Macs",
         "Unsupported features fail explicitly"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:df5ed71ca628",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The Metal backend is incomplete. There is no declared pass set and no visual parity test. Mac hardware is needed."
+        },
+        {
+          "criterionDigest": "sha256:0f932a3b1358",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There are no Metal resource-lifetime or synchronization tests."
+        },
+        {
+          "criterionDigest": "sha256:dbbf70e01454",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a packaged scene on certified Mac hardware."
+        },
+        {
+          "criterionDigest": "sha256:50f8aa92ac83",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestMetalRayTracing.cpp",
+            "SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.mm"
+          ],
+          "note": "Only the ray-tracing null-device failure paths are tested, and only on macOS. There is no general explicit-unsupported-feature coverage."
+        }
+      ],
       "commands": [
         "ctest --test-dir build/macos-metal -L metal --output-on-failure --no-tests=error"
       ],
@@ -762,6 +952,35 @@
         "Advanced feature fallbacks are deterministic",
         "Packaged scene passes supported GPUs/drivers"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:b3240365716d",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no D3D12 parity matrix and there are no D3D12 parity tests."
+        },
+        {
+          "criterionDigest": "sha256:210dbdea9230",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no debug-layer validation gate. Windows GPU runs are needed."
+        },
+        {
+          "criterionDigest": "sha256:b0eacef609fe",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestDXRSupport.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp"
+          ],
+          "note": "Partial: only DXR-unavailable headless/null cases are tested. There are no deterministic D3D12 device fallback tests."
+        },
+        {
+          "criterionDigest": "sha256:f3df062bd6ee",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a packaged scene on supported GPUs and drivers."
+        }
+      ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -L d3d12 --output-on-failure --no-tests=error"
       ],
@@ -810,7 +1029,7 @@
       "id": "RHI-230",
       "title": "Close Vulkan GPU-backed parity and shader-toolchain gates",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "rendering",
@@ -848,6 +1067,47 @@
         "Validation is clean",
         "Shader toolchain failures are fatal",
         "Packaged supported rows pass"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:00e2dc7a026e",
+          "state": "unmet",
+          "evidence": [
+            "Tests/GoldenImages/manifest.json",
+            "Tests/TestRHI230VulkanValidationReal.cpp"
+          ],
+          "note": "The golden manifest has no entries, so there is no reviewed lavapipe or hardware baseline. Readback tests use hand-written SPIR-V draws, not goldens with thresholds."
+        },
+        {
+          "criterionDigest": "sha256:ea058ba24c18",
+          "state": "unmet",
+          "evidence": [
+            "SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp"
+          ],
+          "note": "No SPIR-V is built for shipped shaders, and production shadow/deferred/post passes do not run on Vulkan. There is no pass-matrix parity test."
+        },
+        {
+          "criterionDigest": "sha256:e66683102ec6",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestRHI230VulkanValidationReal.cpp"
+          ],
+          "note": "The validation lane fails closed but covers only unit-level draws, not production passes. It needs layers plus an ICD, and there is no vulkan-lavapipe job."
+        },
+        {
+          "criterionDigest": "sha256:c30a0243b349",
+          "state": "unmet",
+          "evidence": [
+            "SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp"
+          ],
+          "note": "The runtime rejects non-SPIR-V, but glslang/DXC are optional at build time. No check makes a missing toolchain fatal for supported builds."
+        },
+        {
+          "criterionDigest": "sha256:92b1fcb816d0",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no Vulkan package lane and no lavapipe/hardware CI rows. This needs hosted or hardware execution."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -L vulkan --output-on-failure --no-tests=error"
@@ -898,7 +1158,7 @@
       "id": "RHI-240",
       "title": "Certify OpenGL translation, visual, driver, and software-render paths",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "rendering",
@@ -934,6 +1194,42 @@
         "Unsupported translation fails explicitly",
         "Hardware and software rows are separately labeled",
         "Packaged scenes pass"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:55c47a1096c8",
+          "state": "unmet",
+          "evidence": [
+            "Tests/GoldenImages/manifest.json",
+            "Tests/TestRHI240OpenGLReal.cpp"
+          ],
+          "note": "The golden manifest has no OpenGL entries or thresholds. Unit programs read back on llvmpipe, but production passes do not render real scenes."
+        },
+        {
+          "criterionDigest": "sha256:995eb3158c72",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRHI240OpenGLReal.cpp",
+            "SparkEngine/Source/Graphics/RHI/RHIFactory.cpp",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "ShaderTranslation_RHI240_HLSLToGLSLFailsExplicitly calls production CompileShader and requires failure naming SPIRV-Cross. Registered as CTest SparkOpenGLTests; needs no GL context. Keyword-substitution helper still exported."
+        },
+        {
+          "criterionDigest": "sha256:78dd0099af39",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestRHI240OpenGLReal.cpp",
+            "SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp"
+          ],
+          "note": "The lane is only CTest-labelled llvmpipe. Tests never assert the software renderer (GL_RENDERER), and there is no opengl-hardware row."
+        },
+        {
+          "criterionDigest": "sha256:032eb8523eaf",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no packaged OpenGL scene lane or packaged-scene test."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -L opengl --output-on-failure --no-tests=error"
@@ -1020,6 +1316,46 @@
         "Malformed or unsupported content fails actionably",
         "The Windows package retains all dependencies",
         "Experimental backend parity remains owned by RHI-220, RHI-225, RHI-230, and RHI-240"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:697d4717fa4c",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestGLTFStaticMeshLoader.cpp",
+            "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp"
+          ],
+          "note": "There is no glTF skin/animation importer; the static loader rejects skins. There are no skinning/animation tests and no D3D11 skinned render proof."
+        },
+        {
+          "criterionDigest": "sha256:60f825cc1ca8",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There are no canonical-scene tests or content. The D3D11 material check was a local Windows run, with no hosted packaged proof."
+        },
+        {
+          "criterionDigest": "sha256:a0ea46f75153",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestGLTFStaticMeshLoader.cpp",
+            "Tests/TestENG220ObjImportReal.cpp"
+          ],
+          "note": "Static glTF/OBJ rejections are tested. Skinned-content, material/texture and Windows package import diagnostics are missing."
+        },
+        {
+          "criterionDigest": "sha256:99267550fdd7",
+          "state": "unmet",
+          "evidence": [],
+          "note": "This needs a Windows package run. There is no dependency reference-closure check."
+        },
+        {
+          "criterionDigest": "sha256:0bdf64af2831",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "Downgraded: the contract test only asserts ENG-220 text omits backend names. Nothing asserts RHI-220/225/230/240 exist or own parity, so losing ownership would pass."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -L gltf-d3d11 --output-on-failure --no-tests=error"
@@ -1114,6 +1450,38 @@
         "FPS lifecycle, save/reload, shutdown, and recovery are bounded and sanitizer-clean",
         "Production network administration, fleet telemetry, backups, and incident drills remain owned by G12 and OPS-110"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:cd2b72fd5268",
+          "state": "unmet",
+          "evidence": [
+            "cmake/ValidateStagedPackageExecutables.cmake"
+          ],
+          "note": "Needs a clean Windows 11 host without GPU or display, plus a hosted headless package job. The staged run was local, with a display."
+        },
+        {
+          "criterionDigest": "sha256:dda52a09803d",
+          "state": "unmet",
+          "evidence": [
+            "cmake/RunSparkHeadlessNullRHILifecycle.cmake"
+          ],
+          "note": "The parser rejects D3D11 device records, but repository-content isolation is not asserted. There is no clean-host run."
+        },
+        {
+          "criterionDigest": "sha256:113da975258b",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There are no FPS headless package or shutdown selectors, and no NullRHI save/reload, forced-shutdown, soak or sanitizer runs."
+        },
+        {
+          "criterionDigest": "sha256:e6a39adf789f",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "The contract checks OPS-110 wording only. Nothing asserts that HEAD-220 excludes these concerns or that G12 owns them."
+        }
+      ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -L nullrhi-headless --output-on-failure --no-tests=error"
       ],
@@ -1168,7 +1536,7 @@
       "id": "LIFE-200",
       "title": "Close runtime ownership, shutdown, reload, and failure semantics",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "runtime",
@@ -1207,6 +1575,39 @@
         "Every injected phase failure unwinds without stale singleton/thread/resource",
         "Hot reload rejects incompatible state safely",
         "Shutdown completes within budget"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:a9bbfa256f65",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no repeated boot/shutdown loop test, no module reload tests, and no sanitizer/deadlock run of lifecycle loops."
+        },
+        {
+          "criterionDigest": "sha256:0e019adbc00a",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestLifecycleCompositionRootFailure.cpp",
+            "SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h"
+          ],
+          "note": "Root rollback is tested with limited injection. Per-phase injection and thread/resource leak checks are missing."
+        },
+        {
+          "criterionDigest": "sha256:4fdc9530334c",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestModuleABI.cpp"
+          ],
+          "note": "ABI-incompatible replacements are rejected. There is no state-handoff/versioning contract, so incompatible-state rejection is untested."
+        },
+        {
+          "criterionDigest": "sha256:a372c7c44e09",
+          "state": "unmet",
+          "evidence": [
+            "perf-budgets/v1/budget.json"
+          ],
+          "note": "No shutdown budget metric exists and nothing enforces shutdown time."
+        }
       ],
       "commands": [
         "ctest --test-dir build/ci-linux-asan -L lifecycle --output-on-failure --no-tests=error",
@@ -1262,7 +1663,7 @@
       "id": "EDT-210",
       "title": "Finish the editor authoring and undo-safe package round trip",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "editor",
@@ -1300,6 +1701,39 @@
         "Assets can be browsed, dragged, assigned, saved, cooked, and run",
         "A clean automated author-to-installed-runtime scenario passes",
         "Failed operations remain atomic and recoverable"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:75e8e61a5f5f",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestEditorRecovery.cpp"
+          ],
+          "note": "No audit or check proves every World mutation goes through the command stack."
+        },
+        {
+          "criterionDigest": "sha256:69382bab2d53",
+          "state": "unmet",
+          "evidence": [
+            "SparkEditor/Source/Panels/InspectorPanel.cpp"
+          ],
+          "note": "There is no asset drop target, no asset-drag tests, and the cook-and-run path is untested."
+        },
+        {
+          "criterionDigest": "sha256:4c9b9b22f00d",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no automated author-to-installed-runtime scenario or cook/package test. The editor smoke is WIN32-only."
+        },
+        {
+          "criterionDigest": "sha256:66e00b9727df",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestEditorRecovery.cpp",
+            "SparkEditor/Source/Core/EditorRecovery.cpp"
+          ],
+          "note": "The recovery store is tested. Crash-triggered restore and atomicity across failing editor operations are not qualified."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -L editor-integration --output-on-failure --no-tests=error"
@@ -1358,7 +1792,7 @@
       "id": "ASSET-220",
       "title": "Consolidate cooking, packaging, CLI, and installed consumer behavior",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "packaging",
@@ -1400,6 +1834,37 @@
         "Installed runtime loads supported modules/assets without source paths",
         "CLI and packager claims match behavior",
         "Install/uninstall is repeatable and leaves only declared user data"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:167749619b69",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGameFPS/CMakeLists.txt",
+            "Tests/PackageSmoke/CMakeLists.txt"
+          ],
+          "note": "Only the header smoke builds from the installed SDK. The FPS module still uses private headers and links SparkEngineLib."
+        },
+        {
+          "criterionDigest": "sha256:0ec10cc244b9",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Installed runtime tests are WIN32-gated. The Linux consumer lane does not load runtime modules or assets."
+        },
+        {
+          "criterionDigest": "sha256:037f80907fc4",
+          "state": "unmet",
+          "evidence": [
+            "SparkEngine/Source/Core/SparkEngineLinux.cpp"
+          ],
+          "note": "The -scene flag is advertised but loads no scene. No test checks that CLI claims match behaviour."
+        },
+        {
+          "criterionDigest": "sha256:94cbedf9f93f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no uninstall target and no install/uninstall repeatability test."
+        }
       ],
       "commands": [
         "cmake --install build/linux-shipping --prefix /tmp/spark-install",
@@ -1457,7 +1922,7 @@
       "id": "SAVE-230",
       "title": "Version saves, scenes, assets, editor data, and migrations",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "compatibility",
@@ -1498,6 +1963,40 @@
         "Rollback restores previous usable data",
         "Interrupted/corrupt writes do not destroy the last good state",
         "Breaking changes emit actionable diagnostics"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1e666db357f8",
+          "state": "unmet",
+          "evidence": [
+            "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp"
+          ],
+          "note": "The reflected-World dialect accepts only the current version. Prefab and editor-state N-1 fixtures and migrations are missing."
+        },
+        {
+          "criterionDigest": "sha256:8d9be8a2494e",
+          "state": "unmet",
+          "evidence": [
+            "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp"
+          ],
+          "note": "Save .bak fallback exists. Rollback is untested for prefabs, editor state and asset migrations."
+        },
+        {
+          "criterionDigest": "sha256:33b4700b3cfc",
+          "state": "unmet",
+          "evidence": [
+            "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp"
+          ],
+          "note": "CRC corruption tests exist, but there is no process-kill interruption rehearsal and no atomic-write tests."
+        },
+        {
+          "criterionDigest": "sha256:333b592702f6",
+          "state": "unmet",
+          "evidence": [
+            "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp"
+          ],
+          "note": "Reflected-World LoadWorld/DeserializeInto fail with a bare false and no versioned diagnostic."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -L compatibility --output-on-failure --no-tests=error"
@@ -1552,7 +2051,7 @@
       "id": "SDK-240",
       "title": "Stabilize SDK, module ABI, package exports, and compatibility diagnostics",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "sdk",
@@ -1591,6 +2090,47 @@
         "Any module whose ABI descriptor differs from the host, including an N-1 module, is rejected before OS load with a diagnostic naming the field and both versions (OD-02)",
         "Incompatible module fails before executing code",
         "SDK package contains headers, targets, license, notices, docs, and examples"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:2ce64c3b94bd",
+          "state": "implemented",
+          "evidence": [
+            "cmake/RunInstalledPackageConsumer.cmake",
+            "cmake/TestPackageConsumerBoundary.cmake",
+            "Tests/CMakeLists.txt",
+            "Tests/PackageSmoke/FPSProgression/CMakeLists.txt"
+          ],
+          "note": "Opt-in local PackageConsumer_LinuxInstalledSDK installs, builds and tests PackageSmoke from the prefix and fails on engine source/build-tree headers or libs. Always-on CTest covers the detector."
+        },
+        {
+          "criterionDigest": "sha256:3e936e0f4337",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestModuleABIDiagnostics.cpp",
+            "SparkEngine/Source/Core/ModuleManager.cpp"
+          ],
+          "note": "ModuleABI_ tests drive production LoadModule with sidecars for all ten fields plus struct_size and N-1 sdk_version, asserting exact 'rejected before OS load' messages that name the field and both values."
+        },
+        {
+          "criterionDigest": "sha256:2a1334911ea8",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestModuleABI.cpp",
+            "Tests/Fixtures/ModuleABI/MismatchedModule.cpp",
+            "SparkEngine/Source/Core/ModuleManager.cpp"
+          ],
+          "note": "ModuleABI_MismatchRejectedBeforeStaticConstructorInjectionOrFactory loads the real mismatched fixture and asserts that its sentinel (static ctor/DllMain/inject/factory) is never written."
+        },
+        {
+          "criterionDigest": "sha256:0bec21096bc0",
+          "state": "implemented",
+          "evidence": [
+            "Tests/PackageSmoke/TestSparkSDKComponentCompleteness.cmake",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "SparkSDKComponentCompleteness installs only the sdk component and fails if the SDK header, Config/Targets, README, LICENSE, THIRD_PARTY_NOTICES or the EmptyProject example is missing."
+        }
       ],
       "commands": [
         "cmake -S Tests/PackageSmoke -B /tmp/spark-sdk-consumer -DCMAKE_PREFIX_PATH=/tmp/spark-install",
@@ -1652,7 +2192,7 @@
       "id": "ENG-200",
       "title": "Complete the AngelScript and visual-script runtime lifecycle",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "scripting",
@@ -1690,6 +2230,37 @@
         "Compile/runtime failure disables safely with actionable diagnostics",
         "Hot reload follows documented state rules",
         "Graph-to-packaged-runtime gameplay loop passes"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:bb0380c76dc5",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestENG200ScriptFaultsReal.cpp"
+          ],
+          "note": "The real script moves an entity only through a direct CallUpdate. Nothing tests production collision/event dispatch or script-driven audio/animation."
+        },
+        {
+          "criterionDigest": "sha256:cd885ff23a2b",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestENG200ScriptFaultsReal.cpp",
+            "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp"
+          ],
+          "note": "The real AngelScriptEngine reports compile, runtime, constructor and sandbox-runaway faults with section:line diagnostics. The faulted script is disabled and not re-run, and this is asserted by trace counts."
+        },
+        {
+          "criterionDigest": "sha256:6b96a39373c4",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No committed document defines hot-reload state rules, and no test checks that state is preserved against such rules."
+        },
+        {
+          "criterionDigest": "sha256:cec871256cec",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No test runs a visual-script graph through a packaged runtime gameplay loop, and there are no VisualScriptRuntime_ tests."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -L scripting-integration --output-on-failure --no-tests=error"

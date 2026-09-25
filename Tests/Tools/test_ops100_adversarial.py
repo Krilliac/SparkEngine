@@ -598,12 +598,15 @@ class DocsEvidenceTests(unittest.TestCase):
         scope = evidence["scope"]
         self.assertIn("not runtime", scope.lower().replace("-", " "))
 
-    def test_work_item_status_is_open(self) -> None:
+    def test_work_item_is_unfinished_and_blocking(self) -> None:
+        # Committed OPS-100 work makes the item in-progress; it may not be done until every
+        # acceptance criterion is evidenced by an exact-commit CI run.
         data = json.loads((ROOT / "docs" / "readiness" / "work-items" /
                            "10-security-network-operations.json").read_text(encoding="utf-8"))
         ops = next(item for item in data["workItems"] if item["id"] == "OPS-100")
-        self.assertEqual(ops["status"], "open")
+        self.assertIn(ops["status"], ("open", "in-progress", "blocked"))
         self.assertTrue(ops["blocking"])
+        self.assertTrue(any(entry["state"] != "evidenced" for entry in ops["acceptanceStatus"]))
 
     def test_remaining_blockers_list_is_nonempty(self) -> None:
         data = json.loads((ROOT / "docs" / "readiness" / "work-items" /

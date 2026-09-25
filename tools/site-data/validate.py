@@ -19,6 +19,8 @@ from typing import Any, Iterable
 from assets import validate_assets
 from module_content import validate as validate_module_content
 from common import (
+    ACCEPTANCE_CI_REFERENCE,
+    ACCEPTANCE_STATES,
     METRIC_IDS,
     REPO_ROOT,
     SCHEMA_VERSION,
@@ -26,6 +28,7 @@ from common import (
     decode_json_bytes,
     load_contract,
     load_json,
+    criterion_digest,
     read_bytes_stable,
 )
 from contract_selectors import (cmake_preset_index, preset_references, required_gate_jobs, resolve_ci_job,
@@ -202,13 +205,13 @@ WORK_ITEM_REQUIRED_KEYS = {
     "id", "title", "priority", "status", "blocking", "wave", "area", "owner",
     "profileApplicability",
     "rationale", "dependencies", "parallelWith", "sourceContext", "entryPoints",
-    "implementationScope", "acceptanceCriteria", "commands", "testSelectors",
+    "implementationScope", "acceptanceCriteria", "acceptanceStatus", "commands", "testSelectors",
     "requiredCiJobs", "performanceBudgets", "documentationUpdates", "readinessChanges",
     "websiteImpact", "risks", "outOfScope", "definitionOfDone",
 }
 WORK_ITEM_LIST_KEYS = {
     "dependencies", "parallelWith", "sourceContext", "entryPoints", "implementationScope",
-    "acceptanceCriteria", "commands", "testSelectors", "requiredCiJobs",
+    "acceptanceCriteria", "acceptanceStatus", "commands", "testSelectors", "requiredCiJobs",
     "performanceBudgets", "documentationUpdates", "readinessChanges", "websiteImpact",
     "risks", "outOfScope", "definitionOfDone",
 }
@@ -1478,6 +1481,92 @@ class Validator:
             return
         self.error(location, f"referenced path does not exist: {value}")
 
+    def validate_acceptance_status(self, item: dict[str, Any], location: str) -> None:
+        """Per-criterion progress must line up with the criteria and never outrun the item status.
+
+        Entry i records the state of acceptanceCriteria[i]; its criterionDigest binds it to
+        that criterion's exact wording, so rewording a criterion forces a fresh assessment.
+        "implemented" needs repository evidence, "evidenced" additionally needs an
+        exact-commit CI reference, an item with any progress cannot still be "open", and a
+        "done" item must have every criterion evidenced.
+        """
+        criteria = item.get("acceptanceCriteria")
+        entries = item.get("acceptanceStatus")
+        if not isinstance(criteria, list) or not isinstance(entries, list):
+            return  # the list-type check above already reported it
+        status_location = f"{location}.acceptanceStatus"
+        if len(entries) != len(criteria):
+            self.error(
+                status_location,
+                f"must hold one entry per acceptance criterion ({len(criteria)}), found {len(entries)}",
+            )
+            return
+        states: list[str] = []
+        for index, (criterion, entry) in enumerate(zip(criteria, entries)):
+            entry_location = f"{status_location}[{index}]"
+            if not isinstance(entry, dict):
+                self.error(entry_location, "must be an object")
+                continue
+            unknown = set(entry).difference({"criterionDigest", "state", "evidence", "note"})
+            self.require(not unknown, entry_location, f"unknown fields: {', '.join(sorted(unknown))}")
+            if isinstance(criterion, str):
+                self.require(
+                    entry.get("criterionDigest") == criterion_digest(criterion),
+                    entry_location,
+                    "criterionDigest does not match acceptanceCriteria[{}]; the criterion changed, so "
+                    "re-assess it and record {}".format(index, criterion_digest(criterion)),
+                )
+            state = entry.get("state")
+            if state not in ACCEPTANCE_STATES:
+                self.error(entry_location, f"state must be one of {', '.join(ACCEPTANCE_STATES)}")
+                continue
+            states.append(state)
+            note = entry.get("note")
+            self.require(
+                isinstance(note, str) and bool(note.strip()) and len(note) <= 400,
+                entry_location,
+                "note must be a non-empty string of at most 400 characters",
+            )
+            evidence = entry.get("evidence")
+            if not isinstance(evidence, list) or not all(isinstance(value, str) for value in evidence):
+                self.error(entry_location, "evidence must be an array of strings")
+                continue
+            ci_references = [value for value in evidence if value.startswith("ci:")]
+            for value in ci_references:
+                self.require(
+                    bool(ACCEPTANCE_CI_REFERENCE.match(value)),
+                    entry_location,
+                    f"CI evidence must look like ci:<workflow>/<run id>@<40-hex commit>: {value}",
+                )
+            for evidence_index, value in enumerate(evidence):
+                if not value.startswith("ci:"):
+                    self.require_path(value, f"{entry_location}.evidence[{evidence_index}]")
+            if state != "unmet":
+                self.require(
+                    any(not value.startswith("ci:") for value in evidence),
+                    entry_location,
+                    f"a {state} criterion must cite the committed test or check that proves it",
+                )
+            if state == "evidenced":
+                self.require(
+                    bool(ci_references),
+                    entry_location,
+                    "an evidenced criterion must cite the exact-commit CI run (ci:<workflow>/<run id>@<commit>)",
+                )
+        status = item.get("status")
+        if status == "open":
+            self.require(
+                all(state == "unmet" for state in states),
+                status_location,
+                "an open work item has no implemented or evidenced criteria; set its status to in-progress",
+            )
+        if status == "done":
+            self.require(
+                bool(states) and all(state == "evidenced" for state in states),
+                status_location,
+                "a done work item must have every acceptance criterion evidenced",
+            )
+
     def validate_selectors(self, item: dict[str, Any], location: str) -> None:
         """Resolve requiredCiJobs and testSelectors, or require declared debt."""
         resolvers = {
@@ -1686,6 +1775,7 @@ class Validator:
                 for index, target_path in enumerate(item.get(key, [])):
                     self.require_path(target_path, f"{location}.{key}[{index}]", allow_future=allow_future)
             self.validate_selectors(item, location)
+            self.validate_acceptance_status(item, location)
         self.validate_planned_presets(by_id, planned_preset_uses)
 
         visiting: set[str] = set()
@@ -2709,11 +2799,13 @@ class Validator:
             policy_gaps = legal.get("policyGaps")
             policy_location = "content.legal.policyGaps"
             status = gov_items[0].get("status")
-            if status == "open" or policy_gaps is not None:
+            # Any status short of done (open, in-progress, blocked) leaves the legal gaps unresolved.
+            unfinished = status != "done"
+            if unfinished or policy_gaps is not None:
                 self.require(
                     isinstance(policy_gaps, list),
                     policy_location,
-                    "must be a list of non-empty unique strings while GOV-400 is open",
+                    "must be a list of non-empty unique strings while GOV-400 is not done",
                 )
             if isinstance(policy_gaps, list):
                 all_non_empty_strings = all(
@@ -2730,11 +2822,11 @@ class Validator:
                         policy_location,
                         "must contain unique strings",
                     )
-                if status == "open":
+                if unfinished:
                     self.require(
                         bool(policy_gaps),
                         policy_location,
-                        "must contain at least one policy gap while GOV-400 is open",
+                        "must contain at least one policy gap while GOV-400 is not done",
                     )
                 if status == "done":
                     self.require(

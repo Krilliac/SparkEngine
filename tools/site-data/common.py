@@ -334,6 +334,17 @@ def load_contract() -> dict[str, Any]:
     }
 
 
+# Per-criterion progress of a work item. Only "evidenced" (an exact-commit CI run)
+# counts toward release; "implemented" means committed code plus a committed check.
+ACCEPTANCE_STATES = ("unmet", "implemented", "evidenced")
+ACCEPTANCE_CI_REFERENCE = re.compile(r"^ci:[A-Za-z0-9_.-]+/[0-9]+@[0-9a-f]{40}$")
+
+
+def criterion_digest(criterion: str) -> str:
+    """Short digest binding an acceptanceStatus entry to its criterion's exact wording."""
+    return "sha256:" + hashlib.sha256(criterion.encode("utf-8")).hexdigest()[:12]
+
+
 def canonical_json_bytes(value: Any) -> bytes:
     """Stable JSON bytes used for published files and their digests."""
     return (

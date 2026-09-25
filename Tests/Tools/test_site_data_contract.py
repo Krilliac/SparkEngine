@@ -103,6 +103,9 @@ class ContractTestCase(unittest.TestCase):
         for item in contract["workItems"]:
             if item["id"] in declared:
                 item["status"] = "done"
+                for entry in item["acceptanceStatus"]:
+                    entry["state"] = "evidenced"
+                    entry["evidence"] = ["README.md", EXACT_CI_REFERENCE]
                 if item["id"] == "GOV-400":
                     contract["content"]["legal"]["policyGaps"] = []
                 for key in ("entryPoints", "documentationUpdates"):
@@ -133,6 +136,82 @@ class ContractTestCase(unittest.TestCase):
             value = item.get(field, [])
             values.extend(value if isinstance(value, list) else [str(value)])
         return " ".join(values).lower()
+
+
+EXACT_CI_REFERENCE = "ci:build.yml/1@" + "0" * 40
+
+
+class AcceptanceStatusTests(ContractTestCase):
+    """acceptanceStatus tracks every criterion and never outruns the item status."""
+
+    def entries(self, item_id: str) -> list[dict[str, Any]]:
+        return self.items_of(self.mutable)[item_id]["acceptanceStatus"]
+
+    def test_every_work_item_tracks_every_criterion(self) -> None:
+        for item in self.contract["workItems"]:
+            with self.subTest(item=item["id"]):
+                self.assertEqual(len(item["acceptanceStatus"]), len(item["acceptanceCriteria"]))
+                for criterion, entry in zip(item["acceptanceCriteria"], item["acceptanceStatus"]):
+                    self.assertEqual(entry["criterionDigest"], site_data_common.criterion_digest(criterion))
+
+    def test_length_mismatch_is_rejected(self) -> None:
+        self.entries("CI-100").pop()
+        self.assert_rejected(self.mutable, "workItems.CI-100.acceptanceStatus")
+
+    def test_reworded_criterion_requires_reassessment(self) -> None:
+        item = self.items_of(self.mutable)["CI-100"]
+        item["acceptanceCriteria"][0] += " (reworded)"
+        self.assert_rejected(self.mutable, "criterionDigest does not match acceptanceCriteria[0]")
+
+    def test_progress_requires_real_repository_evidence(self) -> None:
+        entry = self.entries("CI-100")[0]
+        cases = (
+            ([], "must cite the committed test or check"),
+            ([EXACT_CI_REFERENCE], "must cite the committed test or check"),
+            (["Tests/DoesNotExist.cpp"], "referenced path does not exist"),
+        )
+        for evidence, fragment in cases:
+            with self.subTest(evidence=evidence):
+                mutated = copy.deepcopy(self.mutable)
+                target = self.items_of(mutated)["CI-100"]
+                target["status"] = "in-progress"
+                target["acceptanceStatus"][0] = {**entry, "state": "implemented", "evidence": evidence}
+                self.assert_rejected(mutated, fragment)
+
+    def test_evidenced_requires_a_well_formed_exact_commit_ci_reference(self) -> None:
+        for evidence, fragment in (
+            (["README.md"], "must cite the exact-commit CI run"),
+            (["README.md", "ci:build.yml/latest@main"], "CI evidence must look like"),
+        ):
+            with self.subTest(evidence=evidence):
+                mutated = copy.deepcopy(self.mutable)
+                target = self.items_of(mutated)["CI-100"]
+                target["status"] = "in-progress"
+                target["acceptanceStatus"][0].update(state="evidenced", evidence=evidence)
+                self.assert_rejected(mutated, fragment)
+
+    def test_open_item_cannot_record_progress(self) -> None:
+        target = self.items_of(self.mutable)["CI-100"]
+        target["status"] = "open"
+        target["acceptanceStatus"][0].update(state="implemented", evidence=["README.md"])
+        self.assert_rejected(self.mutable, "an open work item has no implemented or evidenced criteria")
+
+    def test_done_item_needs_every_criterion_evidenced(self) -> None:
+        target = self.items_of(self.mutable)["CI-100"]
+        target["status"] = "done"
+        for entry in target["acceptanceStatus"]:
+            entry.update(state="evidenced", evidence=["README.md", EXACT_CI_REFERENCE])
+        target["acceptanceStatus"][-1].update(state="implemented", evidence=["README.md"])
+        self.assert_rejected(self.mutable, "a done work item must have every acceptance criterion evidenced")
+
+    def test_fully_evidenced_done_item_passes_the_acceptance_rules(self) -> None:
+        target = self.items_of(self.mutable)["CI-100"]
+        target["status"] = "done"
+        for entry in target["acceptanceStatus"]:
+            entry.update(state="evidenced", evidence=["README.md", EXACT_CI_REFERENCE])
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_acceptance_status(target, "workItems.CI-100")
+        self.assertEqual(validator.errors, [])
 
 
 class ReleaseProfileShapeTests(ContractTestCase):
@@ -759,8 +838,8 @@ class ReadyPromotionTests(ContractTestCase):
         items = self.items_of(self.mutable)
         self.assertEqual(gates["G11"]["state"], "blocked")
         self.assertEqual(gates["G12"]["state"], "blocked")
-        self.assertEqual(items["MOD-315"]["status"], "open")
-        self.assertEqual(items["NET-100"]["status"], "open")
+        self.assertNotEqual(items["MOD-315"]["status"], "done")
+        self.assertNotEqual(items["NET-100"]["status"], "done")
         with mock.patch.object(
             site_data_validate,
             "FUTURE_ACCEPTANCE_PATHS",

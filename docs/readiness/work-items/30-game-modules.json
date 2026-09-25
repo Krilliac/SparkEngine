@@ -137,7 +137,7 @@
       "id": "RDY-015",
       "title": "Build real-source lifecycle evidence for experimental modules",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "tests",
@@ -167,6 +167,34 @@
         "Every experimental module has real-source lifecycle evidence",
         "Failures remain visible without changing stable-v1 support",
         "No experimental test promotes a stable profile"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:8e008a4f4f0b",
+          "state": "unmet",
+          "evidence": [
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "Per-module lifecycle tests are registered, but there is no recorded passing run for every module. The manifest-equality check runs only in the hosted advisory job."
+        },
+        {
+          "criterionDigest": "sha256:3cc352faa36d",
+          "state": "implemented",
+          "evidence": [
+            ".github/scripts/test-workflow-failure-propagation.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "The local checker requires the experimental lane to be continue-on-error, publish JUnit with if: always(), stay out of required-ci-gate, and be excluded from full-ctest lanes. Mutation tests cover each rule."
+        },
+        {
+          "criterionDigest": "sha256:4f6e2a12e287",
+          "state": "implemented",
+          "evidence": [
+            ".github/scripts/test-workflow-failure-propagation.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "The checker rejects any ExperimentalModuleLifecycle_ test that carries a stable-profile or generic label, or reuses the experimental-modules label. Mutation cases cover this."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -L experimental-modules --output-on-failure --no-tests=error"
@@ -209,7 +237,7 @@
       "id": "MOD-290",
       "title": "Build the shared manifest and installed-SDK module kit",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -247,6 +275,43 @@
         "Every module manifest references existing source, assets, tests, and docs",
         "Discovery and manifest counts match",
         "Prototype completion helpers remain open under MOD-295"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:d8c597a06b1f",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGameFPS/CMakeLists.txt"
+          ],
+          "note": "The FPS module still links SparkEngineLib and private engine sources, and the D3D11 package smoke needs a Windows run."
+        },
+        {
+          "criterionDigest": "sha256:e200b2bddcf3",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_module_manifest.py",
+            "tools/site-data/module_content.py"
+          ],
+          "note": "ModuleManifest_Contract CTest validates every real manifest, and mutations fail on a missing manifest, source dir, asset root, test source or README."
+        },
+        {
+          "criterionDigest": "sha256:4b8b3e9ce7f8",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_module_manifest.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "test_manifest_count_matches_discovery_and_evidence asserts that discovered module dirs, module.json manifests and evidence entries are identical sets."
+        },
+        {
+          "criterionDigest": "sha256:cac4bf8c66df",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "docs/readiness/work-items/30-game-modules.json"
+          ],
+          "note": "site-data-contract asserts that the MOD-290/MOD-295 scope split holds and that MOD-295 stays not-done, outside stable-v1, and anchored to modules.prototypes."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py --modules",
@@ -301,7 +366,7 @@
       "id": "MOD-295",
       "title": "Build reusable completion helpers for prototype modules",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -334,6 +399,31 @@
         "Prototype modules no longer copy private infrastructure",
         "Helpers exercise production SDK surfaces",
         "Prototype completion remains outside stable-v1"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:69935489929f",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_module_private_dependencies.py"
+          ],
+          "note": "The ratchet only freezes the current inventory. Prototype modules still copy engine-private headers and *EngineSystems.cpp."
+        },
+        {
+          "criterionDigest": "sha256:39962a8a47f7",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No reusable prototype helpers exercise production SDK surfaces."
+        },
+        {
+          "criterionDigest": "sha256:49b427f3412f",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "docs/readiness/work-items/30-game-modules.json"
+          ],
+          "note": "test_split_experimental_work_stays_open_owned_and_scheduled requires MOD-295 to be outside stable-v1, not done, and anchored to modules.prototypes."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -L prototype-module-kit --output-on-failure --no-tests=error"
@@ -378,7 +468,7 @@
       "id": "MOD-300",
       "title": "Complete and correctly position the base SparkGame showcase",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -418,6 +508,42 @@
         "Quicksave reloads exact state",
         "Packaged smoke passes",
         "Public label never calls it a finished game"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:178358a6295a",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no lifecycle score 3. SparkGame is outside every release profile, with no release-profile or required-CI evidence."
+        },
+        {
+          "criterionDigest": "sha256:4901c1ae62f0",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestSparkGameShowcase.cpp"
+          ],
+          "note": "Only the coroutine sequence is asserted. There is no visible render or localization outcome evidence."
+        },
+        {
+          "criterionDigest": "sha256:9e45c6dbf688",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No test reloads a showcase quicksave and compares exact state."
+        },
+        {
+          "criterionDigest": "sha256:904f84ed4a14",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no packaged SparkGame smoke."
+        },
+        {
+          "criterionDigest": "sha256:bd643b216c0e",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGame/README.md"
+          ],
+          "note": "The README disclaims being a game, but no validator enforces the public label."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -R SparkGameShowcase --output-on-failure --no-tests=error",
@@ -462,7 +588,7 @@
       "id": "MOD-310",
       "title": "Finish FPS as the installed single-player stable-v1 slice",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -506,6 +632,48 @@
         "D3D11 and Windows NullRHI package smokes use the real module and assets",
         "Save/reload preserves the declared local profile state",
         "No multiplayer result is required for stable-v1"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:2a343dd4fda0",
+          "state": "unmet",
+          "evidence": [],
+          "note": "This needs a clean Windows install run of the full loop. None is recorded."
+        },
+        {
+          "criterionDigest": "sha256:bfbca7e242b6",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGameFPS/CMakeLists.txt"
+          ],
+          "note": "The module still links SparkEngineLib and uses engine-source include paths."
+        },
+        {
+          "criterionDigest": "sha256:0505105fa4f9",
+          "state": "unmet",
+          "evidence": [
+            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake"
+          ],
+          "note": "The D3D11 and Windows NullRHI package smokes need Windows hardware runs."
+        },
+        {
+          "criterionDigest": "sha256:8011beba4f11",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestSparkGameFPSLoopReal.cpp",
+            "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
+          ],
+          "note": "Only FPSLocalProfile serialization is unit-tested. Nothing locally tests QuickSaveProfile/QuickLoadProfile through SaveSystem end to end."
+        },
+        {
+          "criterionDigest": "sha256:76dc60949a13",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "docs/readiness/work-items/30-game-modules.json"
+          ],
+          "note": "test_fps_singleplayer_and_optional_multiplayer_are_split asserts this criterion, that MOD-310 has no NET-100 dependency or multiplayer selectors, and that MOD-315 is outside stable-v1."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -R FPSSinglePlayerSlice --output-on-failure --no-tests=error",
@@ -565,7 +733,7 @@
       "id": "MOD-315",
       "title": "Finish optional FPS LAN and multiplayer gameplay",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "networking",
@@ -596,6 +764,39 @@
         "No fake connection state remains",
         "Transport hostile-input tests pass",
         "Failure cannot affect stable-v1 single-player readiness"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:48fee83e2cbd",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no two-client authoritative convergence test."
+        },
+        {
+          "criterionDigest": "sha256:5bc1ee8cc5b7",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp"
+          ],
+          "note": "Connect marks the session active before a handshake is confirmed, and nothing proves real connection state."
+        },
+        {
+          "criterionDigest": "sha256:baedd16bd0b2",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestNET100TransportReal.cpp"
+          ],
+          "note": "The FPS LAN path is not bound to the production secure transport and has no hostile-input tests of its own."
+        },
+        {
+          "criterionDigest": "sha256:17033c17c6d7",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "docs/site/readiness.json"
+          ],
+          "note": "The contract tests require MOD-315 to be outside stable-v1 and anchored only to networking.multiplayer and G12, which stable-v1 excludes. The validator also rejects outside items in profile blockers."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -R FPSLAN --output-on-failure --no-tests=error"
@@ -693,6 +894,38 @@
         "No demo hash/timestamp identity/no-op load remains",
         "Applicable parity scores reach 3"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:16e99ff696fc",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestNetworkMMOIntegration.cpp"
+          ],
+          "note": "No committed test has two real clients authenticate, create owned characters and move authoritatively."
+        },
+        {
+          "criterionDigest": "sha256:1e28d56271ea",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+          ],
+          "note": "No cold-restart test shows inventory, reputation or world state persisting."
+        },
+        {
+          "criterionDigest": "sha256:e2c9ec3b616a",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+          ],
+          "note": "CreateCharacter still builds the character ID from GetTimestamp(), so timestamp identity remains."
+        },
+        {
+          "criterionDigest": "sha256:96c5cc4ecb96",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs owner scoring and hosted module-MMO CI evidence."
+        }
+      ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -R MMOIntegratedWorld --output-on-failure --no-tests=error"
       ],
@@ -743,7 +976,7 @@
       "id": "MOD-330",
       "title": "Finish ARPG as a playable dungeon slice",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -785,6 +1018,30 @@
         "Automated player clears a packaged dungeon and authoritative boss identity/state is correct",
         "Hero/skills/combat/loot/UI/save all round-trip",
         "Applicable scores reach 3"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:57ffda3b6ee4",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestMOD330ARPGDungeonReal.cpp"
+          ],
+          "note": "Boss identity and state are tested in-process only. No packaged dungeon is cleared automatically."
+        },
+        {
+          "criterionDigest": "sha256:a2753a909b88",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestMOD330ARPGDungeonReal.cpp"
+          ],
+          "note": "Only the boss snapshot round-trips. There is no UI round-trip and no full hero/skills/loot save through SaveSystem."
+        },
+        {
+          "criterionDigest": "sha256:bd2d7fa4616f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs owner scoring and hosted module-ARPG CI."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -R ARPGDungeon --output-on-failure --no-tests=error"
@@ -834,7 +1091,7 @@
       "id": "MOD-340",
       "title": "Finish Platformer as a complete level slice",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -875,6 +1132,39 @@
         "Death restarts at checkpoint",
         "Collectible/progress state persists",
         "Applicable scores reach 3"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:23dedc4ed8b4",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No automated three-minute packaged level-completion run exists."
+        },
+        {
+          "criterionDigest": "sha256:8ca86e86fcec",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestMOD340PlatformerCompletionReal.cpp",
+            "GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.cpp",
+            "GameModules/SparkGamePlatformer/Source/Checkpoint/PlatformerCheckpointSystem.cpp",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "Registered tests link the real controller and checkpoint sources. The kill plane and zero-lives timer restart the player at the checkpoint with no R key."
+        },
+        {
+          "criterionDigest": "sha256:abe675a87b56",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp"
+          ],
+          "note": "No committed test shows collectible or progress state persisting and reloading."
+        },
+        {
+          "criterionDigest": "sha256:bd2d7fa4616f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs owner scoring and hosted module-Platformer CI."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -R PlatformerCompletion --output-on-failure --no-tests=error"
@@ -919,7 +1209,7 @@
       "id": "MOD-350",
       "title": "Finish RPG as a quest, party, combat, and persistence slice",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -960,6 +1250,30 @@
         "Automated packaged quest flow completes and reward/state persist after restart",
         "NPCs navigate/interact through runtime systems",
         "Applicable scores reach 3"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:7a3b148c732e",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestMOD350RPGQuestSliceReal.cpp"
+          ],
+          "note": "The quest chain completes in-process, but no packaged run or restart persistence test exists."
+        },
+        {
+          "criterionDigest": "sha256:63d66a74b7a8",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp"
+          ],
+          "note": "NPCs have no NavMesh integration and no test covers NPC navigation through runtime systems."
+        },
+        {
+          "criterionDigest": "sha256:bd2d7fa4616f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs owner scoring and hosted module-RPG CI."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -R RPGQuestSlice --output-on-failure --no-tests=error"
@@ -1007,7 +1321,7 @@
       "id": "MOD-360",
       "title": "Finish OpenWorld as a streamed survival/exploration slice",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -1049,6 +1363,40 @@
         "Restart restores player/world/event/settlement state",
         "No missing asset/music reference",
         "Applicable scores reach 3"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:578c759ffd23",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGameOpenWorld/README.md"
+          ],
+          "note": "No OpenWorldTraversal_* test exists, and the README says region scenes and streaming manifests are missing."
+        },
+        {
+          "criterionDigest": "sha256:88b1748c5bdb",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestMOD360OpenWorldPersistenceReal.cpp",
+            "GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.cpp",
+            "GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl"
+          ],
+          "note": "The registered test saves via the real SaveSystem and the console SaveGame path, rebuilds all systems, then LoadGame restores player, world, event and settlement state."
+        },
+        {
+          "criterionDigest": "sha256:786e9a88510e",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGameOpenWorld/README.md"
+          ],
+          "note": "The README admits region scenes, manifests and ow_*.ogg music are missing. No reference checker exists."
+        },
+        {
+          "criterionDigest": "sha256:bd2d7fa4616f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs owner scoring and hosted module-OpenWorld CI."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -R OpenWorldTraversal --output-on-failure --no-tests=error"
@@ -1097,7 +1445,7 @@
       "id": "MOD-370",
       "title": "Finish RTS as a deterministic playable skirmish",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -1138,6 +1486,33 @@
         "Deterministic packaged skirmish reaches a win state",
         "Fog, AI, commands, economy and save operate through production systems",
         "Applicable scores reach 3"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:311c6dcb8387",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestMOD370SkirmishDeterminismReal.cpp"
+          ],
+          "note": "The deterministic skirmish reaches victory in-process only. No packaged build does."
+        },
+        {
+          "criterionDigest": "sha256:27616ca3f8b9",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestMOD370SkirmishDeterminismReal.cpp",
+            "Tests/TestMOD370RTSSaveReal.cpp",
+            "GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp",
+            "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
+          ],
+          "note": "The real skirmish simulation runs commands, economy, fog and AI waves to victory. RTSSave tests use SaveMatch/LoadMatch on the real SaveSystem with per-tick hash equality."
+        },
+        {
+          "criterionDigest": "sha256:bd2d7fa4616f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs owner scoring and hosted module-RTS CI."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -R RTSSkirmish --output-on-failure --no-tests=error"
@@ -1183,7 +1558,7 @@
       "id": "MOD-380",
       "title": "Finish Racing as a physics-backed complete race",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 4,
       "area": "modules",
@@ -1225,6 +1600,38 @@
         "Physics uses the shared runtime and timestep",
         "Results/restart and declared ghost state persist",
         "Applicable scores reach 3"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:2a64ef1c2cac",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestMOD380RacingCompleteRaceReal.cpp"
+          ],
+          "note": "Player and AI finish valid laps in-process, but no packaged race run exists."
+        },
+        {
+          "criterionDigest": "sha256:e800cc13bee9",
+          "state": "unmet",
+          "evidence": [
+            "GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.cpp"
+          ],
+          "note": "The module still uses its own kinematic vehicle physics, not the shared Jolt runtime and timestep."
+        },
+        {
+          "criterionDigest": "sha256:6a35b45838fc",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestMOD380RacingCompleteRaceReal.cpp"
+          ],
+          "note": "Restart after results is tested in memory only. No results or ghost persistence test exists."
+        },
+        {
+          "criterionDigest": "sha256:bd2d7fa4616f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs owner scoring and hosted module-Racing CI."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -R RacingCompleteRace --output-on-failure --no-tests=error"
@@ -1313,6 +1720,36 @@
         "Subsystem bindings and hot reload pass",
         "Applicable scores reach 3"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:d25f5895d55f",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestMOD390VisualScriptDiagnosticsReal.cpp",
+            "GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp",
+            "GameModules/SparkGameVisualScript/Source/Core/Main.cpp"
+          ],
+          "note": "OnLoad fails when LoadScripts fails. The registered test injects a compile error and checks rejection with a file:line diagnostic and full rollback."
+        },
+        {
+          "criterionDigest": "sha256:78498996b11b",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No .vscript graph sources and no VisualScriptGameplay_* test that reaches the win objective."
+        },
+        {
+          "criterionDigest": "sha256:4c73ad5bea74",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The physics, audio, animation and event bindings only log or do nothing. Collision dispatch has no caller, and no module hot-reload test exists."
+        },
+        {
+          "criterionDigest": "sha256:bd2d7fa4616f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs owner scoring and hosted module-VisualScript CI."
+        }
+      ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -R VisualScriptGameplay --output-on-failure --no-tests=error"
       ],
@@ -1362,7 +1799,7 @@
       "id": "TF-110",
       "title": "Prove MMOFPS with a true independent multi-client release gate",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 3,
       "area": "modules",
@@ -1402,6 +1839,32 @@
         "Forged state is rejected and audited",
         "Reconnect restores allowed state",
         "Network/tick/memory budgets pass with no crash or unbounded growth"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:86af5680b79c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No committed dedicated-server plus two-client convergence harness or test exists at HEAD."
+        },
+        {
+          "criterionDigest": "sha256:885e584f6fb7",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No committed multi-client test shows forged inventory, equipment or ability state is rejected and audited."
+        },
+        {
+          "criterionDigest": "sha256:b9afc7b58a80",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No committed test shows a reconnect restores allowed state in a real multi-client harness."
+        },
+        {
+          "criterionDigest": "sha256:a993c17ebdcf",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No budget or soak evidence exists. This needs long soak runs."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -R TerrafrontMultiClient --output-on-failure --no-tests=error"
@@ -1453,7 +1916,7 @@
       "id": "TF-120",
       "title": "Close MMOFPS restart, multimap migration, topology, and performance",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 3,
       "area": "modules",
@@ -1488,6 +1951,38 @@
         "Forced source/destination crashes recover",
         "Cold restart restores authoritative state",
         "Budgets pass"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:a5dd739a2bd9",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No committed test proves cross-continent travel is visually and physically correct."
+        },
+        {
+          "criterionDigest": "sha256:00177fa65d14",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No committed test shows duplicate or lost migration messages keep every entity."
+        },
+        {
+          "criterionDigest": "sha256:1d6ff567117a",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No committed forced source or destination crash-recovery tests."
+        },
+        {
+          "criterionDigest": "sha256:5058dc638b97",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No committed cold-restart test of authoritative state."
+        },
+        {
+          "criterionDigest": "sha256:b48043c84cca",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No budget, soak or capacity evidence."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -R TerrafrontMigration --output-on-failure --no-tests=error",

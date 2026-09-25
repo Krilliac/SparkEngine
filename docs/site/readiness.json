@@ -46,6 +46,7 @@
     "A passing test must execute production source or a packaged binary; mirror-only, tautological, or mock-only tests cannot promote readiness.",
     "Every public numeric claim resolves through a generated metric with an evidence path.",
     "Every readiness promotion includes source, tests, CI evidence, documentation, limitations, and website impact in the same change.",
+    "Every work item records each acceptance criterion as unmet, implemented (committed code plus a committed test or check), or evidenced (additionally an exact-commit CI run); only evidenced criteria count toward release, an item with any progress is at least in-progress, and a done item has every criterion evidenced.",
     "Production-ready wording is forbidden until the global release state is ready at the displayed commit.",
     "If live publication fails, the website labels the last valid bundle stale or unavailable; it never silently calls the fallback current."
   ],

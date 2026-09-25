@@ -5,7 +5,7 @@
       "id": "INST-130",
       "title": "Make installer clean-install, repair, and uninstall behavior verified and recoverable",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "installer",
@@ -47,6 +47,42 @@
         "Capabilities match documentation exactly",
         "Only signed artifacts can enter the stable channel",
         "Experimental platform installers remain owned by their platform work"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:517f9a784d85",
+          "state": "unmet",
+          "evidence": [
+            "SparkInstaller/tests/PortableGitCacheTests.cpp",
+            "SparkInstaller/tests/InstallerTransactionTests.cpp",
+            "SparkInstaller/src/GitBootstrap.cpp"
+          ],
+          "note": "Partial only. Cache tamper and update rollback are tested; a tampered download, failed fetch or wrong archive for the engine install is not."
+        },
+        {
+          "criterionDigest": "sha256:b2d639655345",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs Windows 11 x64 fresh-install, repair and uninstall runs. None are recorded."
+        },
+        {
+          "criterionDigest": "sha256:6ced6ba5de16",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No checker ties installer capabilities to documentation claims."
+        },
+        {
+          "criterionDigest": "sha256:637a4f03b8d7",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs signed published artifacts and a stable-channel signing gate."
+        },
+        {
+          "criterionDigest": "sha256:77a7f9025620",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No validator enforces the ownership boundary."
+        }
       ],
       "commands": [
         "ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"
@@ -105,7 +141,7 @@
       "id": "INST-131",
       "title": "Qualify stable-v1 N-1 upgrade and rollback against an immutable predecessor",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 6,
       "area": "installer",
@@ -117,6 +153,26 @@
       "entryPoints": ["SparkInstaller/src/Installer.cpp", ".github/scripts/qualify-windows-msi.py"],
       "implementationScope": ["Verify the greatest-lower immutable signed MSI and shipping manifest", "Exercise upgrade, rollback, interruption, and external user-data retention on Windows 11 x64"],
       "acceptanceCriteria": ["A real published signed predecessor is selected by exact tag, commit, digest, and asset identity", "Upgrade and rollback pass on a clean supported Windows host", "Failure or interruption never replaces the working install"],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:522a2161563c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a real published and signed predecessor release. None exists."
+        },
+        {
+          "criterionDigest": "sha256:9253a832b311",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs upgrade and rollback runs on a clean Windows host."
+        },
+        {
+          "criterionDigest": "sha256:536c5bfd873e",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No upgrade-interruption test against a real predecessor installer."
+        }
+      ],
       "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
       "testSelectors": ["Installer_Upgrade", "Installer_Rollback", "Installer_Interrupted"],
       "requiredCiJobs": ["installer-windows"],
@@ -135,7 +191,7 @@
       "id": "INST-132",
       "title": "Qualify predecessor bootstrap recovery without an N-1 dependency",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 6,
       "area": "installer",
@@ -147,6 +203,28 @@
       "entryPoints": ["SparkInstaller/src/Installer.cpp"],
       "implementationScope": ["Exercise bootstrap activation and recovery with no predecessor input", "Retain user data across repair and uninstall"],
       "acceptanceCriteria": ["Fresh predecessor installation and interrupted activation recover without replacing user data", "Repair and uninstall pass with no N-1 claim", "Evidence is bound to the reviewed v0.9.0 source commit"],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:e4d717d6251d",
+          "state": "unmet",
+          "evidence": [
+            "SparkInstaller/tests/InstallerTransactionTests.cpp"
+          ],
+          "note": "Transaction tests exist. No Windows run shows a fresh predecessor install and an interrupted activation recovering with user data kept."
+        },
+        {
+          "criterionDigest": "sha256:6f6b2bb4602c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs Windows repair and uninstall qualification runs."
+        },
+        {
+          "criterionDigest": "sha256:0c8b27a63fd0",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs evidence bound to the reviewed v0.9.0 commit."
+        }
+      ],
       "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
       "testSelectors": ["Installer_Tamper", "Installer_AtomicUpdate", "Installer_Interrupted", "Installer_Uninstall"],
       "requiredCiJobs": ["installer-windows"],
@@ -166,7 +244,7 @@
       "id": "GOV-400",
       "title": "Resolve licensing, third-party notices, trademark, contribution, security, and support policy",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 6,
       "area": "governance",
@@ -210,6 +288,43 @@
         "Packages include root license, notices, and required third-party texts",
         "Security/support policy names actually published versions/channels",
         "Legal/maintainer sign-off is release evidence"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:6e03a612fb80",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_third_party_notices.py",
+            "cmake/ValidateStagedPackageNotices.cmake"
+          ],
+          "note": "The notice gate exists, but the editor fonts are not covered. Notice obligations also need legal review."
+        },
+        {
+          "criterionDigest": "sha256:a2569b9a17e2",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a legal classification that someone has reviewed."
+        },
+        {
+          "criterionDigest": "sha256:6b0f854510e7",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_third_party_notices.py"
+          ],
+          "note": "The package does not include the editor-font texts yet."
+        },
+        {
+          "criterionDigest": "sha256:451e0e4cba68",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs versions and channels that are actually published."
+        },
+        {
+          "criterionDigest": "sha256:f5a3e0f81d56",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs legal and maintainer sign-off."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py --legal",
@@ -262,7 +377,7 @@
       "id": "DOC-410",
       "title": "Repair and enforce deterministic repository documentation generation",
       "priority": "P0",
-      "status": "done",
+      "status": "in-progress",
       "blocking": true,
       "wave": 0,
       "area": "documentation",
@@ -308,6 +423,57 @@
         "Health contains every expected generator exactly once with exit and failure counts consistent",
         "Hostile stale-doc, symbol, macro, health, link, anchor, route, and confinement fixtures pass",
         "A stale generator, missing result, or broken link blocks CI"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:dab94757cd15",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_docs_health.py"
+          ],
+          "note": "The double isolated generation is tested. Being green at the exact commit needs an exact-SHA CI run."
+        },
+        {
+          "criterionDigest": "sha256:59ac611c1455",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff."
+        },
+        {
+          "criterionDigest": "sha256:ccd94aacef95",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate_docs_links.py"
+          ],
+          "note": "The link validator reports errors on the HEAD tree, including a missing heading anchor and stale line anchors."
+        },
+        {
+          "criterionDigest": "sha256:d72cef64ec82",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_docs_health.py",
+            "tools/docs_currentness.py",
+            "tools/site-data/generate.py"
+          ],
+          "note": "Tests drive production write_health and summarize_documentation_health. Missing or duplicate generators and inconsistent exit or failure counts are rejected. RepositoryEvidenceTests pins the generator manifest."
+        },
+        {
+          "criterionDigest": "sha256:e20216dba74e",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_docs_health.py",
+            "tools/docs_contract.py",
+            "tools/site-data/validate_docs_links.py",
+            "tools/docs_currentness.py"
+          ],
+          "note": "Two hostile test classes (docs generation, docs links) cover stale docs, symbols, macros, health, links, anchors, route collisions and repository escape against production code."
+        },
+        {
+          "criterionDigest": "sha256:e03b1b3590ef",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Proving it blocks CI needs a hosted CI run. No local check can show that."
+        }
       ],
       "commands": [
         "bash docs/update-all-docs.sh update",
@@ -404,6 +570,58 @@
         "Malformed/oversize/hash-invalid bundles are rejected",
         "Fallback is visibly stale/unavailable",
         "All docs routes/search/source links resolve"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:e87c2575b050",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs the live, owner-deployed site to use the bundle. It has not adopted it."
+        },
+        {
+          "criterionDigest": "sha256:ee89c98da46a",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/runtime/verifyBundle.mjs"
+          ],
+          "note": "The reference verifier binds the SHA, but the live site has not adopted it."
+        },
+        {
+          "criterionDigest": "sha256:a9886368fcde",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a hosted failed-CI run that switches the live site to blocked."
+        },
+        {
+          "criterionDigest": "sha256:21906cf1ffbd",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The claim audit covers repository JSON only. The external site copy has not been audited."
+        },
+        {
+          "criterionDigest": "sha256:1f175ad88fc6",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/runtime/verifyBundle.mjs"
+          ],
+          "note": "The reference verifier is tested, but the live site runtime does not use it."
+        },
+        {
+          "criterionDigest": "sha256:cb55308f2aaa",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/runtime/freshness.mjs"
+          ],
+          "note": "The freshness classifier exists. Visible stale labelling on the live site is unproven."
+        },
+        {
+          "criterionDigest": "sha256:83f4372345f3",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate_docs_links.py"
+          ],
+          "note": "The link validator fails at HEAD, and the live-docs parity check does not exist."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py",

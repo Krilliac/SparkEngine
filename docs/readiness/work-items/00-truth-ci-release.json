@@ -45,6 +45,45 @@
         "A capability cannot be ready while a blocker or required gate is open",
         "Two clean generations produce byte-identical content except declared timestamps"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:bf0632f5fe5f",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "The numeric-claim check covers only a fixed set of surfaces and nouns. Wiki and status-claim prose are not checked, and the item still lists outside public claims as open."
+        },
+        {
+          "criterionDigest": "sha256:f529f9e7254b",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "Cross-references are validated, but FUTURE_ACCEPTANCE_PATHS deliberately lets unfinished items reference paths that do not exist."
+        },
+        {
+          "criterionDigest": "sha256:2c8c4a1437af",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "ReadyAndPassingEvidenceTests and TransitiveDependencyTests run the real Validator. They reject open direct or transitive blockers and non-passing required gates. Registered as CTest readiness-cross-references."
+        },
+        {
+          "criterionDigest": "sha256:7f44777314f5",
+          "state": "unmet",
+          "evidence": [
+            ".github/workflows/site-data.yml",
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "Only the hosted site-data workflow generates twice and diffs. The local test only checks the workflow text and that the handoff render is deterministic."
+        }
+      ],
       "commands": [
         "python3 tools/site-data/validate.py",
         "python3 Tests/Tools/test_site_data_contract.py",
@@ -152,6 +191,38 @@
         "Each in-profile module publishes deterministic JUnit and sanitizer evidence",
         "Experimental module evidence remains independently owned and cannot block stable-v1"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:825cc23dea53",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a hosted Windows D3D11 lifecycle run at the exact commit. None has been observed."
+        },
+        {
+          "criterionDigest": "sha256:9fe198aadd95",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_module_evidence.py"
+          ],
+          "note": "The census guards only the sanitizer FPSRespawn_* selector. Replacing mirror tests across the gates remains open."
+        },
+        {
+          "criterionDigest": "sha256:641c68cb4915",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs hosted JUnit and sanitizer artifacts at the exact commit, consumed by module-evidence. None has been observed."
+        },
+        {
+          "criterionDigest": "sha256:d891fbbdaa85",
+          "state": "implemented",
+          "evidence": [
+            "tools/module-evidence/validate_manifest.py",
+            "Tests/Tools/test_module_evidence.py",
+            "tools/module-evidence/manifest.json"
+          ],
+          "note": "_check_experimental_separation rejects experimental modules that are required or shared in a profile, or that have an unknown or missing tracker (B32*). All ten experimental modules sit outside stable-v1 under RDY-015."
+        }
+      ],
       "commands": [
         "python3 -m unittest Tests.Tools.test_module_evidence",
         "python3 tools/module-evidence/validate_manifest.py --repo-root . --policy-only",
@@ -216,7 +287,7 @@
       "id": "RDY-020",
       "title": "Establish asset and package integrity manifests",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 0,
       "area": "content",
@@ -263,6 +334,49 @@
         "Every asset has provenance/license metadata where required",
         "Tampered or traversal paths fail before package assembly",
         "Experimental modules keep their package-smoke debt outside stable-v1"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:dbf6a5ff40ba",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_asset_integrity.py",
+            "tools/asset-integrity/verify_asset_integrity.py"
+          ],
+          "note": "Downgraded. Only the root Assets manifest is checked. The rationale cites modules referencing missing assets, and content from modules outside the profile remains unclassified. Per-module manifests are not generated."
+        },
+        {
+          "criterionDigest": "sha256:5a3bf0f4851d",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs the Windows installed-package D3D11 smoke (MOD-310). Only a local Linux NullRHI run exists."
+        },
+        {
+          "criterionDigest": "sha256:b056e4c35794",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_asset_package_profile.py"
+          ],
+          "note": "Licenses are asserted only for the 40-entry stable-v1 closure. 475 NOASSERTION entries remain, and provenance is listed as open."
+        },
+        {
+          "criterionDigest": "sha256:3467a81033d4",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_asset_integrity.py"
+          ],
+          "note": "The verifier rejects traversal and tampering, but the configure-time package profile does not re-hash sources. Blocking before assembly relies on CI job ordering."
+        },
+        {
+          "criterionDigest": "sha256:d2fc0972e07f",
+          "state": "implemented",
+          "evidence": [
+            "tools/module-evidence/validate_manifest.py",
+            "Tests/Tools/test_module_evidence.py",
+            "Tests/Tools/test_asset_package_profile.py"
+          ],
+          "note": "Experimental modules must stay outside stable-v1 with an RDY-015 tracker (B32d). The stable-v1 closure excludes other modules' content, and experimental-profile smoke logs are rejected."
+        }
       ],
       "commands": [
         "python3 tools/asset-integrity/verify_asset_integrity.py check-all",
@@ -336,7 +450,7 @@
       "id": "CI-100",
       "title": "Repair fail-closed required CI",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 0,
       "area": "ci",
@@ -373,6 +487,38 @@
         "Every Working commit receives a gate summary, including docs-only changes",
         "MinGW/Wine is either executable and labeled experimental or removed from claims",
         "Required-check policy is documented and externally verified"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:55c1cd2f8364",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a hosted, controlled red run on Working proving the Required CI Gate turns red."
+        },
+        {
+          "criterionDigest": "sha256:ae0f4962f815",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs hosted Working runs, including a docs-only commit, that publish a gate summary."
+        },
+        {
+          "criterionDigest": "sha256:709caf31c8a5",
+          "state": "unmet",
+          "evidence": [
+            ".github/scripts/test-workflow-failure-propagation.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "The experimental label is structurally tested, but no hosted MinGW dispatch has run since the relabel. The last run had 32 Wine test failures."
+        },
+        {
+          "criterionDigest": "sha256:3918ed579816",
+          "state": "unmet",
+          "evidence": [
+            ".github/scripts/test-verify-working-ruleset.py",
+            ".github/scripts/verify-working-ruleset.py"
+          ],
+          "note": "The offline test uses a captured fixture. External verification needs the live GitHub API."
+        }
       ],
       "commands": [
         "bash tools/validate-all.sh",
@@ -429,7 +575,7 @@
       "id": "CI-110",
       "title": "Enforce deterministic test, coverage, sanitizer, and static-analysis policy",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "tests",
@@ -470,6 +616,45 @@
         "Coverage and analysis regressions block",
         "Every shipped binary has a smoke or integration lane",
         "Linux sanitizer evidence never promotes the Windows 11 stable-v1 certification row by itself"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:3aa012b16686",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate.py"
+          ],
+          "note": "Commands are resolved statically but never executed. The tests-unit and tests-integration jobs are still planned."
+        },
+        {
+          "criterionDigest": "sha256:6023a2a14b43",
+          "state": "unmet",
+          "evidence": [
+            "Tools/validate_test_warnings.py",
+            "Tests/Tools/test_validate_test_warnings.py"
+          ],
+          "note": "SKIP_TEST and EXPECT_NO_CRASH exceptions have no owner or expiry enforcement."
+        },
+        {
+          "criterionDigest": "sha256:7f52d65039aa",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Clang-tidy diagnostics are advisory. Proof that regressions block requires hosted CI."
+        },
+        {
+          "criterionDigest": "sha256:ed39e09a09dc",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Not every shipped binary has a smoke or integration lane. The item records integration depth as open."
+        },
+        {
+          "criterionDigest": "sha256:c7cfdec66128",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "The only check asserts the item's own wording, which is tautological. No validator blocks sanitizer evidence from promoting the Windows row."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release --show-only=json-v1",
@@ -604,6 +789,67 @@
         "Configured codemodel evidence is accepted only when its source tree, producer-captured commit, generator, preset build directory, cache values, and reply-file digests match the profile claiming it",
         "No same-job OIDC token, mutable workflow or checkout, provenance JSON, artifact path, or artifact hash can self-author producer-verified evidence; a protected external attestation verifier is independently evidenced"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:169f524e59c4",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs configured Windows codemodel evidence from a real MSVC configure."
+        },
+        {
+          "criterionDigest": "sha256:acca7c786544",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs independent hosted evidence for Windows Shipping, validation and the installed SDK."
+        },
+        {
+          "criterionDigest": "sha256:7acb0e5f3398",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_build_option_guard.py",
+            "cmake/SparkOptionGuard.cmake"
+          ],
+          "note": "Typed -DNAME:TYPE entries bypass the guard and unused options are not detected. No Windows lane has run it."
+        },
+        {
+          "criterionDigest": "sha256:4edcdfd4db9c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "StrictDependencies_* is still planned. No test proves that a missing dependency is fatal."
+        },
+        {
+          "criterionDigest": "sha256:06bff177aa6c",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/validate.py"
+          ],
+          "note": "Only work-item commands are resolved against presets. README and wiki quick starts are not validated."
+        },
+        {
+          "criterionDigest": "sha256:029af64cb513",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "Only the planned macos-shipping preset is owner-scoped. linux-shipping has no enforced platform owner."
+        },
+        {
+          "criterionDigest": "sha256:78f73e6e4ef8",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_build_matrix_parity.py",
+            "Tools/buildmatrix/inventory.py",
+            "Tools/buildmatrix/capture_provenance.py"
+          ],
+          "note": "Tests drive inventory.extract_codemodel_targets and reject a mismatched source tree, build directory, generator, cache or commit, caller-asserted commits, and changed, linked or traversing reply files."
+        },
+        {
+          "criterionDigest": "sha256:588a2f8df8d0",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No protected external attestation verifier has accepted a Working artifact. This needs a hosted run."
+        }
+      ],
       "commands": [
         "python3 Tools/buildmatrix/inventory.py --check docs/readiness/build-matrix-inventory.json",
         "python3 Tools/buildmatrix/capture_provenance.py --profile windows-shipping --build-dir build/windows-shipping --build",
@@ -702,6 +948,38 @@
         "Every artifact includes private-symbol mapping and build ID",
         "Unsupported CPU features are not silently required"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:bb21f83f989b",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_build_shipping_contract.py",
+            "CMakePresets.json"
+          ],
+          "note": "Downgraded. Tests are only static text checks of presets and CMake. No committed test builds or runs windows-shipping to show distinct output, and no hosted Windows Shipping build has been observed."
+        },
+        {
+          "criterionDigest": "sha256:fee036747503",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No comparison of two clean Windows builds exists. The reproducibility job is planned."
+        },
+        {
+          "criterionDigest": "sha256:8ddf41e62b9f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Private-symbol mapping and build IDs are not implemented. ShippingManifest_* is planned."
+        },
+        {
+          "criterionDigest": "sha256:efd875760a6e",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_cpu_floor.py",
+            "Tests/Tools/test_check_isa_baseline.py"
+          ],
+          "note": "Windows PE images are not scanned and the Windows entry-point check is uncompiled. The below-floor startup path has never run."
+        }
+      ],
       "commands": [
         "cmake --preset windows-shipping -DSPARK_STRICT_DEPS=ON",
         "cmake --build build/windows-shipping --config MinSizeRel --clean-first"
@@ -799,6 +1077,44 @@
         "Nightly, stable, and experimental channels have explicit retention and support semantics",
         "Prove one uniquely tagged immutable nightly and the protected signed stable path independently; the repository policy and workflow topology are compatible, but live publication remains unverified"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:be5103107a9b",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_rel100_product_versions.py"
+          ],
+          "note": "No hosted package run qualifies the tag version inside packaged artifacts such as installers or the SDK ZIP."
+        },
+        {
+          "criterionDigest": "sha256:a060209998d6",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Complete per-artifact toolchain and dependency-lock manifests remain open."
+        },
+        {
+          "criterionDigest": "sha256:82f7d0d8ba4d",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_release_stages.py",
+            "tools/site-data/release_stages.py",
+            ".github/workflows/release.yml"
+          ],
+          "note": "Tests run candidate_readiness_errors and finalization_contract_errors, rejecting open technical or transitive work and non-finalizer exemptions. release.yml runs validate.py --require-candidate-ready."
+        },
+        {
+          "criterionDigest": "sha256:9f3c13d1441c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The OD-17 policy is only recorded. Retention and support semantics are not enforced."
+        },
+        {
+          "criterionDigest": "sha256:bfd70eb1bec7",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a live published nightly and a signed stable publication. Neither exists."
+        }
+      ],
       "commands": [
         "git ls-remote --tags origin",
         "SparkEngine --version",
@@ -854,7 +1170,7 @@
       "id": "REL-110",
       "title": "Sign, checksum, attest, scan, and approve release artifacts",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "release",
@@ -888,6 +1204,48 @@
         "Critical/high findings require owned, expiring exceptions",
         "Release approval is recorded",
         "Unsigned artifacts cannot be promoted"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:4b012ba799ce",
+          "state": "unmet",
+          "evidence": [
+            ".github/scripts/test_verify_published_stable_release.py",
+            ".github/scripts/verify_published_stable_release.py"
+          ],
+          "note": "The consumer verifier is fixture-tested, but no signed stable release has been published or verified by a consumer. The publisher key and hosted provenance are not provisioned."
+        },
+        {
+          "criterionDigest": "sha256:8cde53f33d89",
+          "state": "implemented",
+          "evidence": [
+            ".github/scripts/test_verify_vulnerability_findings.py",
+            ".github/scripts/verify_vulnerability_findings.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/release.yml"
+          ],
+          "note": "CTest ArtifactIntegrity_VulnerabilityGate imports the production gate. It fails High/Critical findings with no exception, and expired, placeholder-owner or unused exceptions. release.yml runs the gate on the grype report."
+        },
+        {
+          "criterionDigest": "sha256:a71e601b54a6",
+          "state": "unmet",
+          "evidence": [
+            ".github/scripts/test_record_release_approval.py",
+            ".github/scripts/record_release_approval.py"
+          ],
+          "note": "The recorder is tested only with an injected urlopen. No hosted protected stable-release approval has ever been recorded."
+        },
+        {
+          "criterionDigest": "sha256:0e3cdcb238f2",
+          "state": "implemented",
+          "evidence": [
+            ".github/scripts/test_verify_release_bundle.py",
+            ".github/scripts/verify_release_bundle.py",
+            ".github/scripts/test_verify_release_bundle_workflow.py",
+            ".github/workflows/release.yml"
+          ],
+          "note": "ArtifactIntegrity_ReleaseBundle rejects unsigned or uncovered artifacts in the real verifier. The workflow test checks release.yml re-verifies right before promotion. Windows Authenticode is not covered locally."
+        }
       ],
       "commands": [
         "sha256sum -c SHA256SUMS",
@@ -948,7 +1306,7 @@
       "completionPhase": "qualification",
       "title": "Rehearse the predecessor release without N-1 upgrade claims",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 6,
       "area": "release",
@@ -960,6 +1318,29 @@
       "entryPoints": [".github/workflows/release.yml"],
       "implementationScope": ["Freeze and review the exact predecessor source commit", "Run all common qualification gates and protected approval checks", "Record bootstrap install, repair, retention, and uninstall evidence without N-1 claims"],
       "acceptanceCriteria": ["Every common qualification item and gate passes at the reviewed predecessor SHA", "Named sign-off and protected approval evidence are retained", "No N-1 upgrade or rollback result is presented as predecessor evidence"],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:c4c9ec9526ac",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No reviewed predecessor baseline SHA exists (baselineCommit is empty), and there is no exact-SHA hosted gate evidence."
+        },
+        {
+          "criterionDigest": "sha256:3a8b9de7c83b",
+          "state": "unmet",
+          "evidence": [],
+          "note": "signOffEvidence is empty. A named sign-off and a hosted protected approval are both still needed."
+        },
+        {
+          "criterionDigest": "sha256:a94d3e17f34f",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_release_stages.py",
+            "tools/site-data/release_stages.py"
+          ],
+          "note": "No checker specifically rejects N-1 upgrade or rollback results presented as predecessor evidence. The tests only show the predecessor can pass without REL-192."
+        }
+      ],
       "commands": ["python3 tools/site-data/validate.py --require-predecessor-candidate"],
       "testSelectors": ["ReleaseProfilePredecessorRehearsal_*"],
       "requiredCiJobs": ["profile-required-gates", "release-approval"],
@@ -992,6 +1373,28 @@
       "entryPoints": [".github/workflows/release.yml"],
       "implementationScope": ["Run the stable-v1 rehearsal against a previously published signed predecessor", "Verify upgrade, rollback, save migration, and recovery evidence"],
       "acceptanceCriteria": ["Exact-SHA v1 rehearsal passes with a real immutable predecessor", "Upgrade and rollback evidence is independently retained", "The first predecessor path cannot satisfy this item"],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:73cde1712dcd",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a real immutable published predecessor and a hosted exact-SHA v1 rehearsal. Neither exists."
+        },
+        {
+          "criterionDigest": "sha256:db2de60b6b17",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No upgrade or rollback evidence has been retained. The N-1 rehearsal selectors are still planned."
+        },
+        {
+          "criterionDigest": "sha256:81b1fd86d0c3",
+          "state": "unmet",
+          "evidence": [
+            "tools/site-data/release_stages.py"
+          ],
+          "note": "The predecessor stage is kept separate, but no validator or test stops predecessor evidence from being used to mark REL-192 satisfied."
+        }
+      ],
       "commands": ["python3 tools/site-data/validate.py --require-candidate-ready"],
       "testSelectors": ["ReleaseProfileNMinusOneRehearsal_*"],
       "requiredCiJobs": ["profile-required-gates", "release-approval"],
@@ -1023,6 +1426,26 @@
       "entryPoints": [".github/workflows/release.yml"],
       "implementationScope": ["Publish only the reviewed immutable predecessor artifacts", "Independently download and verify hashes, signatures, provenance, and exact source identity"],
       "acceptanceCriteria": ["Artifacts are immutable and signed under the disclosed project-pinned trust model", "Krilliac gives required owner approval with administrative bypass disabled", "A read-only independent consumer verifies the published predecessor before v1 uses it"],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:48a246fe39b7",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No predecessor artifacts have been published or signed. Needs a published immutable release."
+        },
+        {
+          "criterionDigest": "sha256:e8d601f5ec0c",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs Krilliac's owner approval in a hosted protected environment with admin bypass disabled. None is recorded."
+        },
+        {
+          "criterionDigest": "sha256:21deba073030",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No independent read-only consumer verification of a published predecessor exists."
+        }
+      ],
       "commands": ["python3 tools/site-data/validate.py --require-predecessor-candidate"],
       "testSelectors": [],
       "requiredCiJobs": [],
@@ -1071,6 +1494,53 @@
         "Release notes enumerate support, limitations, migrations, hashes, signatures, SBOM, and provenance",
         "The profile-required-gates and release-approval jobs execute and block on failure; no planned rehearsal selector remains",
         "Named qualification sign-off is retained; the protected stable-release environment requires Krilliac owner approval with administrative bypass disabled, and independent technical verification remains separate"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:c546f1e4dabe",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs passing exact-SHA hosted evidence for every required gate and dependency. Many dependencies are still open."
+        },
+        {
+          "criterionDigest": "sha256:22e8be2baa83",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "CTest site-data-contract drives the production validator. It checks gates are required or excluded with a reason, excluded gates may stay blocked, and misclassified or scope-widening support claims are rejected."
+        },
+        {
+          "criterionDigest": "sha256:d1ade2fca435",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No clean install, uninstall, repair or recovery drills have passed on supported hosts. Those need Windows or hosted runs."
+        },
+        {
+          "criterionDigest": "sha256:b83699f23d85",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_release_notes.py",
+            "tools/release_notes.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/release.yml"
+          ],
+          "note": "CTest ReleaseProfileRehearsal_ReleaseNotes runs tools/release_notes.py. It checks support, limitations, migrations, SHA256SUMS, signatures, SBOM and attestation provenance, and fail-closed errors."
+        },
+        {
+          "criterionDigest": "sha256:f24b9e8fd483",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The profile-required-gates and release-approval jobs are still in plannedCiJobs. The ReleaseProfileRehearsal_Qualification* selector is still planned."
+        },
+        {
+          "criterionDigest": "sha256:90bdc7c18dcd",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs a named qualification sign-off and a hosted protected owner approval. None is retained."
+        }
       ],
       "commands": ["python3 tools/site-data/validate.py", "sha256sum -c SHA256SUMS"],
       "testSelectors": ["ReleaseProfileRehearsal_ReleaseNotes", "ReleaseProfileRehearsal_Qualification*"],
@@ -1121,6 +1591,39 @@
         "Excluded gates may remain blocked and cannot be presented as supported",
         "Published artifacts are immutable and independently verify against the exact qualified candidate",
         "Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:f939f3cc8af2",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs every profile gate passing at a candidate SHA. The gates are blocked and there is no hosted evidence."
+        },
+        {
+          "criterionDigest": "sha256:22e8be2baa83",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "test_excluded_gates_and_work_may_remain_open_when_ready, plus the scope-widening and capability-classification rejection tests, exercise the production validator for this rule."
+        },
+        {
+          "criterionDigest": "sha256:5bbbc4190311",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No published immutable artifacts, and no independent verification against a qualified candidate."
+        },
+        {
+          "criterionDigest": "sha256:3b70b5b3a40d",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py"
+          ],
+          "note": "The validator only tests that global ready needs every profile ready. Nothing ties ready to publication evidence, and the live-site switch needs a hosted publish."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py --require-candidate-ready",

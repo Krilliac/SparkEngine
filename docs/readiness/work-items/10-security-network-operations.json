@@ -5,7 +5,7 @@
       "id": "SEC-100",
       "title": "Close critical remote-administration and runtime security paths",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "security",
@@ -39,6 +39,50 @@
         "Invalid, expired, replayed, downgraded, or rate-limited credentials fail closed",
         "Every attempt is auditable without logging reusable secrets",
         "Remote administration is permanently unavailable in stable-v1 and no configuration or command-line switch enables it (OD-05)"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1ecbff731c6f",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRemoteDebugSystem.cpp",
+            "Tests/TestDedicatedServerRuntime.cpp",
+            "SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h",
+            "SparkEngine/Source/Engine/Networking/DedicatedServer.cpp"
+          ],
+          "note": "RemoteAdmin_AnonymousDenied, RemoteAdmin_RoleMatrix and DedicatedServerRuntime_ChatCannotInvokeRcon run production code compiled into SparkTests. They deny anonymous, observer and chat-slash admin dispatch."
+        },
+        {
+          "criterionDigest": "sha256:b8429c15a3e3",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRemoteDebugSystem.cpp",
+            "Tests/TestGatewayAreaControl.cpp",
+            "SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h",
+            "SparkGateway/src/GatewayAreaControl.cpp"
+          ],
+          "note": "Malformed, expired, replayed, rate-limited and reserved-command-rebind (downgrade) denials are tested, plus gateway wrong-key MAC, stale timestamp and replayed nonce rejection. These run against production code linked into SparkTests."
+        },
+        {
+          "criterionDigest": "sha256:cc7d31770b8e",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRemoteDebugSystem.cpp",
+            "Tests/TestDedicatedServerRuntime.cpp",
+            "Tests/TestGatewayAreaControl.cpp",
+            "SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h"
+          ],
+          "note": "Audit disposition and eviction-count tests, RconAuditRedactsArgumentsAndResponses and GatewayAreaControl_AuditRecordOmitsSecrets check that each attempt is audited and secrets are absent."
+        },
+        {
+          "criterionDigest": "sha256:d945d445bf2a",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestSEC100RemoteAdminUnavailableReal.cpp",
+            "SparkEngine/Source/Engine/Networking/DedicatedServer.h"
+          ],
+          "note": "Downgraded: the compile-time checks catch only the named entry points and fields. Nothing tests that no command-line switch enables it, and the networking-off Shipping contract is not built by any lane."
+        }
       ],
       "commands": [
         "rg -n \"RCON|rconPassword|ExecuteCommand\" SparkEngine/Source/Engine/Networking",
@@ -143,6 +187,40 @@
         "Critical/high findings block without an owned expiring exception",
         "Final package inventory reconciles with source lock",
         "Release artifacts include verifiable supply-chain evidence"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1d1411824831",
+          "state": "unmet",
+          "evidence": [
+            "Tests/test_check_supply_chain.py",
+            "tools/check-supply-chain.py"
+          ],
+          "note": "Action pins and the ThirdParty lock are enforced. There is still no policy for third-party code outside ThirdParty/, so unmanaged dependencies are not ruled out."
+        },
+        {
+          "criterionDigest": "sha256:1fa25e25f1e1",
+          "state": "unmet",
+          "evidence": [
+            ".github/scripts/verify_vulnerability_findings.py"
+          ],
+          "note": "The gate covers only the release SBOM. Dependency-level scanning is still a listed blocker, and whether syft catalogs statically linked ThirdParty code is unverified."
+        },
+        {
+          "criterionDigest": "sha256:b70931523204",
+          "state": "unmet",
+          "evidence": [
+            "Tests/Tools/test_generate_sbom.py",
+            "tools/generate-sbom.py"
+          ],
+          "note": "Reconcile mode is tested but not wired into the release.yml package jobs. There is no final Windows or hosted package reconciliation evidence."
+        },
+        {
+          "criterionDigest": "sha256:a0dafc5583e3",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Needs published release artifacts carrying verified SBOM and provenance. No such release exists."
+        }
       ],
       "commands": [
         "python3 tools/check-supply-chain.py",
@@ -276,6 +354,26 @@
         "Every found issue lands with a minimized regression fixture",
         "Required fuzz smoke is deterministic and blocking"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:cd03931e2734",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Only some parsers have bounds or libFuzzer targets. The item still lists blocked and unclassified parser candidates, so 'every parser' is not shown."
+        },
+        {
+          "criterionDigest": "sha256:f3d43da4661a",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Nothing enforces a minimized regression fixture for each found issue, and the definition of done still lists this as remaining."
+        },
+        {
+          "criterionDigest": "sha256:f4d1e4691985",
+          "state": "unmet",
+          "evidence": [],
+          "note": "A blocking fuzz-smoke gate needs hosted, exact-SHA CI evidence. The local fuzz-smoke CTest targets cover only some parsers."
+        }
+      ],
       "commands": [
         "cmake --preset linux-fuzz",
         "cmake --build build/linux-fuzz",
@@ -341,7 +439,7 @@
       "id": "NET-100",
       "title": "Replace placeholder transport security with audited authenticated encryption",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 3,
       "area": "networking",
@@ -384,6 +482,32 @@
         "Tamper, replay, nonce reuse, wrong key, truncation, reorder, downgrade, and malformed handshake fail closed",
         "Authentication and gameplay share the production encrypted path",
         "No custom cryptographic primitive remains in the advertised transport"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1a190dffcb31",
+          "state": "unmet",
+          "evidence": [],
+          "note": "GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocolOnboarding.h still sends a plaintext password field (char pass[64]) at login."
+        },
+        {
+          "criterionDigest": "sha256:1294cd87e10f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No tamper, replay, downgrade or key-rotation suite runs through a production authenticated transport."
+        },
+        {
+          "criterionDigest": "sha256:c7a82159fc73",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Authentication and gameplay do not share an audited encrypted path."
+        },
+        {
+          "criterionDigest": "sha256:04b666ab668b",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The custom XOR/FNV NetworkEncryption and TFCrypto primitives are still in the tree, and no independent review is recorded."
+        }
       ],
       "commands": [
         "rg -n \"mt19937|FNV|XOR|placeholder for DTLS|placeholder for AES|char pass\" SparkEngine/Source GameModules/SparkGameMMOFPS",
@@ -452,7 +576,7 @@
       "id": "NET-110",
       "title": "Define and implement the production online-service boundary",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 3,
       "area": "services",
@@ -491,6 +615,32 @@
         "Engine runs locally with deterministic adapters",
         "Production adapters fail safely and are observable",
         "No local JSON/demo service is marketed as production infrastructure"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1bdf18cdc828",
+          "state": "unmet",
+          "evidence": [],
+          "note": "docs/specs/online-services.md has a diagram and boundaries B1-B9, but no check requires that content. The validator only checks the file exists and its wording."
+        },
+        {
+          "criterionDigest": "sha256:70dbbe77ed6e",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Only NullOnlinePlatform is deterministic. Local adapters for identity, match, fleet, moderation and entitlement are still open."
+        },
+        {
+          "criterionDigest": "sha256:5f2ff3eec738",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No production adapter exists. GuardedOnlinePlatform is tested only against a fault-injecting test adapter."
+        },
+        {
+          "criterionDigest": "sha256:dbc290e08ea2",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Downgraded. validate.py only catches hosted/managed/turnkey phrasing on a fixed set of pages. A 'production' claim about a local JSON or demo store (TFDatabase, MMO modules) elsewhere would pass."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py --capability services.production",
@@ -547,7 +697,7 @@
       "id": "DATA-120",
       "title": "Make multiplayer persistence transactional, migratable, backed up, and recoverable",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 3,
       "area": "persistence",
@@ -584,6 +734,32 @@
         "N-1 migrations and rollback fixtures pass",
         "Forced process/database failure recovers to a documented point",
         "Backup restore is regularly rehearsed"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:25b8b24da1b3",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The Persistence_Transaction tests cover only single-writer atomicity in TFDatabase. No concurrent-writer or territory-store test exists."
+        },
+        {
+          "criterionDigest": "sha256:f67e46df6e00",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The N-1 migration tests cover only the TFDatabase character store. No rollback or downgrade fixture exists, and no economy or territory store is migrated."
+        },
+        {
+          "criterionDigest": "sha256:824bc738ee74",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No drill forces a process or database failure and checks recovery to a documented point."
+        },
+        {
+          "criterionDigest": "sha256:d2d86202a7f2",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No backup/restore implementation or test exists, and 'regularly rehearsed' also needs history over time."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -L persistence --output-on-failure --no-tests=error",
@@ -646,7 +822,7 @@
       "id": "OPS-100",
       "title": "Secure and complete crash reporting, telemetry delivery, and symbol operations",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 1,
       "area": "operations",
@@ -682,6 +858,48 @@
         "Declined consent transmits nothing",
         "A synthetic release crash reaches the test relay and symbolicates to source",
         "Endpoint outage recovers within documented spool/drop bounds"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:71c492c4e794",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Full-memory dumps can still hold in-process secrets, as the consent text itself says. The privacy review is still pending."
+        },
+        {
+          "criterionDigest": "sha256:2f215b96fa7c",
+          "state": "implemented",
+          "evidence": [
+            "SparkCrashReporter/tests/CrashReporterManifestTests.cpp",
+            "SparkCrashReporter/src/CrashReporterApp.cpp",
+            "SparkCrashReporter/CMakeLists.txt",
+            "Tests/Tools/test_ops100_crash_security.py"
+          ],
+          "note": "CTest SparkCrashReporter.ManifestCompatibility builds the production reporter. It rejects traversal, symlinks, junctions, hardlinks and file swaps, and checks outside sentinel files survive."
+        },
+        {
+          "criterionDigest": "sha256:fbf020452e6c",
+          "state": "implemented",
+          "evidence": [
+            "SparkCrashReporter/tests/CrashReporterConsentTests.cpp",
+            "SparkCrashReporter/src/CrashReporterApp.cpp",
+            "Tests/TestTelemetrySpool.cpp",
+            "SparkEngine/Source/Utils/Telemetry.h"
+          ],
+          "note": "CTest CrashReporter_Consent: declined or unanswered prompts make zero fake-gh calls, and an explicit yes makes one. Telemetry_SpoolRecovery_ConsentRevocation: no backend call after revocation."
+        },
+        {
+          "criterionDigest": "sha256:3a1537530a6f",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There is no relay and no private symbol publication. The canary only symbolicates a -g probe offline."
+        },
+        {
+          "criterionDigest": "sha256:7ab0f4aa3ffc",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No network endpoint exists. Spool bounds are proven only against a test backend, and telemetry.md lists this as a blocker."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -L crash-security --output-on-failure --no-tests=error",
@@ -781,7 +999,7 @@
       "id": "OPS-110",
       "title": "Add production server observability, load, soak, backup, and incident gates",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 3,
       "area": "operations",
@@ -821,6 +1039,32 @@
         "Thirty-minute release smoke and longer scheduled soak show bounded memory/queues and pass p95/p99 budgets",
         "Backup/restore and alert/runbook drills are recorded",
         "Telemetry is externally consumable and exact-SHA labeled"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:23354f02da27",
+          "state": "unmet",
+          "evidence": [],
+          "note": "The Server_Health tests cover health JSON and drain signalling only. Restarting and recovering a failing server is not tested."
+        },
+        {
+          "criterionDigest": "sha256:3d3d8ebe5028",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There are no soak, load or p95/p99 budget runs. The smoke and scheduled soaks need hosted or history evidence."
+        },
+        {
+          "criterionDigest": "sha256:6a1b58381966",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No backup/restore or alert/runbook drills are recorded."
+        },
+        {
+          "criterionDigest": "sha256:6a4de067db5d",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No telemetry export exists that outside tools can consume with exact-SHA labels, and it would need hosted evidence."
+        }
       ],
       "commands": [
         "ctest --test-dir build/linux-gcc-release -L server-soak --output-on-failure --no-tests=error",
@@ -933,6 +1177,32 @@
         "Golden changes require reviewed baseline update",
         "Required soak completes without leak, crash, deadlock, or unbounded queue growth",
         "Results attach to exact commit and certified hardware row"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:3950e9bda498",
+          "state": "unmet",
+          "evidence": [],
+          "note": "All metrics are pending_measurement and none has an accepted baseline, so no budget can block a regression."
+        },
+        {
+          "criterionDigest": "sha256:f4be3e4b59ef",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No reviewed golden baselines are committed, and no approval gate exists for baseline changes."
+        },
+        {
+          "criterionDigest": "sha256:4570b349bbe5",
+          "state": "unmet",
+          "evidence": [],
+          "note": "No required long soak exists or has been run."
+        },
+        {
+          "criterionDigest": "sha256:aa587eb5dfef",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There are no certified hardware rows, and this needs exact-commit results on certified hardware."
+        }
       ],
       "commands": [
         "python3 -m unittest Tests.Tools.test_perf_budget Tests.Tools.test_perf_budget_adversarial Tests.Tools.test_perf_budget_hardening -v",
