@@ -90,7 +90,7 @@ static HRESULT InitializeGraphicsForWindow(SDL_Window* window, void* nativeRende
     if (SUCCEEDED(hr))
         console.LogInfo("Graphics engine initialized (RHI backend).");
     else
-        console.LogWarning("Graphics engine initialization deferred (headless fallback).");
+        console.LogError("Graphics engine initialization failed for the render window.");
     return hr;
 }
 
@@ -278,13 +278,12 @@ int RunSDL2Windowed(int argc, char* argv[])
         SetOpenGLWindowAttributes();
     }
 
-    // If SDL itself failed to initialize, or RHIBridge already decided there
-    // is no usable GPU backend (e.g. under gVisor or on a host missing
-    // libEGL/libvulkan), skip SDL window creation entirely. SDL2's offscreen
-    // video driver dlopen()s libEGL during SDL_CreateWindow — if libEGL is
-    // missing the process exits with -1 without surfacing an error through
-    // SDL_GetError(). Running windowless in that case lets the engine come up
-    // on NullRHIDevice.
+    // If SDL itself failed to initialize, or RHIBridge recommends no GPU
+    // backend at all (e.g. under gVisor), this host cannot render, so the run
+    // deliberately stays windowless on NullRHIDevice. Every other run attempts
+    // a window: a failed SDL_CreateWindow reports its reason through
+    // SDL_GetError() (for example the offscreen driver's "Could not load EGL
+    // library") and fails startup below instead of degrading.
     const bool noGpuBackend =
         !sdlInitOk || ((!preferVulkan && !preferMetal) &&
                        (Spark::RHI::RHIBridge::GetRecommendedBackend() == Spark::RHI::GraphicsBackend::None));
@@ -304,6 +303,19 @@ int RunSDL2Windowed(int argc, char* argv[])
     else
         windowFlags |= SDL_WINDOW_OPENGL;
 
+    // Set when this windowed run attempted to create its window, Metal view
+    // or GL context and failed. Such a run must not quietly continue on
+    // NullRHIDevice and exit 0: that is how a missing libEGL once turned every
+    // Linux windowed OpenGL launch into an unnoticed headless run. Hosts with
+    // no GPU backend at all take the noGpuBackend path above instead, and a
+    // deliberately windowless run passes -headless.
+    bool windowSurfaceLost = false;
+
+    // Set when the window and context exist but GraphicsEngine could not bring
+    // up a render device for them (RHIBridge refuses the silent headless
+    // fallback for a windowed surface). Refused below for the same reason.
+    bool graphicsInitFailed = false;
+
     SDL_Window* window = nullptr;
     if (!noGpuBackend)
     {
@@ -311,13 +323,8 @@ int RunSDL2Windowed(int argc, char* argv[])
             SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
         if (!window)
         {
-            // Treat window-creation failure as recoverable: the engine will
-            // initialize graphics against a null handle (NullRHIDevice) and
-            // run the main loop windowless. This matches the headless
-            // fallback the rest of the stack already handles.
-            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                           "SDL_CreateWindow failed: %s — falling back to windowless / NullRHIDevice mode",
-                           SDL_GetError());
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "SDL_CreateWindow failed: %s", SDL_GetError());
+            windowSurfaceLost = true;
             if (preferVulkan)
             {
                 SDL_Vulkan_UnloadLibrary();
@@ -337,15 +344,13 @@ int RunSDL2Windowed(int argc, char* argv[])
         sdlMetalView = Spark::MacOS::CreateMetalView(window);
         if (!sdlMetalView)
         {
-            // Metal framework unavailable / sandbox restriction. Tear down
-            // the Metal window and continue windowless — RHIBridge will
-            // select NullRHIDevice and the engine will run headlessly rather
-            // than aborting.
-            Spark::SimpleConsole::GetInstance().LogWarning(
-                "Spark::MacOS::CreateMetalView returned null — running windowless on NullRHIDevice");
+            // Metal framework unavailable / sandbox restriction. The window
+            // cannot render, so startup is refused below.
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Spark::MacOS::CreateMetalView returned null");
             SDL_DestroyWindow(window);
             window = nullptr;
             preferMetal = false;
+            windowSurfaceLost = true;
         }
     }
 
@@ -360,8 +365,8 @@ int RunSDL2Windowed(int argc, char* argv[])
         glContext = SDL_GL_CreateContext(window);
         if (!glContext)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                           "SDL_GL_CreateContext failed: %s — engine will try headless fallback", SDL_GetError());
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "SDL_GL_CreateContext failed: %s", SDL_GetError());
+            windowSurfaceLost = true;
         }
         else
         {
@@ -385,9 +390,12 @@ int RunSDL2Windowed(int argc, char* argv[])
     // backend choice into the window flags at creation time, so if
     // RHIBridge falls back from Vulkan to OpenGL we need to recreate the
     // window with SDL_WINDOW_OPENGL and re-run graphics init.
-    InitializeGraphicsForWindow(window, nativeRenderHandle);
+    // A failed Vulkan init is not final: the fallback below rebuilds the window
+    // for OpenGL and initializes again, and only that second result decides.
+    if (!windowSurfaceLost)
+        graphicsInitFailed = FAILED(InitializeGraphicsForWindow(window, nativeRenderHandle)) && !preferVulkan;
 
-    if (preferVulkan)
+    if (preferVulkan && !windowSurfaceLost)
     {
         auto* rhiDev = GetEngineRuntime().graphics->GetRHIDevice();
         auto* rhiBridge = GetEngineRuntime().graphics->GetRHIBridge();
@@ -416,22 +424,18 @@ int RunSDL2Windowed(int argc, char* argv[])
                                       windowFlags);
             if (!window)
             {
-                // Second-chance GL window creation also failed. Don't abort;
-                // initialize graphics against a null handle and run the engine
-                // on NullRHIDevice, matching the noGpuBackend path above.
-                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                               "SDL_CreateWindow (GL fallback) failed: %s — falling back to windowless / NullRHIDevice "
-                               "mode",
-                               SDL_GetError());
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "SDL_CreateWindow (GL fallback) failed: %s",
+                                SDL_GetError());
+                windowSurfaceLost = true;
             }
             else
             {
                 glContext = SDL_GL_CreateContext(window);
                 if (!glContext)
                 {
-                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                                   "SDL_GL_CreateContext (GL fallback) failed: %s — engine will try headless fallback",
-                                   SDL_GetError());
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "SDL_GL_CreateContext (GL fallback) failed: %s",
+                                    SDL_GetError());
+                    windowSurfaceLost = true;
                 }
                 else
                 {
@@ -443,7 +447,8 @@ int RunSDL2Windowed(int argc, char* argv[])
 
             // Metal view is only valid for a preferMetal path — Vulkan fallback
             // never creates one, so nativeRenderHandle stays null here.
-            InitializeGraphicsForWindow(window, /*nativeRenderHandle=*/nullptr);
+            if (!windowSurfaceLost)
+                graphicsInitFailed = FAILED(InitializeGraphicsForWindow(window, /*nativeRenderHandle=*/nullptr));
         }
     }
 
@@ -461,6 +466,24 @@ int RunSDL2Windowed(int argc, char* argv[])
             SDL_Quit();
         }
     };
+
+    // A windowed run whose window, Metal view or GL context could not be
+    // created fails startup (reason logged above) instead of degrading to
+    // NullRHIDevice. This mirrors RHIBridge::Initialize refusing the silent
+    // headless fallback for a windowed surface.
+    if (windowSurfaceLost)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                        "Windowed startup could not create its render window or context — refusing to continue on "
+                        "NullRHIDevice (pass -headless for a windowless run)");
+        if (GetEngineRuntime().graphics)
+        {
+            GetEngineRuntime().graphics->Shutdown();
+            GetEngineRuntime().graphics.reset();
+        }
+        releaseSdlResources();
+        return EXIT_FAILURE;
+    }
 
     // SPARK_RHI_BACKEND naming a GPU backend is an explicit operator request
     // (CI lanes, backend certification). Coming up on anything else — NullRHI
@@ -485,6 +508,22 @@ int RunSDL2Windowed(int argc, char* argv[])
             releaseSdlResources();
             return EXIT_FAILURE;
         }
+    }
+
+    // The window and context exist but no render device came up for them, with
+    // no backend named (a named one was refused above with its own message).
+    if (graphicsInitFailed)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                        "Windowed startup could not initialize a render device for its window — refusing to "
+                        "continue on NullRHIDevice (pass -headless for a windowless run)");
+        if (GetEngineRuntime().graphics)
+        {
+            GetEngineRuntime().graphics->Shutdown();
+            GetEngineRuntime().graphics.reset();
+        }
+        releaseSdlResources();
+        return EXIT_FAILURE;
     }
 
     const bool lifecycleInitialized = InitializeSDL2Subsystems(window, argc, argv);

@@ -136,6 +136,21 @@ land on NullRHI). The SDL2 window requests the same 4.5 core context `GLDevice`
 requires. `SparkEngineExplicitOpenGLStartup` (CTest label `opengl`) runs the real
 executable under `DISPLAY` or `xvfb-run` and checks both outcomes.
 
+**Lost windows fail closed too (PLT-210).** The same host fails startup whenever it
+tries to create a window, Metal view or GL context and cannot, whether or not a
+backend was named. It logs the SDL error, then `Windowed startup could not create its
+render window or context — refusing to continue on NullRHIDevice`, and exits 1.
+If the window and context exist but `GraphicsEngine::Initialize` fails for them, it
+logs `Windowed startup could not initialize a render device for its window` and
+exits 1 too (after the Vulkan-to-OpenGL rebuild, when Vulkan was tried first).
+Only runs that never try to create a window still come up on NullRHI: `-headless`,
+`SPARK_RHI_BACKEND=null`, a failed `SDL_Init`, and hosts where the RHI recommends no
+GPU backend. Debug builds are the exception: they pass `allowHeadlessFallback=true`
+to RHIBridge, so a Debug windowed run whose GPU backends all fail still comes up on
+NullRHI unless `SPARK_RHI_BACKEND` names a backend. The CTest also runs SparkGameFPS for 30 frames on the OpenGL window,
+requiring exactly one OpenGL initialization. It also requires the refusal on
+`SDL_VIDEODRIVER=dummy`, where window creation fails on every host.
+
 ### NullRHIDevice Selection and Bridge Failover
 
 When `GraphicsBackend::None` is selected, `RHIFactory::CreateDevice()` returns a

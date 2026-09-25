@@ -120,12 +120,58 @@ Notes:
   (Mesa llvmpipe)**, initialized ImGui, fonts and panels, and was still running
   when the 25 s timeout killed it. No interaction or rendering correctness was
   checked.
-* **Engine rendering on Linux was not demonstrated.** Without a backend
-  override, the SDL2 path chose `NullRHIDevice` because of the gVisor
-  detection. With `SPARK_RHI_BACKEND=opengl` under Xvfb, the RHI still logged
-  "No graphics backend available — falling back to NullRHIDevice", with no
-  reason given. Owner: RHI lane (`Graphics/RHI/**`, forbidden to this lane);
-  the cause is unknown.
+* **Engine rendering on Linux was not demonstrated** in the original run.
+  Without a backend override, the SDL2 path chose `NullRHIDevice` because of
+  the gVisor detection. With `SPARK_RHI_BACKEND=opengl` under Xvfb, the RHI
+  still logged "No graphics backend available — falling back to
+  NullRHIDevice", with no reason given, and the run exited 0.
+* **Root cause and fix (added later, PLT-210 / RHI-240).** The SDL2 host
+  unconditionally set `SDL_HINT_VIDEO_X11_FORCE_EGL=1`. This host has no
+  `libEGL` (only `libGL`/`libGLX_mesa`), so `SDL_CreateWindow` failed with
+  "Could not load EGL library". The failure was logged through `SimpleConsole`
+  before the console existed, so nothing reached stdout. `GraphicsEngine` then
+  received a null window and picked NullRHI. Commit `b3607df` (RHI-240) now
+  forces EGL only in `SPARK_EGL_SUPPORT` builds, which link `libEGL` and whose
+  `GLDevice` reuses a host EGL context. GLX builds keep SDL's GLX context,
+  which `GLDevice` already reuses. That commit also logs SDL failures through
+  `SPARK_LOG_ERROR` and refuses to start when `SPARK_RHI_BACKEND` names a GPU
+  backend that did not come up. PLT-210 then made the windowed host fail
+  closed whenever it tried to create a window, Metal view or GL context and
+  could not, whether or not a backend was named. It logs
+  "Windowed startup could not create its render window or context — refusing
+  to continue on NullRHIDevice" and exits 1. When the window and context exist
+  but `GraphicsEngine::Initialize` fails for them (RHIBridge refuses the
+  headless fallback for a windowed surface in Release builds), the host logs
+  "Windowed startup could not initialize a render device for its window —
+  refusing to continue on NullRHIDevice" and exits 1 as well. A failed Vulkan
+  init is not final there: the Vulkan-to-OpenGL rebuild runs, and only its
+  result decides. Runs that never try to create a window are unchanged:
+  `-headless`, `SPARK_RHI_BACKEND=null`, and hosts where the RHI recommends no
+  GPU backend. Debug builds still pass `allowHeadlessFallback=true` to
+  RHIBridge, so a Debug windowed run whose GPU backends all fail comes up on
+  NullRHI unless `SPARK_RHI_BACKEND` names a backend. The render-device refusal
+  is checked by reading the code only. On this host, runs with no backend named
+  (or `SPARK_RHI_BACKEND=auto`) get "recommended backend = None" and never try a
+  window. A named backend that fails is still refused with the explicit-backend
+  message, which is checked before the render-device message. Re-run on this host at HEAD `d44383d`
+  plus this change (local, not CI):
+  * From `bin/`: `xvfb-run -a env SPARK_RHI_BACKEND=opengl ./SparkEngine -game
+    $PWD/libSparkGameFPS.so -require-game -test-frames 30 -no-subprocess`
+    exits 0 on "OpenGL 4.5 (Core Profile) Mesa 25.2.8 … llvmpipe". It logs
+    exactly one "Initialized on Linux via RHI (OpenGL)" and no NullRHI
+    selection.
+  * The same command with `DISPLAY` unset and no Xvfb exits 1. SDL picks its
+    `offscreen` driver, which reports "SDL_CreateWindow failed: Could not load
+    EGL library", and the refusal follows.
+  * With `SDL_VIDEO_X11_FORCE_EGL=1` exported (the old forced hint), the
+    run under Xvfb now exits 1 with the same SDL reason. It no longer exits 0
+    on NullRHI.
+  * CTest `SparkEngineExplicitOpenGLStartup` (labels `opengl;llvmpipe;linux;
+    sdl2`) covers four cases. It checks the explicit OpenGL start and the
+    `SPARK_DISABLE_OPENGL=1` refusal. It runs SparkGameFPS for 30 frames on
+    the OpenGL window and requires exactly one OpenGL initialization. It also
+    requires a non-zero exit with the SDL reason and the refusal on
+    `SDL_VIDEODRIVER=dummy`, where window creation fails on every host.
 * Audio: the OpenAL Soft backend initialized. There was no audio device and
   no audible output was verified.
 * **Headless NullRHI records (added later, PLT-210).** `RunHeadlessLinux` now
@@ -234,8 +280,10 @@ not built.
    stages other modules' `Shaders/` and `Assets/` into `lib/`. Fix: stage to the
    runtime (`bin/`) directory.
 2. **`SparkTests` link failure with CMake 3.28.3** (§3, build lane).
-3. **Engine OpenGL RHI falls back to NullRHI under Xvfb** (§6, RHI lane,
-   unexplained).
+3. ~~**Engine OpenGL RHI falls back to NullRHI under Xvfb**~~ **Fixed.** The
+   cause was the unconditional `SDL_VIDEO_X11_FORCE_EGL=1` on a host without
+   `libEGL`, and window-creation failures were silently downgraded to NullRHI.
+   See §6 for the fix and the regression test.
 4. Engine log lines emitted after "Loading module" through `SimpleConsole` are
    not flushed to the `SparkConsole` child before shutdown. A failed module
    load's reason appears only with `-no-subprocess` or under a debugger
