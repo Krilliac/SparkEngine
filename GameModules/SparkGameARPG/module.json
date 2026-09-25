@@ -4,8 +4,13 @@
   "cmakeTarget": "SparkGameARPG",
   "sourceDirectory": "GameModules/SparkGameARPG/Source",
   "assets": {
-    "state": "none",
-    "reason": "The ARPG module ships no asset root; its sources reference no asset files."
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/ARPG",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
   },
   "tests": {
     "files": [

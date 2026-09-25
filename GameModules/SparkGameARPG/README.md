@@ -8,7 +8,11 @@ SparkGameARPG is a compact systems-first action-RPG example. Loading the module 
 - `Q`: use the learned primary skill
 - `R`: restart at floor one with full health and mana
 
-The same loop is scriptable through `arpg_encounter`, `arpg_attack`, `arpg_cast`, and `arpg_restart`. The module intentionally uses its existing debug UI and engine integrations rather than shipping duplicate template-local art; monster, loot, skill, dungeon, combat, save, and AI state remain inspectable from the editor.
+The same loop is scriptable through `arpg_encounter`, `arpg_attack`, `arpg_cast`, and `arpg_restart`. Monster, loot, skill, dungeon, combat, save, and AI state remain inspectable from the editor through the module's debug UI.
+
+## Crypt kit
+
+When the module loads with a world, `ARPGDungeonSystem` dresses the crypt entry room with the Blender-authored Action RPG Dungeon kit in `Assets/Models/ARPG/Kit`: three destructible urns, a spike trap, a loot pile, and the portal gate to the next floor. The props are set dressing only, with no colliders, triggers, or destructible components. Source, provenance, and preview are in `Art/Blender/SparkGameARPG/`, and `asset-references.json` records every asset path the module source names.
 
 Skill learning and casting are validated against the authoritative hero ID, class, and level. Health and mana recover at deterministic, frame-rate-independent rates while the hero is alive, so the playable loop does not strand the starter hero after spending the initial mana pool. If another gameplay system defeats the current encounter target, the encounter reconciles that death on its next update, awards progression once, and spawns the next target.
 

@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 1049,
+  "fileCount": 1073,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -1690,6 +1690,174 @@
       "size": 194,
       "license": "CC0-1.0",
       "provenance": "Procedural placeholder output of tools/generate_default_assets.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [default-placeholder-generator]"
+    },
+    {
+      "path": "Models/ARPG/Kit/destructible_urn.mtl",
+      "sha256": "54ccaec076952e97ef7217fb251a992743c8247b8855b6ddf4cc0baf90212572",
+      "size": 981,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json: Blender-authored destructible_urn [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/destructible_urn.obj",
+      "sha256": "21e82d9cdcbd26e02b0ea230cf91b25ca1d0377768d16624990f2e5d1c8a7925",
+      "size": 51696,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json: Blender-authored destructible_urn [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/destructible_urn_collision.mtl",
+      "sha256": "bb0b0cf67090555e6b454f327087c897e51f9e99fe684a2190fdeefb429fd80d",
+      "size": 237,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/destructible_urn_collision.obj",
+      "sha256": "c8655e591e3ba6f93afdf397999461f7538e705d7115757ac3a10e7a94af94a9",
+      "size": 14616,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/destructible_urn_lod1.mtl",
+      "sha256": "54ccaec076952e97ef7217fb251a992743c8247b8855b6ddf4cc0baf90212572",
+      "size": 981,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/destructible_urn_lod1.obj",
+      "sha256": "7111b6821a2d47195797635fac125dda51517840e9c7b69f68ef3c80d230283a",
+      "size": 24844,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/loot_pile.mtl",
+      "sha256": "bc8923e37b56b3f48cf0a829a46a2c8fbc53f7f5f8190f5a438f846ed5d53b80",
+      "size": 987,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json: Blender-authored loot_pile [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/loot_pile.obj",
+      "sha256": "e0db779d0146eccc64dae8b4c1be930c89a017dca542c71794eb2fc62708b4e3",
+      "size": 89250,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json: Blender-authored loot_pile [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/loot_pile_collision.mtl",
+      "sha256": "bb0b0cf67090555e6b454f327087c897e51f9e99fe684a2190fdeefb429fd80d",
+      "size": 237,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/loot_pile_collision.obj",
+      "sha256": "ac0ee54728442dcf62a50e184aac598819ce874474be34326d3bf8bbe88441a5",
+      "size": 11076,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/loot_pile_lod1.mtl",
+      "sha256": "bc8923e37b56b3f48cf0a829a46a2c8fbc53f7f5f8190f5a438f846ed5d53b80",
+      "size": 987,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/loot_pile_lod1.obj",
+      "sha256": "a9b4509a9745ee6b24264aea35c6ff63c4086c5326acf5f069787a0d70fd3920",
+      "size": 38125,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/portal_gate.mtl",
+      "sha256": "8e96e6d0cadd604da759634d4d0afa13d5340ea6df94683d8666f6809b408af6",
+      "size": 990,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json: Blender-authored portal_gate [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/portal_gate.obj",
+      "sha256": "dfe93bd8b7f03cb75bd53da0182276da218ab5a73e423c6a8bb10f64ccc40d83",
+      "size": 90489,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json: Blender-authored portal_gate [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/portal_gate_collision.mtl",
+      "sha256": "bb0b0cf67090555e6b454f327087c897e51f9e99fe684a2190fdeefb429fd80d",
+      "size": 237,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/portal_gate_collision.obj",
+      "sha256": "551133c8c1d801f10129faea47fbe773869942f6a35d9ab5c18b4aa153e715a8",
+      "size": 12275,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/portal_gate_lod1.mtl",
+      "sha256": "8e96e6d0cadd604da759634d4d0afa13d5340ea6df94683d8666f6809b408af6",
+      "size": 990,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/portal_gate_lod1.obj",
+      "sha256": "02abb8cdd3178c22d7135297711238eac989bfba3509a7e2d3b42bae3a560265",
+      "size": 41372,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/spike_trap.mtl",
+      "sha256": "0de3ec905f70b67351c316ef1ad1995f1feaaa29a66fdfa072ccb3162cabc1cb",
+      "size": 985,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json: Blender-authored spike_trap [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/spike_trap.obj",
+      "sha256": "e5a5dbb97b5883339bb3f95cd359dda48b6a62a0cc5f0552a6a317a3a47f101f",
+      "size": 103363,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json: Blender-authored spike_trap [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/spike_trap_collision.mtl",
+      "sha256": "bb0b0cf67090555e6b454f327087c897e51f9e99fe684a2190fdeefb429fd80d",
+      "size": 237,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/spike_trap_collision.obj",
+      "sha256": "41f6d9e7fb2dc206ba7df3555d545946d991c4fc0b24082bebd5c9415a16aeed",
+      "size": 8994,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/spike_trap_lod1.mtl",
+      "sha256": "0de3ec905f70b67351c316ef1ad1995f1feaaa29a66fdfa072ccb3162cabc1cb",
+      "size": 985,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
+    },
+    {
+      "path": "Models/ARPG/Kit/spike_trap_lod1.obj",
+      "sha256": "944dd5768b4d91a32da4219cfb4ceec53015f4e0af5992c8a96071842a987c15",
+      "size": 49013,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameARPG/arpg_kit.blend via tools/blender/author_arpg_kit.py; hash-bound by Art/Blender/SparkGameARPG/provenance.json [arpg-blender-kit]"
     },
     {
       "path": "Models/Cube.mtl",

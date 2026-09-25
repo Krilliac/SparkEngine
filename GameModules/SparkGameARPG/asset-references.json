@@ -1,0 +1,31 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGameARPG",
+  "description": "Every asset path SparkGameARPG source names (the Blender Action RPG Dungeon kit under Models/ARPG/Kit, placed in the crypt entry room by ARPGDungeonSystem::PlaceCryptKit), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Models/ARPG/Kit/destructible_urn.obj",
+      "sha256": "21e82d9cdcbd26e02b0ea230cf91b25ca1d0377768d16624990f2e5d1c8a7925",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "arpg-blender-kit"
+    },
+    {
+      "path": "Assets/Models/ARPG/Kit/loot_pile.obj",
+      "sha256": "e0db779d0146eccc64dae8b4c1be930c89a017dca542c71794eb2fc62708b4e3",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "arpg-blender-kit"
+    },
+    {
+      "path": "Assets/Models/ARPG/Kit/portal_gate.obj",
+      "sha256": "dfe93bd8b7f03cb75bd53da0182276da218ab5a73e423c6a8bb10f64ccc40d83",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "arpg-blender-kit"
+    },
+    {
+      "path": "Assets/Models/ARPG/Kit/spike_trap.obj",
+      "sha256": "e5a5dbb97b5883339bb3f95cd359dda48b6a62a0cc5f0552a6a317a3a47f101f",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "arpg-blender-kit"
+    }
+  ]
+}

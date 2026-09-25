@@ -6,7 +6,9 @@
  *
  * Generates dungeon floors with configurable monster density, elite pack
  * chances, and boss encounters. Difficulty scales across four tiers
- * (Normal, Nightmare, Hell, Inferno) with HP/damage/XP multipliers.
+ * (Normal, Nightmare, Hell, Inferno) with HP/damage/XP multipliers. With a
+ * world available it also dresses the crypt entry room with the Blender-authored
+ * dungeon kit (Assets/Models/ARPG/Kit).
  */
 
 #pragma once
@@ -77,8 +79,11 @@ namespace ARPG
 
       private:
         void RegisterTierConfigs();
+        void PlaceCryptKit();
+        void RemoveCryptKit();
 
         Spark::IEngineContext* m_context{nullptr};
+        std::vector<uint32_t> m_kitEntities; ///< Crypt kit props (MeshRenderer entities) owned by this system
         std::vector<DungeonTierConfig> m_tierConfigs;
         std::vector<DungeonLevel> m_floors;
         ARPGDungeonTier m_currentTier = ARPGDungeonTier::Normal;
