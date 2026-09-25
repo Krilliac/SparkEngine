@@ -73,7 +73,10 @@ add_test(
         -max_len=4096
         -timeout=1
         -rss_limit_mb=256
-        -max_total_time=4
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent
+        # or write mutated units into the tracked corpus.
+        -runs=7
         "${SPARK_FUZZ_PROJECT_ROOT}/Tests/fuzz-corpora/json-utils"
 )
 set_tests_properties(FuzzJsonUtilsSmoke PROPERTIES

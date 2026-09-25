@@ -24,7 +24,13 @@ while any blocker remains.
 The neural CTest uses `-runs=8` to replay all eight reviewed seeds, and the crash-manifest
 CTest replays its six reviewed seeds, under ASan/UBSan without mutating the tracked
 corpus. The texture-stex and scene-manifest CTests replay their eight reviewed seeds the
-same way. The scene-manifest adapter aborts when an accepted asset path climbs out of the
+same way, and the json-utils CTest replays its seven (`-runs=7`). The json-utils smoke
+previously mutated for `-max_total_time=4` with no `-runs`, so its execution count
+varied run to run (about 300,000) and it wrote several hundred mutated units into the
+tracked `Tests/fuzz-corpora/json-utils/` directory. Every smoke now runs only the empty
+input plus its reviewed seeds. libFuzzer's leak check can still run one seed a second
+time when malloc/free counts differ, so the `Done N runs` line may read one higher. The
+scene-manifest adapter aborts when an accepted asset path climbs out of the
 root under Windows separator semantics (its own lexical walk splits on both `/` and `\`,
 so it does not merely re-run the parser's filter), contains a control byte such as an
 embedded NUL, or fails `IsVirtualPathSafe`, or when the entry cap is exceeded. The
