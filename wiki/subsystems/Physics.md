@@ -259,8 +259,16 @@ enum class ConstraintType {
 - Four or more wheels get all-wheel drive: one differential per axle (wheels 0/1 front, 2/3 rear), each taking half the engine torque (Jolt requires the ratios to sum to 1).
 - `reverseGearRatio` replaces Jolt's default reverse gear and accepts either sign.
 - The wheel ray collision tester uses the car body's own object layer.
+- `CreateVehicle` returns `nullptr` when the body or descriptor is unusable, instead of a vehicle that ignores input.
 
-`Tests/TestMOD380VehiclePhysicsReal.cpp` (`VehiclePhysics_JoltVehicle*`) drives a real car on a static ground slab with `StepFixed()`: throttle accelerates it forward, braking decelerates it at more than twice the coasting rate, reverse works, steering yaws it in the input's sign, a sleeping car wakes on input, and two identical input scripts give bitwise-identical poses. SparkGameRacing does not use this wrapper yet; its vehicles still run the module's own kinematic model (MOD-380).
+**Tracked vehicles** (`PhysicsVehicleType::Tracked`) use Jolt's `TrackedVehicleController` with `WheelSettingsTV` wheels:
+
+- Wheels join a track by the sign of `position.x`. Engine +X wheels form Jolt's `ETrackSide::Left` track, because positions reach Jolt unconverted and Jolt's right-handed frame calls +X left. A wheel at `x == 0`, or a layout with no wheels on one side, is rejected.
+- Each track is driven through its rearmost wheel, as in Jolt's tank sample. It brakes with the sum of its wheels' `maxBrakeTorque` and uses `differentialRatio` as its gearbox-to-sprocket ratio. The wheels' friction multipliers scale Jolt's track friction (4 longitudinal, 2 lateral). Anti-roll bars are not built for tracks.
+- Steering is by track speed. `steerAngle / trackedFullSteerAngle` (default 0.5 rad) moves the inner track's ratio from 1 through a stop to -1. Jolt rejects an exact 0, so a stopped inner track is commanded as ±0.05.
+- Steering with no throttle or brake below 1 m/s pivots the hull in place (counter-rotating tracks). The handbrake acts as the brake.
+
+`Tests/TestMOD380VehiclePhysicsReal.cpp` (`VehiclePhysics_JoltVehicle*`) drives a real car on a static ground slab with `StepFixed()`: throttle accelerates it forward, braking decelerates it at more than twice the coasting rate, reverse works, steering yaws it in the input's sign, a sleeping car wakes on input, and two identical input scripts give bitwise-identical poses. `VehiclePhysics_JoltTrackedVehicle*` and `VehiclePhysics_TrackedVehicleRejects*` drive a ten-wheel tracked hull: it goes straight on equal tracks, brakes to a stop, yaws toward the steer side while driving, pivots in place, and rejects one-sided or centred-wheel layouts. SparkGameRacing does not use this wrapper yet; its vehicles still run the module's own kinematic model (MOD-380).
 
 ---
 

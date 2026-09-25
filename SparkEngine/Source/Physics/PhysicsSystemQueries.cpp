@@ -255,7 +255,12 @@ std::unique_ptr<CharacterController> PhysicsSystem::CreateCharacterController(co
 
 std::unique_ptr<VehiclePhysics> PhysicsSystem::CreateVehicle(std::shared_ptr<PhysicsBody> body, const VehicleDesc& desc)
 {
-    return std::make_unique<VehiclePhysics>(this, body, desc);
+    auto vehicle = std::make_unique<VehiclePhysics>(this, body, desc);
+    if (!vehicle->IsValid())
+    {
+        return nullptr; // the constructor logged why
+    }
+    return vehicle;
 }
 
 std::unique_ptr<Ragdoll> PhysicsSystem::CreateRagdoll(const RagdollDesc& desc)

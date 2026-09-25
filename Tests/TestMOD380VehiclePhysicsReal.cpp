@@ -9,6 +9,9 @@
  * throttle accelerates the car forward, brake slows it, steering yaws it in the
  * engine's left-handed convention (+X is right when looking down +Z), a sleeping
  * car wakes when driven, and identical input scripts produce identical poses.
+ * A tracked hull covers the TrackedVehicleController path: driving on both
+ * tracks, steering by track-speed difference, pivot turns in place, and
+ * rejection of layouts Jolt cannot split into a left and a right track.
  */
 
 #include "TestFramework.h"
@@ -60,8 +63,39 @@ namespace
         return wheel;
     }
 
+    VehicleDesc MakeCarDesc()
+    {
+        // Engine convention (left-handed): +X is right, +Z is forward.
+        VehicleDesc desc;
+        desc.type = PhysicsVehicleType::Wheeled;
+        desc.minRPM = kMinEngineRPM;
+        desc.wheels = {
+            MakeWheel(-0.9f, 1.4f, kFrontSteerLimit, 0.0f), // FL
+            MakeWheel(0.9f, 1.4f, kFrontSteerLimit, 0.0f),  // FR
+            MakeWheel(-0.9f, -1.4f, 0.0f, 4000.0f),         // RL
+            MakeWheel(0.9f, -1.4f, 0.0f, 4000.0f),          // RR
+        };
+        return desc;
+    }
+
+    /// Five road wheels per side, like a small tracked hull. No wheel steers.
+    VehicleDesc MakeTankDesc()
+    {
+        VehicleDesc desc;
+        desc.type = PhysicsVehicleType::Tracked;
+        desc.minRPM = kMinEngineRPM;
+        for (const float x : {-0.9f, 0.9f})
+        {
+            for (const float z : {1.6f, 0.8f, 0.0f, -0.8f, -1.6f})
+            {
+                desc.wheels.push_back(MakeWheel(x, z, 0.0f, 0.0f));
+            }
+        }
+        return desc;
+    }
+
     /**
-     * A real Jolt world with a 400 m ground slab and one four-wheeled car.
+     * A real Jolt world with a 400 m ground slab and one vehicle (a four-wheeled car by default).
      * Heap-allocated PhysicsSystem and explicit teardown: PhysicsSystem logs
      * through SimpleConsole and must not outlive it (see TestPhysicsTeardownGuard).
      * PhysicsBody resolves its world through EngineContext, so the rig registers
@@ -77,7 +111,7 @@ namespace
         PhysicsSystem* previousPhysics = nullptr;
         bool ready = false;
 
-        VehicleRig()
+        explicit VehicleRig(const VehicleDesc& desc = MakeCarDesc())
         {
             // Same pattern as TestEngineDiagnostics: a standalone test run has no
             // engine-owned context yet, so create the process-wide one on demand.
@@ -116,16 +150,6 @@ namespace
                 return;
             }
 
-            // Engine convention (left-handed): +X is right, +Z is forward.
-            VehicleDesc desc;
-            desc.type = PhysicsVehicleType::Wheeled;
-            desc.minRPM = kMinEngineRPM;
-            desc.wheels = {
-                MakeWheel(-0.9f, 1.4f, kFrontSteerLimit, 0.0f), // FL
-                MakeWheel(0.9f, 1.4f, kFrontSteerLimit, 0.0f),  // FR
-                MakeWheel(-0.9f, -1.4f, 0.0f, 4000.0f),         // RL
-                MakeWheel(0.9f, -1.4f, 0.0f, 4000.0f),          // RR
-            };
             vehicle = physics->CreateVehicle(car, desc);
             ready = vehicle != nullptr;
         }
@@ -159,6 +183,21 @@ namespace
         }
 
         float Yaw() const { return car->GetRotation().y; }
+
+        /// Drive and return the heading change (radians, positive toward +X) integrated from the
+        /// body's angular velocity. Unlike Yaw(), which reads the Euler angle, this stays correct
+        /// once the hull has turned more than a quarter turn.
+        float DriveMeasuringTurn(const VehicleInput& input, uint32_t ticks)
+        {
+            vehicle->SetInput(input.throttle, input.brake, input.steer, input.handbrake);
+            float turned = 0.0f;
+            for (uint32_t i = 0; i < ticks; ++i)
+            {
+                physics->StepFixed(1);
+                turned += car->GetAngularVelocity().y * physics->GetTimeStep();
+            }
+            return turned;
+        }
 
         /// Signed speed along the car's current heading (m/s).
         float ForwardSpeed() const
@@ -326,6 +365,99 @@ TEST(VehiclePhysics_JoltVehicleIsDeterministicUnderStepFixed)
     const VehicleSample& last = first.back();
     const float travelled = std::sqrt(last.position.x * last.position.x + last.position.z * last.position.z);
     EXPECT_GT(travelled, 5.0f);
+}
+
+TEST(VehiclePhysics_JoltTrackedVehicleDrivesAndSteersByTrackSpeed)
+{
+    // Both tracks driven: straight-line acceleration, then braking to a stop.
+    {
+        VehicleRig rig(MakeTankDesc());
+        ASSERT_TRUE(rig.ready);
+        EXPECT_EQ(rig.vehicle->GetWheelCount(), 10u);
+        rig.Settle();
+        EXPECT_TRUE(rig.AllWheelsOnGround());
+        const XMFLOAT3 start = rig.car->GetPosition();
+
+        rig.Drive({1.0f, 0.0f, 0.0f, 0.0f}, 180); // 3 s full throttle
+        const float cruiseSpeed = rig.ForwardSpeed();
+        EXPECT_GT(cruiseSpeed, 2.0f);
+        EXPECT_GT(rig.car->GetPosition().z - start.z, 2.0f);
+        EXPECT_LT(std::fabs(rig.car->GetPosition().x - start.x), 0.25f); // equal track speeds -> straight
+        EXPECT_LT(std::fabs(rig.Yaw()), 0.05f);
+        EXPECT_GE(rig.vehicle->GetCurrentGear(), 1);
+        EXPECT_GT(rig.vehicle->GetEngineRPM(), kMinEngineRPM);
+
+        rig.Drive({0.0f, 1.0f, 0.0f, 0.0f}, 120);
+        EXPECT_LT(std::fabs(rig.ForwardSpeed()), 0.25f);
+    }
+
+    // Steering while driving: the inner track slows, so the hull yaws toward the steer side
+    // (+X is right in the engine's convention) and drifts that way while still moving forward.
+    for (const float steer : {0.2f, -0.2f})
+    {
+        VehicleRig rig(MakeTankDesc());
+        ASSERT_TRUE(rig.ready);
+        rig.Settle();
+        const XMFLOAT3 start = rig.car->GetPosition();
+
+        const float turned = rig.DriveMeasuringTurn({1.0f, 0.0f, steer, 0.0f}, 180);
+        const float lateral = rig.car->GetPosition().x - start.x;
+        EXPECT_GT(turned * steer, 0.0f);
+        EXPECT_GT(std::fabs(turned), 0.2f);
+        EXPECT_GT(lateral * steer, 0.0f);
+        EXPECT_GT(rig.car->GetPosition().z - start.z, 1.0f);
+    }
+
+    // Pivot turn: steer with no throttle or brake while stopped counter-rotates the tracks,
+    // turning the hull in place; the steer amount sets the turn rate.
+    for (const float direction : {1.0f, -1.0f})
+    {
+        float turnedBySteer[2] = {};
+        const float steers[2] = {0.1f * direction, 0.5f * direction}; // 20% and 100% of trackedFullSteerAngle
+        for (int i = 0; i < 2; ++i)
+        {
+            VehicleRig rig(MakeTankDesc());
+            ASSERT_TRUE(rig.ready);
+            rig.Settle();
+            const XMFLOAT3 start = rig.car->GetPosition();
+
+            turnedBySteer[i] = rig.DriveMeasuringTurn({0.0f, 0.0f, steers[i], 0.0f}, 30); // 0.5 s
+            EXPECT_GT(turnedBySteer[i] * direction, 0.0f);
+            const float dx = rig.car->GetPosition().x - start.x;
+            const float dz = rig.car->GetPosition().z - start.z;
+            EXPECT_LT(std::sqrt(dx * dx + dz * dz), 0.5f);
+        }
+        EXPECT_GT(std::fabs(turnedBySteer[1]), 0.3f);
+        EXPECT_GT(std::fabs(turnedBySteer[1]), 1.5f * std::fabs(turnedBySteer[0]));
+    }
+}
+
+TEST(VehiclePhysics_TrackedVehicleRejectsLayoutsWithoutTwoTracks)
+{
+    // Every wheel on one side leaves the other track empty.
+    {
+        VehicleDesc oneSided = MakeTankDesc();
+        for (VehicleWheelDesc& wheel : oneSided.wheels)
+        {
+            wheel.position.x = std::fabs(wheel.position.x);
+        }
+        VehicleRig rig(oneSided);
+        EXPECT_FALSE(rig.ready);
+        EXPECT_TRUE(rig.vehicle == nullptr);
+    }
+
+    // A centred wheel belongs to neither track.
+    {
+        VehicleDesc centred = MakeTankDesc();
+        centred.wheels[2].position.x = 0.0f;
+        VehicleRig rig(centred);
+        EXPECT_FALSE(rig.ready);
+        EXPECT_TRUE(rig.vehicle == nullptr);
+    }
+
+    // The same rig with a valid layout still builds, so the failures above are the layouts'.
+    VehicleRig valid(MakeTankDesc());
+    EXPECT_TRUE(valid.ready);
 }
 
 #endif // SPARK_TEST_HAS_PHYSICS

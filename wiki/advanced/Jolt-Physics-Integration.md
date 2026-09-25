@@ -39,7 +39,7 @@ All physics source lives under `SparkEngine/Source/Physics/`.
 ### Subsystems
 
 - **CharacterController** (`CharacterController.h/.cpp`) — Jolt `CharacterVirtual` (slopes, stairs, ground state, moving platforms)
-- **VehiclePhysics** (`VehiclePhysics.h/.cpp`) — wheeled, tracked, motorcycle with engine/transmission/differential
+- **VehiclePhysics** (`VehiclePhysics.h/.cpp`) — wheeled, tracked, motorcycle with engine/transmission/differential. The wheeled path is runtime-tested against real Jolt (`Tests/TestMOD380VehiclePhysicsReal.cpp`: throttle, brake, reverse, steering, wake-from-sleep, bitwise-identical repeat runs under `StepFixed`). `SetInput` takes throttle in [-1, 1] (negative = reverse), and steering in radians where positive turns toward +X (right in the engine's left-handed convention); the wrapper converts that to Jolt's [-1, 1] steering fraction and wakes a sleeping car. The tracked path builds `WheelSettingsTV` wheels split into two tracks by X sign and steers by track-speed difference (see [Physics](../subsystems/Physics.md#vehicle-physics)); it is runtime-tested in the same file.
 - **RagdollSystem** (`RagdollSystem.h/.cpp`) — 3 modes (Physics, Kinematic, Blended), per-part constraints
 - **SoftBodyPhysics** (`SoftBodyPhysics.h/.cpp`) — XPBD cloth/deformable, skinned constraints (cloth-to-skeleton), wind
 - **ClothSimulation** (`ClothSimulation.h/.cpp`) — standalone cloth, separate from Jolt soft body
@@ -63,7 +63,7 @@ All physics source lives under `SparkEngine/Source/Physics/`.
 
 ## Implementation Notes
 
-- The `g_physicsSystem` accessor in `PhysicsSystemQueries.cpp` lets `PhysicsBody` methods call back into the system (e.g. `SetPosition` routes through `BodyInterface`).
+- `PhysicsBody` methods resolve the world through `EngineContext::Get()->GetPhysics()` (`PhysicsBodyImpl.cpp`). A `PhysicsSystem` that is not registered in the context still simulates, but its bodies' getters silently return the creation descriptor (position, velocity), so tests that read body state must register their system with `SetPhysics()` and restore the previous one afterwards.
 - The contact listener runs on Jolt's internal threads — it uses a mutex for pending contacts.
 - The surface-velocity map is also mutex-protected for contact-listener thread safety.
 - `IPhysicsBackend.h` is a forward-looking abstraction. `PhysicsSystem` does **not** currently inherit it — engine code still uses `PhysicsSystem` directly. (See the deferred Phase 8C item in [Reflection & Polymorphism Refactoring Plan](Reflection-Polymorphism-Refactoring-Plan.md).)
@@ -83,6 +83,7 @@ All physics source lives under `SparkEngine/Source/Physics/`.
 
 - **Original entry date:** 2026-03-22 (`jolt-physics-integration.md`, type: Observation)
 - **Verified against codebase 2026-06-08.**
+- **Updated 2026-09-24 (MOD-380):** VehiclePhysics runtime-test status and input conventions; `PhysicsBody` resolves its world via `EngineContext`, not a `g_physicsSystem` global.
 - Status bullets:
   - **Still accurate.** All listed core systems, shapes (15), constraints (12 + motors), and subsystems are present under `SparkEngine/Source/Physics/`.
   - Jolt is referenced ~45 times in `PhysicsSystem.cpp`; `PhysicsSystemStub.cpp` confirms the no-Jolt fallback.

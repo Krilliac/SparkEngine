@@ -66,10 +66,15 @@ class VehiclePhysics
      * @brief Set vehicle control inputs for the current frame.
      * Non-zero input wakes a sleeping vehicle body. Values outside the documented ranges are clamped.
      *
+     * Tracked vehicles steer by track speed: the inner track slows, stops and reverses as |steerAngle|
+     * approaches VehicleDesc::trackedFullSteerAngle, and a steer input with no throttle or brake while
+     * nearly stopped pivots the vehicle in place. Their handbrake acts as the brake.
+     *
      * @param throttle  Throttle [-1, 1]; negative selects reverse through the automatic transmission
      * @param brake     Brake [0-1]
      * @param steerAngle Steering angle in radians (negative = left, positive = right, i.e. toward +X in the
      *                   engine's left-handed convention), clamped to the largest wheel maxSteerAngle
+     *                   (tracked: to VehicleDesc::trackedFullSteerAngle)
      * @param handbrake Handbrake [0-1]
      */
     void SetInput(float throttle, float brake, float steerAngle, float handbrake);
@@ -77,6 +82,9 @@ class VehiclePhysics
     // =========================================================================
     // Vehicle state
     // =========================================================================
+
+    /** @brief True when the Jolt vehicle constraint was created (the descriptor was usable). */
+    bool IsValid() const { return m_joltConstraint != nullptr; }
 
     /** @brief Get current engine RPM. */
     float GetEngineRPM() const;
