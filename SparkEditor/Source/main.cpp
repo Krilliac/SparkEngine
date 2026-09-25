@@ -11,6 +11,7 @@
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/MultiISA.h"
 #include <Spark/Version.h>
 #include <cstdio>
 #include <format>
@@ -219,6 +220,25 @@ static int RunCollabServer(uint16_t port, const std::string& serverName)
 // Unified main entry point with debug support when needed
 int main(int argc, char* argv[])
 {
+    // BLD-100 / OD-04: refuse an x86-64 CPU below the SSE4.2 + POPCNT floor
+    // before the console, logger or crash handling start, so the user gets a
+    // clear message instead of an illegal-instruction crash. The Windows editor
+    // is a GUI-subsystem image: without a usable stderr handle it shows a box.
+    if (const std::string cpuFloorFailure = Spark::DescribeStableCpuFloorFailure(Spark::DetectCpuFeatures());
+        !cpuFloorFailure.empty())
+    {
+        std::fprintf(stderr, "SparkEditor: %s\n", cpuFloorFailure.c_str());
+        std::fflush(stderr);
+#ifdef _WIN32
+        const HANDLE errorOutput = GetStdHandle(STD_ERROR_HANDLE);
+        if (errorOutput == nullptr || errorOutput == INVALID_HANDLE_VALUE)
+        {
+            MessageBoxA(nullptr, cpuFloorFailure.c_str(), "SparkEditor", MB_OK | MB_ICONERROR);
+        }
+#endif
+        return EXIT_FAILURE;
+    }
+
     // Check for debug console request or if debugger is present
     bool showDebugConsole = false;
     bool collabServerMode = false;

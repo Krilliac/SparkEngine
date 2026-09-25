@@ -1,10 +1,12 @@
 /**
  * @file TestMultiISADispatch.cpp
- * @brief Tests for multi-ISA CPU function dispatch
+ * @brief Tests for multi-ISA CPU function dispatch and the stable-v1 CPU floor check
  */
 
 #include "TestFramework.h"
+#include "Utils/MultiISA.h"
 #include <cstdint>
+#include <string>
 
 namespace
 {
@@ -133,4 +135,128 @@ TEST(MultiISA_HighestAvailableSelected)
     EXPECT_EQ(SelectBestISA(TestISALevel::AVX, variants)(), 4);
     // When AVX2 is detected, should pick AVX2
     EXPECT_EQ(SelectBestISA(TestISALevel::AVX2, variants)(), 8);
+}
+
+// ---------------------------------------------------------------------------
+// BLD-100 / OD-04: runtime CPU feature detection and the SSE4.2 + POPCNT floor
+// (Utils/MultiISA.h, called first thing by the engine and editor entry points).
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    Spark::CpuFeatures FloorOnlyFeatures()
+    {
+        Spark::CpuFeatures features;
+        features.isX86 = true;
+        features.sse2 = true;
+        features.sse3 = true;
+        features.ssse3 = true;
+        features.sse41 = true;
+        features.sse42 = true;
+        features.popcnt = true;
+        return features;
+    }
+} // anonymous namespace
+
+TEST(MultiISA_CpuFloor_FloorFeaturesAccepted)
+{
+    EXPECT_TRUE(Spark::DescribeStableCpuFloorFailure(FloorOnlyFeatures()).empty());
+}
+
+TEST(MultiISA_CpuFloor_MissingFeaturesNamed)
+{
+    Spark::CpuFeatures features = FloorOnlyFeatures();
+    features.sse42 = false;
+    features.popcnt = false;
+    // Above-floor features must not rescue a CPU that misses the floor.
+    features.avx = true;
+    features.avx2 = true;
+    const std::string message = Spark::DescribeStableCpuFloorFailure(features);
+    EXPECT_FALSE(message.empty());
+    EXPECT_NE(message.find("Missing: SSE4.2, POPCNT"), std::string::npos);
+    EXPECT_EQ(message.find("SSE4.1,"), std::string::npos);
+}
+
+TEST(MultiISA_CpuFloor_Sse41OnlyCpuRejected)
+{
+    // A Core 2 (Penryn) class CPU: SSE4.1 but no SSE4.2 or POPCNT.
+    Spark::CpuFeatures features = FloorOnlyFeatures();
+    features.sse42 = false;
+    features.popcnt = false;
+    EXPECT_FALSE(Spark::DescribeStableCpuFloorFailure(features).empty());
+
+    features = FloorOnlyFeatures();
+    features.popcnt = false;
+    EXPECT_NE(Spark::DescribeStableCpuFloorFailure(features).find("Missing: POPCNT"), std::string::npos);
+}
+
+TEST(MultiISA_CpuFloor_NonX86NotApplicable)
+{
+    const Spark::CpuFeatures features; // isX86 == false, every feature false
+    EXPECT_TRUE(Spark::DescribeStableCpuFloorFailure(features).empty());
+}
+
+TEST(MultiISA_CpuFloor_HostDetectionConsistent)
+{
+    const Spark::CpuFeatures features = Spark::DetectCpuFeatures();
+#if defined(__x86_64__) || defined(_M_X64)
+    // This test binary is itself built for the floor and is running, so the
+    // host must report it; a detection bug here would lock every user out.
+    EXPECT_TRUE(features.isX86);
+    EXPECT_TRUE(features.sse2);
+    EXPECT_TRUE(features.sse42);
+    EXPECT_TRUE(features.popcnt);
+    EXPECT_TRUE(Spark::DescribeStableCpuFloorFailure(features).empty());
+#endif
+    // OS-enabled YMM state gates every VEX feature.
+    if (features.avx2 || features.fma || features.f16c)
+    {
+        EXPECT_TRUE(features.avx);
+    }
+}
+
+TEST(MultiISA_CpuFloor_DispatchLevelMatchesRuntimeFeatures)
+{
+    const Spark::CpuFeatures features = Spark::DetectCpuFeatures();
+    auto& dispatch = Spark::MultiISADispatch::GetInstance();
+    dispatch.Initialize();
+    const Spark::ISALevel level = dispatch.GetDetectedLevel();
+    if (level == Spark::ISALevel::AVX2)
+    {
+        EXPECT_TRUE(features.avx2 && features.fma);
+    }
+    if (level == Spark::ISALevel::AVX)
+    {
+        EXPECT_TRUE(features.avx);
+        EXPECT_FALSE(features.avx2 && features.fma);
+    }
+    if (features.avx2 && features.fma)
+    {
+        EXPECT_EQ(static_cast<int>(level), static_cast<int>(Spark::ISALevel::AVX2));
+    }
+#if defined(__x86_64__) || defined(_M_X64)
+    EXPECT_TRUE(static_cast<int>(level) >= static_cast<int>(Spark::ISALevel::SSE4));
+#endif
+}
+
+TEST(MultiISA_CpuFloor_SelectLevelReportsKernelNotCapability)
+{
+    using FuncT = int (*)();
+    auto baseline = []() -> int { return 2; };
+    auto& dispatch = Spark::MultiISADispatch::GetInstance();
+    dispatch.Initialize();
+
+    // Only the baseline is compiled in (a floor build's shape): whatever the CPU
+    // supports, the kernel that runs -- and the level reported for it -- is SSE2.
+    const FuncT baselineOnly[4] = {baseline, nullptr, nullptr, nullptr};
+    EXPECT_EQ(static_cast<int>(dispatch.SelectLevel(baselineOnly)), static_cast<int>(Spark::ISALevel::SSE2));
+    EXPECT_EQ(dispatch.Select(baselineOnly)(), 2);
+
+    // With every variant populated the selected level is exactly the detected one.
+    auto sse4 = []() -> int { return 4; };
+    auto avx = []() -> int { return 6; };
+    auto avx2 = []() -> int { return 8; };
+    const FuncT all[4] = {baseline, sse4, avx, avx2};
+    EXPECT_EQ(static_cast<int>(dispatch.SelectLevel(all)), static_cast<int>(dispatch.GetDetectedLevel()));
+    EXPECT_EQ(dispatch.Select(all)(), all[static_cast<size_t>(dispatch.GetDetectedLevel())]());
 }

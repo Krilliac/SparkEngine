@@ -26,6 +26,7 @@
 #include "Utils/LogMacros.h" // SPARK_LOG_*
 #include "Utils/WineDetection.h"
 #include "Utils/CrashHandler.h"
+#include "Utils/MultiISA.h"
 #include <Spark/Version.h>
 #include <csignal>
 #include <cstring>
@@ -109,6 +110,16 @@ static void ParseWindowSizeOverrideArgs(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
+    // BLD-100 / OD-04: refuse an x86-64 CPU below the SSE4.2 + POPCNT floor
+    // before anything else runs, so it gets a clear message rather than an
+    // illegal-instruction crash somewhere inside initialization.
+    if (const std::string cpuFloorFailure = Spark::DescribeStableCpuFloorFailure(Spark::DetectCpuFeatures());
+        !cpuFloorFailure.empty())
+    {
+        std::fprintf(stderr, "SparkEngine: %s\n", cpuFloorFailure.c_str());
+        return EXIT_FAILURE;
+    }
+
     if (ParseFlag(argc, argv, "--help") || ParseFlag(argc, argv, "-h") || ParseFlag(argc, argv, "-help"))
     {
         std::printf("SparkEngine %d.%d.%d\n"

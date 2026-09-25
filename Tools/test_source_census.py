@@ -190,7 +190,6 @@ MIRROR_BASELINE: frozenset[str] = frozenset(
         "Tests/TestMeshShaderPipeline.cpp",
         "Tests/TestModuleDependency.cpp",
         "Tests/TestMovementSystem.cpp",
-        "Tests/TestMultiISADispatch.cpp",
         "Tests/TestNavMesh.cpp",
         "Tests/TestNetBuffer.cpp",
         "Tests/TestNetworkEncryption.cpp",

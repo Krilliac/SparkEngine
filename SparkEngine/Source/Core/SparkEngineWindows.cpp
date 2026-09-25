@@ -28,6 +28,7 @@
 #include "Utils/FreezeDetector.h"
 #include "Utils/LocalFileCache.h"
 #include "Utils/Logger.h"
+#include "Utils/MultiISA.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "Utils/WineDetection.h"
@@ -400,13 +401,39 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     const HANDLE inheritedOutput = GetStdHandle(STD_OUTPUT_HANDLE);
     const bool hasRedirectedOutput = inheritedOutput != nullptr && inheritedOutput != INVALID_HANDLE_VALUE &&
                                      GetFileType(inheritedOutput) != FILE_TYPE_CHAR;
+    bool attachedParentConsole = false;
     if (!hasRedirectedOutput && AttachConsole(ATTACH_PARENT_PROCESS))
     {
+        attachedParentConsole = true;
         FILE* fp = nullptr;
         freopen_s(&fp, "CONOUT$", "w", stdout);
         freopen_s(&fp, "CONOUT$", "w", stderr);
         // Don't rebind stdin: under Wine in a headless sandbox there's no
         // interactive input, and CONIN$ can block during open.
+    }
+
+    // BLD-100 / OD-04: refuse an x86-64 CPU below the SSE4.2 + POPCNT floor
+    // before logging, crash hooks or any subsystem runs, so the user gets a
+    // clear message rather than an illegal-instruction crash. A console or a
+    // redirected stream receives it as text; a double-click launch has
+    // neither, so it gets a message box.
+    if (const std::string cpuFloorFailure = Spark::DescribeStableCpuFloorFailure(Spark::DetectCpuFeatures());
+        !cpuFloorFailure.empty())
+    {
+        const std::string line = "SparkEngine: " + cpuFloorFailure + "\n";
+        const HANDLE errorOutput = GetStdHandle(STD_ERROR_HANDLE);
+        DWORD written = 0;
+        if (attachedParentConsole)
+        {
+            std::fputs(line.c_str(), stderr);
+            std::fflush(stderr);
+        }
+        else if (errorOutput == nullptr || errorOutput == INVALID_HANDLE_VALUE ||
+                 !WriteFile(errorOutput, line.data(), static_cast<DWORD>(line.size()), &written, nullptr))
+        {
+            MessageBoxA(nullptr, cpuFloorFailure.c_str(), "SparkEngine", MB_OK | MB_ICONERROR);
+        }
+        return EXIT_FAILURE;
     }
 
     // Introspection must stay safe in staged packages and on machines without

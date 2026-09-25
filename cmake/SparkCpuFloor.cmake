@@ -2,7 +2,8 @@
 #
 # The stable-v1 CPU floor is x86-64 with SSE4.2 (the x86-64-v2 level: SSE3,
 # SSSE3, SSE4.1, SSE4.2 and POPCNT). AVX, AVX2, AVX-512, FMA, F16C, LZCNT and
-# BMI (TZCNT) are above the floor: a binary compiled with them faults with an
+# BMI (TZCNT) are above the floor, as are MOVBE, AES-NI, PCLMULQDQ, SHA-NI,
+# GFNI, RDRAND, RDSEED and ADX: a binary compiled with them faults with an
 # illegal instruction on a supported CPU, or -- for LZCNT, which older CPUs
 # decode as BSR -- silently computes wrong results.
 #
@@ -48,6 +49,12 @@ function(spark_cpu_floor_violations out_var)
         # GCC/Clang ISA extensions above x86-64-v2 (-mavx covers -mavx2, -mavx512*
         # and -mavxvnni; -mfma covers -mfma4; -mbmi covers -mbmi2).
         if(_entry MATCHES "(^|[^A-Za-z0-9_])-m(avx|fma|f16c|lzcnt|bmi)")
+            set(_bad TRUE)
+        endif()
+        # Legacy-encoded extensions that are also above x86-64-v2 (MOVBE is v3;
+        # AES-NI, PCLMULQDQ, SHA-NI, GFNI, RDRAND, RDSEED and ADX are in no x86-64
+        # level at or below the floor). Whole-flag match: -msha must not catch -mshstk.
+        if(_entry MATCHES "(^|[^A-Za-z0-9_])-m(movbe|aes|pclmul|sha|gfni|rdrnd|rdseed|adx|vaes|vpclmulqdq)($|[^A-Za-z0-9_])")
             set(_bad TRUE)
         endif()
         # -march=/-mcpu= may only name the generic floor levels.

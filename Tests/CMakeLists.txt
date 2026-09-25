@@ -2187,6 +2187,48 @@ set_tests_properties(SecretScan_RepositoryGate PROPERTIES
     LABELS "governance;security;unit;python"
     TIMEOUT 300)
 
+# BLD-100 / OD-04: the stable-v1 x86-64 CPU floor is SSE4.2 + POPCNT.
+# CpuFloor_IsaBaselineChecker proves tools/check_isa_baseline.py rejects
+# AVX/AVX2/AVX-512/FMA/F16C/BMI/LZCNT/MOVBE and the legacy-encoded AES-NI,
+# PCLMULQDQ, SHA, GFNI, RDRAND, RDSEED and ADX instructions in real ELF and PE
+# fixtures and passes floor-only builds. CpuFloor_IsaBaseline disassembles this
+# tree's linked engine, editor, server and game-module images and fails on any
+# above-floor instruction that reached them (SparkCpuFloor.cmake only sees flags).
+# The image scan is ELF-only: MSVC links the STL's CPUID-dispatched AVX2
+# vector_algorithms code statically into every image, and an MSVC PE carries no
+# COFF symbol table, so --allow-symbol cannot exempt that code without a
+# PDB-aware lookup. Windows images are not scanned until one exists.
+add_test(
+    NAME CpuFloor_IsaBaselineChecker
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_check_isa_baseline -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(CpuFloor_IsaBaselineChecker PROPERTIES
+    LABELS "build;shipping;unit;python"
+    TIMEOUT 300)
+
+include("${CMAKE_SOURCE_DIR}/cmake/SparkCpuFloor.cmake")
+spark_cpu_floor_enforced(_spark_isa_floor_enforced)
+if(_spark_isa_floor_enforced AND CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")
+    find_program(SPARK_ISA_DISASSEMBLER NAMES objdump llvm-objdump)
+    set(_spark_isa_images "")
+    foreach(_spark_isa_target IN ITEMS SparkEngine SparkEditor SparkServer ${_SPARK_GAME_MODULE_NAMES})
+        if(TARGET ${_spark_isa_target})
+            list(APPEND _spark_isa_images "$<TARGET_FILE:${_spark_isa_target}>")
+        endif()
+    endforeach()
+    if(SPARK_ISA_DISASSEMBLER AND _spark_isa_images)
+        add_test(
+            NAME CpuFloor_IsaBaseline
+            COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/check_isa_baseline.py
+                --objdump ${SPARK_ISA_DISASSEMBLER} ${_spark_isa_images})
+        set_tests_properties(CpuFloor_IsaBaseline PROPERTIES
+            LABELS "build;shipping;integration"
+            TIMEOUT 600)
+    else()
+        message(STATUS "CpuFloor_IsaBaseline not registered: no objdump/llvm-objdump or no shipped image target")
+    endif()
+endif()
+
 # RDY-010: ModuleDiscovery_* drive the production ModuleManager and the real ABI
 # fixture DLL. The exact count fails closed if the family stops being compiled
 # in; the contract test keeps the file from regressing to a test-local mirror.
