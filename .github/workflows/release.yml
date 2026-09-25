@@ -654,6 +654,9 @@ jobs:
 
     # REL-100: bind the final (signed, qualified) package bytes to the source
     # SHA, committed dependency-lock digest, CMake toolchain, and configuration.
+    # Schema v2 also records the Windows SDK, exact MSVC tools version, VS
+    # instance, linker/archiver, and CPU ISA baseline; a stable-v1 record fails
+    # closed here when any is missing or the baseline is above the OD-04 floor.
     # The record is a separate artifact so the stable asset boundary is unchanged.
     - name: Record per-artifact build provenance
       shell: pwsh
