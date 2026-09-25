@@ -969,6 +969,8 @@
       "description": "Console -exec script file whose contents are executed as commands.",
       "trust_boundary": "untrusted-file",
       "source_files": [
+        "SparkEngine/Source/Core/ExecScript.cpp",
+        "SparkEngine/Source/Core/ExecScript.h",
         "SparkEngine/Source/Core/SparkEngineWindows.cpp"
       ],
       "formats": [
@@ -2973,8 +2975,9 @@
     {
       "source_file": "SparkEngine/Source/Core/SparkEngineLinux.cpp",
       "classification": "not-a-parser",
-      "justification": "sscanf(\"%dx%d\") converts the launching user's --window-size command-line argument into two integers; no file, package, or network bytes are decoded.",
+      "justification": "sscanf(\"%dx%d\") converts the launching user's --window-size command-line argument into two integers, and the -exec path is handed to ExecScriptPlayer::LoadFile, the inventoried exec-script-file entry; no file, package, or network bytes are decoded here.",
       "detected_by": [
+        "parse-entry",
         "scanf-parse"
       ]
     },
