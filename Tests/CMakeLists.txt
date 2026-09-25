@@ -3029,11 +3029,30 @@ if(TARGET SparkCooker)
         TIMEOUT 30)
 endif()
 
-# CI-110: execute the shipped editor against an isolated project.  This is a
-# Windows-only gate because the stable-v1 editor backend is Win32/D3D11; Linux
-# editor builds require an X11/GL display and are covered by the live-editor
-# lane instead of reporting a misleading headless pass.
-if(WIN32 AND TARGET SparkEditor)
+# CI-110 / EDT-210: execute the shipped editor against an isolated project.
+# On Windows this is the stable-v1 Win32/D3D11 editor. On Linux the editor needs
+# an X11/GL display, so every editor run is wrapped in xvfb-run (Mesa llvmpipe):
+# that proves the Linux executable starts, loads a project, saves/reopens a
+# scene and shuts down cleanly. It is not D3D11 editor certification. Without
+# xvfb-run the test is still registered and fails, so the lane cannot pass by
+# skipping.
+if(TARGET SparkEditor AND (WIN32 OR (UNIX AND NOT APPLE)))
+    set(_spark_editor_smoke_launcher_arg)
+    set(_spark_editor_smoke_labels "release;editor;editor-integration;process")
+    set(_spark_editor_smoke_timeout 45)
+    if(NOT WIN32)
+        find_program(SPARK_XVFB_RUN_EXECUTABLE xvfb-run)
+        if(NOT SPARK_XVFB_RUN_EXECUTABLE)
+            message(WARNING
+                "xvfb-run was not found: SparkEditorExecutableSmoke is registered but will fail "
+                "until xvfb is installed (the Linux editor needs an X server).")
+        endif()
+        set(_spark_editor_smoke_launcher_arg
+            "-DSPARK_EDITOR_REQUIRE_XVFB=ON" "-DSPARK_EDITOR_XVFB_RUN=${SPARK_XVFB_RUN_EXECUTABLE}")
+        set(_spark_editor_smoke_labels "editor;editor-integration;process;linux")
+        # Four editor launches, each starting its own Xvfb server.
+        set(_spark_editor_smoke_timeout 180)
+    endif()
     add_dependencies(SparkTests SparkEditor)
     add_test(
         NAME SparkEditorExecutableSmoke

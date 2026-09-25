@@ -1741,7 +1741,7 @@
           "evidence": [
             "cmake/RunSparkLinuxScenePreview.cmake"
           ],
-          "note": "There is no automated author-to-installed-runtime scenario or cook/package test. The editor smoke is WIN32-only. The Linux runtime now honors -scene (LinuxScenePreview), which such a scenario needs, but the editor-cook-install-run scenario itself does not exist."
+          "note": "There is no automated author-to-installed-runtime scenario or cook/package test. The editor smoke also runs on Linux under xvfb-run/llvmpipe (execution only, not D3D11 certification). The Linux runtime now honors -scene (LinuxScenePreview), which such a scenario needs, but the editor-cook-install-run scenario itself does not exist."
         },
         {
           "criterionDigest": "sha256:66e00b9727df",

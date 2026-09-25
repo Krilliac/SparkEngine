@@ -18,6 +18,20 @@ if(NOT EXISTS "${SPARK_EDITOR_BUILD_DIR}/CMakeCache.txt")
     message(FATAL_ERROR "SparkEditor smoke build directory is not a configured CMake tree: ${SPARK_EDITOR_BUILD_DIR}")
 endif()
 
+# Linux registers the smoke with SPARK_EDITOR_REQUIRE_XVFB=ON: every editor run
+# gets its own Xvfb server (llvmpipe), so the result never depends on the
+# caller's DISPLAY. A missing xvfb-run fails the test instead of skipping it.
+set(_launcher)
+if(SPARK_EDITOR_REQUIRE_XVFB)
+    if(NOT DEFINED SPARK_EDITOR_XVFB_RUN OR NOT EXISTS "${SPARK_EDITOR_XVFB_RUN}"
+       OR IS_DIRECTORY "${SPARK_EDITOR_XVFB_RUN}")
+        message(FATAL_ERROR
+            "SparkEditor smoke requires xvfb-run on this platform, but it was not found at configure time "
+            "('${SPARK_EDITOR_XVFB_RUN}'). Install xvfb and reconfigure.")
+    endif()
+    set(_launcher "${SPARK_EDITOR_XVFB_RUN}" -a -s "-screen 0 1280x720x24")
+endif()
+
 set(_build_dir "${SPARK_EDITOR_BUILD_DIR}")
 set(_work_dir "${SPARK_EDITOR_WORK_DIR}")
 cmake_path(ABSOLUTE_PATH _build_dir NORMALIZE)
@@ -93,7 +107,7 @@ file(COPY_FILE "${_project}" "${_missing_project}")
 set(_output "${_canonical_work_dir}/editor-smoke-output.txt")
 set(_result_file "${_canonical_work_dir}/editor-smoke-result.json")
 execute_process(
-    COMMAND "${SPARK_EDITOR}" --test-mode --test-frames 3 --project "${_project}" --smoke-result "${_result_file}"
+    COMMAND ${_launcher} "${SPARK_EDITOR}" --test-mode --test-frames 3 --project "${_project}" --smoke-result "${_result_file}"
     WORKING_DIRECTORY "${_canonical_work_dir}"
     TIMEOUT 30
     RESULT_VARIABLE _result
@@ -128,7 +142,7 @@ message(STATUS "SparkEditor executable smoke passed (project load, 3-frame run, 
 # frame run must not conceal a failed --open-scene request.
 set(_saved_scene "${_canonical_work_dir}/Scenes/EditorRoundTrip.sparkscene")
 execute_process(
-    COMMAND "${SPARK_EDITOR}" --test-mode --project "${_project}"
+    COMMAND ${_launcher} "${SPARK_EDITOR}" --test-mode --project "${_project}"
         --save-scene "Scenes/EditorRoundTrip.sparkscene"
     WORKING_DIRECTORY "${_canonical_work_dir}"
     TIMEOUT 30
@@ -139,7 +153,7 @@ endif()
 
 set(_reopen_result_file "${_canonical_work_dir}/editor-reopen-result.json")
 execute_process(
-    COMMAND "${SPARK_EDITOR}" --test-mode --test-frames 3 --project "${_project}"
+    COMMAND ${_launcher} "${SPARK_EDITOR}" --test-mode --test-frames 3 --project "${_project}"
         --open-scene "Scenes/EditorRoundTrip.sparkscene" --smoke-result "${_reopen_result_file}"
     WORKING_DIRECTORY "${_canonical_work_dir}"
     TIMEOUT 30
@@ -154,7 +168,7 @@ endif()
 
 set(_missing_result_file "${_missing_work_dir}/editor-missing-scene-result.json")
 execute_process(
-    COMMAND "${SPARK_EDITOR}" --test-mode --test-frames 3 --project "${_missing_project}"
+    COMMAND ${_launcher} "${SPARK_EDITOR}" --test-mode --test-frames 3 --project "${_missing_project}"
         --open-scene "Scenes/DefinitelyMissing.sparkscene" --smoke-result "${_missing_result_file}"
     WORKING_DIRECTORY "${_missing_work_dir}"
     TIMEOUT 30

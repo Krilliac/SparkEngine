@@ -2156,7 +2156,7 @@ Progress: 0 of 4 implemented, 0 evidenced at an exact commit.
    - There is no asset drop target, no asset-drag tests, and the cook-and-run path is untested.
 3. **[unmet]** A clean automated author-to-installed-runtime scenario passes
    - Evidence: `cmake/RunSparkLinuxScenePreview.cmake`
-   - There is no automated author-to-installed-runtime scenario or cook/package test. The editor smoke is WIN32-only. The Linux runtime now honors -scene (LinuxScenePreview), which such a scenario needs, but the editor-cook-install-run scenario itself does not exist.
+   - There is no automated author-to-installed-runtime scenario or cook/package test. The editor smoke also runs on Linux under xvfb-run/llvmpipe (execution only, not D3D11 certification). The Linux runtime now honors -scene (LinuxScenePreview), which such a scenario needs, but the editor-cook-install-run scenario itself does not exist.
 4. **[unmet]** Failed operations remain atomic and recoverable
    - Evidence: `Tests/TestEditorRecovery.cpp`, `SparkEditor/Source/Core/EditorRecovery.cpp`
    - The recovery store is tested. Crash-triggered restore and atomicity across failing editor operations are not qualified.
