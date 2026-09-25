@@ -658,6 +658,10 @@ if(NOT WIN32 AND ENABLE_SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/CMakeLists.txt")
     # import library twice and component-only installs remain self-contained.
     set(SDL2_DISABLE_INSTALL ON CACHE BOOL
         "SparkEngine provides component-aware SDL2 install rules" FORCE)
+    # SDL's own uninstall target deletes every manifest path without checking
+    # that it lies under the prefix; SparkEngine defines the guarded one below.
+    set(SDL2_DISABLE_UNINSTALL ON CACHE BOOL
+        "SparkEngine provides the manifest-driven uninstall target" FORCE)
 
     if(APPLE)
         # macOS: Cocoa + CoreAudio. X11/Wayland/ALSA etc. are irrelevant.
@@ -2686,10 +2690,11 @@ if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
             -DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/spark-tracked-install-test
             -DSPARK_BINARY_ROOT=${CMAKE_BINARY_DIR}
             -DSPARK_TRACKED_INSTALL_HELPER=${CMAKE_SOURCE_DIR}/cmake/SparkTrackedInstall.cmake
+            -DSPARK_UNINSTALL_HELPER=${CMAKE_SOURCE_DIR}/cmake/SparkUninstall.cmake
             -P ${CMAKE_SOURCE_DIR}/cmake/TestSparkTrackedInstall.cmake)
     set_tests_properties(SparkTrackedInstall.Contract PROPERTIES
         LABELS "cmake;packaging;unit"
-        TIMEOUT 30)
+        TIMEOUT 60)
     message(STATUS "Adding test suite...")
     add_subdirectory(Tests)
 endif()
@@ -2711,6 +2716,20 @@ endif()
 # ---------------------------------------------------------------------
 
 include("${CMAKE_SOURCE_DIR}/cmake/SparkTrackedInstall.cmake")
+
+# Uninstall: `cmake --build <build> --target uninstall` removes exactly the files
+# the last full `cmake --install` recorded in install_manifest.txt, refusing
+# links and paths outside CMAKE_INSTALL_PREFIX, and keeps anything created later
+# (user data). For an install made with --prefix or --component, run the helper
+# directly: cmake -DPREFIX=<prefix> -DMANIFEST=<build>/install_manifest[_<component>].txt
+#   -P cmake/SparkUninstall.cmake
+add_custom_target(uninstall
+    COMMAND "${CMAKE_COMMAND}"
+        "-DPREFIX=${CMAKE_INSTALL_PREFIX}"
+        "-DMANIFEST=${CMAKE_BINARY_DIR}/install_manifest.txt"
+        -P "${CMAKE_SOURCE_DIR}/cmake/SparkUninstall.cmake"
+    COMMENT "Uninstalling SparkEngine from ${CMAKE_INSTALL_PREFIX}"
+    VERBATIM)
 
 set(SPARK_INSTALL_COMPONENT_RUNTIME "runtime")
 set(SPARK_INSTALL_COMPONENT_SDK "sdk")

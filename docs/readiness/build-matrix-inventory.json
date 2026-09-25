@@ -598,7 +598,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2668,
+      "line": 2672,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -625,7 +625,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3588,
+      "line": 3607,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1378,7 +1378,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2668,
+      "line": 2672,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1464,7 +1464,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3588,
+      "line": 3607,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2116,10 +2116,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1745,
+      "line": 1749,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1731",
+          "id": "CMakeLists.txt:1735",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2154,24 +2154,24 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1716,
+      "line": 1720,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1619",
+          "id": "CMakeLists.txt:1623",
           "branch": 0,
           "branches": [
             "JOLT_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:1714",
+          "id": "CMakeLists.txt:1718",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1715",
+          "id": "CMakeLists.txt:1719",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2265,10 +2265,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1733,
+      "line": 1737,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1731",
+          "id": "CMakeLists.txt:1735",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2738,10 +2738,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1485,
+      "line": 1489,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1484",
+          "id": "CMakeLists.txt:1488",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2756,10 +2756,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1487,
+      "line": 1491,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1484",
+          "id": "CMakeLists.txt:1488",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2775,10 +2775,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1468,
+      "line": 1472,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1467",
+          "id": "CMakeLists.txt:1471",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2793,7 +2793,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1441,
+      "line": 1445,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3264,7 +3264,7 @@
       "target": "SparkRuntimeShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1850,
+      "line": 1854,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3324,10 +3324,10 @@
       "target": "SparkSpirvShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1909,
+      "line": 1913,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1866",
+          "id": "CMakeLists.txt:1870",
           "branch": 0,
           "branches": [
             "SPARK_VULKAN_AVAILABLE AND NOT WIN32"
@@ -3414,10 +3414,10 @@
       "target": "VulkanMemoryAllocator",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 776,
+      "line": 780,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:775",
+          "id": "CMakeLists.txt:779",
           "branch": 0,
           "branches": [
             "NOT TARGET VulkanMemoryAllocator AND EXISTS \"${VMA_ROOT}/vk_mem_alloc.h\""
@@ -3432,10 +3432,10 @@
       "target": "angelscript",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1037,
+      "line": 1041,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:979",
+          "id": "CMakeLists.txt:983",
           "branch": 0,
           "branches": [
             "ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"
@@ -3450,10 +3450,10 @@
       "target": "cgltf",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 845,
+      "line": 849,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:844",
+          "id": "CMakeLists.txt:848",
           "branch": 0,
           "branches": [
             "NOT TARGET cgltf AND EXISTS \"${CGLTF_DIR}/cgltf.h\""
@@ -3488,17 +3488,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2385,
+      "line": 2389,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2380",
+          "id": "CMakeLists.txt:2384",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2384",
+          "id": "CMakeLists.txt:2388",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -3578,10 +3578,10 @@
       "target": "miniaudio",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 864,
+      "line": 868,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:863",
+          "id": "CMakeLists.txt:867",
           "branch": 0,
           "branches": [
             "NOT TARGET miniaudio AND EXISTS \"${MINIAUDIO_DIR}/miniaudio.h\""
@@ -3596,10 +3596,10 @@
       "target": "miniz",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 727,
+      "line": 731,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:725",
+          "id": "CMakeLists.txt:729",
           "branch": 0,
           "branches": [
             "MINIZ_SOURCES"
@@ -3614,10 +3614,10 @@
       "target": "nlohmann_json",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 890,
+      "line": 894,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:889",
+          "id": "CMakeLists.txt:893",
           "branch": 0,
           "branches": [
             "NOT TARGET nlohmann_json AND EXISTS \"${NLOHMANN_JSON_DIR}/nlohmann_json.h\""
@@ -3722,10 +3722,10 @@
       "target": "stb_image",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 826,
+      "line": 830,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:825",
+          "id": "CMakeLists.txt:829",
           "branch": 0,
           "branches": [
             "NOT TARGET stb_image AND EXISTS \"${STB_DIR}/stb_image.h\""
@@ -3740,10 +3740,10 @@
       "target": "tinyexr",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 903,
+      "line": 907,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:902",
+          "id": "CMakeLists.txt:906",
           "branch": 0,
           "branches": [
             "NOT TARGET tinyexr AND EXISTS \"${TINYEXR_DIR}/tinyexr.h\""
@@ -3758,10 +3758,10 @@
       "target": "tinyobjloader",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 799,
+      "line": 803,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:796",
+          "id": "CMakeLists.txt:800",
           "branch": 0,
           "branches": [
             "TINYOBJLOADER_INCLUDE_DIR"
@@ -3773,13 +3773,23 @@
       "resolved": true
     },
     {
+      "target": "uninstall",
+      "kind": "utility",
+      "file": "CMakeLists.txt",
+      "line": 2726,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "zstd",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 755,
+      "line": 759,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:754",
+          "id": "CMakeLists.txt:758",
           "branch": 0,
           "branches": [
             "NOT TARGET zstd AND EXISTS \"${ZSTD_ROOT}/zstd.h\""
@@ -3850,7 +3860,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1745,
+          "line": 1749,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3904,7 +3914,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1716,
+          "line": 1720,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -4012,7 +4022,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1733,
+          "line": 1737,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4534,7 +4544,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1485,
+          "line": 1489,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4542,7 +4552,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1487,
+          "line": 1491,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4560,7 +4570,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1468,
+          "line": 1472,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4578,7 +4588,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1441,
+          "line": 1445,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5294,7 +5304,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1850,
+          "line": 1854,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -5402,7 +5412,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1909,
+          "line": 1913,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -5548,7 +5558,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 776,
+          "line": 780,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5566,7 +5576,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1037,
+          "line": 1041,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -5584,7 +5594,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 845,
+          "line": 849,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5622,7 +5632,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2385,
+          "line": 2389,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5666,7 +5676,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 864,
+          "line": 868,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5684,7 +5694,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 727,
+          "line": 731,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5702,7 +5712,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 890,
+          "line": 894,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5882,7 +5892,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 826,
+          "line": 830,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5900,7 +5910,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 903,
+          "line": 907,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5918,8 +5928,26 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 799,
+          "line": 803,
           "kind": "static_library",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "uninstall",
+      "kind": "utility",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "CMakeLists.txt",
+          "line": 2726,
+          "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
           "resolved": true
@@ -5936,7 +5964,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 755,
+          "line": 759,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],

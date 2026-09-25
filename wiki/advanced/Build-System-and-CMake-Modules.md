@@ -299,6 +299,42 @@ not evidence of automatic fallback or uniform runtime probing.
 | [SparkConsole](../gameplay-tools/SparkConsole.md) | Executable | Debug console with named-pipe transport on Windows and bidirectional inherited stdio transport elsewhere |
 | `SparkShaderCompiler` | Executable | Offline HLSL/GLSL shader compilation tool |
 | `SparkTests` | Executable | Unit test runner (when `BUILD_TESTS=ON`) |
+| `uninstall` | Custom target | Manifest-driven removal of the last full `cmake --install` (see below) |
+
+### Install and Uninstall
+
+`cmake --install <build>` records every file it writes in
+`<build>/install_manifest.txt` (`install_manifest_<component>.txt` for a
+`--component` install). `cmake/SparkUninstall.cmake` removes exactly those files:
+
+```bash
+cmake --build <build> --target uninstall      # full install into CMAKE_INSTALL_PREFIX
+cmake -DPREFIX=<prefix> -DMANIFEST=<build>/install_manifest_runtime.txt \
+      -P cmake/SparkUninstall.cmake           # --prefix or --component installs
+```
+
+Every manifest entry is validated before anything is deleted. The helper refuses
+the whole manifest if any entry is relative, not normalized, outside the prefix,
+a link, a directory, or under a parent that resolves outside the prefix. It also
+refuses a manifest containing a semicolon or an entry with unbalanced square
+brackets (CMake list handling would merge it with its neighbors), and a
+filesystem-root prefix. Entries that are already gone are skipped, so a second
+uninstall succeeds. Directories are pruned only when they are left empty, so data
+written under the prefix after install (saves, settings, caches) survives. The
+emptiness check escapes glob metacharacters, so a prefix such as
+`C:/Games [Beta]` is listed literally rather than read as a pattern. DESTDIR is
+applied as `cmake --install` applies it: the manifest holds unstaged paths, and a
+leading drive letter is dropped before DESTDIR is prepended. The DESTDIR stage is
+tested on Linux; the drive-letter mapping has not yet run on a Windows host. The vendored SDL2 `uninstall` target is disabled
+(`SDL2_DISABLE_UNINSTALL`) because it deletes manifest paths without these checks.
+
+`SparkTrackedInstall.Contract` covers the contract. It runs two install,
+reinstall and uninstall cycles, asserts that reinstall is byte-identical and that
+only declared user data remains, and checks the adversarial manifests, a
+DESTDIR stage, and a prefix containing glob metacharacters with user data inside
+an installed directory. This is local CMake-tree evidence only. Windows CPack/NSIS
+uninstall and SparkInstaller are separate and not yet qualified (ASSET-220,
+INST-130).
 
 ## Build Output
 
