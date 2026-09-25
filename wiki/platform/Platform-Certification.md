@@ -25,6 +25,8 @@ Platform certification (PLT-200, gate G08) proves that a specific commit builds,
 | `tools/platform-cert/evidence_schema.json` | JSON Schema for evidence records |
 | `docs/certification/support-matrix.json` | Seed support matrix (stable-v1) |
 | `docs/certification/evidence/*.json` | Per-row evidence records (one file per row) |
+| `docs/certification/plans/<rowId>.json` | Collector probe plan for each declared row |
+| `Tools/platform-cert/collect_evidence.py` | Runs a plan's probes and writes the measured record |
 | `Tests/Tools/test_platform_certification.py` | 136 adversarial tests |
 
 ## Support Matrix
@@ -120,6 +122,36 @@ Evidence is not fabricated — it must come from actual test runs on matching ha
 3. Record results in a JSON file following `evidence_schema.json`.
 4. Place the file in `docs/certification/evidence/` named `{rowId}.json`.
 5. Run the validator to confirm the evidence passes.
+
+### Row probe plans
+
+Each declared row has a collector plan in `docs/certification/plans/`. Every probe runs a
+command that already exists; categories with no implementation are listed under
+`uncoveredCategories` with the reason, never mapped to a stand-in that could pass.
+
+| Row | Probed | Command |
+|-----|--------|---------|
+| `win11-x64-msvc143-nullrhi` | `build` | `cmake --build --preset windows-shipping --config MinSizeRel` |
+| | `launch` | `ctest --test-dir build/windows-shipping -C MinSizeRel -R ^NullRHI_Windows_FPSLifecycle$ --no-tests=error` |
+| `win11-x64-msvc143-d3d11` | `build` | same Shipping build |
+| | `content`, `save` | `ctest ... -R ^FPSPackage_InstalledRuntime$ --no-tests=error` |
+
+Uncovered today: `install`/`uninstall`/`upgrade`/`rollback` (the MSI qualifier needs per-run
+arguments and predecessor packages; INST-130, REL-100 and REL-110), `crash` (OPS-100), and
+`dependency_closure` (it must come from the staged binaries' PE import tables). The NullRHI row
+also leaves out `save`, because the only save/reload proof runs D3D11 WARP. The D3D11 row also
+leaves out `launch` and `renderer`, because every D3D11 test forces WARP, plus `input` and
+`audio`. The validator refuses to certify a row with any category missing, so both rows stay
+uncertified until these gaps close.
+
+Plans carry no `provenance` block. Collection therefore has to run under CI with
+`--from-github-env` on the physical host, after
+`cmake --preset windows-shipping -DBUILD_TESTS=ON` at the commit under test. Probes run in
+category order, so `build` rebuilds the product before any ctest probe uses it.
+`TestRowProbePlans` in `Tests/Tools/test_platform_certification.py` checks four things: every
+probed or uncovered category is in the row's `evidenceRequired`, every `ctest -R ^Name$`
+selector names an `add_test` in `Tests/CMakeLists.txt`, every ctest probe passes
+`--no-tests=error`, and every named preset exists in `CMakePresets.json`.
 
 ### Remaining blockers for PLT-200 completion
 

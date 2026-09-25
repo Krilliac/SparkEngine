@@ -25,6 +25,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -2062,6 +2063,199 @@ class TestShippedArtefacts(unittest.TestCase):
                 if relative.endswith("/"):
                     continue
                 self.assertIn(relative, tracked, f"{relative} is not a tracked path")
+
+
+_ANCHORED_SELECTOR_RE = re.compile(r"^\^([A-Za-z0-9_]+)\$$")
+_ADD_TEST_NAME_RE = re.compile(r"add_test\(\s*NAME\s+([A-Za-z0-9_]+)\s")
+
+
+def _registered_ctest_names() -> set[str]:
+    """Every literal `add_test(NAME ...)` in the test tree's CMakeLists."""
+    text = (REPO_ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+    return set(_ADD_TEST_NAME_RE.findall(text))
+
+
+def _preset_configurations() -> tuple[set[str], dict[str, str]]:
+    """Configure preset names, and build preset name -> its configuration."""
+    presets = vc.load_strict_json(REPO_ROOT / "CMakePresets.json")
+    configure = {preset["name"] for preset in presets["configurePresets"]}
+    build = {
+        preset["name"]: preset.get("configuration", "")
+        for preset in presets.get("buildPresets", [])
+    }
+    return configure, build
+
+
+def _flag_value(command: list[str], flag: str) -> str | None:
+    if flag not in command:
+        return None
+    index = command.index(flag)
+    return command[index + 1] if index + 1 < len(command) else ""
+
+
+def _row_plan_errors(
+    plan: dict[str, Any],
+    row: dict[str, Any],
+    test_names: set[str],
+    configure_presets: set[str],
+    build_presets: dict[str, str],
+) -> list[str]:
+    """Why a row plan could pass vacuously or run a command that does not exist."""
+    errors: list[str] = []
+    required = set(row["evidenceRequired"])
+    probes = set(plan["probes"])
+    uncovered = plan.get("uncoveredCategories", {})
+
+    for name in sorted(probes - required):
+        errors.append(f"probe {name!r} is not in the row's evidenceRequired")
+    for name in sorted(set(uncovered) - required):
+        errors.append(f"uncovered category {name!r} is not in the row's evidenceRequired")
+    for name in sorted(probes & set(uncovered)):
+        errors.append(f"category {name!r} is both probed and declared uncovered")
+    for name in sorted(required - probes - set(uncovered)):
+        errors.append(f"category {name!r} is neither probed nor declared uncovered")
+    for name, reason in uncovered.items():
+        if not isinstance(reason, str) or not reason.strip():
+            errors.append(f"uncovered category {name!r} has no reason")
+    if "provenance" in plan:
+        errors.append("a row plan must take provenance from CI, not declare it")
+
+    declared_level = plan.get("hostOverrides", {}).get("gpu", {}).get("featureLevel")
+    if declared_level is not None and declared_level != row["gpu"]["featureLevel"]:
+        errors.append(
+            f"hostOverrides.gpu.featureLevel {declared_level!r} is not the row's "
+            f"{row['gpu']['featureLevel']!r}"
+        )
+
+    for name, spec in sorted(plan["probes"].items()):
+        command = spec["command"]
+        if command[0] == "ctest":
+            if "--no-tests=error" not in command:
+                errors.append(f"probe {name!r}: ctest must pass --no-tests=error")
+            selector = _flag_value(command, "-R")
+            match = _ANCHORED_SELECTOR_RE.match(selector or "")
+            if match is None:
+                errors.append(f"probe {name!r}: -R selector {selector!r} is not ^Name$")
+            elif match.group(1) not in test_names:
+                errors.append(
+                    f"probe {name!r}: -R selector {selector!r} names no add_test in "
+                    "Tests/CMakeLists.txt"
+                )
+            test_dir = _flag_value(command, "--test-dir") or ""
+            if not test_dir.startswith("build/") or test_dir[6:] not in configure_presets:
+                errors.append(
+                    f"probe {name!r}: --test-dir {test_dir!r} is not a configure preset's tree"
+                )
+            if not _flag_value(command, "-C"):
+                errors.append(f"probe {name!r}: ctest must select a configuration with -C")
+        elif command[0] == "cmake" and "--preset" in command:
+            preset = _flag_value(command, "--preset") or ""
+            if "--build" in command:
+                if preset not in build_presets:
+                    errors.append(f"probe {name!r}: build preset {preset!r} does not exist")
+                elif _flag_value(command, "--config") not in (None, build_presets[preset]):
+                    errors.append(
+                        f"probe {name!r}: --config disagrees with build preset {preset!r}"
+                    )
+            elif preset not in configure_presets:
+                errors.append(f"probe {name!r}: configure preset {preset!r} does not exist")
+    return errors
+
+
+class TestRowProbePlans(unittest.TestCase):
+    """The collector plans for the two declared Windows rows run real commands."""
+
+    PLANS = REPO_ROOT / "docs" / "certification" / "plans"
+    MATRIX = REPO_ROOT / "docs" / "certification" / "support-matrix.json"
+
+    def setUp(self) -> None:
+        self.rows = {row["id"]: row for row in vc.load_strict_json(self.MATRIX)["rows"]}
+        self.test_names = _registered_ctest_names()
+        self.configure_presets, self.build_presets = _preset_configurations()
+
+    def _plan(self, row_id: str) -> dict[str, Any]:
+        return collector.load_plan(self.PLANS / f"{row_id}.json")
+
+    def _errors(self, plan: dict[str, Any]) -> list[str]:
+        return _row_plan_errors(
+            plan,
+            self.rows[plan["rowId"]],
+            self.test_names,
+            self.configure_presets,
+            self.build_presets,
+        )
+
+    def test_every_declared_row_has_a_plan(self) -> None:
+        for row_id in self.rows:
+            self.assertTrue((self.PLANS / f"{row_id}.json").is_file(), row_id)
+
+    def test_every_row_plan_names_its_own_row(self) -> None:
+        for path in sorted(self.PLANS.glob("*.json")):
+            if path.stem == "ci-selfcheck":
+                continue
+            self.assertIn(path.stem, self.rows, f"{path.name} names no matrix row")
+            self.assertEqual(collector.load_plan(path)["rowId"], path.stem)
+
+    def test_row_plans_load_through_the_collector(self) -> None:
+        for row_id in self.rows:
+            self.assertTrue(self._plan(row_id)["probes"], row_id)
+
+    def test_row_plans_meet_the_contract(self) -> None:
+        for row_id in self.rows:
+            self.assertEqual(self._errors(self._plan(row_id)), [], row_id)
+
+    def test_the_selector_parser_sees_the_real_registrations(self) -> None:
+        """A parser that found nothing would make every selector check vacuous."""
+        for name in ("NullRHI_Windows_FPSLifecycle", "FPSPackage_InstalledRuntime"):
+            self.assertIn(name, self.test_names)
+
+    def test_a_misspelt_selector_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(NULLRHI_ID))
+        command = plan["probes"]["launch"]["command"]
+        command[command.index("-R") + 1] = "^NullRHI_Windows_FPSLifecycl$"
+        self.assertIn(
+            "probe 'launch': -R selector '^NullRHI_Windows_FPSLifecycl$' names no "
+            "add_test in Tests/CMakeLists.txt",
+            self._errors(plan),
+        )
+
+    def test_an_unanchored_selector_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(D3D11_ID))
+        command = plan["probes"]["save"]["command"]
+        command[command.index("-R") + 1] = "FPSPackage"
+        self.assertIn(
+            "probe 'save': -R selector 'FPSPackage' is not ^Name$", self._errors(plan)
+        )
+
+    def test_a_ctest_probe_that_could_match_nothing_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(D3D11_ID))
+        plan["probes"]["content"]["command"].remove("--no-tests=error")
+        self.assertIn(
+            "probe 'content': ctest must pass --no-tests=error", self._errors(plan)
+        )
+
+    def test_an_unknown_preset_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(NULLRHI_ID))
+        command = plan["probes"]["build"]["command"]
+        command[command.index("--preset") + 1] = "windows-shiping"
+        self.assertIn(
+            "probe 'build': build preset 'windows-shiping' does not exist",
+            self._errors(plan),
+        )
+
+    def test_a_probe_outside_the_rows_evidence_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(NULLRHI_ID))
+        plan["probes"]["renderer"] = copy.deepcopy(plan["probes"]["launch"])
+        self.assertIn(
+            "probe 'renderer' is not in the row's evidenceRequired", self._errors(plan)
+        )
+
+    def test_a_silently_dropped_category_is_rejected(self) -> None:
+        plan = copy.deepcopy(self._plan(D3D11_ID))
+        del plan["uncoveredCategories"]["crash"]
+        self.assertIn(
+            "category 'crash' is neither probed nor declared uncovered", self._errors(plan)
+        )
 
 
 class TestLedgerConsistency(BundleTestCase):
