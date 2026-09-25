@@ -14,12 +14,23 @@
   },
   "tests": {
     "files": [
-      "Tests/TestVisualScriptCompiler.cpp"
+      "Tests/TestVisualScriptCompiler.cpp",
+      "Tests/TestMOD390VisualScriptDiagnosticsReal.cpp"
     ],
     "prefixes": [
       {
         "prefix": "VisualScriptDemo_",
-        "count": 10
+        "count": 10,
+        "requires": [
+          "angelscript"
+        ]
+      },
+      {
+        "prefix": "VisualScriptDiagnostics_",
+        "count": 5,
+        "requires": [
+          "angelscript"
+        ]
       }
     ]
   },

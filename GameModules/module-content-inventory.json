@@ -416,7 +416,7 @@
       "directory": "GameModules/SparkGameVisualScript",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameVisualScript/Source",
-      "sourceFileCount": 3,
+      "sourceFileCount": 5,
       "moduleLocalContentState": "packaged",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,

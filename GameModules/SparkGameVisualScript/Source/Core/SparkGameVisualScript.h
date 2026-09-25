@@ -23,13 +23,11 @@
 
 #pragma once
 
-#include "Engine/ECS/Components/CoreComponents.h"
 #include "Spark/SparkSDK.h"
+#include "VisualScriptDemoWorld.h"
 
-#include <filesystem>
+#include <memory>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 /**
  * @brief Game module with all logic defined in visual scripts
@@ -55,18 +53,12 @@ class SparkGameVisualScriptModule : public Spark::IModule
     void OnImGui() override;
 
   private:
-    bool LoadAndCompileScripts();
-    bool SpawnGameEntities();
-    bool AttachScript(EntityID entity, const std::string& className);
-    void DestroyGameEntities();
     void RegisterConsoleCommands();
     void UnregisterConsoleCommands();
     std::string GetStatusString() const;
 
     Spark::IEngineContext* m_context{nullptr};
-    std::filesystem::path m_scriptRoot;
-    std::unordered_map<std::string, std::string> m_scriptSources;
-    std::vector<EntityID> m_scriptEntities;
+    std::unique_ptr<Spark::VisualScriptDemo::DemoWorld> m_demo; ///< Script entities; null until a load succeeds
     bool m_initialized{false};
     bool m_paused{false};
 };

@@ -60,7 +60,7 @@ else()
     set(ENGINE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
 endif()
 
-# Only two source files — the IModule shell
+# The IModule shell (Main.cpp) plus the demo world builder (VisualScriptDemoWorld.cpp)
 file(GLOB_RECURSE SPARK_GAME_VS_SOURCES CONFIGURE_DEPENDS "Source/*.cpp" "Source/*.h")
 
 add_library(SparkGameVisualScript SHARED ${SPARK_GAME_VS_SOURCES})

@@ -184,7 +184,17 @@ class ManifestMutationTests(unittest.TestCase):
         self.edit_selector("SparkGameRTS", "RTS_", count=True)
         self.assert_named_error("count must be a positive integer: True")
         self.edit("SparkGameRTS", lambda manifest: manifest["tests"].update(prefixes=["RTS_"]))
-        self.assert_named_error("selector must contain exactly prefix and count")
+        self.assert_named_error("selector must contain exactly prefix and count (and optional requires)")
+
+    def test_selector_requires_names_known_features(self) -> None:
+        # SparkGameVisualScript's families compile only with AngelScript; the
+        # generated CTest is skipped when a required feature is off.
+        self.assertEqual(["angelscript"], self.selector("SparkGameVisualScript", "VisualScriptDiagnostics_")["requires"])
+        for bad in (["lua"], [], ["angelscript", "angelscript"], "angelscript"):
+            self.edit_selector("SparkGameVisualScript", "VisualScriptDiagnostics_", requires=bad)
+            self.assert_named_error("requires must be a non-empty list of unique features from ['angelscript']")
+        cmake = (ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn('if(_spark_module_kit_feature STREQUAL "angelscript")', cmake)
 
     def test_selector_count_excludes_names_that_only_contain_the_prefix(self) -> None:
         # "ARPG_Hero_Initialize" contains "RPG_". The generated CTest runs with the

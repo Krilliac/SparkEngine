@@ -3744,7 +3744,7 @@ ctest --test-dir build/windows-release -C Release -R RacingCompleteRace --output
 **Priority:** P1 · **Status:** blocked · **Wave:** 4 · **Area:** modules · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-The module compiles/spawns surfaces but runtime lifecycle is disconnected, AttachScript failure is ignored, and load can succeed with zero compiled scripts.
+Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. Open: the shipped scripts have no checked-in .vscript graph sources, applyForce/playSound/playAnimation/fireEvent bindings are log-only or no-ops, collision dispatch has no caller, and no VisualScriptGameplay_* test runs the scripts to the win objective.
 
 **Dependency contract**
 

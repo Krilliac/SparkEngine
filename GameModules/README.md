@@ -49,7 +49,8 @@ CTest fail when a discovered module has no manifest or any referenced path,
 test prefix, test count, README, or N/A declaration does not hold.
 `Tests/CMakeLists.txt` also generates one `ModuleManifest_<Module>_<Prefix>`
 CTest (label `module-kit`) per declared prefix; it runs exactly that many
-tests or fails. The field rules are in
+tests or fails. A prefix with `"requires": ["angelscript"]` is not registered
+when the build disables AngelScript, because its tests are compiled out. The field rules are in
 [Creating a Game Module](../wiki/getting-started/Creating-a-Game-Module.md#gamemodulesnamemodulejson-in-tree-modules).
 
 ### 2. Implement `Spark::IModule`

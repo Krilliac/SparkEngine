@@ -374,6 +374,11 @@ add_executable(SparkTests
     TestAreaAssetLoader.cpp
     TestEventResponseSystem.cpp
     TestVisualScriptCompiler.cpp
+    # MOD-390: the SparkGameVisualScript demo world builder (the module's real
+    # OnLoad/vs_restart load, spawn and rollback path) driven against a live
+    # World and AngelScriptEngine.
+    TestMOD390VisualScriptDiagnosticsReal.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp"
     TestEntityPresetManager.cpp
     TestGamePackager.cpp
     TestASSET220GamePackagerReal.cpp
@@ -2450,8 +2455,36 @@ if(TARGET imgui)
                     "needs a TEST-name prefix and a positive count "
                     "(got '${_spark_module_kit_prefix}', '${_spark_module_kit_count}').")
             endif()
+            # Optional requires: build features without which the family is not
+            # compiled into SparkTests (count is the feature-on count), so the
+            # exact-count CTest is not registered when one of them is off.
+            string(JSON _spark_module_kit_requires ERROR_VARIABLE _spark_module_kit_requires_error
+                GET "${_spark_module_kit_json}" tests prefixes ${_spark_module_kit_index} requires)
+            set(_spark_module_kit_missing_feature "")
+            if(NOT _spark_module_kit_requires_error)
+                string(JSON _spark_module_kit_requires_count LENGTH "${_spark_module_kit_requires}")
+                math(EXPR _spark_module_kit_requires_last "${_spark_module_kit_requires_count} - 1")
+                foreach(_spark_module_kit_requires_index RANGE ${_spark_module_kit_requires_last})
+                    string(JSON _spark_module_kit_feature GET "${_spark_module_kit_requires}"
+                        ${_spark_module_kit_requires_index})
+                    if(_spark_module_kit_feature STREQUAL "angelscript")
+                        if(NOT SPARK_ANGELSCRIPT_AVAILABLE)
+                            set(_spark_module_kit_missing_feature "${_spark_module_kit_feature}")
+                        endif()
+                    else()
+                        message(FATAL_ERROR
+                            "MOD-290: ${_spark_module_kit_manifest} tests.prefixes[${_spark_module_kit_index}] "
+                            "requires unknown feature '${_spark_module_kit_feature}'.")
+                    endif()
+                endforeach()
+            endif()
             string(REGEX REPLACE "_+$" "" _spark_module_kit_suffix "${_spark_module_kit_prefix}")
             set(_spark_module_kit_test "ModuleManifest_${_spark_module_kit_name}_${_spark_module_kit_suffix}")
+            if(_spark_module_kit_missing_feature)
+                message(STATUS "${_spark_module_kit_test}: not registered (requires "
+                    "${_spark_module_kit_missing_feature}, which this build disables)")
+                continue()
+            endif()
             add_test(NAME ${_spark_module_kit_test} COMMAND $<TARGET_FILE:SparkTests> --quiet --empty-is-error)
             # RUN_SERIAL: several families open loopback UDP listeners or write
             # save/database files under shared per-user roots.

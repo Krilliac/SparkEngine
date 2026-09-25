@@ -447,6 +447,11 @@ def _is_registered_test_source(cmake_text: str, relative: str) -> bool:
 # a Windows-only preprocessor branch runs on one of them only, so a module
 # selector's count may differ by platform. Any other condition is assumed true.
 TEST_PLATFORMS = ("windows", "other")
+# Optional selector "requires": build features without which the selected TEST(
+# family is not compiled into SparkTests. Tests/CMakeLists.txt skips the generated
+# ModuleManifest_ CTest when a listed feature is off (the count is the feature-on
+# count), so an exact-count lane never runs an empty or shrunken family there.
+SELECTOR_FEATURES = ("angelscript",)
 _WINDOWS_MACROS = r"(?:_WIN32|SPARK_PLATFORM_WINDOWS)"
 _IF_WINDOWS = re.compile(rf"^#\s*(?:ifdef\s+{_WINDOWS_MACROS}\b|if\s+defined\s*\(?\s*{_WINDOWS_MACROS}\s*\)?\s*$)")
 _IF_NOT_WINDOWS = re.compile(rf"^#\s*(?:ifndef\s+{_WINDOWS_MACROS}\b|if\s+!\s*defined\s*\(?\s*{_WINDOWS_MACROS}\s*\)?\s*$)")
@@ -675,9 +680,20 @@ def _validate_manifest_tests(
     valid_prefixes: list[str] = []
     for index, entry in enumerate(prefixes):
         entry_location = f"{location}.prefixes[{index}]"
-        if not isinstance(entry, dict) or set(entry) != {"prefix", "count"}:
-            findings.append((entry_location, "selector must contain exactly prefix and count"))
+        if not isinstance(entry, dict) or set(entry) - {"requires"} != {"prefix", "count"}:
+            findings.append((entry_location, "selector must contain exactly prefix and count (and optional requires)"))
             continue
+        if "requires" in entry:
+            features = entry["requires"]
+            if (
+                not isinstance(features, list) or not features or len(features) != len(set(map(str, features)))
+                or not all(feature in SELECTOR_FEATURES for feature in features)
+            ):
+                findings.append((
+                    f"{entry_location}.requires",
+                    f"requires must be a non-empty list of unique features from {list(SELECTOR_FEATURES)}",
+                ))
+                continue
         prefix, count = entry["prefix"], entry["count"]
         if not isinstance(prefix, str) or not TEST_PREFIX_PATTERN.match(prefix):
             findings.append((entry_location, f"invalid TEST-name prefix: {prefix!r}"))

@@ -21,6 +21,12 @@ Useful console commands:
 
 Module load is intentionally fail-fast. All five scripts must exist and compile, and all eleven script instances must
 attach successfully; otherwise the partial world is rolled back instead of presenting a silently broken example.
+Each script must also declare `uint selfEntity = 0;` exactly once. The rejection diagnostic names the script file, and
+the line when the fault has one (a compile error, a constructor fault while attaching, a duplicated placeholder).
+File paths use forward slashes on every platform, matching the AngelScript builder's compile diagnostics.
+This load, spawn and rollback path lives in `Source/Core/VisualScriptDemoWorld.cpp`, which the module shell calls from
+`OnLoad` and `vs_restart`. `Tests/TestMOD390VisualScriptDiagnosticsReal.cpp` (the `VisualScriptDiagnostics_*` tests)
+runs that file against a real `World` and `AngelScriptEngine`.
 
 ## AngelScript build contract
 
