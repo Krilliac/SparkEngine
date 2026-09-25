@@ -2326,7 +2326,10 @@ if(TARGET imgui)
     endforeach()
 endif()
 
-if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkCrashReporter)
+# OPS-100: the isolated production crash-capture producer runs on every native
+# host that builds the reporter (Windows minidump path, POSIX assertion path).
+# Without miniz the engine links CrashHandlerStub.cpp, which has no producer.
+if(NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND AND TARGET SparkCrashReporter)
     add_dependencies(SparkTests SparkCrashReporter)
     add_test(
         NAME CrashCapturePackageSecurity
