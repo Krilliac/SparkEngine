@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 924,
+  "fileCount": 954,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -1669,6 +1669,216 @@
       "size": 8177,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original starter/module-kit model from Tools/model_pipeline/generate_starter_models.py; hash-bound by Assets/Models/Generated/starter_assets_manifest.json: starter model core_primitives/Cube [starter-model-pipeline]"
+    },
+    {
+      "path": "Models/FPS/Kit/ammo_crate.mtl",
+      "sha256": "dc076a31f806be6b5f8f507179c7f13439618148397d30e7743947f86b6f56e3",
+      "size": 796,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json: Blender-authored ammo_crate [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/ammo_crate.obj",
+      "sha256": "e18cb025090367bdb72068503a7eec0c70a289c43dd67c280cc34283a8292fb5",
+      "size": 36006,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json: Blender-authored ammo_crate [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/ammo_crate_collision.mtl",
+      "sha256": "0f2566eaab3e6901e2f025ffba3885bae4b93235f73eab3a356591d66f9ec17d",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/ammo_crate_collision.obj",
+      "sha256": "63d7b41b07cd6a3410247caf1961312b6207e2b072787c8343baa0832fa874bf",
+      "size": 1232,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/ammo_crate_lod1.mtl",
+      "sha256": "dc076a31f806be6b5f8f507179c7f13439618148397d30e7743947f86b6f56e3",
+      "size": 796,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/ammo_crate_lod1.obj",
+      "sha256": "e5c1e14b6e8ae2520e486f40d7491a242d5a44999988cc9115328dbdf4bdeb69",
+      "size": 16444,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/cover_barrier.mtl",
+      "sha256": "2985c4b40c5cef5e5baad61f4af25c7e36c138955288bc7a408cbf18f8b891c6",
+      "size": 796,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json: Blender-authored cover_barrier [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/cover_barrier.obj",
+      "sha256": "1f912859b77c566cfefed15c17f9f785d8b358bc81f7f5e386205476477ab2eb",
+      "size": 23622,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json: Blender-authored cover_barrier [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/cover_barrier_collision.mtl",
+      "sha256": "0f2566eaab3e6901e2f025ffba3885bae4b93235f73eab3a356591d66f9ec17d",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/cover_barrier_collision.obj",
+      "sha256": "03490486a0f3b3bf69e2a3e8b4e5f03a245274b6bedb8fbdd1fba47c9eb7bc27",
+      "size": 9719,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/cover_barrier_lod1.mtl",
+      "sha256": "2985c4b40c5cef5e5baad61f4af25c7e36c138955288bc7a408cbf18f8b891c6",
+      "size": 796,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/cover_barrier_lod1.obj",
+      "sha256": "a4b47bf05221641ccbc4d2e3d23c612ade373990edca650add37b27ba41c9369",
+      "size": 10786,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/spawn_pad.mtl",
+      "sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+      "size": 980,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json: Blender-authored spawn_pad [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/spawn_pad.obj",
+      "sha256": "70446b036848ff0a8d3c58404df395c2cd10f1ae92559218434b428e32b59a67",
+      "size": 84442,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json: Blender-authored spawn_pad [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/spawn_pad_collision.mtl",
+      "sha256": "0f2566eaab3e6901e2f025ffba3885bae4b93235f73eab3a356591d66f9ec17d",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/spawn_pad_collision.obj",
+      "sha256": "304248a44b43cf549a13e13671dc53b15e54e7262ed8d501533c868f2f0de4d6",
+      "size": 14930,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/spawn_pad_lod1.mtl",
+      "sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+      "size": 980,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/spawn_pad_lod1.obj",
+      "sha256": "02d92b7fcd8a4e4646fe4a67f2fe4bdc2d378e6207f1eca8457544a953860da6",
+      "size": 31789,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/target_dummy.mtl",
+      "sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+      "size": 980,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json: Blender-authored target_dummy [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/target_dummy.obj",
+      "sha256": "f3f7b08a76e63a4f9e2204671832344b876cdc5b4328738cad0025db5eba78c0",
+      "size": 66784,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json: Blender-authored target_dummy [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/target_dummy_collision.mtl",
+      "sha256": "0f2566eaab3e6901e2f025ffba3885bae4b93235f73eab3a356591d66f9ec17d",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/target_dummy_collision.obj",
+      "sha256": "7d492eda120181299c751aa7e95fb645d67b88c2e6948ab4ccb8a6f9c5b74af3",
+      "size": 8809,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/target_dummy_lod1.mtl",
+      "sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+      "size": 980,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/target_dummy_lod1.obj",
+      "sha256": "204fff23bc258c2f49236247f91aacc732410870a0b67860c5702bda7d0a3330",
+      "size": 28380,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/weapon_rack.mtl",
+      "sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+      "size": 980,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json: Blender-authored weapon_rack [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/weapon_rack.obj",
+      "sha256": "3bb3bdd2e79fa8c6e858f60b7498cc0b5df8edd427137260b55ec8d0513da359",
+      "size": 68792,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json: Blender-authored weapon_rack [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/weapon_rack_collision.mtl",
+      "sha256": "0f2566eaab3e6901e2f025ffba3885bae4b93235f73eab3a356591d66f9ec17d",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/weapon_rack_collision.obj",
+      "sha256": "421fa0a03ea3aba9ebabc9f0a2dc7e5217d2e3eaf2f9642df59a08af421d605e",
+      "size": 1234,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/weapon_rack_lod1.mtl",
+      "sha256": "a863a79578d834024092818efb7a7eb059db0ea621ffdec7acc466f2c615b44a",
+      "size": 980,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
+    },
+    {
+      "path": "Models/FPS/Kit/weapon_rack_lod1.obj",
+      "sha256": "e679b0b363d92d02f40481ad766c4855fd2cdedbace42cad3b92826226e0e0fb",
+      "size": 30995,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameFPS/fps_kit.blend via tools/blender/author_fps_kit.py; hash-bound by Art/Blender/SparkGameFPS/provenance.json [fps-blender-kit]"
     },
     {
       "path": "Models/Generated/starter_assets_manifest.json",

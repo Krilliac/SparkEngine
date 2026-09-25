@@ -659,6 +659,14 @@ namespace
             return "Assets/Materials/Arena_CenterBuilding.json";
 
         const std::wstring path(modelPath ? modelPath : L"");
+        // Training-kit props (Assets/Models/FPS/Kit) carry palette colours in their MTL files, but the D3D11
+        // Model ignores MTL data, so give each one the procedural material of its dominant surface.
+        if (path.find(L"FPS/Kit/") != std::wstring::npos)
+        {
+            const bool concrete =
+                path.find(L"cover_barrier") != std::wstring::npos || path.find(L"spawn_pad") != std::wstring::npos;
+            return concrete ? "Assets/Materials/Concrete.json" : "Assets/Materials/Metal.json";
+        }
         if (path.find(L"crate.obj") != std::wstring::npos)
             return "Assets/Materials/Wood.json";
         if (path.find(L"target.obj") != std::wstring::npos || path.find(L"rifle.obj") != std::wstring::npos ||
@@ -674,7 +682,7 @@ namespace
     /// Helper: create a ModelObject, initialize it, set position/name, and add to the list
     void PlaceModel(const wchar_t* modelPath, const std::string& name, XMFLOAT3 pos, ID3D11Device* device,
                     ID3D11DeviceContext* context, std::vector<std::unique_ptr<GameObject>>& objects,
-                    XMFLOAT3 scale = {1.0f, 1.0f, 1.0f})
+                    XMFLOAT3 scale = {1.0f, 1.0f, 1.0f}, float yaw = 0.0f)
     {
         auto obj = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(modelPath));
         HRESULT hr = obj->Initialize(device, context);
@@ -685,6 +693,8 @@ namespace
         obj->SetMaterialPath(ProceduralMaterialFor(modelPath, name));
         if (scale.x != 1.0f || scale.y != 1.0f || scale.z != 1.0f)
             obj->SetScale(scale);
+        if (yaw != 0.0f)
+            obj->SetRotation({0.0f, yaw, 0.0f});
         objects.push_back(std::move(obj));
     }
 
@@ -823,6 +833,48 @@ void Game::CreateCombatArena()
         {
             PlaceModel(weaponModels[i], weaponNames[i], {-3.0f + i * 1.5f, 1.2f, -72.0f}, device, context,
                        m_gameObjects, {3.0f, 3.0f, 3.0f});
+        }
+    }
+
+    // === TRAINING KIT (tools/blender/author_fps_kit.py -> Art/Blender/SparkGameFPS) ===
+    // Kit props face +Z; the yaw turns each one toward the play space. Spawn pads mark the default spawns
+    // of Scenes/level1.scene (the east/west pads sit 1.6 m toward +Z of theirs, clear of Field_Barrier_5/6 at
+    // x = +/-20), racks and ammo stand at the back of each base (behind Alpha's weapon displays), and the
+    // dummies stagger behind the practice targets facing the shooting lane (+X).
+    {
+        struct KitPlacement
+        {
+            const wchar_t* model;
+            const char* name;
+            XMFLOAT3 position;
+            float yaw;
+        };
+        const KitPlacement kitPlacements[] = {
+            {L"Models/FPS/Kit/spawn_pad.obj", "North_SpawnPad", {0.0f, 0.0f, -20.0f}, 0.0f},
+            {L"Models/FPS/Kit/spawn_pad.obj", "South_SpawnPad", {0.0f, 0.0f, 20.0f}, XM_PI},
+            {L"Models/FPS/Kit/spawn_pad.obj", "East_SpawnPad", {20.0f, 0.0f, 1.6f}, -XM_PIDIV2},
+            {L"Models/FPS/Kit/spawn_pad.obj", "West_SpawnPad", {-20.0f, 0.0f, 1.6f}, XM_PIDIV2},
+            {L"Models/FPS/Kit/cover_barrier.obj", "North_SpawnCover_1", {-4.0f, 0.0f, -16.0f}, 0.0f},
+            {L"Models/FPS/Kit/cover_barrier.obj", "North_SpawnCover_2", {4.0f, 0.0f, -16.0f}, 0.0f},
+            {L"Models/FPS/Kit/cover_barrier.obj", "South_SpawnCover_1", {-4.0f, 0.0f, 16.0f}, XM_PI},
+            {L"Models/FPS/Kit/cover_barrier.obj", "South_SpawnCover_2", {4.0f, 0.0f, 16.0f}, XM_PI},
+            {L"Models/FPS/Kit/weapon_rack.obj", "Alpha_WeaponRack_1", {-0.8f, 0.0f, -73.5f}, 0.0f},
+            {L"Models/FPS/Kit/weapon_rack.obj", "Alpha_WeaponRack_2", {0.8f, 0.0f, -73.5f}, 0.0f},
+            {L"Models/FPS/Kit/ammo_crate.obj", "Alpha_AmmoCrate_1", {-2.4f, 0.0f, -73.6f}, 0.0f},
+            {L"Models/FPS/Kit/ammo_crate.obj", "Alpha_AmmoCrate_2", {2.4f, 0.0f, -73.6f}, 0.0f},
+            {L"Models/FPS/Kit/weapon_rack.obj", "Bravo_WeaponRack_1", {-0.8f, 0.0f, 73.5f}, XM_PI},
+            {L"Models/FPS/Kit/weapon_rack.obj", "Bravo_WeaponRack_2", {0.8f, 0.0f, 73.5f}, XM_PI},
+            {L"Models/FPS/Kit/ammo_crate.obj", "Bravo_AmmoCrate_1", {-2.4f, 0.0f, 73.6f}, XM_PI},
+            {L"Models/FPS/Kit/ammo_crate.obj", "Bravo_AmmoCrate_2", {2.4f, 0.0f, 73.6f}, XM_PI},
+            {L"Models/FPS/Kit/target_dummy.obj", "Target_Dummy_1", {-58.0f, 0.0f, -7.5f}, XM_PIDIV2},
+            {L"Models/FPS/Kit/target_dummy.obj", "Target_Dummy_2", {-58.0f, 0.0f, -2.5f}, XM_PIDIV2},
+            {L"Models/FPS/Kit/target_dummy.obj", "Target_Dummy_3", {-58.0f, 0.0f, 2.5f}, XM_PIDIV2},
+            {L"Models/FPS/Kit/target_dummy.obj", "Target_Dummy_4", {-58.0f, 0.0f, 7.5f}, XM_PIDIV2},
+        };
+        for (const auto& placement : kitPlacements)
+        {
+            PlaceModel(placement.model, placement.name, placement.position, device, context, m_gameObjects,
+                       {1.0f, 1.0f, 1.0f}, placement.yaw);
         }
     }
 

@@ -31,6 +31,10 @@ The module initializes without a D3D11 device: gameplay state is built in full a
 `Render()` are skipped. Module assets (the scene, arena and weapon models, music tracks) resolve against a single
 asset root discovered at runtime (`FPSAssets::Resolve`), not against paths relative to the working directory.
 
+The arena also places a Blender-authored training kit from `Assets/Models/FPS/Kit/` (spawn pads, cover barriers,
+weapon racks, ammo crates and target dummies; source and provenance in `Art/Blender/SparkGameFPS/`).
+`asset-references.json` records every asset path the module source names.
+
 Under the headless (NullRHI) host the engine context exposes no `GraphicsEngine` or `InputManager`, so the renderable
 `Game` is not built. The module still simulates the authored arena (`Core/HeadlessArena.cpp`): it loads
 `Scenes/level1.scene` through the data-only `SceneManager` path, binds `RespawnSystem` and a Deathmatch `GameMode` to

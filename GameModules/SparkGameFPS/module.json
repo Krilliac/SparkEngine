@@ -11,6 +11,10 @@
         "manifest": "Assets/assets.integrity.json"
       },
       {
+        "directory": "Assets/Models/FPS",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
         "directory": "Assets/Scenes",
         "manifest": "Assets/assets.integrity.json"
       }
