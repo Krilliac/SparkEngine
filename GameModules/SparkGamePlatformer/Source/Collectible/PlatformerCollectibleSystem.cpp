@@ -18,9 +18,8 @@ namespace Platformer
 
     bool PlatformerCollectibleSystem::Initialize(Spark::IEngineContext* context)
     {
-        if (!context)
-            return false;
-
+        // The context is only stored; collectible placement and collection are self-contained, so a null
+        // context (the level-flow tests) is valid.
         m_context = context;
 
         BuildDemoCollectibles();

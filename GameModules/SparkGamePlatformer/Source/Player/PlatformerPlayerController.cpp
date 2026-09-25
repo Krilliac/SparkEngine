@@ -215,6 +215,7 @@ namespace Platformer
             m_coyoteTimer = 0.0f;
             m_jumpBufferTimer = 0.0f;
             m_grounded = false;
+            m_jumpCutEligible = true;
             TransitionState(PlayerState::Jumping);
             return;
         }
@@ -225,12 +226,14 @@ namespace Platformer
             m_velocity.y = m_doubleJumpForce;
             m_hasDoubleJumped = true;
             m_jumpBufferTimer = 0.0f;
+            m_jumpCutEligible = true;
             TransitionState(PlayerState::DoubleJumping);
             return;
         }
 
-        // Variable jump height: cut velocity when button released early
-        if (!m_jumpHeld && m_velocity.y > 0.0f &&
+        // Variable jump height: cut velocity when button released early. Only an ascent the player started
+        // with the jump button is cut; a bouncy-platform launch or hazard knockback keeps its full height.
+        if (m_jumpCutEligible && !m_jumpHeld && m_velocity.y > 0.0f &&
             (m_state == PlayerState::Jumping || m_state == PlayerState::DoubleJumping))
         {
             m_velocity.y *= m_jumpCutMultiplier;
@@ -464,6 +467,7 @@ namespace Platformer
         m_invincibilityTimer = m_invincibilityDuration;
         m_hasDoubleJumped = false;
         m_hasDashed = false;
+        m_jumpCutEligible = false;
         m_dashRequested = false;
         m_groundPoundRequested = false;
 

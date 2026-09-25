@@ -9,12 +9,17 @@
   },
   "tests": {
     "files": [
-      "Tests/TestGameModulePlatformerARPG.cpp"
+      "Tests/TestGameModulePlatformerARPG.cpp",
+      "Tests/TestMOD340PlatformerCompletionReal.cpp"
     ],
     "prefixes": [
       {
         "prefix": "Platformer_",
         "count": 18
+      },
+      {
+        "prefix": "PlatformerCompletion_",
+        "count": 12
       }
     ]
   },

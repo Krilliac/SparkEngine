@@ -1169,7 +1169,10 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Level/PlatformerPlatformSimulation.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Checkpoint/PlatformerCheckpointSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Collectible/PlatformerCollectibleSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Hazard/PlatformerHazardSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Core/PlatformerLevelFlow.cpp"
     )
 
     # ARPG module sources

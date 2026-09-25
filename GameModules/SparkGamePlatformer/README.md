@@ -9,7 +9,10 @@ abilities, checkpoints, collectibles, hazards, and a camera system.
 ## What runs
 
 `Source/Core/Main.cpp` creates the level, checkpoint, player-controller, collectible, hazard, camera, and
-engine-bridge systems on load. The `platformer_*` console commands inspect and drive the level and player
+engine-bridge systems on load. Its `OnUpdate`/`OnFixedUpdate` forward to `Source/Core/PlatformerLevelFlow`, which
+owns the per-frame level orchestration: platform simulation, player physics, and wind in `StepFixed`; collection,
+ability unlocks, checkpoint activation, hazard damage and knockback, and the goal test in `StepFrame`. The
+`platformer_*` console commands inspect and drive the level and player
 (`platformer_status`, `platformer_level`, `platformer_next`, `platformer_respawn`, `platformer_restart`, and
 others). `plat_save` and `plat_load` save and restore progress through the engine bridge, and
 `plat_replay_start`, `plat_replay_stop`, and `plat_ghost` record a run and toggle ghost playback.
@@ -27,3 +30,12 @@ others). `plat_save` and `plat_load` save and restore progress through the engin
 `Tests/TestGameModulePlatformerARPG.cpp` (`Platformer_*`) compiles the module's real player-controller,
 checkpoint, and engine-bridge sources into SparkTests and covers checkpoints, player damage and respawn,
 deterministic movement, jump buffering, and dash.
+
+`Tests/TestMOD340PlatformerCompletionReal.cpp` (`PlatformerCompletion_*`) additionally compiles the level,
+collectible, hazard, and `PlatformerLevelFlow` sources. It covers platform collision, the kill plane, automatic
+checkpoint restart, and bouncy-pad launches, and it drives `PlatformerLevelFlow` with a route-following input
+script that completes level 0 inside a 180-second simulated budget, including one run that dies to hazards at
+the second checkpoint and restarts there. This is in-process evidence at 60 Hz, not a packaged run.
+
+Both families are registered from `module.json` as exact-count CTests
+(`ModuleManifest_SparkGamePlatformer_Platformer` and `ModuleManifest_SparkGamePlatformer_PlatformerCompletion`).

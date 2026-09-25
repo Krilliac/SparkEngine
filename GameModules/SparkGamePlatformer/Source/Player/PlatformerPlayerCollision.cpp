@@ -211,6 +211,7 @@ namespace Platformer
         m_position.y = surfaceY;
         m_hasDoubleJumped = false;
         m_hasDashed = false;
+        m_jumpCutEligible = false;
 
         if (platform.bounceForce > 0.0f)
         {

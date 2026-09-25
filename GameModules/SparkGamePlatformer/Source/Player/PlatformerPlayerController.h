@@ -208,6 +208,7 @@ namespace Platformer
         bool m_hasDoubleJumped{false};
         bool m_hasDashed{false};
         bool m_jumpHeld{false};
+        bool m_jumpCutEligible{false}; ///< Current ascent came from a jump press, so releasing early shortens it
         bool m_jumpRequested{false};
         bool m_dashRequested{false};
         bool m_groundPoundRequested{false};
