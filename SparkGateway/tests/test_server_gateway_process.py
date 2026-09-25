@@ -18,6 +18,9 @@ from pathlib import Path
 MAGIC = 0x5350524B  # "SPRK"
 CONNECT = 1
 CONNECT_ACCEPTED = 2
+# Connect payload prefix: handshake magic "SPNH" + protocol version (NetworkManager.h).
+HANDSHAKE_MAGIC = 0x484E5053
+PROTOCOL_VERSION = 1
 
 
 class ManagedProcess:
@@ -139,7 +142,7 @@ def wait_health(
 
 def connect_packet(player_name: str) -> bytes:
     name = player_name.encode("utf-8")
-    payload = struct.pack("<H", len(name)) + name
+    payload = struct.pack("<IHH", HANDSHAKE_MAGIC, PROTOCOL_VERSION, len(name)) + name
     header = struct.pack("<IHBIIfI", MAGIC, CONNECT, 1, 0, 0, 0.0, len(payload))
     return header + payload
 

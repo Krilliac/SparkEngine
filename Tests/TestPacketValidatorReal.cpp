@@ -52,15 +52,21 @@ TEST(PacketValidatorReal_ConnectionAndAckSchemasMatchConsumers)
     PacketValidator validator;
     NetworkMessage message;
 
+    // ConnectAccepted is exactly client ID + server time + echoed protocol version.
     message.type = MessageType::ConnectAccepted;
-    message.payload.resize(3);
-    EXPECT_FALSE(validator.ValidatePacket(message, false, false).valid);
-    message.payload.resize(4);
-    EXPECT_TRUE(validator.ValidatePacket(message, false, false).valid);
-    message.payload.resize(8);
-    EXPECT_TRUE(validator.ValidatePacket(message, false, false).valid);
     message.payload.resize(9);
     EXPECT_FALSE(validator.ValidatePacket(message, false, false).valid);
+    message.payload.resize(10);
+    EXPECT_TRUE(validator.ValidatePacket(message, false, false).valid);
+    message.payload.resize(11);
+    EXPECT_FALSE(validator.ValidatePacket(message, false, false).valid);
+
+    // Connect needs at least handshake magic + protocol version + an (empty) name prefix.
+    message.type = MessageType::Connect;
+    message.payload.resize(7);
+    EXPECT_FALSE(validator.ValidatePacket(message, false, true).valid);
+    message.payload.resize(8);
+    EXPECT_TRUE(validator.ValidatePacket(message, false, true).valid);
 
     message.type = MessageType::Ack;
     message.payload.resize(7);

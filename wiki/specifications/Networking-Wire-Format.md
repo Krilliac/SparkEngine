@@ -201,10 +201,10 @@ Reliable messages use a sliding-window acknowledgment scheme:
 Client                          Server
   │                               │
   │──── Connect ─────────────────>│
-  │     (token, version)          │
+  │     (magic, version, name)    │
   │                               │
   │<─── ConnectAccepted ──────────│
-  │     (clientID, serverTime)    │
+  │  (clientID, serverTime, ver)  │
   │                               │
   │<─── GameStateSync ────────────│
   │     (full world state)        │
@@ -214,7 +214,19 @@ Client                          Server
   │     (ongoing keepalive)       │
 ```
 
-If the server rejects the connection (version mismatch, server full, banned), it sends `ConnectRejected` with a reason string in the payload.
+The `Connect` payload opens with the handshake magic `0x484E5053` ("SPNH") and the `uint16`
+`NETWORK_PROTOCOL_VERSION` (currently `1`), followed by the length-prefixed player name. Before it
+considers a client slot, the server rejects a missing (`ProtocolMissing`), older (`ProtocolTooOld`),
+newer (`ProtocolTooNew`), or malformed (`MalformedHandshake`) handshake. It also rejects with
+`ServerFull` when every slot is taken. `ConnectRejected` carries the reason text, then a typed
+`uint8` reason code and the server's protocol version. `ConnectAccepted` echoes the negotiated
+version, and a client refuses (`ProtocolMismatch`) an echo that differs from its own. The exact
+layouts are in `docs/specs/networking-wire-format.md`, and the evidence is the CTest
+`NetworkSessionCompatibility` (`Tests/TestSessionCompatibilityReal.cpp`). Version negotiation is
+not authentication. A current client talking to a pre-negotiation (legacy) server gets no typed
+refusal. The legacy server admits it and replies with the old 8-byte `ConnectAccepted`, which the
+client drops as malformed. The client then fails at its connect timeout with reason `Unspecified`,
+and the legacy server holds the slot until its heartbeat timeout.
 
 ---
 

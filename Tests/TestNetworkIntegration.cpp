@@ -739,7 +739,7 @@ TEST(NetworkManager_HandleConnectCreatesClient)
     connectMsg.channel = ChannelType::Reliable;
     connectMsg.senderID = INVALID_CLIENT;
     NetBuffer buf;
-    buf.WriteString("TestPlayer");
+    WriteConnectRequest(buf, "TestPlayer");
     connectMsg.payload = buf.GetData();
 
     // The HandleConnect is private but is registered as a handler.

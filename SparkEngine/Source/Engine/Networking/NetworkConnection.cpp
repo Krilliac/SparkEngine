@@ -20,6 +20,7 @@
 #include "../../Utils/ScopeGuard.h"
 #include "../../Utils/SecureMemory.h"
 #include "../../Utils/Validate.h"
+#include <format>
 #include <sstream>
 #include <cstring>
 #include <algorithm>
@@ -97,10 +98,24 @@ namespace Spark::Net
                                  NetBuffer buf;
                                  buf.WriteBytes(msg.payload.data(), msg.payload.size());
                                  const ClientID assignedID = buf.ReadUint32();
+                                 buf.ReadFloat(); // server time; informational only
+                                 const uint16_t serverVersion = buf.ReadUint16();
                                  if (buf.HasError() || assignedID == INVALID_CLIENT)
                                  {
                                      SPARK_LOG_WARN(Spark::LogCategory::Network,
                                                     "Ignoring malformed ConnectAccepted packet");
+                                     return;
+                                 }
+
+                                 // The server must echo the version this client offered. Anything
+                                 // else means the peers disagree about the wire format, so refuse the
+                                 // session instead of exchanging traffic neither side can trust.
+                                 if (serverVersion != NETWORK_PROTOCOL_VERSION)
+                                 {
+                                     AbandonClientHandshake(ConnectRejectReason::ProtocolMismatch,
+                                                            std::format("Server accepted with protocol version {}, "
+                                                                        "client requires {}",
+                                                                        serverVersion, NETWORK_PROTOCOL_VERSION));
                                      return;
                                  }
 
@@ -116,35 +131,30 @@ namespace Spark::Net
         registerInternal(MessageType::ConnectRejected,
                          [this](const NetworkMessage& msg)
                          {
-                             std::string reason = "Connection rejected";
+                             // Payload: reason text, then a typed trailer (reason code + the
+                             // server's protocol version). Any rejection is terminal, so a missing
+                             // or malformed trailer still fails the handshake, just untyped.
+                             std::string text = "Connection rejected";
+                             ConnectRejectReason reason = ConnectRejectReason::Unspecified;
                              if (!msg.payload.empty())
                              {
                                  NetBuffer buf;
                                  buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                 std::string suppliedReason = buf.ReadString();
-                                 if (!buf.HasError() && !suppliedReason.empty())
-                                     reason = std::move(suppliedReason);
+                                 std::string suppliedText = buf.ReadString();
+                                 if (!buf.HasError() && !suppliedText.empty())
+                                     text = std::move(suppliedText);
+                                 const uint8_t code = buf.ReadUint8();
+                                 const uint16_t serverVersion = buf.ReadUint16();
+                                 if (!buf.HasError() &&
+                                     code <= static_cast<uint8_t>(ConnectRejectReason::MalformedHandshake))
+                                 {
+                                     reason = static_cast<ConnectRejectReason>(code);
+                                     SPARK_LOG_DEBUG(Spark::LogCategory::Network,
+                                                     "ConnectRejected reason %u from server protocol version %u",
+                                                     static_cast<unsigned>(code), static_cast<unsigned>(serverVersion));
+                                 }
                              }
-
-                             uint64_t rejectedLifecycleEpoch = 0;
-                             {
-                                 std::lock_guard<std::mutex> stateLock(m_stateMutex);
-                                 if (m_role.load(std::memory_order_acquire) != NetworkRole::Client ||
-                                     m_connectionState != ConnectionState::Connecting)
-                                     return;
-                                 rejectedLifecycleEpoch = m_lifecycleEpoch;
-                                 m_lastConnectionError = reason;
-                                 m_connectionState = ConnectionState::Disconnected;
-                                 m_role = NetworkRole::None;
-                                 m_localClientID = INVALID_CLIENT;
-                                 m_wasConnected = false;
-                             }
-                             ++m_lifecycleEpoch;
-#ifdef ENABLE_NETWORKING
-                             CloseSocket();
-#endif
-                             DiscardClientLifecycleTraffic(rejectedLifecycleEpoch);
-                             SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected: %s", reason.c_str());
+                             AbandonClientHandshake(reason, std::move(text));
                          });
         registerInternal(MessageType::Heartbeat,
                          [this](const NetworkMessage& msg)
@@ -553,6 +563,7 @@ namespace Spark::Net
             m_role = NetworkRole::Client;
             m_connectionState = ConnectionState::Connecting;
             m_lastConnectionError.clear();
+            m_lastConnectRejectReason = ConnectRejectReason::Unspecified;
         }
         m_allowLanAdvertisement = false;
         ++m_lifecycleEpoch;
@@ -564,7 +575,7 @@ namespace Spark::Net
         connectMsg.senderID = INVALID_CLIENT;
         connectMsg.timestamp = 0.0f;
         NetBuffer buf;
-        buf.WriteString(playerName);
+        WriteConnectRequest(buf, playerName);
         connectMsg.payload = buf.GetData();
         SendMessage(connectMsg);
 
@@ -935,36 +946,95 @@ namespace Spark::Net
         return INVALID_CLIENT;
     }
 
+    void NetworkManager::RejectPendingConnect(ClientID pendingID, ConnectRejectReason reason, const std::string& text)
+    {
+        NetworkMessage reject;
+        reject.type = MessageType::ConnectRejected;
+        reject.channel = ChannelType::Reliable;
+        NetBuffer rejectBuf;
+        rejectBuf.WriteString(text);
+        rejectBuf.WriteUint8(static_cast<uint8_t>(reason));
+        rejectBuf.WriteUint16(NETWORK_PROTOCOL_VERSION);
+        reject.payload = rejectBuf.GetData();
+
+        // Send rejection only to the connecting client (not broadcast)
+        SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected for pending client %u: %s", pendingID,
+                       text.c_str());
+        SendToClient(pendingID, reject);
+
+#ifdef ENABLE_NETWORKING
+        // Clean up the pre-registered address so the rejected client
+        // doesn't receive broadcast traffic meant for real clients
+        m_clientAddresses.erase(pendingID);
+#endif
+    }
+
+    void NetworkManager::AbandonClientHandshake(ConnectRejectReason reason, std::string text)
+    {
+        uint64_t rejectedLifecycleEpoch = 0;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            if (m_role.load(std::memory_order_acquire) != NetworkRole::Client ||
+                m_connectionState != ConnectionState::Connecting)
+                return;
+            rejectedLifecycleEpoch = m_lifecycleEpoch;
+            m_lastConnectionError = text;
+            m_lastConnectRejectReason = reason;
+            m_connectionState = ConnectionState::Disconnected;
+            m_role = NetworkRole::None;
+            m_localClientID = INVALID_CLIENT;
+            m_wasConnected = false;
+        }
+        ++m_lifecycleEpoch;
+#ifdef ENABLE_NETWORKING
+        CloseSocket();
+#endif
+        DiscardClientLifecycleTraffic(rejectedLifecycleEpoch);
+        SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected: %s", text.c_str());
+    }
+
     ClientID NetworkManager::HandleConnect(const NetworkMessage& msg)
     {
         if (GetRole() != NetworkRole::Server)
             return INVALID_CLIENT;
 
         // ProcessIncoming pre-registers m_clientAddresses[m_nextClientID] so
-        // that SendToClient can reach the new client. If we reject, we must
-        // clean up that entry to avoid stale addresses receiving broadcasts.
-        ClientID pendingID = m_nextClientID;
+        // that SendToClient can reach the new client. Every rejection below
+        // must clean up that entry to avoid stale addresses receiving broadcasts.
+        const ClientID pendingID = m_nextClientID;
+
+        // Protocol negotiation happens before any slot is considered: a peer that
+        // cannot speak this exact wire version never occupies server state.
+        NetBuffer request;
+        request.WriteBytes(msg.payload.data(), msg.payload.size());
+        const uint32_t magic = request.ReadUint32();
+        const uint16_t clientVersion = request.ReadUint16();
+        if (request.HasError() || magic != NETWORK_HANDSHAKE_MAGIC)
+        {
+            RejectPendingConnect(pendingID, ConnectRejectReason::ProtocolMissing,
+                                 std::format("Protocol version required (server speaks {})", NETWORK_PROTOCOL_VERSION));
+            return INVALID_CLIENT;
+        }
+        if (clientVersion != NETWORK_PROTOCOL_VERSION)
+        {
+            const bool older = clientVersion < NETWORK_PROTOCOL_VERSION;
+            RejectPendingConnect(pendingID,
+                                 older ? ConnectRejectReason::ProtocolTooOld : ConnectRejectReason::ProtocolTooNew,
+                                 std::format("Client protocol version {} is {} than server version {}", clientVersion,
+                                             older ? "older" : "newer", NETWORK_PROTOCOL_VERSION));
+            return INVALID_CLIENT;
+        }
+        std::string playerName = request.ReadString();
+        if (request.HasError() || request.RemainingBytes() != 0)
+        {
+            RejectPendingConnect(pendingID, ConnectRejectReason::MalformedHandshake, "Malformed connect request");
+            return INVALID_CLIENT;
+        }
 
         if (static_cast<int>(m_clients.size()) >= m_maxClients)
         {
-            NetworkMessage reject;
-            reject.type = MessageType::ConnectRejected;
-            reject.channel = ChannelType::Reliable;
-            NetBuffer rejectBuf;
-            rejectBuf.WriteString("Server full");
-            reject.payload = rejectBuf.GetData();
-
-            // Send rejection only to the connecting client (not broadcast)
-            SPARK_LOG_WARN(Spark::LogCategory::Network,
-                           "Connection rejected for pending client %u: server full (%d/%d)", pendingID,
-                           static_cast<int>(m_clients.size()), m_maxClients);
-            SendToClient(pendingID, reject);
-
-#ifdef ENABLE_NETWORKING
-            // Clean up the pre-registered address so the rejected client
-            // doesn't receive broadcast traffic meant for real clients
-            m_clientAddresses.erase(pendingID);
-#endif
+            RejectPendingConnect(pendingID, ConnectRejectReason::ServerFull,
+                                 std::format("Server full ({}/{})", m_clients.size(), m_maxClients));
             return INVALID_CLIENT;
         }
 
@@ -974,18 +1044,7 @@ namespace Spark::Net
         info.id = newID;
         info.state = ConnectionState::Connected;
         info.lastHeartbeatTime = m_serverTime;
-
-        // Parse player name from connection request payload
-        if (!msg.payload.empty())
-        {
-            NetBuffer buf;
-            buf.WriteBytes(msg.payload.data(), msg.payload.size());
-            info.name = buf.ReadString();
-        }
-        if (info.name.empty())
-        {
-            info.name = "Player_" + std::to_string(newID);
-        }
+        info.name = playerName.empty() ? "Player_" + std::to_string(newID) : std::move(playerName);
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             m_clients[newID] = info;
@@ -994,13 +1053,14 @@ namespace Spark::Net
         // Register the new connection for delta snapshot tracking
         DeltaSnapshotManager::GetInstance().RegisterConnection(newID);
 
-        // Send acceptance with assigned client ID
+        // Send acceptance with assigned client ID, echoing the negotiated protocol version
         NetworkMessage accept;
         accept.type = MessageType::ConnectAccepted;
         accept.channel = ChannelType::Reliable;
         NetBuffer respBuf;
         respBuf.WriteUint32(newID);
         respBuf.WriteFloat(m_serverTime);
+        respBuf.WriteUint16(NETWORK_PROTOCOL_VERSION);
         accept.payload = respBuf.GetData();
         SendToClient(newID, accept);
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u accepted ('%s'), %d/%d slots used", newID,

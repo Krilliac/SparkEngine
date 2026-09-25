@@ -288,6 +288,14 @@ namespace
         return datagrams;
     }
 
+    /// Current-protocol Connect payload (handshake magic, version, name) as a production client sends it.
+    std::vector<uint8_t> ConnectRequestPayload(const std::string& name = "Player")
+    {
+        NetBuffer buf;
+        WriteConnectRequest(buf, name);
+        return buf.GetData();
+    }
+
     bool ContainsBytes(const std::vector<uint8_t>& haystack, const std::vector<uint8_t>& needle)
     {
         return !needle.empty() &&
@@ -342,7 +350,8 @@ TEST(NetworkManager_GeneratedClientIdsWrapBeforeReservedSentinels)
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(nm.GetBoundPort());
     serverAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    const auto connect = BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT);
+    const auto connect =
+        BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT, ConnectRequestPayload());
 
     SOCKET first = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     ASSERT_TRUE(first != INVALID_SOCKET);
@@ -403,7 +412,7 @@ TEST(NetworkManager_MessageCallbackMayWaitForCrossThreadStopServer)
     serverAddr.sin_port = htons(port);
     inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
 
-    auto sendPacket = [&](MessageType type)
+    auto sendPacket = [&](MessageType type, const std::vector<uint8_t>& payload = {})
     {
         std::vector<uint8_t> packet;
         auto put32 = [&](uint32_t value)
@@ -422,12 +431,13 @@ TEST(NetworkManager_MessageCallbackMayWaitForCrossThreadStopServer)
         put32(INVALID_CLIENT);
         put32(0);
         put32(0);
-        put32(0);
+        put32(static_cast<uint32_t>(payload.size()));
+        packet.insert(packet.end(), payload.begin(), payload.end());
         return sendto(rawSock, reinterpret_cast<const char*>(packet.data()), static_cast<int>(packet.size()), 0,
                       reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
     };
 
-    ASSERT_TRUE(sendPacket(MessageType::Connect) > 0);
+    ASSERT_TRUE(sendPacket(MessageType::Connect, ConnectRequestPayload()) > 0);
     for (int i = 0; i < 50 && nm.GetClients().empty(); ++i)
     {
         nm.Update(0.016f);
@@ -738,8 +748,10 @@ TEST(NetworkManager_ClientAcceptsOnlyConfiguredServerEndpoint)
     put32(INVALID_CLIENT);
     put32(1);
     put32(0);
-    put32(4);
+    put32(10); // client ID + server time + echoed protocol version
     put32(42);
+    put32(0);
+    put16(NETWORK_PROTOCOL_VERSION);
 
     EXPECT_EQ(sendto(spoofSock, reinterpret_cast<const char*>(accepted.data()), static_cast<int>(accepted.size()), 0,
                      reinterpret_cast<sockaddr*>(&clientAddr), sizeof(clientAddr)),
@@ -799,7 +811,9 @@ TEST(NetworkManager_RejectedConnectDoesNotTriggerEntitySync)
     put32(INVALID_CLIENT);
     put32(0);
     put32(0);
-    put32(0);
+    const auto connectPayload = ConnectRequestPayload();
+    put32(static_cast<uint32_t>(connectPayload.size()));
+    connectPacket.insert(connectPacket.end(), connectPayload.begin(), connectPayload.end());
 
     auto sendConnect = [&]()
     {
@@ -895,7 +909,8 @@ TEST(NetworkManager_ProtocolHandlersAndApplicationObserversBothRunExactlyOnce)
     serverAddr.sin_port = htons(nm.GetBoundPort());
     inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
 
-    const auto connect = BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT);
+    const auto connect =
+        BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT, ConnectRequestPayload());
     auto sendPacket = [&](const std::vector<uint8_t>& packet)
     {
         return sendto(client, reinterpret_cast<const char*>(packet.data()), static_cast<int>(packet.size()), 0,
@@ -979,7 +994,8 @@ TEST(NetworkManager_PolicyKickDropsGameplayQueuedBehindConnectInSameReceivePump)
                       reinterpret_cast<const sockaddr*>(&serverAddress), sizeof(serverAddress));
     };
 
-    const auto connect = BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT);
+    const auto connect =
+        BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT, ConnectRequestPayload());
     const auto gameplay = BuildWireMessage(MessageType::UserDefined, ChannelType::Unreliable, INVALID_CLIENT,
                                            std::vector<uint8_t>{'g', 'a', 'm', 'e', 'p', 'l', 'a', 'y'});
     const uint64_t droppedBefore = NetworkManagerClientIdTestAccess::DroppedIncomingMessages(nm);
@@ -1019,7 +1035,8 @@ TEST(NetworkManager_ConcurrentLoopbackQueriesExerciseAdmittedAddressMapDuringSto
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(nm.GetBoundPort());
     serverAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    const auto connect = BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT);
+    const auto connect =
+        BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT, ConnectRequestPayload());
     ASSERT_EQ(sendto(client, reinterpret_cast<const char*>(connect.data()), static_cast<int>(connect.size()), 0,
                      reinterpret_cast<const sockaddr*>(&serverAddr), sizeof(serverAddr)),
               static_cast<int>(connect.size()));

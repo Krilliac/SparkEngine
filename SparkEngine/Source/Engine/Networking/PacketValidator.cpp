@@ -42,14 +42,16 @@ namespace Spark::Net
     void PacketValidator::RegisterDefaultSchemas()
     {
         // Connection messages
-        RegisterSchema(MessageType::Connect, {.minPayloadSize = 0,
+        // Connect: handshake magic (4) + protocol version (2) + length-prefixed name (>= 2).
+        RegisterSchema(MessageType::Connect, {.minPayloadSize = 8,
                                               .maxPayloadSize = 256,
                                               .requiresAuth = false,
                                               .allowedFromClient = true,
                                               .allowedFromServer = false});
 
-        RegisterSchema(MessageType::ConnectAccepted, {.minPayloadSize = 4,
-                                                      .maxPayloadSize = 8,
+        // ConnectAccepted: client ID (4) + server time (4) + echoed protocol version (2).
+        RegisterSchema(MessageType::ConnectAccepted, {.minPayloadSize = 10,
+                                                      .maxPayloadSize = 10,
                                                       .requiresAuth = false,
                                                       .allowedFromClient = false,
                                                       .allowedFromServer = true});

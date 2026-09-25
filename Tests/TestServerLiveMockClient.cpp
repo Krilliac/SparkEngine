@@ -136,7 +136,7 @@ static std::vector<uint8_t> BuildPacket(MessageType type, ChannelType channel, u
 static std::vector<uint8_t> BuildConnectPacket(const std::string& name)
 {
     NetBuffer nameBuf;
-    nameBuf.WriteString(name);
+    WriteConnectRequest(nameBuf, name);
     return BuildPacket(MessageType::Connect, ChannelType::Reliable, 0, 0, 0.0f,
                        std::vector<uint8_t>(nameBuf.GetData().begin(), nameBuf.GetData().end()));
 }

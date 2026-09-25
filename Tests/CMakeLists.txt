@@ -269,6 +269,7 @@ add_executable(SparkTests
     TestPacketValidator.cpp
     TestPacketValidatorReal.cpp
     TestNET100TransportReal.cpp
+    TestSessionCompatibilityReal.cpp
     TestLogger.cpp
     TestProfiler.cpp
     TestStackTrace.cpp
@@ -1593,6 +1594,17 @@ foreach(_spark_net100_selector IN LISTS _spark_net100_transport_selectors)
         LABELS "network-security;security;unit"
         TIMEOUT 30)
 endforeach()
+
+# NET-100: protocol-version negotiation in Connect/ConnectAccepted over real loopback UDP.
+# The server must reject missing/older/newer/malformed handshakes with a typed ConnectRejected
+# before allocating a slot, and the client must refuse a mismatched ConnectAccepted echo.
+if(ENABLE_NETWORKING)
+    add_test(NAME NetworkSessionCompatibility COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(NetworkSessionCompatibility PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestSessionCompatibilityReal.cpp;SPARK_TEST_EXPECT_COUNT=10"
+        LABELS "network-security;network;security;unit"
+        TIMEOUT 60)
+endif()
 
 # NET-110: IOnlinePlatform conformance (docs/specs/online-services.md 5.1, 6) across
 # every adapter in OnlineServices.h (Null, Steam, Epic, Console) plus the Null
