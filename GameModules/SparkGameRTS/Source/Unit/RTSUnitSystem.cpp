@@ -1,6 +1,6 @@
 /**
  * @file RTSUnitSystem.cpp
- * @brief Unit templates, spawning, lifecycle, and behavioral AI
+ * @brief Unit templates, spawning, and lifecycle
  */
 
 #include "RTSUnitSystem.h"
@@ -35,19 +35,11 @@ namespace RTS
 
     void RTSUnitSystem::Update(float deltaTime)
     {
-        // Remove dead units
-        for (auto it = m_units.begin(); it != m_units.end();)
-        {
-            if (it->second.state == RTSUnitState::Dead)
-            {
-                it = m_units.erase(it);
-            }
-            else
-            {
-                UpdateUnitAI(it->second, deltaTime);
-                ++it;
-            }
-        }
+        (void)deltaTime;
+
+        // Remove dead units. Movement belongs to RTSCommandSystem (grid pathfinding), combat and win/loss to
+        // RTSSkirmishSimulation, and gathering to RTSResourceSystem.
+        std::erase_if(m_units, [](const auto& entry) { return entry.second.state == RTSUnitState::Dead; });
     }
 
     void RTSUnitSystem::Shutdown()
@@ -275,34 +267,6 @@ namespace RTS
         addTemplate(RTSUnitType::Hero, "Hero", 300, 40, 1.0f, 3.0f, 10.0f, 2.0f, 60.0f, 300, 200, 6);
         addTemplate(RTSUnitType::Medic, "Medic", 50, 0, 0.0f, 3.0f, 8.0f, 4.0f, 20.0f, 50, 50, 1);
         addTemplate(RTSUnitType::Siege, "Siege", 120, 50, 0.3f, 1.5f, 8.0f, 12.0f, 35.0f, 200, 100, 3);
-    }
-
-    void RTSUnitSystem::UpdateUnitAI(UnitData& unit, float deltaTime)
-    {
-        (void)deltaTime;
-
-        // Simple state-based AI skeleton
-        switch (unit.state)
-        {
-        case RTSUnitState::Idle:
-            // Idle units do nothing; await commands
-            break;
-
-        case RTSUnitState::Moving:
-            // Movement would be handled by pathfinding integration
-            break;
-
-        case RTSUnitState::Attacking:
-            // Attack logic handled by CommandSystem targeting
-            break;
-
-        case RTSUnitState::Gathering:
-            // Resource gathering handled by ResourceSystem
-            break;
-
-        default:
-            break;
-        }
     }
 
     void RTSUnitSystem::RenderDebugUI()

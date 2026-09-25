@@ -1503,9 +1503,10 @@
             "Tests/TestMOD370SkirmishDeterminismReal.cpp",
             "Tests/TestMOD370RTSSaveReal.cpp",
             "GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp",
+            "GameModules/SparkGameRTS/Source/Navigation/RTSGridPathfinder.cpp",
             "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
           ],
-          "note": "The real skirmish simulation runs commands, economy, fog and AI waves to victory. RTSSave tests use SaveMatch/LoadMatch on the real SaveSystem with per-tick hash equality."
+          "note": "The real skirmish simulation runs commands, economy, fog and AI waves to victory. Move and attack-move orders route around structures via deterministic grid A*; routes are hashed and saved. RTSSave tests use SaveMatch/LoadMatch on the real SaveSystem with per-tick hash equality."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",

@@ -90,7 +90,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
 
     // Initialize command system (selection, move, attack, patrol)
     m_commandSystem = std::make_unique<RTS::RTSCommandSystem>();
-    if (!m_commandSystem->Initialize(context, m_unitSystem.get()))
+    if (!m_commandSystem->Initialize(context, m_unitSystem.get(), m_buildingSystem.get()))
     {
         console.LogError("[RTS] Failed to initialize command system");
         return false;

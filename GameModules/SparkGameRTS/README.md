@@ -29,6 +29,19 @@ toward the point but stops to fight whatever enters range. The Swarm AI keeps it
 sends its idle army at the oldest surviving Human structure once four units are ready. A faction with no units and
 no structures is eliminated; the match reports **Victory** or **Defeat** from the local (non-AI) player's side.
 
+## Movement and pathfinding
+
+`Move` and attack-move orders are routed by `Source/Navigation/RTSGridPathfinder` on the 96 × 96 map grid, where
+every building's 4 × 4 footprint (`[pos − 2, pos + 2)` on both axes) is a blocked cell block. An order with a clear
+straight line walks it directly; otherwise A* searches the grid with integer costs (10 orthogonal, 14 diagonal, no
+corner cutting, octile heuristic) and an open list ordered by `(f, h, cell index)`, so the same map always yields the
+same route. The cell path is shortened to the waypoints a straight segment cannot skip. A target under a footprint
+moves to the nearest free cell, and an unreachable one to the reachable cell closest to it.
+
+The route is planned when the order becomes current, stored in the order (`UnitCommand::path`), hashed by
+`ComputeStateHash()`, and saved with the match, so a resumed skirmish continues on the same route. Each tick the
+remaining route is re-checked and replanned if a structure now stands across it.
+
 ## Live controls
 
 | Input | Action |

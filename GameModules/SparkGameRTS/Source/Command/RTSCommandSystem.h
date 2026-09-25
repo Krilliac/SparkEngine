@@ -12,6 +12,7 @@
 
 #include "Spark/IEngineContext.h"
 #include "Enums/RTSEnums.h"
+#include "Navigation/RTSGridPathfinder.h"
 
 #include <cstdint>
 #include <string>
@@ -21,7 +22,9 @@
 namespace RTS
 {
 
+    class RTSBuildingSystem;
     class RTSUnitSystem;
+    struct UnitData;
 
     /// @brief A command issued to a unit
     struct UnitCommand
@@ -30,6 +33,12 @@ namespace RTS
         float targetX = 0.0f;
         float targetY = 0.0f;
         uint32_t targetEntity = 0; ///< Target unit or building ID; an Attack with no target is an attack-move
+
+        /**
+         * Remaining route of a Move or attack-move, planned when the order becomes current and replanned if a
+         * structure blocks it. Part of the simulation state (hashed and saved); orders are issued without one.
+         */
+        std::vector<RTSWaypoint> path{};
     };
 
     /**
@@ -41,7 +50,12 @@ namespace RTS
         RTSCommandSystem() = default;
         ~RTSCommandSystem() = default;
 
-        bool Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem);
+        /**
+         * @param buildingSystem  Source of the structures move and attack-move orders route around; null plans on
+         *                        an obstacle-free grid.
+         */
+        bool Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem,
+                        const RTSBuildingSystem* buildingSystem = nullptr);
         void Update(float deltaTime);
         void Shutdown();
         void RenderDebugUI();
@@ -79,7 +93,10 @@ namespace RTS
         bool RestoreRuntimeState(const std::map<uint32_t, std::vector<UnitCommand>>& queues,
                                  const std::vector<uint32_t>& selection);
 
-        /** @brief The acceptance rule IssueCommand and QueueCommand apply to every order. */
+        /**
+         * @brief The acceptance rule for every order: finite targets, and a route (at most
+         *        RTSGridPathfinder::MAX_WAYPOINTS finite points) only on a Move or attack-move.
+         */
         [[nodiscard]] static bool IsCommandValid(const UnitCommand& command);
 
         static constexpr size_t MAX_QUEUED_COMMANDS = 64; ///< Per-unit shift-queue limit; later orders are dropped
@@ -87,9 +104,14 @@ namespace RTS
       private:
         void ProcessCommands(float deltaTime);
         void PruneSelection();
+        /** @return true when the order is finished (arrived, or no route towards the target exists). */
+        bool AdvanceAlongRoute(UnitData& unit, UnitCommand& command, float deltaTime);
 
         Spark::IEngineContext* m_context{nullptr};
         RTSUnitSystem* m_unitSystem{nullptr};
+        const RTSBuildingSystem* m_buildingSystem{nullptr};
+        RTSGridPathfinder m_pathfinder;
+        bool m_obstaclesCurrent{false}; ///< Obstacle map rebuilt for the command update in progress
 
         // Current selection
         std::vector<uint32_t> m_selectedUnits;

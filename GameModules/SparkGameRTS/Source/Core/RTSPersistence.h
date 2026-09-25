@@ -3,9 +3,10 @@
  * @brief Deterministic, validated full-state snapshot codec for an RTS skirmish.
  *
  * A snapshot holds everything RTSSkirmishSimulation::Step reads or writes: units, buildings, the economy and
- * resource nodes, the never-reused id counters and harvest timer, every command queue and the selection, the match
- * lifecycle and eliminations, each faction's fog grid (explored history cannot be rebuilt from units), and the sim
- * tick (which also fixes the AI decision phase). Loading a snapshot therefore resumes a skirmish bit-identically.
+ * resource nodes, the never-reused id counters and harvest timer, every command queue (including each order's
+ * planned route) and the selection, the match lifecycle and eliminations, each faction's fog grid (explored history
+ * cannot be rebuilt from units), and the sim tick (which also fixes the AI decision phase). Loading a snapshot
+ * therefore resumes a skirmish bit-identically.
  *
  * Floats are written as their IEEE-754 bit patterns so a round trip is exact for every value, and the decoder
  * rejects any other format version, truncated input, trailing data, and out-of-range values without touching its

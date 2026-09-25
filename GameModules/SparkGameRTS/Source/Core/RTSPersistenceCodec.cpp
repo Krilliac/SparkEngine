@@ -149,10 +149,27 @@ namespace RTS
             size_t m_position = 0;
         };
 
+        void WriteCommand(Writer& out, const UnitCommand& command)
+        {
+            out.E(command.type).F(command.targetX).F(command.targetY).U(command.targetEntity);
+            out.U(command.path.size());
+            for (const RTSWaypoint& waypoint : command.path)
+                out.F(waypoint.x).F(waypoint.y);
+        }
+
         bool ReadCommand(Reader& in, UnitCommand& command)
         {
-            return in.E(command.type) && in.F(command.targetX) && in.F(command.targetY) &&
-                   in.Number(command.targetEntity);
+            size_t waypointCount = 0;
+            if (!in.E(command.type) || !in.F(command.targetX) || !in.F(command.targetY) ||
+                !in.Number(command.targetEntity) || !in.Count(waypointCount, RTSGridPathfinder::MAX_WAYPOINTS))
+                return false;
+            command.path.resize(waypointCount);
+            for (RTSWaypoint& waypoint : command.path)
+            {
+                if (!in.F(waypoint.x) || !in.F(waypoint.y))
+                    return false;
+            }
+            return true;
         }
 
         void WriteFog(Writer& out, const std::vector<FogGrid>& grids)
@@ -267,7 +284,7 @@ namespace RTS
         {
             out.Tag("Q").U(unitId).U(queue.size());
             for (const UnitCommand& command : queue)
-                out.E(command.type).F(command.targetX).F(command.targetY).U(command.targetEntity);
+                WriteCommand(out, command);
             out.Line();
         }
         out.Tag("SELECTION").U(snapshot.selection.size());

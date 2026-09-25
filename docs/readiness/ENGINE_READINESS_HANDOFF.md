@@ -3976,8 +3976,8 @@ Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestMOD370SkirmishDeterminismReal.cpp`
    - The deterministic skirmish reaches victory in-process only. No packaged build does.
 2. **[implemented]** Fog, AI, commands, economy and save operate through production systems
-   - Evidence: `Tests/TestMOD370SkirmishDeterminismReal.cpp`, `Tests/TestMOD370RTSSaveReal.cpp`, `GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp`, `GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp`
-   - The real skirmish simulation runs commands, economy, fog and AI waves to victory. RTSSave tests use SaveMatch/LoadMatch on the real SaveSystem with per-tick hash equality.
+   - Evidence: `Tests/TestMOD370SkirmishDeterminismReal.cpp`, `Tests/TestMOD370RTSSaveReal.cpp`, `GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp`, `GameModules/SparkGameRTS/Source/Navigation/RTSGridPathfinder.cpp`, `GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp`
+   - The real skirmish simulation runs commands, economy, fog and AI waves to victory. Move and attack-move orders route around structures via deterministic grid A*; routes are hashed and saved. RTSSave tests use SaveMatch/LoadMatch on the real SaveSystem with per-tick hash equality.
 3. **[unmet]** Applicable scores reach 3
    - Needs owner scoring and hosted module-RTS CI.
 

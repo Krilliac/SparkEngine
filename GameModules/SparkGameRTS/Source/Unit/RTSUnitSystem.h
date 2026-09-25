@@ -1,6 +1,6 @@
 /**
  * @file RTSUnitSystem.h
- * @brief Unit management: templates, spawning, stats, and AI states
+ * @brief Unit management: templates, spawning, stats, and behavioral state
  * @author Spark Engine Team
  * @date 2026
  *
@@ -65,7 +65,7 @@ namespace RTS
     };
 
     /**
-     * @brief Manages unit templates, spawning, lifecycle, and simple AI
+     * @brief Manages unit templates, spawning, and lifecycle (Update removes dead units)
      */
     class RTSUnitSystem
     {
@@ -108,7 +108,6 @@ namespace RTS
 
       private:
         void RegisterFactionTemplates(RTSFaction faction);
-        void UpdateUnitAI(UnitData& unit, float deltaTime);
 
         Spark::IEngineContext* m_context{nullptr};
 

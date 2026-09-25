@@ -9,6 +9,7 @@
 #include "Command/RTSCommandSystem.h"
 #include "FogOfWar/RTSFogOfWarSystem.h"
 #include "Match/RTSMatchSystem.h"
+#include "Navigation/RTSGridPathfinder.h"
 #include "Resource/RTSResourceSystem.h"
 #include "Unit/RTSUnitSystem.h"
 
@@ -19,6 +20,9 @@
 
 namespace RTS
 {
+    static_assert(RTSSkirmishSimulation::MAP_SIZE == RTSGridPathfinder::GRID_SIZE,
+                  "move orders are planned on the skirmish map grid");
+
     namespace
     {
         /// Buildings are hit from anywhere on their footprint, not only their centre point.
@@ -167,7 +171,7 @@ namespace RTS
         match->Shutdown();
 
         if (!units->Initialize(m_context) || !resources->Initialize(m_context, units) ||
-            !buildings->Initialize(m_context, units, resources) || !commands->Initialize(m_context, units) ||
+            !buildings->Initialize(m_context, units, resources) || !commands->Initialize(m_context, units, buildings) ||
             !fog->Initialize(m_context, MAP_SIZE, MAP_SIZE) || !match->Initialize(m_context))
         {
             return false;
@@ -492,6 +496,12 @@ namespace RTS
                 hash.F32(command.targetX);
                 hash.F32(command.targetY);
                 hash.U32(command.targetEntity);
+                hash.U64(command.path.size());
+                for (const RTSWaypoint& waypoint : command.path)
+                {
+                    hash.F32(waypoint.x);
+                    hash.F32(waypoint.y);
+                }
             }
         }
         hash.U64(commands->GetSelection().size());

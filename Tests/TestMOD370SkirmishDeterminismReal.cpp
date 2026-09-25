@@ -17,6 +17,7 @@
 #include "../GameModules/SparkGameRTS/Source/Core/RTSPersistence.h"
 #include "../GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Navigation/RTSGridPathfinder.h"
 #include "../GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.h"
 #include "../GameModules/SparkGameRTS/Source/Unit/RTSUnitSystem.h"
@@ -389,6 +390,313 @@ TEST(RTSSkirmish_ModuleTicksOnlyThroughFixedStepSimulation)
                                "m_resourceSystem->Update", "m_matchSystem->Update", "m_fogOfWarSystem->Update"})
     {
         EXPECT_TRUE(body.find(direct) == std::string::npos);
+    }
+}
+
+// =============================================================================
+// Grid pathfinding for move and attack-move orders
+// =============================================================================
+
+namespace
+{
+    /// Units, buildings, and commands wired the way the skirmish wires them, without the rest of the tick.
+    struct RoutingWorld
+    {
+        RTSUnitSystem units;
+        RTSResourceSystem resources;
+        RTSBuildingSystem buildings;
+        RTSCommandSystem commands;
+        RTSGridPathfinder obstacles; ///< Independent obstacle map the assertions check positions against
+
+        RoutingWorld()
+        {
+            units.Initialize(nullptr);
+            resources.Initialize(nullptr, &units);
+            buildings.Initialize(nullptr, &units, &resources);
+            commands.Initialize(nullptr, &units, &buildings);
+        }
+
+        void Place(float x, float y)
+        {
+            ASSERT_NE(buildings.PlaceBuilding(RTSBuildingType::Barracks, RTSFaction::Human, x, y), 0u);
+            obstacles.RebuildObstacles(buildings);
+        }
+    };
+
+    struct WalkResult
+    {
+        bool arrived = false;
+        bool enteredBlockedCell = false;
+        size_t longestRoute = 0;
+        float minY = std::numeric_limits<float>::max();
+        float maxY = std::numeric_limits<float>::lowest();
+    };
+
+    /// Tick the command system until the unit's order completes, checking its cell after every tick.
+    WalkResult WalkUntilIdle(RoutingWorld& world, uint32_t unitId, uint64_t maxTicks)
+    {
+        WalkResult result;
+        for (uint64_t tick = 0; tick < maxTicks; ++tick)
+        {
+            world.commands.Update(RTSSkirmishSimulation::TICK_SECONDS);
+            const UnitData* unit = world.units.GetUnit(unitId);
+            result.enteredBlockedCell =
+                result.enteredBlockedCell || world.obstacles.IsBlockedAt(unit->posX, unit->posY);
+            result.minY = std::min(result.minY, unit->posY);
+            result.maxY = std::max(result.maxY, unit->posY);
+            if (const UnitCommand* command = world.commands.GetCurrentCommand(unitId))
+            {
+                result.longestRoute = std::max(result.longestRoute, command->path.size());
+                continue;
+            }
+            result.arrived = true;
+            break;
+        }
+        return result;
+    }
+} // namespace
+
+// A wall of three barracks spans x [18, 22) and y [14, 26) straight across the order's line. Both a move and an
+// attack-move walk around the wall, never through it, and still finish exactly on the ordered point.
+TEST(RTSSkirmish_MoveOrderRoutesAroundBuilding)
+{
+    for (const bool attackMove : {false, true})
+    {
+        RoutingWorld world;
+        for (float wallY : {16.0f, 20.0f, 24.0f})
+            world.Place(20.0f, wallY);
+        EXPECT_TRUE(world.obstacles.IsBlocked(18, 14));
+        EXPECT_TRUE(world.obstacles.IsBlocked(21, 25));
+        EXPECT_FALSE(world.obstacles.IsBlocked(17, 20));
+        EXPECT_FALSE(world.obstacles.IsBlocked(22, 20));
+        EXPECT_FALSE(world.obstacles.IsBlocked(20, 26));
+
+        const float startX = 14.25f;
+        const float startY = 20.25f;
+        const float targetX = 26.75f;
+        const float targetY = 20.5f;
+        EXPECT_FALSE(world.obstacles.IsSegmentClear(startX, startY, targetX, targetY, 0.0f)); // the wall is in the way
+
+        const uint32_t marine = world.units.SpawnUnit(RTSUnitType::Marine, RTSFaction::Human, startX, startY);
+        const RTSCommandType type = attackMove ? RTSCommandType::Attack : RTSCommandType::Move;
+        world.commands.IssueCommand(marine, {type, targetX, targetY, 0});
+        world.commands.Update(RTSSkirmishSimulation::TICK_SECONDS);
+        const UnitCommand* command = world.commands.GetCurrentCommand(marine);
+        ASSERT_TRUE(command != nullptr);
+        EXPECT_GE(command->path.size(), static_cast<size_t>(2)); // a detour, not the straight line
+        EXPECT_TRUE(world.units.GetUnit(marine)->state ==
+                    (attackMove ? RTSUnitState::Attacking : RTSUnitState::Moving));
+
+        const WalkResult walk = WalkUntilIdle(world, marine, 32 * 60);
+        const UnitData* unit = world.units.GetUnit(marine);
+        EXPECT_TRUE(walk.arrived);
+        EXPECT_FALSE(walk.enteredBlockedCell);
+        EXPECT_TRUE(walk.minY < 14.0f || walk.maxY >= 26.0f); // went around an end of the wall
+        EXPECT_EQ(unit->posX, targetX);
+        EXPECT_EQ(unit->posY, targetY);
+        EXPECT_TRUE(unit->state == RTSUnitState::Idle);
+        EXPECT_EQ(world.commands.GetPendingCommandCount(), static_cast<size_t>(0));
+    }
+}
+
+// A target under a footprint ends on the nearest free cell; an enclosed unit gets as close as the grid allows.
+TEST(RTSSkirmish_MoveOrderIntoStructureStopsAtNearestFreeCell)
+{
+    RoutingWorld world;
+    for (float wallY : {16.0f, 20.0f, 24.0f})
+        world.Place(20.0f, wallY);
+    const uint32_t marine = world.units.SpawnUnit(RTSUnitType::Marine, RTSFaction::Human, 30.25f, 20.75f);
+    world.commands.IssueCommand(marine, {RTSCommandType::Move, 20.0f, 20.0f, 0});
+    WalkResult walk = WalkUntilIdle(world, marine, 32 * 60);
+    EXPECT_TRUE(walk.arrived);
+    EXPECT_FALSE(walk.enteredBlockedCell);
+    EXPECT_EQ(world.units.GetUnit(marine)->posX, 22.5f); // centre of cell (22, 20), the nearest free cell
+    EXPECT_EQ(world.units.GetUnit(marine)->posY, 20.5f);
+
+    // Eight barracks enclose the 4x4 pocket [48, 52) x [48, 52); the target outside cannot be reached.
+    RoutingWorld pocket;
+    for (float y : {46.0f, 50.0f, 54.0f})
+    {
+        for (float x : {46.0f, 50.0f, 54.0f})
+        {
+            if (x != 50.0f || y != 50.0f)
+                pocket.Place(x, y);
+        }
+    }
+    const uint32_t trapped = pocket.units.SpawnUnit(RTSUnitType::Marine, RTSFaction::Human, 48.5f, 48.5f);
+    pocket.commands.IssueCommand(trapped, {RTSCommandType::Move, 80.0f, 80.0f, 0});
+    walk = WalkUntilIdle(pocket, trapped, 32 * 60);
+    EXPECT_TRUE(walk.arrived);
+    EXPECT_FALSE(walk.enteredBlockedCell);
+    EXPECT_EQ(pocket.units.GetUnit(trapped)->posX, 51.5f); // pocket cell nearest the target
+    EXPECT_EQ(pocket.units.GetUnit(trapped)->posY, 51.5f);
+
+    // A planned route is replaced when a structure is built across it after planning.
+    RoutingWorld late;
+    const uint32_t scout = late.units.SpawnUnit(RTSUnitType::Scout, RTSFaction::Human, 10.5f, 40.5f);
+    late.commands.IssueCommand(scout, {RTSCommandType::Move, 40.5f, 40.5f, 0});
+    late.commands.Update(RTSSkirmishSimulation::TICK_SECONDS);
+    ASSERT_TRUE(late.commands.GetCurrentCommand(scout) != nullptr);
+    EXPECT_EQ(late.commands.GetCurrentCommand(scout)->path.size(), static_cast<size_t>(1)); // open ground: direct
+    late.Place(25.0f, 40.0f);
+    walk = WalkUntilIdle(late, scout, 32 * 60);
+    EXPECT_TRUE(walk.arrived);
+    EXPECT_FALSE(walk.enteredBlockedCell);
+    EXPECT_GE(walk.longestRoute, static_cast<size_t>(2));
+    EXPECT_EQ(late.units.GetUnit(scout)->posX, 40.5f);
+    EXPECT_EQ(late.units.GetUnit(scout)->posY, 40.5f);
+
+    // The search itself is a pure function of the obstacle map and endpoints.
+    const std::vector<RTSWaypoint> first = world.obstacles.FindPath(14.25f, 20.25f, 26.75f, 20.5f);
+    EXPECT_TRUE(first == world.obstacles.FindPath(14.25f, 20.25f, 26.75f, 20.5f));
+    EXPECT_GE(first.size(), static_cast<size_t>(2));
+}
+
+namespace
+{
+    /// Human army ordered through its own barracks (footprint [29, 33) x [17, 21)) before the first tick.
+    void IssueDetourOrders(Skirmish& game)
+    {
+        for (uint32_t id : game.units.GetUnitsByFaction(RTSFaction::Human))
+        {
+            if (game.units.GetUnit(id)->type == RTSUnitType::Worker)
+                continue;
+            game.commands.IssueCommand(id, {RTSCommandType::Move, 35.5f, 18.5f, 0});
+            game.commands.QueueCommand(id, {RTSCommandType::Attack, 60.0f, 60.0f, 0});
+        }
+    }
+
+    bool AnyUnitInsideStructure(const Skirmish& game)
+    {
+        RTSGridPathfinder obstacles;
+        obstacles.RebuildObstacles(game.buildings);
+        for (int faction = 0; faction < static_cast<int>(RTSFaction::Count); ++faction)
+        {
+            for (uint32_t id : game.units.GetUnitsByFaction(static_cast<RTSFaction>(faction)))
+            {
+                const UnitData* unit = game.units.GetUnit(id);
+                if (obstacles.IsBlockedAt(unit->posX, unit->posY))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    size_t LongestRoute(const Skirmish& game)
+    {
+        size_t longest = 0;
+        for (const auto& [id, queue] : game.commands.GetCommandQueues())
+        {
+            for (const UnitCommand& command : queue)
+                longest = std::max(longest, command.path.size());
+        }
+        return longest;
+    }
+
+    struct RoutedRun
+    {
+        std::vector<uint64_t> hashes; ///< index 0 = state before the first tick
+        size_t longestRoute = 0;
+        bool unitInsideStructure = false;
+    };
+
+    RoutedRun RunRoutedSkirmish(bool shuffleInsertionOrder, uint64_t ticks)
+    {
+        auto game = std::make_unique<Skirmish>();
+        if (shuffleInsertionOrder)
+            ShuffleContainerInsertionOrder(*game);
+        IssueDetourOrders(*game);
+
+        RoutedRun run;
+        run.hashes.push_back(game->simulation.ComputeStateHash());
+        while (game->simulation.GetTick() < ticks && game->match.GetMatchState() == RTSMatchState::Playing)
+        {
+            ApplyHumanInput(*game);
+            game->simulation.Step();
+            run.hashes.push_back(game->simulation.ComputeStateHash());
+            run.longestRoute = std::max(run.longestRoute, LongestRoute(*game));
+            run.unitInsideStructure = run.unitInsideStructure || AnyUnitInsideStructure(*game);
+        }
+        return run;
+    }
+} // namespace
+
+// Routes are part of the hashed state: reruns, shuffled container insertion, and any frame pacing must still agree
+// on every tick while units detour around structures, and a mid-route save carries the route exactly.
+TEST(RTSSkirmish_PathfindingPreservesPerTickDeterminism)
+{
+    constexpr uint64_t ticks = TICKS_PER_SECOND * 60;
+    const RoutedRun canonical = RunRoutedSkirmish(false, ticks);
+    const RoutedRun rerun = RunRoutedSkirmish(false, ticks);
+    const RoutedRun shuffled = RunRoutedSkirmish(true, ticks);
+    EXPECT_GE(canonical.longestRoute, static_cast<size_t>(2)); // orders really routed around structures
+    EXPECT_FALSE(canonical.unitInsideStructure);
+    EXPECT_GT(canonical.hashes.size(), static_cast<size_t>(TICKS_PER_SECOND * 50));
+    EXPECT_EQ(FirstDivergence(canonical.hashes, rerun.hashes), static_cast<size_t>(-1));
+    EXPECT_EQ(FirstDivergence(canonical.hashes, shuffled.hashes), static_cast<size_t>(-1));
+
+    // Frame pacing: the same pre-issued detour orders, advanced by wall-clock time instead of single steps.
+    constexpr uint64_t pacedTicks = TICKS_PER_SECOND * 20;
+    Skirmish reference;
+    IssueDetourOrders(reference);
+    std::vector<uint64_t> expected{reference.simulation.ComputeStateHash()};
+    bool savedMidRoute = false;
+    // One Advance may run several ticks past pacedTicks, so the reference covers that overshoot too.
+    while (reference.simulation.GetTick() < pacedTicks + RTSSkirmishSimulation::MAX_TICKS_PER_ADVANCE)
+    {
+        reference.simulation.Step();
+        expected.push_back(reference.simulation.ComputeStateHash());
+
+        // Save while a detour is in progress, load into a fresh skirmish, and require the identical state.
+        if (!savedMidRoute && LongestRoute(reference) >= 2)
+        {
+            savedMidRoute = true;
+            const RTSSkirmishSystems systems{&reference.units,    &reference.buildings, &reference.resources,
+                                             &reference.commands, &reference.fog,       &reference.match};
+            std::string error;
+            const std::string encoded =
+                RTSPersistence::Serialize(RTSPersistence::Capture(systems, reference.simulation), error);
+            ASSERT_FALSE(encoded.empty());
+            RTSPersistenceSnapshot decoded;
+            ASSERT_TRUE(RTSPersistence::Deserialize(encoded, decoded, error));
+            const auto& liveQueues = reference.commands.GetCommandQueues();
+            ASSERT_EQ(decoded.commandQueues.size(), liveQueues.size());
+            for (const auto& [unitId, queue] : liveQueues)
+            {
+                ASSERT_TRUE(decoded.commandQueues.contains(unitId));
+                ASSERT_EQ(decoded.commandQueues.at(unitId).size(), queue.size());
+                for (size_t i = 0; i < queue.size(); ++i)
+                    EXPECT_TRUE(decoded.commandQueues.at(unitId)[i].path == queue[i].path);
+            }
+
+            Skirmish loaded;
+            ASSERT_TRUE(RTSPersistence::Apply(
+                decoded,
+                {&loaded.units, &loaded.buildings, &loaded.resources, &loaded.commands, &loaded.fog, &loaded.match},
+                loaded.simulation, error));
+            EXPECT_EQ(loaded.simulation.ComputeStateHash(), reference.simulation.ComputeStateHash());
+        }
+    }
+    EXPECT_TRUE(savedMidRoute);
+
+    const std::vector<std::vector<float>> pacings = {
+        {1.0f / 64.0f}, {1.0f / 128.0f, 3.0f / 128.0f, 5.0f / 128.0f, 1.0f / 64.0f}, {3.0f / 32.0f}};
+    for (const std::vector<float>& pacing : pacings)
+    {
+        Skirmish game;
+        IssueDetourOrders(game);
+        size_t frame = 0;
+        while (game.simulation.GetTick() < pacedTicks)
+        {
+            const uint64_t before = game.simulation.GetTick();
+            game.simulation.Advance(pacing[frame++ % pacing.size()]);
+            const uint64_t after = game.simulation.GetTick();
+            if (after != before)
+            {
+                ASSERT_TRUE(after < expected.size());
+                EXPECT_EQ(game.simulation.ComputeStateHash(), expected[after]);
+            }
+        }
     }
 }
 
