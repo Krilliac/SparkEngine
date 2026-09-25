@@ -342,6 +342,24 @@ Neither system depends on or communicates with the other. A game can use both si
 | `GetInt()`/`GetDouble()`/`GetString()` type mismatch | Throws `std::bad_variant_access` |
 | Column index out of range | `GetInt()`/`GetDouble()`/`GetString()` throw `std::out_of_range`; `IsNull()` returns true |
 
+## Durable Commit (TERRAFRONT stores)
+
+Every TERRAFRONT JSON store -- `TFDatabase` (accounts/characters), `TFOutfitStore`, `TFSocialSystem`, and the `WorldSave::WriteJson` world/progression files -- commits through one primitive, `Terrafront::SavePaths::WriteDurableReplace(destination, bytes, ec)` in `GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h`. A crash or power loss leaves either the complete previous file or the complete new one, never an empty or truncated committed file.
+
+| Step | POSIX | Windows |
+|------|-------|---------|
+| Stage | Unlink a stale `<store>.tmp` file (a directory there fails the write), create `<store>.tmp` with `O_CREAT\|O_EXCL\|O_NOFOLLOW\|O_CLOEXEC`, mode `0600` | `DeleteFileW` a stale staging file, `CreateFileW(CREATE_NEW)` |
+| Write | Loop `write()` until every byte lands (retries `EINTR`) | Loop `WriteFile()` |
+| Flush staging | `fsync()` then `close()`, both checked | `FlushFileBuffers()` then `CloseHandle()`, both checked |
+| Swap | `rename()` over the destination | `MoveFileExW(MOVEFILE_REPLACE_EXISTING \| MOVEFILE_WRITE_THROUGH)` |
+| Flush rename | `fsync()` the parent directory (`EINVAL`, "cannot sync a directory", is tolerated) | Covered by `MOVEFILE_WRITE_THROUGH` |
+
+`false` means nothing was committed: any failure before the swap removes the staging file and leaves the destination untouched. `true` means the destination holds the new bytes and the caller must adopt them (TFDatabase keeps the new revision in memory). Once the swap has succeeded the commit is never reported as failed, because rolling the in-memory state back while the disk holds the new revision would make a purchase, account creation or transfer that the caller was told failed reappear on the next reload. If the POSIX parent-directory sync fails after the swap, the function still returns `true`, leaves the error in `ec` as a durability warning, and logs a `[TF] ... committed, but syncing its directory failed` warning; the next successful write restores durability. Callers must create the parent directory and hold the store's `ExclusiveFileLock` so there is one writer per destination.
+
+Permissions: the owner-only (`0600`) committed file applies on POSIX only. On Windows the committed file inherits the parent directory's ACL, so the save root's ACL is the operator's responsibility.
+
+Enforced by `Persistence_Durable_*` in `Tests/TestDATA120PersistenceReal.cpp` (byte-exact commit, stale staging discarded, failed staging leaves the committed file untouched, a stale symlink left at the staging path is unlinked rather than followed, committed files are owner-only on POSIX, and a directory-sync failure after the swap still reports the commit so TFDatabase keeps the new revision). The `O_EXCL|O_NOFOLLOW` create flags guard only an entry planted between that unlink and `open()`, which no test schedules; the source contract below pins that the flags stay present and by `Tests/Tools/test_async_database_durability.py` (CTest `AsyncDatabaseDurabilityContract`), which fails if the flush-before-swap and directory-sync ordering changes or any TERRAFRONT source writes or renames a file without the primitive.
+
 ## Secrets and Encryption at Rest (OD-22)
 
 Owner decision OD-22 (`docs/readiness/OWNER-DECISIONS.md`, work item DATA-120) sets the stable-v1 rules for anything these stores write:

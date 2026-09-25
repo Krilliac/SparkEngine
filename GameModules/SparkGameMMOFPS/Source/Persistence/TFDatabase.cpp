@@ -675,18 +675,7 @@ namespace Terrafront
             }
         }
 
-        std::filesystem::path tmpFile = m_path;
-        tmpFile += ".tmp";
-        {
-            std::ofstream out(tmpFile, std::ios::binary | std::ios::trunc);
-            if (!out.is_open())
-                return false;
-            out << Spark::Json::StringifyPretty(root);
-            if (!out.good())
-                return false;
-        }
-
-        return SavePaths::AtomicReplace(tmpFile, m_path, ec);
+        return SavePaths::WriteDurableReplace(m_path, Spark::Json::StringifyPretty(root), ec);
     }
 
     bool TFDatabase::CreateAccount(const std::string& username, const std::string& salt, const std::string& hash,

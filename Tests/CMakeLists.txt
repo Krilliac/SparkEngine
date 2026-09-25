@@ -1535,16 +1535,25 @@ set_tests_properties(PersistenceSecretsAtRest PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 60)
 
-# DATA-120: TFDatabase multi-row transactions, schema migration, and the real
+# DATA-120: TFDatabase multi-row transactions, schema migration, the TERRAFRONT
+# durable-commit primitive (SavePaths::WriteDurableReplace), and the real
 # AsyncDatabase KV flush run under the persistence label, so `ctest -L persistence`
 # executes the C++ evidence and not only the static Python durability contract.
 # Counts are exact per family: a dropped or renamed case fails its CTest instead
 # of shrinking the evidence. RUN_SERIAL because the fixtures reuse fixed paths
 # (Saves/test_data120_*.db, <tmp>/spark_save_roundtrip_kv_store) that SparkEngineTests
 # also writes, so a parallel ctest run would let one process delete the other's files.
+# Persistence_Durable_DirectorySyncFailureAfterRenameStillReportsCommit is POSIX-only
+# (it skips, but still counts, as root), so Windows builds register one case fewer.
+if(WIN32)
+    set(_spark_data120_durable_count 3)
+else()
+    set(_spark_data120_durable_count 4)
+endif()
 set(_spark_data120_persistence_selectors
     "Persistence_Transaction_=3"
     "Persistence_Migration_=2"
+    "Persistence_Durable_=${_spark_data120_durable_count}"
     "AsyncDatabaseReal_=1")
 foreach(_spark_data120_selector IN LISTS _spark_data120_persistence_selectors)
     string(REPLACE "=" ";" _spark_data120_parts "${_spark_data120_selector}")

@@ -9,9 +9,12 @@
  */
 #pragma once
 
+#include "Utils/LogMacros.h"
+
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <system_error>
@@ -311,21 +314,161 @@ namespace Terrafront::SavePaths
         return false;
     }
 
-    /** Replace destination with a completed temporary file without deleting destination first. */
-    inline bool AtomicReplace(const std::filesystem::path& temporary, const std::filesystem::path& destination,
-                              std::error_code& ec)
+    /**
+     * Durably replace `destination` with `bytes`; the only commit primitive for TERRAFRONT stores.
+     *
+     * The bytes are staged in `<destination>.tmp`, forced to stable storage, and then swapped over the
+     * destination in one rename, so a crash or power loss leaves either the complete previous file or the
+     * complete new one, never an empty or truncated "committed" file:
+     *   - POSIX: any stale staging entry is unlinked (a directory there fails the write), the staging file is
+     *     created O_CREAT|O_EXCL|O_NOFOLLOW (mode 0600, the stores hold credential hashes), written in full,
+     *     fsync()ed and closed, renamed over the destination, and the parent directory is fsync()ed so the
+     *     rename itself survives power loss.
+     *   - Windows: the staging file is created CREATE_NEW, written in full, FlushFileBuffers()ed, closed, and
+     *     moved with MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH), which does not return
+     *     until the rename is flushed.
+     * The caller must create the parent directory and serialize writers of one destination (ExclusiveFileLock).
+     * Return contract: false means nothing was committed; any failure before the swap removes the staging
+     * file and leaves the destination untouched. true means the destination now holds `bytes`, and callers
+     * must adopt that state. Once the rename has succeeded the commit is never reported as failed: if the
+     * POSIX parent-directory sync then fails (the rename is visible but may not survive power loss), the
+     * function still returns true, leaves that error in `ec` as a durability warning, and logs it; the next
+     * successful write re-establishes durability. `ec` is cleared on a fully durable commit.
+     */
+    inline bool WriteDurableReplace(const std::filesystem::path& destination, std::string_view bytes,
+                                    std::error_code& ec) noexcept
     {
-#ifdef _WIN32
-        if (::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        ec.clear();
+        if (destination.empty() || !destination.has_filename())
         {
-            ec.clear();
-            return true;
+            ec = std::make_error_code(std::errc::invalid_argument);
+            return false;
         }
-        ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
-        return false;
+        std::filesystem::path temporary = destination;
+        temporary += ".tmp";
+        std::error_code removeEc;
+
+#ifdef _WIN32
+        if (!::DeleteFileW(temporary.c_str()) && ::GetLastError() != ERROR_FILE_NOT_FOUND)
+        {
+            ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            return false;
+        }
+        HANDLE file =
+            ::CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            return false;
+        }
+        const auto failStaged = [&](DWORD error) noexcept
+        {
+            ::CloseHandle(file);
+            ec = std::error_code(static_cast<int>(error), std::system_category());
+            std::filesystem::remove(temporary, removeEc);
+            return false;
+        };
+        std::string_view remaining = bytes;
+        while (!remaining.empty())
+        {
+            const DWORD chunk = static_cast<DWORD>(std::min<size_t>(remaining.size(), 1u << 30));
+            DWORD written = 0;
+            if (!::WriteFile(file, remaining.data(), chunk, &written, nullptr))
+                return failStaged(::GetLastError());
+            if (written == 0)
+                return failStaged(ERROR_WRITE_FAULT);
+            remaining.remove_prefix(written);
+        }
+        if (!::FlushFileBuffers(file))
+            return failStaged(::GetLastError());
+        if (!::CloseHandle(file))
+        {
+            ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            std::filesystem::remove(temporary, removeEc);
+            return false;
+        }
+        if (!::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        {
+            ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            std::filesystem::remove(temporary, removeEc);
+            return false;
+        }
+        return true;
 #else
+        // A crashed writer can leave a staging file behind; the destination's writer lock is held, so it is
+        // stale. unlink() refuses directories, so an occupied staging path still fails the write.
+        if (::unlink(temporary.c_str()) != 0 && errno != ENOENT)
+        {
+            ec = std::error_code(errno, std::generic_category());
+            return false;
+        }
+        const int fd = ::open(temporary.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+        if (fd < 0)
+        {
+            ec = std::error_code(errno, std::generic_category());
+            return false;
+        }
+        const auto failStaged = [&](int error, bool closeFd) noexcept
+        {
+            if (closeFd)
+                (void)::close(fd);
+            ec = std::error_code(error, std::generic_category());
+            std::filesystem::remove(temporary, removeEc);
+            return false;
+        };
+        std::string_view remaining = bytes;
+        while (!remaining.empty())
+        {
+            const ssize_t written = ::write(fd, remaining.data(), remaining.size());
+            if (written < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                return failStaged(errno, true);
+            }
+            if (written == 0)
+                return failStaged(EIO, true);
+            remaining.remove_prefix(static_cast<size_t>(written));
+        }
+        if (::fsync(fd) != 0)
+            return failStaged(errno, true);
+        if (::close(fd) != 0)
+            return failStaged(errno, false);
+
         std::filesystem::rename(temporary, destination, ec);
-        return !ec;
+        if (ec)
+        {
+            std::filesystem::remove(temporary, removeEc);
+            return false;
+        }
+
+        // The new bytes are committed and visible from here on, so the result is true whatever happens next;
+        // a directory-sync failure only means the rename may not survive power loss.
+        std::filesystem::path parent = destination.parent_path();
+        if (parent.empty())
+            parent = ".";
+        int syncError = 0;
+        const int dirFd = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        if (dirFd < 0)
+        {
+            syncError = errno;
+        }
+        else
+        {
+            // EINVAL means the filesystem cannot sync a directory at all (the rename is as durable as it gets).
+            if (::fsync(dirFd) != 0 && errno != EINVAL)
+                syncError = errno;
+            (void)::close(dirFd);
+        }
+        if (syncError != 0)
+        {
+            ec = std::error_code(syncError, std::generic_category());
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] %s committed, but syncing its directory failed (%s); the commit may not survive "
+                           "power loss until the next successful write",
+                           Utf8ForLog(destination).c_str(), ec.message().c_str());
+        }
+        return true;
 #endif
     }
 
