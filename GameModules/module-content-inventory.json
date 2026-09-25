@@ -18,6 +18,7 @@
       },
       "sharedRootDependencies": [],
       "privateEngineHeaders": [
+        "Engine/Coroutine/CoroutineScheduler.h",
         "Engine/ECS/Components.h",
         "Engine/ECS/Components/GameplayComponents.h",
         "Engine/Events/EventSystem.h",
@@ -30,7 +31,7 @@
         "Utils/LogMacros.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 11,
+      "privateEngineHeaderCount": 12,
       "copiedInfrastructureFiles": []
     },
     {

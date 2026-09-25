@@ -9,6 +9,7 @@
 
 #include "GameplayShowcase.h"
 
+#include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/LogMacros.h"
 #include "Engine/SaveSystem/SaveSystem.h"
@@ -17,6 +18,8 @@
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/ECS/Components.h"
 #include "Utils/SparkConsole.h"
+
+#include <algorithm>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -63,6 +66,18 @@ void GameplayShowcase::Shutdown()
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Shutting down gameplay showcase");
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Showcase] Shutting down gameplay showcase...");
+
+    // The lifecycle coroutine's steps capture `this` and their callables live in this
+    // module image: stop it (which destroys it outside a scheduler tick) before the
+    // showcase or the image goes away.
+    if (m_coroutineScheduled)
+    {
+        if (auto* scheduler = m_context ? m_context->GetCoroutineScheduler() : nullptr)
+            scheduler->StopCoroutine(LifecycleCoroutineName);
+        m_coroutineScheduled = false;
+        m_coroutineStage = "stopped";
+    }
+    m_coroutineTarget.reset();
 
     if (m_registeredTagSerializer)
     {
@@ -259,12 +274,101 @@ void GameplayShowcase::RegisterCustomSerializer()
 
 void GameplayShowcase::StartShowcaseCoroutine()
 {
-    // CoroutineScheduler.h cannot be included from game module DLLs (C++20
-    // coroutine header bugs with GCC 13). The showcase lifecycle sequence
-    // (spawn → 3s → damage → 2s → heal) would be driven by the coroutine
-    // scheduler; entity management still works via World/ECS directly.
-    Spark::SimpleConsole::GetInstance().LogInfo(
-        "[Showcase] Coroutine: lifecycle sequence configured (spawn -> damage -> heal)");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    auto* scheduler = m_context->GetCoroutineScheduler();
+    if (!scheduler)
+    {
+        m_coroutineStage = "unavailable (host exposes no CoroutineScheduler)";
+        SPARK_LOG_WARN(Spark::LogCategory::Game, "Showcase coroutine not started: host exposes no CoroutineScheduler");
+        console.LogWarning("[Showcase] Coroutine sequence unavailable: host exposes no CoroutineScheduler");
+        return;
+    }
+
+    // spawn -> 3 s -> damage -> 2 s -> heal, ticked by the host's scheduler.
+    scheduler->StartCoroutine(LifecycleCoroutineName)
+        .Do([this]() { SpawnCoroutineTarget(); })
+        .WaitForSeconds(CoroutineDamageDelaySeconds)
+        .Do([this]() { DamageCoroutineTarget(); })
+        .WaitForSeconds(CoroutineHealDelaySeconds)
+        .Do([this]() { HealCoroutineTarget(); });
+    m_coroutineScheduled = true;
+    m_coroutineStage = "scheduled";
+    console.LogInfo("[Showcase] Coroutine sequence scheduled (spawn -> 3s -> damage -> 2s -> heal)");
+}
+
+void GameplayShowcase::AbortCoroutineSequence(const std::string& reason)
+{
+    // Record the first failure and cancel the remaining steps so a later step cannot overwrite the root
+    // cause. Called from inside a step, so the scheduler defers destruction to the end of this tick.
+    m_coroutineStage = "failed: " + reason;
+    m_coroutineScheduled = false;
+    if (auto* scheduler = m_context ? m_context->GetCoroutineScheduler() : nullptr)
+        scheduler->StopCoroutine(LifecycleCoroutineName);
+    Spark::SimpleConsole::GetInstance().LogWarning("[Showcase] Coroutine sequence aborted: " + reason);
+}
+
+HealthComponent* GameplayShowcase::FindCoroutineTargetHealth()
+{
+    auto* world = m_context ? m_context->GetWorld() : nullptr;
+    if (!world || !m_coroutineTarget)
+        return nullptr;
+
+    const auto entity = static_cast<EntityID>(*m_coroutineTarget);
+    if (!world->GetRegistry().valid(entity))
+        return nullptr;
+    return world->GetComponent<HealthComponent>(entity);
+}
+
+void GameplayShowcase::SpawnCoroutineTarget()
+{
+    const size_t before = m_spawnedEntities.size();
+    const std::string result = SpawnEntity("CoroutineTarget");
+    if (m_spawnedEntities.size() == before)
+    {
+        AbortCoroutineSequence(result);
+        return;
+    }
+
+    m_coroutineTarget = m_spawnedEntities.back();
+    m_coroutineStage = "spawned target";
+    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Coroutine: " + result);
+}
+
+void GameplayShowcase::DamageCoroutineTarget()
+{
+    auto* health = FindCoroutineTargetHealth();
+    if (!health)
+    {
+        AbortCoroutineSequence("target lost before damage");
+        return;
+    }
+
+    const float damage = std::min(CoroutineHealthDelta, health->health);
+    health->health -= damage;
+    m_coroutineStage = "damaged target";
+
+    if (auto* eventBus = m_context->GetEventBus())
+    {
+        eventBus->Publish(Spark::EntityDamagedEvent{
+            .entityId = *m_coroutineTarget, .damage = damage, .damageSource = "ShowcaseCoroutine"});
+    }
+}
+
+void GameplayShowcase::HealCoroutineTarget()
+{
+    auto* health = FindCoroutineTargetHealth();
+    if (!health)
+    {
+        AbortCoroutineSequence("target lost before heal");
+        return;
+    }
+
+    health->health = std::min(health->maxHealth, health->health + CoroutineHealthDelta);
+    m_coroutineScheduled = false;
+    m_coroutineStage = "complete";
+    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Coroutine: target healed to " +
+                                                std::to_string(static_cast<int>(health->health)) +
+                                                " HP — sequence complete");
 }
 
 // =============================================================================
@@ -279,6 +383,7 @@ std::string GameplayShowcase::GetStatus() const
     status += "Kill events: " + std::to_string(m_totalKillEvents) + "\n";
     status += "Weather changes: " + std::to_string(m_totalWeatherChanges) + "\n";
     status += "Total damage dealt: " + std::to_string(static_cast<int>(m_totalDamageDealt)) + "\n";
+    status += "Coroutine sequence: " + m_coroutineStage + "\n";
 
     // Weather info
     auto* weather = m_context ? m_context->GetWeather() : nullptr;
@@ -404,6 +509,7 @@ void GameplayShowcase::RenderDebugUI()
     ImGui::Text("Damage Events: %u (%.0f total dmg)", m_totalDamageEvents, m_totalDamageDealt);
     ImGui::Text("Kill Events: %u", m_totalKillEvents);
     ImGui::Text("Weather Changes: %u", m_totalWeatherChanges);
+    ImGui::Text("Coroutine sequence: %s", m_coroutineStage.c_str());
 
     // Weather info
     auto* weather = m_context ? m_context->GetWeather() : nullptr;

@@ -151,6 +151,7 @@ add_executable(SparkTests
     TestModuleDiscovery.cpp
     TestModuleABI.cpp
     TestModuleABIDiagnostics.cpp
+    TestSparkGameShowcase.cpp
     TestPluginABI.cpp
     TestReflection.cpp
     TestPathCache.cpp
@@ -1601,6 +1602,18 @@ foreach(_spark_life_selector IN LISTS _spark_life_selectors)
         RUN_SERIAL TRUE
         TIMEOUT 120)
 endforeach()
+
+# MOD-300: the real SparkGame image runs its spawn -> damage -> heal coroutine on the
+# host CoroutineScheduler, stops and destroys it before unload, cancels on a lost target,
+# and reports a missing scheduler. Exact count so a dropped case fails the lane.
+if(TARGET SparkGame AND NOT WIN32)
+    add_test(NAME SparkGameShowcase_CoroutineSequence COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SparkGameShowcase_CoroutineSequence PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SparkGameShowcase_Coroutine;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "module;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endif()
 
 # RHI-230: Vulkan backend under VK_LAYER_KHRONOS_validation (Lavapipe on CI).
 # Lavapipe proves API-usage correctness only, not hardware certification.

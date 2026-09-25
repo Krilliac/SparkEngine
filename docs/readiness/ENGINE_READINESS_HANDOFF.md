@@ -3118,6 +3118,7 @@ SparkGame has real lifecycle, ECS spawn, EventBus, weather, time of day, and qui
 **Required commands**
 
 ```bash
+ctest --test-dir build/linux-gcc-release -R SparkGameShowcase --output-on-failure --no-tests=error
 ctest --test-dir build/windows-release -C Release -R SparkGameShowcase --output-on-failure --no-tests=error
 ```
 
@@ -3141,6 +3142,7 @@ ctest --test-dir build/windows-release -C Release -R SparkGameShowcase --output-
 
 - Risks:
   - Expanding into another full game
+  - SparkGameShowcase_* loads the real module image only on Linux (Tests/CMakeLists.txt registers TestSparkGameShowcase.cpp under NOT WIN32); the Windows command above selects no test and fails with --no-tests=error until a Windows lane for the showcase test exists
 - Out of scope:
   - Networking unless declared
 
