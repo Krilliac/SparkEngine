@@ -10,7 +10,7 @@ import re
 import zipfile
 from dataclasses import dataclass
 from pathlib import PurePosixPath, PureWindowsPath
-from typing import Any, Iterable
+from typing import Any, Collection, Iterable, Iterator
 
 
 MAX_ARCHIVE_MEMBERS = 128
@@ -121,6 +121,11 @@ _RULES = (
 )
 
 
+def is_sensitive_key(name: str) -> bool:
+    """Return whether a key or identifier names credential material."""
+    return _SENSITIVE_KEY.search(name) is not None
+
+
 def _is_placeholder(value: object) -> bool:
     return isinstance(value, str) and value.strip().lower() in _SAFE_PLACEHOLDERS
 
@@ -145,19 +150,43 @@ def _text_views(data: bytes, *, include_utf16: bool = False) -> Iterable[tuple[s
         yield "utf16be", data.decode("utf-16-be", errors="ignore")
 
 
-def scan_text(text: str, *, location: str) -> list[SecretFinding]:
-    findings: list[SecretFinding] = []
-    seen: set[tuple[str, int]] = set()
-    safe_loc = _sanitize_location(location)
+@dataclass(frozen=True)
+class SecretMatch:
+    """One detector hit with offsets into the scanned text, never the value itself.
+
+    ``value_start``/``value_end`` span the credential value for rules that
+    capture one (``structured-credential``) and the whole match otherwise, so a
+    caller can classify the value without this module echoing it anywhere.
+    """
+
+    rule: str
+    start: int
+    end: int
+    value_start: int
+    value_end: int
+
+
+RULE_NAMES = tuple(rule.name for rule in _RULES)
+
+
+def iter_secret_matches(text: str, rule_names: Collection[str] | None = None) -> Iterator[SecretMatch]:
+    """Yield every non-placeholder detector hit in ``text``, rule by rule.
+
+    ``rule_names`` restricts the scan to those rules; None runs all of them.
+    """
     for rule in _RULES:
+        if rule_names is not None and rule.name not in rule_names:
+            continue
         for match in rule.expression.finditer(text):
             if rule.value_group and _is_placeholder(match.group(rule.value_group)):
                 continue
-            marker = (rule.name, match.start())
-            if marker not in seen:
-                seen.add(marker)
-                findings.append(SecretFinding(rule.name, safe_loc))
-    return findings
+            value_start, value_end = match.span(rule.value_group) if rule.value_group else match.span()
+            yield SecretMatch(rule.name, match.start(), match.end(), value_start, value_end)
+
+
+def scan_text(text: str, *, location: str) -> list[SecretFinding]:
+    safe_loc = _sanitize_location(location)
+    return [SecretFinding(match.rule, safe_loc) for match in iter_secret_matches(text)]
 
 
 def scan_json_values(value: Any, *, location: str) -> list[SecretFinding]:

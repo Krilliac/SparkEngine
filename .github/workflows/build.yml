@@ -476,6 +476,32 @@ jobs:
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: ignore
 
+  # ===========================================================================
+  # SEC-110 — repository secret scan with the OPS-100 detectors. Every tracked
+  # regular file is scanned (bounded, symlinks never followed); a finding
+  # passes only through an exact <rule>:<path> exception in
+  # tools/secret-scan-exceptions.json with an owner, live expiry, exact count.
+  # ===========================================================================
+  secret-scan:
+    name: "Secret Scan"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Secret-scan adversarial tests
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
+      run: python3 -m unittest Tests.Tools.test_check_secret_scan -v
+
+    - name: Scan tracked files for secrets
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
+      run: python3 tools/check-secret-scan.py
+
   check-thirdparty-manifest:
     runs-on: ubuntu-24.04
     steps:
@@ -3372,6 +3398,7 @@ jobs:
       - check-format
       - validate-prompts
       - validate-ops100
+      - secret-scan
       - check-thirdparty-manifest
       - check-supply-chain
       - license-compliance
@@ -3830,6 +3857,7 @@ jobs:
       - check-format
       - validate-prompts
       - validate-ops100
+      - secret-scan
       - check-thirdparty-manifest
       - check-supply-chain
       - license-compliance
@@ -3857,7 +3885,7 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
 

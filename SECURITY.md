@@ -178,6 +178,40 @@ and enforced by `tools/check-supply-chain.py` in the required
 Verification: `python tools/check-supply-chain.py`
 CI job: `check-supply-chain` in `.github/workflows/build.yml`
 
+**Secret scanning:** `tools/check-secret-scan.py` scans every git-tracked
+regular file with the OPS-100 detectors in `tools/ops/secret_policy.py` (token
+formats, PEM private-key headers, credential-bearing URLs, and the structured
+credential lexer) in the required `secret-scan` CI job. The gate narrows two of
+those detectors, and only these ways:
+
+- *Structured credentials* (a credential-named key, then `=` or `:`, then a
+  value): the last dotted segment of the key must name credential material, a
+  `::` scope operator is not a separator, and values that are references (`$VAR`, `${...}`, `${{ ... }}`,
+  `%s`, `{...}`, `<...>`) are not findings. In programming-language source
+  (C/C++/HLSL/GLSL/Metal/Objective-C, Python, AngelScript, C#, JavaScript,
+  TypeScript, Java, Kotlin, Go, Rust, Swift, Lua, Gradle) only a quoted string
+  literal counts, because an unquoted right-hand side there is an expression.
+  Every other file (configs, shell/batch/PowerShell scripts, Dockerfiles,
+  dotfile and suffixless credential stores such as `.npmrc`, `.netrc` or an AWS
+  `credentials` file, Markdown and text) also flags unquoted values, except a
+  `$name`/`@name` key (a variable being read) and a YAML `key = ...` line.
+- *Credential-bearing URLs*: a password part that is a reference is not a finding.
+- *Binary files* (any NUL byte) get only the self-identifying detectors: PEM
+  private-key headers and GitHub, OpenAI, Anthropic and AWS access-key token
+  formats.
+
+Symbolic links are never followed, files over the size bound fail instead of
+being skipped, and findings report only `path:line: rule`, never the value. A
+finding passes only through an exception in `tools/secret-scan-exceptions.json`
+whose scope is exactly `<rule>:<tracked file path>` (no globs or directories),
+using the same owner/justification/expiry schema as `supply-chain.lock`
+exceptions plus a required `count` of reviewed findings, and expiring at most
+366 days ahead. An exception covers its file only while the live count equals
+the reviewed count: a new secret in an excepted file fails the job, and a lower
+count must be ratcheted down. Expired and stale exceptions also fail. If a real
+secret is ever found, rotate it first: removing it from the tree does not remove
+it from Git history.
+
 **Outstanding (SEC-110 remains open/blocking):**
 
 - Retained success evidence for release SBOM and provenance: `release.yml`
@@ -185,7 +219,7 @@ CI job: `check-supply-chain` in `.github/workflows/build.yml`
   versioned release has exercised them, and publisher identity and consumer
   verification evidence remain open
 - Vulnerability-scanner integration
-- Required secret-scanning enforcement
+- Hosted exact-SHA evidence for the required `secret-scan` job
 - CodeQL coverage for every shipped product
 - SPDX allowlist enforcement and policy for third-party code outside
   `ThirdParty/` (for example, the editor fonts under `SparkEditor/Fonts/` have

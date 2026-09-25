@@ -2072,6 +2072,18 @@ set_tests_properties(SupplyChain_SbomAndPackageReconciliation PROPERTIES
     LABELS "governance;security;unit;python"
     TIMEOUT 300)
 
+# SEC-110: repository secret scan (tools/check-secret-scan.py) against planted
+# tokens, PEM keys and credentials, symlinks, oversize files, and exceptions that
+# are expired, stale, wildcarded, directory-scoped, count-exceeded or invalid. The
+# full-tree scan itself runs in build.yml's required secret-scan job.
+add_test(
+    NAME SecretScan_RepositoryGate
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_check_secret_scan -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(SecretScan_RepositoryGate PROPERTIES
+    LABELS "governance;security;unit;python"
+    TIMEOUT 300)
+
 # RDY-010: ModuleDiscovery_* drive the production ModuleManager and the real ABI
 # fixture DLL. The exact count fails closed if the family stops being compiled
 # in; the contract test keeps the file from regressing to a test-local mirror.

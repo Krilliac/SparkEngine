@@ -103,7 +103,7 @@
       "wave": 1,
       "area": "security",
       "owner": "unassigned",
-      "rationale": "Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. 2026-09-13 progress: the supply-chain lock now requires a bounded, case-insensitive-unique, non-waiving exception schema with named owners, valid expiries, adversarial tests, and required legal-compliance CI wiring. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open. 2026-09-24 progress: tools/generate-sbom.py generates a deterministic, --check-reproducible SPDX 2.3 SBOM from dependencies.lock and supply-chain.lock (license_policy SPDX, gitlinks, vendored tree digests), bound to the source SHA and the committed dependency-lock digest that REL-100 provenance records; its reconcile mode classifies an install manifest or staged package with the GOV-400 package rule set and fails on unmapped or unlocked third-party payload, a locked shipped dependency that is absent, or a notice inventory from a different lock. A local Linux GCC Release install (2515 files) reconciles; Windows and hosted package reconciliation evidence and release.yml wiring remain open.",
+      "rationale": "Workflow actions use mutable major tags, dependency inventories disagree, CodeQL builds only part of the product, and releases lack SBOM/provenance/security gates. 2026-09-12 progress: the release prepare job now runs the existing fail-closed supply-chain checker, including dependency, vendored-content, and action-pin policy, before computing release metadata. 2026-09-13 progress: the supply-chain lock now requires a bounded, case-insensitive-unique, non-waiving exception schema with named owners, valid expiries, adversarial tests, and required legal-compliance CI wiring. Publisher identity, signed-artifact success evidence, consumer verification, vulnerability/license/secret scan policy, and protected release approval remain open. 2026-09-24 progress: tools/generate-sbom.py generates a deterministic, --check-reproducible SPDX 2.3 SBOM from dependencies.lock and supply-chain.lock (license_policy SPDX, gitlinks, vendored tree digests), bound to the source SHA and the committed dependency-lock digest that REL-100 provenance records; its reconcile mode classifies an install manifest or staged package with the GOV-400 package rule set and fails on unmapped or unlocked third-party payload, a locked shipped dependency that is absent, or a notice inventory from a different lock. A local Linux GCC Release install (2515 files) reconciles; Windows and hosted package reconciliation evidence and release.yml wiring remain open. 2026-09-25 progress: tools/check-secret-scan.py scans every git-tracked regular file with the OPS-100 secret_policy detectors and fails on any finding not covered by an exact, owned, unexpired <rule>:<path> exception that reuses the supply-chain exception schema plus a required reviewed finding count (a new finding in an excepted file fails; a lower count must be ratcheted down); the new required secret-scan job in build.yml runs it with its adversarial tests. The gate narrows the structured-credential lexer (credential-naming last key segment, :: scope operators and $VAR/${..}/%s-style references excluded, quoted literals only in programming-language source while scripts, Dockerfiles, dotfile/suffixless credential stores, Markdown and configs also flag unquoted values) and applies only the PEM and self-identifying token detectors to NUL-containing binary files; SECURITY.md documents the narrowing. Hosted exact-SHA evidence for the job is still open.",
       "dependencies": [
         "CI-100"
       ],
@@ -154,6 +154,8 @@
         "python3 tools/generate-sbom.py --out sbom.spdx.json",
         "python3 tools/generate-sbom.py reconcile --install-manifest build/linux-gcc-release/install_manifest.txt",
         "python3 -m unittest Tests.Tools.test_generate_sbom -v",
+        "python3 tools/check-secret-scan.py",
+        "python3 -m unittest Tests.Tools.test_check_secret_scan -v",
         "osv-scanner --lockfile ThirdParty/dependencies.lock"
       ],
       "testSelectors": [
@@ -204,13 +206,15 @@
         "ThirdParty/POLICY.md — supply-chain policy document",
         "SECURITY.md — supply-chain security section",
         "tools/generate-sbom.py — lock-derived SPDX 2.3 SBOM (source-SHA and dependency-lock digest bound, --check reproducible) and package-inventory reconciliation over the GOV-400 package rule set",
-        "Tests/Tools/test_generate_sbom.py — forged, unlocked, missing, stale-declaration, and wrong-lock notice cases (ctest SupplyChain_SbomAndPackageReconciliation; build.yml check-supply-chain job)"
+        "Tests/Tools/test_generate_sbom.py — forged, unlocked, missing, stale-declaration, and wrong-lock notice cases (ctest SupplyChain_SbomAndPackageReconciliation; build.yml check-supply-chain job)",
+        "tools/check-secret-scan.py — bounded git-index secret scan with the OPS-100 tools/ops/secret_policy.py detectors (no symlink following, oversize files fail, values never printed); exceptions in tools/secret-scan-exceptions.json reuse the supply-chain validate_exception_records schema with exact <rule>:<path> scopes, a 366-day expiry horizon, and stale-exception failure; local run 2026-09-25: 6160 files scanned, 0 unexcepted findings, 20 owned fixture exceptions",
+        "Tests/Tools/test_check_secret_scan.py — planted tokens/PEM/credentials, symlink, oversize, expired, stale, wildcard, directory-scoped, duplicate-id and schema-invalid exception cases (ctest SecretScan_RepositoryGate; required build.yml secret-scan job)"
       ],
       "remainingBlockers": [
         "CodeQL expansion across all shipped products (CI-100 and CI-110)",
         "Release wiring of lock-derived SBOM and package reconciliation (release.yml package jobs) with hosted Windows and Linux package evidence",
         "Vulnerability scanner integration",
-        "Secret scanning CI job",
+        "Exact-SHA hosted record of the required secret-scan job",
         "Formal exception schema with owner and expiry fields",
         "SPDX allowlist enforcement",
         "Policy for third-party code outside ThirdParty/"
@@ -220,7 +224,6 @@
       },
       "plannedCiJobs": [
         "dependency-policy",
-        "secret-scan",
         "license-scan"
       ],
       "plannedTestSelectors": [

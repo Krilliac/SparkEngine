@@ -47,6 +47,7 @@ REQUIRED_CI_JOBS = (
     "check-format",
     "validate-prompts",
     "validate-ops100",
+    "secret-scan",
     "check-thirdparty-manifest",
     "check-supply-chain",
     "license-compliance",

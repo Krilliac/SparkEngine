@@ -6130,7 +6130,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 31,
+    "jobCount": 32,
     "jobs": [
       {
         "id": "fuzz-policy",
@@ -7187,6 +7187,75 @@
         "gating": "blocking"
       },
       {
+        "id": "secret-scan",
+        "name": "Secret Scan",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": 20,
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
+        "stepCount": 3,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Secret-scan adversarial tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "PYTHONDONTWRITEBYTECODE"
+            ],
+            "runDigest": "37978b07e365e7d9"
+          },
+          {
+            "index": 2,
+            "name": "Scan tracked files for secrets",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "PYTHONDONTWRITEBYTECODE"
+            ],
+            "runDigest": "3a83788710618c43"
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
+      {
         "id": "check-thirdparty-manifest",
         "name": "",
         "runsOn": "ubuntu-24.04",
@@ -7258,7 +7327,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 6,
+        "stepCount": 7,
         "steps": [
           {
             "index": 0,
@@ -7310,6 +7379,18 @@
           },
           {
             "index": 4,
+            "name": "Release vulnerability gate tests",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "54a505b1a1b32f04"
+          },
+          {
+            "index": 5,
             "name": "Generate and reproduce lock-derived SPDX SBOM",
             "id": "",
             "uses": "",
@@ -7321,7 +7402,7 @@
             "runDigest": "303dfb386a64b0c1"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "SBOM and package-reconciliation tests",
             "id": "",
             "uses": "",
@@ -10521,6 +10602,7 @@
           "check-format",
           "validate-prompts",
           "validate-ops100",
+          "secret-scan",
           "check-thirdparty-manifest",
           "check-supply-chain",
           "license-compliance",
@@ -11197,6 +11279,7 @@
           "check-format",
           "validate-prompts",
           "validate-ops100",
+          "secret-scan",
           "check-thirdparty-manifest",
           "check-supply-chain",
           "license-compliance",
@@ -16080,8 +16163,8 @@
       }
     ],
     "summary": {
-      "jobCount": 31,
-      "matrixLegCount": 39,
+      "jobCount": 32,
+      "matrixLegCount": 40,
       "pathFilteredEventCount": 0,
       "configureCount": 26,
       "buildCount": 27,
@@ -16089,7 +16172,7 @@
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 18,
-      "blockingJobCount": 23,
+      "blockingJobCount": 24,
       "advisoryJobCount": 4,
       "conditionalJobCount": 4,
       "builtOsConfigurationPairs": [
