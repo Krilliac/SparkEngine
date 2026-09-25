@@ -83,7 +83,6 @@ static void InitEngineContext()
 
     InitPhysics();
 
-    Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
     if (!g_noJobSystem)
     {
         Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);

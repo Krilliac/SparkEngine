@@ -86,8 +86,8 @@ See `.clang-format` for the full style configuration.
 ## Adding New Systems
 
 1. Create the header in the appropriate directory under `SparkEngine/Source/`
-2. Register with `EngineContext` using `RegisterSystem<T>()` or `RegisterSubsystem<T>()`
-3. Wire into `SparkEngine.cpp` initialization and update loops
+2. Own it in `EngineRuntime` (`Core/EngineRuntime.h`), create and tear it down in the `LifecycleCompositionRoot` stage for its phase (`Core/Lifecycle/`), and publish it with `EngineContext::RegisterSystem<T>()` or the named setter
+3. Wire its per-frame update into the main loop
 4. Add tests in `Tests/`
 5. Add Doxygen comments (`@file`, `@brief`, `@param`, `@return`)
 6. Update the wiki with a new page if adding a subsystem

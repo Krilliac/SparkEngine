@@ -214,8 +214,8 @@ Checklist per new/changed system:
 
 - [ ] **Caller** — `Initialize()` invoked in the startup path (`SparkEngine.cpp` /
   `EngineContext` / `EditorApplication`), not just defined.
-- [ ] **Registration** — registered via `EngineContext` `RegisterSystem<T>()` /
-  `RegisterSubsystem<T>()`; panels in `EditorPanelFactory`; tests in `Tests/CMakeLists.txt`.
+- [ ] **Registration** — published via `EngineContext` `RegisterSystem<T>()` / named
+  setter (owned in `EngineRuntime`, created in a `LifecycleCompositionRoot` stage); panels in `EditorPanelFactory`; tests in `Tests/CMakeLists.txt`.
 - [ ] **Tick** — `Update()`/`ProcessCommands()` appears in the main loop.
 - [ ] **Teardown** — shutdown/unload path is real. Clean module/resource teardown is
   gate `G10` territory and tracked as open item `LIFE-200` — if your teardown is

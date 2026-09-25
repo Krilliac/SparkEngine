@@ -238,8 +238,8 @@ The engine boots through a strict initialization order. Dependencies flow top-do
     └────────┬──────────────┘   │ Fixed 60Hz Tick Loop     │
              │                  │ (sleep-regulated)         │
     ┌────────▼──────────────┐   └─────────────────────────┘
-    │ RegisterCoreSubsystems│
-    │ (via EngineSetup)     │
+    │ InitPhysics           │
+    │ (Jolt world)          │
     └────────┬──────────────┘
              │
     ┌────────▼──────────────┐
@@ -289,7 +289,7 @@ The engine boots through a strict initialization order. Dependencies flow top-do
 
 **Key files:**
 - `SparkEngine/Source/Core/SparkEngine.cpp` — `wWinMain()`, `main()`, `InitInstance()`, `InitEngineContext()`
-- `SparkEngine/Source/Core/EngineBootstrap.h` — `EngineSetup::RegisterCoreSubsystems()`
+- `SparkEngine/Source/Core/EngineSetup.h` — `EngineSetup::InitializeJobSystem()`, `CreatePhaseSystemManager()`
 - `SparkEngine/Source/Core/GameplaySystemLifecycle.cpp` — `InitGameplaySystems()`
 - `SparkEngine/Source/Utils/ConsoleProcessManager.h` — subprocess management
 """)
