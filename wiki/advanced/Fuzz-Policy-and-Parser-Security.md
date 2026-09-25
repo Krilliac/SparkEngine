@@ -33,8 +33,8 @@ Linux-hosted target covers Windows separator semantics as well as POSIX ones
 (`SceneManifest_ParseDropsBackslashTraversalOnEveryHost`); other Win32 name quirks such
 as 8.3 short names are not modelled. The 8 MB and 100,000-entry caps sit above its
 64 KiB `-max_len`, so the `SceneManifest_EntryCap*`/`SceneManifest_ByteCap*` unit tests pin those boundaries. These
-are seed-smoke checks, not mutation campaigns; scheduled campaigns must use a disposable
-writable corpus and retain their results. Mutation runs on the larger scene-manifest seeds
+are seed-smoke checks, not mutation campaigns; the scheduled campaign (below) mutates a
+disposable writable corpus and retains its results. Mutation runs on the larger scene-manifest seeds
 trip `-rss_limit_mb=256` through ASan's default 256 MB quarantine alone, so run campaigns
 with `ASAN_OPTIONS=quarantine_size_mb=32` (a local 180-second campaign then completed
 86,134 executions with no finding).
@@ -175,6 +175,53 @@ failures return nonzero, including JSON emission mode. The CI mode also checks t
 workflow/CMake wiring and requires the committed evidence snapshot to equal the
 freshly computed report.
 
+## Scheduled Campaign
+
+`.github/workflows/fuzz-scheduled.yml` (job `fuzz-scheduled`, nightly and
+`workflow_dispatch`) is the exploration half of the gate. It is deliberately not a need
+of `required-ci-gate`: a campaign finding is a new bug to fix with a regression seed,
+not a reason to block unrelated merges. `tools/fuzz-policy/run_campaign.py` discovers
+every CTest test labelled exactly `fuzz` in the configured build, so a new target joins
+the campaign when its smoke is registered. For each target it:
+
+- copies the committed corpus into a temporary directory and gives libFuzzer only that
+  copy, then re-hashes the committed corpus and reports `corpus-mutated` if it changed
+  (the workflow also fails on any `git status` change under `Tests/fuzz-corpora`);
+- keeps the smoke's `-max_len`/`-timeout`/`-rss_limit_mb`, drops its replay-only
+  `-runs`/`-max_total_time`, and mutates for `--seconds` (600 per target by default);
+- caps ASan's quarantine at 32 MB unless `ASAN_OPTIONS` already sets one, so the 256 MB
+  RSS limit does not report false OOMs;
+- sets `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1` unless `halt_on_error` is
+  already set, so undefined behaviour in a target built with recoverable UBSan
+  (`SparkFuzzJsonUtils` lacks `-fno-sanitize-recover=undefined`) aborts and leaves a
+  `crash-` reproducer, and reports `sanitizer-report` if a `runtime error:` line is in
+  the log of an otherwise clean run;
+- runs `-minimize_crash=1` on every `crash-`/`leak-`/`timeout-`/`oom-` reproducer and
+  keeps both the raw and the minimized file;
+- rewrites `campaign-summary.json` after every target (`complete` stays `false` until
+  the last one finishes, so a cancelled job still uploads partial results) with
+  per-target status, duration, executed units, crash-free wall time, peak RSS, new
+  units and artifact SHA-256s.
+
+It exits 1 on any finding (crash, hang, abnormal exit, UBSan report or corpus change).
+Without a finding it exits 2 when the campaign could not be set up (bad arguments, no
+targets, a budget above `--max-campaign-seconds`) or when a target could not run
+(non-executable binary or unusable corpus, recorded as `setup-error` in the summary).
+The workflow passes `--max-campaign-seconds 6000`, so `seconds_per_target` times the
+discovered target count must fit 100 of the job's 180 minutes.
+The workflow uploads the whole output directory as `fuzz-campaign-<run id>` for 90
+days. To land a finding, reproduce with the minimized file, fix the parser, and commit
+that file as a `regression-*` seed with an updated `corpus-manifest.json` digest.
+
+```bash
+python3 tools/fuzz-policy/run_campaign.py --build-dir build/fuzz-policy \
+  --output /tmp/fuzz-campaign --seconds 30
+git status --porcelain -- Tests/fuzz-corpora   # must print nothing
+```
+
+A workflow file proves nothing until a hosted run is recorded; no scheduled-campaign
+history exists yet, so `runtime_evidence.scheduled_campaign` stays `false`.
+
 ## Adding or Reclassifying a Parser
 
 1. Add its production implementation files to
@@ -208,9 +255,10 @@ change *is* the review record.
   `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
   `fps-terrain-heightmap-bmp`, `asset-media-windows`);
 - commit bounded seed corpora under `Tests/fuzz-corpora/` and minimized regressions;
-- retain the blocking ASan/UBSan smoke now wired for both targets and add scheduled
-  campaigns with retained coverage and crash-free-duration evidence (the `-L fuzz`
-  CI run is now required whenever a parser is marked `fuzzed`);
+- retain the blocking ASan/UBSan smoke now wired for both targets and record hosted
+  `fuzz-scheduled` campaign history with its crash-free-duration statistics, then add
+  coverage reporting (the `-L fuzz` CI run is required whenever a parser is marked
+  `fuzzed`);
 - independently review that each harness reaches production parsing code and that
   allocation, depth, path, integer, and time bounds are enforced by that code;
 - extend the detector so the 28 known blind spots shrink;
@@ -220,7 +268,8 @@ change *is* the review record.
 ## Source & Freshness
 
 Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocking
-`fuzz-policy` job in `.github/workflows/build.yml`, and the closure step in
+`fuzz-policy` job in `.github/workflows/build.yml`, the non-blocking `fuzz-scheduled`
+campaign in `.github/workflows/fuzz-scheduled.yml`, and the closure step in
 `.github/workflows/release.yml`. The OD-21 classification and the counts above were
 re-verified structurally 2026-09-25 on the release worktree; rerun the CI command for
 current counts and exact-SHA runtime evidence.
