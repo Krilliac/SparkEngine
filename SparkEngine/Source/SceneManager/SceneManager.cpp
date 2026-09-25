@@ -526,9 +526,11 @@ namespace
 
 SceneManager::SceneManager(GraphicsEngine* graphics, InputManager* input) : m_graphics(graphics), m_input(input)
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Scene, "SceneManager constructed");
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Scene, graphics);
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Scene, input);
+    // Both pointers are optional. Every GameObject instantiation path checks
+    // m_graphics, so null graphics selects data-only loading (the headless FPS
+    // arena); m_input is only stored for callers and never dereferenced here.
+    SPARK_LOG_INFO(Spark::LogCategory::Scene, "SceneManager constructed (%s)",
+                   graphics ? "graphics attached" : "data-only, no graphics");
 }
 
 SceneManager::~SceneManager()

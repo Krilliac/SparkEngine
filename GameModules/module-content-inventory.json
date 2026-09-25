@@ -81,7 +81,7 @@
       "directory": "GameModules/SparkGameFPS",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameFPS/Source",
-      "sourceFileCount": 70,
+      "sourceFileCount": 71,
       "moduleLocalContentState": "root-dependent",
       "releaseClassification": "shipping",
       "cmakeDeclarationParseError": false,

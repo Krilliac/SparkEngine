@@ -2071,6 +2071,40 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     endif()
 endif()
 
+# MOD-310: headless arena simulation. The parser contract is deterministic and
+# runs everywhere. The Linux run launches the production headless host on
+# NullRHI with the real SparkGameFPS module, which must load the authored
+# level1 arena, bind RespawnSystem and GameMode to its default spawns and tick
+# the match; the runner fails closed unless the SPARK_FPS_HEADLESS_ARENA record
+# matches an independent parse of the staged scene. Source-tree evidence only.
+add_test(
+    NAME FPSHeadlessArenaParserContract
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_FPS_HEADLESS_ARENA_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkFPSHeadlessArena.cmake
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(FPSHeadlessArenaParserContract PROPERTIES
+    LABELS "module;fps;nullrhi-headless;unit"
+    TIMEOUT 10)
+if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
+   TARGET SparkEngine AND TARGET SparkGameFPS)
+    add_dependencies(SparkTests SparkEngine SparkGameFPS)
+    add_test(
+        NAME FPSSinglePlayerSlice_HeadlessArenaLinux
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_ARENA_SCENE=$<TARGET_FILE_DIR:SparkEngine>/Assets/Scenes/level1.scene"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkFPSHeadlessArena.cmake
+    )
+    set_tests_properties(FPSSinglePlayerSlice_HeadlessArenaLinux PROPERTIES
+        LABELS "module;fps;nullrhi-headless;linux;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
+
 add_test(
     NAME SparkTemplateAssets
     COMMAND ${CMAKE_COMMAND}

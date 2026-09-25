@@ -135,10 +135,13 @@ class SceneManager
      * @brief Construct the SceneManager with required engine subsystems.
      *
      * Does not load any scene; call `NewScene()` or `LoadScene()` to populate the
-     * hierarchy. Both pointers must remain valid for the lifetime of this object.
+     * hierarchy. Non-null pointers must remain valid for the lifetime of this object.
+     * Passing `nullptr` for both selects data-only use (headless servers): authored
+     * INI and versioned scenes load their nodes with one null object slot each, and
+     * the legacy space-delimited format, which needs a device, is rejected.
      *
-     * @param graphics  Pointer to the active GraphicsEngine (used for mesh instantiation).
-     * @param input     Pointer to the InputManager (forwarded to spawned GameObjects).
+     * @param graphics  Active GraphicsEngine used for mesh instantiation, or `nullptr`.
+     * @param input     InputManager stored for callers, or `nullptr`.
      */
     SceneManager(GraphicsEngine* graphics, InputManager* input);
 

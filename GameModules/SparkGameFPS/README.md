@@ -31,6 +31,17 @@ The module initializes without a D3D11 device: gameplay state is built in full a
 `Render()` are skipped. Module assets (the scene, arena and weapon models, music tracks) resolve against a single
 asset root discovered at runtime (`FPSAssets::Resolve`), not against paths relative to the working directory.
 
+Under the headless (NullRHI) host the engine context exposes no `GraphicsEngine` or `InputManager`, so the renderable
+`Game` is not built. The module still simulates the authored arena (`Core/HeadlessArena.cpp`): it loads
+`Scenes/level1.scene` through the data-only `SceneManager` path, binds `RespawnSystem` and a Deathmatch `GameMode` to
+the scene's default spawns, ticks both on every `OnUpdate`, and at unload prints one
+`SPARK_FPS_HEADLESS_ARENA objects=N spawns=S bound=B mode_spawns=M ticks=T match=1` record. `OnLoad` fails when the
+scene or its default spawns cannot be loaded. The Linux CTest `FPSSinglePlayerSlice_HeadlessArenaLinux`
+(`cmake/RunSparkFPSHeadlessArena.cmake`) runs `SparkEngine -headless -game libSparkGameFPS.so -test-frames 8` on
+NullRHI and fails closed unless the record matches an independent parse of the staged scene, the host lifecycle
+records pass, and the arena ticked once per reported update. It exercises no player, combat or HUD path and is
+source-tree evidence, not package certification.
+
 The editor's **Spark Arena** panel exposes the same survival and class actions and shows the live player, round, wave,
 enemy, weapon, progression, time-scale, and engine-service state.
 
