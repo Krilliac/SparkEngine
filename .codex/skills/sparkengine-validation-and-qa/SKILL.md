@@ -273,8 +273,9 @@ Verified fine print — checks whose advertised threshold is **not actually enfo
 | Test-registration guard | exists in `tools/` | Not called by any workflow or by `validate-all.sh` — manual only (§2). |
 
 Load-bearing extra gates worth knowing: `build-linux-gcc` Release **greps the test log**
-for `VulkanParity_ShaderCompilePath_Asserted` and `VulkanParity_D3D11MilestoneSnapshot` and
-asserts `ENABLE_VULKAN:BOOL=ON` in the CMake cache — renaming those tests breaks CI.
+for `VulkanShaderToolchain_RejectsMalformedSpirv` and `VulkanGolden_FullscreenTriangleReadback`
+(compiled only with `SPARK_VULKAN_SUPPORT`) and asserts `ENABLE_VULKAN:BOOL=ON` in the CMake
+cache — renaming those tests breaks CI.
 `msvc.yml` (MSVC Code Analysis → SARIF) and `codeql.yml` run separately from build.yml.
 
 `candidate` improvements (unproven, do not claim as done): wire

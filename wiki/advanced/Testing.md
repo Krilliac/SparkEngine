@@ -1410,7 +1410,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestVolumeManager` | 11 |
 | `TestVolumetricClouds` | 14 |
 | `TestVoxelConeTracing` | 24 |
-| `TestVulkanLavapipe` | 8 |
+| `TestVulkanLavapipe` | 5 |
 | `TestWARPRendering` | 4 |
 | `TestWaterRenderer` | 6 |
 | `TestWeaponMechanics` | 29 |

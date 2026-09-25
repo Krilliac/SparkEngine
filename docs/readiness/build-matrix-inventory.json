@@ -9355,7 +9355,7 @@
           },
           {
             "index": 13,
-            "name": "Assert Vulkan shader compile parity test ran (Release gate)",
+            "name": "Assert Vulkan backend tests are compiled in (Release gate)",
             "id": "",
             "uses": "",
             "shell": "",
@@ -9363,7 +9363,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "e568db7ded40b153"
+            "runDigest": "0cac91df58caa9a0"
           },
           {
             "index": 14,

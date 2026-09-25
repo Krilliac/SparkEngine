@@ -2262,12 +2262,16 @@ jobs:
       if: matrix.config == 'Release'
       run: grep -q "ENABLE_VULKAN:BOOL=ON" build/CMakeCache.txt
 
-    - name: Assert Vulkan shader compile parity test ran (Release gate)
+    # These tests exist only when SPARK_VULKAN_SUPPORT compiles the backend in, so their presence in the
+    # JUnit report proves the Release SparkTests binary carries the real Vulkan backend. The full run may
+    # report them as skipped; the VulkanValidation CTest entry (SPARK_REQUIRE_VULKAN_VALIDATION=1) is what
+    # makes a missing ICD or validation layer fatal.
+    - name: Assert Vulkan backend tests are compiled in (Release gate)
       if: matrix.config == 'Release'
       run: |
         echo "Test results: $(wc -l < test-results.log) lines"
-        grep -Fq 'name="VulkanParity_ShaderCompilePath_Asserted"' build/SparkTests-junit.xml
-        grep -Fq 'name="VulkanParity_D3D11MilestoneSnapshot"' build/SparkTests-junit.xml
+        grep -Fq 'name="VulkanShaderToolchain_RejectsMalformedSpirv"' build/SparkTests-junit.xml
+        grep -Fq 'name="VulkanGolden_FullscreenTriangleReadback"' build/SparkTests-junit.xml
 
     - name: Extract error summary
       if: failure()

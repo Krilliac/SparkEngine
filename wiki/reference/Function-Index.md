@@ -708,7 +708,7 @@
 | `AllocateCacheSlot` | function | SparkEngine | [ReflectionProbeCache.h:L266](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h#L266) |  |
 | `AllocateCacheSlot` | function | SparkEngine | [ReflectionProbeCache.h:L305](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h#L305) |  |
 | `AllocateDecompressBuffer` | function | SparkEngine | [SparkPak.cpp:L103](../../SparkEngine/Source/Core/SparkPak.cpp#L103) |  |
-| `AllocateDescriptorSet` | function | SparkEngine | [VulkanDevice.h:L512](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L512) |  |
+| `AllocateDescriptorSet` | function | SparkEngine | [VulkanDevice.h:L498](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L498) |  |
 | `AllocateEventSequence` | function | SparkEngine | [Telemetry.h:L1036](../../SparkEngine/Source/Utils/Telemetry.h#L1036) |  |
 | `AllocateIndices` | function | SparkEngine | [TransientBufferAllocator.h:L175](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L175) | Allocate transient index buffer space. |
 | `AllocateIndices` | function | Tests | [TestTransientBufferAllocator.cpp:L58](../../Tests/TestTransientBufferAllocator.cpp#L58) |  |
@@ -2015,7 +2015,7 @@
 | `BeginFrame` | function | SparkEngine | [RHIDevice.h:L177](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L177) |  |
 | `BeginFrame` | function | SparkEngine | [TransientBufferAllocator.h:L116](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L116) | Begin a new frame. Maps buffers for writing. Call before any allocations. |
 | `BeginFrame` | function | SparkEngine | [VulkanDescriptorCache.h:L85](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDescriptorCache.h#L85) | Reset the current frame's descriptor pool. Call at frame start. |
-| `BeginFrame` | function | SparkEngine | [VulkanDevice.h:L480](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L480) |  |
+| `BeginFrame` | function | SparkEngine | [VulkanDevice.h:L468](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L468) |  |
 | `BeginFrame` | function | SparkEngine | [TransientResourcePool.h:L115](../../SparkEngine/Source/Graphics/RenderGraph/TransientResourcePool.h#L115) | Mark the start of a new frame for age tracking. |
 | `BeginFrame` | function | SparkEngine | [SceneRenderer.h:L96](../../SparkEngine/Source/Graphics/SceneRenderer.h#L96) | Begin a new frame — resets the draw list. |
 | `BeginFrame` | function | SparkEngine | [ShadowAtlas.h:L79](../../SparkEngine/Source/Graphics/ShadowAtlas.h#L79) | Begin a new frame, marking all tiles inactive |
@@ -2984,7 +2984,7 @@
 | `CheckConnectionTimeouts` | function | SparkEngine | [NetworkManager.h:L837](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L837) | Checks heartbeat freshness, removes timed-out clients, and |
 | `CheckConnectionTypes` | function | Tests | [TestShaderGraphCompiler.cpp:L231](../../Tests/TestShaderGraphCompiler.cpp#L231) |  |
 | `CheckDeaths` | function | Tests | [TestECSIntegration.cpp:L146](../../Tests/TestECSIntegration.cpp#L146) |  |
-| `CheckDeviceExtensionSupport` | function | SparkEngine | [VulkanDevice.h:L530](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L530) |  |
+| `CheckDeviceExtensionSupport` | function | SparkEngine | [VulkanDevice.h:L516](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L516) |  |
 | `CheckDiscovery` | function | GameModules | [OWExplorationSystem.h:L105](../../GameModules/SparkGameOpenWorld/Source/Exploration/OWExplorationSystem.h#L105) | Install a synchronous notification for newly visited POIs. |
 | `CheckDominion` | function | GameModules | [TFRegionSystem.h:L137](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionSystem.h#L137) |  |
 | `CheckDoubleFrees` | function | SparkEngine | [MemoryMonitor.h:L219](../../SparkEngine/Source/Utils/MemoryMonitor.h#L219) |  |
@@ -4914,31 +4914,31 @@
 | `ConvertAddressMode` | function | SparkEngine | [D3D12Device.h:L187](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L187) |  |
 | `ConvertAddressMode` | function | SparkEngine | [MetalDevice.h:L520](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L520) |  |
 | `ConvertAddressMode` | function | SparkEngine | [OpenGLDevice.h:L455](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L455) |  |
-| `ConvertAddressMode` | function | SparkEngine | [VulkanDevice.h:L536](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L536) |  |
+| `ConvertAddressMode` | function | SparkEngine | [VulkanDevice.h:L522](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L522) |  |
 | `ConvertAudio` | function | SparkEditor | [AdvancedAssetPipeline.h:L146](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h#L146) |  |
 | `ConvertBlendFactor` | function | SparkEngine | [D3D11Device.h:L360](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L360) |  |
 | `ConvertBlendFactor` | function | SparkEngine | [D3D12Device.h:L190](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L190) |  |
 | `ConvertBlendFactor` | function | SparkEngine | [MetalDevice.h:L523](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L523) |  |
-| `ConvertBlendFactor` | function | SparkEngine | [VulkanDevice.h:L539](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L539) |  |
+| `ConvertBlendFactor` | function | SparkEngine | [VulkanDevice.h:L525](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L525) |  |
 | `ConvertBlendOp` | function | SparkEngine | [D3D11Device.h:L361](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L361) |  |
 | `ConvertBlendOp` | function | SparkEngine | [D3D12Device.h:L191](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L191) |  |
 | `ConvertBlendOp` | function | SparkEngine | [MetalDevice.h:L524](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L524) |  |
-| `ConvertBlendOp` | function | SparkEngine | [VulkanDevice.h:L540](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L540) |  |
-| `ConvertBorderColor` | function | SparkEngine | [VulkanDevice.h:L543](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L543) |  |
+| `ConvertBlendOp` | function | SparkEngine | [VulkanDevice.h:L526](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L526) |  |
+| `ConvertBorderColor` | function | SparkEngine | [VulkanDevice.h:L529](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L529) |  |
 | `ConvertBufferAccess` | function | SparkEngine | [MetalDevice.h:L526](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L526) |  |
 | `ConvertCompareOp` | function | SparkEngine | [D3D11Device.h:L358](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L358) |  |
 | `ConvertCompareOp` | function | SparkEngine | [D3D12Device.h:L188](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L188) |  |
 | `ConvertCompareOp` | function | SparkEngine | [MetalDevice.h:L521](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L521) |  |
 | `ConvertCompareOp` | function | SparkEngine | [OpenGLDevice.cpp:L56](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp#L56) |  |
-| `ConvertCompareOp` | function | SparkEngine | [VulkanDevice.h:L537](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L537) |  |
+| `ConvertCompareOp` | function | SparkEngine | [VulkanDevice.h:L523](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L523) |  |
 | `ConvertFilter` | function | SparkEngine | [D3D11Device.h:L356](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L356) |  |
 | `ConvertFilter` | function | SparkEngine | [D3D12Device.h:L186](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L186) |  |
-| `ConvertFilter` | function | SparkEngine | [VulkanDevice.h:L535](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L535) |  |
+| `ConvertFilter` | function | SparkEngine | [VulkanDevice.h:L521](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L521) |  |
 | `ConvertFormat` | function | SparkEngine | [D3D11Device.h:L355](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L355) |  |
 | `ConvertFormat` | function | SparkEngine | [D3D12Device.h:L185](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L185) |  |
 | `ConvertFormat` | function | SparkEngine | [MetalDevice.h:L517](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L517) |  |
 | `ConvertFormat` | function | SparkEngine | [OpenGLDevice.h:L452](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L452) |  |
-| `ConvertFormat` | function | SparkEngine | [VulkanDevice.h:L534](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L534) |  |
+| `ConvertFormat` | function | SparkEngine | [VulkanDevice.h:L520](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L520) |  |
 | `ConvertFormatType` | function | SparkEngine | [OpenGLDevice.h:L454](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L454) |  |
 | `ConvertInternalFormat` | function | SparkEngine | [OpenGLDevice.h:L453](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L453) |  |
 | `ConvertMinMagFilter` | function | SparkEngine | [MetalDevice.h:L518](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L518) |  |
@@ -4948,14 +4948,14 @@
 | `ConvertStencilOp` | function | SparkEngine | [D3D12Device.h:L189](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L189) |  |
 | `ConvertStencilOp` | function | SparkEngine | [MetalDevice.h:L522](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L522) |  |
 | `ConvertStencilOp` | function | SparkEngine | [OpenGLDevice.cpp:L80](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp#L80) |  |
-| `ConvertStencilOp` | function | SparkEngine | [VulkanDevice.h:L538](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L538) |  |
+| `ConvertStencilOp` | function | SparkEngine | [VulkanDevice.h:L524](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L524) |  |
 | `ConvertTextureType` | function | SparkEngine | [MetalDevice.h:L527](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L527) |  |
 | `ConvertTopology` | function | SparkEngine | [MetalDevice.h:L412](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L412) |  |
-| `ConvertTopology` | function | SparkEngine | [VulkanDevice.h:L541](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L541) |  |
+| `ConvertTopology` | function | SparkEngine | [VulkanDevice.h:L527](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L527) |  |
 | `ConvertVertexFormat` | function | SparkEngine | [D3D11Device.h:L362](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L362) |  |
 | `ConvertVertexFormat` | function | SparkEngine | [D3D12Device.h:L192](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L192) |  |
 | `ConvertVertexFormat` | function | SparkEngine | [MetalDevice.h:L525](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L525) |  |
-| `ConvertVertexFormat` | function | SparkEngine | [VulkanDevice.h:L542](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L542) |  |
+| `ConvertVertexFormat` | function | SparkEngine | [VulkanDevice.h:L528](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L528) |  |
 | `CookAssets` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L747](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L747) |  |
 | `cookColor` | function | SparkEditor | [DedicatedServerPanel.cpp:L486](../../SparkEditor/Source/Panels/DedicatedServerPanel.cpp#L486) |  |
 | `CookFile` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L734](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L734) |  |
@@ -5144,7 +5144,7 @@
 | `CreateBuffer` | function | SparkEngine | [NullRHIDevice.h:L244](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L244) |  |
 | `CreateBuffer` | function | SparkEngine | [OpenGLDevice.h:L423](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L423) |  |
 | `CreateBuffer` | function | SparkEngine | [RHIDevice.h:L142](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L142) |  |
-| `CreateBuffer` | function | SparkEngine | [VulkanDevice.h:L461](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L461) |  |
+| `CreateBuffer` | function | SparkEngine | [VulkanDevice.h:L449](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L449) |  |
 | `CreateBuffer` | function | Tests | [TestNullRHIDevice.cpp:L36](../../Tests/TestNullRHIDevice.cpp#L36) |  |
 | `CreateBuffer` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L87](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L87) |  |
 | `CreateBuffers` | function | SparkEngine | [MSDFTextRenderer.h:L190](../../SparkEngine/Source/Graphics/MSDFTextRenderer.h#L190) | Measure text dimensions without rendering |
@@ -5178,7 +5178,7 @@
 | `CreateCombatArena` | function | GameModules | [Game.h:L323](../../GameModules/SparkGameFPS/Source/Game/Game.h#L323) | Create the enhanced combat arena level |
 | `CreateCombatBehavior` | function | SparkEngine | [AISystem.cpp:L794](../../SparkEngine/Source/Engine/AI/AISystem.cpp#L794) |  |
 | `CreateCombatBehavior` | function | SparkEngine | [BehaviorTree.h:L291](../../SparkEngine/Source/Engine/AI/BehaviorTree.h#L291) |  |
-| `CreateCommandPool` | function | SparkEngine | [VulkanDevice.h:L520](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L520) |  |
+| `CreateCommandPool` | function | SparkEngine | [VulkanDevice.h:L506](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L506) |  |
 | `CreateCommandQueues` | function | SparkEngine | [D3D12Device.h:L179](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L179) |  |
 | `CreateCommPipe` | function | SparkEditor | [EngineInterface.h:L391](../../SparkEditor/Source/Communication/EngineInterface.h#L391) | Create named pipe for communication |
 | `CreateComplementaryColor` | function | SparkEditor | [EditorTheme.h:L303](../../SparkEditor/Source/Core/EditorTheme.h#L303) |  |
@@ -5214,7 +5214,7 @@
 | `CreateDeferredCommandList` | function | SparkEngine | [NullRHIDevice.h:L315](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L315) |  |
 | `CreateDeferredCommandList` | function | SparkEngine | [OpenGLDevice.h:L441](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L441) |  |
 | `CreateDeferredCommandList` | function | SparkEngine | [RHIDevice.h:L164](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L164) |  |
-| `CreateDeferredCommandList` | function | SparkEngine | [VulkanDevice.h:L477](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L477) |  |
+| `CreateDeferredCommandList` | function | SparkEngine | [VulkanDevice.h:L465](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L465) |  |
 | `CreateDeferredCommandList` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L133](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L133) |  |
 | `CreateDeployableEntity` | function | GameModules | [TFDeployableSystem.h:L189](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.h#L189) |  |
 | `CreateDepthBuffer` | function | SparkEngine | [RHIBridge.h:L175](../../SparkEngine/Source/Graphics/RHI/RHIBridge.h#L175) | Create a depth buffer |
@@ -5224,7 +5224,7 @@
 | `CreateDepthStencil` | function | SparkEngine | [TextureSystem.h:L170](../../SparkEngine/Source/Graphics/TextureSystem.h#L170) |  |
 | `CreateDepthStencilView` | function | SparkEngine | [GraphicsEngine.h:L1234](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1234) |  |
 | `CreateDescriptorHeaps` | function | SparkEngine | [D3D12Device.h:L180](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L180) |  |
-| `CreateDescriptorSetLayout` | function | SparkEngine | [VulkanDevice.h:L521](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L521) |  |
+| `CreateDescriptorSetLayout` | function | SparkEngine | [VulkanDevice.h:L507](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L507) |  |
 | `CreateDevice` | function | SparkEngine | [GraphicsEngine.h:L1232](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1232) |  |
 | `CreateDevice` | function | SparkEngine | [D3D12Device.h:L178](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L178) |  |
 | `CreateDevice` | function | SparkEngine | [MetalInterop.h:L18](../../SparkEngine/Source/Graphics/RHI/Metal/MetalInterop.h#L18) |  |
@@ -5310,7 +5310,7 @@
 | `CreateHighGravityZone` | function | GameModules | [GravitySystem.h:L202](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L202) | Create a high-gravity zone |
 | `CreateHingeConstraint` | function | SparkEngine | [PhysicsSystem.h:L231](../../SparkEngine/Source/Physics/PhysicsSystem.h#L231) |  |
 | `CreateHiZResources` | function | SparkEngine | [GPUDrivenRenderer.h:L172](../../SparkEngine/Source/Graphics/GPUDrivenRenderer.h#L172) | Create the HiZ mip chain UAV textures |
-| `CreateHostBuffer` | function | SparkEngine | [VulkanDevice.h:L526](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L526) |  |
+| `CreateHostBuffer` | function | SparkEngine | [VulkanDevice.h:L512](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L512) |  |
 | `CreateHud` | function | Templates | [GameModule.h:L622](../../Templates/FPSStarter/Source/GameModule.h#L622) |  |
 | `CreateHudSprite` | function | Templates | [GameModule.h:L605](../../Templates/FPSStarter/Source/GameModule.h#L605) |  |
 | `CreateImage` | function | SparkEngine | [UISystem.h:L325](../../SparkEngine/Source/Engine/UI/UISystem.h#L325) | Set background color. |
@@ -5328,7 +5328,7 @@
 | `CreateInstance` | function | GameModules | [MMODungeonSystem.h:L113](../../GameModules/SparkGameMMO/Source/Dungeon/MMODungeonSystem.h#L113) |  |
 | `CreateInstance` | function | SparkEngine | [InstanceManager.h:L196](../../SparkEngine/Source/Engine/Gameplay/InstanceManager.h#L196) |  |
 | `CreateInstance` | function | SparkEngine | [MaterialSystem.h:L262](../../SparkEngine/Source/Graphics/MaterialSystem.h#L262) |  |
-| `CreateInstance` | function | SparkEngine | [VulkanDevice.h:L517](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L517) |  |
+| `CreateInstance` | function | SparkEngine | [VulkanDevice.h:L503](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L503) |  |
 | `CreateInstance` | function | Tests | [TestInstanceManager.cpp:L77](../../Tests/TestInstanceManager.cpp#L77) |  |
 | `CreateInstance` | function | Tests | [TestMaterialSystemValidation.cpp:L201](../../Tests/TestMaterialSystemValidation.cpp#L201) |  |
 | `CreateJetBrainsTheme` | function | SparkEditor | [EditorTheme.h:L272](../../SparkEditor/Source/Core/EditorTheme.h#L272) | Create JetBrains-inspired dark theme |
@@ -5338,7 +5338,7 @@
 | `CreateLinked` | function | SparkEngine | [CancellationToken.h:L38](../../SparkEngine/Source/Engine/Coroutine/CancellationToken.h#L38) | Create a linked token that cancels when either this or any ancestor cancels. |
 | `CreateListing` | function | GameModules | [MMOTradingSystem.h:L99](../../GameModules/SparkGameMMO/Source/Trading/MMOTradingSystem.h#L99) |  |
 | `CreateLocalListener` | function | SparkGateway | [GatewayAreaControl.cpp:L279](../../SparkGateway/src/GatewayAreaControl.cpp#L279) |  |
-| `CreateLogicalDevice` | function | SparkEngine | [VulkanDevice.h:L519](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L519) |  |
+| `CreateLogicalDevice` | function | SparkEngine | [VulkanDevice.h:L505](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L505) |  |
 | `CreateLookAt` | function | SparkEngine | [MathUtilsExtended.h:L136](../../SparkEngine/Source/Utils/MathUtilsExtended.h#L136) |  |
 | `CreateLowGravityZone` | function | GameModules | [GravitySystem.h:L185](../../GameModules/SparkGameFPS/Source/Game/GravitySystem.h#L185) | Create a low-gravity zone |
 | `CreateMainWindow` | function | SparkEditor | [EditorApplication.h:L110](../../SparkEditor/Source/Core/EditorApplication.h#L110) |  |
@@ -5420,7 +5420,7 @@
 | `CreatePipelineState` | function | SparkEngine | [NullRHIDevice.h:L277](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L277) |  |
 | `CreatePipelineState` | function | SparkEngine | [OpenGLDevice.h:L428](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L428) |  |
 | `CreatePipelineState` | function | SparkEngine | [RHIDevice.h:L146](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L146) |  |
-| `CreatePipelineState` | function | SparkEngine | [VulkanDevice.h:L466](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L466) |  |
+| `CreatePipelineState` | function | SparkEngine | [VulkanDevice.h:L454](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L454) |  |
 | `CreatePipelineState` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L108](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L108) |  |
 | `CreatePlane` | function | SparkEngine | [Primitives.h:L67](../../SparkEngine/Source/Game/Primitives.h#L67) |  |
 | `CreatePlane` | function | SparkEngine | [Mesh.h:L103](../../SparkEngine/Source/Graphics/Mesh.h#L103) | Generate a flat plane mesh |
@@ -5486,7 +5486,7 @@
 | `CreateSampler` | function | SparkEngine | [OpenGLDevice.h:L427](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L427) |  |
 | `CreateSampler` | function | SparkEngine | [RHIAdapter.h:L316](../../SparkEngine/Source/Graphics/RHI/RHIAdapter.h#L316) | Create a sampler state. |
 | `CreateSampler` | function | SparkEngine | [RHIDevice.h:L145](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L145) |  |
-| `CreateSampler` | function | SparkEngine | [VulkanDevice.h:L465](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L465) |  |
+| `CreateSampler` | function | SparkEngine | [VulkanDevice.h:L453](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L453) |  |
 | `CreateSampler` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L103](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L103) |  |
 | `CreateSamplerAnisotropic` | function | SparkEngine | [RHIBridge.h:L227](../../SparkEngine/Source/Graphics/RHI/RHIBridge.h#L227) | Create a sampler state with common presets |
 | `CreateSamplerLinearClamp` | function | SparkEngine | [RHIBridge.h:L225](../../SparkEngine/Source/Graphics/RHI/RHIBridge.h#L225) | Create a sampler state with common presets |
@@ -5509,7 +5509,7 @@
 | `CreateShader` | function | SparkEngine | [OpenGLDevice.h:L426](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L426) |  |
 | `CreateShader` | function | SparkEngine | [RHIAdapter.h:L327](../../SparkEngine/Source/Graphics/RHI/RHIAdapter.h#L327) | Compile and create a shader from source. |
 | `CreateShader` | function | SparkEngine | [RHIDevice.h:L144](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L144) |  |
-| `CreateShader` | function | SparkEngine | [VulkanDevice.h:L464](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L464) |  |
+| `CreateShader` | function | SparkEngine | [VulkanDevice.h:L452](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L452) |  |
 | `CreateShader` | function | Tests | [TestNullRHIDevice.cpp:L38](../../Tests/TestNullRHIDevice.cpp#L38) |  |
 | `CreateShader` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L98](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L98) |  |
 | `CreateShaderVariant` | function | SparkEngine | [Shader.h:L346](../../SparkEngine/Source/Graphics/Shader.h#L346) | Create a shader variant with preprocessor defines |
@@ -5551,7 +5551,7 @@
 | `CreateSwapChain` | function | SparkEngine | [OpenGLDevice.h:L421](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L421) |  |
 | `CreateSwapChain` | function | SparkEngine | [RHIDevice.h:L139](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L139) |  |
 | `CreateSwapChain` | function | SparkEngine | [VulkanDevice.h:L283](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L283) |  |
-| `CreateSwapChain` | function | SparkEngine | [VulkanDevice.h:L459](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L459) |  |
+| `CreateSwapChain` | function | SparkEngine | [VulkanDevice.h:L447](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L447) |  |
 | `CreateSwapChain` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L82](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L82) |  |
 | `CreateSyncObjects` | function | SparkEngine | [VulkanDevice.h:L285](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L285) |  |
 | `CreateTarget` | function | SparkEngine | [RenderTargetPool.h:L283](../../SparkEngine/Source/Graphics/RenderTargetPool.h#L283) |  |
@@ -5568,7 +5568,7 @@
 | `CreateTexture` | function | SparkEngine | [NullRHIDevice.h:L254](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L254) |  |
 | `CreateTexture` | function | SparkEngine | [OpenGLDevice.h:L424](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L424) |  |
 | `CreateTexture` | function | SparkEngine | [RHIDevice.h:L143](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L143) |  |
-| `CreateTexture` | function | SparkEngine | [VulkanDevice.h:L462](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L462) |  |
+| `CreateTexture` | function | SparkEngine | [VulkanDevice.h:L450](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L450) |  |
 | `CreateTexture` | function | SparkEngine | [TextureSystem.h:L251](../../SparkEngine/Source/Graphics/TextureSystem.h#L251) | Update the texture system (handle streaming, etc.) |
 | `CreateTexture` | function | Tests | [TestNullRHIDevice.cpp:L37](../../Tests/TestNullRHIDevice.cpp#L37) |  |
 | `CreateTexture` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L93](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L93) |  |
@@ -7630,7 +7630,7 @@
 | `EndFrame` | function | SparkEngine | [RHIBridge.h:L130](../../SparkEngine/Source/Graphics/RHI/RHIBridge.h#L130) |  |
 | `EndFrame` | function | SparkEngine | [RHIDevice.h:L178](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L178) |  |
 | `EndFrame` | function | SparkEngine | [TransientBufferAllocator.h:L130](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L130) | End the frame. Unmaps buffers. Allocations from this frame become invalid. |
-| `EndFrame` | function | SparkEngine | [VulkanDevice.h:L481](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L481) |  |
+| `EndFrame` | function | SparkEngine | [VulkanDevice.h:L469](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L469) |  |
 | `EndFrame` | function | SparkEngine | [SceneRenderer.h:L132](../../SparkEngine/Source/Graphics/SceneRenderer.h#L132) | End the frame — resets the frame allocator. |
 | `EndFrame` | function | SparkEngine | [ShadowAtlas.h:L91](../../SparkEngine/Source/Graphics/ShadowAtlas.h#L91) | End frame: evict stale tiles unused for several frames |
 | `EndFrame` | function | SparkEngine | [TemporalEffects.h:L154](../../SparkEngine/Source/Graphics/TemporalEffects.h#L154) | End the current frame - call after rendering |
@@ -8225,7 +8225,7 @@
 | `ExecuteCommandList` | function | SparkEngine | [NullRHIDevice.h:L319](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L319) |  |
 | `ExecuteCommandList` | function | SparkEngine | [OpenGLDevice.h:L442](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L442) |  |
 | `ExecuteCommandList` | function | SparkEngine | [RHIDevice.h:L174](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L174) |  |
-| `ExecuteCommandList` | function | SparkEngine | [VulkanDevice.h:L478](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L478) |  |
+| `ExecuteCommandList` | function | SparkEngine | [VulkanDevice.h:L466](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L466) |  |
 | `ExecuteCommandList` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L134](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L134) |  |
 | `ExecuteConsoleCommand` | function | SparkEditor | [SparkEngineIntegration.h:L458](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L458) | Execute console command in engine |
 | `ExecuteConsoleCommand` | function | SparkEngine | [RemoteDebugSystem.h:L612](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L612) | Execute a console command on the remote game. |
@@ -9150,7 +9150,7 @@
 | `FindMember` | function | GameModules | [MMOPartySystem.h:L105](../../GameModules/SparkGameMMO/Source/Party/MMOPartySystem.h#L105) |  |
 | `FindMember` | function | GameModules | [TFOutfitStore.h:L79](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h#L79) |  |
 | `FindMember` | function | GameModules | [TFOutfitStore.h:L80](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h#L80) |  |
-| `FindMemoryType` | function | SparkEngine | [VulkanDevice.h:L508](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L508) |  |
+| `FindMemoryType` | function | SparkEngine | [VulkanDevice.h:L494](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L494) |  |
 | `FindModule` | function | SparkEngine | [ModuleManager.h:L110](../../SparkEngine/Source/Core/ModuleManager.h#L110) |  |
 | `FindModuleMatches` | function | SparkLauncher | [LauncherProcess.cpp:L162](../../SparkLauncher/src/LauncherProcess.cpp#L162) |  |
 | `FindNamed` | function | Tests | [TestSaveSystemRoundTripReal.cpp:L39](../../Tests/TestSaveSystemRoundTripReal.cpp#L39) |  |
@@ -9198,7 +9198,7 @@
 | `FindProjectTemplateDescriptor` | function | SparkEditor | [ProjectManager.h:L185](../../SparkEditor/Source/Core/ProjectManager.h#L185) |  |
 | `FindProjectTemplateDescriptor` | function | SparkEditor | [ProjectManager.h:L187](../../SparkEditor/Source/Core/ProjectManager.h#L187) |  |
 | `FindProperty` | function | SparkEngine | [MaterialPropertyHandle.h:L114](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L114) | Look up a property handle by name (O(1) hash lookup). |
-| `FindQueueFamilies` | function | SparkEngine | [VulkanDevice.h:L522](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L522) |  |
+| `FindQueueFamilies` | function | SparkEngine | [VulkanDevice.h:L508](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L508) |  |
 | `FindRec` | function | GameModules | [TFVehicleSystem.h:L153](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L153) |  |
 | `FindRec` | function | GameModules | [TFVehicleSystem.h:L154](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h#L154) |  |
 | `FindRecoveryBackup` | function | GameModules | [TFSocialSystemStore.cpp:L193](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp#L193) |  |
@@ -10638,7 +10638,7 @@
 | `GetBackendType` | function | SparkEngine | [NullRHIDevice.h:L336](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L336) |  |
 | `GetBackendType` | function | SparkEngine | [OpenGLDevice.h:L448](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L448) |  |
 | `GetBackendType` | function | SparkEngine | [RHIDevice.h:L182](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L182) |  |
-| `GetBackendType` | function | SparkEngine | [VulkanDevice.h:L484](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L484) |  |
+| `GetBackendType` | function | SparkEngine | [VulkanDevice.h:L472](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L472) |  |
 | `GetBackendType` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L140](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L140) |  |
 | `GetBackoffInterval` | function | Tests | [TestReliableChannel.cpp:L125](../../Tests/TestReliableChannel.cpp#L125) |  |
 | `GetBaseNoiseTexture` | function | SparkEngine | [VolumetricClouds.h:L177](../../SparkEngine/Source/Graphics/VolumetricClouds.h#L177) | Upload latest CPU-generated noise/weather to the GPU textures |
@@ -10653,7 +10653,7 @@
 | `GetBinding` | function | SparkEngine | [InputBindings.h:L137](../../SparkEngine/Source/Input/InputBindings.h#L137) | Get the binding for an action. |
 | `GetBinding` | function | Tests | [TestExtendedSystems.cpp:L772](../../Tests/TestExtendedSystems.cpp#L772) |  |
 | `GetBindingIndex` | function | SparkEngine | [MaterialPropertyHandle.h:L54](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h#L54) | Extract the binding index (bits 22..31). |
-| `GetBindingLayout` | function | SparkEngine | [VulkanDevice.h:L513](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L513) |  |
+| `GetBindingLayout` | function | SparkEngine | [VulkanDevice.h:L499](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L499) |  |
 | `GetBindings` | function | SparkEngine | [InputActionSystem.h:L497](../../SparkEngine/Source/Input/InputActionSystem.h#L497) | Get the bindings for an action (for UI display / rebind screens) |
 | `GetBitsPerSample` | function | SparkEngine | [SoundEffect.h:L142](../../SparkEngine/Source/Audio/SoundEffect.h#L142) | Get the bit depth of the audio samples |
 | `GetBitsPerSample` | function | SparkEngine | [AssetPipeline.h:L297](../../SparkEngine/Source/Graphics/AssetPipeline.h#L297) |  |
@@ -10972,7 +10972,7 @@
 | `GetCommandNames` | function | Tests | [TestEditorAutomation.cpp:L93](../../Tests/TestEditorAutomation.cpp#L93) |  |
 | `GetCommandOwner` | function | SparkEngine | [SparkConsole.h:L207](../../SparkEngine/Source/Utils/SparkConsole.h#L207) | Owner token of a registered command; empty for host commands and for unknown names. |
 | `GetCommandPalette` | function | SparkEditor | [EditorUI.h:L161](../../SparkEditor/Source/Core/EditorUI.h#L161) |  |
-| `GetCommandPool` | function | SparkEngine | [VulkanDevice.h:L504](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L504) |  |
+| `GetCommandPool` | function | SparkEngine | [VulkanDevice.h:L490](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L490) |  |
 | `GetCommandQueues` | function | GameModules | [RTSCommandSystem.h:L69](../../GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.h#L69) | Per-unit command queues in ascending unit-id order (the processing order). |
 | `GetCommands` | function | Tests | [TestDedicatedServer.cpp:L144](../../Tests/TestDedicatedServer.cpp#L144) |  |
 | `GetCommandsByCategory` | function | SparkEditor | [EditorAutomation.h:L374](../../SparkEditor/Source/Panels/EditorAutomation.h#L374) | Get commands by category |
@@ -11238,7 +11238,6 @@
 | `GetD3D11Context` | function | SparkEngine | [D3D11Device.h:L351](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L351) |  |
 | `GetD3D11Device` | function | SparkEngine | [D3D11Device.h:L350](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L350) |  |
 | `GetD3D11DSV` | function | SparkEngine | [D3D11Device.h:L102](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L102) |  |
-| `GetD3D11ParityMilestones` | function | SparkEngine | [VulkanDevice.h:L497](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L497) |  |
 | `GetD3D11Resource` | function | SparkEngine | [D3D11Device.h:L99](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L99) |  |
 | `GetD3D11RTV` | function | SparkEngine | [D3D11Device.h:L101](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L101) |  |
 | `GetD3D11Sampler` | function | SparkEngine | [D3D11Device.h:L159](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L159) |  |
@@ -11337,7 +11336,7 @@
 | `GetDefaultLoadout` | function | GameModules | [ClassSystem.h:L197](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L197) | Get the default loadout for a class |
 | `GetDefaultMaterial` | function | SparkEngine | [MaterialSystem.h:L369](../../SparkEngine/Source/Graphics/MaterialSystem.h#L369) |  |
 | `GetDefaultNetworkRuntime` | function | SparkEngine | [DedicatedServer.cpp:L39](../../SparkEngine/Source/Engine/Networking/DedicatedServer.cpp#L39) |  |
-| `GetDefaultPipelineLayout` | function | SparkEngine | [VulkanDevice.h:L514](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L514) |  |
+| `GetDefaultPipelineLayout` | function | SparkEngine | [VulkanDevice.h:L500](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L500) |  |
 | `GetDefaultStats` | function | GameModules | [RacingVehicleSystem.h:L119](../../GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.h#L119) |  |
 | `GetDefaultString` | function | SparkEngine | [ConsoleVariable.h:L119](../../SparkEngine/Source/Utils/ConsoleVariable.h#L119) | Get the default value as a display string |
 | `GetDefaultString` | function | SparkEngine | [ConsoleVariable.h:L329](../../SparkEngine/Source/Utils/ConsoleVariable.h#L329) |  |
@@ -11483,7 +11482,7 @@
 | `GetDeviceInfo` | function | SparkEngine | [OpenGLDevice.h:L449](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L449) |  |
 | `GetDeviceInfo` | function | SparkEngine | [RHIBridge.h:L253](../../SparkEngine/Source/Graphics/RHI/RHIBridge.h#L253) |  |
 | `GetDeviceInfo` | function | SparkEngine | [RHIDevice.h:L186](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L186) |  |
-| `GetDeviceInfo` | function | SparkEngine | [VulkanDevice.h:L485](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L485) |  |
+| `GetDeviceInfo` | function | SparkEngine | [VulkanDevice.h:L473](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L473) |  |
 | `GetDeviceInfo` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L144](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L144) |  |
 | `GetDialogue` | function | SparkEngine | [EngineContext.h:L206](../../SparkEngine/Source/Core/EngineContext.h#L206) |  |
 | `GetDialogue` | function | SparkEngine | [EngineContext.h:L207](../../SparkEngine/Source/Core/EngineContext.h#L207) |  |
@@ -11980,7 +11979,7 @@
 | `GetGraphics` | function | Tests | [Test_gamemodules_mmochat_di.cpp:L39](../../Tests/harden/Test_gamemodules_mmochat_di.cpp#L39) |  |
 | `GetGraphicsFromContext` | function | SparkEngine | [D3DUtils.cpp:L21](../../SparkEngine/Source/Utils/D3DUtils.cpp#L21) |  |
 | `GetGraphicsPerformance` | function | GameModules | [Game.h:L522](../../GameModules/SparkGameFPS/Source/Game/Game.h#L522) | Get current graphics performance metrics |
-| `GetGraphicsQueue` | function | SparkEngine | [VulkanDevice.h:L502](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L502) |  |
+| `GetGraphicsQueue` | function | SparkEngine | [VulkanDevice.h:L488](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L488) |  |
 | `GetGraphicsSettings` | function | SparkEngine | [GraphicsEngine.h:L549](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L549) | Set graphics settings |
 | `GetGravity` | function | SparkEngine | [Physics2D.h:L100](../../SparkEngine/Source/Engine/2D/Physics2D.h#L100) |  |
 | `GetGravity` | function | SparkEngine | [JoltPhysicsInterface.h:L351](../../SparkEngine/Source/Engine/Physics/JoltPhysicsInterface.h#L351) |  |
@@ -12108,7 +12107,7 @@
 | `GetImmediateCommandList` | function | SparkEngine | [NullRHIDevice.h:L314](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L314) |  |
 | `GetImmediateCommandList` | function | SparkEngine | [OpenGLDevice.h:L440](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L440) |  |
 | `GetImmediateCommandList` | function | SparkEngine | [RHIDevice.h:L163](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L163) |  |
-| `GetImmediateCommandList` | function | SparkEngine | [VulkanDevice.h:L476](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L476) |  |
+| `GetImmediateCommandList` | function | SparkEngine | [VulkanDevice.h:L464](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L464) |  |
 | `GetImmediateCommandList` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L132](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L132) |  |
 | `GetImpostorAtlas` | function | SparkEngine | [FoliageRenderer.h:L399](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L399) | Read-only access to the singleton impostor atlas. |
 | `GetImpostorDistance` | function | SparkEngine | [FoliageRenderer.h:L262](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L262) | Current impostor switch distance. |
@@ -13361,7 +13360,7 @@
 | `GetPrefabNames` | function | SparkEditor | [PrefabManager.h:L129](../../SparkEditor/Source/Prefabs/PrefabManager.h#L129) | Get all prefab names |
 | `GetPrefabs` | function | SparkEditor | [PrefabManager.h:L123](../../SparkEditor/Source/Prefabs/PrefabManager.h#L123) | Get all loaded prefabs |
 | `GetPresentation` | function | GameModules | [TFDataTables.h:L248](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.h#L248) |  |
-| `GetPresentQueue` | function | SparkEngine | [VulkanDevice.h:L503](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L503) |  |
+| `GetPresentQueue` | function | SparkEngine | [VulkanDevice.h:L489](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L489) |  |
 | `GetPreset` | function | GameModules | [GameMode.h:L126](../../GameModules/SparkGameFPS/Source/Game/GameMode.h#L126) |  |
 | `GetPreset` | function | Tests | [TestWeatherSystem.cpp:L35](../../Tests/TestWeatherSystem.cpp#L35) |  |
 | `GetPresetNames` | function | SparkEngine | [InputBindings.h:L176](../../SparkEngine/Source/Input/InputBindings.h#L176) | Get a list of all registered preset names. |
@@ -13461,7 +13460,7 @@
 | `GetQuestListString` | function | GameModules | [RPGQuestSystem.h:L86](../../GameModules/SparkGameRPG/Source/Quest/RPGQuestSystem.h#L86) |  |
 | `GetQuestProgress` | function | GameModules | [RPGQuestSystem.h:L97](../../GameModules/SparkGameRPG/Source/Quest/RPGQuestSystem.h#L97) |  |
 | `GetQuestRegistry` | function | GameModules | [Game.h:L361](../../GameModules/SparkGameFPS/Source/Game/Game.h#L361) | Get the quest registry for quest lookups |
-| `GetQueueFamilies` | function | SparkEngine | [VulkanDevice.h:L505](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L505) |  |
+| `GetQueueFamilies` | function | SparkEngine | [VulkanDevice.h:L491](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L491) |  |
 | `GetQueueSize` | function | SparkEngine | [Telemetry.h:L763](../../SparkEngine/Source/Utils/Telemetry.h#L763) | Number of events currently queued. |
 | `GetRace` | function | GameModules | [MMOCharacterSystem.h:L153](../../GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.h#L153) |  |
 | `GetRacer` | function | GameModules | [RacingRaceManager.h:L134](../../GameModules/SparkGameRacing/Source/Race/RacingRaceManager.h#L134) |  |
@@ -14740,14 +14739,14 @@
 | `GetVisibleTiles` | function | SparkEditor | [LevelStreamingSystem.h:L217](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L217) | Get tiles visible from position |
 | `GetVkBuffer` | function | SparkEngine | [VulkanDevice.h:L124](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L124) |  |
 | `GetVkCommandBuffer` | function | SparkEngine | [VulkanDevice.h:L379](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L379) |  |
-| `GetVkDevice` | function | SparkEngine | [VulkanDevice.h:L488](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L488) |  |
+| `GetVkDevice` | function | SparkEngine | [VulkanDevice.h:L476](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L476) |  |
 | `GetVkImage` | function | SparkEngine | [VulkanDevice.h:L162](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L162) |  |
 | `GetVkImageView` | function | SparkEngine | [VulkanDevice.h:L163](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L163) |  |
-| `GetVkInstance` | function | SparkEngine | [VulkanDevice.h:L490](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L490) |  |
+| `GetVkInstance` | function | SparkEngine | [VulkanDevice.h:L478](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L478) |  |
 | `GetVkLayout` | function | SparkEngine | [VulkanDevice.h:L240](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L240) |  |
 | `GetVkMemory` | function | SparkEngine | [VulkanDevice.h:L125](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L125) |  |
 | `GetVkModule` | function | SparkEngine | [VulkanDevice.h:L194](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L194) |  |
-| `GetVkPhysicalDevice` | function | SparkEngine | [VulkanDevice.h:L489](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L489) |  |
+| `GetVkPhysicalDevice` | function | SparkEngine | [VulkanDevice.h:L477](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L477) |  |
 | `GetVkPipeline` | function | SparkEngine | [VulkanDevice.h:L239](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L239) |  |
 | `GetVkSampler` | function | SparkEngine | [VulkanDevice.h:L216](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L216) |  |
 | `GetVkSwapChain` | function | SparkEngine | [VulkanDevice.h:L276](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L276) |  |
@@ -16767,7 +16766,7 @@
 | `Initialize` | function | SparkEngine | [RHIValidationLayer.h:L198](../../SparkEngine/Source/Graphics/RHI/RHIValidationLayer.h#L198) |  |
 | `Initialize` | function | SparkEngine | [TransientBufferAllocator.h:L79](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L79) | Create the underlying GPU buffers. Call once at startup. |
 | `Initialize` | function | SparkEngine | [VulkanDescriptorCache.h:L64](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDescriptorCache.h#L64) | Initialize with Vulkan device. |
-| `Initialize` | function | SparkEngine | [VulkanDevice.h:L456](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L456) |  |
+| `Initialize` | function | SparkEngine | [VulkanDevice.h:L444](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L444) |  |
 | `Initialize` | function | SparkEngine | [RTHandleSystem.h:L87](../../SparkEngine/Source/Graphics/RTHandleSystem.h#L87) |  |
 | `Initialize` | function | SparkEngine | [RTHandleSystem.h:L243](../../SparkEngine/Source/Graphics/RTHandleSystem.h#L243) | Double-buffered RTHandle for temporal effects (TAA, motion blur) |
 | `Initialize` | function | SparkEngine | [ReflectionProbeCache.h:L93](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h#L93) | Initialize the probe cache |
@@ -18135,7 +18134,7 @@
 | `IsSimulating` | function | SparkEngine | [PlayModeManager.h:L289](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L289) |  |
 | `IsSoftwareDevice` | function | SparkEngine | [D3D11Device.h:L352](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L352) |  |
 | `IsSoftwareDevice` | function | SparkEngine | [D3D12Device.h:L143](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L143) |  |
-| `IsSoftwareDevice` | function | SparkEngine | [VulkanDevice.h:L491](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L491) |  |
+| `IsSoftwareDevice` | function | SparkEngine | [VulkanDevice.h:L479](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L479) |  |
 | `IsSourceLive` | function | SparkEngine | [AudioEngine.h:L385](../../SparkEngine/Source/Audio/AudioEngine.h#L385) |  |
 | `IsSparkEnginePackageDirectory` | function | SparkEditor | [BuildPipeline.h:L116](../../SparkEditor/Source/Panels/BuildPipeline.h#L116) | Validate an installed SparkEngine CMake package directory. |
 | `IsSparkSRAvailable` | function | SparkEngine | [UpscalingSystem.h:L249](../../SparkEngine/Source/Graphics/UpscalingSystem.h#L249) | Check if SparkSR is available (always true — shader-based, no vendor SDK) |
@@ -18311,7 +18310,7 @@
 | `IsVisibleTo` | function | Tests | [TestExtendedSystems.cpp:L328](../../Tests/TestExtendedSystems.cpp#L328) |  |
 | `IsVisualizationEnabled` | function | SparkEngine | [RenderTarget.h:L363](../../SparkEngine/Source/Graphics/RenderTarget.h#L363) | Check if a render target has visualization enabled |
 | `IsVolumeBlendEnabled` | function | SparkEngine | [PostProcessingPipeline.h:L203](../../SparkEngine/Source/Graphics/PostProcessingPipeline.h#L203) | Whether `Process()` should push the blended volume stack |
-| `IsVulkan14` | function | SparkEngine | [VulkanDevice.h:L492](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L492) |  |
+| `IsVulkan14` | function | SparkEngine | [VulkanDevice.h:L480](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L480) |  |
 | `IsWaitingForRespawn` | function | GameModules | [GameMechanics.h:L239](../../GameModules/SparkGameFPS/Source/Game/GameMechanics.h#L239) | True while a death has been recorded and no respawn has happened yet. |
 | `IsWatchedExtension` | function | SparkEngine | [ScriptHotReload.h:L159](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L159) |  |
 | `IsWatchedExtension` | function | Tests | [TestScriptHotReload.cpp:L111](../../Tests/TestScriptHotReload.cpp#L111) |  |
@@ -20999,7 +20998,7 @@
 | `MapBuffer` | function | SparkEngine | [OpenGLDevice.h:L432](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L432) |  |
 | `MapBuffer` | function | SparkEngine | [RHIAdapter.h:L340](../../SparkEngine/Source/Graphics/RHI/RHIAdapter.h#L340) | Map a buffer for CPU write access. |
 | `MapBuffer` | function | SparkEngine | [RHIDevice.h:L156](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L156) |  |
-| `MapBuffer` | function | SparkEngine | [VulkanDevice.h:L470](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L470) |  |
+| `MapBuffer` | function | SparkEngine | [VulkanDevice.h:L458](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L458) |  |
 | `MapBuffer` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L120](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L120) |  |
 | `mapCenter` | function | GameModules | [TFMapScreenDraw.cpp:L109](../../GameModules/SparkGameMMOFPS/Source/UI/TFMapScreenDraw.cpp#L109) |  |
 | `mappedPathBuffer` | function | SparkEngine | [DynamicPluginHost.cpp:L981](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L981) |  |
@@ -24696,7 +24695,6 @@
 | `PixelNear` | function | Tests | [TestRHI210D3D11GoldenReal.cpp:L120](../../Tests/TestRHI210D3D11GoldenReal.cpp#L120) |  |
 | `pixels` | function | SparkEngine | [GraphicsStateAndSettingsLinux.cpp:L312](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsLinux.cpp#L312) |  |
 | `pixels` | function | SparkEngine | [GraphicsStateAndSettingsWindowsResize.cpp:L156](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsWindowsResize.cpp#L156) |  |
-| `pixels` | function | SparkEngine | [VulkanDevice.cpp:L2009](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L2009) |  |
 | `pixels` | function | Tests | [TestGoldenImageTest.cpp:L38](../../Tests/TestGoldenImageTest.cpp#L38) |  |
 | `pixels` | function | Tests | [TestGoldenImageTest.cpp:L133](../../Tests/TestGoldenImageTest.cpp#L133) |  |
 | `pixels` | function | Tests | [TestNeuralTextureCompressor.cpp:L72](../../Tests/TestNeuralTextureCompressor.cpp#L72) |  |
@@ -25855,7 +25853,7 @@
 | `QueryAchievements` | function | SparkEngine | [OnlineServices.h:L588](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L588) |  |
 | `QueryBatchCPU` | function | SparkEngine | [NeuralRadianceCache.h:L145](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.h#L145) | Query a batch of positions (CPU). |
 | `QueryCapabilities` | function | SparkEngine | [OpenGLDevice.h:L459](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L459) |  |
-| `QueryCapabilities` | function | SparkEngine | [VulkanDevice.h:L531](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L531) |  |
+| `QueryCapabilities` | function | SparkEngine | [VulkanDevice.h:L517](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L517) |  |
 | `QueryCaptureAvailability` | function | SparkEngine | [GPUDebugMarkers.h:L173](../../SparkEngine/Source/Graphics/GPUDebugMarkers.h#L173) | Query capture API support (RenderDoc/PIX) for current process. |
 | `QueryCaptureProgress` | function | GameModules | [TFBotSystemInternal.h:L148](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemInternal.h#L148) |  |
 | `QueryCPU` | function | SparkEngine | [NeuralRadianceCache.h:L136](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.h#L136) | Query the cache for radiance at a world position + direction (CPU). |
@@ -26280,7 +26278,7 @@
 | `ReadAvailable` | function | SparkEngine | [ProcessWin32Internal.h:L86](../../SparkEngine/Source/Utils/ProcessWin32Internal.h#L86) |  |
 | `readBack` | function | Tests | [TestNetworkManagerEdgeCases.cpp:L233](../../Tests/TestNetworkManagerEdgeCases.cpp#L233) |  |
 | `ReadbackRGBA8` | function | Tests | [TestRHI210D3D11GoldenReal.cpp:L80](../../Tests/TestRHI210D3D11GoldenReal.cpp#L80) |  |
-| `ReadbackTexture` | function | SparkEngine | [VulkanDevice.h:L501](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L501) |  |
+| `ReadbackTexture` | function | SparkEngine | [VulkanDevice.h:L487](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L487) |  |
 | `ReadbackTextureRGBA8` | function | SparkEngine | [MetalGoldenImageCapture.mm:L23](../../SparkEngine/Source/Graphics/RHI/Metal/MetalGoldenImageCapture.mm#L23) |  |
 | `ReadbackTextureRGBA8` | function | SparkEngine | [MetalTextureReadback.h:L51](../../SparkEngine/Source/Graphics/RHI/Metal/MetalTextureReadback.h#L51) |  |
 | `ReadbackTextureRGBA8` | function | SparkEngine | [MetalTextureReadback.mm:L20](../../SparkEngine/Source/Graphics/RHI/Metal/MetalTextureReadback.mm#L20) |  |
@@ -27716,7 +27714,6 @@
 | `RenderCameraComponent` | function | SparkEditor | [InspectorPanel.h:L93](../../SparkEditor/Source/Panels/InspectorPanel.h#L93) |  |
 | `RenderCameraModeSelector` | function | SparkEditor | [PlayModeToolbarPanel.h:L61](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.h#L61) | Connect to the engine's PlayModeManager. |
 | `RenderCameraTab` | function | SparkEditor | [ProjectSettingsPanel.h:L43](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h#L43) |  |
-| `RenderCanonicalGoldenScene` | function | SparkEngine | [VulkanDevice.h:L498](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L498) |  |
 | `RenderCanvas` | function | SparkEditor | [DecorLayoutEditorPanel.h:L130](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h#L130) |  |
 | `RenderCanvas` | function | SparkEditor | [RegionMapEditorPanel.h:L100](../../SparkEditor/Source/Panels/RegionMapEditorPanel.h#L100) |  |
 | `RenderCanvas` | function | SparkEditor | [VisualScriptPanel.h:L127](../../SparkEditor/Source/Panels/VisualScriptPanel.h#L127) |  |
@@ -30566,7 +30563,7 @@
 | `SelectMultiple` | function | SparkEditor | [SelectionManager.h:L280](../../SparkEditor/Source/Panels/SelectionManager.h#L280) | Select multiple entities at once |
 | `SelectObject` | function | SparkEditor | [HierarchyPanel.h:L145](../../SparkEditor/Source/Panels/HierarchyPanel.h#L145) | Select a single object |
 | `SelectorNode` | function | SparkEngine | [BehaviorTreeNodes.h:L102](../../SparkEngine/Source/Engine/AI/BehaviorTreeNodes.h#L102) | Composite node that runs children left-to-right, stopping on first success. |
-| `SelectPhysicalDevice` | function | SparkEngine | [VulkanDevice.h:L518](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L518) |  |
+| `SelectPhysicalDevice` | function | SparkEngine | [VulkanDevice.h:L504](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L504) |  |
 | `SelectPiece` | function | SparkEditor | [DecorLayoutEditorPanel.h:L137](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h#L137) |  |
 | `SelectRegion` | function | SparkEditor | [RegionMapEditorPanel.h:L108](../../SparkEditor/Source/Panels/RegionMapEditorPanel.h#L108) |  |
 | `SelectUnitType` | function | GameModules | [RTSDemoPresentation.h:L39](../../GameModules/SparkGameRTS/Source/Demo/RTSDemoPresentation.h#L39) |  |
@@ -33182,7 +33179,7 @@
 | `Shutdown` | function | SparkEngine | [RHIValidationLayer.h:L210](../../SparkEngine/Source/Graphics/RHI/RHIValidationLayer.h#L210) |  |
 | `Shutdown` | function | SparkEngine | [TransientBufferAllocator.h:L107](../../SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h#L107) | Destroy GPU buffers. Call at shutdown. |
 | `Shutdown` | function | SparkEngine | [VulkanDescriptorCache.h:L67](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDescriptorCache.h#L67) | Destroy all cached layouts and pools. |
-| `Shutdown` | function | SparkEngine | [VulkanDevice.h:L457](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L457) |  |
+| `Shutdown` | function | SparkEngine | [VulkanDevice.h:L445](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L445) |  |
 | `Shutdown` | function | SparkEngine | [RTHandleSystem.h:L98](../../SparkEngine/Source/Graphics/RTHandleSystem.h#L98) |  |
 | `Shutdown` | function | SparkEngine | [ReflectionProbeCache.h:L104](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h#L104) |  |
 | `Shutdown` | function | SparkEngine | [RenderCommandRing.h:L187](../../SparkEngine/Source/Graphics/RenderCommandRing.h#L187) |  |
@@ -35473,7 +35470,7 @@
 | `SubmitLight` | function | SparkEngine | [LightManager.h:L237](../../SparkEngine/Source/Graphics/LightManager.h#L237) | Submit a light for this frame's rendering |
 | `SubmitMeshForRendering` | function | SparkEngine | [GraphicsEngine.h:L292](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L292) |  |
 | `SubmitOccluder` | function | SparkEngine | [OcclusionCulling.h:L142](../../SparkEngine/Source/Graphics/OcclusionCulling.h#L142) | Rasterize an occluder mesh into the depth buffer. |
-| `SubmitOneShot` | function | SparkEngine | [VulkanDevice.h:L524](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L524) |  |
+| `SubmitOneShot` | function | SparkEngine | [VulkanDevice.h:L510](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L510) |  |
 | `SubmitPreparedAutoIssue` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L629](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L629) |  |
 | `SubmitPreparedAutoIssue` | function | SparkCrashReporter | [CrashAutoIssues.h:L38](../../SparkCrashReporter/src/CrashAutoIssues.h#L38) |  |
 | `SubmitScore` | function | SparkEngine | [OnlineServices.h:L163](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L163) |  |
@@ -35553,8 +35550,8 @@
 | `SuitShieldMult` | function | GameModules | [TFProgressionSystem.h:L214](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h#L214) |  |
 | `SumFrom` | function | GameModules | [TFDamageSystem.h:L150](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.h#L150) |  |
 | `summaryColor` | function | SparkEditor | [BuildCookPanel.cpp:L191](../../SparkEditor/Source/Panels/BuildCookPanel.cpp#L191) |  |
-| `SupportsHeadlessSurface` | function | SparkEngine | [VulkanDevice.h:L496](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L496) |  |
-| `SupportsHostImageCopy` | function | SparkEngine | [VulkanDevice.h:L494](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L494) |  |
+| `SupportsHeadlessSurface` | function | SparkEngine | [VulkanDevice.h:L484](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L484) |  |
+| `SupportsHostImageCopy` | function | SparkEngine | [VulkanDevice.h:L482](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L482) |  |
 | `SupportsHotReload` | function | GameModules | [SparkGameMMOFPS.h:L49](../../GameModules/SparkGameMMOFPS/Source/Core/SparkGameMMOFPS.h#L49) |  |
 | `SupportsHotReload` | function | SparkSDK | [IModule.h:L125](../../SparkSDK/Include/Spark/IModule.h#L125) | Whether a replacement image may initialize beside this one. |
 | `SupportsHotReload` | function | Templates | [GameModule.h:L80](../../Templates/Blank3D/Source/GameModule.h#L80) |  |
@@ -35573,7 +35570,7 @@
 | `SupportsInitialize` | function | SparkEngine | [LifecycleStage.h:L42](../../SparkEngine/Source/Core/Lifecycle/LifecycleStage.h#L42) |  |
 | `SupportsInitialize` | function | Tests | [TestLifecycleCompositionRootFailure.cpp:L78](../../Tests/TestLifecycleCompositionRootFailure.cpp#L78) |  |
 | `SupportsProductionDrawListInstanceContract` | function | SparkEngine | [GPUDrivenRenderer.h:L88](../../SparkEngine/Source/Graphics/GPUDrivenRenderer.h#L88) | Whether CullAndDraw can preserve draw-list instance identity. |
-| `SupportsPushDescriptors` | function | SparkEngine | [VulkanDevice.h:L493](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L493) |  |
+| `SupportsPushDescriptors` | function | SparkEngine | [VulkanDevice.h:L481](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L481) |  |
 | `SupportsShutdown` | function | SparkEngine | [LifecycleStage.h:L44](../../SparkEngine/Source/Core/Lifecycle/LifecycleStage.h#L44) |  |
 | `SupportsShutdown` | function | SparkEngine | [ShutdownStage.cpp:L12](../../SparkEngine/Source/Core/Lifecycle/ShutdownStage.cpp#L12) |  |
 | `SupportsShutdown` | function | Tests | [TestLifecycleCompositionRootFailure.cpp:L80](../../Tests/TestLifecycleCompositionRootFailure.cpp#L80) |  |
@@ -38653,7 +38650,7 @@
 | `UnmapBuffer` | function | SparkEngine | [OpenGLDevice.h:L433](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L433) |  |
 | `UnmapBuffer` | function | SparkEngine | [RHIAdapter.h:L345](../../SparkEngine/Source/Graphics/RHI/RHIAdapter.h#L345) | Unmap a previously mapped buffer. |
 | `UnmapBuffer` | function | SparkEngine | [RHIDevice.h:L157](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L157) |  |
-| `UnmapBuffer` | function | SparkEngine | [VulkanDevice.h:L471](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L471) |  |
+| `UnmapBuffer` | function | SparkEngine | [VulkanDevice.h:L459](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L459) |  |
 | `UnmapBuffer` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L128](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L128) |  |
 | `Unmount` | function | SparkEngine | [VirtualFileSystem.h:L190](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h#L190) | Remove a mount point by name. |
 | `UnpackFloats` | function | SparkEngine | [GLTFStaticMeshLoader.cpp:L338](../../SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp#L338) |  |
@@ -39227,7 +39224,7 @@
 | `UpdateBuffer` | function | SparkEngine | [OpenGLDevice.h:L434](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L434) |  |
 | `UpdateBuffer` | function | SparkEngine | [RHIAdapter.h:L334](../../SparkEngine/Source/Graphics/RHI/RHIAdapter.h#L334) | Update buffer contents. |
 | `UpdateBuffer` | function | SparkEngine | [RHIDevice.h:L158](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L158) |  |
-| `UpdateBuffer` | function | SparkEngine | [VulkanDevice.h:L472](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L472) |  |
+| `UpdateBuffer` | function | SparkEngine | [VulkanDevice.h:L460](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L460) |  |
 | `UpdateBuffer` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L129](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L129) |  |
 | `UpdateCamera` | function | GameModules | [Game.h:L623](../../GameModules/SparkGameFPS/Source/Game/Game.h#L623) | Update the camera based on input and game state |
 | `UpdateCamera` | function | SparkEditor | [SceneViewPanel.h:L162](../../SparkEditor/Source/Panels/SceneViewPanel.h#L162) |  |
@@ -39449,7 +39446,7 @@
 | `UpdateTexture` | function | SparkEngine | [NullRHIDevice.h:L312](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L312) |  |
 | `UpdateTexture` | function | SparkEngine | [OpenGLDevice.h:L435](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L435) |  |
 | `UpdateTexture` | function | SparkEngine | [RHIDevice.h:L159](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L159) |  |
-| `UpdateTexture` | function | SparkEngine | [VulkanDevice.h:L473](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L473) |  |
+| `UpdateTexture` | function | SparkEngine | [VulkanDevice.h:L461](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L461) |  |
 | `UpdateTexture` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L130](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L130) |  |
 | `updateThread` | function | Tests | [TestRemoteDebugSystem.cpp:L623](../../Tests/TestRemoteDebugSystem.cpp#L623) |  |
 | `updateThread` | function | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L259](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L259) |  |
@@ -39490,7 +39487,7 @@
 | `UploadToGPU` | function | SparkEngine | [LightProbeSystem.h:L168](../../SparkEngine/Source/Graphics/LightProbeSystem.h#L168) |  |
 | `UploadToGPU` | function | SparkEngine | [VolumetricClouds.h:L175](../../SparkEngine/Source/Graphics/VolumetricClouds.h#L175) | Upload latest CPU-generated noise/weather to the GPU textures |
 | `UploadToSceneBuffer` | function | SparkEngine | [FoliageRenderer.h:L379](../../SparkEngine/Source/Graphics/FoliageRenderer.h#L379) |  |
-| `UploadViaStaging` | function | SparkEngine | [VulkanDevice.h:L529](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L529) |  |
+| `UploadViaStaging` | function | SparkEngine | [VulkanDevice.h:L515](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L515) |  |
 | `UploadWeights` | function | SparkEngine | [NeuralInference.h:L107](../../SparkEngine/Source/Graphics/Neural/NeuralInference.h#L107) | Upload trained weights to a network's GPU buffers. |
 | `upperSha` | function | SparkInstaller | [PortableGitCacheTests.cpp:L197](../../SparkInstaller/tests/PortableGitCacheTests.cpp#L197) |  |
 | `Upsample` | function | SparkEngine | [BilateralUpsample.h:L70](../../SparkEngine/Source/Graphics/BilateralUpsample.h#L70) |  |
@@ -40210,16 +40207,14 @@
 | `VulkanDevice::CreateTexture` | method | SparkEngine | [VulkanDevice.cpp:L1202](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1202) |  |
 | `VulkanDevice::EndFrame` | method | SparkEngine | [VulkanDevice.cpp:L1915](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1915) |  |
 | `VulkanDevice::ExecuteCommandList` | method | SparkEngine | [VulkanDevice.cpp:L1879](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1879) |  |
-| `VulkanDevice::FindMemoryType` | method | SparkEngine | [VulkanDevice.cpp:L2067](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L2067) |  |
+| `VulkanDevice::FindMemoryType` | method | SparkEngine | [VulkanDevice.cpp:L1961](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1961) |  |
 | `VulkanDevice::FindQueueFamilies` | method | SparkEngine | [VulkanDevice.cpp:L706](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L706) |  |
-| `VulkanDevice::GetD3D11ParityMilestones` | method | SparkEngine | [VulkanDevice.cpp:L1981](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1981) |  |
 | `VulkanDevice::GetDeviceInfo` | method | SparkEngine | [VulkanDevice.cpp:L1943](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1943) |  |
 | `VulkanDevice::GetImmediateCommandList` | method | SparkEngine | [VulkanDevice.cpp:L1867](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1867) |  |
 | `VulkanDevice::Initialize` | method | SparkEngine | [VulkanDevice.cpp:L183](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L183) |  |
 | `VulkanDevice::MapBuffer` | method | SparkEngine | [VulkanDevice.cpp:L1573](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1573) |  |
 | `VulkanDevice::QueryCapabilities` | method | SparkEngine | [VulkanDevice.cpp:L747](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L747) |  |
 | `VulkanDevice::ReadbackTexture` | method | SparkEngine | [VulkanDevice.cpp:L1806](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1806) |  |
-| `VulkanDevice::RenderCanonicalGoldenScene` | method | SparkEngine | [VulkanDevice.cpp:L2004](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L2004) |  |
 | `VulkanDevice::SelectPhysicalDevice` | method | SparkEngine | [VulkanDevice.cpp:L439](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L439) |  |
 | `VulkanDevice::Shutdown` | method | SparkEngine | [VulkanDevice.cpp:L981](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L981) |  |
 | `VulkanDevice::SubmitOneShot` | method | SparkEngine | [VulkanDevice.cpp:L1728](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp#L1728) |  |
@@ -40272,7 +40267,7 @@
 | `WaitForIdle` | function | SparkEngine | [NullRHIDevice.h:L334](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L334) |  |
 | `WaitForIdle` | function | SparkEngine | [OpenGLDevice.h:L446](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L446) |  |
 | `WaitForIdle` | function | SparkEngine | [RHIDevice.h:L179](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L179) |  |
-| `WaitForIdle` | function | SparkEngine | [VulkanDevice.h:L482](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L482) |  |
+| `WaitForIdle` | function | SparkEngine | [VulkanDevice.h:L470](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L470) |  |
 | `WaitForIdle` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L138](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L138) |  |
 | `WaitForJob` | function | SparkEngine | [JobSystem.h:L235](../../SparkEngine/Source/Utils/JobSystem.h#L235) | Block until a job is queued or the pool is stopping. |
 | `WaitForLifecycleSocket` | function | Tests | [TestDaemonLifecycle.cpp:L72](../../Tests/TestDaemonLifecycle.cpp#L72) |  |
@@ -40678,7 +40673,7 @@
 | `WrapNativeTexture` | function | SparkEngine | [NullRHIDevice.h:L286](../../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h#L286) |  |
 | `WrapNativeTexture` | function | SparkEngine | [OpenGLDevice.h:L425](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h#L425) |  |
 | `WrapNativeTexture` | function | SparkEngine | [RHIDevice.h:L153](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h#L153) |  |
-| `WrapNativeTexture` | function | SparkEngine | [VulkanDevice.h:L463](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L463) |  |
+| `WrapNativeTexture` | function | SparkEngine | [VulkanDevice.h:L451](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L451) |  |
 | `WrapNativeTexture` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L115](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L115) |  |
 | `WrapPi` | function | GameModules | [TFBotSystemInternal.h:L230](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemInternal.h#L230) |  |
 | `WrapPi` | function | GameModules | [TFBotSystemNav.cpp:L89](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemNav.cpp#L89) |  |

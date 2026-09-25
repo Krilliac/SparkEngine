@@ -932,7 +932,6 @@
 | `D3D11CommandList` | class | SparkEngine | [D3D11Device.h:L239](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L239) |  |
 | `D3D11Device` | class | SparkEngine | [D3D11Device.h:L312](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L312) |  |
 | `D3D11Fixture` | struct | Tests | [TestPostProcessingPipelineD3D11.cpp:L20](../../Tests/TestPostProcessingPipelineD3D11.cpp#L20) |  |
-| `D3D11ParityMilestones` | struct | SparkEngine | [VulkanDevice.h:L441](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L441) |  |
 | `D3D11PipelineState` | class | SparkEngine | [D3D11Device.h:L167](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L167) |  |
 | `D3D11PipelineStateCache` | class | SparkEngine | [PipelineStateCache.h:L117](../../SparkEngine/Source/Graphics/PipelineStateCache.h#L117) | Caches D3D11 pipeline state objects and tracks dirty state to minimize API calls. |
 | `D3D11Sampler` | class | SparkEngine | [D3D11Device.h:L146](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h#L146) |  |

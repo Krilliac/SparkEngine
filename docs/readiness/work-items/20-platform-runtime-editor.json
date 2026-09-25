@@ -815,7 +815,7 @@
       "wave": 5,
       "area": "rendering",
       "owner": "unassigned",
-      "rationale": "Vulkan's deterministic reference route and parity milestones do not yet prove full GPU readback or every production pass variant.",
+      "rationale": "Vulkan does not yet prove GPU-backed goldens of the engine renderer or any production pass variant. 2026-09-25 progress (no promotion): VulkanDevice::GetD3D11ParityMilestones (pass-route, golden-route and CI milestones hard-coded to true) and RenderCanonicalGoldenScene (a CPU-synthesized image its test compared with itself) were deleted along with the three vacuous VulkanParity_* tests, so VulkanParity_* is now a planned selector. The build-linux-gcc Release gate now requires the SPARK_VULKAN_SUPPORT-only VulkanShaderToolchain_RejectsMalformedSpirv and VulkanGolden_FullscreenTriangleReadback tests in the JUnit report instead. Every acceptance criterion keeps its state.",
       "dependencies": [
         "RHI-210",
         "ENG-220",
@@ -890,7 +890,9 @@
         "vulkan-lavapipe",
         "vulkan-hardware"
       ],
-      "plannedTestSelectors": []
+      "plannedTestSelectors": [
+        "VulkanParity_*"
+      ]
     },
     {
       "id": "RHI-240",

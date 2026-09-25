@@ -523,7 +523,7 @@ TEST(VulkanShaderToolchain_AcceptsValidSpirv)
 
 // ============================================================================
 // Real render + readback: the pixels come from Lavapipe executing the SPIR-V,
-// not from the CPU-synthesized RenderCanonicalGoldenScene route.
+// not from a CPU-synthesized image.
 // ============================================================================
 
 namespace
