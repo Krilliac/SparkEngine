@@ -512,6 +512,13 @@ jobs:
     - name: Supply-chain adversarial tests
       run: python3 -m unittest Tests.test_check_supply_chain -v
 
+    # REL-110: the release vulnerability gate and its release.yml wiring. The
+    # CTest registration runs the gate cases on every lane; the wiring cases
+    # need PyYAML, which this job installs and asserts above, so they cannot
+    # skip here.
+    - name: Release vulnerability gate tests
+      run: python3 .github/scripts/test_verify_vulnerability_findings.py -v
+
     # SEC-110: the lock-derived SPDX SBOM must generate from this exact commit
     # (lockfiles equal to their committed blobs) and reproduce byte for byte.
     - name: Generate and reproduce lock-derived SPDX SBOM
