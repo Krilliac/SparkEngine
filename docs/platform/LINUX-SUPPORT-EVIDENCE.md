@@ -137,6 +137,94 @@ Notes:
   one ready, rhi and lifecycle record, in that order, with `rendered=0` and
   `faults=0`. This is source-tree evidence only. It does not certify a package.
 
+### 6.1 Installed-tree runtime closure (added later, PLT-210)
+
+`Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake` checks an installed
+tree, not the build tree. CTest `VerifyLinuxInstalledRuntime` (labels
+`package;linux;integration`) runs `cmake --install` into a fresh prefix under
+the build directory. The same script also runs standalone against an existing
+prefix, such as a `linux-shipping` install (that preset sets `BUILD_TESTS=OFF`).
+The script fails on any of the following:
+
+* a RUNPATH/RPATH entry that is absolute, empty, or `$ORIGIN`-relative but
+  escapes the prefix (checked with `readelf -d` on every ELF in the prefix);
+* a library in any ELF's `ldd` closure (run with an empty environment) that is
+  not found, resolves into the source or build tree, or resolves outside both
+  the prefix and the host's system library directories (the multilib defaults
+  plus the `ldconfig` cache);
+* a library the package ships in `<prefix>/lib` (today `libSDL2-2.0.so.0`)
+  that resolves anywhere else;
+* a symlink that leaves the prefix;
+* a `.sparkabi` sidecar whose `binary_sha256` does not hash its installed
+  module;
+* a run of the installed `SparkEngine -headless` with the installed
+  `libSparkGameFPS.so`, started from cwd `/` with an empty environment and fresh
+  `HOME`/`XDG_*` directories, that does not pass the shared NullRHI record
+  parser, prints no clean `SPARK_MODULE_LIFECYCLE module=SparkGameFPS` record,
+  names the source or build tree in its output, adds, removes or changes any
+  file in the prefix (SHA256 of every file and every symlink target, taken
+  before and after the run), or creates a new top-level entry in its working
+  directory `/`. Writes deeper under `/` (for example `/var`) are not
+  observed; `HOME`, the `XDG_*` directories and `TMPDIR` point into the test
+  root.
+
+On a pass the install-mode test deletes the installed prefix and the scratch
+`HOME`/`TMPDIR` and keeps only `runtime-closure-report.txt`, `install.log` and
+the engine logs; the self test deletes each fixture prefix once its case
+passes. A failure keeps everything for diagnosis.
+
+CTest `LinuxInstalledRuntime_ClosureDetection` builds defective copies of the
+real build-tree images and checks that each rule rejects its copy. It also runs
+a clean install-shaped positive control, and checks that the prefix snapshot
+detects a same-name, same-size in-place rewrite.
+
+**Defect found and fixed.** Before this check, every installed Linux game
+module was rejected at load. `cmake --install` rewrote each module's
+build-tree RUNPATH to `$ORIGIN/../lib`, so the image no longer matched the
+`binary_sha256` its POST_BUILD sidecar had recorded, and `ModuleManager`
+refused it before `dlopen`. The installed engine then exited 2 under
+`-require-game` with `SPARK_HEADLESS_LIFECYCLE initialized=0`, and printed no
+rejection reason to stdout or stderr. The fix is in `cmake/SparkGameModule.cmake`:
+`spark_configure_module_abi` sets `BUILD_WITH_INSTALL_RPATH` on ELF, so the
+build-tree image and the installed image are byte-identical. On the tree
+before the fix the script reported all 11 sidecars as mismatched and the
+installed run exited 2. After the fix it passed.
+
+Host evidence from 2026-09-25 (linux-gcc-release, GCC 13.3, Release):
+
+| Item | Value |
+|---|---|
+| Host | Ubuntu 24.04.4 LTS x86-64 under gVisor (kernel 6.18.44-fc-v37) |
+| glibc | Ubuntu GLIBC 2.39-0ubuntu8.9 |
+| libstdc++ | `/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.33` |
+| ELF images / module sidecars in the prefix | 30 / 11 |
+| Libraries from the host | glibc (`libc`, `libm`, `ld-linux`), `libstdc++`, `libgcc_s`, `libGL`/`libGLX`/`libGLdispatch`, `libX11`/`libxcb`/`libXau`/`libXdmcp`, `libfreetype` with `libpng16`/`libz`/`libbz2`/`libbrotli*`, `libbsd`/`libmd` |
+| Shipped in the prefix | `libSDL2-2.0.so.0` |
+| Installed run records | `SPARK_MODULE_READY count=1`; `SPARK_HEADLESS_RHI backend=null initialized=1 frames=8 shutdown=1`; `SPARK_HEADLESS_LIFECYCLE initialized=1 updated=8 fixed=10 rendered=0 unloaded=1 faults=0` |
+
+The host-library list shows what this build links against on this host. It
+is not a declared dependency set or a distribution range. `bin/SparkEngine`
+itself has `NEEDED` entries for `libGL.so.1` and `libX11.so.6`, which pull in
+`libGLX`, `libGLdispatch`, `libxcb`, `libXau`, `libXdmcp` and, through
+`libXdmcp`, `libbsd`/`libmd`. The same holds for `SparkServer`, `SparkGateway`
+and `SparkShaderCompiler`. The loader needs these even for `-headless` (see
+§7). Only `libfreetype` and its `libpng16`/`libz`/`libbz2`/`libbrotli*`
+dependencies come from other tools (`SparkEditor`, `SparkLauncher`,
+`SparkInstaller`, `SparkTests`), not from the engine. Negative checks run: a copy of the
+installed prefix whose `bin/SparkEngine` RUNPATH was set to the build `lib/`
+failed with both the RUNPATH and the `libSDL2` resolution rule. Pointing the
+script at the build tree itself failed on the absolute and empty build
+RUNPATHs.
+
+The `linux-shipping` preset (MinSizeRel, `STRIP_DEBUG_SYMBOLS=ON`) was also
+configured and built locally, with `-DSPARK_GAME_MODULES=SparkGameFPS` to
+limit build time, and its install was checked. The script ran once in install
+mode and once in standalone mode on that prefix, and both passed. The prefix
+held 36 ELF images, including 18 split `symbols/*.debug` files, and 1 module
+sidecar. It resolved the same host libraries as the table above, and the
+installed run printed the same records. The full 11-module shipping set was
+not built.
+
 ## 7. Known broken / not fixed here (with owner)
 
 1. **VisualScript assets are staged in the wrong place on Linux** (build lane).
@@ -155,15 +243,23 @@ Notes:
 5. The Windows `Process` detached launch also passes `bInheritHandles=TRUE`.
    Whether it has the same stdio-inheritance hang (#4) was **not verified**,
    because there is no Windows host here.
+6. **Headless and server binaries still need GL and X11 at load time**
+   (build/RHI lane). `SparkEngine`, `SparkServer` and `SparkGateway` link
+   `libGL.so.1` and `libX11.so.6` directly (§6.1). `SparkEngine -headless` and
+   the dedicated server therefore cannot start on a minimal host without the
+   GL and X11 client libraries, even though they never open a window or a GL
+   context. No display is needed, only the libraries. Fix: move the GL/X11
+   dependency behind the windowed backends, or load it at runtime.
 
 ## 8. Untested (no evidence either way)
 
 Clean-machine package, install, upgrade, rollback and uninstall; CPack and
-installer output on Linux; RPATH/`$ORIGIN` of an installed tree; desktop
-integration; any real GPU or driver (Vulkan, OpenGL hardware); Wayland; audio
-output; physical input devices; multiplayer across hosts; Clang, GCC 14,
-Debug, sanitizer and Shipping configurations (only GCC 13 Release was run);
-distributions other than Ubuntu 24.04; ARM64; running outside gVisor.
+installer output on Linux; the installed-tree RUNPATH/NEEDED closure on any
+host but the one in §6.1; desktop integration; any real GPU or driver (Vulkan,
+OpenGL hardware); Wayland; audio output; physical input devices; multiplayer
+across hosts; Clang, GCC 14, Debug and sanitizer configurations, and Shipping
+beyond the §6.1 install-closure run (the test suite ran on GCC 13 Release
+only); distributions other than Ubuntu 24.04; ARM64; running outside gVisor.
 
 ## 9. Bounded support statement
 

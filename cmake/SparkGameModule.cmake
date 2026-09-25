@@ -167,6 +167,15 @@ function(spark_configure_module_abi TARGET_NAME)
     _spark_detect_cxx_language_abi(_cxx_language_abi)
     target_compile_features(${TARGET_NAME} PRIVATE cxx_std_23)
 
+    # The sidecar binds binary_sha256 to the linked image. On ELF, `cmake
+    # --install` rewrites a build-tree RUNPATH to INSTALL_RPATH, so the
+    # installed module no longer matches its hash and ModuleManager rejects it
+    # before dlopen (PLT-210). Linking with the install RUNPATH keeps the build
+    # and installed images byte-identical, so the sidecar hashes both.
+    if(CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")
+        set_target_properties(${TARGET_NAME} PROPERTIES BUILD_WITH_INSTALL_RPATH ON)
+    endif()
+
     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND}
             "-DMODULE_PATH=$<TARGET_FILE:${TARGET_NAME}>"

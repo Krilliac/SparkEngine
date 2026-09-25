@@ -166,7 +166,7 @@
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a clean-machine package, driver, desktop/audio/input, and uninstall certification. Owner decision OD-10 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): the stable-v1 Linux support row is Ubuntu 24.04 LTS on x86-64 only. The decision fixes the row's scope; it does not certify it, and the clean-machine evidence above is still required.",
+      "rationale": "Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a clean-machine package, driver, desktop/audio/input, and uninstall certification. Owner decision OD-10 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): the stable-v1 Linux support row is Ubuntu 24.04 LTS on x86-64 only. The decision fixes the row's scope; it does not certify it, and the clean-machine evidence above is still required. 2026-09-25 progress: installed-tree runtime closure is now checked. CTest VerifyLinuxInstalledRuntime (Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake) installs the build into a fresh prefix. It fails on any RUNPATH/RPATH entry that is not $ORIGIN-relative inside the prefix, on any ldd closure entry that is missing, resolves into the source/build tree, or leaves the prefix for anything but a host system directory, on a shipped soname resolved elsewhere, and on a stale module sidecar. It then runs the installed SparkEngine -headless with the installed SparkGameFPS from cwd=/ with an empty environment and fresh HOME/XDG, and requires the NullRHI lifecycle records. LinuxInstalledRuntime_ClosureDetection proves each rule on defective copies of real build images. The check found that every installed Linux game module was rejected before dlopen, because cmake --install rewrote the RUNPATH that the .sparkabi binary_sha256 had hashed. cmake/SparkGameModule.cmake now links modules with BUILD_WITH_INSTALL_RPATH on ELF. The check passed on local linux-gcc-release and linux-shipping (FPS-only) installs on one Ubuntu 24.04 gVisor host. The installed SparkEngine, SparkServer and SparkGateway directly need libGL.so.1 and libX11.so.6, so even -headless cannot start on a host without those libraries. That is not clean-machine, hosted or certification evidence, so the package criterion stays open.",
       "dependencies": [
         "BLD-100",
         "RDY-020",
@@ -222,8 +222,11 @@
         {
           "criterionDigest": "sha256:2889e6c2676e",
           "state": "unmet",
-          "evidence": [],
-          "note": "There is no Linux package and no clean-host or RPATH runtime-dependency check."
+          "evidence": [
+            "Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake",
+            "docs/platform/LINUX-SUPPORT-EVIDENCE.md"
+          ],
+          "note": "A local single-host installed-tree RUNPATH/ldd closure and installed-run check exists (CTest VerifyLinuxInstalledRuntime, LinuxInstalledRuntime_ClosureDetection). There is no clean-host, hosted or packaged (CPack) evidence, and the installed SparkEngine still needs the host GL and X11 client libraries even for -headless."
         }
       ],
       "commands": [

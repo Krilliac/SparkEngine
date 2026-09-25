@@ -2315,6 +2315,47 @@ set_tests_properties(PackageConsumer_SourceTreeBoundaryDetection PROPERTIES
     LABELS "package;sdk;unit"
     TIMEOUT 60)
 
+# ----------------------------------------------------------------------------
+# PLT-210 installed Linux tree runtime closure
+# ----------------------------------------------------------------------------
+# Installs this build into a build-owned prefix, then fails on any RUNPATH or
+# NEEDED that reaches the source/build tree or leaves the prefix for anything
+# but a host system library, on any module sidecar that no longer hashes its
+# installed image, and on an installed SparkEngine -headless + SparkGameFPS run
+# (cwd=/, empty environment, fresh HOME/XDG) without clean lifecycle records.
+# The same script verifies a linux-shipping install standalone (see its header).
+# LinuxInstalledRuntime_ClosureDetection proves each rule on real defective
+# copies of the build-tree images.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING AND SPARK_HEADLESS_SUPPORT AND
+   TARGET SparkEngine AND TARGET SparkGameFPS)
+    set(_spark_linux_runtime_config "$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,Release>")
+    add_test(NAME VerifyLinuxInstalledRuntime
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_CONFIG=$<CONFIG>"
+            "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/linux-installed-runtime/${_spark_linux_runtime_config}"
+            -P "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake")
+    set_tests_properties(VerifyLinuxInstalledRuntime PROPERTIES
+        LABELS "package;linux;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 600)
+
+    add_test(NAME LinuxInstalledRuntime_ClosureDetection
+        COMMAND ${CMAKE_COMMAND}
+            -DSPARK_LINUX_RUNTIME_CLOSURE_SELF_TEST=ON
+            "-DSPARK_FIXTURE_ENGINE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_FIXTURE_MODULE=$<TARGET_FILE:SparkGameFPS>"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_FORBIDDEN_ROOTS=${CMAKE_BINARY_DIR}"
+            "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/linux-installed-runtime-detection/${_spark_linux_runtime_config}"
+            -P "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake")
+    set_tests_properties(LinuxInstalledRuntime_ClosureDetection PROPERTIES
+        LABELS "package;linux;unit"
+        TIMEOUT 120)
+endif()
+
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(
     NAME FPSSceneMaterialContract
