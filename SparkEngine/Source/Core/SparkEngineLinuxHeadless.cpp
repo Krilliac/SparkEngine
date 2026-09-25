@@ -43,6 +43,7 @@
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -257,6 +258,10 @@ int RunHeadlessLinux(int argc, char* argv[])
         static_cast<unsigned long long>(evidence.initialized), static_cast<unsigned long long>(evidence.updated),
         static_cast<unsigned long long>(evidence.fixedUpdated), static_cast<unsigned long long>(evidence.rendered),
         static_cast<unsigned long long>(evidence.unloaded), static_cast<unsigned long long>(evidence.faults));
+    // NullRHI resources an owner kept past device shutdown (the soak harness,
+    // tools/perf-budget/run_nullrhi_soak.py, requires live=0).
+    if (const std::optional<uint32_t> liveResources = GetEngineRuntime().headlessRhiLiveResourcesAtShutdown)
+        std::fprintf(stdout, "SPARK_HEADLESS_NULLRHI_RESOURCES live=%u\n", static_cast<unsigned>(*liveResources));
     std::fflush(stdout);
     if (!nullRhiShutdown && exitCode == 0)
         exitCode = 3;

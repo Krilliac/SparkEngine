@@ -2029,7 +2029,7 @@ endif()
 # (leak/soak signal for packaged headless runs).
 add_test(NAME NullRHIResourceLifetime COMMAND $<TARGET_FILE:SparkTests> --empty-is-error)
 set_tests_properties(NullRHIResourceLifetime PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=NullRHI_Lifetime_;SPARK_TEST_EXPECT_COUNT=6"
+    ENVIRONMENT "SPARK_TEST_NAME=NullRHI_Lifetime_;SPARK_TEST_EXPECT_COUNT=8"
     LABELS "nullrhi-headless;stable-v1;unit"
     TIMEOUT 30)
 
@@ -2086,6 +2086,11 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(NullRHISoak_Harness PROPERTIES
         LABELS "perf-budget;unit;python"
         TIMEOUT 120)
+    # Under ASan, freed blocks sit in a 256 MiB allocator quarantine that fills
+    # for minutes and reads as RSS growth. The soaks bound it to 1 MiB so the
+    # slope measures engine memory; leak detection stays on. Other builds
+    # ignore ASAN_OPTIONS.
+    set(_spark_soak_asan_quarantine "ASAN_OPTIONS=string_append::quarantine_size_mb=1")
     if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
        TARGET SparkEngine AND TARGET SparkGame)
         add_dependencies(SparkTests SparkEngine SparkGame)
@@ -2106,9 +2111,32 @@ if(Python3_Interpreter_FOUND)
                 ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py SoakNullRHIHeadlessSmoke)
         set_tests_properties(Soak_NullRHIHeadlessSmoke PROPERTIES
             ENVIRONMENT "SPARK_HEADLESS_ENGINE=$<TARGET_FILE:SparkEngine>;SPARK_HEADLESS_MODULE=$<TARGET_FILE:SparkGame>"
+            ENVIRONMENT_MODIFICATION "${_spark_soak_asan_quarantine}"
             LABELS "nullrhi-soak;nullrhi-headless;integration;process"
             RUN_SERIAL TRUE
             TIMEOUT 480)
+    endif()
+    # HEAD-220: ten-minute bounded soak of the shared headless FPS/NullRHI path
+    # (SparkGameFPS, 36000 ticks): VmRSS sampled from /proc, the provisional
+    # leak-slope ceiling, and zero NullRHI resources live at device shutdown.
+    # Too slow for the default lanes, so it is opt-in:
+    #   cmake -B build -DSPARK_ENABLE_SOAK_TESTS=ON
+    #   ctest --test-dir build -L soak --no-tests=error
+    # Linux shared-code evidence only; not the Windows package soak.
+    option(SPARK_ENABLE_SOAK_TESTS "Register the ten-minute headless FPS/NullRHI soak (label soak)" OFF)
+    if(SPARK_ENABLE_SOAK_TESTS AND UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
+       TARGET SparkEngine AND TARGET SparkGameFPS)
+        add_dependencies(SparkTests SparkEngine SparkGameFPS)
+        add_test(
+            NAME Soak_FPSHeadlessNullRHI
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py SoakNullRHIHeadlessSmoke)
+        set_tests_properties(Soak_FPSHeadlessNullRHI PROPERTIES
+            ENVIRONMENT "SPARK_HEADLESS_ENGINE=$<TARGET_FILE:SparkEngine>;SPARK_HEADLESS_MODULE=$<TARGET_FILE:SparkGameFPS>;SPARK_SOAK_DURATION=600"
+            ENVIRONMENT_MODIFICATION "${_spark_soak_asan_quarantine}"
+            LABELS "soak;linux;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 1500)
     endif()
 endif()
 

@@ -27,6 +27,7 @@
 #include "RHIResources.h"
 #include "RHITypes.h"
 #include <memory>
+#include <optional>
 #include <string>
 #include <functional>
 #include <unordered_map>
@@ -143,6 +144,16 @@ namespace Spark
 
             /** @brief True when running on NullRHIDevice (no GPU / headless). */
             bool IsHeadless() const { return m_headless; }
+
+            /**
+             * @brief NullRHI resources still live when Shutdown released the device.
+             *
+             * Empty until a Shutdown has released a NullRHIDevice. Counted after the
+             * bridge dropped its own shader cache, depth buffer and swap chain and the
+             * device dropped its transient buffers, so any non-zero value is a
+             * resource some other owner kept past teardown.
+             */
+            std::optional<uint32_t> GetNullResourcesLiveAtShutdown() const { return m_nullResourcesLiveAtShutdown; }
 
             // ========================================================================
             // RESOURCE CONVENIENCE METHODS
@@ -288,6 +299,7 @@ namespace Spark
             uint32_t m_height = 0;
             bool m_initialized = false;
             bool m_headless = false;
+            std::optional<uint32_t> m_nullResourcesLiveAtShutdown;
         };
 
     } // namespace RHI

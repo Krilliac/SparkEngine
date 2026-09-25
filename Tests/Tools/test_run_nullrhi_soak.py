@@ -42,7 +42,8 @@ SHA = "0123456789abcdef0123456789abcdef01234567"
 LINUX_ONLY = unittest.skipUnless(sys.platform.startswith("linux"), "soak harness supports the Linux row only")
 
 # Stand-in host: argv check, ready marker, a sleeping 60 Hz loop with an
-# optional per-tick fault hook, then the tick-stats record with its own VmHWM.
+# optional per-tick fault hook (which may set live_resources), then the NullRHI
+# live-resource record and the tick-stats record with its own VmHWM.
 STAND_IN = """\
 import os, signal, sys, threading, time
 frames = int(sys.argv[sys.argv.index("-test-frames") + 1])
@@ -50,12 +51,14 @@ assert sys.argv[1:] == ["-headless", "-game", sys.argv[3], "-require-game", "-te
 print("boot log line")
 print("SPARK_MODULE_READY count=1", flush=True)
 hoard = []
+live_resources = 0
 start = time.monotonic()
 for tick in range(frames):
     elapsed = time.monotonic() - start
 {fault}
     time.sleep(1 / 60)
 hwm = next(l.split()[1] for l in open("/proc/self/status") if l.startswith("VmHWM:"))
+print(f"SPARK_HEADLESS_NULLRHI_RESOURCES live={{live_resources}}")
 print(f"SPARK_HEADLESS_TICK_STATS backend=null frames={{frames}} p50_us=90 p99_us=160 max_us=900 peak_rss_kib={{hwm}}")
 """
 
@@ -181,7 +184,35 @@ class HarnessTests(unittest.TestCase):
         report = json.loads(self.report.read_text(encoding="utf-8"))
         self.assertEqual(report["schema"], soak_tool.REPORT_SCHEMA)
         self.assertEqual(report["failures"], [])
+        self.assertEqual(report["nullrhiLiveResourcesAtShutdown"], 0)
         self.assertGreater(len(report["rssSamples"]), soak_tool.MIN_FIT_SAMPLES)
+
+    @LINUX_ONLY
+    def test_resources_held_past_device_shutdown_fail(self) -> None:
+        outcome = self.soak(self.engine("live_resources = 3"))
+        self.assertFalse(outcome.crashed or outcome.hung)
+        self.assertEqual(outcome.nullrhi_live_resources, 3)
+        self.assertTrue(any(f.startswith("leak: 3 NullRHI resources") for f in outcome.failures), outcome.failures)
+
+    @LINUX_ONLY
+    def test_missing_resource_record_is_invalid_evidence(self) -> None:
+        script = STAND_IN.format(fault="").replace('print(f"SPARK_HEADLESS_NULLRHI_RESOURCES live={live_resources}")\n',
+                                                   "")
+        self.assertNotIn("SPARK_HEADLESS_NULLRHI_RESOURCES", script)
+        outcome = self.soak(self.engine(script=script))
+        self.assertTrue(any("SPARK_HEADLESS_NULLRHI_RESOURCES records" in f for f in outcome.failures),
+                        outcome.failures)
+
+    def test_resource_record_parser_fails_closed(self) -> None:
+        self.assertEqual(soak_tool.parse_nullrhi_live_resources("x\nSPARK_HEADLESS_NULLRHI_RESOURCES live=0\r\n"), 0)
+        for text, fragment in (("", "found 0"),
+                               ("SPARK_HEADLESS_NULLRHI_RESOURCES live=0\nSPARK_HEADLESS_NULLRHI_RESOURCES live=0",
+                                "found 2"),
+                               ("SPARK_HEADLESS_NULLRHI_RESOURCES live=-1", "malformed"),
+                               ("SPARK_HEADLESS_NULLRHI_RESOURCES live=01", "malformed"),
+                               ("SPARK_HEADLESS_NULLRHI_RESOURCES live=0 extra=1", "malformed")):
+            with self.subTest(text), self.assertRaisesRegex(CollectionError, fragment):
+                soak_tool.parse_nullrhi_live_resources(text)
 
     @LINUX_ONLY
     def test_leaking_engine_fails_the_ceiling(self) -> None:
@@ -307,7 +338,8 @@ class HarnessTests(unittest.TestCase):
 
 
 class SoakNullRHIHeadlessSmoke(unittest.TestCase):
-    """Real host soak; registered as CTest Soak_NullRHIHeadlessSmoke."""
+    """Real host soak; registered as CTest Soak_NullRHIHeadlessSmoke (SparkGame, 120 s)
+    and, opt-in, Soak_FPSHeadlessNullRHI (SparkGameFPS, SPARK_SOAK_DURATION=600)."""
 
     def test_real_headless_host_soak(self) -> None:
         engine_env = os.environ.get("SPARK_HEADLESS_ENGINE")
@@ -334,8 +366,10 @@ class SoakNullRHIHeadlessSmoke(unittest.TestCase):
         self.assertEqual(report["tickStats"]["frames"], round(duration * 60))
         self.assertGreaterEqual(report["fitSampleCount"], soak_tool.MIN_FIT_SAMPLES)
         self.assertLessEqual(report["leakSlopeBytesPerHour"], report["provisionalMaxLeakBytesPerHour"])
-        print(f"soak: {duration:g}s leak slope {report['leakSlopeBytesPerHour']:.0f} B/h over "
-              f"{report['fitSampleCount']} samples, max heartbeat gap {report['maxHeartbeatGapS']:.2f}s",
+        self.assertEqual(report["nullrhiLiveResourcesAtShutdown"], 0)
+        print(f"soak: {module.name} {duration:g}s leak slope {report['leakSlopeBytesPerHour']:.0f} B/h over "
+              f"{report['fitSampleCount']} samples, max heartbeat gap {report['maxHeartbeatGapS']:.2f}s, "
+              f"peak RSS {report['tickStats']['peakRssKib']} KiB, NullRHI live resources at shutdown 0",
               file=sys.stderr)
 
 

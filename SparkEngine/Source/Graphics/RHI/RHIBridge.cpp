@@ -187,6 +187,8 @@ namespace Spark
             if (m_initialized)
                 Shutdown();
 
+            // A re-initialized bridge must not report the previous device's count.
+            m_nullResourcesLiveAtShutdown.reset();
             m_windowHandle = windowHandle;
             m_width = width;
             m_height = height;
@@ -392,6 +394,8 @@ namespace Spark
             {
                 m_device->WaitForIdle();
                 m_device->Shutdown();
+                if (const auto* nullDevice = dynamic_cast<const NullRHIDevice*>(m_device.get()))
+                    m_nullResourcesLiveAtShutdown = nullDevice->GetLiveResourceCountAtShutdown();
                 m_device.reset();
             }
 

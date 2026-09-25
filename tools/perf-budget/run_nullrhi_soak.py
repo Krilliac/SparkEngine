@@ -29,10 +29,13 @@ Launches SparkEngine exactly as collect_headless_result.py does
 * Exit -- any non-zero status or signal death counts as a crash. A clean exit
   must still carry exactly one valid ``SPARK_HEADLESS_TICK_STATS`` record for
   exactly the requested frame count (parse_tick_stats), proving the loop ran
-  to completion on NullRHI with the module loaded.
+  to completion on NullRHI with the module loaded, and exactly one
+  ``SPARK_HEADLESS_NULLRHI_RESOURCES live=N`` record with ``N == 0``: no
+  NullRHI resource may still be held when teardown releases the device.
 
-The run fails on a crash, a hang, invalid exit evidence, too few samples in
-the fit window, or a leak slope above ``--max-leak-bytes-per-hour``. That
+The run fails on a crash, a hang, invalid exit evidence, NullRHI resources
+live at device shutdown, too few samples in the fit window, or a leak slope
+above ``--max-leak-bytes-per-hour``. That
 ceiling is PROVISIONAL (a harness guard, not a budget): nullrhi.soak.leak_rate
 stays ``pending_measurement`` with ``budget: null`` in perf-budgets/v1.
 
@@ -93,6 +96,8 @@ MIN_FIT_SAMPLES = 10
 # steady leak of a few KiB per tick (1 KiB/tick at 60 Hz is ~211 MiB/hour).
 DEFAULT_MAX_LEAK_BYTES_PER_HOUR = 64 * 1024 * 1024
 _READY_RE = re.compile(r"^SPARK_MODULE_READY count=1\r?$", re.MULTILINE)
+_NULLRHI_RESOURCES_PREFIX = "SPARK_HEADLESS_NULLRHI_RESOURCES"
+_NULLRHI_RESOURCES_RE = re.compile(r"SPARK_HEADLESS_NULLRHI_RESOURCES live=(0|[1-9][0-9]{0,9})")
 REPORT_SCHEMA = "spark-nullrhi-soak-report/1"
 
 
@@ -145,6 +150,7 @@ class SoakOutcome:
     slope_bytes_per_hour: float | None = None
     fit_sample_count: int = 0
     stats: TickStats | None = None
+    nullrhi_live_resources: int | None = None
 
 
 def read_main_thread_status(pid: int) -> tuple[int | None, tuple[int, int] | None]:
@@ -180,6 +186,20 @@ def read_main_thread_status(pid: int) -> tuple[int | None, tuple[int, int] | Non
                 switches = int(parts[1])
     heartbeat = None if switches is None or cpu_ticks is None else (switches, cpu_ticks)
     return rss_bytes, heartbeat
+
+
+def parse_nullrhi_live_resources(stdout_text: str) -> int:
+    """Return N from the host's single ``SPARK_HEADLESS_NULLRHI_RESOURCES live=N`` record.
+
+    Fails closed on a missing, duplicated, or malformed record.
+    """
+    records = [line.rstrip("\r") for line in stdout_text.split("\n") if line.startswith(_NULLRHI_RESOURCES_PREFIX)]
+    if len(records) != 1:
+        raise CollectionError(f"found {len(records)} {_NULLRHI_RESOURCES_PREFIX} records, expected exactly 1")
+    match = _NULLRHI_RESOURCES_RE.fullmatch(records[0])
+    if match is None:
+        raise CollectionError(f"malformed {_NULLRHI_RESOURCES_PREFIX} record: {records[0][:200]!r}")
+    return int(match.group(1))
 
 
 def fit_leak_slope(samples: list[tuple[float, int]], window_start_s: float,
@@ -301,6 +321,15 @@ def run_soak(engine: Path, module: Path, config: SoakConfig) -> SoakOutcome:
             outcome.stats = parse_tick_stats(stdout_text, config.frames)
         except CollectionError as exc:
             outcome.failures.append(f"invalid exit evidence: {exc}")
+        try:
+            outcome.nullrhi_live_resources = parse_nullrhi_live_resources(stdout_text)
+        except CollectionError as exc:
+            outcome.failures.append(f"invalid exit evidence: {exc}")
+        else:
+            if outcome.nullrhi_live_resources != 0:
+                outcome.failures.append(
+                    f"leak: {outcome.nullrhi_live_resources} NullRHI resources still live when teardown "
+                    "released the device")
 
     outcome.slope_bytes_per_hour, outcome.fit_sample_count = fit_leak_slope(
         outcome.samples, config.warmup_s, config.duration_s)
@@ -374,6 +403,7 @@ def build_report(outcome: SoakOutcome, config: SoakConfig, commit_sha: str | Non
         "maxHeartbeatGapS": outcome.max_heartbeat_gap_s,
         "leakSlopeBytesPerHour": outcome.slope_bytes_per_hour,
         "fitSampleCount": outcome.fit_sample_count,
+        "nullrhiLiveResourcesAtShutdown": outcome.nullrhi_live_resources,
         "tickStats": None if stats is None else {"frames": stats.frames, "p50Us": stats.p50_us,
                                                  "p99Us": stats.p99_us, "maxUs": stats.max_us,
                                                  "peakRssKib": stats.peak_rss_kib},
@@ -467,7 +497,8 @@ def main(argv: list[str] | None = None) -> int:
     slope = "n/a" if outcome.slope_bytes_per_hour is None else f"{outcome.slope_bytes_per_hour:.0f} B/h"
     summary = (f"{config.frames} frames over {config.duration_s:g}s, leak slope {slope} "
                f"({outcome.fit_sample_count} samples), crash_count={1 if outcome.crashed else 0}, "
-               f"max heartbeat gap {outcome.max_heartbeat_gap_s:.2f}s")
+               f"max heartbeat gap {outcome.max_heartbeat_gap_s:.2f}s, "
+               f"NullRHI live resources at shutdown {outcome.nullrhi_live_resources}")
     if outcome.failures:
         for failure in outcome.failures:
             print(f"run_nullrhi_soak: FAIL: {failure}", file=sys.stderr)

@@ -271,6 +271,94 @@ sidecar. It resolved the same host libraries as the table above, and the
 installed run printed the same records. The full 11-module shipping set was
 not built.
 
+### 6.2 Sanitizer and bounded-soak evidence for the shared headless FPS/NullRHI path (HEAD-220)
+
+> **Linux shared-code evidence only.** These runs exercise the engine core,
+> the NullRHI device and the real `SparkGameFPS` module through the production
+> Linux headless host (`RunHeadlessLinux`). They are **not** Windows package,
+> clean-machine, no-display-host or hosted exact-SHA evidence, and they do not
+> replace the planned `headless-windows-package` / `headless-windows-soak`
+> jobs.
+
+**Inputs.** Base commit `b71fe358c81ad4923971153de24dbd8f5a71bf07` plus this
+slice's working-tree changes (the commit that adds this section). Same host as
+§1 (gVisor, 4 vCPU, no GPU), GCC 13.3.0, CMake 4.4.3, Python 3.11.15, Unix
+Makefiles, ccache.
+
+**What the runs check.** The `nullrhi-headless` label (12 tests): the strict
+lifecycle parser and `NullRHI_Linux_FPSLifecycle`; the shutdown harness
+(`HeadlessShutdown_Graceful`, `_ForcedRecovery`, `_BootInterrupted`, i.e.
+SIGTERM, SIGKILL-then-restart and kill-during-boot); `NullRHIResourceLifetime`
+(8 `NullRHI_Lifetime_*` tests); `HeadlessTickStats`;
+`Benchmark_HeadlessTickLoop`; the 120 s `Soak_NullRHIHeadlessSmoke`; and the
+FPS headless arena (`FPSSinglePlayerSlice_HeadlessArenaLinux`). There is no
+NullRHI save/reload test yet, so save/reload is **not** covered here.
+
+The host now prints `SPARK_HEADLESS_NULLRHI_RESOURCES live=N` after teardown.
+`N` is the number of NullRHI resources that some owner still held when
+`EngineRuntime::ShutdownHeadlessRhi` released the device
+(`NullRHIDevice::GetLiveResourceCountAtShutdown`, carried out through
+`RHIBridge::GetNullResourcesLiveAtShutdown`). `tools/perf-budget/run_nullrhi_soak.py`
+requires exactly one such record with `N == 0`.
+
+**Scope of that record.** Game modules cannot reach the headless NullRHI
+device: `EngineRuntime::headlessRhiBridge` is not exposed through
+`EngineContext`, and the headless hosts only call its `BeginFrame` and
+`EndFrame`. SparkGameFPS therefore creates no NullRHI resource, and `live=0`
+only proves that the bridge and device release their own resources. It is a
+teardown guard, not an FPS resource-leak check; it becomes one once module or
+render work allocates on the device.
+
+**Commands.**
+
+```bash
+# ASan + UBSan + LSan (preset plus the CI job's flags; -g1 keeps the tree ~11 GiB)
+cmake --preset ci-linux-asan -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+  "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
+  "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
+  "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined" "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined" \
+  -DCMAKE_CXX_FLAGS_DEBUG=-g1 -DCMAKE_C_FLAGS_DEBUG=-g1
+cmake --build build/ci-linux-asan --target SparkEngine SparkGameFPS SparkGame SparkTests -j4
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:check_initialization_order=1 \
+UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
+LSAN_OPTIONS=suppressions=$PWD/Tests/lsan_suppressions.txt:print_suppressions=0 \
+  ctest --test-dir build/ci-linux-asan -L nullrhi-headless --output-on-failure --no-tests=error
+
+# TSan (same pattern, -fsanitize=thread; the CI job's TSAN_OPTIONS)
+TSAN_OPTIONS=halt_on_error=0:second_deadlock_stack=1:suppressions=$PWD/Tests/tsan_suppressions.txt \
+  ctest --test-dir build/ci-linux-tsan -L nullrhi-headless --output-on-failure --no-tests=error
+
+# Ten-minute FPS soak (opt-in registration, Release)
+cmake -B build/linux-gcc-release -DSPARK_ENABLE_SOAK_TESTS=ON
+ctest --test-dir build/linux-gcc-release -L '^soak$' --output-on-failure --no-tests=error
+```
+
+Use `-L '^soak$'`. A bare `-L soak` also matches the `nullrhi-soak` and
+`server-soak` labels.
+
+**Results.**
+
+| Run | Result |
+|---|---|
+| ASan/UBSan/LSan, `nullrhi-headless`, before the fix | **7 of 12 failed.** Every test that runs the real host (lifecycle, all three shutdown scenarios, tick benchmark, soak smoke, FPS arena) exited 1 with a LeakSanitizer report of about 800 bytes in 10 allocations: the `ModuleManager`, its `LoadedModule` and lifecycle-record vectors, and the FPS module object. Headless POSIX teardown deliberately keeps the manager and module images alive until process exit (`ShutdownEngineAfterPreflight`), but it did so with a bare `release()`, which left them unreachable. The soak smoke also failed its RSS ceiling (719 MB/h). |
+| Fix | `EngineRuntime::residentModuleManagers` now holds the deliberately process-lifetime manager (one entry per teardown), so it stays reachable. Behavior is unchanged: nothing is unloaded or freed. The two soak tests bound ASan's freed-memory quarantine to 1 MiB (`ENVIRONMENT_MODIFICATION ASAN_OPTIONS=string_append::quarantine_size_mb=1`). A 120 s ASan FPS soak with that bound fitted a slope of -687 MB/h, so the 719 MB/h was the 256 MiB default quarantine filling up, not engine growth. Leak detection stays on, with one caveat: LSan treats all heap reachable from the resident `ModuleManager` and the FPS module (module-owned state not freed at shutdown) as live, so it cannot report module-side leaks on Linux headless. That gap is tracked with the modules-kept-mapped-at-exit teardown item. The seeded-leak rows below used an unrooted shim and do not cover it. |
+| ASan/UBSan/LSan, `nullrhi-headless`, after the fix | **12/12 passed**, no sanitizer report. |
+| TSan, `nullrhi-headless` | **12/12 passed**, no ThreadSanitizer warning. The engine links `libtsan.so.2`. |
+| `Soak_FPSHeadlessNullRHI` (Release, 600 s, 36000 ticks) | **Passed twice.** On the final code (after the fix above): 608 s, leak slope 0 B/h over 446 VmRSS samples (the provisional ceiling is 64 MiB/h), max heartbeat gap 0.20 s, peak RSS 32468 KiB, `SPARK_HEADLESS_NULLRHI_RESOURCES live=0` (a bridge/device teardown guard; see the scope note above). The earlier run, before the fix: slope -30.9 MB/h, peak RSS 32324 KiB, live=0. |
+| Release `nullrhi-headless` after the fix | **12/12 passed.** The related Release suites (`-R "Lifecycle|RHIBridge|NullRHI|EngineRuntime|Shutdown"`, 16 CTest entries) also passed. |
+| Seeded leak, LSan | An `LD_PRELOAD` shim (a thread that `malloc`s 64 KiB every 16 ms and drops the pointer), loaded into the ASan host running FPS for 120 frames, exited 1: LeakSanitizer reported `35913728 byte(s) leaked in 548 allocation(s)` from the shim's `leak_loop`. The same command without the shim exited 0 with no report. |
+| Seeded leak, soak threshold | The same shim under `run_nullrhi_soak.py --duration 90` failed with `leak: RSS slope 14549534873 B/h` (Release) and `17749407897 B/h` (ASan, quarantine bounded; that run also exited 1 from LSan). Both are far above the 64 MiB/h ceiling. |
+| Seeded NullRHI resource leak | `NullRHI_Lifetime_ShutdownReportsResourcesHeldPastTeardown` and `NullRHI_Lifetime_BridgeShutdownReportsHeadlessLeaks` hold resources past device and bridge shutdown and expect counts of 2 and 1. `HarnessTests.test_resources_held_past_device_shutdown_fail` proves that the soak harness fails on `live=3`. |
+
+**Still missing (unchanged owners).** A NullRHI save/reload test; any Windows
+package, clean-machine or no-display-host run; the hosted
+`headless-windows-package` and `headless-windows-soak` jobs; soaks longer than
+10 minutes (the one-hour `headless-soak-1h` scene is required for a PERF-100
+`nullrhi.soak.*` result); and budgets. The Windows host does not yet print
+`SPARK_HEADLESS_NULLRHI_RESOURCES`. The Linux headless host still keeps
+modules mapped at exit instead of unloading them. The late-shutdown crash that
+motivates this was not re-investigated.
+
 ## 7. Known broken / not fixed here (with owner)
 
 1. **VisualScript assets are staged in the wrong place on Linux** (build lane).
@@ -305,9 +393,9 @@ Clean-machine package, install, upgrade, rollback and uninstall; CPack and
 installer output on Linux; the installed-tree RUNPATH/NEEDED closure on any
 host but the one in §6.1; desktop integration; any real GPU or driver (Vulkan,
 OpenGL hardware); Wayland; audio output; physical input devices; multiplayer
-across hosts; Clang, GCC 14, Debug and sanitizer configurations, and Shipping
-beyond the §6.1 install-closure run (the test suite ran on GCC 13 Release
-only); distributions other than Ubuntu 24.04; ARM64; running outside gVisor.
+across hosts; Clang, GCC 14, Debug and sanitizer configurations (except the
+`nullrhi-headless` label in §6.2), and Shipping beyond the §6.1
+install-closure run (the full test suite ran on GCC 13 Release only); distributions other than Ubuntu 24.04; ARM64; running outside gVisor.
 
 ## 9. Bounded support statement
 
@@ -326,4 +414,6 @@ GPUs, audio and input are **unverified**. Linux therefore remains
 Produced by the PLT-210 cloud lane on 2026-09-24 from `claude/cloud-plt-210`
 (base `b5debbd43`, rebased onto `8738dff59`) on the host described in §1. The
 counts come from CTest JUnit and `SparkTests-junit.xml` on that host; this is
-not CI evidence and not same-SHA CI evidence. Re-run §2 to refresh.
+not CI evidence and not same-SHA CI evidence. Re-run §2 to refresh. §6.2 was
+added on 2026-09-25 by the HEAD-220 lane from local ASan, TSan and Release
+runs on the same host; re-run its commands to refresh it.

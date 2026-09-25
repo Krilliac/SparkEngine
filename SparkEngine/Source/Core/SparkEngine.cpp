@@ -371,8 +371,9 @@ bool ShutdownEngineAfterPreflight()
         {
             // Linux/headless teardown currently hits a late-shutdown crash path
             // when module-owned callbacks/channels are destroyed after dlclose().
-            // Keep modules mapped until process exit in this mode.
-            rt.moduleManager.release();
+            // Keep modules mapped until process exit in this mode, and keep the
+            // manager reachable (never deleted) through residentModuleManagers.
+            rt.residentModuleManagers.push_back(rt.moduleManager.release());
         }
         else
         {
@@ -412,14 +413,10 @@ bool ShutdownEngineAfterPreflight()
     rt.audioEngine.reset();
     ShutdownPhysics(); // no-op when the module branch above already ran it
 
-    // The Windows headless host owns a real NullRHI bridge without exposing a
-    // renderer through EngineContext. Keep it alive until game-module teardown
-    // has completed, then release it before the remaining core services.
-    if (rt.headlessRhiBridge)
-    {
-        rt.headlessRhiBridge->Shutdown();
-        rt.headlessRhiBridge.reset();
-    }
+    // The Windows and Linux headless hosts own a real NullRHI bridge without
+    // exposing a renderer through EngineContext. Keep it alive until game-module
+    // teardown has completed, then release it before the remaining core services.
+    rt.ShutdownHeadlessRhi();
 
     // Shut down the job system after all subsystems that submit jobs
     Spark::JobSystem::Get().Shutdown();
