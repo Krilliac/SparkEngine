@@ -7,15 +7,16 @@
 
 #include "Dungeon/ARPGDungeonSystem.h"
 #include "Enums/ARPGEnums.h"
+#include "Loot/ARPGLootSystem.h"
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace ARPG
 {
     class ARPGHeroSystem;
     class ARPGCombatSystem;
-    class ARPGLootSystem;
     class ARPGDungeonSystem;
     class ARPGSkillSystem;
     class ARPGMonsterSystem;
@@ -35,6 +36,7 @@ namespace ARPG
         ARPGMonsterRank lastDropRank = ARPGMonsterRank::Normal; ///< Rank the last loot drop was rolled for
         ARPGItemRarity lastDropRarity = ARPGItemRarity::Normal; ///< Rarity of the last loot drop
         uint32_t lastDropItemId = 0;                            ///< 0 until the first drop
+        std::vector<ItemData> collectedLoot; ///< Drops the hero carries, oldest first; kept across Restart()
     };
 
     /**
@@ -42,12 +44,15 @@ namespace ARPG
      *
      * Each regular floor is cleared by KillsPerFloor kills. The run ends on RunGoalFloor (the first boss
      * floor): defeating its boss marks the run complete and no further targets spawn until Restart().
+     * Every drop is carried until the bag holds MaxCarriedLoot items; later drops are left behind. The hero's
+     * level, learned skills, cooldowns and carried loot survive Restart() and are part of the save snapshot.
      */
     class ARPGDemoEncounter
     {
       public:
         static constexpr uint32_t KillsPerFloor = 3;
         static constexpr int RunGoalFloor = ARPGDungeonSystem::BOSS_FLOOR_INTERVAL;
+        static constexpr size_t MaxCarriedLoot = 64;
 
         bool Initialize(ARPGHeroSystem* heroes, ARPGCombatSystem* combat, ARPGLootSystem* loot,
                         ARPGDungeonSystem* dungeon, ARPGSkillSystem* skills, ARPGMonsterSystem* monsters);

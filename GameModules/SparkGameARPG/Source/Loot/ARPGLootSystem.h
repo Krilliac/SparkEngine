@@ -66,10 +66,31 @@ namespace ARPG
         size_t GetGeneratedItemCount() const { return m_generatedCount; }
         std::string GetLootInfoString() const;
 
+        // === Persistence ===
+
+        /// Highest item level a restored item may carry (matches the monster restore bound).
+        static constexpr int MAX_RESTORABLE_ITEM_LEVEL = 1000;
+
+        /**
+         * @brief Check that @p item is exactly what GenerateItem can produce.
+         *
+         * The name and base stats must match the slot/rarity/level derivation, the affix count must fit the
+         * rarity, and every affix must be a pool entry whose rolled value lies inside its level-scaled range.
+         * @return true when the item may be restored from a save.
+         */
+        [[nodiscard]] bool IsRestorableItem(const ItemData& item) const;
+
+        /**
+         * @brief Keep future item IDs above @p itemId so a restored item never shares an ID with a new drop.
+         * @param itemId ID of an item restored from a save.
+         */
+        void ReserveItemId(uint32_t itemId);
+
       private:
         void BuildAffixPool();
         ARPGItemRarity RollRarity(ARPGMonsterRank rank) const;
         std::string GenerateItemName(ARPGItemSlot slot, ARPGItemRarity rarity) const;
+        ItemData BuildBaseItem(uint32_t itemId, ARPGItemSlot slot, ARPGItemRarity rarity, int level) const;
         void RollAffixes(ItemData& item, int count);
 
         Spark::IEngineContext* m_context{nullptr};

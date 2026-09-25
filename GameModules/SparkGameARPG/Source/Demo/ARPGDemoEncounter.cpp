@@ -17,15 +17,21 @@
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#include <utility>
+#include <vector>
 
 namespace ARPG
 {
     namespace
     {
-        /// Snapshot format version. v3 persists the full target instance (rank, name, affixes, stats) and the
-        /// run-complete flag; earlier versions re-rolled bosses on load and are rejected rather than migrated.
-        constexpr int SnapshotVersion = 3;
+        /// Snapshot format version. v3 added the full target instance (rank, name, affixes, stats) and the
+        /// run-complete flag; v4 adds every learned skill, remaining cooldowns and the carried loot. Earlier
+        /// versions lack that state and are rejected rather than migrated.
+        constexpr int SnapshotVersion = 4;
         constexpr size_t MaxPersistedMonsterNameLength = 64;
+        constexpr size_t MaxPersistedLootTextLength = 64;
+        /// Parse-time allocation bound only; ARPGLootSystem::IsRestorableItem enforces the per-rarity count.
+        constexpr size_t MaxPersistedItemAffixes = 16;
 
         struct ARPGDemoSnapshot
         {
@@ -50,7 +56,95 @@ namespace ARPG
             bool runComplete = false;
             bool hasTarget = false;
             MonsterData target;
+            std::vector<uint32_t> learnedSkills;
+            std::vector<SkillCooldownState> cooldowns;
+            std::vector<ItemData> loot;
         };
+
+        /// Reads a non-negative element count no larger than @p maxCount. Counts are parsed signed so a
+        /// negative value is rejected instead of wrapping through unsigned extraction.
+        bool ParseCount(std::istringstream& snapshot, size_t maxCount, size_t& count)
+        {
+            long long parsed = 0;
+            if (!(snapshot >> parsed) || parsed < 0 || static_cast<unsigned long long>(parsed) > maxCount)
+                return false;
+            count = static_cast<size_t>(parsed);
+            return true;
+        }
+
+        bool ParseSkillState(std::istringstream& snapshot, const ARPGSkillSystem& skills, ARPGDemoSnapshot& result)
+        {
+            size_t learnedCount = 0;
+            if (!ParseCount(snapshot, skills.GetTotalSkillCount(), learnedCount))
+                return false;
+            result.learnedSkills.resize(learnedCount);
+            for (uint32_t& skillId : result.learnedSkills)
+            {
+                if (!(snapshot >> skillId))
+                    return false;
+            }
+
+            size_t cooldownCount = 0;
+            if (!ParseCount(snapshot, learnedCount, cooldownCount))
+                return false;
+            result.cooldowns.resize(cooldownCount);
+            for (SkillCooldownState& cooldown : result.cooldowns)
+            {
+                if (!(snapshot >> cooldown.skillId >> cooldown.remainingCooldown))
+                    return false;
+            }
+
+            // The primary skill is always one of the learned skills.
+            return std::ranges::find(result.learnedSkills, result.primarySkillId) != result.learnedSkills.end() &&
+                   skills.CanRestoreHeroSkills(result.heroClass, result.level, result.learnedSkills, result.cooldowns);
+        }
+
+        bool ParseItem(std::istringstream& snapshot, const ARPGLootSystem& loot, ItemData& item)
+        {
+            int slot = 0;
+            int rarity = 0;
+            size_t affixCount = 0;
+            if (!(snapshot >> item.itemId >> std::quoted(item.name) >> slot >> rarity >> item.itemLevel >>
+                  item.baseDamage >> item.baseArmor) ||
+                item.name.size() > MaxPersistedLootTextLength || slot < 0 ||
+                slot >= static_cast<int>(ARPGItemSlot::Count) || rarity < 0 ||
+                rarity >= static_cast<int>(ARPGItemRarity::Count) ||
+                !ParseCount(snapshot, MaxPersistedItemAffixes, affixCount))
+                return false;
+
+            item.slot = static_cast<ARPGItemSlot>(slot);
+            item.rarity = static_cast<ARPGItemRarity>(rarity);
+            item.affixes.resize(affixCount);
+            for (AffixData& affix : item.affixes)
+            {
+                if (!(snapshot >> std::quoted(affix.name) >> std::quoted(affix.statType) >> affix.minValue >>
+                      affix.maxValue >> affix.rolledValue) ||
+                    affix.name.size() > MaxPersistedLootTextLength ||
+                    affix.statType.size() > MaxPersistedLootTextLength)
+                    return false;
+            }
+            return loot.IsRestorableItem(item);
+        }
+
+        bool ParseLoot(std::istringstream& snapshot, const ARPGLootSystem& loot, ARPGDemoSnapshot& result)
+        {
+            size_t itemCount = 0;
+            if (!ParseCount(snapshot, ARPGDemoEncounter::MaxCarriedLoot, itemCount))
+                return false;
+            result.loot.resize(itemCount);
+            for (size_t i = 0; i < itemCount; ++i)
+            {
+                if (!ParseItem(snapshot, loot, result.loot[i]))
+                    return false;
+                // Item IDs identify carried loot, so two carried items may never share one.
+                for (size_t j = 0; j < i; ++j)
+                {
+                    if (result.loot[j].itemId == result.loot[i].itemId)
+                        return false;
+                }
+            }
+            return true;
+        }
 
         bool IsBossFloor(int floor)
         {
@@ -85,8 +179,11 @@ namespace ARPG
         }
 
         bool ParseARPGDemoSnapshot(const std::string& serializedState, const ARPGSkillSystem* skills,
-                                   ARPGDemoSnapshot& result)
+                                   const ARPGLootSystem* loot, ARPGDemoSnapshot& result)
         {
+            if (!skills || !loot)
+                return false;
+
             std::istringstream snapshot(serializedState);
             std::string magic;
             int version = 0;
@@ -137,13 +234,12 @@ namespace ARPG
                     return false;
             }
 
-            snapshot >> std::ws;
-            if (!snapshot.eof())
+            result.heroClass = static_cast<ARPGHeroClass>(heroClass);
+            if (!ParseSkillState(snapshot, *skills, result) || !ParseLoot(snapshot, *loot, result))
                 return false;
 
-            result.heroClass = static_cast<ARPGHeroClass>(heroClass);
-            const SkillData* skill = skills ? skills->GetSkill(result.primarySkillId) : nullptr;
-            return skill && skill->heroClass == result.heroClass && skill->requiredLevel <= result.level;
+            snapshot >> std::ws;
+            return snapshot.eof();
         }
     } // namespace
 
@@ -302,6 +398,8 @@ namespace ARPG
             m_state.lastDropRank = rank;
             m_state.lastDropRarity = drop.rarity;
             m_state.lastDropItemId = drop.itemId;
+            if (m_state.collectedLoot.size() < MaxCarriedLoot)
+                m_state.collectedLoot.push_back(drop);
         }
 
         ++m_state.killsOnFloor;
@@ -354,6 +452,7 @@ namespace ARPG
         if (hero)
             status << "Hero: " << hero->name << " Lv" << hero->level << " HP " << hero->health << "/" << hero->maxHealth
                    << " MP " << hero->mana << "/" << hero->maxMana << "\n";
+        status << "Loot carried: " << m_state.collectedLoot.size() << "/" << MaxCarriedLoot << "\n";
         if (m_state.runComplete)
             status << "Dungeon cleared: boss defeated on floor " << RunGoalFloor << " (press R to run again)\n";
         else if (target)
@@ -367,7 +466,7 @@ namespace ARPG
     {
         const HeroData* hero = GetHero();
         const MonsterData* target = GetTarget();
-        if (!hero || !m_dungeon || (!target && !m_state.runComplete))
+        if (!hero || !m_dungeon || !m_skills || (!target && !m_state.runComplete))
             return {};
 
         std::ostringstream snapshot;
@@ -388,23 +487,44 @@ namespace ARPG
             for (const ChampionAffix affix : target->affixes)
                 snapshot << ' ' << static_cast<int>(affix);
         }
+
+        const std::vector<uint32_t> learnedSkills = m_skills->GetLearnedSkills(hero->heroId);
+        snapshot << ' ' << learnedSkills.size();
+        for (const uint32_t skillId : learnedSkills)
+            snapshot << ' ' << skillId;
+        const std::vector<SkillCooldownState> cooldowns = m_skills->GetCooldowns(hero->heroId);
+        snapshot << ' ' << cooldowns.size();
+        for (const SkillCooldownState& cooldown : cooldowns)
+            snapshot << ' ' << cooldown.skillId << ' ' << cooldown.remainingCooldown;
+
+        snapshot << ' ' << m_state.collectedLoot.size();
+        for (const ItemData& item : m_state.collectedLoot)
+        {
+            snapshot << ' ' << item.itemId << ' ' << std::quoted(item.name) << ' ' << static_cast<int>(item.slot) << ' '
+                     << static_cast<int>(item.rarity) << ' ' << item.itemLevel << ' ' << item.baseDamage << ' '
+                     << item.baseArmor << ' ' << item.affixes.size();
+            for (const AffixData& affix : item.affixes)
+                snapshot << ' ' << std::quoted(affix.name) << ' ' << std::quoted(affix.statType) << ' '
+                         << affix.minValue << ' ' << affix.maxValue << ' ' << affix.rolledValue;
+        }
         return snapshot.str();
     }
 
     bool ARPGDemoEncounter::CanRestoreState(const std::string& serializedState) const
     {
         ARPGDemoSnapshot snapshot;
-        return m_heroes && m_dungeon && m_monsters && ParseARPGDemoSnapshot(serializedState, m_skills, snapshot);
+        return m_heroes && m_dungeon && m_monsters &&
+               ParseARPGDemoSnapshot(serializedState, m_skills, m_loot, snapshot);
     }
 
     bool ARPGDemoEncounter::RestoreState(const std::string& serializedState)
     {
-        if (!m_heroes || !m_dungeon || !m_monsters || !m_skills)
+        if (!m_heroes || !m_dungeon || !m_monsters || !m_skills || !m_loot)
             return false;
 
         // Validate everything before touching live state so a rejected snapshot leaves the run untouched.
         ARPGDemoSnapshot snapshot;
-        if (!ParseARPGDemoSnapshot(serializedState, m_skills, snapshot))
+        if (!ParseARPGDemoSnapshot(serializedState, m_skills, m_loot, snapshot))
             return false;
         HeroData* hero = m_heroes->GetHero(m_state.heroId);
         if (!hero)
@@ -437,13 +557,17 @@ namespace ARPG
         hero->maxMana = snapshot.maxMana;
         hero->moveSpeed = snapshot.moveSpeed;
         hero->freeAttributePoints = snapshot.freeAttributePoints;
-        const auto learnedSkills = m_skills->GetLearnedSkills(hero->heroId);
-        if (std::find(learnedSkills.begin(), learnedSkills.end(), snapshot.primarySkillId) == learnedSkills.end() &&
-            !m_skills->LearnSkill(hero->heroId, snapshot.primarySkillId))
+        // The hero now carries the snapshot's class and level, which the skill state was validated against.
+        if (!m_skills->RestoreHeroSkills(hero->heroId, snapshot.learnedSkills, snapshot.cooldowns))
         {
             Restart();
             return false;
         }
+
+        // Restored items keep their IDs; new drops must be numbered after every carried item.
+        m_state.collectedLoot = std::move(snapshot.loot);
+        for (const ItemData& item : m_state.collectedLoot)
+            m_loot->ReserveItemId(item.itemId);
 
         if (snapshot.runComplete)
             return true;

@@ -5,10 +5,12 @@
  * @date 2026
  *
  * Integrates the ARPG module with engine infrastructure: EventBus (damage/kill
- * routing), SaveSystem (hero/dungeon persistence), DestructionSystem (breakable
- * dungeon props), AI/BehaviorTree (monster intelligence), AnimationSystem
- * (hero action state machine), CoroutineScheduler (one-shot action recovery),
- * AbilitySystem (spells, auras, procs), and WeatherSystem (dungeon atmosphere).
+ * routing), DestructionSystem (breakable dungeon props), AI/BehaviorTree (monster
+ * intelligence), AnimationSystem (hero action state machine), CoroutineScheduler
+ * (one-shot action recovery), AbilitySystem (spells, auras, procs), and
+ * WeatherSystem (dungeon atmosphere). Save/load goes through the module's
+ * arpg_save/arpg_load commands, which store the demo encounter snapshot in
+ * SaveSystem custom state.
  */
 
 #pragma once
@@ -107,7 +109,6 @@ namespace ARPG
       private:
         // --- Registration helpers (called once during Initialize) ---
         void SetupEventSubscriptions();
-        void SetupSaveSystem();
         void SetupDestruction();
         void SetupAI();
         void SetupAnimation();

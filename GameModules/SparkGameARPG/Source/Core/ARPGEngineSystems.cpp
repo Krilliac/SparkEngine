@@ -11,7 +11,6 @@
 #include "Dungeon/ARPGDungeonSystem.h"
 
 #include "Engine/Events/EventSystem.h"
-#include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/AI/AISystem.h"
 #include "Engine/AI/BehaviorTree.h"
@@ -88,7 +87,6 @@ namespace ARPG
         m_dungeon = dungeon;
 
         SetupEventSubscriptions();
-        SetupSaveSystem();
         SetupDestruction();
         SetupAI();
         SetupAnimation();
@@ -216,67 +214,6 @@ namespace ARPG
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG EventBus: 2 subscriptions registered");
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] EventBus: 2 subscriptions registered");
-    }
-
-    // =========================================================================
-    // SaveSystem Integration
-    // =========================================================================
-
-    void ARPGEngineSystems::SetupSaveSystem()
-    {
-        auto* saveSystem = m_context->GetSaveSystem();
-        if (!saveSystem)
-            return;
-
-        auto& registry = Spark::ComponentSerializerRegistry::GetInstance();
-
-        // Register ARPG hero data serializer
-        registry.Register(
-            "ARPGHeroData",
-            [](const void* comp) -> Spark::SerializedComponent
-            {
-                const auto* hero = static_cast<const HeroData*>(comp);
-                Spark::SerializedComponent sc;
-                sc.typeName = "ARPGHeroData";
-                sc.properties["heroId"] = std::to_string(hero->heroId);
-                sc.properties["name"] = hero->name;
-                sc.properties["class"] = std::to_string(static_cast<int>(hero->heroClass));
-                sc.properties["level"] = std::to_string(hero->level);
-                sc.properties["experience"] = std::to_string(hero->experience);
-                sc.properties["strength"] = std::to_string(hero->strength);
-                sc.properties["dexterity"] = std::to_string(hero->dexterity);
-                sc.properties["intelligence"] = std::to_string(hero->intelligence);
-                sc.properties["vitality"] = std::to_string(hero->vitality);
-                sc.properties["health"] = std::to_string(hero->health);
-                sc.properties["mana"] = std::to_string(hero->mana);
-                return sc;
-            },
-            []([[maybe_unused]] World& world, [[maybe_unused]] EntityID entity,
-               [[maybe_unused]] const Spark::SerializedComponent& data)
-            {
-                // Deserialization handled by ARPGHeroSystem when loading a save
-            });
-
-        // Register dungeon progress serializer
-        registry.Register(
-            "ARPGDungeonProgress",
-            [this](const void*) -> Spark::SerializedComponent
-            {
-                Spark::SerializedComponent sc;
-                sc.typeName = "ARPGDungeonProgress";
-                if (m_dungeon)
-                {
-                    sc.properties["floor"] = std::to_string(m_dungeon->GetCurrentFloorNumber());
-                }
-                return sc;
-            },
-            []([[maybe_unused]] World& world, [[maybe_unused]] EntityID entity,
-               [[maybe_unused]] const Spark::SerializedComponent& data)
-            {
-                // Deserialization handled by ARPGDungeonSystem when loading a save
-            });
-
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] SaveSystem: 2 serializers registered");
     }
 
     // =========================================================================
