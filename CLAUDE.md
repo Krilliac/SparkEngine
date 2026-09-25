@@ -14,6 +14,8 @@ SparkEngine is a C++23 open-source 3D game engine (with C++26 forward-compatibil
 - **Headless/Software rendering**: NullRHIDevice fallback (no GPU) or full CPU rendering via OpenGL + Mesa llvmpipe
 - **Primary platform**: Windows 10+ (MSVC); Linux/macOS are experimental (macOS has CI job + CMake presets)
 
+Engine systems architecture is the priority, and only production-ready code lands. MSVC is the primary CI target, and the cross-platform builds must stay green.
+
 ## Session start (run at the beginning of every session)
 
 **Step 1 — Git sync** (see [Git Sync Workflow](#git-sync-workflow) below for the commands):
@@ -72,6 +74,8 @@ These are **guidelines for when to pause and think**, not absolute rules. A clea
 
 ## Coding Standards
 
+**Ground truth first.** Read the build config before assuming the C++ standard, compiler flags, platforms or graphics API: the root `CMakeLists.txt`, `CMakePresets.json`, `cmake/` and `.github/workflows/build.yml` (the build is CMake only, with no premake). Match the existing conventions, `.clang-format` and `.clang-tidy`, and do not introduce a new style.
+
 - **C++23**: `constexpr`, `enum class`, structured bindings, `std::format`, `std::expected`, `std::print`, concepts, deducing `this`, `if consteval`, `std::unreachable`
 - **Ownership**: `std::unique_ptr` owning, raw pointers non-owning. No naked `new`/`delete`
 - **RAII**: D3D11 via `ComPtr`, all resources released in destructors
@@ -82,6 +86,29 @@ These are **guidelines for when to pause and think**, not absolute rules. A clea
 - **Warnings**: root MSVC flags are `/W3 /MP /bigobj` (CMakeLists.txt; no `/W4`, no `/WX`), GCC/Clang use `-Wall -Wextra`; CI does not fail on warnings. Keep new code warning-free at those levels -- a zero-warning build is a goal, not an enforced gate
 - **Service locator**: Use `EngineContext::Get()->GetX()` for subsystem access. Engine-lifetime ownership lives in the `EngineRuntime` struct (Core-internal; `Core/EngineRuntime.h`) — do not introduce new file-scope `g_*` subsystem globals
 - **Cross-platform types**: `Core/Platform.h` (DirectXMath stubs on Linux)
+
+### Language policy
+
+Exceptions and RTTI are both ON. No flag disables them; CMake's MSVC defaults `/EHsc /GR` apply.
+
+- **Exceptions** are for unrecoverable, initialization and tooling failures. Per-frame and hot-path code stays non-throwing and `noexcept`, and expected failures there return result types (`std::expected`, `bool` + out-param) instead of throwing.
+- **Move constructors and move assignment are `noexcept`.** Containers depend on it: `std::vector` copies instead of moving on reallocation otherwise. `performance-noexcept-move-constructor` flags misses (advisory).
+- **No `dynamic_cast` or `typeid` in per-frame paths.** Both are fine in editor, tools and serialization code.
+
+### Engine systems
+
+- **Every system states its contract** in its header docs:
+  - thread affinity (game thread, render thread, or async-safe);
+  - ownership and lifetime;
+  - allocation strategy;
+  - scalability tier.
+- **Hot paths:**
+  - no hidden allocations;
+  - data-oriented layout;
+  - justify every virtual dispatch.
+- **New subsystems:**
+  - go behind an interface with a test seam;
+  - land as gated milestones with checks (a readiness work item with acceptance criteria and tests), not as one unverified drop.
 
 ## Architecture (key directories)
 
