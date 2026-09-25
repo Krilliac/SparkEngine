@@ -34,6 +34,7 @@ struct HealthComponent;
  * - LocalizationSystem string table loading and formatted lookups
  * - TimeOfDaySystem day/night cycle configuration
  * - ECS entity creation with NameComponent, Transform, HealthComponent
+ * - MeshRenderer placement of the Blender-authored Engine Showcase kit (Assets/Models/Showcase/Kit)
  */
 class GameplayShowcase
 {
@@ -93,6 +94,7 @@ class GameplayShowcase
     void SetupTimeOfDay();
     void RegisterCustomSerializer();
     void StartShowcaseCoroutine();
+    void SpawnExhibit();
     void SpawnCoroutineTarget();
     void DamageCoroutineTarget();
     void HealCoroutineTarget();
@@ -106,6 +108,9 @@ class GameplayShowcase
 
     // Tracked showcase entities for cleanup
     std::vector<uint32_t> m_spawnedEntities;
+
+    // Exhibit prop entities (MeshRenderer only), kept apart so they do not shift the SpawnEntity grid
+    std::vector<uint32_t> m_exhibitEntities;
 
     // True only when this module installed the TagComponent serializer. The
     // engine may already own a built-in registration, which must survive this

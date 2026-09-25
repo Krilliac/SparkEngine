@@ -3090,6 +3090,28 @@ if(Python3_Interpreter_FOUND)
         LABELS "asset;cpu;unit;python"
         TIMEOUT 30)
 
+    # Per-module Blender kits (tools/blender/spark_kit.py): validator unit tests, plus one
+    # source/export contract per committed Art/Blender/<Module>/provenance.json record.
+    add_test(
+        NAME BlenderKitValidatorRegression
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_blender_kit.py)
+    set_tests_properties(BlenderKitValidatorRegression PROPERTIES
+        LABELS "asset;cpu;unit;python"
+        TIMEOUT 30)
+    file(GLOB _spark_blender_kit_records "${CMAKE_SOURCE_DIR}/Art/Blender/SparkGame*/provenance.json")
+    foreach(_spark_blender_kit_record IN LISTS _spark_blender_kit_records)
+        get_filename_component(_spark_blender_kit_dir "${_spark_blender_kit_record}" DIRECTORY)
+        get_filename_component(_spark_blender_kit_module "${_spark_blender_kit_dir}" NAME)
+        add_test(
+            NAME BlenderKitSourceContract_${_spark_blender_kit_module}
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/blender/validate_kit.py
+                "${_spark_blender_kit_record}" --root ${CMAKE_SOURCE_DIR})
+        set_tests_properties(BlenderKitSourceContract_${_spark_blender_kit_module} PROPERTIES
+            LABELS "asset;cpu;static;python"
+            TIMEOUT 30)
+    endforeach()
+    unset(_spark_blender_kit_records)
+
     add_test(
         NAME SparkRunSparkTestsHarness
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.github/scripts/test-run-spark-tests.py)

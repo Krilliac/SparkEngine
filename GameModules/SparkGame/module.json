@@ -4,8 +4,13 @@
   "cmakeTarget": "SparkGame",
   "sourceDirectory": "GameModules/SparkGame/Source",
   "assets": {
-    "state": "none",
-    "reason": "The base module ships no asset root; its sources reference no asset files."
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/Showcase",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
   },
   "tests": {
     "files": [

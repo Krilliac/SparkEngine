@@ -50,6 +50,7 @@ bool GameplayShowcase::Initialize(Spark::IEngineContext* context)
     SpawnEntity("Player");
     SpawnEntity("Enemy_Alpha");
     SpawnEntity("Enemy_Bravo");
+    SpawnExhibit();
 
     // Kick off the coroutine demo (spawn → wait → damage → wait → heal)
     StartShowcaseCoroutine();
@@ -85,20 +86,24 @@ void GameplayShowcase::Shutdown()
         m_registeredTagSerializer = false;
     }
 
-    // Destroy spawned entities
+    // Destroy spawned entities and exhibit props
     auto* world = m_context ? m_context->GetWorld() : nullptr;
     if (world)
     {
-        for (uint32_t entityId : m_spawnedEntities)
+        for (const auto* tracked : {&m_spawnedEntities, &m_exhibitEntities})
         {
-            auto entity = static_cast<EntityID>(entityId);
-            if (world->GetRegistry().valid(entity))
+            for (uint32_t entityId : *tracked)
             {
-                world->DestroyEntity(entity);
+                auto entity = static_cast<EntityID>(entityId);
+                if (world->GetRegistry().valid(entity))
+                {
+                    world->DestroyEntity(entity);
+                }
             }
         }
     }
     m_spawnedEntities.clear();
+    m_exhibitEntities.clear();
 
     // Release RAII subscription handles (auto-unsubscribes from EventBus)
     m_subscriptions.clear();
@@ -461,6 +466,7 @@ std::string GameplayShowcase::DoQuickLoad()
     {
         // Re-track entities after load (previous entity IDs are invalidated)
         m_spawnedEntities.clear();
+        m_exhibitEntities.clear();
         Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] QuickLoad succeeded");
         return "QuickLoad successful";
     }
@@ -493,6 +499,44 @@ std::string GameplayShowcase::SpawnEntity(const std::string& name)
 
     return "Spawned '" + entityName + "' (id=" + std::to_string(static_cast<uint32_t>(entity)) +
            ", total=" + std::to_string(m_spawnedEntities.size()) + ")";
+}
+
+// =============================================================================
+// Exhibit — Blender-authored Engine Showcase kit
+// =============================================================================
+
+void GameplayShowcase::SpawnExhibit()
+{
+    auto* world = m_context->GetWorld();
+    if (!world)
+        return;
+
+    // Props from tools/blender/author_showcase_kit.py (source Art/Blender/SparkGame/showcase_kit.blend):
+    // meters, pivot at the ground contact centre, front facing +Z. They stand in a row 4 m behind the
+    // SpawnEntity grid (x = 0, 3, 6, ...) and face it. The OBJ/MTL base colours render without a material.
+    struct ExhibitProp
+    {
+        const char* name;
+        const char* meshPath;
+        float x;
+    };
+    static constexpr ExhibitProp exhibit[] = {
+        {"Exhibit_DisplayPedestal", "Assets/Models/Showcase/Kit/display_pedestal.obj", -1.5f},
+        {"Exhibit_InfoSignpost", "Assets/Models/Showcase/Kit/info_signpost.obj", 1.5f},
+        {"Exhibit_SupplyCrate", "Assets/Models/Showcase/Kit/supply_crate.obj", 4.5f},
+        {"Exhibit_LightPylon", "Assets/Models/Showcase/Kit/light_pylon.obj", 7.5f},
+    };
+    for (const ExhibitProp& prop : exhibit)
+    {
+        EntityID entity = world->CreateEntity(prop.name);
+        world->AddComponent<Transform>(entity, Transform{{prop.x, 0.0f, -4.0f}, {0, 0, 0}, {1, 1, 1}});
+        MeshRenderer& renderer = world->AddComponent<MeshRenderer>(entity);
+        renderer.meshPath = prop.meshPath;
+        m_exhibitEntities.push_back(static_cast<uint32_t>(entity));
+    }
+
+    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Placed " + std::to_string(m_exhibitEntities.size()) +
+                                                " exhibit props from Assets/Models/Showcase/Kit");
 }
 
 // =============================================================================

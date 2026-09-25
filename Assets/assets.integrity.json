@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 900,
+  "fileCount": 924,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -3748,6 +3748,174 @@
       "size": 554,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original starter/module-kit model from Tools/model_pipeline/generate_starter_models.py; hash-bound by Assets/Models/Generated/starter_assets_manifest.json: starter model core_primitives/Ramp [starter-model-pipeline]"
+    },
+    {
+      "path": "Models/Showcase/Kit/display_pedestal.mtl",
+      "sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+      "size": 1006,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json: Blender-authored display_pedestal [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/display_pedestal.obj",
+      "sha256": "6ba3a6374df480ffd8a050a6e3ee305feb8462896527472c5f251ae5e3c3a6a3",
+      "size": 43667,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json: Blender-authored display_pedestal [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/display_pedestal_collision.mtl",
+      "sha256": "c43cf022204e5d04233d4463b8c3ea11193b8f822aa682fb2603fc6cefe62ad9",
+      "size": 241,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/display_pedestal_collision.obj",
+      "sha256": "2020c565e40f2ef979777943d5e1244a0eb677a7c7b06ddbd6361b3b1231c150",
+      "size": 1248,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/display_pedestal_lod1.mtl",
+      "sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+      "size": 1006,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/display_pedestal_lod1.obj",
+      "sha256": "8953cd9ae997e7a65caf494cafc58c4074c8f58c1264515688e498e9c4960896",
+      "size": 20401,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/info_signpost.mtl",
+      "sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+      "size": 1006,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json: Blender-authored info_signpost [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/info_signpost.obj",
+      "sha256": "2ba5226d954dd1d748b815a965eb2e519804e60f01d7553c1baaba862fefe309",
+      "size": 46956,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json: Blender-authored info_signpost [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/info_signpost_collision.mtl",
+      "sha256": "c43cf022204e5d04233d4463b8c3ea11193b8f822aa682fb2603fc6cefe62ad9",
+      "size": 241,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/info_signpost_collision.obj",
+      "sha256": "2ae46679fcfb6b3904b06c0dab813174e40c23bbe31876e144d5369bfc53125b",
+      "size": 5042,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/info_signpost_lod1.mtl",
+      "sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+      "size": 1006,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/info_signpost_lod1.obj",
+      "sha256": "948577d47ce6f643afcd878ccb0f40d52e712ea4dbd435834cf29564c1bdb1cc",
+      "size": 20713,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/light_pylon.mtl",
+      "sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+      "size": 1006,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json: Blender-authored light_pylon [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/light_pylon.obj",
+      "sha256": "13a599e13e7cfcecd07bb46cea88f897186aeb63faefe37a26a60124868cd94d",
+      "size": 45934,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json: Blender-authored light_pylon [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/light_pylon_collision.mtl",
+      "sha256": "c43cf022204e5d04233d4463b8c3ea11193b8f822aa682fb2603fc6cefe62ad9",
+      "size": 241,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/light_pylon_collision.obj",
+      "sha256": "09eaa7704560dec1912bb136f2ea15c016933b8423f1de0f999df747986cbcba",
+      "size": 4964,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/light_pylon_lod1.mtl",
+      "sha256": "e87014685647756edb898387b7626b179be4aa2217ef57ad2d3c06a2ebe824e9",
+      "size": 1006,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/light_pylon_lod1.obj",
+      "sha256": "bfd04f972ccf94c30efd4f36a27bf7769fcb7fe59f8bcb1a1838ee80c9755916",
+      "size": 21913,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/supply_crate.mtl",
+      "sha256": "fac1020627a308a8faf23601ebf08bea6267e0864ce2f139b86f2b75291f1e8b",
+      "size": 809,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json: Blender-authored supply_crate [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/supply_crate.obj",
+      "sha256": "ca676c239d2f81246f84b0c0821cce731a657c374069331ddd23c627bc3f79ea",
+      "size": 33684,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json: Blender-authored supply_crate [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/supply_crate_collision.mtl",
+      "sha256": "c43cf022204e5d04233d4463b8c3ea11193b8f822aa682fb2603fc6cefe62ad9",
+      "size": 241,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/supply_crate_collision.obj",
+      "sha256": "33550dc60a4c10751a2f9b5ad9ad1dcf7b97ca8152d70305649f4154e5af817b",
+      "size": 1240,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/supply_crate_lod1.mtl",
+      "sha256": "fac1020627a308a8faf23601ebf08bea6267e0864ce2f139b86f2b75291f1e8b",
+      "size": 809,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
+    },
+    {
+      "path": "Models/Showcase/Kit/supply_crate_lod1.obj",
+      "sha256": "a0342441fd9ef75261341fc02a387bbd759cf9c08408a0065ce7a04f2028e47f",
+      "size": 14902,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGame/showcase_kit.blend via tools/blender/author_showcase_kit.py; hash-bound by Art/Blender/SparkGame/provenance.json [showcase-blender-kit]"
     },
     {
       "path": "Models/Sphere.mtl",
