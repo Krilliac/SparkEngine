@@ -376,7 +376,7 @@
       "directory": "GameModules/SparkGameRTS",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameRTS/Source",
-      "sourceFileCount": 22,
+      "sourceFileCount": 24,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,

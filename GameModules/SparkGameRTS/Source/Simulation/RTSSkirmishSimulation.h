@@ -80,12 +80,23 @@ namespace RTS
         /** @brief Execute exactly one fixed tick. No-op once the match has left the Playing state. */
         void Step();
 
-        /** @brief Discard accumulated wall-clock time and restart the tick counter (after reset or load). */
+        /** @brief Discard accumulated wall-clock time and restart the tick counter (after a reset). */
         void ResetClock();
+
+        /**
+         * @brief ResetClock semantics for a loaded match: discard accumulated wall-clock time and resume the tick
+         *        counter (and with it the AI decision phase) at the saved tick.
+         */
+        void RestoreClock(uint64_t tick);
 
         uint64_t GetTick() const;
 
-        /** @brief FNV-1a hash of the complete simulation state, walked in canonical (id) order. */
+        /**
+         * @brief FNV-1a hash of the complete simulation state, walked in canonical (id) order.
+         *
+         * Covers every field a save persists, so a resumed match that diverges in any of them changes the hash.
+         * Only the sub-tick wall-clock remainder is excluded: it never influences simulated state.
+         */
         uint64_t ComputeStateHash() const;
 
       private:

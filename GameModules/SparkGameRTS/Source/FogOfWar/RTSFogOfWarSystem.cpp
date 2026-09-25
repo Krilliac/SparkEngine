@@ -85,6 +85,33 @@ namespace RTS
         return it != m_grids.end() ? &it->second : nullptr;
     }
 
+    bool RTSFogOfWarSystem::RestoreState(const std::vector<FogGrid>& grids)
+    {
+        if (grids.size() != static_cast<size_t>(RTSFaction::Count))
+            return false;
+        const int width = grids.front().width;
+        const int height = grids.front().height;
+        if (width <= 0 || height <= 0 || width > MAX_MAP_DIMENSION || height > MAX_MAP_DIMENSION)
+            return false;
+        for (const FogGrid& grid : grids)
+        {
+            if (grid.width != width || grid.height != height ||
+                grid.cells.size() != static_cast<size_t>(width) * static_cast<size_t>(height) ||
+                !std::ranges::all_of(grid.cells, [](RTSVisibility cell) { return cell < RTSVisibility::Count; }))
+            {
+                return false;
+            }
+        }
+
+        std::unordered_map<RTSFaction, FogGrid> restored;
+        for (size_t index = 0; index < grids.size(); ++index)
+            restored.emplace(static_cast<RTSFaction>(index), grids[index]);
+        m_grids = std::move(restored);
+        m_mapWidth = width;
+        m_mapHeight = height;
+        return true;
+    }
+
     // === Vision updates ===
 
     void RTSFogOfWarSystem::UpdateVision(RTSFaction faction, float unitX, float unitY, float visionRange)

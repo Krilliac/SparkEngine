@@ -112,21 +112,22 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
-    // Initialize engine system integrations (AI, events, audio, weather, destruction, save, coroutines)
-    m_engineSystems = std::make_unique<RTS::RTSEngineSystems>();
-    if (!m_engineSystems->Initialize(context, m_unitSystem.get(), m_buildingSystem.get(), m_resourceSystem.get(),
-                                     m_commandSystem.get()))
-    {
-        console.LogWarning("[RTS] Engine system integrations partially unavailable (non-fatal)");
-    }
-
     // Fixed-step skirmish tick: the only place gameplay systems are advanced
+    const RTS::RTSSkirmishSystems gameplaySystems{m_unitSystem.get(),    m_buildingSystem.get(), m_resourceSystem.get(),
+                                                  m_commandSystem.get(), m_fogOfWarSystem.get(), m_matchSystem.get()};
     m_simulation = std::make_unique<RTS::RTSSkirmishSimulation>();
-    if (!m_simulation->Initialize(context, {m_unitSystem.get(), m_buildingSystem.get(), m_resourceSystem.get(),
-                                            m_commandSystem.get(), m_fogOfWarSystem.get(), m_matchSystem.get()}))
+    if (!m_simulation->Initialize(context, gameplaySystems))
     {
         console.LogError("[RTS] Failed to initialize skirmish simulation");
         return false;
+    }
+
+    // Engine system integrations (AI, events, audio, weather, destruction, save, coroutines). Save/load persist
+    // the full skirmish, so the bridge binds every gameplay system and the simulation clock.
+    m_engineSystems = std::make_unique<RTS::RTSEngineSystems>();
+    if (!m_engineSystems->Initialize(context, gameplaySystems, m_simulation.get()))
+    {
+        console.LogWarning("[RTS] Engine system integrations partially unavailable (non-fatal)");
     }
 
     m_demoPresentation = std::make_unique<RTS::RTSDemoPresentation>();
@@ -203,15 +204,15 @@ void SparkGameRTSModule::OnUnload()
         m_demoPresentation->Shutdown();
         m_demoPresentation.reset();
     }
-    if (m_simulation)
-    {
-        m_simulation->Shutdown();
-        m_simulation.reset();
-    }
     if (m_engineSystems)
     {
         m_engineSystems->Shutdown();
         m_engineSystems.reset();
+    }
+    if (m_simulation)
+    {
+        m_simulation->Shutdown();
+        m_simulation.reset();
     }
     if (m_matchSystem)
     {

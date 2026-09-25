@@ -164,7 +164,12 @@ namespace RTS
         return result;
     }
 
-    bool RTSUnitSystem::RestoreState(const std::vector<UnitData>& units)
+    uint32_t RTSUnitSystem::GetNextUnitId() const
+    {
+        return m_nextUnitId;
+    }
+
+    bool RTSUnitSystem::RestoreState(const std::vector<UnitData>& units, uint32_t nextUnitId)
     {
         std::map<uint32_t, UnitData> restored;
         uint32_t nextId = 1;
@@ -183,6 +188,12 @@ namespace RTS
                 return false;
             }
             nextId = std::max(nextId, unit.unitId + 1);
+        }
+        if (nextUnitId != 0)
+        {
+            if (nextUnitId < nextId)
+                return false;
+            nextId = nextUnitId;
         }
 
         m_units = std::move(restored);

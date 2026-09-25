@@ -115,8 +115,10 @@ namespace RTS
         if (!m_unitSystem || !m_unitSystem->GetUnit(unitId) || !IsCommandValid(command))
             return;
 
-        // Append to existing queue (shift-click behavior)
-        m_commandQueues[unitId].push_back(command);
+        // Append to existing queue (shift-click behavior); a full queue ignores further orders.
+        std::vector<UnitCommand>& queue = m_commandQueues[unitId];
+        if (queue.size() < MAX_QUEUED_COMMANDS)
+            queue.push_back(command);
     }
 
     void RTSCommandSystem::ClearCommands(uint32_t unitId)
@@ -162,10 +164,31 @@ namespace RTS
         return result;
     }
 
-    void RTSCommandSystem::ResetRuntimeState()
+    const std::map<uint32_t, std::vector<UnitCommand>>& RTSCommandSystem::GetCommandQueues() const
     {
-        m_selectedUnits.clear();
-        m_commandQueues.clear();
+        return m_commandQueues;
+    }
+
+    bool RTSCommandSystem::RestoreRuntimeState(const std::map<uint32_t, std::vector<UnitCommand>>& queues,
+                                               const std::vector<uint32_t>& selection)
+    {
+        for (const auto& [unitId, queue] : queues)
+        {
+            if (unitId == 0 || queue.empty() || queue.size() > MAX_QUEUED_COMMANDS ||
+                !std::ranges::all_of(queue, IsCommandValid))
+                return false;
+        }
+        std::vector<uint32_t> sortedSelection = selection;
+        std::ranges::sort(sortedSelection);
+        if (std::ranges::find(sortedSelection, 0u) != sortedSelection.end() ||
+            std::ranges::adjacent_find(sortedSelection) != sortedSelection.end())
+        {
+            return false;
+        }
+
+        m_commandQueues = queues;
+        m_selectedUnits = selection;
+        return true;
     }
 
     // === Internal ===
@@ -274,7 +297,7 @@ namespace RTS
         }
     }
 
-    bool RTSCommandSystem::IsCommandValid(const UnitCommand& command) const
+    bool RTSCommandSystem::IsCommandValid(const UnitCommand& command)
     {
         if (command.type >= RTSCommandType::Count)
             return false;

@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "Simulation/RTSSkirmishSimulation.h"
 #include "Spark/SparkSDK.h"
 #include "Utils/EventBus.h"
 
@@ -19,11 +20,6 @@
 
 namespace RTS
 {
-    class RTSBuildingSystem;
-    class RTSCommandSystem;
-    class RTSResourceSystem;
-    class RTSUnitSystem;
-
     /**
      * @brief Bridges SparkEngine services into the RTS module
      *
@@ -42,12 +38,13 @@ namespace RTS
 
         /**
          * @brief Initialize all engine-system integrations.
-         * @param context  Engine context providing access to subsystems.
+         * @param context     Engine context providing access to subsystems.
+         * @param systems     Gameplay systems whose state SaveMatch/LoadMatch persist (non-owning).
+         * @param simulation  Fixed-step skirmish clock saved and resumed with the match (non-owning).
          * @return true on success, false if a required subsystem is missing.
          */
-        bool Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem = nullptr,
-                        RTSBuildingSystem* buildingSystem = nullptr, RTSResourceSystem* resourceSystem = nullptr,
-                        RTSCommandSystem* commandSystem = nullptr);
+        bool Initialize(Spark::IEngineContext* context, const RTSSkirmishSystems& systems = {},
+                        RTSSkirmishSimulation* simulation = nullptr);
 
         /**
          * @brief Per-frame update for engine-system integrations.
@@ -60,10 +57,15 @@ namespace RTS
 
         // --- Save / Load helpers exposed for console commands ---
 
-        /** @brief Save the full RTS match state to the given slot. */
+        /** @brief Save the full skirmish state (records, orders, match, fog, and sim tick) to the given slot. */
         bool SaveMatch(const std::string& slotName) const;
 
-        /** @brief Load an RTS match state from the given slot. */
+        /**
+         * @brief Load a skirmish from the given slot and resume it at the saved tick.
+         *
+         * Only the current snapshot version is accepted; a version 1 slot, or any damaged or truncated state,
+         * is rejected without changing the running match.
+         */
         bool LoadMatch(const std::string& slotName) const;
 
         /** @brief Match SaveSystem's portable slot-name policy. */
@@ -76,6 +78,9 @@ namespace RTS
         void SetTimeOfDay(float hour) const;
 
       private:
+        /** @return true when every gameplay system and the simulation are bound. */
+        bool HasMatchState() const;
+
         // Setup helpers called from Initialize()
         void SetupAI();
         void SetupEvents();
@@ -86,10 +91,8 @@ namespace RTS
         void SetupCoroutines();
 
         Spark::IEngineContext* m_context{nullptr};
-        RTSUnitSystem* m_unitSystem{nullptr};
-        RTSBuildingSystem* m_buildingSystem{nullptr};
-        RTSResourceSystem* m_resourceSystem{nullptr};
-        RTSCommandSystem* m_commandSystem{nullptr};
+        RTSSkirmishSystems m_systems;
+        RTSSkirmishSimulation* m_simulation{nullptr};
 
         // RAII event subscription handles (auto-unsubscribe on destruction)
         std::vector<Spark::SubscriptionHandle> m_eventHandles;

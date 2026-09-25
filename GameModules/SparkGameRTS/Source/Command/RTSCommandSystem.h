@@ -65,12 +65,27 @@ namespace RTS
         size_t GetPendingCommandCount() const;
         std::string GetCommandStatusString() const;
 
-        /** Clear transient selections and queued orders after restoring persistent state. */
-        void ResetRuntimeState();
+        /** @brief Per-unit command queues in ascending unit-id order (the processing order). */
+        const std::map<uint32_t, std::vector<UnitCommand>>& GetCommandQueues() const;
+
+        /**
+         * @brief Replace the selection and every command queue from a validated persistence snapshot.
+         *
+         * Ids of units that no longer exist are accepted: a unit killed mid-tick keeps its queue and selection
+         * entry until the next Update prunes them, and a resumed match must reproduce that exactly.
+         * @return false (leaving state untouched) on a zero id, a duplicate selection entry, an empty queue, or a
+         *         command IssueCommand would reject.
+         */
+        bool RestoreRuntimeState(const std::map<uint32_t, std::vector<UnitCommand>>& queues,
+                                 const std::vector<uint32_t>& selection);
+
+        /** @brief The acceptance rule IssueCommand and QueueCommand apply to every order. */
+        [[nodiscard]] static bool IsCommandValid(const UnitCommand& command);
+
+        static constexpr size_t MAX_QUEUED_COMMANDS = 64; ///< Per-unit shift-queue limit; later orders are dropped
 
       private:
         void ProcessCommands(float deltaTime);
-        [[nodiscard]] bool IsCommandValid(const UnitCommand& command) const;
         void PruneSelection();
 
         Spark::IEngineContext* m_context{nullptr};

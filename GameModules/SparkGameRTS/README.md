@@ -52,3 +52,24 @@ simulation tick.
 - `rts_move <x> <y> [queue]`, `rts_hold`, and `rts_stop` issue orders.
 - `rts_train_marine` queues a marine at the Human barracks.
 - `rts_demo_reset` restores the default skirmish.
+- `rts_save [slot]` / `rts_load [slot]` save or resume the skirmish (default slot `rts_quicksave`; an autosave is
+  written to `rts_autosave` every two minutes).
+
+## Save and resume
+
+Saves go through the engine `SaveSystem` under the custom-state key `SparkGameRTS.match.v2`, encoded by
+`Source/Core/RTSPersistence`. A snapshot holds the complete skirmish, so a loaded match continues bit-identically:
+
+- units, buildings (with production queues), player economies, and resource nodes with their worker order;
+- the never-reused unit/building/node id counters and the harvest timer;
+- every command queue and the current selection;
+- match state, players, eliminations, winner, and match time;
+- each faction's fog grid, including explored history that cannot be rebuilt from unit positions;
+- the simulation tick, which also fixes the AI decision phase. Loading resumes at that tick with the sub-tick
+  wall-clock remainder discarded.
+
+Floats are stored as IEEE-754 bit patterns. Loading is all-or-nothing: version 1 slots (records only, from earlier
+builds, including old `rts_autosave` files), truncated or trailing data, and out-of-range values are rejected
+without changing the running match. `Tests/TestMOD370RTSSaveReal.cpp` saves a scripted skirmish at several ticks,
+loads each save into rebuilt systems (directly and through `rts_save`/`rts_load`'s `SaveMatch`/`LoadMatch` on the
+real `SaveSystem`), and requires the uninterrupted run's state hash for the next 2000 ticks and at victory.

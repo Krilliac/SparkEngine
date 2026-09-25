@@ -578,6 +578,7 @@ add_executable(SparkTests
     TestOpenWorldModule.cpp
     TestGameModuleRTS.cpp
     TestMOD370SkirmishDeterminismReal.cpp
+    TestMOD370RTSSaveReal.cpp
     TestGameModuleMMO.cpp
     TestGameModuleRPG.cpp
     TestGameModuleRacing.cpp
@@ -1098,6 +1099,8 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Building/RTSBuildingSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSPersistence.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceCodec.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.cpp"
@@ -2210,6 +2213,16 @@ if(TARGET imgui)
         LABELS "module;rpg;unit"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+
+    # MOD-370: RTSSave_* save a scripted skirmish mid-match (codec and the real SaveSystem
+    # through RTSEngineSystems::SaveMatch/LoadMatch), load it into rebuilt systems, and
+    # require the uninterrupted run's per-tick state hash; v1 and truncated saves are rejected.
+    add_test(NAME RTSSave COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(RTSSave PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=RTSSave_;SPARK_TEST_EXPECT_COUNT=3"
+        LABELS "module;rts;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
 endif()
 
 # RDY-010: no stable-v1/module-profile CTest that runs SparkTests may select a

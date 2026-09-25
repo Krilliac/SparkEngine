@@ -10,7 +10,8 @@
   "tests": {
     "files": [
       "Tests/TestGameModuleRTS.cpp",
-      "Tests/TestMOD370SkirmishDeterminismReal.cpp"
+      "Tests/TestMOD370SkirmishDeterminismReal.cpp",
+      "Tests/TestMOD370RTSSaveReal.cpp"
     ],
     "prefixes": [
       {
@@ -20,6 +21,10 @@
       {
         "prefix": "RTSSkirmish_",
         "count": 7
+      },
+      {
+        "prefix": "RTSSave_",
+        "count": 3
       }
     ]
   },

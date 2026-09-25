@@ -252,7 +252,12 @@ namespace RTS
         return result;
     }
 
-    bool RTSBuildingSystem::RestoreState(const std::vector<BuildingData>& buildings)
+    uint32_t RTSBuildingSystem::GetNextBuildingId() const
+    {
+        return m_nextBuildingId;
+    }
+
+    bool RTSBuildingSystem::RestoreState(const std::vector<BuildingData>& buildings, uint32_t nextBuildingId)
     {
         std::map<uint32_t, BuildingData> restored;
         uint32_t nextId = 1;
@@ -282,6 +287,12 @@ namespace RTS
             if (!restored.emplace(building.buildingId, building).second)
                 return false;
             nextId = std::max(nextId, building.buildingId + 1);
+        }
+        if (nextBuildingId != 0)
+        {
+            if (nextBuildingId < nextId)
+                return false;
+            nextId = nextBuildingId;
         }
 
         m_buildings = std::move(restored);

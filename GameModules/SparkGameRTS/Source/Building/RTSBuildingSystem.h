@@ -102,8 +102,16 @@ namespace RTS
         int GetSupplyProvided(RTSFaction faction) const;
         std::string GetBuildingListString() const;
 
-        /** Replace all runtime buildings from a validated persistence snapshot. */
-        bool RestoreState(const std::vector<BuildingData>& buildings);
+        /** @brief Id the next placed building receives (ids are never reused, so this is persistent state). */
+        uint32_t GetNextBuildingId() const;
+
+        /**
+         * @brief Replace all runtime buildings from a validated persistence snapshot.
+         * @param nextBuildingId  Id the next placement receives; 0 derives it as one past the highest restored id,
+         *                        otherwise it must exceed every restored id.
+         * @return false (leaving state untouched) if any record or the id counter is invalid.
+         */
+        bool RestoreState(const std::vector<BuildingData>& buildings, uint32_t nextBuildingId = 0);
 
       private:
         void RegisterFactionTemplates(RTSFaction faction);
