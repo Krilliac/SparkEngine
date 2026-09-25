@@ -17,13 +17,26 @@ include("${CMAKE_CURRENT_LIST_DIR}/SparkTrackedInstall.cmake")
 # PROFILE default installs every tracked file in DIRECTORIES plus
 # <ROOT>/assets.integrity.json unchanged.
 #
-# PROFILE stable-v1 applies OD-09: no asset whose license is NOASSERTION may
-# ship. At configure time the verifier derives the stable-v1 package manifest
-# from <ROOT>/assets.integrity.json and lists the excluded files/directories.
-# The install rules skip exactly those paths and ship the derived manifest as
+# PROFILE stable-v1 ships only the runtime asset closure of its in-profile game
+# modules (RDY-020): the assets their sources and the reviewed engine source
+# directories name, the scenes/materials those reference, and the reviewed
+# seeds in tools/asset-integrity/package-profiles.json (see
+# package_closure.py). It also
+# applies OD-09: a closure entry whose license is NOASSERTION fails configure.
+# At configure time the verifier derives the stable-v1 package manifest from
+# <ROOT>/assets.integrity.json and lists the excluded files/directories. The
+# install rules skip exactly those paths and ship the derived manifest as
 # <DESTINATION>/assets.integrity.json, so `verify --profile stable-v1` on the
 # installed tree proves both completeness and the exclusion. The excluded
 # files stay in the repository.
+#
+# Configure re-runs when the manifest, the derivation scripts, the profile
+# definition, the module inventory, a followed scene/material, or the set of
+# C/C++ files in a scanned source directory changes. Editing the contents of
+# an existing source file does not reconfigure (that would make every engine
+# edit a full configure); a stale closure is instead rejected by
+# `verify --profile stable-v1`, which re-derives the closure from the current
+# sources and fails on any profile-incomplete or profile-outside-closure file.
 function(spark_install_runtime_assets)
     cmake_parse_arguments(PARSE_ARGV 0 SPARK_ASSETS
         ""
@@ -65,12 +78,15 @@ function(spark_install_runtime_assets)
         file(MAKE_DIRECTORY "${_spark_profile_dir}")
         set(_spark_installed_manifest "${_spark_profile_dir}/assets.integrity.json")
         set(_spark_exclusion_file "${_spark_profile_dir}/excluded-paths.txt")
+        set(_spark_inputs_file "${_spark_profile_dir}/closure-inputs.txt")
         execute_process(
             COMMAND "${Python3_EXECUTABLE}" -B "${SPARK_ASSETS_VERIFIER}"
                 package-profile "${_spark_source_manifest}"
                 --profile "${SPARK_ASSETS_PROFILE}"
                 --output "${_spark_installed_manifest}"
                 --exclusions "${_spark_exclusion_file}"
+                --repo-root "${CMAKE_SOURCE_DIR}"
+                --inputs "${_spark_inputs_file}"
             RESULT_VARIABLE _spark_profile_result
             OUTPUT_VARIABLE _spark_profile_output
             ERROR_VARIABLE _spark_profile_error
@@ -81,9 +97,26 @@ function(spark_install_runtime_assets)
                 "(${_spark_profile_result}):\n${_spark_profile_output}\n${_spark_profile_error}")
         endif()
         message(STATUS "${_spark_profile_output}")
-        # Re-derive when the reviewed manifest or the derivation logic changes.
+        # The inputs file lists the data files read plus each scanned source
+        # directory; a directory contributes a CONFIGURE_DEPENDS glob so that
+        # adding or removing a source file re-derives the closure.
+        file(STRINGS "${_spark_inputs_file}" _spark_closure_inputs)
+        set(_spark_closure_files "")
+        foreach(_spark_closure_input IN LISTS _spark_closure_inputs)
+            if(IS_DIRECTORY "${_spark_closure_input}")
+                set(_spark_source_patterns "")
+                foreach(_spark_suffix IN ITEMS c cc cpp cxx h hh hpp hxx inl)
+                    list(APPEND _spark_source_patterns "${_spark_closure_input}/*.${_spark_suffix}")
+                endforeach()
+                file(GLOB_RECURSE _spark_scanned_sources CONFIGURE_DEPENDS ${_spark_source_patterns})
+            else()
+                list(APPEND _spark_closure_files "${_spark_closure_input}")
+            endif()
+        endforeach()
+        get_filename_component(_spark_verifier_dir "${SPARK_ASSETS_VERIFIER}" DIRECTORY)
         set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-            "${_spark_source_manifest}" "${SPARK_ASSETS_VERIFIER}")
+            "${_spark_source_manifest}" "${SPARK_ASSETS_VERIFIER}"
+            "${_spark_verifier_dir}/package_closure.py" ${_spark_closure_files})
         file(STRINGS "${_spark_exclusion_file}" _spark_exclusions)
     endif()
 

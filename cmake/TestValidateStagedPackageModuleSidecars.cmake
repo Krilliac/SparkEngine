@@ -554,7 +554,7 @@ foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sideca
                 "in the Software without restriction.\n")
             foreach(_spark_file IN ITEMS LICENSE.txt bin/Shaders/BasicVS.hlsl
                     bin/Shaders/ForwardPlus/DepthPrepass.hlsl bin/Shaders/HLSL/BasicVS.hlsl
-                    bin/Shaders/HLSL/Compute/GPUCull.hlsl bin/Assets/MMOFPS/Data/continents.json
+                    bin/Shaders/HLSL/Compute/GPUCull.hlsl bin/Assets/Scenes/level1.scene
                     bin/Assets/Engine/Branding/sparkengine_wordmark.svg
                     bin/Resources/Config/settings.ini bin/Resources/Config/controls.cfg)
                 file(WRITE "${_spark_root}/${_spark_file}" "fixture runtime content\n")

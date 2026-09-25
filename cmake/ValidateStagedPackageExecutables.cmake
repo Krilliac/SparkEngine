@@ -733,11 +733,18 @@ set(_spark_required_runtime_files
     bin/Shaders/ForwardPlus/DepthPrepass.hlsl
     bin/Shaders/HLSL/BasicVS.hlsl
     bin/Shaders/HLSL/Compute/GPUCull.hlsl
-    bin/Assets/MMOFPS/Data/continents.json
     bin/Assets/Engine/Branding/sparkengine_wordmark.svg
     bin/Resources/Config/settings.ini
     bin/Resources/Config/controls.cfg
 )
+# stable-v1 ships only the SparkGameFPS runtime asset closure (RDY-020), whose
+# entry scene is Scenes/level1.scene; the TERRAFRONT data tables belong to the
+# modules only the default profile ships.
+if(SPARK_PACKAGE_PROFILE STREQUAL "stable-v1")
+    list(APPEND _spark_required_runtime_files bin/Assets/Scenes/level1.scene)
+else()
+    list(APPEND _spark_required_runtime_files bin/Assets/MMOFPS/Data/continents.json)
+endif()
 set(_spark_missing_runtime_files "")
 foreach(_spark_relative_path IN LISTS _spark_required_runtime_files)
     set(_spark_runtime_path "${SPARK_PACKAGE_ROOT}/${_spark_relative_path}")

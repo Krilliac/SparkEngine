@@ -233,10 +233,29 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
     def _fixture(self, temporary: str | os.PathLike[str], license_id: str = "CC0-1.0") -> Path:
         # The helper applies the stable-v1 package profile, so the fixture is a
         # schema v2 manifest whose entries match a reviewed source manifest.
+        # The source manifest lives in a fixture checkout whose stable-v1
+        # profile definition makes payload.bin the whole asset closure (RDY-020).
         assets = Path(temporary) / "Assets"
         assets.mkdir(parents=True)
         payload = b"installed FPS package fixture\n"
         (assets / "payload.bin").write_bytes(payload)
+        checkout = Path(temporary) / "checkout"
+        for relative in ("Assets", "tools/asset-integrity", "GameModules/Fixture/Source", "Engine/Source"):
+            (checkout / relative).mkdir(parents=True)
+        (checkout / "tools/asset-integrity/package-profiles.json").write_text(json.dumps({
+            "version": 1,
+            "profiles": {"stable-v1": {
+                "modules": ["Fixture"],
+                "engineSources": [{"path": "Engine/Source/", "reason": "Fixture engine code"}],
+                "seeds": [{"path": "payload.bin", "reason": "Installed-package helper fixture payload"}],
+                "unshippedReferences": [],
+            }},
+        }), encoding="utf-8")
+        (checkout / "GameModules/module-content-inventory.json").write_text(json.dumps({"modules": [{
+            "name": "Fixture",
+            "sourceDirectory": "GameModules/Fixture/Source",
+            "profileApplicability": {"stable-v1": "required"},
+        }]}), encoding="utf-8")
         manifest = {
             "version": 2,
             "algorithm": "sha256",
@@ -251,7 +270,7 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
             }],
         }
         (assets / vai.MANIFEST_FILENAME).write_bytes(vai.manifest_bytes(manifest))
-        (Path(temporary) / "source.integrity.json").write_bytes(vai.manifest_bytes(manifest))
+        (checkout / "Assets" / vai.MANIFEST_FILENAME).write_bytes(vai.manifest_bytes(manifest))
         return assets
 
     def _run_helper(self, assets: Path) -> subprocess.CompletedProcess[str]:
@@ -262,7 +281,7 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
                 cmake,
                 f"-DSPARK_ASSETS_ROOT={assets}",
                 f"-DSPARK_ASSET_VERIFIER={SCRIPT}",
-                f"-DSPARK_ASSET_SOURCE_MANIFEST={assets.parent / 'source.integrity.json'}",
+                f"-DSPARK_ASSET_SOURCE_MANIFEST={assets.parent / 'checkout' / 'Assets' / vai.MANIFEST_FILENAME}",
                 "-P",
                 str(self.HELPER),
             ],

@@ -2925,9 +2925,12 @@ endif()
 # Mirror the runtime asset set copied beside SparkEngine after a normal build.
 # MMOFPS/Data is required for TerraFront module initialization and command
 # registration, while Engine contains startup branding used before project load.
-# The focused FPS shipping selector is the stable-v1 package: per OD-09 it ships
-# no asset whose license is NOASSERTION and installs the derived stable-v1
-# manifest instead of the full repository manifest.
+# The focused FPS shipping selector is the stable-v1 package: it installs only
+# the SparkGameFPS runtime asset closure (module source references, the scenes
+# and materials they name, and the reviewed engine seeds in
+# tools/asset-integrity/package-profiles.json), rejects any NOASSERTION entry in
+# that closure (OD-09), and installs the derived stable-v1 manifest instead of
+# the full repository manifest.
 if(SPARK_GAME_MODULES STREQUAL "SparkGameFPS")
     set(_spark_runtime_asset_profile stable-v1)
 else()

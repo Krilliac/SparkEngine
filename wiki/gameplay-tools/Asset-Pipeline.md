@@ -180,34 +180,102 @@ proof that the same verified snapshot was consumed by package assembly.
 
 ### stable-v1 package asset profile (OD-09)
 
-Entries whose license is `NOASSERTION` (the TERRAFRONT content with no tracked
-origin record) stay in the repository but are excluded from the stable-v1
-package. The focused FPS shipping selector (`SPARK_GAME_MODULES=SparkGameFPS`,
-the `windows-shipping` preset) installs runtime assets through
-`cmake/SparkRuntimeAssets.cmake`, which derives the stable-v1 manifest at
-configure time, skips exactly the excluded files, and installs the derived
-manifest as `bin/Assets/assets.integrity.json`. Other selectors keep the full
-manifest (`default` profile).
+The stable-v1 package ships only the runtime asset closure of its in-profile
+game modules, not every root under `Assets/` (RDY-020). The focused FPS
+shipping selector (`SPARK_GAME_MODULES=SparkGameFPS`, the `windows-shipping`
+preset) installs runtime assets through `cmake/SparkRuntimeAssets.cmake`,
+which derives the stable-v1 manifest at configure time, skips every file
+outside it, and installs the derived manifest as
+`bin/Assets/assets.integrity.json`. Other selectors keep the full manifest
+(`default` profile).
+
+`tools/asset-integrity/package_closure.py` derives the closure; nothing in it
+is hand-listed per asset:
+
+1. The in-profile modules are the `GameModules/module-content-inventory.json`
+   modules whose `profileApplicability["stable-v1"]` is `required`. The
+   reviewed definition in `tools/asset-integrity/package-profiles.json` must
+   name the same modules, so a module joining the profile forces a review.
+2. Every asset-rooted string literal in those modules' sources, and in the
+   reviewed `engineSources` directory (`SparkEngine/Source/`), is a
+   reference. The engine scan is what adds `Models/Cube.obj` and the other
+   primitive defaults: `CubeObject.h` and its siblings name them, and FPS and
+   SceneManager (for `level1.scene` plane/wall/cube nodes) create those
+   objects. Comments and preprocessor lines (`#include "Audio/..."`) are
+   skipped.
+3. `package-profiles.json` adds reviewed seeds, each with a reason: the
+   asset README and `Engine/Branding/` (the startup splash).
+4. References are followed transitively. A `.scene` contributes its
+   `key=value` asset paths (a bare `model=crate.obj` resolves below
+   `Models/`). A material or data `.json` contributes its string values. OBJ
+   `mtllib` lines are not followed, because no engine or FPS OBJ loader opens
+   MTL files.
+
+A literal is a reference when its first path component names a top-level
+asset directory, ignoring case, after backslashes become `/` and a leading
+`./` or `Assets/` is dropped. So `models/crate.obj` and `Models\crate.obj`
+are both references. Each reference must then name a manifest entry with its
+exact case. Configure fails when a reference resolves to nothing or differs
+only in case (a typo a case-insensitive Windows filesystem would hide), or
+when the closure needs an entry whose license is `NOASSERTION`. Under OD-09
+that content cannot ship, and dropping it silently would ship a package that
+cannot load its own scene. The only exemptions are the reviewed
+`unshippedReferences` in `package-profiles.json`, each with a reason. These
+are the DecalSystem `.dds` names that no code opens, and the
+EntityPresetManager preset strings that only the editor reads. An exemption
+that no scanned source uses any more, or that names a declared asset, also
+fails.
+
+Configure re-runs when the profile definition, the module inventory, a
+followed scene or material, or the set of files in a scanned source directory
+changes. It does not re-run when you edit the contents of an existing source
+file, because that would turn every engine edit into a full configure. A
+stale closure is caught instead: `verify --profile stable-v1` re-derives it
+from the current sources and fails with `profile-incomplete`.
+
+The closure is currently 40 of 883 entries: `Scenes/level1.scene`, its five
+materials and their textures, the FPS models and music, the six engine
+primitive OBJs, and the branding. It covers the literal asset paths in the
+scanned code. It does not cover paths the runtime builds from non-literal
+parts. It is not yet proven to be everything the runtime opens: the Linux
+proof ran under NullRHI, which creates no meshes, so the D3D11 package smoke
+(MOD-310) still has to confirm it.
+The `NOASSERTION` TERRAFRONT content and the rest of the TERRAFRONT/MMO
+content stay in the repository and in the `default` package.
 
 ```bash
+# Derive the stable-v1 closure, check it ships no NOASSERTION entry
+python3 tools/asset-integrity/verify_asset_integrity.py check-all --profile stable-v1 --strict-provenance
 # Derive the stable-v1 manifest and install exclusions (what CMake runs)
 python3 tools/asset-integrity/verify_asset_integrity.py package-profile Assets/assets.integrity.json \
-    --profile stable-v1 --output stable.json --exclusions excluded.txt
+    --profile stable-v1 --output stable.json --exclusions excluded.txt --repo-root .
 # Check an installed stable-v1 tree
 python3 tools/asset-integrity/verify_asset_integrity.py verify <pkg>/bin/Assets/assets.integrity.json \
     --root <pkg>/bin/Assets --profile stable-v1
 ```
 
-`--profile stable-v1` fails on any `NOASSERTION` entry (`profile-excluded`),
-on an entry the repository manifest records as `NOASSERTION` even if the
-package relabels it, on a file the repository manifest does not declare
-(`profile-unreviewed`), and on an entry that differs from the repository
-entry (`profile-mismatch`). The installed FPS package smoke and the release
-workflow's extracted-package check (`--package-profile ${{ matrix.profile }}`)
-run it. `PackageAssets_StableV1ExcludesNoAssertion` covers derivation, the
-check, and the install rules. Asserted TERRAFRONT scenes and materials that
-point at excluded files still ship, with dangling references. They are not
-loaded by the stable-v1 FPS module.
+With `--profile`, `check-all --strict-provenance` judges only the entries
+that profile ships. Without `--profile` it still fails while any repository
+entry is `NOASSERTION`.
+
+`verify --profile stable-v1` fails on any `NOASSERTION` entry
+(`profile-excluded`), on an entry the repository manifest records as
+`NOASSERTION` even if the package relabels it, on a file the repository
+manifest does not declare (`profile-unreviewed`), and on an entry that
+differs from the repository entry (`profile-mismatch`). It also fails on a
+file outside the derived closure (`profile-outside-closure`) or a closure
+file the package omits (`profile-incomplete`). When the source manifest is
+not inside a checkout that holds the profile definitions, the check derives
+the closure from the verifier's own checkout. If neither has the
+definitions, it fails with `profile-closure` rather than skipping the check.
+Any file not in the installed manifest fails as `undeclared`. The installed FPS package smoke and
+the release workflow's extracted-package check
+(`--package-profile ${{ matrix.profile }}`) run it. For stable-v1,
+`cmake/ValidateStagedPackageExecutables.cmake` requires
+`bin/Assets/Scenes/level1.scene` in place of the TERRAFRONT
+`MMOFPS/Data/continents.json`. `PackageAssets_StableV1ExcludesNoAssertion`
+(Tests/Tools/test_asset_package_profile.py) covers the closure, the
+derivation, the check, and the install rules.
 
 ```
 Assets/

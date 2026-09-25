@@ -79,6 +79,9 @@ ROOT_IGNORES = frozenset({MANIFEST_FILENAME})
 # their provenance remains open outside stable-v1.
 PACKAGE_PROFILES = frozenset({"default", "stable-v1"})
 NOASSERTION_EXCLUDED_PROFILES = frozenset({"stable-v1"})
+# RDY-020: these profiles ship only the runtime asset closure of their
+# in-profile modules (tools/asset-integrity/package_closure.py), not every root.
+CLOSURE_PROFILES = frozenset({"stable-v1"})
 TEMPLATE_ROOT_METADATA = frozenset({"README.md", "manifest.json"})
 TEMPLATE_COLLECTION_METADATA = frozenset({"README.md", "assets.lock.json"})
 INVALID_WINDOWS_CHARS = frozenset('<>:"|?*')
@@ -866,14 +869,52 @@ def provenance_summary(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def derive_package_manifest(manifest: dict[str, Any], profile: str) -> tuple[dict[str, Any], list[str]]:
+def _package_closure_module() -> Any:
+    """Load the sibling closure module; this verifier is also loaded by file path."""
+    import importlib.util
+
+    path = Path(__file__).resolve().with_name("package_closure.py")
+    spec = importlib.util.spec_from_file_location("spark_asset_package_closure", path)
+    if spec is None or spec.loader is None:
+        raise ManifestFormatError(f"cannot load the package closure module: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def derive_profile_closure(
+    repo_root: Path, manifest: dict[str, Any], profile: str
+) -> tuple[dict[str, list[str]] | None, list[Path]]:
+    """Return ``(closure, inputs)`` for a closure profile, or ``(None, [])`` for a whole-tree profile.
+
+    Raises ``ManifestFormatError`` when the closure cannot be derived: an
+    unresolved reference, a NOASSERTION entry the profile needs, or a profile
+    definition that disagrees with the module inventory.
+    """
+    if profile not in PACKAGE_PROFILES:
+        raise ManifestFormatError(f"unknown package profile: {profile!r}")
+    if profile not in CLOSURE_PROFILES:
+        return None, []
+    closure_module = _package_closure_module()
+    try:
+        return closure_module.derive_closure(repo_root, manifest, profile)
+    except closure_module.ClosureError as exc:
+        raise ManifestFormatError(f"package profile {profile!r} asset closure:\n{exc}") from exc
+
+
+def derive_package_manifest(
+    manifest: dict[str, Any], profile: str, closure: Iterable[str] | None = None
+) -> tuple[dict[str, Any], list[str]]:
     """Return ``(package manifest, excluded paths)`` for one package profile.
 
     The input must already have passed ``load_manifest``. A profile in
     ``NOASSERTION_EXCLUDED_PROFILES`` drops every NOASSERTION entry (OD-09) and
     requires schema v2, because a v1 manifest cannot show which files lack a
-    license record. Entry objects are copied unchanged, so the result stays
-    sorted and verifiable against an installed root.
+    license record. With ``closure`` (see ``derive_profile_closure``) only the
+    closure entries are kept; a closure path the manifest does not declare, or
+    one whose license is NOASSERTION, is an error rather than a silent drop.
+    Entry objects are copied unchanged, so the result stays sorted and
+    verifiable against an installed root.
     """
     if profile not in PACKAGE_PROFILES:
         raise ManifestFormatError(f"unknown package profile: {profile!r}")
@@ -884,6 +925,20 @@ def derive_package_manifest(manifest: dict[str, Any], profile: str) -> tuple[dic
             raise ManifestFormatError(
                 f"package profile {profile!r} needs a schema v{MANIFEST_SCHEMA_VERSION} manifest "
                 "that records each entry's license")
+    if closure is not None:
+        kept = set(closure)
+        by_path = {entry["path"]: entry for entry in entries}
+        undeclared = sorted(kept - by_path.keys())
+        if undeclared:
+            raise ManifestFormatError(f"package profile {profile!r} closure names undeclared files: {undeclared}")
+        if profile in NOASSERTION_EXCLUDED_PROFILES:
+            unasserted = sorted(path for path in kept if by_path[path]["license"] == NOASSERTION)
+            if unasserted:
+                raise ManifestFormatError(
+                    f"package profile {profile!r} closure needs NOASSERTION files (OD-09): {unasserted}")
+        excluded = [entry["path"] for entry in entries if entry["path"] not in kept]
+        entries = [entry for entry in entries if entry["path"] in kept]
+    elif profile in NOASSERTION_EXCLUDED_PROFILES:
         excluded = [entry["path"] for entry in entries if entry["license"] == NOASSERTION]
         entries = [entry for entry in entries if entry["license"] != NOASSERTION]
     derived = {
@@ -1006,7 +1061,51 @@ def verify_package_manifest(
         source = load_manifest(_absolute_lexical(source_path))
     except (ManifestFormatError, OSError) as exc:
         return errors + [IntegrityError(str(source_path), "manifest-load", str(exc))]
-    return errors + package_profile_errors(manifest, profile, str(manifest_path), source)
+    errors += package_profile_errors(manifest, profile, str(manifest_path), source)
+    return errors + _package_closure_errors(manifest, profile, _absolute_lexical(source_path), source)
+
+
+def _package_closure_errors(
+    manifest: dict[str, Any], profile: str, source_path: Path, source: dict[str, Any]
+) -> list[IntegrityError]:
+    """Require a closure profile's package to ship exactly its derived asset closure.
+
+    The closure is derived from the repository that holds the source manifest
+    (``<repo>/<root>/assets.integrity.json``) when that tree defines the
+    package profiles, and otherwise from the checkout holding this verifier.
+    It never fails open: when neither defines the profiles the package is
+    rejected with a ``profile-closure`` error.
+    """
+    if profile not in CLOSURE_PROFILES:
+        return []
+    closure_module = _package_closure_module()
+    definitions = closure_module.PROFILE_DEFINITIONS_RELATIVE
+    repo_root = source_path.parent.parent
+    if source_path.name != MANIFEST_FILENAME or not (repo_root / definitions).is_file():
+        repo_root = REPO_ROOT
+    if not (repo_root / definitions).is_file():
+        return [IntegrityError(
+            str(source_path), "profile-closure",
+            f"package profile {profile!r} needs {definitions.as_posix()} to derive its asset closure, "
+            f"but neither the source manifest's tree nor {REPO_ROOT} provides it")]
+    try:
+        closure, _ = derive_profile_closure(repo_root, source, profile)
+    except ManifestFormatError as exc:
+        return [IntegrityError(str(source_path), "profile-closure", str(exc))]
+    assert closure is not None
+    shipped = {entry["path"] for entry in manifest["entries"]}
+    errors = [
+        IntegrityError(path, "profile-outside-closure",
+                       f"package profile {profile!r} ships a file outside its runtime asset closure")
+        for path in sorted(shipped - closure.keys())
+    ]
+    errors += [
+        IntegrityError(path, "profile-incomplete",
+                       f"package profile {profile!r} omits a file its runtime asset closure needs "
+                       f"(first needed by {closure[path][0]})")
+        for path in sorted(closure.keys() - shipped)
+    ]
+    return errors
 
 
 def manifest_bytes(manifest: dict[str, Any]) -> bytes:
@@ -1439,9 +1538,11 @@ def cmd_package_profile(args: argparse.Namespace) -> int:
     if len({source, output, exclusions_output}) != 3:
         print("Refusing: source, --output, and --exclusions must be three different files", file=sys.stderr)
         return 1
+    repo_root = _absolute_lexical(Path(args.repo_root)) if args.repo_root else REPO_ROOT
     try:
         manifest = load_manifest(source)
-        derived, excluded = derive_package_manifest(manifest, args.profile)
+        closure, inputs = derive_profile_closure(repo_root, manifest, args.profile)
+        derived, excluded = derive_package_manifest(manifest, args.profile, closure)
     except (ManifestFormatError, OSError) as exc:
         print(f"Cannot derive package profile {args.profile!r}: {exc}", file=sys.stderr)
         return 1
@@ -1456,13 +1557,24 @@ def cmd_package_profile(args: argparse.Namespace) -> int:
     try:
         output.write_bytes(manifest_bytes(derived))
         exclusions_output.write_bytes("".join(f"{prefix}\n" for prefix in prefixes).encode("utf-8"))
+        if args.inputs:
+            inputs_output = _absolute_lexical(Path(args.inputs))
+            inputs_output.write_bytes("".join(f"{path.as_posix()}\n" for path in inputs).encode("utf-8"))
     except OSError as exc:
         print(f"Cannot write package profile outputs: {exc}", file=sys.stderr)
         return 1
-    print(
-        f"Package profile {args.profile}: {derived['fileCount']} of {manifest['fileCount']} entries kept, "
-        f"{len(excluded)} NOASSERTION entries excluded as {len(prefixes)} install exclusion(s)")
+    print(f"Package profile {args.profile}: {derived['fileCount']} of {manifest['fileCount']} entries kept, "
+          f"{_exclusion_summary(manifest, excluded)} excluded as {len(prefixes)} install exclusion(s)")
     return 0
+
+
+def _exclusion_summary(manifest: dict[str, Any], excluded: list[str]) -> str:
+    excluded_set = set(excluded)
+    unasserted = sum(
+        1 for entry in manifest["entries"]
+        if entry["path"] in excluded_set and entry.get("license") == NOASSERTION)
+    return (f"{len(excluded)} entries ({unasserted} NOASSERTION, "
+            f"{len(excluded) - unasserted} outside the profile closure)")
 
 
 def _format_summary(summary: dict[str, Any]) -> str:
@@ -1487,18 +1599,30 @@ def cmd_check_all(args: argparse.Namespace) -> int:
         unasserted += summary["unasserted"]
         print(f"{manifest_relative} {_format_summary(summary)}")
     source_manifest = load_manifest(_absolute_lexical(Path(repo_root) / KNOWN_MANIFESTS[0][0]))
-    for profile in sorted(NOASSERTION_EXCLUDED_PROFILES):
-        derived, excluded = derive_package_manifest(source_manifest, profile)
+    selected = getattr(args, "profile", None)
+    profiles = [selected] if selected else sorted(NOASSERTION_EXCLUDED_PROFILES | CLOSURE_PROFILES)
+    for profile in profiles:
+        try:
+            closure, _ = derive_profile_closure(Path(repo_root), source_manifest, profile)
+            derived, excluded = derive_package_manifest(source_manifest, profile, closure)
+        except ManifestFormatError as exc:
+            print(f"FAILED: cannot derive package profile {profile}: {exc}", file=sys.stderr)
+            return 1
         profile_errors = package_profile_errors(derived, profile, profile, source_manifest)
         if profile_errors:
             print(f"FAILED: derived {profile} package manifest violates its profile", file=sys.stderr)
             _print_errors(profile_errors)
             return 1
-        print(
-            f"package profile {profile}: {derived['fileCount']} entries packaged, "
-            f"{len(excluded)} NOASSERTION entries excluded (OD-09)")
+        print(f"package profile {profile}: {derived['fileCount']} entries packaged, "
+              f"{_exclusion_summary(source_manifest, excluded)} excluded")
+        if selected:
+            # With --profile, --strict-provenance judges only what that profile ships.
+            unasserted = sum(1 for entry in derived["entries"] if entry.get("license") in (None, NOASSERTION))
+            print(f"package profile {profile} {_format_summary(provenance_summary(derived))}")
     if getattr(args, "strict_provenance", False) and unasserted:
-        print(f"FAILED: --strict-provenance and {unasserted} entries assert no license", file=sys.stderr)
+        scope = f"package profile {selected} ships" if selected else "the repository manifest has"
+        print(f"FAILED: --strict-provenance and {scope} {unasserted} entries that assert no license",
+              file=sys.stderr)
         return 1
     return 0
 
@@ -1540,10 +1664,21 @@ def main() -> int:
     package_profile.add_argument(
         "--exclusions", required=True,
         help="Root-relative excluded files and directories (trailing '/'), one per line")
+    package_profile.add_argument(
+        "--repo-root",
+        help="Repository whose module sources and profile definitions derive the asset closure "
+             "(default: auto-detect)")
+    package_profile.add_argument(
+        "--inputs",
+        help="Also write the closure's re-derivation inputs, one absolute path per line: every data file "
+             "read plus each scanned source directory")
     package_profile.set_defaults(handler=cmd_package_profile)
 
     check_all = commands.add_parser("check-all", help="Verify all repository asset contracts")
     check_all.add_argument("--repo-root", help="Repository root (default: auto-detect)")
+    check_all.add_argument(
+        "--profile", choices=sorted(PACKAGE_PROFILES),
+        help="Derive only this package profile; --strict-provenance then judges only the entries it ships")
     check_all.add_argument(
         "--strict-provenance", action="store_true",
         help="Also fail while any entry asserts NOASSERTION (release-promotion gate)")

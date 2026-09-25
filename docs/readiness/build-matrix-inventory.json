@@ -625,7 +625,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3403,
+      "line": 3406,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1438,7 +1438,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3403,
+      "line": 3406,
       "conditionFrames": [],
       "definitionScope": []
     },
