@@ -1375,7 +1375,7 @@ class TestWorkflowBinding(unittest.TestCase):
     def test_run_commands_preserve_execution_order(self) -> None:
         block = check_fuzz_policy._job_block(self.workflow, check_fuzz_policy.FUZZ_JOB)
         commands = check_fuzz_policy._run_commands_in_order(block)
-        build = "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest"
+        build = "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive"
         all_tests = "ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release"
         smoke = "ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release"
         self.assertLess(commands.index(build), commands.index(all_tests))
@@ -1540,7 +1540,7 @@ class TestCiBindingMutations(unittest.TestCase):
     def test_inventory_fuzz_target_missing_from_build_command_is_rejected(self) -> None:
         self.fixture.patch(
             ".github/workflows/build.yml",
-            "      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest",
+            "      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive",
             "      # cmake --build build/fuzz-policy --target SparkFuzzCrashManifest\n"
             "      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights",
         )
@@ -1554,7 +1554,7 @@ class TestCiBindingMutations(unittest.TestCase):
     def test_inventory_fuzz_build_after_ctest_is_rejected(self) -> None:
         path = self.fixture.root / ".github/workflows/build.yml"
         text = path.read_text(encoding="utf-8")
-        build = "      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest"
+        build = "      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive"
         all_tests = "      run: ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release"
         smoke = "      run: ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release"
         self.assertLess(text.index(build), text.index(all_tests))
@@ -1701,7 +1701,7 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertIn('LDFLAGS: "-stdlib=libstdc++"', block_text)
         build_commands = check_fuzz_policy._run_commands(block)
         self.assertIn(
-            "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest",
+            "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive",
             build_commands,
         )
         self.assertIn(

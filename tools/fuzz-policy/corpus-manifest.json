@@ -80,6 +80,22 @@
         "max_corpus_bytes": 32768,
         "smoke_seconds": 10
       }
+    },
+    {
+      "id": "sparkpak-reader-corpus",
+      "parser_id": "sparkpak-reader",
+      "corpus_dir": "FuzzerTests/corpora/sparkpak-reader",
+      "last_verified": "2026-09-25",
+      "content_digest": "d160d5c7e350f4db0020320bb8189c54e6f3e2aecbc55692545a2170c46cdfd6",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 512,
+        "max_depth": 1,
+        "max_corpus_entries": 11,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      }
     }
   ]
 }

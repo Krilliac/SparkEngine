@@ -542,10 +542,16 @@
       "formats": [
         ".spak"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzArchive.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzArchive",
+        "test_selector": "FuzzArchiveSmoke",
+        "corpus_id": "sparkpak-reader-corpus",
+        "entry_symbol": "Spark::SparkPakReader::Open",
+        "binding_source": "FuzzerTests/FuzzArchiveProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzOpenSparkPak"
       }
     },
     {
@@ -2378,6 +2384,17 @@
   ],
   "deferred_candidates": [],
   "exempt_candidates": [
+    {
+      "source_file": "GameModules/SparkGameFPS/Source/Core/HeadlessArena.cpp",
+      "classification": "delegating-call-site",
+      "justification": "The headless arena loads the fixed Scenes/level1.scene path through the data-only SceneManager::LoadScene and reads the decoded nodes; the file decodes no scene bytes itself.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "scene-serializer"
+      ]
+    },
     {
       "source_file": "GameModules/SparkGameFPS/Source/Core/Main.cpp",
       "classification": "delegating-call-site",

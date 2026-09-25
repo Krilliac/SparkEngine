@@ -257,3 +257,99 @@ set_tests_properties(FuzzSceneManifestSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# The SparkPak reader inflates deflate entries and its TOC through the vendored
+# miniz. It is compiled here with the fuzzer's coverage and sanitizer
+# instrumentation (instead of linking the root project's uninstrumented miniz
+# target) so libFuzzer can steer through inflate and ASan sees its buffer use.
+enable_language(C)
+set(SPARK_FUZZ_MINIZ_ROOT "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/miniz")
+add_library(SparkFuzzMiniz STATIC
+    "${SPARK_FUZZ_MINIZ_ROOT}/miniz.c"
+    "${SPARK_FUZZ_MINIZ_ROOT}/miniz_tdef.c"
+    "${SPARK_FUZZ_MINIZ_ROOT}/miniz_tinfl.c"
+)
+include(GenerateExportHeader)
+generate_export_header(SparkFuzzMiniz
+    BASE_NAME miniz
+    EXPORT_FILE_NAME "${CMAKE_CURRENT_BINARY_DIR}/miniz-export/miniz_export.h"
+)
+target_include_directories(SparkFuzzMiniz PUBLIC
+    "${SPARK_FUZZ_MINIZ_ROOT}"
+    "${CMAKE_CURRENT_BINARY_DIR}/miniz-export"
+)
+target_compile_definitions(SparkFuzzMiniz PUBLIC MINIZ_STATIC_DEFINE)
+# Coverage instrumentation only (the executable links the libFuzzer driver).
+target_compile_options(SparkFuzzMiniz PRIVATE
+    -fsanitize=fuzzer-no-link
+    -fsanitize=address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -w
+)
+
+add_executable(SparkFuzzArchive
+    FuzzArchive.cpp
+    FuzzArchiveProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/SparkPak.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzArchive.cpp use
+# libstdc++; the production reader, the VFS path policy, the logger and the
+# adapter use libc++ and meet the driver only at the C ABI in
+# FuzzArchiveProduction.h.
+set_source_files_properties(
+    FuzzArchiveProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/SparkPak.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp"
+    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzArchive PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/zstd"
+)
+target_compile_features(SparkFuzzArchive PRIVATE cxx_std_23)
+# Build the reader with both codecs the engine ships (the root project defines
+# the same two macros when it links miniz and the vendored zstd). Logger.cpp
+# routes warnings/errors through DebugHookManager unless SPARK_SHIPPING compiles
+# the hooks out; the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzArchive PRIVATE
+    SPARK_SHIPPING=1
+    SPARK_MINIZ_AVAILABLE=1
+    SPARK_ZSTD_AVAILABLE=1
+)
+target_compile_options(SparkFuzzArchive PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzArchive PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzArchive PRIVATE SparkFuzzMiniz Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzArchiveSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzArchive>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=512
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=11
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/sparkpak-reader"
+)
+set_tests_properties(FuzzArchiveSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

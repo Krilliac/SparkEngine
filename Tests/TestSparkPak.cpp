@@ -746,3 +746,57 @@ TEST(SparkPak_ProductionAddDirectoryRejectsSymlinkOutsideRoot)
     reader.Close();
     Cleanup();
 }
+
+#ifdef SPARK_MINIZ_AVAILABLE
+TEST(SparkPak_ProductionRejectsTocHeaderThatOverstatesDeflateOutput)
+{
+    // Regression for the SEC-120 SparkPak fuzz target: ReadTOC allocated the
+    // header's tocRawSize (up to 256 MB) before inflating a TOC stream of any
+    // size, and accepted a stream that ended short of that size. A tiny archive
+    // could therefore demand a 256 MB zero-filled buffer at mount time and still
+    // open. Both forms are now refused before the entry parser runs.
+    const auto path = TempPath("toc_overstated.spk");
+    Spark::SparkPakWriter writer;
+    writer.AddFile("asset.bin", std::vector<uint8_t>(16, 0x42), false);
+    EXPECT_TRUE(writer.Finalize(path));
+
+    Spark::PakHeader header;
+    {
+        std::ifstream in(path, std::ios::binary);
+        in.read(reinterpret_cast<char*>(&header), sizeof(header));
+        EXPECT_TRUE(in.good());
+    }
+    EXPECT_TRUE(header.tocSize != header.tocRawSize); // the writer deflates the TOC
+
+    const auto rewriteRawSize = [&](uint32_t rawSize)
+    {
+        Spark::PakHeader patched = header;
+        patched.tocRawSize = rawSize;
+        std::fstream out(path, std::ios::binary | std::ios::in | std::ios::out);
+        out.seekp(0);
+        out.write(reinterpret_cast<const char*>(&patched), sizeof(patched));
+    };
+
+    {
+        Spark::SparkPakReader reader;
+        EXPECT_TRUE(reader.Open(path));
+        EXPECT_TRUE(reader.ReadFile("asset.bin") == std::vector<uint8_t>(16, 0x42));
+    }
+
+    // The stream inflates to fewer bytes than declared (still a plausible ratio).
+    rewriteRawSize(header.tocRawSize + 64u);
+    {
+        Spark::SparkPakReader reader;
+        EXPECT_FALSE(reader.Open(path));
+    }
+
+    // A declared expansion past deflate's ~1032:1 ceiling cannot be genuine.
+    rewriteRawSize(header.tocSize * 1032u + 1u);
+    {
+        Spark::SparkPakReader reader;
+        EXPECT_FALSE(reader.Open(path));
+    }
+
+    Cleanup();
+}
+#endif

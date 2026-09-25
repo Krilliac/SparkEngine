@@ -2793,6 +2793,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzArchive",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 292,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzCrashManifest",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
@@ -2807,6 +2817,16 @@
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
       "line": 10,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzMiniz",
+      "kind": "static_library",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 267,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4550,6 +4570,24 @@
       ]
     },
     {
+      "target": "SparkFuzzArchive",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 292,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzCrashManifest",
       "kind": "executable",
       "buildable": true,
@@ -4579,6 +4617,24 @@
           "file": "FuzzerTests/CMakeLists.txt",
           "line": 10,
           "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzMiniz",
+      "kind": "static_library",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 267,
+          "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
           "resolved": true
@@ -6228,7 +6284,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 7,
+        "stepCount": 8,
         "steps": [
           {
             "index": 0,
@@ -6256,6 +6312,18 @@
           },
           {
             "index": 2,
+            "name": "Check out the miniz submodule",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "99b2e87570470231"
+          },
+          {
+            "index": 3,
             "name": "Configure fuzz-policy checks",
             "id": "",
             "uses": "",
@@ -6270,7 +6338,7 @@
             "runDigest": "b22b3da5c91fad33"
           },
           {
-            "index": 3,
+            "index": 4,
             "name": "Run blocking fuzz-policy target",
             "id": "",
             "uses": "",
@@ -6282,7 +6350,7 @@
             "runDigest": "294c9a40d1798602"
           },
           {
-            "index": 4,
+            "index": 5,
             "name": "Build production fuzz smoke target",
             "id": "",
             "uses": "",
@@ -6291,10 +6359,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "32b8d63d162834ba"
+            "runDigest": "ca1d5c7723bcba21"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "Run adversarial policy tests",
             "id": "",
             "uses": "",
@@ -6306,7 +6374,7 @@
             "runDigest": "02f0d4615a6259d9"
           },
           {
-            "index": 6,
+            "index": 7,
             "name": "Run production fuzz smoke",
             "id": "",
             "uses": "",
@@ -11593,7 +11661,7 @@
       {
         "job": "fuzz-policy",
         "step": "Configure fuzz-policy checks",
-        "stepIndex": 2,
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -11615,7 +11683,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run blocking fuzz-policy target",
-        "stepIndex": 3,
+        "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -11642,7 +11710,7 @@
       {
         "job": "fuzz-policy",
         "step": "Build production fuzz smoke target",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -11654,9 +11722,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive",
         "commandProvenance": "literal",
         "targets": [
+          "SparkFuzzArchive",
           "SparkFuzzCrashManifest",
           "SparkFuzzJsonUtils",
           "SparkFuzzNeuralWeights",
@@ -11673,7 +11742,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run adversarial policy tests",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -11696,7 +11765,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run production fuzz smoke",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -14100,7 +14169,7 @@
       {
         "job": "fuzz-policy",
         "step": "Configure fuzz-policy checks",
-        "stepIndex": 2,
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -14948,7 +15017,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run blocking fuzz-policy target",
-        "stepIndex": 3,
+        "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -14975,7 +15044,7 @@
       {
         "job": "fuzz-policy",
         "step": "Build production fuzz smoke target",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -14987,9 +15056,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive",
         "commandProvenance": "literal",
         "targets": [
+          "SparkFuzzArchive",
           "SparkFuzzCrashManifest",
           "SparkFuzzJsonUtils",
           "SparkFuzzNeuralWeights",
@@ -15770,7 +15840,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run adversarial policy tests",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -15793,7 +15863,7 @@
       {
         "job": "fuzz-policy",
         "step": "Run production fuzz smoke",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -16690,7 +16760,7 @@
     {
       "job": "fuzz-policy",
       "step": "Configure fuzz-policy checks",
-      "stepIndex": 2,
+      "stepIndex": 3,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "linux",

@@ -60,6 +60,13 @@ namespace Spark
         constexpr uint64_t kMaxDecompressedEntryBytes = 256ull * 1024ull * 1024ull; // 256 MB
         constexpr uint64_t kMaxCompressionRatio = 100'000ull;
 
+        // The TOC is always deflate (SparkPakWriter uses mz_compress), and deflate
+        // cannot expand past ~1032:1 (a 258-byte match coded in two bits). A header
+        // whose tocRawSize exceeds that multiple of tocSize cannot be genuine, so it
+        // is rejected before ReadTOC allocates the declared raw buffer; otherwise a
+        // ~100-byte file could demand a 256 MB zero-filled allocation at mount time.
+        constexpr uint64_t kMaxDeflateExpansion = 1032ull;
+
         /// Reject an entry whose declared decompressed size is outside the per-entry
         /// budget. Returns false (and logs) for the offending entry only.
         bool WithinDecompressionBudget(const PakEntry& entry, const std::string& virtualPath)
@@ -238,6 +245,9 @@ namespace Spark
             return false;
         if (m_header.tocSize > fileSize - m_header.tocOffset)
             return false;
+        if (m_header.tocSize != m_header.tocRawSize &&
+            static_cast<uint64_t>(m_header.tocRawSize) > static_cast<uint64_t>(m_header.tocSize) * kMaxDeflateExpansion)
+            return false;
 
         // Seek to TOC
         if (PAK_FSEEK(m_file, m_header.tocOffset, SEEK_SET) != 0)
@@ -261,6 +271,10 @@ namespace Spark
             tocRaw.resize(m_header.tocRawSize);
             mz_ulong destLen = m_header.tocRawSize;
             if (mz_uncompress(tocRaw.data(), &destLen, tocCompressed.data(), m_header.tocSize) != MZ_OK)
+                return false;
+            // A stream that ends short of the declared size would leave a
+            // zero-filled tail that the entry parser below would read as TOC data.
+            if (destLen != m_header.tocRawSize)
                 return false;
 #else
             return false;
@@ -367,6 +381,12 @@ namespace Spark
         // Refuse this entry before touching the file if its declared expansion is
         // outside the per-entry budget. Other entries in the archive stay readable.
         if (!WithinDecompressionBudget(entry, virtualPath))
+            return {};
+
+        // A zero-byte entry has nothing to read or inflate. Handing a codec the
+        // data() of an empty vector passes it a null buffer, and miniz then does
+        // pointer arithmetic on null (found by the SparkFuzzArchive target).
+        if (entry.originalSize == 0)
             return {};
 
         // The declared sizes are attacker-controlled. ReadTOC bounds them, but the

@@ -80,6 +80,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y clang cmake libc++-dev libc++abi-dev
 
+    # SparkFuzzArchive compiles the vendored miniz (a pinned submodule) with
+    # fuzzer instrumentation; no other submodule is needed by this job.
+    - name: Check out the miniz submodule
+      run: git submodule update --init --depth 1 ThirdParty/Utils/miniz
+
     - name: Configure fuzz-policy checks
       env:
         CXXFLAGS: "-stdlib=libstdc++"
@@ -90,7 +95,7 @@ jobs:
       run: cmake --build build/fuzz-policy --target check-fuzz-policy
 
     - name: Build production fuzz smoke target
-      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest
+      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive
 
     - name: Run adversarial policy tests
       # -C is required by multi-config generators and ignored by single-config

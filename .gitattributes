@@ -38,6 +38,8 @@ FuzzerTests/corpora/crash-manifest/*.json text eol=lf
 # .sparkscene seeds deliberately carry CRLF, lone CR, NUL and non-UTF-8 bytes;
 # store them verbatim so neither normalization nor autocrlf rewrites a seed.
 FuzzerTests/corpora/scene-manifest/*.sparkscene -text
+# .spk seeds are binary archives; autocrlf must never touch a byte of them.
+FuzzerTests/corpora/sparkpak-reader/*.spk -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before
