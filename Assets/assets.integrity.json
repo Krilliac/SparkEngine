@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 972,
+  "fileCount": 996,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -2236,6 +2236,174 @@
       "size": 45229,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original Blender 4.0.2 export from Art/Blender/MMO/props.blend via tools/blender/author_mmo_props.py; hash-bound by Art/Blender/MMO/provenance.json: Blender-authored tree_pine [mmo-blender-props]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/comms_relay.mtl",
+      "sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+      "size": 985,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json: Blender-authored comms_relay [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/comms_relay.obj",
+      "sha256": "0cf677e573e3542bffc160151019431a0bcc3150dd6d64bfadf0aa9fd2262064",
+      "size": 72712,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json: Blender-authored comms_relay [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/comms_relay_collision.mtl",
+      "sha256": "c557449d5bf777b0ab07161d236ecfd794278347d4cee59d052b96d19cefe2dc",
+      "size": 239,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/comms_relay_collision.obj",
+      "sha256": "0cc9dfcb6c89da713ad19ec79ffb9adacfb4aa680c545eb7abe19ef2b5484bf8",
+      "size": 7245,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/comms_relay_lod1.mtl",
+      "sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+      "size": 985,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/comms_relay_lod1.obj",
+      "sha256": "0c7fd37cd33c1ebac5e7f7d2236c8f0bd55be27cb0b9616070bdfc16173e6a50",
+      "size": 33454,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/deployable_barricade.mtl",
+      "sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+      "size": 985,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json: Blender-authored deployable_barricade [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/deployable_barricade.obj",
+      "sha256": "1c12a7514c1e98dc31913829f9123e3bd4fe337ba5ff60e88e807723463fe58c",
+      "size": 58818,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json: Blender-authored deployable_barricade [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/deployable_barricade_collision.mtl",
+      "sha256": "c557449d5bf777b0ab07161d236ecfd794278347d4cee59d052b96d19cefe2dc",
+      "size": 239,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/deployable_barricade_collision.obj",
+      "sha256": "8762651f1d6c13c446865d2ae64a9aa76774271d6a5a305fac3b8d920efe7353",
+      "size": 6425,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/deployable_barricade_lod1.mtl",
+      "sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+      "size": 985,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/deployable_barricade_lod1.obj",
+      "sha256": "0afbe34e0d13a32166f6623389d9230bbfe0ea6d437b6b1b2832ebdea3593e41",
+      "size": 25078,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/supply_drop_pod.mtl",
+      "sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+      "size": 985,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json: Blender-authored supply_drop_pod [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/supply_drop_pod.obj",
+      "sha256": "c2f29676190b33ac85fd8ab9dcf41a5e606a7c02938e156443e37b12e572d8c4",
+      "size": 79552,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json: Blender-authored supply_drop_pod [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/supply_drop_pod_collision.mtl",
+      "sha256": "c557449d5bf777b0ab07161d236ecfd794278347d4cee59d052b96d19cefe2dc",
+      "size": 239,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/supply_drop_pod_collision.obj",
+      "sha256": "39634f2e65df96a1b5e86a268f439ca74229f4bf98d4aa007a29c0f0fa3bd50b",
+      "size": 15275,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/supply_drop_pod_lod1.mtl",
+      "sha256": "1e96cab69fd01301036fa07abb876872e9be852ba8f5a6e2b0e1638ff5edef66",
+      "size": 985,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/supply_drop_pod_lod1.obj",
+      "sha256": "1357e9eec59a9a73ba78e65de2916ba5e2b1345184d8f94b313d4ff6597db228",
+      "size": 37631,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/vehicle_pad.mtl",
+      "sha256": "8f2f5294444886d69051b4ef1f7e2c1996af1049c5962ca5ef738d3bf2f3667b",
+      "size": 799,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json: Blender-authored vehicle_pad [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/vehicle_pad.obj",
+      "sha256": "96544a14220edfdc76ddf189c6774eca5aad3d08b674e1b7719c9a6ed9300da6",
+      "size": 23014,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json: Blender-authored vehicle_pad [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/vehicle_pad_collision.mtl",
+      "sha256": "c557449d5bf777b0ab07161d236ecfd794278347d4cee59d052b96d19cefe2dc",
+      "size": 239,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/vehicle_pad_collision.obj",
+      "sha256": "58709589f30478943da8fc68f7138e56923f8d386bf2d3c914645fd444f2a78d",
+      "size": 1237,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/vehicle_pad_lod1.mtl",
+      "sha256": "8f2f5294444886d69051b4ef1f7e2c1996af1049c5962ca5ef738d3bf2f3667b",
+      "size": 799,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
+    },
+    {
+      "path": "Models/MMOFPS/Kit/vehicle_pad_lod1.obj",
+      "sha256": "a8c8fe017aac33322c0142a6426ce3a5ed46ce123fb7b9de47e882e0682f0a14",
+      "size": 9621,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json [mmofps-blender-kit]"
     },
     {
       "path": "Models/MMOFPS/buildings/T_Decals.png",

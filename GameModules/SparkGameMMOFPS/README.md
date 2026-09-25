@@ -260,7 +260,10 @@ $env:SPARK_TEST_NAME = "TF"; .\build\bin\Release\SparkTests.exe
 
 ## Credits
 
-All shipped art and audio is **CC0 1.0** (Kenney, Quaternius, ambientCG,
+Imported art and audio is **CC0 1.0** (Kenney, Quaternius, ambientCG,
 OpenGameArt contributors). Per-pack table: [`Assets/MMOFPS/ATTRIBUTION.md`](../../Assets/MMOFPS/ATTRIBUTION.md);
-per-file provenance: `Assets/MMOFPS/asset_manifest.json`. TERRAFRONT's fiction,
-names and design are original to this module.
+per-file provenance: `Assets/MMOFPS/asset_manifest.json`. The frontline-logistics kit in
+`Assets/Models/MMOFPS/Kit/` (supply drop pod, deployable barricade, comms relay, vehicle pad) is
+repository-original Blender work under the Spark Open License 1.0; see
+[`Art/Blender/SparkGameMMOFPS/README.md`](../../Art/Blender/SparkGameMMOFPS/README.md).
+TERRAFRONT's fiction, names and design are original to this module.

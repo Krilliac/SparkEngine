@@ -261,6 +261,27 @@
       ]
     },
     {
+      "id": "mmofps-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMOFPS/mmofps_kit.blend via tools/blender/author_mmofps_kit.py; hash-bound by Art/Blender/SparkGameMMOFPS/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameMMOFPS/provenance.json",
+        "Art/Blender/SparkGameMMOFPS/mmofps_kit.blend",
+        "tools/blender/author_mmofps_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameMMOFPS/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/MMOFPS/Kit/"
+      ]
+    },
+    {
       "id": "starter-model-pipeline",
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original starter/module-kit model from Tools/model_pipeline/generate_starter_models.py; hash-bound by Assets/Models/Generated/starter_assets_manifest.json",
