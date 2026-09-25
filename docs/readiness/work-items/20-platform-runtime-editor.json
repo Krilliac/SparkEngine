@@ -1355,8 +1355,13 @@
         {
           "criterionDigest": "sha256:99267550fdd7",
           "state": "unmet",
-          "evidence": [],
-          "note": "This needs a Windows package run. There is no dependency reference-closure check."
+          "evidence": [
+            "tools/asset-integrity/asset_references.py",
+            "tools/asset-integrity/verify_asset_integrity.py",
+            "Tests/PackageSmoke/ValidateInstalledFPSAssets.cmake",
+            "Tests/Tools/test_asset_integrity.py"
+          ],
+          "note": "verify_asset_integrity.py references proves scene and material references resolve inside the staged Assets root to listed, link-free files and fails closed on unknown reference-like keys; check-all and ValidateInstalledFPSAssets.cmake run it. Local Linux: repo Assets (740 references) and a cmake --install stage pass. Missing: Windows package run, hosted evidence."
         },
         {
           "criterionDigest": "sha256:0bdf64af2831",

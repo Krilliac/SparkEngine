@@ -5183,7 +5183,8 @@ Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `Tests/TestENG220ObjImportReal.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`, `Tests/TestGLTFAnimationImport.cpp`
    - Static glTF/OBJ rejections are tested. Skinned rejections (GLTF_Skinning_*): JOINTS_1, joint range, weights, 256-joint cap, joint graph, inverse binds. Animation rejections (GLTF_Animation_*): non-LINEAR, non-joint/morph targets, offset animated root, bad times/outputs, duplicates, failed skinned mesh; MeshAsset fails on invalid skins. Material/texture and Windows package diagnostics are missing.
 4. **[unmet]** The Windows package retains all dependencies
-   - This needs a Windows package run. There is no dependency reference-closure check.
+   - Evidence: `tools/asset-integrity/asset_references.py`, `tools/asset-integrity/verify_asset_integrity.py`, `Tests/PackageSmoke/ValidateInstalledFPSAssets.cmake`, `Tests/Tools/test_asset_integrity.py`
+   - verify_asset_integrity.py references proves scene and material references resolve inside the staged Assets root to listed, link-free files and fails closed on unknown reference-like keys; check-all and ValidateInstalledFPSAssets.cmake run it. Local Linux: repo Assets (740 references) and a cmake --install stage pass. Missing: Windows package run, hosted evidence.
 5. **[unmet]** Experimental backend parity remains owned by RHI-220, RHI-225, RHI-230, and RHI-240
    - Evidence: `Tests/Tools/test_site_data_contract.py`
    - Downgraded: the contract test only asserts ENG-220 text omits backend names. Nothing asserts RHI-220/225/230/240 exist or own parity, so losing ownership would pass.

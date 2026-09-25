@@ -178,6 +178,41 @@ non-regular files, incomplete declarations, resource-limit violations, and a
 file that changes while it is read. This is a repository-content gate, not yet
 proof that the same verified snapshot was consumed by package assembly.
 
+### Staged reference closure (ENG-220)
+
+Hashes prove the staged files are the reviewed bytes. They do not prove that
+what a scene or material names is actually there. The `references` command
+checks that separately:
+
+```bash
+python3 tools/asset-integrity/verify_asset_integrity.py references Assets/assets.integrity.json --root Assets
+python3 tools/asset-integrity/verify_asset_integrity.py references <pkg>/bin/Assets/assets.integrity.json \
+    --root <pkg>/bin/Assets
+```
+
+It parses every `.scene` and every `Materials/**.json` that the manifest
+lists, plus any other material a scene names
+(`tools/asset-integrity/asset_references.py`). Every reference must resolve
+inside the root, without `..` or an absolute path, to a regular, link-free
+file that the manifest lists with exact case. A failure names the
+referencing file, its line or JSON key, and the value.
+
+| Format | Reference keys | Base |
+|--------|----------------|------|
+| INI `.scene` (SceneManager) | Runtime: `model`, `material`. Validator policy: `mesh`, `[Scene] skybox` | `model` must start with `Assets/` because SceneManager hands it to the OBJ loader unchanged. `material` must start with exactly `Assets/Materials/` (or `Assets\Materials\`) and end in `.json`, because GameObject silently uses the default material for anything else (`material=ground_dirt` or `material=Assets/Textures/foo.json` fails). SceneManager stores `mesh` as an opaque node property and ignores `skybox` today; the validator still requires `mesh` to be an `Assets/`-rooted model and a non-`default` `skybox` to name a cubemap prefix whose six `_px/_nx/_py/_ny/_pz/_nz.png` faces are all staged |
+| JSON `.scene` (`entities`) | `MeshRenderer.mesh` (or the built-in `Primitive/<Name>`), `MeshRenderer.material`, `AudioSource.sound`, `environment.skyTexture` | `Assets`-relative, and a leading `Assets/` is accepted |
+| Material `.json` | `albedo`, `normal`, string `roughness` | `Assets`-relative unless prefixed with `Assets/` (as `GetOrLoadBasicMaterial` resolves them) |
+
+The check fails closed. If a value looks like an asset path (it has a
+separator or a known asset suffix) under any other key, that is an error
+until the key is added to `asset_references.py`. So is a legacy
+space-delimited scene. `check-all` runs the check on the repository
+`Assets/`. `Tests/PackageSmoke/ValidateInstalledFPSAssets.cmake` runs it on
+the installed package after hash and profile verification. The check proves
+that staged content is closed under its references. It does not prove that a
+runtime consumer loads every JSON-dialect path. Windows package evidence
+stays external.
+
 ### stable-v1 package asset profile (OD-09)
 
 The stable-v1 package ships only the runtime asset closure of its in-profile

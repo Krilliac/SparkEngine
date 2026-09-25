@@ -4598,8 +4598,8 @@
     },
     {
       "path": "Scenes/combat_arena.scene",
-      "sha256": "de59f80bc688ec508cac0292f6bc564885be38cdcbd4d930507feed25e558fd4",
-      "size": 5871,
+      "sha256": "7b69aa205820f68bf98c390a5f4518531ad38e0dbc5470c3b3b5015a5b42bfe7",
+      "size": 6454,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-authored scene, data, script, model, or documentation file covered by the repository LICENSE [repository-authored]"
     },

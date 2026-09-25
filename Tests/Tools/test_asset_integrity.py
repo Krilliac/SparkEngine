@@ -230,24 +230,34 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
 
     HELPER = REPO_ROOT / "Tests" / "PackageSmoke" / "ValidateInstalledFPSAssets.cmake"
 
-    def _fixture(self, temporary: str | os.PathLike[str], license_id: str = "CC0-1.0") -> Path:
+    def _fixture(
+        self, temporary: str | os.PathLike[str], license_id: str = "CC0-1.0",
+        extra: dict[str, bytes] | None = None,
+    ) -> Path:
         # The helper applies the stable-v1 package profile, so the fixture is a
         # schema v2 manifest whose entries match a reviewed source manifest.
         # The source manifest lives in a fixture checkout whose stable-v1
-        # profile definition makes payload.bin the whole asset closure (RDY-020).
+        # profile definition makes payload.bin (plus any extra files) the whole
+        # asset closure (RDY-020).
         assets = Path(temporary) / "Assets"
         assets.mkdir(parents=True)
         payload = b"installed FPS package fixture\n"
-        (assets / "payload.bin").write_bytes(payload)
+        files = {"payload.bin": payload, **(extra or {})}
         checkout = Path(temporary) / "checkout"
         for relative in ("Assets", "tools/asset-integrity", "GameModules/Fixture/Source", "Engine/Source"):
             (checkout / relative).mkdir(parents=True)
+        # The closure derivation follows scene references in the checkout's copy.
+        for base in (assets, checkout / "Assets"):
+            for relative, data in files.items():
+                (base / relative).parent.mkdir(parents=True, exist_ok=True)
+                (base / relative).write_bytes(data)
         (checkout / "tools/asset-integrity/package-profiles.json").write_text(json.dumps({
             "version": 1,
             "profiles": {"stable-v1": {
                 "modules": ["Fixture"],
                 "engineSources": [{"path": "Engine/Source/", "reason": "Fixture engine code"}],
-                "seeds": [{"path": "payload.bin", "reason": "Installed-package helper fixture payload"}],
+                "seeds": [{"path": relative, "reason": "Installed-package helper fixture payload"}
+                          for relative in sorted(files)],
                 "unshippedReferences": [],
             }},
         }), encoding="utf-8")
@@ -260,14 +270,14 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
             "version": 2,
             "algorithm": "sha256",
             "root": "Assets",
-            "fileCount": 1,
+            "fileCount": len(files),
             "entries": [{
-                "path": "payload.bin",
-                "sha256": digest(payload),
-                "size": len(payload),
+                "path": relative,
+                "sha256": digest(files[relative]),
+                "size": len(files[relative]),
                 "license": license_id,
                 "provenance": "Installed-package helper fixture",
-            }],
+            } for relative in sorted(files)],
         }
         (assets / vai.MANIFEST_FILENAME).write_bytes(vai.manifest_bytes(manifest))
         (checkout / "Assets" / vai.MANIFEST_FILENAME).write_bytes(vai.manifest_bytes(manifest))
@@ -296,6 +306,37 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             result = self._run_helper(self._fixture(temporary))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_installed_package_asset_helper_checks_scene_reference_closure(self) -> None:
+        crate = b"o crate\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"
+        for model, accepted in (("Assets/Models/crate.obj", True), ("crate.obj", False)):
+            with self.subTest(model=model), tempfile.TemporaryDirectory() as temporary:
+                scene = f"[Scene]\nname=Fixture\n\n[Object]\ntype=model\nmodel={model}\n".encode()
+                assets = self._fixture(temporary, extra={"Models/crate.obj": crate, "Scenes/arena.scene": scene})
+                result = self._run_helper(assets)
+                output = result.stdout + result.stderr
+                if accepted:
+                    self.assertEqual(result.returncode, 0, output)
+                    self.assertIn("reference closure passed: OK: 1 references in 1 scene", output)
+                else:
+                    # The hash and closure-profile checks accept the bytes; only
+                    # the reference check sees that the runtime cannot resolve them.
+                    self.assertNotEqual(result.returncode, 0, output)
+                    self.assertIn("Installed FPS asset reference closure failed", output)
+                    self.assertIn("Scenes/arena.scene:6: model='crate.obj' is not an Assets/-rooted path", output)
+
+    def test_installed_package_asset_helper_fails_hashes_before_references(self) -> None:
+        # A tampered payload plus a broken reference must stop at the hash step:
+        # closure is only meaningful over bytes already proven to be the reviewed ones.
+        scene = b"[Scene]\nname=Fixture\n\n[Object]\ntype=model\nmodel=Assets/Models/absent.obj\n"
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary, extra={"Scenes/arena.scene": scene})
+            (assets / "payload.bin").write_bytes(b"tampered package payload\n")
+            result = self._run_helper(assets)
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("Installed FPS asset integrity validation failed", output)
+        self.assertNotIn("reference closure", output)
 
     def test_installed_package_asset_helper_rejects_noassertion_asset(self) -> None:
         # OD-09: the stable-v1 package must not ship an asset without a license record.
@@ -890,6 +931,228 @@ class SiteDataAssetIntegrationTests(unittest.TestCase):
             (root / "Assets" / "fixture.bin").write_bytes(b"tampered")
             errors = self.validate_fixture(root)
         self.assertTrue(any("asset-integrity:fixture.bin" in error for error in errors), errors)
+
+
+class AssetReferenceClosureTests(unittest.TestCase):
+    """ENG-220: staged scene and material references must close over listed files inside the root."""
+
+    SCENE = (
+        "[Scene]\n"
+        "name=Fixture\n"
+        "skybox=Assets/Textures/sky/space\n"
+        "\n"
+        "[Object]\n"
+        "type=model\n"
+        "model=Assets/Models/crate.obj\n"
+        "material=Assets/Materials/Stone.json\n"
+        "position=0.0,0.0,0.0\n"
+    )
+    ZONE = {
+        "name": "Zone",
+        "environment": {"skyTexture": ""},
+        "entities": [
+            {"name": "Crate", "components": {"MeshRenderer": {"mesh": "Models/crate.obj",
+                                                              "material": "Materials/Stone.json"}}},
+            {"name": "Floor", "components": {"MeshRenderer": {"mesh": "Primitive/Cube"}}},
+            {"name": "Ambience", "components": {"AudioSource": {"sound": "Audio/amb.wav"}}},
+        ],
+    }
+    MATERIAL = {"name": "Stone", "shader": "PBR", "albedo": "Textures/stone.png",
+                "normal": "Assets/Textures/stone_n.png", "roughness": 0.5, "tiling": [1, 1]}
+
+    def _stage(
+        self, directory: str, overrides: dict[str, bytes | None] | None = None, *, unlisted: tuple[str, ...] = ()
+    ) -> Path:
+        root = Path(directory) / "Assets"
+        files: dict[str, bytes | None] = {
+            "Scenes/level.scene": self.SCENE.encode(),
+            "Scenes/zone.scene": json.dumps(self.ZONE).encode(),
+            "Materials/Stone.json": json.dumps(self.MATERIAL).encode(),
+            "Models/crate.obj": b"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n",
+            "Textures/stone.png": b"png",
+            "Textures/stone_n.png": b"png-normal",
+            "Audio/amb.wav": b"wav",
+        }
+        for face in ("px", "nx", "py", "ny", "pz", "nz"):
+            files[f"Textures/sky/space_{face}.png"] = face.encode()
+        files.update(overrides or {})
+        entries = []
+        for relative, data in sorted(files.items()):
+            if data is None:
+                continue
+            (root / relative).parent.mkdir(parents=True, exist_ok=True)
+            (root / relative).write_bytes(data)
+            if relative not in unlisted:
+                entries.append({"path": relative, "sha256": digest(data), "size": len(data)})
+        write_manifest(root, entries)
+        return root
+
+    def _check(self, root: Path) -> tuple[list, int, int]:
+        return vai.verify_references(root / vai.MANIFEST_FILENAME, root)
+
+    def _assert_error(self, root: Path, category: str, location: str, fragment: str) -> None:
+        errors, _, _ = self._check(root)
+        rendered = [str(error) for error in errors]
+        self.assertTrue(
+            any(error.category == category and error.path == location and fragment in error.message
+                for error in errors),
+            f"expected [{category}] {location}: ...{fragment}... in {rendered}")
+
+    def test_closed_fixture_passes_both_dialects_and_materials(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory)
+            self.assertEqual(vai.verify_manifest(root / vai.MANIFEST_FILENAME, root), [])
+            errors, parsed, checked = self._check(root)
+        self.assertEqual(errors, [], [str(error) for error in errors])
+        # level.scene: 6 skybox faces + model + material; zone.scene: mesh, material, sound; Stone.json: 2.
+        self.assertEqual((parsed, checked), (3, 13))
+
+    def test_missing_texture_names_material_and_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Textures/stone.png": None})
+            self._assert_error(root, "reference-missing", "Materials/Stone.json:albedo",
+                               "albedo='Textures/stone.png' resolves to 'Textures/stone.png', which is not staged")
+
+    def test_missing_material_names_scene_line(self) -> None:
+        scene = self.SCENE.replace("Materials/Stone.json", "Materials/Missing.json")
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Scenes/level.scene": scene.encode()})
+            self._assert_error(root, "reference-missing", "Scenes/level.scene:8",
+                               "material='Assets/Materials/Missing.json'")
+
+    def test_path_escaping_the_root_fails_in_every_format(self) -> None:
+        zone = json.loads(json.dumps(self.ZONE))
+        zone["entities"][0]["components"]["MeshRenderer"]["mesh"] = "Models/../../outside.obj"
+        material = dict(self.MATERIAL, normal="../Textures/stone_n.png")
+        cases = {
+            "Scenes/level.scene:7": ("Scenes/level.scene",
+                                     self.SCENE.replace("Assets/Models/crate.obj", "Assets/../outside.obj").encode()),
+            "Scenes/zone.scene:entities.0.components.MeshRenderer.mesh": ("Scenes/zone.scene",
+                                                                          json.dumps(zone).encode()),
+            "Materials/Stone.json:normal": ("Materials/Stone.json", json.dumps(material).encode()),
+        }
+        for location, (key, data) in cases.items():
+            with self.subTest(location=location), tempfile.TemporaryDirectory() as directory:
+                (Path(directory) / "outside.obj").write_bytes(b"v 0 0 0\n")
+                root = self._stage(directory, {key: data})
+                self._assert_error(root, "reference", location, "escapes the staged Assets root")
+
+    def test_absolute_reference_fails(self) -> None:
+        material = dict(self.MATERIAL, albedo="/etc/passwd")
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Materials/Stone.json": json.dumps(material).encode()})
+            self._assert_error(root, "reference", "Materials/Stone.json:albedo", "is an absolute path")
+
+    def test_unlisted_staged_file_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, unlisted=("Audio/amb.wav",))
+            self._assert_error(root, "reference-unlisted",
+                               "Scenes/zone.scene:entities.2.components.AudioSource.sound",
+                               "which assets.integrity.json does not list")
+
+    def test_case_mismatch_fails_on_every_filesystem(self) -> None:
+        scene = self.SCENE.replace("Assets/Models/crate.obj", "Assets/Models/Crate.obj")
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Scenes/level.scene": scene.encode()})
+            self._assert_error(root, "reference-case", "Scenes/level.scene:7", "differs in case")
+
+    def test_bare_scene_names_the_runtime_cannot_resolve_fail(self) -> None:
+        scene = self.SCENE.replace("Assets/Models/crate.obj", "crate.obj").replace(
+            "Assets/Materials/Stone.json", "ground_dirt")
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Scenes/level.scene": scene.encode()})
+            self._assert_error(root, "reference", "Scenes/level.scene:7", "is not an Assets/-rooted path")
+            self._assert_error(root, "reference", "Scenes/level.scene:8", "is not an Assets/-rooted path")
+
+    def test_unknown_reference_like_keys_fail_closed(self) -> None:
+        zone = json.loads(json.dumps(self.ZONE))
+        zone["entities"][0]["components"]["Decal"] = {"image": "Textures/stone.png"}
+        material = dict(self.MATERIAL, emissiveMap="Textures/stone.png")
+        cases = {
+            "Scenes/level.scene:10": ("Scenes/level.scene",
+                                      (self.SCENE + "texture=Assets/Textures/stone.png\n").encode()),
+            "Scenes/zone.scene:entities.0.components.Decal.image": ("Scenes/zone.scene", json.dumps(zone).encode()),
+            "Materials/Stone.json:emissiveMap": ("Materials/Stone.json", json.dumps(material).encode()),
+        }
+        for location, (key, data) in cases.items():
+            with self.subTest(location=location), tempfile.TemporaryDirectory() as directory:
+                root = self._stage(directory, {key: data})
+                self._assert_error(root, "reference", location, "under a key the reference validator does not know")
+
+    def test_every_cubemap_face_must_be_staged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Textures/sky/space_nz.png": None})
+            self._assert_error(root, "reference-missing", "Scenes/level.scene:3",
+                               "resolves to 'Textures/sky/space_nz.png'")
+
+    def test_material_outside_materials_is_followed(self) -> None:
+        zone = json.loads(json.dumps(self.ZONE))
+        zone["entities"][0]["components"]["MeshRenderer"]["material"] = "Data/Other.json"
+        other = json.dumps(dict(self.MATERIAL, albedo="Textures/absent.png")).encode()
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Scenes/zone.scene": json.dumps(zone).encode(), "Data/Other.json": other})
+            self._assert_error(root, "reference-missing", "Data/Other.json:albedo", "'Textures/absent.png'")
+
+    def test_legacy_and_malformed_scenes_fail_closed(self) -> None:
+        cases = {
+            "is not an INI or JSON scene": b"Cube 0 0 0\nSphere 1 2 3\n",
+            "is not valid JSON": b'{"entities": [}',
+            "duplicate JSON object key": b'{"name": "a", "name": "b"}',
+        }
+        for fragment, data in cases.items():
+            with self.subTest(fragment=fragment), tempfile.TemporaryDirectory() as directory:
+                root = self._stage(directory, {"Scenes/zone.scene": data})
+                self._assert_error(root, "reference", "Scenes/zone.scene", fragment)
+
+    @unittest.skipIf(sys.platform == "win32", "symlink creation needs privileges on Windows")
+    def test_link_like_reference_target_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Audio/amb.wav": None})
+            outside = Path(directory) / "outside.wav"
+            outside.write_bytes(b"wav")
+            (root / "Audio").mkdir()
+            (root / "Audio" / "amb.wav").symlink_to(outside)
+            manifest = vai.load_manifest(root / vai.MANIFEST_FILENAME)
+            manifest["entries"].append({"path": "Audio/amb.wav", "sha256": digest(b"wav"), "size": 3})
+            manifest["entries"].sort(key=lambda entry: entry["path"])
+            manifest["fileCount"] = len(manifest["entries"])
+            (root / vai.MANIFEST_FILENAME).write_bytes(vai.manifest_bytes(manifest))
+            self._assert_error(root, "reference-unsafe",
+                               "Scenes/zone.scene:entities.2.components.AudioSource.sound", "symlink")
+
+    def test_command_line_reports_referencing_file_and_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory)
+            passed = subprocess.run(
+                [sys.executable, "-B", str(SCRIPT), "references", str(root / vai.MANIFEST_FILENAME),
+                 "--root", str(root)], text=True, capture_output=True, timeout=60, check=False)
+            (root / "Textures" / "stone_n.png").unlink()
+            failed = subprocess.run(
+                [sys.executable, "-B", str(SCRIPT), "references", str(root / vai.MANIFEST_FILENAME),
+                 "--root", str(root)], text=True, capture_output=True, timeout=60, check=False)
+        self.assertEqual(passed.returncode, 0, passed.stderr)
+        self.assertIn("OK: 13 references in 3 scene and material files", passed.stdout)
+        self.assertEqual(failed.returncode, 1)
+        self.assertIn("[reference-missing] Materials/Stone.json:normal: normal='Assets/Textures/stone_n.png'",
+                      failed.stderr)
+
+    def test_ini_material_outside_runtime_material_root_fails(self) -> None:
+        # GameObject loads INI materials only from Assets/Materials/*.json (exact
+        # case); any other staged, listed JSON would silently render the default.
+        for value in ("Assets/Textures/foo.json", "Assets/materials/foo.json", "Assets/Materials/Foo.JSON",
+                      "Assets/Materials\\Foo.json"):
+            scene = self.SCENE.replace("Assets/Materials/Stone.json", value)
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                staged = value[len("Assets/"):].replace("\\", "/")
+                root = self._stage(directory, {"Scenes/level.scene": scene.encode(),
+                                               staged: json.dumps(self.MATERIAL).encode()})
+                self._assert_error(root, "reference", "Scenes/level.scene:8",
+                                   "GameObject ignores materials outside Assets/Materials/")
+        backslash = self.SCENE.replace("Assets/Materials/Stone.json", "Assets\\Materials\\Stone.json")
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Scenes/level.scene": backslash.encode()})
+            errors, _, _ = self._check(root)
+        self.assertEqual(errors, [], [str(error) for error in errors])
 
 
 class RepositoryParityTests(unittest.TestCase):

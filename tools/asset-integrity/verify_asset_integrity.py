@@ -67,6 +67,7 @@ MAX_PATH_BYTES = 1024
 MAX_FILE_BYTES = 4 * 1024 * 1024 * 1024
 MAX_TOTAL_BYTES = 64 * 1024 * 1024 * 1024
 MAX_DIRECTORY_DEPTH = 128
+MAX_REFERENCE_SOURCE_BYTES = 16 * 1024 * 1024
 HASH_CHUNK_BYTES = 1024 * 1024
 
 # (manifest, asset root, provenance policy) — all repository-relative.
@@ -869,17 +870,23 @@ def provenance_summary(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _package_closure_module() -> Any:
-    """Load the sibling closure module; this verifier is also loaded by file path."""
+def _sibling_module(filename: str, module_name: str) -> Any:
+    """Load a sibling helper module; this verifier is also loaded by file path."""
     import importlib.util
 
-    path = Path(__file__).resolve().with_name("package_closure.py")
-    spec = importlib.util.spec_from_file_location("spark_asset_package_closure", path)
+    path = Path(__file__).resolve().with_name(filename)
+    spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
-        raise ManifestFormatError(f"cannot load the package closure module: {path}")
+        raise ManifestFormatError(f"cannot load the helper module: {path}")
     module = importlib.util.module_from_spec(spec)
+    # Dataclasses resolve their module through sys.modules while the class body runs.
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _package_closure_module() -> Any:
+    return _sibling_module("package_closure.py", "spark_asset_package_closure")
 
 
 def derive_profile_closure(
@@ -1257,6 +1264,111 @@ def verify_manifest(
     return errors
 
 
+def _read_contained_bytes(
+    root: Path, root_resolved: Path, relative: str, limit: int
+) -> tuple[bytes | None, IntegrityError | None]:
+    """Read one staged file that is proven regular, link-free and inside ``root``."""
+    candidate, before, error = _checked_candidate(root, root_resolved, relative, want_directory=False)
+    if error is not None or candidate is None or before is None:
+        return None, error
+    if before.st_size > limit:
+        return None, IntegrityError(relative, "resource-limit", f"reference source exceeds {limit} bytes")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(candidate, flags)
+        try:
+            opened = os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode) or _fingerprint(opened) != _fingerprint(before):
+                return None, IntegrityError(relative, "io-race", "file changed between inspection and open")
+            data = os.read(fd, limit + 1)
+        finally:
+            os.close(fd)
+    except OSError as exc:
+        return None, IntegrityError(relative, "io-error", str(exc))
+    if len(data) != opened.st_size:
+        return None, IntegrityError(relative, "io-race", "file size changed during read")
+    return data, None
+
+
+def verify_references(manifest_path: Path, root: Path) -> tuple[list[IntegrityError], int, int]:
+    """Prove the reference closure of a staged Assets root (ENG-220).
+
+    Every ``.scene`` entry and every ``Materials/**.json`` entry the manifest
+    lists is parsed by ``asset_references.py``; so is any other material a
+    scene names. Each reference must resolve inside ``root`` to a regular,
+    link-free file that the manifest lists with exact case. Failures name the
+    referencing file, line or JSON key, and the offending value. Returns
+    ``(errors, parsed file count, reference count)``. Run it after
+    ``verify``: this check trusts the manifest's hashes, not the bytes.
+    """
+    try:
+        manifest = load_manifest(_absolute_lexical(manifest_path))
+    except (ManifestFormatError, OSError) as exc:
+        return [IntegrityError(str(manifest_path), "manifest-load", str(exc))], 0, 0
+    absolute_root = _absolute_lexical(root)
+    if manifest["root"] != absolute_root.name:
+        return [IntegrityError(
+            str(manifest_path), "root-metadata",
+            f"manifest root {manifest['root']!r} does not exactly match caller root {absolute_root.name!r}")], 0, 0
+    prepared_root, root_resolved, errors = _prepare_root(absolute_root)
+    if errors or prepared_root is None or root_resolved is None:
+        return errors, 0, 0
+
+    parser = _sibling_module("asset_references.py", "spark_asset_references")
+    listed = {entry["path"] for entry in manifest["entries"]}
+    folded = {path.casefold(): path for path in listed}
+    pending = sorted(
+        path for path in listed
+        if path.lower().endswith(".scene") or (path.startswith("Materials/") and path.lower().endswith(".json")))
+    queued = set(pending)
+    parsed = 0
+    checked = 0
+    while pending:
+        relative = pending.pop(0)
+        data, error = _read_contained_bytes(prepared_root, root_resolved, relative, MAX_REFERENCE_SOURCE_BYTES)
+        if error is not None or data is None:
+            errors.append(error or IntegrityError(relative, "io-error", "unknown read failure"))
+            continue
+        extract = parser.scene_references if relative.lower().endswith(".scene") else parser.material_references
+        references, problems = extract(relative, data)
+        parsed += 1
+        for problem in problems:
+            detail = f"{problem.key}={problem.value!r} " if problem.key else ""
+            errors.append(IntegrityError(problem.location, "reference", f"{detail}{problem.message}"))
+        for reference in references:
+            checked += 1
+            target = reference.target
+            named = f"{reference.key}={reference.value!r}"
+            _, _, unsafe = _checked_candidate(prepared_root, root_resolved, target, want_directory=False)
+            staged = os.path.lexists(prepared_root / target)
+            declared = folded.get(target.casefold())
+            if target not in listed and declared is not None:
+                errors.append(IntegrityError(
+                    reference.location, "reference-case",
+                    f"{named} resolves to {target!r}, which differs in case from the listed {declared!r}"))
+                continue
+            if not staged:
+                errors.append(IntegrityError(
+                    reference.location, "reference-missing",
+                    f"{named} resolves to {target!r}, which is not staged in {absolute_root.name}"))
+                continue
+            if unsafe is not None:
+                errors.append(IntegrityError(
+                    reference.location, "reference-unsafe",
+                    f"{named} resolves to {target!r}, which is not a regular file inside the staged root: "
+                    f"{unsafe.message}"))
+                continue
+            if target not in listed:
+                errors.append(IntegrityError(
+                    reference.location, "reference-unlisted",
+                    f"{named} resolves to staged file {target!r}, which {MANIFEST_FILENAME} does not list"))
+                continue
+            if reference.kind == "material" and target not in queued:
+                queued.add(target)
+                pending.append(target)
+    return errors, parsed, checked
+
+
 def _validate_lock(lock_path: Path) -> dict[str, str]:
     data = _read_bounded_json(lock_path)
     if not isinstance(data, dict):
@@ -1445,6 +1557,7 @@ def verify_repository(repo_root: Path) -> list[IntegrityError]:
             repo_root=repo_root,
             require_provenance=True,
         ))
+        errors.extend(verify_references(repo_root / manifest_relative, repo_root / root_relative)[0])
     errors.extend(verify_template_manifests(repo_root))
     return errors
 
@@ -1527,6 +1640,16 @@ def cmd_verify(args: argparse.Namespace) -> int:
     manifest = load_manifest(_absolute_lexical(Path(args.manifest)))
     suffix = f", package profile {profile}" if profile else ""
     print(f"OK: {manifest['fileCount']} entries verified (manifest v{manifest['version']}{suffix})")
+    return 0
+
+
+def cmd_references(args: argparse.Namespace) -> int:
+    errors, parsed, checked = verify_references(Path(args.manifest), Path(args.root))
+    if errors:
+        print(f"FAILED: {len(errors)} reference error(s)", file=sys.stderr)
+        _print_errors(errors)
+        return 1
+    print(f"OK: {checked} references in {parsed} scene and material files resolve to listed staged assets")
     return 0
 
 
@@ -1655,6 +1778,12 @@ def main() -> int:
         "--source-manifest",
         help="Reviewed repository manifest every packaged entry must match "
              f"(default for NOASSERTION-excluding profiles: {KNOWN_MANIFESTS[0][0]})")
+
+    references = commands.add_parser(
+        "references", help="Prove scene and material references resolve to listed files inside the root")
+    references.add_argument("manifest", help="Manifest JSON path")
+    references.add_argument("--root", required=True, help="Caller-authorized asset root")
+    references.set_defaults(handler=cmd_references)
 
     package_profile = commands.add_parser(
         "package-profile", help="Derive a package manifest and install exclusions for a profile")

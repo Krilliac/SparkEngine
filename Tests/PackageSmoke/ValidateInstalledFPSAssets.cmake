@@ -88,3 +88,23 @@ endif()
 
 string(STRIP "${_asset_output}" _asset_summary)
 message(STATUS "Installed FPS asset integrity passed: ${_asset_summary}")
+
+# ENG-220: the hashes above prove the staged files are the reviewed bytes; this
+# proves every scene and material reference resolves to one of them, inside
+# the staged Assets root, and is listed in the staged manifest.
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -B "${_asset_verifier}"
+        references "${_asset_manifest}" --root "${_assets_root}"
+    RESULT_VARIABLE _reference_result
+    OUTPUT_VARIABLE _reference_output
+    ERROR_VARIABLE _reference_error
+    TIMEOUT 120
+    ENCODING UTF-8)
+if(NOT _reference_result EQUAL 0)
+    message(FATAL_ERROR
+        "Installed FPS asset reference closure failed (exit ${_reference_result}):\n"
+        "${_reference_output}${_reference_error}")
+endif()
+
+string(STRIP "${_reference_output}" _reference_summary)
+message(STATUS "Installed FPS asset reference closure passed: ${_reference_summary}")
