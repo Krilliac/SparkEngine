@@ -381,6 +381,9 @@ add_executable(SparkTests
     # OnLoad/vs_restart load, spawn and rollback path) driven against a live
     # World and AngelScriptEngine.
     TestMOD390VisualScriptDiagnosticsReal.cpp
+    # MOD-390: the shipped scripts played headless to the five-pickup win, with
+    # scripted key input through a real InputManager in the injected EngineContext.
+    TestMOD390VisualScriptGameplayReal.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp"
     TestEntityPresetManager.cpp
     TestGamePackager.cpp

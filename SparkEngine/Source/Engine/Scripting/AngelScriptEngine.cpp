@@ -21,6 +21,7 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+#include <cctype>
 
 namespace fs = std::filesystem;
 
@@ -131,10 +132,13 @@ Transform* ASGetTransform(EntityID entity)
  */
 static int ScriptKeyNameToVK(const std::string& key)
 {
-#ifdef SPARK_PLATFORM_WINDOWS
+    // InputManager keys on Win32 virtual-key codes on every platform (the SDL2
+    // host translates SDL keycodes to VK_*, and Core/PlatformTypes.h defines
+    // the VK_* values off Windows), so this mapping is platform-independent.
     // Upper-case the key name for case-insensitive matching
     std::string upper = key;
-    std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+    std::transform(upper.begin(), upper.end(), upper.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
 
     // Single character letter or digit
     if (upper.size() == 1)
@@ -215,9 +219,6 @@ static int ScriptKeyNameToVK(const std::string& key)
             return VK_F1 + (num - 1);
         }
     }
-#else
-    (void)key;
-#endif
     return 0;
 }
 

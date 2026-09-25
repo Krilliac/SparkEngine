@@ -15,7 +15,8 @@
   "tests": {
     "files": [
       "Tests/TestVisualScriptCompiler.cpp",
-      "Tests/TestMOD390VisualScriptDiagnosticsReal.cpp"
+      "Tests/TestMOD390VisualScriptDiagnosticsReal.cpp",
+      "Tests/TestMOD390VisualScriptGameplayReal.cpp"
     ],
     "prefixes": [
       {
@@ -28,6 +29,13 @@
       {
         "prefix": "VisualScriptDiagnostics_",
         "count": 5,
+        "requires": [
+          "angelscript"
+        ]
+      },
+      {
+        "prefix": "VisualScriptGameplay_",
+        "count": 3,
         "requires": [
           "angelscript"
         ]

@@ -4107,7 +4107,7 @@ ctest --test-dir build/windows-release -C Release -R RacingCompleteRace --output
 **Priority:** P1 · **Status:** blocked · **Wave:** 4 · **Area:** modules · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. Open: the shipped scripts have no checked-in .vscript graph sources, applyForce/playSound/playAnimation/fireEvent bindings are log-only or no-ops, collision dispatch has no caller, and no VisualScriptGameplay_* test runs the scripts to the win objective.
+Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. Open: the shipped scripts have no checked-in .vscript graph sources, applyForce/playSound/playAnimation/fireEvent bindings are log-only or no-ops, and collision dispatch has no caller. VisualScriptGameplay_* (TestMOD390VisualScriptGameplayReal.cpp) plays the shipped generated scripts headless to the five-pickup win, and covers enemy damage and the health pickup, with scripted keys read through the real InputManager (script getKey/getKeyDown returned false off Windows until the key-name mapping was made platform-independent).
 
 **Dependency contract**
 
@@ -4141,7 +4141,7 @@ Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestMOD390VisualScriptDiagnosticsReal.cpp`, `GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp`, `GameModules/SparkGameVisualScript/Source/Core/Main.cpp`
    - OnLoad fails when LoadScripts fails. The registered test injects a compile error and checks rejection with a file:line diagnostic and full rollback.
 2. **[unmet]** Graph-authored player completes a real runtime objective
-   - No .vscript graph sources and no VisualScriptGameplay_* test that reaches the win objective.
+   - VisualScriptGameplay_ScriptedPlayerCollectsAllPickupsAndWins runs the shipped scripts headless to the win, but they are hand-maintained .as files: no .vscript graph sources exist, so no graph-authored player has done it.
 3. **[unmet]** Subsystem bindings and hot reload pass
    - The physics, audio, animation and event bindings only log or do nothing. Collision dispatch has no caller, and no module hot-reload test exists.
 4. **[unmet]** Applicable scores reach 3

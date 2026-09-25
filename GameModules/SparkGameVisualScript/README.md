@@ -28,6 +28,13 @@ This load, spawn and rollback path lives in `Source/Core/VisualScriptDemoWorld.c
 `OnLoad` and `vs_restart`. `Tests/TestMOD390VisualScriptDiagnosticsReal.cpp` (the `VisualScriptDiagnostics_*` tests)
 runs that file against a real `World` and `AngelScriptEngine`.
 
+`Tests/TestMOD390VisualScriptGameplayReal.cpp` (the `VisualScriptGameplay_*` tests) plays the shipped scripts headless.
+It holds W/A/S/D through a real `InputManager` in the injected `EngineContext`, where the scripts' `getKey` reads it,
+and ticks every script at the module's sanitized frame delta. The player collects all five coins and `GameManager`
+announces the win with a score of 500. Enemy contact costs 10 HP per strike, and the health pack heals 30, hides,
+and respawns after 10 seconds. The test reads outcomes only from state the scripts write: positions, health, and
+their `print` output.
+
 ## AngelScript build contract
 
 AngelScript is enabled by default when the complete vendored SDK is present. The root build compiles the core runtime

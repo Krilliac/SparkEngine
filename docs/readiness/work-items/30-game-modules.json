@@ -1688,7 +1688,7 @@
       "wave": 4,
       "area": "modules",
       "owner": "unassigned",
-      "rationale": "Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. Open: the shipped scripts have no checked-in .vscript graph sources, applyForce/playSound/playAnimation/fireEvent bindings are log-only or no-ops, collision dispatch has no caller, and no VisualScriptGameplay_* test runs the scripts to the win objective.",
+      "rationale": "Module load is fail-fast: a missing manifest script, a compile error, a missing or duplicated selfEntity placeholder, or an attach failure rejects OnLoad and rolls back every spawned entity. VisualScriptDemoWorld.cpp owns that path and VisualScriptDiagnostics_* (TestMOD390VisualScriptDiagnosticsReal.cpp) drives it against a real World and AngelScriptEngine, with file:line diagnostics. Open: the shipped scripts have no checked-in .vscript graph sources, applyForce/playSound/playAnimation/fireEvent bindings are log-only or no-ops, and collision dispatch has no caller. VisualScriptGameplay_* (TestMOD390VisualScriptGameplayReal.cpp) plays the shipped generated scripts headless to the five-pickup win, and covers enemy damage and the health pickup, with scripted keys read through the real InputManager (script getKey/getKeyDown returned false off Windows until the key-name mapping was made platform-independent).",
       "dependencies": [
         "MOD-290",
         "ENG-200"
@@ -1741,7 +1741,7 @@
           "criterionDigest": "sha256:78498996b11b",
           "state": "unmet",
           "evidence": [],
-          "note": "No .vscript graph sources and no VisualScriptGameplay_* test that reaches the win objective."
+          "note": "VisualScriptGameplay_ScriptedPlayerCollectsAllPickupsAndWins runs the shipped scripts headless to the win, but they are hand-maintained .as files: no .vscript graph sources exist, so no graph-authored player has done it."
         },
         {
           "criterionDigest": "sha256:4c73ad5bea74",
@@ -1797,9 +1797,7 @@
       "plannedCiJobs": [
         "module-VisualScript"
       ],
-      "plannedTestSelectors": [
-        "VisualScriptGameplay_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "TF-110",
