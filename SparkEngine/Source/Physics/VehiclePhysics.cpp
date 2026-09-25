@@ -21,6 +21,9 @@
 #include <Jolt/Physics/Vehicle/MotorcycleController.h>
 #include <Jolt/Physics/Vehicle/VehicleCollisionTester.h>
 
+#include <algorithm>
+#include <cmath>
+
 JPH_SUPPRESS_WARNINGS
 #include "JoltWarningRestore.h"
 
@@ -110,22 +113,28 @@ VehiclePhysics::VehiclePhysics(PhysicsSystem* physicsSystem, std::shared_ptr<Phy
         {
             controller->mTransmission.mGearRatios.push_back(ratio);
         }
-        controller->mTransmission.mReverseGearRatios.push_back(-desc.reverseGearRatio);
+        // Jolt defaults to one reverse ratio (-2.9); replace it rather than appending a second
+        // gear. Jolt expects reverse ratios to be negative, so accept either sign from callers.
+        controller->mTransmission.mReverseGearRatios.clear();
+        controller->mTransmission.mReverseGearRatios.push_back(-std::fabs(desc.reverseGearRatio));
         controller->mTransmission.mClutchStrength = desc.clutchStrength;
 
-        // Differentials — simple setup: one diff connecting front/back axles
+        // Differentials — all-wheel drive: one diff per axle. Jolt requires the engine torque
+        // ratios of all differentials to sum to 1, so the two axles split the torque evenly.
         if (desc.wheels.size() >= 4)
         {
             JPH::VehicleDifferentialSettings diff;
             diff.mLeftWheel = 0;
             diff.mRightWheel = 1;
             diff.mDifferentialRatio = desc.differentialRatio;
+            diff.mEngineTorqueRatio = 0.5f;
             controller->mDifferentials.push_back(diff);
 
             JPH::VehicleDifferentialSettings rearDiff;
             rearDiff.mLeftWheel = 2;
             rearDiff.mRightWheel = 3;
             rearDiff.mDifferentialRatio = desc.differentialRatio;
+            rearDiff.mEngineTorqueRatio = 0.5f;
             controller->mDifferentials.push_back(rearDiff);
         }
         else if (desc.wheels.size() >= 2)
@@ -174,8 +183,9 @@ VehiclePhysics::VehiclePhysics(PhysicsSystem* physicsSystem, std::shared_ptr<Phy
 
     auto* constraint = new JPH::VehicleConstraint(*joltBody, vehicleSettings); // Jolt ref-counted via AddConstraint
 
-    // Set up collision tester (raycast-based wheel ground detection)
-    auto* collisionTester = new JPH::VehicleCollisionTesterRay(1 /* MOVING layer */); // Jolt ref-counted
+    // Set up collision tester (raycast-based wheel ground detection). The tester filters
+    // against the car body's own object layer, whatever layer CreateBody assigned it.
+    auto* collisionTester = new JPH::VehicleCollisionTesterRay(bodyInterface.GetObjectLayer(bodyID)); // ref-counted
     constraint->SetVehicleCollisionTester(collisionTester);
 
     joltSystem->AddConstraint(constraint);
@@ -205,10 +215,35 @@ void VehiclePhysics::SetInput(float throttle, float brake, float steerAngle, flo
     if (!m_joltController)
         return;
 
+    throttle = std::clamp(throttle, -1.0f, 1.0f);
+    brake = std::clamp(brake, 0.0f, 1.0f);
+    handbrake = std::clamp(handbrake, 0.0f, 1.0f);
+
+    // A parked vehicle is put to sleep by Jolt, and a sleeping body skips the vehicle
+    // constraint entirely, so driver input must wake it or the car never responds.
+    if (throttle != 0.0f || brake != 0.0f || steerAngle != 0.0f || handbrake != 0.0f)
+    {
+        if (m_physicsSystem && m_physicsSystem->GetJoltSystem() && m_body)
+        {
+            m_physicsSystem->GetJoltSystem()->GetBodyInterface().ActivateBody(JPH::BodyID(m_body->GetJoltBodyID()));
+        }
+    }
+
     if (m_desc.type == PhysicsVehicleType::Wheeled || m_desc.type == PhysicsVehicleType::Motorcycle)
     {
+        // Jolt takes steering as a fraction in [-1, 1] of each wheel's mMaxSteerAngle and sets
+        // the wheel angle to -fraction * max. Convert the requested angle (radians) into that
+        // fraction, negated so a positive angle turns toward +X (right in the engine's
+        // left-handed convention) and GetWheelSteerAngle() reports the requested angle.
+        float maxSteerAngle = 0.0f;
+        for (const auto& wheel : m_desc.wheels)
+        {
+            maxSteerAngle = std::max(maxSteerAngle, std::fabs(wheel.maxSteerAngle));
+        }
+        const float steerFraction = maxSteerAngle > 0.0f ? std::clamp(steerAngle / maxSteerAngle, -1.0f, 1.0f) : 0.0f;
+
         auto* controller = static_cast<JPH::WheeledVehicleController*>(m_joltController);
-        controller->SetDriverInput(throttle, steerAngle, brake, handbrake);
+        controller->SetDriverInput(throttle, -steerFraction, brake, handbrake);
     }
     else if (m_desc.type == PhysicsVehicleType::Tracked)
     {

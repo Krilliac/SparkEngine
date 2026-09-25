@@ -64,9 +64,12 @@ class VehiclePhysics
 
     /**
      * @brief Set vehicle control inputs for the current frame.
-     * @param throttle  Throttle [0-1]
+     * Non-zero input wakes a sleeping vehicle body. Values outside the documented ranges are clamped.
+     *
+     * @param throttle  Throttle [-1, 1]; negative selects reverse through the automatic transmission
      * @param brake     Brake [0-1]
-     * @param steerAngle Steering angle in radians (negative = left, positive = right)
+     * @param steerAngle Steering angle in radians (negative = left, positive = right, i.e. toward +X in the
+     *                   engine's left-handed convention), clamped to the largest wheel maxSteerAngle
      * @param handbrake Handbrake [0-1]
      */
     void SetInput(float throttle, float brake, float steerAngle, float handbrake);

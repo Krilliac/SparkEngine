@@ -583,6 +583,7 @@ add_executable(SparkTests
     TestGameModuleRPG.cpp
     TestGameModuleRacing.cpp
     TestMOD380RacingCompleteRaceReal.cpp
+    TestMOD380VehiclePhysicsReal.cpp
     TestGameModulePlatformerARPG.cpp
     TestMOD340PlatformerCompletionReal.cpp
     TestMOD330ARPGDungeonReal.cpp

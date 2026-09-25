@@ -250,6 +250,20 @@ enum class ConstraintType {
 
 ---
 
+## Vehicle Physics
+
+`PhysicsSystem::CreateVehicle(body, VehicleDesc)` attaches a Jolt `VehicleConstraint` to an existing dynamic body. The wrapper (`Physics/VehiclePhysics.h`) follows these rules:
+
+- `SetInput(throttle, brake, steerAngle, handbrake)` takes the steering angle in **radians**; positive steers toward +X (right, left-handed convention). It is clamped to the largest wheel `maxSteerAngle` and converted to the fraction Jolt expects, so `GetWheelSteerAngle()` reports the requested angle. Throttle is clamped to [-1, 1] (negative selects reverse); brake and handbrake to [0, 1].
+- Any non-zero input wakes a sleeping car body; Jolt skips the vehicle constraint of a sleeping body, so a parked car would otherwise never respond.
+- Four or more wheels get all-wheel drive: one differential per axle (wheels 0/1 front, 2/3 rear), each taking half the engine torque (Jolt requires the ratios to sum to 1).
+- `reverseGearRatio` replaces Jolt's default reverse gear and accepts either sign.
+- The wheel ray collision tester uses the car body's own object layer.
+
+`Tests/TestMOD380VehiclePhysicsReal.cpp` (`VehiclePhysics_JoltVehicle*`) drives a real car on a static ground slab with `StepFixed()`: throttle accelerates it forward, braking decelerates it at more than twice the coasting rate, reverse works, steering yaws it in the input's sign, a sleeping car wakes on input, and two identical input scripts give bitwise-identical poses. SparkGameRacing does not use this wrapper yet; its vehicles still run the module's own kinematic model (MOD-380).
+
+---
+
 ## Raycasting
 
 ```cpp
