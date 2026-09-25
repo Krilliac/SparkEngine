@@ -1529,6 +1529,30 @@ set_tests_properties(PersistenceSecretsAtRest PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 60)
 
+# DATA-120: TFDatabase multi-row transactions, schema migration, and the real
+# AsyncDatabase KV flush run under the persistence label, so `ctest -L persistence`
+# executes the C++ evidence and not only the static Python durability contract.
+# Counts are exact per family: a dropped or renamed case fails its CTest instead
+# of shrinking the evidence. RUN_SERIAL because the fixtures reuse fixed paths
+# (Saves/test_data120_*.db, <tmp>/spark_save_roundtrip_kv_store) that SparkEngineTests
+# also writes, so a parallel ctest run would let one process delete the other's files.
+set(_spark_data120_persistence_selectors
+    "Persistence_Transaction_=3"
+    "Persistence_Migration_=2"
+    "AsyncDatabaseReal_=1")
+foreach(_spark_data120_selector IN LISTS _spark_data120_persistence_selectors)
+    string(REPLACE "=" ";" _spark_data120_parts "${_spark_data120_selector}")
+    list(GET _spark_data120_parts 0 _spark_data120_prefix)
+    list(GET _spark_data120_parts 1 _spark_data120_count)
+    string(REGEX REPLACE "_$" "" _spark_data120_name "${_spark_data120_prefix}")
+    add_test(NAME ${_spark_data120_name} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(${_spark_data120_name} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_data120_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_data120_count}"
+        LABELS "persistence;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+endforeach()
+
 # OPS-110: SparkServer operator health (build identity, tick percentiles, RSS, drain ordering).
 if(TARGET SparkServerCore)
     add_test(NAME ServerHealth COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
