@@ -220,8 +220,34 @@ replaces `--health-file` with the same object when one is given
 
 Consumers must ignore unknown fields. `ctest -L observability` runs the
 `SparkServerVersion` stamp check and the `Server_Health_*` tests, including
-the draining-before-stopping ordering. This is the health surface only: SLOs,
-alerts, soak/load runs, and a runbook remain open under `OPS-110`.
+the draining-before-stopping ordering.
+
+### Server soak harness (`OPS-110`)
+
+`tools/ops/server_soak.py` launches the real `SparkServer` with one game module
+and a health file, then samples the health file and `/proc/<pid>/status` for
+`--duration` seconds after the first ready snapshot. It fails when the RSS slope
+or in-window RSS growth is over its ceiling, `tickP95Us`/`tickP99Us` is over
+budget, `ticks` goes backwards, stalls, or runs below half the requested tick
+rate. After the soak it sends SIGTERM. The stdout health stream must then show a
+live `draining` snapshot with `ready=false` before any `stopping` snapshot and
+end on `live=false`. The process must exit 0, and no process may be left in the
+server's session. `--summary` writes a `spark-server-soak-summary/1` JSON
+document. `--expected-sha` labels that document, and the server's reported
+`commit` must match it. The harness never infers the SHA.
+
+| CTest | Label | What it runs |
+|-------|-------|--------------|
+| `Server_Soak` | `server-soak` | Real `SparkServer` + `SparkGame` for 60 s (Linux); summary at `build/<preset>/server-soak-summary.json` |
+| `ServerSoak_Harness` | `ops` | Every failure mode against a stand-in server: leak, stall, backwards ticks, slow p99, crash, never ready, missing drain snapshot, non-zero exit, ignored SIGTERM, leaked child, and commit mismatch |
+
+The 30-minute release smoke is `python3 tools/ops/server_soak.py --server <SparkServer>
+--module <libSparkGame.so> --duration 1800 --expected-sha <sha> --summary <out.json>`.
+Every budget is provisional: 64 MiB/h RSS slope, 32 MiB growth, and p95 8 ms / p99 16 ms at
+60 Hz. They are harness guards with headroom for shared runners, not SLOs. A passing run is
+local precursor evidence, not certification. The health surface carries no queue metrics, so
+the soak checks memory but not queue depth. SLOs, alerts, load and chaos runs, a hosted
+`server-soak` job, and a runbook remain open under `OPS-110`.
 
 ### Using DedicatedServer Class
 
@@ -514,6 +540,27 @@ Both approaches can run without a display, but they differ in how they achieve i
 | **Physics** | Module/runtime dependent | Module/runtime dependent |
 | **Networking** | Available when `ENABLE_NETWORKING=ON` | Target exists only when `ENABLE_NETWORKING=ON` |
 | **ECS** | Active | Active |
+
+### Shutdown and restart-recovery tests (`HEAD-220`)
+
+`Tests/PackageSmoke/run_headless_shutdown_recovery.py` drives the shared headless host
+(`-headless -game <SparkGameFPS> -require-game`, `SPARK_RHI_BACKEND=null`) with private user
+directories and a working directory outside the source tree. Each run must pass the strict
+`cmake/RunSparkHeadlessNullRHILifecycle.cmake` record parser:
+
+| CTest | Scenario |
+|-------|----------|
+| `HeadlessShutdown_Graceful` | SIGTERM once the loop is ticking; the host must pass the `CanShutdownEngine` checkpoint, exit 0 and report `unloaded=1 faults=0` |
+| `HeadlessShutdown_ForcedRecovery` | SIGKILL mid-loop, a torn `fps_quicksave` slot plus an orphaned `.tmp` in the save directory, then a clean bounded reboot that reports the slot as not found |
+| `HeadlessShutdown_BootInterrupted` | Kill on a seeded boot-log marker before the loop starts, then a clean bounded reboot |
+| `HeadlessShutdown_HarnessContract` | Self-test of the harness's audit and shutdown checks |
+
+Every wait has a wall-clock bound, and each run prints its seed (replay it with `--seed`). The
+tests run on Linux only. Windows is not covered: `SparkEngine` is a GUI-subsystem executable
+that skips `AllocConsole` when its output is redirected, so it has no console and a
+`CTRL_BREAK_EVENT` graceful stop cannot reach it. The headless FPS
+module has no `quicksave`/`quickload` console commands, so no run kills a real FPS save
+mid-write. This is source-tree evidence only, not packaged Windows certification.
 
 ## Build Configuration
 

@@ -786,7 +786,7 @@
       "wave": 3,
       "area": "operations",
       "owner": "unassigned",
-      "rationale": "Profiling utilities and local chaos scripts do not substitute for externally consumable health/readiness, SLOs, alerts, long soaks, backup/restore, and incident response evidence.",
+      "rationale": "Profiling utilities and local chaos scripts do not substitute for externally consumable health/readiness, SLOs, alerts, long soaks, backup/restore, and incident response evidence. 2026-09-25 progress (no promotion): tools/ops/server_soak.py soaks the real SparkServer with one game module. It samples the health file and /proc/<pid>/status and fails on an RSS slope or in-window growth over its ceiling, health tickP95Us/tickP99Us over budget, or ticks that go backwards, stall, or run below half the requested rate. It then sends SIGTERM and requires a live draining ready=false snapshot before any stopping snapshot, a final live=false snapshot, exit status 0, and no process left in the server's session. It writes a spark-server-soak-summary/1 JSON labelled with the externally supplied --expected-sha, which must equal the server's reported commit. CTest Server_Soak (label server-soak, Linux, 60 s) runs it against SparkServer + SparkGame, and ServerSoak_Harness proves each failure mode against a stand-in server. One local 1800 s run at 3711fd497c7312b11ad8435a453956e1835c5093 (dirty tree) passed: RSS slope 0.72 MB/h, growth 340 KB, tick p95/p99 500/500 us, drain and exit 0. That is local precursor evidence only. The budgets are provisional harness guards, not SLOs, and the health surface has no queue metrics. The 30-minute and scheduled soak criterion stays unmet until versioned budgets and a hosted server-soak job exist.",
       "dependencies": [
         "OPS-100",
         "HEAD-220",
@@ -876,7 +876,6 @@
       ],
       "plannedTestSelectors": [
         "Server_Load",
-        "Server_Soak",
         "Server_Chaos",
         "Server_BackupRestore"
       ]

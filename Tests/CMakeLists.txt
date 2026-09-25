@@ -2948,6 +2948,34 @@ if(Python3_Interpreter_FOUND)
             LABELS "server;gateway;integration;network;process"
             TIMEOUT 105)
     endif()
+    # OPS-110 server soak (tools/ops/server_soak.py reads /proc, so Linux only).
+    # ServerSoak_Harness proves every failure mode against a stand-in server;
+    # it is not labelled server-soak because only a real-server soak may
+    # satisfy that label. Server_Soak runs the real SparkServer with SparkGame
+    # for 60 s under provisional budgets; the 30-minute release smoke and
+    # longer scheduled soaks run tools/ops/server_soak.py --duration directly.
+    if(UNIX AND NOT APPLE)
+        add_test(
+            NAME ServerSoak_Harness
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/Tools/test_server_soak.py
+                FitTests DrainSequenceTests ConfigTests SummaryTests HarnessTests)
+        set_tests_properties(ServerSoak_Harness PROPERTIES
+            LABELS "ops;server;unit;python"
+            TIMEOUT 180)
+        if(TARGET SparkServer AND TARGET SparkGame)
+            add_dependencies(SparkTests SparkServer SparkGame)
+            add_test(
+                NAME Server_Soak
+                COMMAND ${Python3_EXECUTABLE} -B
+                    ${CMAKE_SOURCE_DIR}/Tests/Tools/test_server_soak.py ServerSoakProcess)
+            set_tests_properties(Server_Soak PROPERTIES
+                ENVIRONMENT "SPARK_SERVER=$<TARGET_FILE:SparkServer>;SPARK_SERVER_MODULE=$<TARGET_FILE:SparkGame>;SPARK_SERVER_SOAK_REQUIRED=1;SPARK_SERVER_SOAK_SUMMARY=${CMAKE_BINARY_DIR}/server-soak-summary.json"
+                LABELS "server-soak;server;integration;process"
+                RUN_SERIAL TRUE
+                TIMEOUT 300)
+        endif()
+    endif()
     add_test(
         NAME SparkTemplateRuntimeSheets
         COMMAND ${Python3_EXECUTABLE}
