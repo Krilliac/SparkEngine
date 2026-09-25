@@ -1051,6 +1051,7 @@ target_sources(SparkTests PRIVATE
     TestSparkGameFPSLoopReal.cpp
     TestSparkGameFPSMirrorCompanionsReal.cpp
     TestMOD310FPSSceneReloadRespawnReal.cpp
+    TestAssetManifestReal.cpp
     TestFPSWeatherPort.cpp
     TestTemplateRuntimeReal.cpp
     TestUserDataPathsReal.cpp
@@ -2027,6 +2028,20 @@ add_test(
 set_tests_properties(FPSSceneMaterialContract PROPERTIES
     LABELS "module;stable-v1;fps;asset;unit"
     TIMEOUT 30)
+
+# RDY-020: every asset the FPS module source and level1.scene reference is
+# declared in Assets/assets.integrity.json with exact case and resolves through
+# the production FPSAssets root; case-altered and traversal spellings fail.
+add_test(NAME AssetManifest_FPSReferences COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(AssetManifest_FPSReferences PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=AssetManifest_;SPARK_TEST_EXPECT_COUNT=2"
+    LABELS "module;stable-v1;fps;asset;unit"
+    TIMEOUT 60)
+add_test(NAME PathCase_FPSReferences COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(PathCase_FPSReferences PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=PathCase_;SPARK_TEST_EXPECT_COUNT=2"
+    LABELS "module;stable-v1;fps;asset;unit"
+    TIMEOUT 60)
 
 # RDY-020 / OD-09: the stable-v1 package derives its asset manifest without any
 # NOASSERTION entry, installs only that set, and the package check rejects a
