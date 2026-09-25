@@ -68,7 +68,6 @@ TEST(EngineSettingsReal_NetworkDefaults)
     EXPECT_EQ(settings.Network().maxClients, 32);
     EXPECT_NEAR(settings.Network().connectionTimeout, 10.0f, 0.001f);
     EXPECT_FALSE(settings.Network().enableCompression);
-    EXPECT_FALSE(settings.Network().enableEncryption);
 }
 
 TEST(EngineSettingsReal_PlayerDefaults)

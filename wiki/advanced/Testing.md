@@ -819,7 +819,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*631 test-bearing `.cpp`/`.mm` files, 7564 source-level test definitions*
+*650 test-bearing `.cpp`/`.mm` files, 7680 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -853,11 +853,12 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationStress` | 12 |
 | `TestAnimationSystem` | 17 |
-| `TestAreaAssetLoader` | 14 |
+| `TestAreaAssetLoader` | 18 |
 | `TestAreaSimulationHook` | 6 |
 | `TestAssertSuppression` | 9 |
 | `TestAssertSuppressionReal` | 8 |
 | `TestAssetDependencyGraph` | 19 |
+| `TestAssetManifestReal` | 4 |
 | `TestAssetMigration` | 23 |
 | `TestAssetMigrationPhaseEE` | 10 |
 | `TestAssetPipelineCache` | 22 |
@@ -926,7 +927,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCooldown` | 14 |
 | `TestCooldownReal` | 9 |
 | `TestCoreAndBuildSystems` | 39 |
-| `TestCoroutineScheduler` | 10 |
+| `TestCoroutineScheduler` | 13 |
 | `TestCoverSystem` | 4 |
 | `TestCoverSystemReal` | 5 |
 | `TestCoverageAI` | 9 |
@@ -936,9 +937,11 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCpuNeuralInference` | 14 |
 | `TestCpuNeuralTraining` | 13 |
 | `TestCrashHandlerGatingReal` | 8 |
+| `TestCrashSymbolication` | 5 |
 | `TestCrossSystemIntegration` | 4 |
 | `TestD3D11DeviceContractsReal` | 14 |
 | `TestDATA120PersistenceReal` | 5 |
+| `TestDATA120SecretsAtRest` | 5 |
 | `TestDXRSupport` | 13 |
 | `TestDaemonCodexFixes` | 4 |
 | `TestDaemonConcurrent` | 6 |
@@ -958,7 +961,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestDecalSystem` | 7 |
 | `TestDedicatedServer` | 27 |
 | `TestDedicatedServerProcessController` | 5 |
-| `TestDedicatedServerRuntime` | 13 |
+| `TestDedicatedServerRuntime` | 12 |
 | `TestDeferredDeletion` | 6 |
 | `TestDeferredDeletionReal` | 6 |
 | `TestDeferredQueue` | 6 |
@@ -1004,7 +1007,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorUndoHierarchyReal` | 6 |
 | `TestEditorWindowManager` | 14 |
 | `TestEngineBootPlatforms` | 41 |
-| `TestEngineContext` | 18 |
+| `TestEngineContext` | 9 |
 | `TestEngineDiagnostics` | 4 |
 | `TestEngineInterfaceProtocol` | 4 |
 | `TestEngineLifecycle` | 22 |
@@ -1025,6 +1028,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEventResponseSystem` | 15 |
 | `TestEventResponseSystemPhaseEE` | 8 |
 | `TestEventSystem` | 10 |
+| `TestExecScript` | 9 |
 | `TestExtendedSystems` | 38 |
 | `TestFBXImportValidation` | 3 |
 | `TestFBXImporter` | 17 |
@@ -1084,9 +1088,10 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGatewayAreaControl` | 17 |
 | `TestGatewaySecurity` | 14 |
 | `TestGizmoMath` | 3 |
-| `TestGoldenImageTest` | 17 |
+| `TestGoldenImageTest` | 28 |
 | `TestGraphicsBenchmarkStats` | 3 |
 | `TestGraphicsEngine` | 14 |
+| `TestGraphicsEngineLinuxPassTruthReal` | 2 |
 | `TestGraphicsInitFallback` | 7 |
 | `TestGraphicsIntegration` | 33 |
 | `TestGraphicsStress` | 15 |
@@ -1099,6 +1104,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestHResultPlatform` | 24 |
 | `TestHash` | 18 |
 | `TestHashReal` | 9 |
+| `TestHeadlessTickStats` | 7 |
 | `TestHitchDetector` | 10 |
 | `TestHybridRT` | 20 |
 | `TestInGameConsole` | 12 |
@@ -1120,6 +1126,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLauncherProcess` | 4 |
 | `TestLegacyGameObjectMaterial` | 2 |
 | `TestLevelStreamingSystemPhaseAA` | 11 |
+| `TestLifecycleCompositionRootFailure` | 8 |
 | `TestLightManager` | 13 |
 | `TestLightmapBaker` | 9 |
 | `TestLoadingScreen` | 11 |
@@ -1133,9 +1140,16 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLootAndCrafting` | 11 |
 | `TestMMOAssetImport` | 16 |
 | `TestMMOCredentialSecurity` | 3 |
-| `TestMOD310FPSSceneReloadRespawnReal` | 5 |
+| `TestMOD310FPSSceneReloadRespawnReal` | 6 |
+| `TestMOD330ARPGDungeonReal` | 6 |
+| `TestMOD340PlatformerCompletionReal` | 9 |
+| `TestMOD350RPGQuestSliceReal` | 2 |
+| `TestMOD360OpenWorldPersistenceReal` | 2 |
+| `TestMOD370RTSSaveReal` | 3 |
 | `TestMOD370SkirmishDeterminismReal` | 7 |
 | `TestMOD380RacingCompleteRaceReal` | 5 |
+| `TestMOD380VehiclePhysicsReal` | 5 |
+| `TestMOD390VisualScriptDiagnosticsReal` | 5 |
 | `TestMSanCanary` | 2 |
 | `TestMacOSPlatform` | 6 |
 | `TestMain` | 1 |
@@ -1158,13 +1172,14 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMetalRayTracingLive` | 10 |
 | `TestModSystem` | 9 |
 | `TestModuleABI` | 27 |
+| `TestModuleABIDiagnostics` | 6 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 7 |
 | `TestModuleHotReload` | 12 |
 | `TestModuleLifecycleReal` | 11 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
-| `TestMultiISADispatch` | 7 |
+| `TestMultiISADispatch` | 14 |
 | `TestMusicManager` | 9 |
 | `TestNET100TransportReal` | 17 |
 | `TestNavMesh` | 11 |
@@ -1183,9 +1198,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkManagerOrchestration` | 27 |
 | `TestNetworkManagerReal` | 23 |
 | `TestNetworkReplicationIntegration` | 13 |
-| `TestNetworkSecurity` | 12 |
-| `TestNetworkSecurityPhaseHH` | 8 |
-| `TestNetworkStack` | 2 |
+| `TestNetworkSecurity` | 6 |
+| `TestNetworkSecurityPhaseHH` | 2 |
+| `TestNetworkStack` | 4 |
 | `TestNetworkStress` | 21 |
 | `TestNeuralInference` | 17 |
 | `TestNeuralPostProcessing` | 9 |
@@ -1198,7 +1213,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestObjectPool` | 6 |
 | `TestObjectPoolReal` | 7 |
 | `TestOcclusionCulling` | 6 |
-| `TestOnlineServices` | 10 |
+| `TestOnlineServices` | 22 |
 | `TestOpaqueHandle` | 7 |
 | `TestOpenWorldModule` | 61 |
 | `TestPLT210AngelScriptVector3Real` | 2 |
@@ -1266,11 +1281,12 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestRuntimePrefab` | 19 |
 | `TestSAVE230NewerFormatSlotReal` | 2 |
 | `TestSEC100ChatAuditLogReal` | 3 |
+| `TestSEC100RemoteAdminUnavailableReal` | 2 |
 | `TestSHLighting` | 7 |
 | `TestSSAOTemporalFilter` | 8 |
 | `TestSafetyCoreUtils` | 17 |
 | `TestSaveSystem` | 7 |
-| `TestSaveSystemRoundTripReal` | 15 |
+| `TestSaveSystemRoundTripReal` | 16 |
 | `TestSceneConfigDatabase` | 3 |
 | `TestSceneConfigDatabaseReal` | 9 |
 | `TestSceneGraph2D` | 14 |
@@ -1279,7 +1295,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSceneRoundtrip` | 8 |
 | `TestSceneSaveConfinedReal` | 5 |
 | `TestSceneSerializer` | 13 |
-| `TestSceneSerializerReal` | 18 |
+| `TestSceneSerializerReal` | 22 |
 | `TestSceneSnapshotSerializer` | 20 |
 | `TestScheduledCallback` | 8 |
 | `TestScopeGuard` | 13 |
@@ -1322,15 +1338,17 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkEngineCameraOwnership` | 1 |
 | `TestSparkError` | 6 |
 | `TestSparkGameARPG` | 5 |
-| `TestSparkGameFPSLoopReal` | 32 |
+| `TestSparkGameFPSLoopReal` | 34 |
 | `TestSparkGameFPSMirrorCompanionsReal` | 14 |
 | `TestSparkGamePlatformer` | 5 |
 | `TestSparkGameRPG` | 5 |
 | `TestSparkGameRTS` | 5 |
 | `TestSparkGameRacing` | 5 |
+| `TestSparkGameShowcase` | 4 |
 | `TestSparkGatewayCoordinator` | 7 |
 | `TestSparkPak` | 19 |
 | `TestSparkServerApplication` | 27 |
+| `TestSparkServerHealth` | 6 |
 | `TestSpatialGrid` | 16 |
 | `TestSpatialGridReal` | 7 |
 | `TestSplineMath` | 24 |
@@ -1350,6 +1368,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSubTickInput` | 5 |
 | `TestSubsystemConsoleCommands` | 14 |
 | `TestSystemManagerIntegration` | 11 |
+| `TestTF120SharedSaveRoot` | 8 |
 | `TestTFAbilityWire` | 6 |
 | `TestTFCaptureMath` | 7 |
 | `TestTFChatRules` | 11 |
@@ -1358,7 +1377,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTFDeathRecapWire` | 5 |
 | `TestTFFixedStep` | 1 |
 | `TestTFNetProtocolLayout` | 9 |
-| `TestTFOnboarding` | 38 |
+| `TestTFOnboarding` | 40 |
 | `TestTFOutfitStore` | 16 |
 | `TestTFRedeployRules` | 7 |
 | `TestTFRegionLattice` | 11 |
@@ -1449,7 +1468,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `Test_persistence_SaveSystem` | 43 |
 | `Test_scripting_hardening` | 8 |
 | `Test_tests_ecsystemordering_real` | 5 |
-| `Test_tests_enginecontext_real` | 8 |
+| `Test_tests_enginecontext_real` | 1 |
 | `Test_tests_inversekinematics` | 10 |
 | `Test_tooling_CommandParser` | 9 |
 | `Test_ui-2d_tween` | 7 |

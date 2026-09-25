@@ -50,7 +50,7 @@ clean CI runners and local generation on the same exact-commit inputs.
 | [`api/`](api/) *(generated)* | Per-header API reference pages (regenerated locally) | [jump ↓](#api-reference) |
 | [`screenshots/`](screenshots/) | Editor and engine screenshots (images) | [jump ↓](#screenshots) |
 | [`wine-upstream/`](wine-upstream/) | Upstream Wine patches for gVisor/UMH compatibility | [jump ↓](#wine-upstream-patches) |
-| [`../wiki/`](../wiki/) | Primary user and developer wiki (202 Markdown pages in the current source inventory, excluding `_Sidebar.md`; not a support metric) | [jump ↓](#wiki-user--developer-docs) |
+| [`../wiki/`](../wiki/) | Primary user and developer wiki (203 Markdown pages in the current source inventory, excluding `_Sidebar.md`; not a support metric) | [jump ↓](#wiki-user--developer-docs) |
 
 ---
 
@@ -141,7 +141,7 @@ See [Tooling Index](tooling/README.md) for the full generator pipeline.
 
 ## Wiki (User & Developer Docs)
 
-The primary user-facing docs are in [`wiki/`](../wiki/) — 202 Markdown pages in the current source inventory, excluding `_Sidebar.md`. This count describes repository inventory, not support or readiness. The authoritative navigation is [`wiki/_Sidebar.md`](../wiki/_Sidebar.md); [`wiki/Home.md`](../wiki/Home.md) is the landing page.
+The primary user-facing docs are in [`wiki/`](../wiki/) — 203 Markdown pages in the current source inventory, excluding `_Sidebar.md`. This count describes repository inventory, not support or readiness. The authoritative navigation is [`wiki/_Sidebar.md`](../wiki/_Sidebar.md); [`wiki/Home.md`](../wiki/Home.md) is the landing page.
 
 Categories (mirrored from the sidebar):
 

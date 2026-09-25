@@ -101,8 +101,10 @@ FABRIK), ragdoll integration, compression, retargeting.
 ### 8. Networking — Experimental Local Development
 
 UDP transport, reliable messaging, entity replication with delta snapshots, client
-prediction + server reconciliation, lag compensation, legacy XOR/FNV security prototypes, instability
-simulator, AreaServer/WorldServer architecture.
+prediction + server reconciliation, lag compensation, instability simulator, AreaServer/WorldServer
+architecture. The legacy XOR/FNV security prototypes listed at evaluation time were removed (the FNV tag by
+the ChaCha20-Poly1305 replacement, the XOR transport prototype under NET-100 on 2026-09-25); secure
+networking remains unclaimed.
 
 ### 9. Game Module System — Working
 
