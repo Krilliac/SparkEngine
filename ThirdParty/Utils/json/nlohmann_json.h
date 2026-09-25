@@ -95,12 +95,20 @@ namespace nlohmann
         static json array() { return json(value_t::array); }
         static json object() { return json(value_t::object); }
 
+        /**
+         * Parse exactly one JSON document. Like the real library, malformed
+         * input throws instead of yielding a partial value: truncated arrays,
+         * objects and strings, missing separators, invalid literals or escapes,
+         * and any non-whitespace after the root value. A torn or truncated file
+         * must never load as a valid-looking (often empty) document.
+         */
         static json parse(std::string_view input)
         {
-            // Minimal parse: delegate to the stub parser
-            json result;
             size_t pos = 0;
-            result = parse_value(input, pos);
+            json result = parse_value(input, pos);
+            skip_ws(input, pos);
+            if (pos != input.size())
+                parse_fail("trailing content after the JSON value", pos);
             return result;
         }
 
@@ -343,7 +351,12 @@ namespace nlohmann
         array_t m_array;
         object_t m_object;
 
-        // -- Minimal JSON parser --
+        // -- Minimal JSON parser (strict: malformed input throws) --
+
+        [[noreturn]] static void parse_fail(const char* what, size_t pos)
+        {
+            throw std::runtime_error(std::string("json: parse error at offset ") + std::to_string(pos) + ": " + what);
+        }
 
         static void skip_ws(std::string_view s, size_t& pos)
         {
@@ -351,11 +364,13 @@ namespace nlohmann
                 ++pos;
         }
 
+        static bool is_digit(std::string_view s, size_t pos) { return pos < s.size() && s[pos] >= '0' && s[pos] <= '9'; }
+
         static json parse_value(std::string_view s, size_t& pos)
         {
             skip_ws(s, pos);
             if (pos >= s.size())
-                return {};
+                parse_fail("unexpected end of input", pos);
 
             char c = s[pos];
             if (c == '"')
@@ -370,70 +385,73 @@ namespace nlohmann
                 return parse_null(s, pos);
             if (c == '-' || (c >= '0' && c <= '9'))
                 return parse_number(s, pos);
-            return {};
+            parse_fail("unexpected character", pos);
         }
 
         static json parse_null(std::string_view s, size_t& pos)
         {
-            if (pos + 4 <= s.size() && s.substr(pos, 4) == "null")
+            if (s.substr(pos, 4) == "null")
             {
                 pos += 4;
                 return {};
             }
-            return {};
+            parse_fail("invalid literal", pos);
         }
 
         static json parse_bool(std::string_view s, size_t& pos)
         {
-            if (pos + 4 <= s.size() && s.substr(pos, 4) == "true")
+            if (s.substr(pos, 4) == "true")
             {
                 pos += 4;
                 return json(true);
             }
-            if (pos + 5 <= s.size() && s.substr(pos, 5) == "false")
+            if (s.substr(pos, 5) == "false")
             {
                 pos += 5;
                 return json(false);
             }
-            return {};
+            parse_fail("invalid literal", pos);
         }
 
         static json parse_number(std::string_view s, size_t& pos)
         {
-            size_t start = pos;
+            const size_t start = pos;
             bool has_dot = false;
             bool has_exp = false;
             bool negative = false;
 
+            // JSON grammar: -?digits(.digits)?([eE][+-]?digits)? -- every part
+            // that is started must have at least one digit.
             if (s[pos] == '-')
             {
                 negative = true;
                 ++pos;
             }
+            if (!is_digit(s, pos))
+                parse_fail("expected digit", pos);
+            while (is_digit(s, pos))
+                ++pos;
 
-            while (pos < s.size())
+            if (pos < s.size() && s[pos] == '.')
             {
-                char c = s[pos];
-                if (c >= '0' && c <= '9')
-                {
+                has_dot = true;
+                ++pos;
+                if (!is_digit(s, pos))
+                    parse_fail("expected digit after '.'", pos);
+                while (is_digit(s, pos))
                     ++pos;
-                }
-                else if (c == '.' && !has_dot)
-                {
-                    has_dot = true;
+            }
+
+            if (pos < s.size() && (s[pos] == 'e' || s[pos] == 'E'))
+            {
+                has_exp = true;
+                ++pos;
+                if (pos < s.size() && (s[pos] == '+' || s[pos] == '-'))
                     ++pos;
-                }
-                else if ((c == 'e' || c == 'E') && !has_exp)
-                {
-                    has_exp = true;
+                if (!is_digit(s, pos))
+                    parse_fail("expected digit in exponent", pos);
+                while (is_digit(s, pos))
                     ++pos;
-                    if (pos < s.size() && (s[pos] == '+' || s[pos] == '-'))
-                        ++pos;
-                }
-                else
-                {
-                    break;
-                }
             }
 
             std::string numStr(s.substr(start, pos - start));
@@ -454,10 +472,74 @@ namespace nlohmann
             }
         }
 
+        static uint32_t parse_hex4(std::string_view s, size_t& pos)
+        {
+            if (pos + 4 > s.size())
+                parse_fail("truncated \\u escape", pos);
+            uint32_t value = 0;
+            for (int i = 0; i < 4; ++i)
+            {
+                const char h = s[pos++];
+                value <<= 4;
+                if (h >= '0' && h <= '9')
+                    value |= static_cast<uint32_t>(h - '0');
+                else if (h >= 'a' && h <= 'f')
+                    value |= static_cast<uint32_t>(h - 'a' + 10);
+                else if (h >= 'A' && h <= 'F')
+                    value |= static_cast<uint32_t>(h - 'A' + 10);
+                else
+                    parse_fail("invalid \\u escape", pos - 1);
+            }
+            return value;
+        }
+
+        // Decode the code point after "\u" (joining a UTF-16 surrogate pair) and append it as UTF-8.
+        static void append_unicode_escape(std::string_view s, size_t& pos, std::string& out)
+        {
+            uint32_t cp = parse_hex4(s, pos);
+            if (cp >= 0xD800 && cp <= 0xDBFF)
+            {
+                if (s.substr(pos, 2) != "\\u")
+                    parse_fail("unpaired high surrogate", pos);
+                pos += 2;
+                const uint32_t low = parse_hex4(s, pos);
+                if (low < 0xDC00 || low > 0xDFFF)
+                    parse_fail("invalid low surrogate", pos - 4);
+                cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+            }
+            else if (cp >= 0xDC00 && cp <= 0xDFFF)
+            {
+                parse_fail("unpaired low surrogate", pos - 4);
+            }
+
+            if (cp < 0x80)
+            {
+                out += static_cast<char>(cp);
+            }
+            else if (cp < 0x800)
+            {
+                out += static_cast<char>(0xC0 | (cp >> 6));
+                out += static_cast<char>(0x80 | (cp & 0x3F));
+            }
+            else if (cp < 0x10000)
+            {
+                out += static_cast<char>(0xE0 | (cp >> 12));
+                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+                out += static_cast<char>(0x80 | (cp & 0x3F));
+            }
+            else
+            {
+                out += static_cast<char>(0xF0 | (cp >> 18));
+                out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+                out += static_cast<char>(0x80 | (cp & 0x3F));
+            }
+        }
+
         static json parse_string(std::string_view s, size_t& pos)
         {
-            if (s[pos] != '"')
-                return {};
+            if (pos >= s.size() || s[pos] != '"')
+                parse_fail("expected string", pos);
             ++pos;
 
             std::string result;
@@ -466,8 +548,10 @@ namespace nlohmann
                 char c = s[pos++];
                 if (c == '"')
                     return json(std::move(result));
-                if (c == '\\' && pos < s.size())
+                if (c == '\\')
                 {
+                    if (pos >= s.size())
+                        break;
                     char esc = s[pos++];
                     switch (esc)
                     {
@@ -495,17 +579,23 @@ namespace nlohmann
                     case 't':
                         result += '\t';
                         break;
-                    default:
-                        result += esc;
+                    case 'u':
+                        append_unicode_escape(s, pos, result);
                         break;
+                    default:
+                        parse_fail("invalid escape", pos - 1);
                     }
+                }
+                else if (static_cast<unsigned char>(c) < 0x20)
+                {
+                    parse_fail("unescaped control character in string", pos - 1);
                 }
                 else
                 {
                     result += c;
                 }
             }
-            return {};
+            parse_fail("unterminated string", pos);
         }
 
         static json parse_array(std::string_view s, size_t& pos)
@@ -520,23 +610,26 @@ namespace nlohmann
                 return arr;
             }
 
-            while (pos < s.size())
+            // A truncated array runs out of input inside parse_value or here;
+            // either way it throws rather than returning the elements so far.
+            while (true)
             {
                 arr.m_array.push_back(parse_value(s, pos));
                 skip_ws(s, pos);
-                if (pos < s.size() && s[pos] == ',')
+                if (pos >= s.size())
+                    parse_fail("unterminated array", pos);
+                if (s[pos] == ',')
                 {
                     ++pos;
                     continue;
                 }
-                if (pos < s.size() && s[pos] == ']')
+                if (s[pos] == ']')
                 {
                     ++pos;
                     return arr;
                 }
-                break;
+                parse_fail("expected ',' or ']'", pos);
             }
-            return arr;
         }
 
         static json parse_object(std::string_view s, size_t& pos)
@@ -551,34 +644,33 @@ namespace nlohmann
                 return obj;
             }
 
-            while (pos < s.size())
+            while (true)
             {
                 skip_ws(s, pos);
                 json key = parse_string(s, pos);
-                if (!key.is_string())
-                    break;
 
                 skip_ws(s, pos);
-                if (pos < s.size() && s[pos] == ':')
-                    ++pos;
+                if (pos >= s.size() || s[pos] != ':')
+                    parse_fail("expected ':'", pos);
+                ++pos;
 
-                skip_ws(s, pos);
                 obj.m_object[key.m_string] = parse_value(s, pos);
                 skip_ws(s, pos);
 
-                if (pos < s.size() && s[pos] == ',')
+                if (pos >= s.size())
+                    parse_fail("unterminated object", pos);
+                if (s[pos] == ',')
                 {
                     ++pos;
                     continue;
                 }
-                if (pos < s.size() && s[pos] == '}')
+                if (s[pos] == '}')
                 {
                     ++pos;
                     return obj;
                 }
-                break;
+                parse_fail("expected ',' or '}'", pos);
             }
-            return obj;
         }
 
         // -- Serialization --
@@ -612,7 +704,18 @@ namespace nlohmann
                     out += "\\t";
                     break;
                 default:
-                    out += c;
+                    // The parser rejects raw control characters, so dump must escape them.
+                    if (static_cast<unsigned char>(c) < 0x20)
+                    {
+                        static constexpr char kHex[] = "0123456789abcdef";
+                        out += "\\u00";
+                        out += kHex[(c >> 4) & 0xF];
+                        out += kHex[c & 0xF];
+                    }
+                    else
+                    {
+                        out += c;
+                    }
                     break;
                 }
             }
