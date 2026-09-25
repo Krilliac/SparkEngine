@@ -303,7 +303,13 @@ namespace SparkFPS
         /** @brief Disconnect from the server. */
         void Disconnect();
 
-        /** @brief Send local player input to server. */
+        /**
+         * @brief Predict and send local player input to the server.
+         *
+         * The input sequence number is assigned by client prediction (monotonic within
+         * a session, reset by Initialize) and overrides @p input.sequenceNumber, so the server's acknowledged
+         * sequence always names an input the client still holds for reconciliation.
+         */
         void SendInput(const PlayerInput& input);
 
         // -- Shared API --
@@ -343,15 +349,27 @@ namespace SparkFPS
       private:
         FPSMultiplayerSystem() = default;
 
+        // Narrow test seam (Tests/TestFPSMultiplayer.cpp) that invokes the private
+        // message handlers the way NetworkManager dispatch will; it adds no behavior.
+        friend struct FPSMultiplayerSystemTestAccess;
+
         // -- Message handlers --
         void OnPlayerJoined(uint32_t clientId);
         void OnPlayerLeft(uint32_t clientId);
         void OnPlayerInputReceived(uint32_t clientId, const PlayerInput& input);
         void OnProjectileFired(uint32_t clientId, const ProjectileData& proj);
         void OnPlayerDamaged(uint32_t attackerId, uint32_t victimId, float damage);
+        /// Client: accept one authoritative player snapshot from the server. The local
+        /// player's snapshot is reconciled on the next ClientUpdate; remote snapshots feed
+        /// interpolation. Snapshots older than the newest one already accepted, and every
+        /// snapshot that arrives before the handshake assigns this client an id, are dropped.
+        void OnStateSnapshotReceived(const NetworkPlayerState& snapshot);
 
         // -- Server logic --
         void ServerUpdate(float dt);
+        /// Record every living player's hitbox into NetworkManager's lag compensator at the
+        /// current server time so ValidateHit has a server-owned world state to rewind.
+        void RecordLagCompensationHistory();
         void SendStateSnapshot();
         void ApplyClientInput(uint32_t clientId, const PlayerInput& input, float dt);
         void ValidateHit(uint32_t attackerId, uint32_t victimId, float damage);
@@ -363,6 +381,7 @@ namespace SparkFPS
         void ClientUpdate(float dt);
         void InterpolateRemotePlayers(float dt);
         void ReconcileToAuthoritativeState(const NetworkPlayerState& authoritativeState);
+        void CopyPredictedMotionToLocal();
 
         bool m_isServer = false;
         bool m_isActive = false;
@@ -383,6 +402,9 @@ namespace SparkFPS
         uint32_t m_nextProjectileId = 1;
         Spark::ClientPrediction m_clientPrediction;
         Spark::PredictedState m_localPredictedState{};
+        NetworkPlayerState m_pendingLocalAuthority{};
+        bool m_hasPendingLocalAuthority = false;
+        uint32_t m_lastLocalAuthoritySequence = 0;
         uint32_t m_correctionCount = 0;
     };
 

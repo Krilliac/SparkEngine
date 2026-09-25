@@ -840,8 +840,7 @@
         "module-FPS-multiplayer"
       ],
       "plannedTestSelectors": [
-        "FPSLAN_*",
-        "FPSMultiplayerProduction_*"
+        "FPSLAN_*"
       ]
     },
     {

@@ -64,7 +64,12 @@ enemy, weapon, progression, time-scale, and engine-service state.
 
 Build the `SparkGameFPS` target. CPU-only regression coverage is part of `SparkTests`; filter for `FPSInteg_`,
 `FPSRespawn_`, `FPSLocalProfile_`, `FPSProgression_`, `FPSAssets_`, `FPSStateRules_`, `FPSComponentsReal_`, and
-`WeaponMechanicsReal_` when running the test executable directly (`FPSMultiplayer_` covers the experimental LAN path).
+`WeaponMechanicsReal_` when running the test executable directly. For the experimental LAN path, `FPSMultiplayer_`
+covers the snapshot/input wire encoding and `FPSMultiplayerProduction_` drives the real `FPSMultiplayerSystem` in one
+process: server input application, hit validation (a lag-compensated line-of-fire ray; damage reports also require a
+living attacker aiming at the victim, and every hit deals at most the weapon's server-owned damage), death, the respawn
+timer, scoreboard ordering, and client reconciliation after a real handshake. Its message handlers are not yet registered with `NetworkManager`, so no two-client LAN result
+exists (`MOD-315`).
 
 ## SDK module boundary
 

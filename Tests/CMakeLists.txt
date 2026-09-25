@@ -667,6 +667,9 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/FPSAssetPaths.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/ProgressionSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Core/EngineWeatherAdapter.cpp"
+    # MOD-315: FPSMultiplayerProduction_ tests (TestFPSMultiplayer.cpp) drive the real
+    # FPSMultiplayerSystem; it depends only on NetworkManager, ClientPrediction and SimpleConsole.
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp"
     # Editor core sources (no ImGui dependency)
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
