@@ -151,6 +151,7 @@ GameModules/                             — Game module directory (auto-discove
 GameModules/SparkGame/Source/            — Base game module (DLL)
 GameModules/SparkGameFPS/Source/         — FPS game module (DLL)
 GameModules/SparkGameMMO/Source/         — MMO game module (DLL)
+GameModules/SparkGameMMOFPS/Source/      — MMO-FPS game module (DLL)
 GameModules/SparkGameRPG/Source/         — RPG game module (DLL)
 GameModules/SparkGameARPG/Source/        — Action RPG game module (DLL)
 GameModules/SparkGameRTS/Source/         — RTS game module (DLL)
@@ -161,6 +162,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
+FuzzerTests/                             — libFuzzer harnesses, corpora, fuzz policy (separate from Tests/)
 Tests/                                   — 7716 test definitions across 652 files, CTest
 ```
 
@@ -192,6 +194,20 @@ cmake --build build --config Release
 cd build && ctest --output-on-failure
 ```
 
+**Run a subset of `SparkTests`** while iterating. `Tests/TestMain.cpp` reads these environment variables:
+
+```bash
+SPARK_TEST_FILE=TestFPSMultiplayer.cpp build/linux-gcc-release/bin/SparkTests   # tests from one source file
+SPARK_TEST_NAME=Showcase build/linux-gcc-release/bin/SparkTests                 # name contains ("RPG_" also hits "ARPG_*")
+SPARK_TEST_NAME_PREFIX=RPG_ build/linux-gcc-release/bin/SparkTests              # anchored name prefix
+SPARK_TEST_EXCLUDE=Soak,Stress build/linux-gcc-release/bin/SparkTests           # comma-separated name substrings to skip
+SPARK_TEST_LIMIT=50 build/linux-gcc-release/bin/SparkTests                      # first N tests (bisection)
+```
+
+`SPARK_TEST_EXPECT_COUNT=N` fails the run unless exactly N tests were selected; CTest registrations use it to pin a test family. Pass `--warn-is-error` to match how those registrations run.
+
+**Fast local rebuilds:** configure an iterate-and-test tree with `-DENABLE_LTO=OFF`, ccache and mold. `SparkTests` then relinks in seconds instead of re-running LTO over the whole binary; CI Release lanes keep LTO. The exact configure line and the ccache settings the precompiled header needs are in `wiki/development/Workflow-Patterns.md` (Fast Local Rebuilds).
+
 CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL` (OFF), `ENABLE_DXR`, `ENABLE_HYBRID_RT`, `ENABLE_RECAST`, `ENABLE_SDL2` (auto-ON on Linux), `SPARK_HEADLESS_SUPPORT`, `SPARK_DOUBLE_PRECISION_PHYSICS` (OFF), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
 
 **Cross-compilation (MinGW + Wine):** Build Windows D3D11 code on Linux via MinGW, run under Wine + DXVK/Lavapipe. See `wiki/development/MinGW-Wine-Cross-Compilation.md` for full setup. Presets: `linux-mingw-release`, `linux-mingw-debug`.
@@ -210,7 +226,8 @@ git rebase origin/Working                         # if behind, rebase
 ```
 
 **Rules:**
-- **Never** commit or push while behind the base branch. Always rebase first.
+- **Never** commit or push while behind the base branch.
+- **Rebase only a branch nobody else has pulled.** Once a branch is pushed and shared (an open PR, or several agents or sessions committing to it), bring `Working` in with `git merge origin/Working` instead. Rebasing a shared branch forces a force-push, which breaks every other checkout of it. Never force-push a shared branch.
 - After rebasing, re-run `docs/sync-wiki.sh sync` to pick up upstream changes.
 - Prefer upstream changes for auto-generated content (`<!-- AUTO:* -->` sections).
 
@@ -319,6 +336,8 @@ gh run view <RUN_ID> --log-failed
 # Fix locally, commit, push, re-poll
 ```
 
+Cloud sessions have no `gh` CLI. There, use the GitHub MCP tools instead: `pull_request_read` for PR status and checks, `actions_list` for runs, and `get_job_logs` for failed-job logs.
+
 To reproduce CI failures locally, see `wiki/development/CI-Reproducible-Builds.md` for exact build commands for each job.
 
 ### CI jobs summary
@@ -384,6 +403,27 @@ python3 tools/publish-wiki.py --check   # Validate the flat GitHub Wiki publicat
 
 Legacy Doxygen is optional: `cd docs && ./generate-docs.sh`
 
+## Readiness Contract
+
+Release readiness is tracked per work item in `docs/readiness/work-items/*.json`. Each criterion carries an `acceptanceStatus` entry, keyed by `criterionDigest` (`criterion_digest()` in `tools/site-data/common.py`):
+
+| State | Required evidence |
+|-------|-------------------|
+| `unmet` | none |
+| `implemented` | at least one repo path (code, test, doc) |
+| `evidenced` | a `ci:<workflow>/<run>@<40-hex commit>` reference from an exact-commit CI run |
+
+An item is `done` only when every criterion is `evidenced`; an `open` item records no progress. Local test passes justify `implemented`, never `evidenced`. After editing work items, run `python3 tools/site-data/validate.py` and `python3 tools/site-data/render_handoff.py`, and commit the regenerated `docs/readiness/ENGINE_READINESS_HANDOFF.md` with them.
+
+## Shared Working Tree (Multiple Agents)
+
+When several agents or sessions work in one checkout:
+
+- **Uncommitted edits may belong to a live agent.** Don't commit, revert, stash or reformat files you did not change. Commit only your own hunks, and stage them with `git apply --cached` or `git update-index --cacheinfo`, never with `git add` on a shared file.
+- **Serialize the shared build** through `tools/build-lock.sh`, and hold one commit lock (`flock <lockfile>`) around index, commit and push, so nobody else's staging lands in your commit.
+- **Never kill or `pkill` a process you did not start.** Pattern-matching `pkill -f` has killed other agents' test runs and deadlocked the build lock.
+- **Watch disk.** Keep scratch worktrees and private builds out of the repo and remove them when done. Tree sizes are in `wiki/development/Workflow-Patterns.md`.
+
 ## Wiring Things In — Functionality Is Not Optional
 
 A system that exists but is never initialized, called, or connected is **worse than not existing**.
@@ -428,3 +468,7 @@ Review whether anything learned warrants a new or updated entry — especially o
 ### Asset workflow
 
 Use Blender for asset creation, repair, and export work. Preserve editable source assets and verify exported files through the engine's asset pipeline; a successful Blender export alone is not release qualification.
+
+- **Headless Blender:** `PYTHONHOME=/usr blender -b --factory-startup --python <script> -- <args>`. Add `xvfb-run` for Workbench preview renders.
+- **Audio:** the runtime decodes WAV only, so ship music and effects as `.wav`.
+- **Module asset references:** `tools/check-module-asset-refs.py` fails closed for modules in its `ENFORCED_MODULES`. Each enforced module lists every asset path its source names, with sha256 and provenance rule, in `GameModules/<Module>/asset-references.json`. Every licensed or authored source has an entry in `tools/asset-integrity/provenance.json`.

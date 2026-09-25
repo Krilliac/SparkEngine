@@ -74,6 +74,21 @@ cmake --preset linux-gcc-release -DBUILD_TESTS=ON -DENABLE_LTO=OFF \
 
 Changing `ENABLE_LTO`, the launcher or the linker type changes every compile command, so the first build after the reconfigure is a full rebuild. Run it through `tools/build-lock.sh` when the tree is shared.
 
+## Disk Budget for Build Trees and Worktrees
+
+Cloud sessions get a fixed writable-disk allowance, and parallel agents fill it fast. Measured on 2026-09-25 (Linux GCC):
+
+| Item | Size |
+|------|------|
+| `build/linux-gcc-release` (`-DENABLE_LTO=OFF`, tests and game modules) | ≈2 GB |
+| Sanitizer Debug tree (ASan/UBSan, `-g1`) | ≈11 GiB (full `-g` is larger) |
+| ccache store | its `max_size` (3–8 GB is plenty) |
+| Detached `git worktree` of the repo (no build) | the checkout size, before any build |
+
+- **Build privately only when needed.** A private build per agent multiplies the first row. Prefer the shared tree under `tools/build-lock.sh`, restricted to the targets you need (`--target SparkTests`).
+- **Scratch locations.** Put scratch worktrees and private builds in the session scratch directory, not in the repo, and `git worktree remove` them when done.
+- **Out-of-space errors.** When "No space left on device" appears, delete regenerable outputs first: stale private builds, abandoned worktrees, then `ccache -C`. Delete a scratch folder only after proving its contents are committed.
+
 ## Exploring the Codebase in 3D (Code City)
 
 `tools/architecture-viz/generate_code_city.py` renders the tracked source tree as an interactive three.js city: projects are blocks, subsystem directories are districts, and each file is a building whose footprint and height grow with its line count. Selecting a building draws its resolved includes (blue) and includers (orange) and lists the readiness work items whose entry points name it; the color modes cover project, file kind, size, 180-day churn, readiness status and include fan-in.
@@ -237,6 +252,7 @@ Skipping steps 4-5 means starting each session without accumulated knowledge. Sk
 - Verified against codebase 2026-06-08.
 - 2026-09-24: added the Code City section (`tools/architecture-viz`).
 - 2026-09-24: added the shared-build-directory lock section (`tools/build-lock.sh`) after a parallel-agent build deadlock.
+- 2026-09-25: added the disk-budget section after repeated out-of-space stalls during parallel readiness work.
 - Updated / found stale:
   - Doc-sync section now leads with `docs/update-all-docs.sh` (the master script), which is the current recommended one-shot; the two-script combo is kept as a faster subset.
   - Pre-push step 5 changed to `docs/update-all-docs.sh` to match current `CLAUDE.md` pre-commit guidance (was two separate scripts).
