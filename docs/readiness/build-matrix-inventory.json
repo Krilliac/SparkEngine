@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2050,
+      "line": 2082,
       "conditionFrames": [],
       "definitionScope": []
     },

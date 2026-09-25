@@ -1519,12 +1519,6 @@ if(TARGET SparkServerCore)
         TIMEOUT 60)
 endif()
 
-add_test(NAME LifecyclePartialInit COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
-set_tests_properties(LifecyclePartialInit PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=PartialInit_EngineContext;SPARK_TEST_EXPECT_COUNT=4"
-    LABELS "lifecycle;unit"
-    TIMEOUT 30)
-
 # LIFE-200: the production LifecycleCompositionRoot fails closed on injected
 # stage failures (false return, std::exception, unknown throw, throwing shutdown).
 add_test(NAME LifecycleCompositionRootFailure COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
@@ -1532,6 +1526,44 @@ set_tests_properties(LifecycleCompositionRootFailure PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=PartialInit_CompositionRoot;SPARK_TEST_EXPECT_COUNT=8"
     LABELS "lifecycle;unit"
     TIMEOUT 30)
+
+# LIFE-200: every in-process lifecycle selector family runs under the lifecycle
+# label, so `ctest -L lifecycle` (and the sanitizer presets' build dirs) cover the
+# work item's selectors. Counts are exact per platform: a family that silently
+# loses tests fails its CTest instead of shrinking the evidence.
+#   ModuleABI_: 27 cross-platform, plus 2 Windows-only (wide-path loader, reload
+#   parent-directory cleanup) or 3 POSIX-only (verified shadow, read-only
+#   install, private stage), plus 1 POSIX test that needs the SparkGame module.
+#   EngineLifecycle_: the whole family is compiled only on non-Windows hosts.
+set(_spark_life_module_abi_count 27)
+if(WIN32)
+    math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 2")
+else()
+    math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 3")
+    if(TARGET SparkGame)
+        math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 1")
+    endif()
+endif()
+set(_spark_life_selectors
+    "ModuleLifecycle_=6"
+    "ModuleABI_=${_spark_life_module_abi_count}"
+    "EngineWiring_=9"
+    "ModuleHotReload_=15")
+if(NOT WIN32)
+    list(APPEND _spark_life_selectors "EngineLifecycle_=22")
+endif()
+foreach(_spark_life_selector IN LISTS _spark_life_selectors)
+    string(REPLACE "=" ";" _spark_life_parts "${_spark_life_selector}")
+    list(GET _spark_life_parts 0 _spark_life_prefix)
+    list(GET _spark_life_parts 1 _spark_life_count)
+    string(REGEX REPLACE "_$" "" _spark_life_name "${_spark_life_prefix}")
+    add_test(NAME Lifecycle_${_spark_life_name} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(Lifecycle_${_spark_life_name} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_life_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_life_count}"
+        LABELS "lifecycle;module;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endforeach()
 
 # RHI-230: Vulkan backend under VK_LAYER_KHRONOS_validation (Lavapipe on CI).
 # Lavapipe proves API-usage correctness only, not hardware certification.
