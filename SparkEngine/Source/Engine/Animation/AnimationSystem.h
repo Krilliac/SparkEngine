@@ -346,17 +346,18 @@ namespace Spark::Animation
      *       `ctx->SetAnimation(&AnimationManager::GetInstance())` and clears it
      *       with `SetAnimation(nullptr)` at teardown, so game modules reach it
      *       through `EngineContext::GetAnimation()` (the alias
-     *       `Animation::AnimationSystem` below is that handle's type) and
-     *       `EngineSetup.h` registers it as a subsystem depending on `Timer`.
+     *       `Animation::AnimationSystem` below is that handle's type).
      *       What stays demand-driven is the *content*: nothing ticks or
      *       populates the registry on a schedule.
-     *       The ECS `AnimationUpdateSystem` (registered at
-     *       `EngineSetup.h:187`, `Phase::Animation`) calls into
+     *       The ECS `AnimationUpdateSystem` (registered in
+     *       `EngineSetup::CreatePhaseSystemManager()`, `Phase::Animation`) calls into
      *       `GetClip()` / `GetSkeleton()` on demand each frame to drive
      *       per-entity playback. Callers provide engine `.skel` / `.sanim`
-     *       assets through `LoadSkeleton()` / `LoadAnimations()` and explicitly
-     *       `RegisterClip()` as needed; current model importers do not populate
-     *       this registry directly. The
+     *       files, or a skinned `.gltf` / `.glb` (its one skin and its LINEAR
+     *       TRS joint animations), through `LoadSkeleton()` /
+     *       `LoadAnimations()` and explicitly `RegisterClip()` as needed; mesh
+     *       importers (MeshAsset) do not populate this registry themselves,
+     *       and FBX skeletons and clips are not loaded here. The
      *       complementary `AnimNotifyManager` (wired at
      *       `GameplayLifecycleShared.cpp:445,1032`) handles event
      *       delivery — it is orthogonal to this registry, not a
@@ -378,21 +379,28 @@ namespace Spark::Animation
         static AnimationManager& GetInstance();
 
         /**
-     * @brief Load and cache a skeleton from Spark Engine `.skel` binary data.
+     * @brief Load and cache a skeleton from Spark Engine `.skel` binary data or a skinned glTF.
      *
-     * Cached by filepath; calling twice with the same path returns the cached result.
+     * Cached by filepath; calling twice with the same path returns the cached result. A `.gltf` /
+     * `.glb` path is imported with `Graphics::Detail::LoadGLTFSkinnedMesh`, so the file's single
+     * skin, geometry and weights must all pass that importer's checks. Failed loads are not cached.
      *
-     * @param filepath  Path to a file with the `SKEL` binary layout.
+     * @param filepath  Path to a file with the `SKEL` binary layout, or a skinned `.gltf` / `.glb`.
      * @return          Shared pointer to the cached Skeleton, which may be empty when loading fails.
      */
         std::shared_ptr<Skeleton> LoadSkeleton(const std::string& filepath);
 
         /**
-     * @brief Load animation clips from Spark Engine `.sanim` binary data.
+     * @brief Load animation clips from Spark Engine `.sanim` binary data or a skinned glTF.
      *
-     * Does NOT register clips automatically; call `RegisterClip()` for each.
+     * Does NOT register clips automatically; call `RegisterClip()` for each. A `.gltf` /
+     * `.glb` path is imported with `Graphics::Detail::LoadGLTFAnimationClips`: one clip per glTF
+     * animation, bound by bone name to the skeleton `LoadSkeleton()` returns for the same file.
+     * The file must pass `LoadGLTFSkinnedMesh` first (the importer `LoadSkeleton()` uses), so a
+     * file that yields no skeleton also yields no clips.
+     * Any rejected animation fails the whole file and returns no clips.
      *
-     * @param filepath  Path to a file with the `ANIM` binary layout.
+     * @param filepath  Path to a file with the `ANIM` binary layout, or a skinned `.gltf` / `.glb`.
      * @return          Vector of shared pointers to loaded AnimationClips.
      */
         std::vector<std::shared_ptr<AnimationClip>> LoadAnimations(const std::string& filepath);

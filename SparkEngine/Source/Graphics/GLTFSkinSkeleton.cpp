@@ -307,6 +307,16 @@ namespace Spark::Graphics::Detail::GLTF
     {
         return BuildSkeleton(data, data.skins[0], jointParents, skeleton, boneOfJoint, error);
     }
+
+    bool LoadSkinSkeleton(Document& document, Spark::Animation::Skeleton& skeleton, std::vector<uint32_t>& boneOfJoint,
+                          std::string& error)
+    {
+        const cgltf_data& data = *document.data;
+        std::vector<int32_t> parents;
+        return ValidateDocumentStructure(data, error) && ValidateSkinHierarchy(data, parents, error) &&
+               LoadAndValidateBuffers(document, error) &&
+               BuildSkinSkeleton(data, parents, skeleton, boneOfJoint, error);
+    }
 } // namespace Spark::Graphics::Detail::GLTF
 
 #endif

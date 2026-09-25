@@ -120,7 +120,7 @@ These entries describe observed source paths, not a stable-v1 support matrix.
 |--------|-------------|---------|---------------|
 | `.obj` | Static Wavefront OBJ geometry | tinyobjloader in the general mesh/scene and non-Windows paths; a limited parser in the Windows `MeshAsset` path | `MeshAsset::Load()` / `LoadOBJ()` |
 | `.fbx` | Native binary FBX parsing; the non-Windows mesh path consumes geometry only | `FBXImporter` (no external FBX SDK) | Native importer source; not wired into the Windows stable-v1 `MeshAsset` path |
-| `.gltf` / `.glb` | Validated static triangle geometry; skins, animations, morph targets, sparse accessors, and required extensions are rejected | cgltf | `LoadGLTFStaticMesh()` |
+| `.gltf` / `.glb` | Validated static triangle geometry, or (non-Windows `MeshAsset` only) one skin with four influences per vertex; morph targets, sparse accessors, and required extensions are rejected | cgltf | `LoadGLTFStaticMesh()` / `LoadGLTFSkinnedMesh()` |
 
 ### Textures
 
@@ -786,7 +786,7 @@ It rejects, with a diagnostic naming the node, joint, primitive, or vertex:
 - cyclic node graphs (detected before cgltf walks any parent chain), joints separated from their parent joint by a non-joint node, joints forming more than one tree, and mesh nodes that do not reference the skin
 - everything the static loader rejects (sparse accessors, morph targets, required extensions, oversized or unaligned buffers)
 
-Animations in the file are not read. Both glTF loaders share `GLTFValidation.h/.cpp` (root-confined reads, size limits, and buffer/view/accessor pre-validation), so the skinned path cannot relax the static loader's limits; the parsers are one entry in the SEC-120 parser inventory. `GLTF_Skinning_*` tests (ctest `GLTFSkinnedMeshImport`, exact count) build every GLB fixture in-test. This is importer coverage only: the loader has no `AssetPipeline`/`MeshAsset` caller yet, nothing uploads its vertices to `GPUSkinning` or a skinned shader, there is no glTF animation clip import, and there is no Blender-authored skinned fixture.
+The mesh loader ignores animations; `LoadGLTFAnimationClips()` (`Graphics/GLTFAnimationLoader.h`) imports them for `AnimationManager::LoadAnimations()` (see [Animation](../subsystems/Animation.md#asset-ingestion-boundary)). All glTF loaders share `GLTFValidation.h/.cpp` (root-confined reads, size limits, and buffer/view/accessor pre-validation), so the skinned path cannot relax the static loader's limits; the parsers are one entry in the SEC-120 parser inventory. `GLTF_Skinning_*` tests (ctest `GLTFSkinnedMeshImport`, exact count) build every GLB fixture in-test. The portable (non-Windows) `MeshAsset::Load()` checks whether a `.gltf`/`.glb` declares a skin (`GLTFFileHasSkin()`) and then uses this loader, copying joints and weights into `MeshAssetData::Vertex::boneIndices`/`boneWeights` (indices address the skeleton `AnimationManager::LoadSkeleton()` builds from the same file) and recording `gltf.boneCount` in the asset metadata; an invalid skin fails the load. The Windows D3D11 `MeshAsset` (`AssetTypesWindows.cpp`) still uses only the static loader and rejects skinned glTF. Nothing uploads the bone data to `GPUSkinning` or a skinned shader, and there is no Blender-authored skinned fixture.
 
 ### Observed Model Data Handoffs
 
@@ -794,7 +794,7 @@ Animations in the file are not read. Both glTF loaders share `GLTFValidation.h/.
 |-------------|--------------------------------|---------------|
 | OBJ | Positions, normals, texture coordinates, and triangle indices | Static geometry path; parser details vary by platform/caller |
 | Native FBX | Geometry on the non-Windows `MeshAsset` path | No Windows `MeshAsset` branch and no `AnimationManager` handoff |
-| cgltf | Static triangle positions, normals, one UV set, and indices | Skins go through the separate CPU-only `LoadGLTFSkinnedMesh()` with no `MeshAssetData` handoff; animations, morph targets, and PBR material graphs are not ingested |
+| cgltf | Static triangle positions, normals, one UV set, and indices; on the non-Windows `MeshAsset` path also four bone indices and weights per vertex for a skinned file | The Windows `MeshAsset` rejects skinned files; no draw path consumes the bone data; animations go to `AnimationManager` instead; morph targets and PBR material graphs are not ingested |
 
 ## Error Handling
 
@@ -823,7 +823,7 @@ Animations in the file are not read. Both glTF loaders share `GLTFValidation.h/.
 2. **Set appropriate priorities**: Use `Critical` for player/weapon assets, `Low` for distant scenery
 3. **Monitor cache hit ratio**: Below 0.5 suggests the cache is too small or assets churn too fast
 4. **Disable hot reloading** in shipping builds to avoid file timestamp overhead
-5. **Use `.gltf`/`.glb` only for the implemented static subset**; validate authoring output against the rejected-feature list
+5. **Use `.gltf`/`.glb` only for the implemented static and single-skin subsets**; validate authoring output against the rejected-feature lists
 6. **Batch directory scans** during loading rather than at runtime
 
 ## Thread Safety
@@ -878,7 +878,7 @@ asset_reload_all            # Force reload all loaded assets
 | Load takes too long | Too few streaming threads | Increase with `SetStreamingThreadCount()` |
 | Cache hit ratio is 0 | Assets loaded but not accessed through cache | Use `GetAsset()` for subsequent accesses |
 | FBX skeleton or clips are unavailable | No current importer-to-`AnimationManager` handoff | A separately verified conversion tool would be required to produce `.skel`/`.sanim`; this pipeline does not provide that conversion |
-| glTF skin, animation, morph, or material data is unavailable | The cgltf path intentionally loads static geometry only | Export a static triangle mesh subset; use separately wired systems for other data |
+| glTF skin data is missing on Windows, or morph/material data is unavailable | The Windows `MeshAsset` loads the static subset only; morph targets and material graphs are not imported | Use the non-Windows `MeshAsset` or `AnimationManager::LoadSkeleton()` for skins; export morph and material data through separately wired systems |
 
 ## Utility Functions
 

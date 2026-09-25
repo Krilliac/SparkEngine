@@ -8,6 +8,7 @@
 #if SPARK_HAS_CGLTF
 
 #include "../Engine/Animation/Skeleton.h"
+#include "GLTFValidation.h"
 
 #include <cgltf.h>
 
@@ -37,6 +38,16 @@ namespace Spark::Graphics::Detail::GLTF
     bool BuildSkinSkeleton(const cgltf_data& data, const std::vector<int32_t>& jointParents,
                            Spark::Animation::Skeleton& skeleton, std::vector<uint32_t>& boneOfJoint,
                            std::string& error);
+
+    /**
+     * @brief Validate a parsed skinned document, load its buffers and build its Skeleton.
+     *
+     * Runs ValidateDocumentStructure, ValidateSkinHierarchy, LoadAndValidateBuffers and
+     * BuildSkinSkeleton in that order, so every consumer of a glTF skin (mesh, skeleton or
+     * animation import) applies the same checks before trusting the file.
+     */
+    bool LoadSkinSkeleton(Document& document, Spark::Animation::Skeleton& skeleton, std::vector<uint32_t>& boneOfJoint,
+                          std::string& error);
 } // namespace Spark::Graphics::Detail::GLTF
 
 #endif

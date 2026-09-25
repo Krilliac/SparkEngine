@@ -5172,13 +5172,13 @@ The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable
 Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Skinned glTF animates correctly on D3D11
-   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp`
-   - CPU-only fail-closed glTF skin importer (LoadGLTFSkinnedMesh) passes GLTF_Skinning_* 19/19 locally (linux-gcc-release). No AssetPipeline/MeshAsset caller, GPUSkinning or skinned-shader consumer, glTF animation import, GLTF_Animation_* tests, Blender-authored skinned fixture, or D3D11 skinned render proof.
+   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp`, `Tests/TestGLTFAnimationImport.cpp`, `SparkEngine/Source/Graphics/GLTFAnimationLoader.cpp`
+   - linux-gcc-release: GLTF_Skinning_* 19/19 and GLTF_Animation_* 19/19 pass (16 on Windows: no portable MeshAsset). AnimationManager LoadSkeleton/LoadAnimations import glTF skins and LINEAR TRS clips; non-Windows MeshAsset keeps bone data. Missing: D3D11 MeshAsset skin handoff (AssetTypesWindows.cpp), GPUSkinning/skinned-shader consumer, Blender-authored skinned fixture, D3D11 skinned render proof.
 2. **[unmet]** Canonical content renders correctly through the packaged primary renderer
    - There are no canonical-scene tests or content. The D3D11 material check was a local Windows run, with no hosted packaged proof.
 3. **[unmet]** Malformed or unsupported content fails actionably
-   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `Tests/TestENG220ObjImportReal.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`
-   - Static glTF/OBJ rejections are tested. CPU skinned-glTF rejections pass locally (GLTF_Skinning_*): JOINTS_1, joint range, bad weights, JOINTS component type, 256-joint cap, cyclic/disconnected joints, singular or non-affine inverse binds. Material/texture and Windows package import diagnostics are missing.
+   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `Tests/TestENG220ObjImportReal.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`, `Tests/TestGLTFAnimationImport.cpp`
+   - Static glTF/OBJ rejections are tested. Skinned rejections (GLTF_Skinning_*): JOINTS_1, joint range, weights, 256-joint cap, joint graph, inverse binds. Animation rejections (GLTF_Animation_*): non-LINEAR, non-joint/morph targets, offset animated root, bad times/outputs, duplicates, failed skinned mesh; MeshAsset fails on invalid skins. Material/texture and Windows package diagnostics are missing.
 4. **[unmet]** The Windows package retains all dependencies
    - This needs a Windows package run. There is no dependency reference-closure check.
 5. **[unmet]** Experimental backend parity remains owned by RHI-220, RHI-225, RHI-230, and RHI-240

@@ -1329,9 +1329,11 @@
             "Tests/TestGLTFStaticMeshLoader.cpp",
             "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp",
             "Tests/TestGLTFSkinnedMeshLoader.cpp",
-            "SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp"
+            "SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp",
+            "Tests/TestGLTFAnimationImport.cpp",
+            "SparkEngine/Source/Graphics/GLTFAnimationLoader.cpp"
           ],
-          "note": "CPU-only fail-closed glTF skin importer (LoadGLTFSkinnedMesh) passes GLTF_Skinning_* 19/19 locally (linux-gcc-release). No AssetPipeline/MeshAsset caller, GPUSkinning or skinned-shader consumer, glTF animation import, GLTF_Animation_* tests, Blender-authored skinned fixture, or D3D11 skinned render proof."
+          "note": "linux-gcc-release: GLTF_Skinning_* 19/19 and GLTF_Animation_* 19/19 pass (16 on Windows: no portable MeshAsset). AnimationManager LoadSkeleton/LoadAnimations import glTF skins and LINEAR TRS clips; non-Windows MeshAsset keeps bone data. Missing: D3D11 MeshAsset skin handoff (AssetTypesWindows.cpp), GPUSkinning/skinned-shader consumer, Blender-authored skinned fixture, D3D11 skinned render proof."
         },
         {
           "criterionDigest": "sha256:60f825cc1ca8",
@@ -1345,9 +1347,10 @@
           "evidence": [
             "Tests/TestGLTFStaticMeshLoader.cpp",
             "Tests/TestENG220ObjImportReal.cpp",
-            "Tests/TestGLTFSkinnedMeshLoader.cpp"
+            "Tests/TestGLTFSkinnedMeshLoader.cpp",
+            "Tests/TestGLTFAnimationImport.cpp"
           ],
-          "note": "Static glTF/OBJ rejections are tested. CPU skinned-glTF rejections pass locally (GLTF_Skinning_*): JOINTS_1, joint range, bad weights, JOINTS component type, 256-joint cap, cyclic/disconnected joints, singular or non-affine inverse binds. Material/texture and Windows package import diagnostics are missing."
+          "note": "Static glTF/OBJ rejections are tested. Skinned rejections (GLTF_Skinning_*): JOINTS_1, joint range, weights, 256-joint cap, joint graph, inverse binds. Animation rejections (GLTF_Animation_*): non-LINEAR, non-joint/morph targets, offset animated root, bad times/outputs, duplicates, failed skinned mesh; MeshAsset fails on invalid skins. Material/texture and Windows package diagnostics are missing."
         },
         {
           "criterionDigest": "sha256:99267550fdd7",
@@ -1408,7 +1411,6 @@
         "golden-d3d11"
       ],
       "plannedTestSelectors": [
-        "GLTF_Animation_*",
         "CanonicalScene_*"
       ]
     },

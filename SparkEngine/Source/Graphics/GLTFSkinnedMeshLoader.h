@@ -73,4 +73,17 @@ namespace Spark::Graphics::Detail
      * @return true when a non-empty, validated skinned mesh was loaded.
      */
     bool LoadGLTFSkinnedMesh(const std::filesystem::path& path, GLTFSkinnedMeshData& meshData, std::string& error);
+
+    /**
+     * @brief Report whether a .gltf/.glb declares any skin, so callers can choose the skinned or static loader.
+     *
+     * Parses only the JSON (and GLB container) with the same root confinement and size limits as
+     * the loaders; binary buffers are not read and nothing else is validated.
+     *
+     * @param path Source .gltf or .glb path.
+     * @param hasSkin Set to true when the document declares at least one skin.
+     * @param error Receives a diagnostic when the document cannot be parsed.
+     * @return false when the file cannot be parsed.
+     */
+    bool GLTFFileHasSkin(const std::filesystem::path& path, bool& hasSkin, std::string& error);
 } // namespace Spark::Graphics::Detail

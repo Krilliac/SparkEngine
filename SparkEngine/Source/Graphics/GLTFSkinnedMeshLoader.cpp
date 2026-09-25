@@ -251,19 +251,13 @@ namespace Spark::Graphics::Detail
 
         bool LoadSkinnedDocument(GLTF::Document& document, GLTFSkinnedMeshData& meshData, std::string& error)
         {
-            const cgltf_data& data = *document.data;
-            std::vector<int32_t> parents;
-            if (!GLTF::ValidateDocumentStructure(data, error) || !GLTF::ValidateSkinHierarchy(data, parents, error) ||
-                !GLTF::LoadAndValidateBuffers(document, error))
+            std::vector<uint32_t> boneOfJoint;
+            if (!GLTF::LoadSkinSkeleton(document, meshData.skeleton, boneOfJoint, error))
             {
                 return false;
             }
 
-            std::vector<uint32_t> boneOfJoint;
-            if (!GLTF::BuildSkinSkeleton(data, parents, meshData.skeleton, boneOfJoint, error))
-            {
-                return false;
-            }
+            const cgltf_data& data = *document.data;
 
             for (cgltf_size meshIndex = 0; meshIndex < data.meshes_count; ++meshIndex)
             {
@@ -319,6 +313,26 @@ namespace Spark::Graphics::Detail
             meshData = {};
         }
         return loaded;
+#endif
+    }
+
+    bool GLTFFileHasSkin(const std::filesystem::path& path, bool& hasSkin, std::string& error)
+    {
+        hasSkin = false;
+        error.clear();
+
+#if !SPARK_HAS_CGLTF
+        (void)path;
+        error = "cgltf support is not available in this build";
+        return false;
+#else
+        GLTF::Document document;
+        if (!GLTF::ParseDocument(path, document, error))
+        {
+            return false;
+        }
+        hasSkin = document.data->skins_count > 0;
+        return true;
 #endif
     }
 } // namespace Spark::Graphics::Detail

@@ -76,13 +76,15 @@ namespace Spark::Animation
  * NOT contain any animation state — that lives in `AnimationInstance`.
  *
  * ### Loading
- * Use `AnimationManager::LoadSkeleton()` to load a Skeleton from an FBX or GLTF file.
- * The manager caches skeletons by file path so that multiple instances of the same
+ * `AnimationManager::LoadSkeleton()` reads engine `.skel` files and the single skin of a
+ * `.gltf` / `.glb` file (through the fail-closed importer in
+ * `Graphics/GLTFSkinnedMeshLoader.h`). FBX skeletons are not loaded into a Skeleton. The
+ * manager caches successful loads by file path so that multiple instances of the same
  * character share a single Skeleton in memory.
  *
  * @code
- *   auto skeleton = AnimationManager::GetInstance().LoadSkeleton("Assets/Soldier.fbx");
- *   int32_t spineIdx = skeleton->FindBone("Bip01_Spine");
+ *   auto skeleton = AnimationManager::GetInstance().LoadSkeleton("Assets/Soldier.glb");
+ *   int32_t spineIdx = skeleton->FindBone("Spine");
  * @endcode
  */
     struct Skeleton

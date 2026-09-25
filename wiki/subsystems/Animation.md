@@ -10,8 +10,8 @@ SparkEngine contains runtime skeletal-animation types and evaluators for bone hi
 
 ```
 AnimationManager (singleton asset cache)
-    ├── Skeleton       (bone hierarchy loaded from Spark .skel data)
-    └── AnimationClip  (keyframe data loaded from Spark .sanim data)
+    ├── Skeleton       (bone hierarchy loaded from Spark .skel data or a skinned glTF)
+    └── AnimationClip  (keyframe data loaded from Spark .sanim data or glTF animations)
 
 Per-entity runtime data:
     AnimationInstance
@@ -34,7 +34,7 @@ The animation system supports:
 - Multi-layer blending (override, additive, layered with per-bone masks)
 - Inverse kinematics (two-bone, look-at, FABRIK)
 - Root motion extraction for locomotion
-- Spark `.skel` skeleton and `.sanim` animation binary loaders; direct FBX/glTF animation import is not implemented by `AnimationManager`
+- Spark `.skel` skeleton and `.sanim` animation binary loaders, plus fail-closed glTF skeleton and LINEAR TRS joint-animation import for `.gltf`/`.glb`; FBX skeletons and clips are not loaded by `AnimationManager`
 
 ## Skeletal Animation
 
@@ -178,8 +178,8 @@ The `AnimationManager` ensures each unique asset is loaded once. All runtime ins
 | Method | Description |
 |--------|-------------|
 | `GetInstance()` | Access the global singleton |
-| `LoadSkeleton(filepath)` | Load/cache a Spark `SKEL`/`.skel` skeleton binary; rejects a name-length prefix outside `[0, 256)`, a non-finite matrix, or a `parentIndex` that does not refer to an already-read bone |
-| `LoadAnimations(filepath)` | Load clips from a Spark `ANIM`/`.sanim` binary (does NOT auto-register); a name-length prefix outside `[0, 256)` aborts the load (previously the loader skipped the name without consuming its bytes, desynced, and still reported success) |
+| `LoadSkeleton(filepath)` | Load/cache a skinned `.gltf`/`.glb` skin through `LoadGLTFSkinnedMesh()` (the file's geometry and weights must also pass), or a Spark `SKEL`/`.skel` skeleton binary; failed loads are not cached; the `.skel` reader rejects a name-length prefix outside `[0, 256)`, a non-finite matrix, or a `parentIndex` that does not refer to an already-read bone |
+| `LoadAnimations(filepath)` | Load clips from a skinned `.gltf`/`.glb` through `LoadGLTFAnimationClips()` (one clip per glTF animation; any rejected animation returns no clips) or from a Spark `ANIM`/`.sanim` binary (does NOT auto-register); a name-length prefix outside `[0, 256)` aborts the load (previously the loader skipped the name without consuming its bytes, desynced, and still reported success) |
 
 **There is no partial parse.** Any corruption — a rejected length prefix, an out-of-range count, a
 non-finite matrix, an invalid parent index, or truncation anywhere inside a channel's keyframes —
@@ -566,16 +566,19 @@ The `AnimationUpdateSystem` evaluates state machines and blends poses each frame
 
 ## Asset Ingestion Boundary
 
-`AnimationManager` does not parse authoring formats. `LoadSkeleton()` accepts the engine's binary `SKEL`/`.skel` layout, while `LoadAnimations()` accepts the engine's binary `ANIM`/`.sanim` layout and leaves registration to the caller.
+`LoadSkeleton()` and `LoadAnimations()` accept the engine's binary `SKEL`/`.skel` and `ANIM`/`.sanim` layouts, and skinned `.gltf`/`.glb` files through the fail-closed cgltf importers in `Graphics/`. Registration of clips stays with the caller.
 
 | Source surface | Current animation handoff |
 |----------------|---------------------------|
+| Skinned glTF (`LoadGLTFSkinnedMesh()`) | `LoadSkeleton("x.glb")` returns the file's one skin as a parent-first `Skeleton` (inverse binds as `offsetMatrix`; the root's bind pose folds in non-joint ancestors) and caches it by path |
+| glTF animations (`LoadGLTFAnimationClips()`) | `LoadAnimations("x.glb")` returns one `AnimationClip` per glTF animation, keyed in seconds (`ticksPerSecond` 1), with each channel bound by name and index to the skeleton bone of its joint |
 | Native `FBXImporter` | Exposes bone and animation result structures, but the mesh path does not convert or register them with `AnimationManager` |
-| cgltf static-mesh loader | Rejects skins and animations rather than converting them |
 | DAE/Collada | No current loader-to-`AnimationManager` path is present |
 | Spark `.skel` / `.sanim` | Formats consumed directly by `AnimationManager` |
 
-Consequently, model-pipeline animation conversion is absent or unproven. Production-loader evidence includes hardened `.skel` parsing tests; FBX validation tests and the static glTF tests do not establish an end-to-end animated-character import workflow. See [Asset Pipeline](../gameplay-tools/Asset-Pipeline.md) for the mesh-format limits.
+The glTF clip importer accepts LINEAR translation, rotation and scale channels on skin joints only. A channel replaces the bone's whole local transform when sampled and an empty track samples as identity, so paths the file does not animate are filled with the joint's rest value; rotations are renormalized. It rejects, and returns no clips for the whole file: STEP and CUBICSPLINE samplers, morph `weights` channels, channels on non-joint nodes, animated joints that use a matrix, an animated root joint under a non-identity non-joint ancestor (apply the armature transform before export), key times that are not finite, non-negative and strictly increasing, output counts that differ from the key count, wrong accessor types, zero-length rotations, duplicate channels for one joint path, animations without channels, duplicate animation names, and more than 1,000,000 keys in one sampler. The file must be the skinned file itself: `LoadGLTFAnimationClips()` first runs `LoadGLTFSkinnedMesh()` on it (skin, geometry, joints and weights), the importer `LoadSkeleton()` uses, so a file whose skin is valid but whose weights or joint indices are not yields no clips, just as it yields no skeleton. Animation-only glTF files are rejected.
+
+Evidence: `GLTF_Animation_*` (ctest `GLTFAnimationImport`, exact count) builds every GLB in-test and drives `AnimationManager::LoadSkeleton`/`LoadAnimations`/`RegisterClip` and the portable `MeshAsset`. This is CPU import only. No skinned draw path consumes the bone data (`GPUSkinning` has no production caller and no shader reads `BLENDINDICES`/`BLENDWEIGHT`), the Windows D3D11 `MeshAsset` still rejects skinned glTF, and there is no Blender-authored skinned or animated fixture. FBX validation tests do not establish an animated-character import workflow. See [Asset Pipeline](../gameplay-tools/Asset-Pipeline.md) for the mesh-format limits.
 
 ## Thread Safety
 

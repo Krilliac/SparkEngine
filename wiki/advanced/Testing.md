@@ -1056,6 +1056,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFrustumCulling` | 11 |
 | `TestFullEngineDiagnostics` | 9 |
 | `TestGLSLPipelineIntegration` | 19 |
+| `TestGLTFAnimationImport` | 19 |
+| `TestGLTFSkinnedMeshLoader` | 19 |
 | `TestGLTFStaticMeshLoader` | 10 |
 | `TestGPUClusterCulling` | 11 |
 | `TestGPUDrivenRenderer` | 14 |

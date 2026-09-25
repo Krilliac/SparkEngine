@@ -245,6 +245,7 @@ add_executable(SparkTests
     TestThirdPartyIntegration.cpp
     TestGLTFStaticMeshLoader.cpp
     TestGLTFSkinnedMeshLoader.cpp
+    TestGLTFAnimationImport.cpp
     TestNetworkStress.cpp
     TestNetworkMMOIntegration.cpp
     TestAnimationStress.cpp
@@ -2002,6 +2003,22 @@ set_tests_properties(NullRHIResourceLifetime PROPERTIES
 add_test(NAME GLTFSkinnedMeshImport COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(GLTFSkinnedMeshImport PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=GLTF_Skinning_;SPARK_TEST_EXPECT_COUNT=19"
+    LABELS "assets;gltf;unit"
+    TIMEOUT 30)
+
+# ENG-220: glTF skeletons and LINEAR TRS joint animations through AnimationManager
+# (LoadSkeleton/LoadAnimations) and skin influences in the portable (non-Windows)
+# MeshAsset. CPU import only: no skinned rendering, and the Windows D3D11 MeshAsset
+# still rejects skinned glTF. Exact count: a dropped test fails. The three portable
+# MeshAsset tests are compiled out on Windows (the D3D11 MeshAsset needs a device).
+if(WIN32)
+    set(_gltf_animation_test_count 16)
+else()
+    set(_gltf_animation_test_count 19)
+endif()
+add_test(NAME GLTFAnimationImport COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(GLTFAnimationImport PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=GLTF_Animation_;SPARK_TEST_EXPECT_COUNT=${_gltf_animation_test_count}"
     LABELS "assets;gltf;unit"
     TIMEOUT 30)
 

@@ -13,6 +13,7 @@
 
 #include "AssetPipeline.h"
 #include "FBXImporter.h"
+#include "GLTFSkinnedMeshLoader.h"
 #include "GLTFStaticMeshLoader.h"
 #include "OBJStaticMeshLoader.h"
 #include "GraphicsEngineRHI.h"
@@ -140,6 +141,79 @@ namespace
             }
         }
     }
+
+    /**
+     * @brief Import a .gltf/.glb into @p meshData with the skinned loader when it declares a skin.
+     *
+     * Skinned files keep four influences per vertex in boneIndices/boneWeights, indexed into the
+     * Skeleton that AnimationManager::LoadSkeleton builds from the same file. The Windows D3D11
+     * MeshAsset still uses only the static loader and rejects skinned glTF.
+     *
+     * @param boneCount Receives the skeleton's bone count (0 for a static file).
+     */
+    bool ImportGLTF(const std::filesystem::path& path, MeshAssetData& meshData, size_t& boneCount, std::string& error)
+    {
+        meshData.vertices.clear();
+        meshData.indices.clear();
+        meshData.submeshes.clear();
+        boneCount = 0;
+
+        bool hasSkin = false;
+        if (!Spark::Graphics::Detail::GLTFFileHasSkin(path, hasSkin, error))
+        {
+            return false;
+        }
+
+        if (hasSkin)
+        {
+            Spark::Graphics::Detail::GLTFSkinnedMeshData imported;
+            if (!Spark::Graphics::Detail::LoadGLTFSkinnedMesh(path, imported, error))
+            {
+                return false;
+            }
+            meshData.vertices.reserve(imported.vertices.size());
+            for (const auto& source : imported.vertices)
+            {
+                MeshAssetData::Vertex vertex{};
+                vertex.position = {source.position[0], source.position[1], source.position[2]};
+                vertex.normal = {source.normal[0], source.normal[1], source.normal[2]};
+                vertex.texCoord0 = {source.texCoord[0], source.texCoord[1]};
+                vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+                vertex.boneIndices = {source.joints[0], source.joints[1], source.joints[2], source.joints[3]};
+                vertex.boneWeights = {source.weights[0], source.weights[1], source.weights[2], source.weights[3]};
+                meshData.vertices.push_back(vertex);
+            }
+            meshData.indices = std::move(imported.indices);
+            for (const auto& primitive : imported.primitives)
+            {
+                meshData.submeshes.push_back(primitive.indexStart);
+            }
+            boneCount = imported.skeleton.bones.size();
+            return true;
+        }
+
+        Spark::Graphics::Detail::GLTFStaticMeshData imported;
+        if (!Spark::Graphics::Detail::LoadGLTFStaticMesh(path, imported, error))
+        {
+            return false;
+        }
+        meshData.vertices.reserve(imported.vertices.size());
+        for (const auto& source : imported.vertices)
+        {
+            MeshAssetData::Vertex vertex{};
+            vertex.position = {source.position[0], source.position[1], source.position[2]};
+            vertex.normal = {source.normal[0], source.normal[1], source.normal[2]};
+            vertex.texCoord0 = {source.texCoord[0], source.texCoord[1]};
+            vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+            meshData.vertices.push_back(vertex);
+        }
+        meshData.indices = std::move(imported.indices);
+        for (const auto& primitive : imported.primitives)
+        {
+            meshData.submeshes.push_back(primitive.indexStart);
+        }
+        return true;
+    }
 } // namespace
 
 HRESULT MeshAsset::Load(ID3D11Device* /*device*/)
@@ -266,38 +340,24 @@ HRESULT MeshAsset::Load(ID3D11Device* /*device*/)
         }
         else if (ext == ".gltf" || ext == ".glb")
         {
-            Spark::Graphics::Detail::GLTFStaticMeshData imported;
+            size_t boneCount = 0;
             std::string error;
-            if (Spark::Graphics::Detail::LoadGLTFStaticMesh(std::filesystem::path(m_path), imported, error))
-            {
-                m_meshData.vertices.clear();
-                m_meshData.indices.clear();
-                m_meshData.submeshes.clear();
-                m_meshData.vertices.reserve(imported.vertices.size());
-                for (const auto& source : imported.vertices)
-                {
-                    MeshAssetData::Vertex vertex{};
-                    vertex.position = {source.position[0], source.position[1], source.position[2]};
-                    vertex.normal = {source.normal[0], source.normal[1], source.normal[2]};
-                    vertex.texCoord0 = {source.texCoord[0], source.texCoord[1]};
-                    vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
-                    m_meshData.vertices.push_back(vertex);
-                }
-                m_meshData.indices = std::move(imported.indices);
-                for (const auto& primitive : imported.primitives)
-                {
-                    m_meshData.submeshes.push_back(primitive.indexStart);
-                }
-                GenerateTangents(m_meshData);
-                ComputeBounds(m_meshData);
-            }
-            else
+            if (!ImportGLTF(std::filesystem::path(m_path), m_meshData, boneCount, error))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Graphics, "glTF validation failed for '%s': %s", m_path.c_str(),
                                error.c_str());
+                m_meshData.vertices.clear();
+                m_meshData.indices.clear();
+                m_meshData.submeshes.clear();
                 m_metadata.state = StreamingState::Failed;
                 return E_FAIL;
             }
+            if (boneCount > 0)
+            {
+                m_metadata.customProperties["gltf.boneCount"] = std::to_string(boneCount);
+            }
+            GenerateTangents(m_meshData);
+            ComputeBounds(m_meshData);
         }
     }
     if (!m_meshData.vertices.empty())
