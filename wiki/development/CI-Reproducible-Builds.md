@@ -236,6 +236,74 @@ build with `-g`, and its disk, memory and time on hosted runners, has not been
 measured. MSVC PDB output under `/Brepro` and the hosted job have not yet been
 observed.
 
+### Build-output reproducibility (BLD-100)
+
+`cmake/SparkReproducibleBuild.cmake` maps both roots out of optimized GCC/Clang
+outputs: `-ffile-prefix-map=<source>/=` and then `-ffile-prefix-map=<build>=.`
+(the later map wins, so it also covers a build tree inside the source tree).
+Without the build-root map every DWARF `comp_dir` (each target's binary
+directory) carried the build path, so builds made in different directories
+differed in `.debug_info` and, through the GNU build-id, in the stripped image.
+Under GCC LTO the LTRANS units compile at link time, so GCC also gets both maps
+as link options, and every compile gets `-frandom-seed=<OBJECT>`: without a
+seed GCC names the LTO IR sections of an object from the clock and pid, so even
+two builds in one directory produced different static libraries.
+
+Known limit: GCC's LTO IR (the members of static libraries such as
+`libSparkAssetPipelineCore.a`) still records the build directory; no prefix map
+rewrites it. Those members differ between trees in different directories,
+although the linked images and `.debug` files are equivalent.
+
+`tools/compare_build_outputs.py` compares builds with the standard library only:
+
+```bash
+python3 tools/compare_build_outputs.py manifest <root> --output a.json   # one tree
+python3 tools/compare_build_outputs.py compare a.json b.json --report r.json
+python3 tools/compare_build_outputs.py trees <root-a> <root-b>           # both at once
+```
+
+The `spark.build-output-manifest/1` manifest lists every ELF, PE and `ar` file
+under the root: relative path, size, SHA-256, the identity (GNU build-id; COFF
+timestamp, RSDS GUID/age/PDB name and whether the image carries the `/Brepro`
+REPRO debug entry) and a SHA-256 per section or archive
+member. It holds no absolute path, so equivalent trees give byte-identical
+manifests. PDBs are not compared: the RSDS record in the image identifies them.
+The comparison exits 1 on any missing, extra or differing output and names the
+first differing section that is a cause (headers, the build-id note and the
+debuglink CRC only follow other changes). A PE image linked without `/Brepro`
+whose COFF timestamp differs is reported at `<pe-headers> (COFF timestamp)`:
+there the timestamp is the link time and the debug directory that repeats it
+is derived. Under `/Brepro` the timestamp is a content hash, so the content
+section is named instead. An empty or malformed tree exits 2.
+
+CTests (label `reproducibility`):
+
+- `ReproducibleBuild_CompareTool` runs `Tests/Tools/test_compare_build_outputs.py`
+  on gcc ELF, crafted PE and `ar` fixtures.
+- `ReproducibleBuild_LinuxToolTargets` (ELF trees with objcopy; `RUN_SERIAL`,
+  about 80 s) runs `compare_build_outputs.py two-tree`. It copies the source
+  tree (no `.git`, no `build/`) to `<build>/reproducible-build-trees/a/src` and
+  `.../tree-b/nested/src`, configures each with the linux-shipping settings
+  (MinSizeRel, LTO, `STRIP_DEBUG_SYMBOLS=ON`; `SPARK_STRICT_DEPS` stays OFF
+  because the copies have no `.git` for the third-party audit) and this tree's
+  compiler, with no compiler launcher and no `CFLAGS`/`CXXFLAGS`/`LDFLAGS`,
+  builds `SparkCooker`, and compares `bin/`: the stripped image and its
+  `.debug`. Before the build-root map both differed (`.debug_info`, and the
+  image's build-id). It has passed locally only with GCC 13.3. The inner
+  build uses the defaults (`ENABLE_LTO=ON`, the compiler's default standard
+  library), not the Clang lane's `ENABLE_LTO=OFF`/libc++ flags, and no hosted
+  GCC 14 or Clang lane has run it yet; one manual Clang two-tree run outside
+  the CTest was equivalent.
+
+The `reproducibility-windows` job checks the repository out twice (`a` and
+`tree-b/nested/src`), builds and installs the `windows-shipping` preset in each
+with no compiler cache, and compares the two install trees. It is job-level
+`continue-on-error` and not a `required-ci-gate` dependency until a hosted run
+shows equivalent trees, and it has not run yet. MSVC objects embed CodeView
+(`/Z7`) with absolute paths that `/d1trimfile` does not rewrite, so the static
+libraries in the SDK install may differ between the trees; the job reports
+that rather than hiding it.
+
 ## macOS (job `build-macos`, `continue-on-error`)
 
 ```bash
@@ -297,6 +365,7 @@ This is a red control run and cannot qualify a release commit.
   - Windows VS 2022 / VS 2026 recipes switched to Ninja Multi-Config + sccache (2026-09-06); the Visual Studio-generator configure now applies only to `build-windows-shipping`'s preset.
   - Added the jobs that did not exist in the source: `check-thirdparty-manifest`, `coverage`, `clang-tidy`, `todo-count`, `build-installer`, `report-ci-errors`, plus the macOS and MinGW-Wine reproduction recipes.
   - Noted the Linux GCC job uses gcc-14/g++-14.
+  - 2026-09-25: added build-output reproducibility (BLD-100): the build-root prefix map, the GCC LTO seed, `tools/compare_build_outputs.py`, the `ReproducibleBuild_*` CTests and the advisory `reproducibility-windows` job, measured locally with GCC 13.3.
 
 ## Related Pages
 

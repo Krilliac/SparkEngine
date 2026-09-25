@@ -2614,6 +2614,58 @@ set_tests_properties(ShippingManifest_SymbolManifestTool PROPERTIES
     LABELS "build;shipping;unit;python"
     TIMEOUT 300)
 
+# BLD-100: ReproducibleBuild_CompareTool proves tools/compare_build_outputs.py
+# on real gcc ELF, crafted PE and ar fixtures (build-directory DWARF leaks,
+# code and timestamp differences, closed manifest schema, failure codes).
+# ReproducibleBuild_LinuxToolTargets copies this source tree to two
+# differently named and nested directories, configures each with the
+# linux-shipping settings (MinSizeRel, LTO, split private symbols) and this
+# tree's compiler, builds SparkCooker without any compiler cache, and requires
+# equivalent bin/ outputs: the stripped image and its .debug file. lib/ is not
+# compared: GCC's LTO IR in static-library members records the build
+# directory whatever the prefix maps say, so those members differ between
+# trees (they do not reach the linked image). The copies carry no .git, so
+# SPARK_STRICT_DEPS stays OFF: its third-party audit resolves submodule
+# gitlinks through git. It runs two clean builds, serially.
+add_test(
+    NAME ReproducibleBuild_CompareTool
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_compare_build_outputs -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(ReproducibleBuild_CompareTool PROPERTIES
+    LABELS "build;reproducibility;unit;python"
+    TIMEOUT 300)
+if(CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF" AND CMAKE_OBJCOPY)
+    add_test(
+        NAME ReproducibleBuild_LinuxToolTargets
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/compare_build_outputs.py two-tree
+            --source ${CMAKE_SOURCE_DIR}
+            --work ${CMAKE_BINARY_DIR}/reproducible-build-trees
+            --exclude ${CMAKE_SOURCE_DIR}/build
+            --exclude ${CMAKE_BINARY_DIR}
+            --cmake ${CMAKE_COMMAND}
+            --jobs 4
+            --target SparkCooker
+            --scan bin
+            --
+            -G ${CMAKE_GENERATOR}
+            -DCMAKE_BUILD_TYPE=MinSizeRel
+            -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+            -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+            -DSTRIP_DEBUG_SYMBOLS=ON
+            -DSPARK_NATIVE_ARCH=OFF
+            -DENABLE_EDITOR=OFF
+            -DENABLE_PROFILING=OFF
+            -DENABLE_CONSOLE_IN_SHIPPING=OFF
+            -DENABLE_DEVCOMMANDS_IN_SHIPPING=OFF
+            -DENABLE_ANGELSCRIPT=OFF
+            -DBUILD_GAME_MODULES=OFF
+            -DBUILD_TESTS=OFF)
+    set_tests_properties(ReproducibleBuild_LinuxToolTargets PROPERTIES
+        LABELS "build;reproducibility;shipping;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 3600)
+endif()
+
 # In a STRIP_DEBUG_SYMBOLS ELF tree the packaged components (runtime, tools,
 # samples) and the private "symbols" component install to separate roots, as
 # a release stages them; every installed image must be stripped and map by

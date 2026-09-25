@@ -238,6 +238,28 @@ class ReproducibleOutputFlagTests(unittest.TestCase):
             " ".join(_cmake_calls(self.text, "add_compile_options")),
         )
 
+    def test_gnu_clang_build_root_is_mapped_after_the_source_root(self) -> None:
+        # The DWARF comp_dir is each target's binary directory. GCC and Clang
+        # apply the last matching map, so the build-root map must follow the
+        # source-root map to win for a build tree inside the source tree.
+        source_map = '"$<$<NOT:$<CONFIG:Debug>>:-ffile-prefix-map=${CMAKE_SOURCE_DIR}/=>"'
+        build_map = '"$<$<NOT:$<CONFIG:Debug>>:-ffile-prefix-map=${CMAKE_BINARY_DIR}=.>"'
+        compile_args = " ".join(_cmake_calls(self.text, "add_compile_options"))
+        self.assertIn(build_map, compile_args)
+        self.assertLess(compile_args.index(source_map), compile_args.index(build_map))
+        # GCC LTO compiles the LTRANS units at link time, so the link repeats both maps.
+        gcc_lto = re.search(
+            r'if\(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND ENABLE_LTO\)(.*?)\n    endif\(\)', self.text, re.S
+        )
+        self.assertIsNotNone(gcc_lto, "GCC LTO link-time prefix maps are missing")
+        link_args = " ".join(_cmake_calls(gcc_lto.group(1), "add_link_options"))
+        self.assertLess(link_args.index(source_map), link_args.index(build_map))
+        # Without a seed GCC names LTO IR sections from the clock and pid.
+        self.assertIn(
+            'string(APPEND CMAKE_${_spark_repro_lang}_COMPILE_OBJECT " -frandom-seed=<OBJECT>")',
+            gcc_lto.group(1),
+        )
+
     def test_shipping_never_links_incrementally(self) -> None:
         # /INCREMENTAL pads images and defeats /Brepro; it must stay Debug-only.
         for call in _cmake_calls(self.root + self.text, "add_link_options"):

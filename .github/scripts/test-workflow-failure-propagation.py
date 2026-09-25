@@ -1408,6 +1408,105 @@ def experimental_mingw_lane_errors(document: dict) -> list[str]:
     return errors
 
 
+REPRODUCIBILITY_JOB = "reproducibility-windows"
+REPRODUCIBILITY_TOOL = "tools/compare_build_outputs.py"
+
+
+def reproducibility_windows_errors(document: dict) -> list[str]:
+    """BLD-100: two clean windows-shipping builds in different trees are compared, fail-closed."""
+
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    job = jobs.get(REPRODUCIBILITY_JOB)
+    if not isinstance(job, dict):
+        return [f"{REPRODUCIBILITY_JOB} job is missing"]
+    errors: list[str] = []
+    if job.get("runs-on") != "windows-2022":
+        errors.append(f"{REPRODUCIBILITY_JOB} does not run on windows-2022")
+    for field in ("if", "strategy"):
+        if field in job:
+            errors.append(f"{REPRODUCIBILITY_JOB} declares job-level {field}")
+    # Advisory until a hosted run shows equivalent trees: visible as a failed
+    # job, but neither a gate dependency nor build-matrix producer coverage.
+    if job.get("continue-on-error") is not True:
+        errors.append(f"{REPRODUCIBILITY_JOB} does not declare job-level continue-on-error: true")
+    if "advisory" not in str(job.get("name") or ""):
+        errors.append(f"{REPRODUCIBILITY_JOB} display name does not say advisory")
+    gate = jobs.get("required-ci-gate")
+    if isinstance(gate, dict) and REPRODUCIBILITY_JOB in (gate.get("needs") or []):
+        errors.append(f"{REPRODUCIBILITY_JOB} is a required-ci-gate dependency before a hosted pass")
+    if not isinstance(job.get("timeout-minutes"), int) or job["timeout-minutes"] <= 0:
+        errors.append(f"{REPRODUCIBILITY_JOB} has no positive timeout-minutes")
+    if re.search(r"(?i)\bs?ccache\b|COMPILER_LAUNCHER", json.dumps(job)):
+        errors.append(f"{REPRODUCIBILITY_JOB} uses a compiler cache")
+
+    steps = [step for step in job.get("steps") or [] if isinstance(step, dict)]
+    checkouts = [
+        step for step in steps if str(step.get("uses", "")).startswith("actions/checkout@")
+    ]
+    paths = [str((step.get("with") or {}).get("path", "")) for step in checkouts]
+    if len(checkouts) != 2 or len(set(paths)) != 2 or "" in paths:
+        errors.append(f"{REPRODUCIBILITY_JOB} must check out exactly two trees at distinct paths")
+    elif any((step.get("with") or {}).get("submodules") != "recursive" for step in checkouts):
+        errors.append(f"{REPRODUCIBILITY_JOB} checkouts must include submodules recursively")
+
+    stages: list[str] = []
+    for tree in paths:
+        builds = [step for step in steps if step.get("working-directory") == tree]
+        if len(builds) != 1:
+            errors.append(f"{REPRODUCIBILITY_JOB} must build the {tree!r} tree in exactly one step")
+            continue
+        run = str(builds[0].get("run", ""))
+        required = (
+            "set -euo pipefail",
+            "cmake --preset windows-shipping",
+            "cmake --build --preset windows-shipping --config MinSizeRel",
+        )
+        for fragment in required:
+            if run.count(fragment) != 1:
+                errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build is missing {fragment!r}")
+        install = re.search(r"(?m)^cmake --install build/windows-shipping --config MinSizeRel --prefix (\S+)$", run)
+        if install is None:
+            errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build does not install the Shipping tree")
+        else:
+            stages.append(os.path.normpath(os.path.join(tree, install.group(1))).replace("\\", "/"))
+    if len(stages) == 2 and len(set(stages)) != 2:
+        errors.append(f"{REPRODUCIBILITY_JOB} stages both trees to the same prefix")
+
+    compares = [step for step in steps if REPRODUCIBILITY_TOOL in str(step.get("run", ""))]
+    if len(compares) != 1:
+        errors.append(f"{REPRODUCIBILITY_JOB} must compare the trees in exactly one step")
+    else:
+        run = str(compares[0].get("run", ""))
+        if "set -euo pipefail" not in run or "working-directory" in compares[0]:
+            errors.append(f"{REPRODUCIBILITY_JOB} compare step is not errexit at the workspace root")
+        manifests = re.findall(rf"{re.escape(REPRODUCIBILITY_TOOL)} manifest (\S+) --output (\S+)", run)
+        if len(stages) == 2 and sorted(root for root, _ in manifests) != sorted(stages):
+            errors.append(f"{REPRODUCIBILITY_JOB} does not write a manifest of each staged tree")
+        compare = re.search(
+            rf"{re.escape(REPRODUCIBILITY_TOOL)} compare\s*\\?\s*(\S+) (\S+)", run
+        )
+        if compare is None or sorted(compare.groups()) != sorted(output for _, output in manifests):
+            errors.append(f"{REPRODUCIBILITY_JOB} does not compare the two manifests")
+        if re.search(r"\|\|\s*(true|:)\b|\bset \+e\b", run):
+            errors.append(f"{REPRODUCIBILITY_JOB} compare step suppresses a failure")
+
+    for step in steps:
+        name = step.get("name", step.get("uses", "?"))
+        if "continue-on-error" in step:
+            errors.append(f"{REPRODUCIBILITY_JOB} step {name!r} declares continue-on-error")
+        is_upload = str(step.get("uses", "")).startswith("actions/upload-artifact@")
+        if "if" in step and not (is_upload and step["if"] == "always()"):
+            errors.append(f"{REPRODUCIBILITY_JOB} step {name!r} is conditional")
+    uploads = [step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact@")]
+    if len(uploads) != 1 or uploads[0].get("if") != "always()" or (uploads[0].get("with") or {}).get(
+        "if-no-files-found"
+    ) != "error":
+        errors.append(f"{REPRODUCIBILITY_JOB} must upload its evidence once, always, failing on no files")
+    return errors
+
+
 EXPERIMENTAL_MODULE_JOB = "experimental-module-lifecycle"
 EXPERIMENTAL_MODULE_LABEL = "experimental-modules"
 EXPERIMENTAL_MODULE_EXCLUDE = "--label-exclude '^experimental-modules$'"
@@ -2558,6 +2657,112 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         for shell in ("bash {0}", "bash --noprofile --norc -o pipefail {0}", "pwsh", "python", "cmd", "", None):
             with self.subTest(shell=shell):
                 self.assertFalse(shell_is_errexit(shell))
+
+    def test_reproducibility_windows_compares_two_clean_shipping_trees(self) -> None:
+        self.assertEqual(reproducibility_windows_errors(parse_workflow_yaml(self.build)), [])
+
+    def test_reproducibility_windows_contract_rejects_each_regression(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+
+        def job(jobs: dict) -> dict:
+            return jobs[REPRODUCIBILITY_JOB]
+
+        def step(jobs: dict, prefix: str) -> dict:
+            matches = [s for s in job(jobs)["steps"] if str(s.get("name", "")).startswith(prefix)]
+            assert len(matches) == 1, prefix
+            return matches[0]
+
+        def edit_run(prefix: str, old: str, new: str):
+            def change(jobs: dict) -> None:
+                target = step(jobs, prefix)
+                assert old in target["run"], (prefix, old)
+                target["run"] = target["run"].replace(old, new)
+
+            return change
+
+        cases = (
+            (lambda jobs: jobs.pop(REPRODUCIBILITY_JOB), "job is missing"),
+            (lambda jobs: job(jobs).pop("continue-on-error"), "continue-on-error: true"),
+            (lambda jobs: job(jobs).update({"name": "reproducibility"}), "does not say advisory"),
+            (
+                lambda jobs: jobs["required-ci-gate"]["needs"].append(REPRODUCIBILITY_JOB),
+                "required-ci-gate dependency",
+            ),
+            (lambda jobs: job(jobs).update({"if": "github.event_name == 'push'"}), "job-level if"),
+            (lambda jobs: job(jobs).update({"runs-on": "ubuntu-24.04"}), "windows-2022"),
+            (lambda jobs: job(jobs).pop("timeout-minutes"), "timeout-minutes"),
+            (
+                lambda jobs: step(jobs, "Checkout the second tree")["with"].update({"path": "a"}),
+                "two trees at distinct paths",
+            ),
+            (
+                lambda jobs: job(jobs)["steps"].remove(step(jobs, "Checkout the second tree")),
+                "two trees at distinct paths",
+            ),
+            (
+                lambda jobs: step(jobs, "Checkout the first tree")["with"].pop("submodules"),
+                "submodules recursively",
+            ),
+            (
+                edit_run("Build and stage Shipping in the second tree", "--preset windows-shipping 2>&1",
+                         "--preset windows-release 2>&1"),
+                "'cmake --preset windows-shipping'",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree", "set -euo pipefail", "set -uo pipefail"),
+                "'set -euo pipefail'",
+            ),
+            (
+                edit_run("Build and stage Shipping in the second tree", "reproducibility-stage-b",
+                         "reproducibility-stage-a"),
+                "same prefix",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree", "cmake --install", "echo cmake --install"),
+                "does not install",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree", "set -euo pipefail\n",
+                         "set -euo pipefail\nexport CMAKE_CXX_COMPILER_LAUNCHER=sccache\n"),
+                "compiler cache",
+            ),
+            (
+                edit_run("Compare the two Shipping builds", "manifest reproducibility-stage-b",
+                         "manifest reproducibility-stage-a"),
+                "manifest of each staged tree",
+            ),
+            (
+                edit_run("Compare the two Shipping builds", "reproducibility/manifest-a.json reproducibility/manifest-b",
+                         "reproducibility/manifest-a.json reproducibility/manifest-a"),
+                "does not compare the two manifests",
+            ),
+            (
+                edit_run("Compare the two Shipping builds", "--report reproducibility/report.json",
+                         "--report reproducibility/report.json || true"),
+                "suppresses a failure",
+            ),
+            (
+                lambda jobs: step(jobs, "Compare the two Shipping builds").update({"continue-on-error": True}),
+                "declares continue-on-error",
+            ),
+            (
+                lambda jobs: step(jobs, "Compare the two Shipping builds").update({"if": "success()"}),
+                "is conditional",
+            ),
+            (lambda jobs: step(jobs, "Upload reproducibility evidence").pop("if"), "upload its evidence"),
+            (
+                lambda jobs: step(jobs, "Upload reproducibility evidence")["with"].update(
+                    {"if-no-files-found": "ignore"}
+                ),
+                "upload its evidence",
+            ),
+        )
+        for index, (change, expected) in enumerate(cases):
+            document = copy.deepcopy(baseline)
+            change(document["jobs"])
+            errors = reproducibility_windows_errors(document)
+            with self.subTest(case=index, expected=expected):
+                self.assertTrue(any(expected in error for error in errors), errors)
 
     def test_mingw_wine_lane_is_manual_advisory_and_labeled_experimental(self) -> None:
         self.assertEqual(experimental_mingw_lane_errors(parse_workflow_yaml(self.build)), [])

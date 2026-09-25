@@ -297,6 +297,9 @@ jobs:
     - name: Test the Shipping private-symbol manifest (BLD-100)
       run: python3 -B -m unittest Tests.Tools.test_shipping_symbol_manifest -v
 
+    - name: Test the build-output reproducibility comparator (BLD-100)
+      run: python3 -B -m unittest Tests.Tools.test_compare_build_outputs -v
+
     - name: Generate and compare the deterministic build-matrix inventory
       run: |
         python3 Tools/buildmatrix/inventory.py \
@@ -1899,6 +1902,79 @@ jobs:
           exit 1
         fi
         echo "Build-matrix evidence recorded for ${{ github.sha }}; the Build Matrix Verifier attests it from the Working checkout."
+
+  # BLD-100: two clean windows-shipping builds of this commit, from two
+  # checkouts at different paths (so different source and build directories),
+  # must install equivalent outputs. tools/compare_build_outputs.py records
+  # size, SHA-256, COFF timestamp, RSDS GUID/age/PDB name and per-section
+  # hashes of every installed EXE, DLL and static library, and fails on any
+  # missing, extra or differing output. Nothing is cached between the builds.
+  # Advisory (job-level continue-on-error, not a required-ci-gate need) until a
+  # hosted run has shown equivalent trees; promoting it is a CI-100 decision.
+  # Being advisory also keeps build-matrix parity from counting its Shipping
+  # builds as coverage for the required build-windows-shipping producer.
+  reproducibility-windows:
+    name: "Windows Shipping reproducibility (advisory)"
+    runs-on: windows-2022
+    timeout-minutes: 360
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout the first tree
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: a
+        submodules: recursive
+
+    - name: Checkout the second tree
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: tree-b/nested/src
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+
+    - name: Build and stage Shipping in the first tree
+      shell: bash
+      working-directory: a
+      run: |
+        set -euo pipefail
+        cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log
+        # --parallel 1 for the same MSBuild /m x cl /MP reason as build-windows-shipping.
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-a-build.log
+        cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-a
+
+    - name: Build and stage Shipping in the second tree
+      shell: bash
+      working-directory: tree-b/nested/src
+      run: |
+        set -euo pipefail
+        cmake --preset windows-shipping 2>&1 | tee ../../../reproducibility-b-configure.log
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../../../reproducibility-b-build.log
+        cmake --install build/windows-shipping --config MinSizeRel --prefix ../../../reproducibility-stage-b
+
+    - name: Compare the two Shipping builds
+      shell: bash
+      run: |
+        set -euo pipefail
+        python a/tools/compare_build_outputs.py manifest reproducibility-stage-a --output reproducibility/manifest-a.json
+        python a/tools/compare_build_outputs.py manifest reproducibility-stage-b --output reproducibility/manifest-b.json
+        python a/tools/compare_build_outputs.py compare \
+          reproducibility/manifest-a.json reproducibility/manifest-b.json \
+          --report reproducibility/report.json
+
+    - name: Upload reproducibility evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: reproducibility-windows-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          reproducibility/
+          reproducibility-*.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
   # ===========================================================================
   # Windows Build (Visual Studio 2026 / v145)
