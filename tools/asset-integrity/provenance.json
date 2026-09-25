@@ -240,6 +240,27 @@
       ]
     },
     {
+      "id": "mmo-blender-kit",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json",
+      "evidence": [
+        "Art/Blender/SparkGameMMO/provenance.json",
+        "Art/Blender/SparkGameMMO/mmo_kit.blend",
+        "tools/blender/author_mmo_kit.py",
+        "tools/blender/spark_kit.py",
+        "LICENSE"
+      ],
+      "records": [
+        {
+          "path": "Art/Blender/SparkGameMMO/provenance.json",
+          "format": "blender-provenance"
+        }
+      ],
+      "prefixes": [
+        "Models/MMO/Kit/"
+      ]
+    },
+    {
       "id": "starter-model-pipeline",
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original starter/module-kit model from Tools/model_pipeline/generate_starter_models.py; hash-bound by Assets/Models/Generated/starter_assets_manifest.json",

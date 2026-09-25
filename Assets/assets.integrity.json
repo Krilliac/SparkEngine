@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 954,
+  "fileCount": 972,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -1886,6 +1886,132 @@
       "size": 37795,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-authored scene, data, script, model, or documentation file covered by the repository LICENSE [repository-authored]"
+    },
+    {
+      "path": "Models/MMO/Kit/portal_ring.mtl",
+      "sha256": "9608bb8afc81c2bdb4ea88591f2d1edbcf2c89e4a6539e97b55b61b475e9a31e",
+      "size": 976,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json: Blender-authored portal_ring [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/portal_ring.obj",
+      "sha256": "c7bf5593c5f6ec4bbeabcdff8915c9a7bef07bd064e8004e4e05f8c74bbf0fcb",
+      "size": 145321,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json: Blender-authored portal_ring [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/portal_ring_collision.mtl",
+      "sha256": "b82a834654c32c5772def2dcf65399a3a8cb614c2d1c1f90ee9d6b56e9715e5a",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/portal_ring_collision.obj",
+      "sha256": "f88624d31bec35ce0eecd0351544ff7ebdcbe298e45b9ec0021f9b8ed60c5993",
+      "size": 10200,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/portal_ring_lod1.mtl",
+      "sha256": "9608bb8afc81c2bdb4ea88591f2d1edbcf2c89e4a6539e97b55b61b475e9a31e",
+      "size": 976,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/portal_ring_lod1.obj",
+      "sha256": "0256b12291969ae0533fb5c6dad5b807e17485f8ffa25195592dd05afd47f60d",
+      "size": 69671,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/quest_board.mtl",
+      "sha256": "9f37c8e4f2fc5c4043f933c753f7c751179f0b84af12a3b076c5c4a5abce554a",
+      "size": 969,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json: Blender-authored quest_board [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/quest_board.obj",
+      "sha256": "30efbd9f04a4069cfdf7a324c34edb9ab9a17b4edda13b6748c0b497700aea65",
+      "size": 91807,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json: Blender-authored quest_board [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/quest_board_collision.mtl",
+      "sha256": "b82a834654c32c5772def2dcf65399a3a8cb614c2d1c1f90ee9d6b56e9715e5a",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/quest_board_collision.obj",
+      "sha256": "ba5c5bf20255403b866f896d847ce60124035d04f47fabc9567e052c596f80be",
+      "size": 7811,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/quest_board_lod1.mtl",
+      "sha256": "9f37c8e4f2fc5c4043f933c753f7c751179f0b84af12a3b076c5c4a5abce554a",
+      "size": 969,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/quest_board_lod1.obj",
+      "sha256": "aa1dfb011d4dcbda9fcbff82d9976ecbe61426a9b3edb17b101dd8651426f944",
+      "size": 43419,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/vendor_stall.mtl",
+      "sha256": "9f37c8e4f2fc5c4043f933c753f7c751179f0b84af12a3b076c5c4a5abce554a",
+      "size": 969,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json: Blender-authored vendor_stall [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/vendor_stall.obj",
+      "sha256": "d4ce16b10084b59e46c0accd3a3accb5d013d7b0aade9b05865082d14172d2c2",
+      "size": 187214,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json: Blender-authored vendor_stall [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/vendor_stall_collision.mtl",
+      "sha256": "b82a834654c32c5772def2dcf65399a3a8cb614c2d1c1f90ee9d6b56e9715e5a",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/vendor_stall_collision.obj",
+      "sha256": "c4030a838238487ebe931f724277b467c2cff6d485980daa7288fe0f3464bca4",
+      "size": 1235,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/vendor_stall_lod1.mtl",
+      "sha256": "9f37c8e4f2fc5c4043f933c753f7c751179f0b84af12a3b076c5c4a5abce554a",
+      "size": 969,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
+    },
+    {
+      "path": "Models/MMO/Kit/vendor_stall_lod1.obj",
+      "sha256": "cdbb73905f93a64b5f034e6ae19ca5663fc474e8c4ed1a13e192a6719070ae18",
+      "size": 88413,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameMMO/mmo_kit.blend via tools/blender/author_mmo_kit.py; hash-bound by Art/Blender/SparkGameMMO/provenance.json [mmo-blender-kit]"
     },
     {
       "path": "Models/MMO/alchemy_shop.mtl",
