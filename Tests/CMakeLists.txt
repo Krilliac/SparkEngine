@@ -1801,6 +1801,46 @@ if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
         TIMEOUT 120)
 endif()
 
+# HEAD-220: graceful (SIGTERM), forced-kill-then-restart and kill-during-boot
+# scenarios against the production headless FPS host on NullRHI, each accepted
+# by the strict parser of RunSparkHeadlessNullRHILifecycle. Linux only: the
+# Windows host is a GUI-subsystem executable with no console when its output is
+# redirected, so CTRL_BREAK_EVENT cannot reach it. Source-tree evidence only,
+# not packaged Windows certification.
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME HeadlessShutdown_HarnessContract
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/run_headless_shutdown_recovery.py --self-test)
+    set_tests_properties(HeadlessShutdown_HarnessContract PROPERTIES
+        LABELS "nullrhi-headless;unit;python"
+        TIMEOUT 30)
+    if(UNIX AND NOT APPLE AND NOT CMAKE_CROSSCOMPILING AND SPARK_HEADLESS_SUPPORT AND
+       BUILD_GAME_MODULES AND TARGET SparkEngine AND TARGET SparkGameFPS)
+        add_dependencies(SparkTests SparkEngine SparkGameFPS)
+        foreach(_spark_headless_shutdown_case
+                "Graceful:graceful" "ForcedRecovery:forced-recovery" "BootInterrupted:boot-interrupted")
+            string(REPLACE ":" ";" _spark_headless_shutdown_pair "${_spark_headless_shutdown_case}")
+            list(GET _spark_headless_shutdown_pair 0 _spark_headless_shutdown_name)
+            list(GET _spark_headless_shutdown_pair 1 _spark_headless_shutdown_scenario)
+            add_test(
+                NAME HeadlessShutdown_${_spark_headless_shutdown_name}
+                COMMAND ${Python3_EXECUTABLE} -B
+                    ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/run_headless_shutdown_recovery.py
+                    --scenario ${_spark_headless_shutdown_scenario}
+                    --engine $<TARGET_FILE:SparkEngine>
+                    --module $<TARGET_FILE:SparkGameFPS>
+                    --source-root ${CMAKE_SOURCE_DIR}
+                    --cmake ${CMAKE_COMMAND})
+            set_tests_properties(HeadlessShutdown_${_spark_headless_shutdown_name} PROPERTIES
+                LABELS "nullrhi-headless;linux;integration;process"
+                RUN_SERIAL TRUE
+                TIMEOUT 300)
+        endforeach()
+    endif()
+endif()
+
 # RDY-015: real-source lifecycle evidence for every experimental game module.
 # The parser contract is deterministic and runs in every lane; the per-module
 # runs launch the production Linux SDL host with -require-game and carry the

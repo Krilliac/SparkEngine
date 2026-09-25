@@ -1531,8 +1531,7 @@
         "headless-windows-soak"
       ],
       "plannedTestSelectors": [
-        "FPSHeadlessPackage_*",
-        "HeadlessShutdown_*"
+        "FPSHeadlessPackage_*"
       ]
     },
     {
