@@ -2849,3 +2849,49 @@ add_subdirectory(FPSGameplayEvents)
 if(SPARK_ENABLE_FUZZ_TARGETS)
     add_subdirectory(Fuzz)
 endif()
+
+# ---------------------------------------------------------------------
+# SparkTests precompiled header
+# ---------------------------------------------------------------------
+# Every test translation unit includes TestFramework.h and most pull in the same
+# standard headers; parsing them is the bulk of a test file's compile time. The
+# PCH holds only TestFramework.h and standard-library headers: no engine or
+# platform header, so tests that define WIN32_LEAN_AND_MEAN, _XM_NO_INTRINSICS_
+# or `private public` before an engine include keep their current meaning.
+# Engine, editor, module and launcher sources compiled into SparkTests are
+# excluded so their include order is exactly what their own targets use.
+# Lanes configured with CMAKE_DISABLE_PRECOMPILE_HEADERS=ON (Windows sccache,
+# clang-tidy) build without it, which keeps missing-include regressions visible.
+target_precompile_headers(SparkTests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/TestFramework.h"
+    <algorithm>
+    <array>
+    <atomic>
+    <chrono>
+    <cmath>
+    <cstdint>
+    <cstring>
+    <filesystem>
+    <fstream>
+    <functional>
+    <limits>
+    <memory>
+    <sstream>
+    <string>
+    <thread>
+    <unordered_map>
+    <vector>
+)
+get_target_property(_spark_tests_sources SparkTests SOURCES)
+foreach(_spark_tests_source IN LISTS _spark_tests_sources)
+    cmake_path(ABSOLUTE_PATH _spark_tests_source BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE _spark_tests_source_abs)
+    cmake_path(IS_PREFIX CMAKE_CURRENT_SOURCE_DIR "${_spark_tests_source_abs}" NORMALIZE _spark_tests_source_is_test)
+    if(NOT _spark_tests_source_is_test OR NOT _spark_tests_source MATCHES "\\.cpp$")
+        set_source_files_properties("${_spark_tests_source}" PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+    endif()
+endforeach()
+unset(_spark_tests_sources)
+unset(_spark_tests_source)
+unset(_spark_tests_source_abs)
+unset(_spark_tests_source_is_test)

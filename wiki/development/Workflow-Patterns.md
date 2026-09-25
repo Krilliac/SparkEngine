@@ -54,6 +54,26 @@ The lock defaults to `build/.spark-build.lock` (`--lock` / `SPARK_BUILD_LOCK` ov
 
 Do not guard a shared lock with a detached waiter that matches processes by command line (`pgrep -f` / `pkill -f`): the waiters' own command lines match the pattern. On 2026-09-24 such a helper inherited the build lock, waited for "no `cmake --build build/...` process", and deadlocked every queued build — including itself, since `pkill -f` on the same pattern also killed the invoking shell. Wait on a PID (`kill -0 $PID`) and hold locks only in the process that took them. Regression coverage: `Tests/Tools/test_build_lock.py` (CI job `validate-ci-tools`).
 
+## Fast Local Rebuilds — LTO Off, ccache, mold
+
+`linux-gcc-release` keeps `ENABLE_LTO=ON` because shipping builds use it. With LTO every Release object carries `-flto=auto`: compiling is cheap and the optimizer runs again at link time over all of `SparkTests` (≈800 objects plus the whole-archive engine library). Every engine change repeats that link. For an iterate-and-test tree, turn it off and add a compiler cache and a faster linker:
+
+```bash
+sudo apt-get install -y ccache mold
+ccache -o max_size=8G -o base_dir="$PWD" -o hash_dir=false \
+       -o sloppiness=pch_defines,time_macros,include_file_mtime,include_file_ctime
+cmake --preset linux-gcc-release -DBUILD_TESTS=ON -DENABLE_LTO=OFF \
+      -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+      -DCMAKE_LINKER_TYPE=MOLD
+```
+
+- **LTO off** moves optimization back into each compile. Test coverage of the LTO configuration stays with the CI Release lanes.
+- **ccache** turns a snapshot switch or a reconfigure into cache hits. The `pch_defines,time_macros` sloppiness is required, or ccache refuses to cache files that use a precompiled header. CI sets the same values in `CCACHE_SLOPPINESS` (`.github/workflows/build.yml`).
+- **mold** (`CMAKE_LINKER_TYPE`, CMake 3.29+) links the large test binary in seconds instead of GNU `ld`'s tens of seconds.
+- **`SparkTests` precompiled header.** `Tests/CMakeLists.txt` precompiles `TestFramework.h` plus the standard headers the test files share. It holds no engine or platform header, so test-local `#define`s before engine includes keep their meaning. Sources compiled into `SparkTests` from outside `Tests/` skip it. Lanes configured with `-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON` (the Windows sccache lanes and clang-tidy) build without it and still catch missing `#include`s.
+
+Changing `ENABLE_LTO`, the launcher or the linker type changes every compile command, so the first build after the reconfigure is a full rebuild. Run it through `tools/build-lock.sh` when the tree is shared.
+
 ## Exploring the Codebase in 3D (Code City)
 
 `tools/architecture-viz/generate_code_city.py` renders the tracked source tree as an interactive three.js city: projects are blocks, subsystem directories are districts, and each file is a building whose footprint and height grow with its line count. Selecting a building draws its resolved includes (blue) and includers (orange) and lists the readiness work items whose entry points name it; the color modes cover project, file kind, size, 180-day churn, readiness status and include fan-in.
