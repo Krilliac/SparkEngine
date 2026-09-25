@@ -140,7 +140,7 @@
       "wave": 6,
       "area": "installer",
       "owner": "unassigned",
-      "rationale": "The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence is explicit fresh-install activation, interruption recovery, repair, uninstall, and external user-data retention; it never claims v1 N-1 upgrade coverage.",
+      "rationale": "The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence is explicit fresh-install activation, interruption recovery, repair, uninstall, and external user-data retention; it never claims v1 N-1 upgrade coverage. 2026-09-24 progress: qualify-windows-msi.py --bootstrap-repair now requires --reviewed-baseline-commit and, before any Windows Installer command, requires the source SHA to have exactly one parent equal to that baseline, reusing validate_baseline_parent/resolve_parents from verify_v090_source_seal.py (the publication seal rule, now single-sourced). Both SHAs are recorded in bootstrap-baseline.json and the qualification report. release.yml reads the baseline from docs/site/readiness.json predecessorRelease.sourceCommitEvidence.baselineCommit (checkout fetch-depth 2), so the v0.9.0 qualification fails closed while that baseline is empty. Covered by fake-git cases in .github/scripts/test_qualify_windows_msi.py; the baseline is not yet recorded and no hosted run exists, so no criterion changes.",
       "dependencies": ["INST-130"],
       "parallelWith": ["INST-131"],
       "sourceContext": ["SparkInstaller/src/Installer.cpp", "SparkInstaller/tests/InstallerTransactionTests.cpp"],

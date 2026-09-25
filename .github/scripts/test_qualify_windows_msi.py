@@ -22,6 +22,18 @@ SPEC.loader.exec_module(MODULE)
 SOURCE_SHA = "0123456789abcdef0123456789abcdef01234567"
 PREVIOUS_SOURCE_SHA = "fedcba9876543210fedcba9876543210fedcba98"
 PREVIOUS_SIGNER_THUMBPRINT = "A" * 40
+REVIEWED_BASELINE_SHA = "b" * 40
+
+
+def fake_git(parents, *, returncode=0, calls=None):
+    """Answer only ``git rev-list --parents -n 1 <sha>`` with the given parents."""
+    def git_runner(argv, **kwargs):
+        if calls is not None:
+            calls.append(list(argv))
+        if argv[:5] != ["git", "rev-list", "--parents", "-n", "1"] or len(argv) != 6:
+            raise AssertionError(f"unexpected git command {argv!r}")
+        return subprocess.CompletedProcess(argv, returncode, stdout=" ".join([argv[5], *parents]) + "\n", stderr="")
+    return git_runner
 
 
 def write_shipping_package_manifest(path, msi, *, source_sha=SOURCE_SHA, version="1.2.3"):
@@ -89,7 +101,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                                   old_manifest, new_manifest, module_manifest,
                                   logs, runner, previous_signer_thumbprint=PREVIOUS_SIGNER_THUMBPRINT,
                                   powershell="powershell.exe", bootstrap=False, previous_receipt=None,
-                                  previous_version="1.2.2"):
+                                  previous_version="1.2.2", reviewed_baseline_commit=REVIEWED_BASELINE_SHA,
+                                  git_runner=None):
         """Exercise the old->new contract with generated native-process fixtures."""
         def copy_private_verified_file(source, private_directory, destination_name):
             destination = private_directory / destination_name
@@ -122,7 +135,11 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                         previous_receipt=previous_receipt or root / "old-provisioning-receipt.json",
                     )
                 else:
-                    kwargs["bootstrap_repair"] = True
+                    kwargs.update(
+                        bootstrap_repair=True,
+                        reviewed_baseline_commit=reviewed_baseline_commit,
+                        git_runner=git_runner or fake_git([REVIEWED_BASELINE_SHA]),
+                    )
                 return MODULE._qualify_impl(
                     new_packages,
                     "1.2.3",
@@ -888,6 +905,85 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertTrue(state["repaired"])
             self.assertTrue(state.get("user_data_preserved"))
             self.assertTrue(any("/fvomus" in call for call in calls if call))
+            binding = json.loads((logs / "bootstrap-baseline.json").read_text(encoding="utf-8"))
+            self.assertEqual(binding["source_sha"], SOURCE_SHA)
+            self.assertEqual(binding["reviewed_baseline_commit"], REVIEWED_BASELINE_SHA)
+            self.assertTrue(binding["passed"])
+
+    def test_bootstrap_rejects_missing_or_malformed_baseline_before_native_commands(self):
+        """An unreviewed baselineCommit ("" in readiness.json today) must fail closed."""
+        for baseline in (None, "", "B" * 40, "b" * 39, "not-a-sha"):
+            with self.subTest(baseline=baseline), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                logs = root / "bootstrap-baseline-logs"
+                calls = []
+                state = {"installed": False, "version": None, "repaired": False,
+                         "install_root": str(root / "install")}
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=logs,
+                    runner=self._identity_runner(calls, state), bootstrap=True,
+                    reviewed_baseline_commit=baseline,
+                )
+                self.assertEqual(result, 1)
+                self.assertEqual(calls, [])
+                self.assertFalse((logs / "bootstrap-baseline.json").exists())
+                report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+                self.assertFalse(report["passed"])
+                self.assertRegex(" ".join(report["errors"]), "baseline commit")
+
+    def test_bootstrap_rejects_source_whose_parent_is_not_the_reviewed_baseline(self):
+        for parents, returncode in (([], 0), (["c" * 40], 0), ([REVIEWED_BASELINE_SHA, "c" * 40], 0),
+                                    ([REVIEWED_BASELINE_SHA], 128)):
+            with self.subTest(parents=parents, returncode=returncode), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                logs = root / "bootstrap-parent-logs"
+                calls = []
+                git_calls = []
+                state = {"installed": False, "version": None, "repaired": False,
+                         "install_root": str(root / "install")}
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=logs,
+                    runner=self._identity_runner(calls, state), bootstrap=True,
+                    git_runner=fake_git(parents, returncode=returncode, calls=git_calls),
+                )
+                self.assertEqual(result, 1)
+                self.assertEqual(calls, [])
+                self.assertEqual(git_calls, [["git", "rev-list", "--parents", "-n", "1", SOURCE_SHA]])
+                self.assertFalse((logs / "bootstrap-baseline.json").exists())
+                report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+                self.assertFalse(report["passed"])
+                self.assertNotIn("reviewed_baseline_commit", report)
+
+    def test_reviewed_baseline_requires_bootstrap_mode(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            new_packages = root / "packages"
+            new_packages.mkdir()
+            with self.assertRaisesRegex(ValueError, "only to bootstrap_repair"):
+                MODULE._qualify_impl(
+                    new_packages, "1.2.3", root / "manifest.cmake", root, root / "logs",
+                    runner=lambda *args, **kwargs: self.fail("native command executed"),
+                    msiexec="msiexec.exe", powershell="powershell.exe", cmake="cmake",
+                    source_sha=SOURCE_SHA, reviewed_baseline_commit=REVIEWED_BASELINE_SHA,
+                )
+
+    def test_cli_requires_reviewed_baseline_with_bootstrap_repair(self):
+        base = ["qualify-windows-msi.py", "--packages", "p", "--version", "0.9.0", "--manifest", "m",
+                "--package-manifest", "pm", "--runner-temp", "t", "--logs", "l", "--source-sha", SOURCE_SHA]
+        for extra in (["--bootstrap-repair"], ["--reviewed-baseline-commit", REVIEWED_BASELINE_SHA]):
+            with self.subTest(extra=extra), mock.patch.object(sys, "argv", base + extra), \
+                    contextlib.redirect_stderr(io.StringIO()) as stderr, \
+                    mock.patch.object(MODULE, "qualify", side_effect=AssertionError("qualified")):
+                with self.assertRaises(SystemExit) as raised:
+                    MODULE.main()
+                self.assertEqual(raised.exception.code, 2)
+                self.assertIn("--reviewed-baseline-commit must be supplied together", stderr.getvalue())
 
     @unittest.skipUnless(os.name == "nt", "Windows sharing-mode mutation protection")
     def test_repair_keeps_verified_msi_locked_against_write_replace_and_parent_rename(self):

@@ -14,6 +14,12 @@ tag, commit and asset identity must match the private predecessor copy and are
 recorded in the qualification report. A predecessor whose version, commit or
 MSI digest is not distinct from (and, for version, strictly lower than) the
 candidate is rejected before any Windows Installer command.
+
+The v0.9.0 bootstrap path (--bootstrap-repair) has no predecessor, so it
+instead requires --reviewed-baseline-commit: before any Windows Installer
+command the source SHA must be a single-parent child of that reviewed baseline,
+using the same parent rule as verify_v090_source_seal.py. Both SHAs are
+recorded in bootstrap-baseline.json and the qualification report.
 """
 from __future__ import annotations
 
@@ -43,6 +49,12 @@ _SIGNATURE_SPEC = importlib.util.spec_from_file_location(
 )
 package_signatures = importlib.util.module_from_spec(_SIGNATURE_SPEC)
 _SIGNATURE_SPEC.loader.exec_module(package_signatures)
+
+_SOURCE_SEAL_SPEC = importlib.util.spec_from_file_location(
+    "spark_v090_source_seal", Path(__file__).with_name("verify_v090_source_seal.py"),
+)
+source_seal = importlib.util.module_from_spec(_SOURCE_SEAL_SPEC)
+_SOURCE_SEAL_SPEC.loader.exec_module(source_seal)
 
 if os.name == "nt":
     _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -355,7 +367,8 @@ def _validate_previous_receipt(path, *, version, previous_version, source_sha, o
 def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_command,
                   msiexec, powershell, cmake, source_sha=None, package_manifest=None,
                   previous_packages=None, previous_version=None, previous_package_manifest=None,
-                  previous_signer_thumbprint=None, previous_receipt=None, bootstrap_repair=False):
+                  previous_signer_thumbprint=None, previous_receipt=None, bootstrap_repair=False,
+                  reviewed_baseline_commit=None, git_runner=subprocess.run):
     logs = Path(logs)
     if os.path.lexists(logs):
         raise ValueError("package-evidence log directory must be fresh")
@@ -366,6 +379,8 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                        previous_signer_thumbprint, previous_receipt))
     if bootstrap_repair and transaction:
         raise ValueError("bootstrap_repair cannot be combined with predecessor transaction inputs")
+    if reviewed_baseline_commit is not None and not bootstrap_repair:
+        raise ValueError("reviewed_baseline_commit applies only to bootstrap_repair qualification")
     report = {"scope": ("hosted-windows-msi-upgrade-repair-rollback-uninstall"
                          if transaction else ("hosted-windows-msi-bootstrap-repair-uninstall"
                                               if bootstrap_repair else "hosted-windows-msi-install-uninstall")),
@@ -452,6 +467,21 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
             raise ValueError("Invalid MSI release version")
         if not _SOURCE_SHA_RE.fullmatch(source_sha or ""):
             raise ValueError("source SHA must be 40 lower-case hexadecimal characters")
+        if bootstrap_repair:
+            # Bind bootstrap evidence to the reviewed v0.9.0 baseline at
+            # qualification time, before any Windows Installer command, using
+            # the publication seal's single-parent rule.
+            if not isinstance(reviewed_baseline_commit, str):
+                raise ValueError("bootstrap repair requires the reviewed baseline commit")
+            parents = source_seal.resolve_parents(source_sha, git_runner=git_runner)
+            source_seal.validate_baseline_parent(source_sha, reviewed_baseline_commit, parents)
+            report["reviewed_baseline_commit"] = reviewed_baseline_commit
+            # Success publishes no secondary result.json, so the binding is its
+            # own evidence file, written before any installer command.
+            _write_result_report(logs / "bootstrap-baseline.json", {
+                "scope": "bootstrap-windows-msi-reviewed-baseline", "source_sha": source_sha,
+                "reviewed_baseline_commit": reviewed_baseline_commit, "passed": True,
+            })
         packages = Path(packages)
         if not packages.is_dir() or packages.is_symlink():
             raise ValueError("shipping package directory must be a real directory")
@@ -764,7 +794,8 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
 def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_command,
             msiexec, powershell, cmake, source_sha=None, package_manifest=None,
             previous_packages=None, previous_version=None, previous_package_manifest=None,
-            previous_signer_thumbprint=None, previous_receipt=None, bootstrap_repair=False):
+            previous_signer_thumbprint=None, previous_receipt=None, bootstrap_repair=False,
+            reviewed_baseline_commit=None):
     """Run native MSI qualification on Windows.
 
     The platform-independent transaction state machine lives in the private
@@ -782,6 +813,7 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         previous_signer_thumbprint=previous_signer_thumbprint,
         previous_receipt=previous_receipt,
         bootstrap_repair=bootstrap_repair,
+        reviewed_baseline_commit=reviewed_baseline_commit,
     )
 
 
@@ -802,6 +834,8 @@ def main():
                         help="provision-previous-windows-msi.py receipt that selected the predecessor")
     parser.add_argument("--bootstrap-repair", action="store_true",
                         help="run repair after a fresh install without an N-1 predecessor")
+    parser.add_argument("--reviewed-baseline-commit",
+                        help="reviewed v0.9.0 baselineCommit; required with --bootstrap-repair")
     args = parser.parse_args()
     previous_values = (args.previous_packages, args.previous_version, args.previous_package_manifest,
                        args.previous_signer_thumbprint, args.previous_receipt)
@@ -810,6 +844,8 @@ def main():
                      "--previous-signer-thumbprint, and --previous-receipt must be supplied together")
     if args.bootstrap_repair and any(value is not None for value in previous_values):
         parser.error("--bootstrap-repair cannot be combined with predecessor transaction inputs")
+    if args.bootstrap_repair != (args.reviewed_baseline_commit is not None):
+        parser.error("--bootstrap-repair and --reviewed-baseline-commit must be supplied together")
     if os.name != "nt" or not re.fullmatch(r"[0-9a-f]{40}", args.source_sha):
         parser.error("Native Windows and an exact source commit are required")
     system = Path(os.environ["SystemRoot"]) / "System32"
@@ -821,7 +857,8 @@ def main():
                    previous_package_manifest=args.previous_package_manifest,
                    previous_signer_thumbprint=args.previous_signer_thumbprint,
                    previous_receipt=args.previous_receipt,
-                   bootstrap_repair=args.bootstrap_repair)
+                   bootstrap_repair=args.bootstrap_repair,
+                   reviewed_baseline_commit=args.reviewed_baseline_commit)
 
 
 if __name__ == "__main__":

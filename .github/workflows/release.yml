@@ -211,6 +211,9 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        # The v0.9.0 bootstrap qualification resolves the source commit's
+        # parent to bind its evidence to the reviewed baselineCommit.
+        fetch-depth: 2
 
     - name: Test native Windows signature rejection
       if: needs.prepare.outputs.is_versioned == 'true'
@@ -468,8 +471,15 @@ jobs:
       # v0.9.0 is the one explicitly permitted bootstrap release: it has no
       # older stable MSI. The qualifier's omitted predecessor arguments still
       # exercises native install, package smoke, repair, and uninstall. Any
-      # other version must use the exact published N-1 path below.
+      # other version must use the exact published N-1 path below. The evidence
+      # is bound to the owner-reviewed predecessorRelease baselineCommit here,
+      # before any installer command; an unrecorded baseline fails closed.
       run: |
+        $readiness = Get-Content -Raw -LiteralPath "${{ github.workspace }}/docs/site/readiness.json" | ConvertFrom-Json
+        $baselineCommit = $readiness.predecessorRelease.sourceCommitEvidence.baselineCommit
+        if (-not ($baselineCommit -is [string]) -or [string]::IsNullOrEmpty($baselineCommit)) {
+          throw 'predecessorRelease.sourceCommitEvidence.baselineCommit is not recorded; bootstrap qualification requires the reviewed baseline'
+        }
         $packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"
         python .github/scripts/write-shipping-package-manifest.py `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
@@ -481,7 +491,7 @@ jobs:
           --version "${{ needs.prepare.outputs.cmake_version }}" `
           --manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake" `
           --package-manifest $packageManifest `
-          --bootstrap-repair `
+          --bootstrap-repair --reviewed-baseline-commit $baselineCommit `
           --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `
           --source-sha "${{ github.sha }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

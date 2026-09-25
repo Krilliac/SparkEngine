@@ -4936,7 +4936,7 @@ npm test
 **Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=required
 
-N-1 upgrade and rollback are distinct from fresh-install correctness and cannot be used to qualify the first immutable predecessor. This item owns the stable-v1-only transaction proof against a previously published signed MSI and manifest.
+N-1 upgrade and rollback are distinct from fresh-install correctness and cannot be used to qualify the first immutable predecessor. This item owns the stable-v1-only transaction proof against a previously published signed MSI and manifest. 2026-09-24 progress: qualify-windows-msi.py now requires --previous-receipt (the provisioner's provisioning-receipt.json, wired in release.yml) and, before any Windows Installer command, binds its schema, candidate version, predecessor version and tag, tag commit, immutable release id, and MSI/manifest asset ids, sizes and digests to the private predecessor copy and the parsed manifest bytes; it records the tag, commit, release id, asset ids and receipt SHA-256 in previous-release.json and the failure report. It also fails closed when the predecessor version is not strictly lower than the candidate, when the predecessor manifest commitSHA equals --source-sha, or when the predecessor MSI digest equals the candidate digest. Covered by fake-runner cases in .github/scripts/test_qualify_windows_msi.py; no published predecessor or native run exists yet, so no criterion changes.
 
 **Dependency contract**
 
@@ -5006,7 +5006,7 @@ ctest --test-dir build/windows-release -C Release -L installer --output-on-failu
 **Priority:** P0 · **Status:** open · **Wave:** 6 · **Area:** installer · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence is explicit fresh-install activation, interruption recovery, repair, uninstall, and external user-data retention; it never claims v1 N-1 upgrade coverage.
+The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence is explicit fresh-install activation, interruption recovery, repair, uninstall, and external user-data retention; it never claims v1 N-1 upgrade coverage. 2026-09-24 progress: qualify-windows-msi.py --bootstrap-repair now requires --reviewed-baseline-commit and, before any Windows Installer command, requires the source SHA to have exactly one parent equal to that baseline, reusing validate_baseline_parent/resolve_parents from verify_v090_source_seal.py (the publication seal rule, now single-sourced). Both SHAs are recorded in bootstrap-baseline.json and the qualification report. release.yml reads the baseline from docs/site/readiness.json predecessorRelease.sourceCommitEvidence.baselineCommit (checkout fetch-depth 2), so the v0.9.0 qualification fails closed while that baseline is empty. Covered by fake-git cases in .github/scripts/test_qualify_windows_msi.py; the baseline is not yet recorded and no hosted run exists, so no criterion changes.
 
 **Dependency contract**
 
