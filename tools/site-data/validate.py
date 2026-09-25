@@ -1072,6 +1072,63 @@ PUBLIC_NUMERIC_CLAIM_PATTERN = re.compile(
     rf"(?:{'|'.join(PUBLIC_NUMERIC_CLAIM_NOUNS)})\b",
     re.IGNORECASE,
 )
+# DOC-400: the hand-authored site contract files. Every mutable fact they could
+# state -- a count, a commit, a CI run, the engine version -- has a bundle
+# source (metrics, source.commit, the version single source), so a literal here
+# goes stale the moment Working moves. There is deliberately no waiver list,
+# not even publicNumericClaims: the copy must name a bundle metric identifier.
+HARDCODED_CLAIM_SURFACES = {
+    "docs/site/content.json": "content",
+    "docs/site/docs-catalog.json": "docsCatalog",
+}
+HARDCODED_CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("count claim", PUBLIC_NUMERIC_CLAIM_PATTERN),
+    # A 7-64 character lowercase hex token with at least one digit and one
+    # letter, so ordinary words such as "defaced" never match.
+    (
+        "commit SHA",
+        re.compile(r"(?<![0-9A-Za-z])(?=[0-9a-f]*[0-9])(?=[0-9a-f]*[a-f])[0-9a-f]{7,64}(?![0-9A-Za-z])"),
+    ),
+    # GitHub Actions run/job URLs and bare run-sized identifiers (8+ digits).
+    ("CI run ID", re.compile(r"/runs/\d+|/job/\d+|(?<![\w.])\d{8,}(?![\w.])")),
+    # A three-part release version, or any v-prefixed dotted version. IPv4
+    # addresses and two-part tool minimums such as "CMake 3.25+" do not match.
+    (
+        "version string",
+        re.compile(r"(?<![\w.])(?:v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?|v\d+\.\d+)(?![\w.])"),
+    ),
+)
+
+
+def _json_string_values(value: Any, location: str) -> Iterable[tuple[str, str]]:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield from _json_string_values(child, f"{location}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from _json_string_values(child, f"{location}[{index}]")
+    elif isinstance(value, str):
+        yield location, value
+
+
+def hardcoded_site_claim_errors(documents: dict[str, Any]) -> list[str]:
+    """Return one error per mutable-claim literal in the site contract documents.
+
+    ``documents`` maps a surface path from HARDCODED_CLAIM_SURFACES to its parsed
+    JSON. Every string value is scanned, links and commands included.
+    """
+    errors: list[str] = []
+    for surface, document in sorted(documents.items()):
+        for location, text in _json_string_values(document, surface):
+            for kind, pattern in HARDCODED_CLAIM_PATTERNS:
+                for match in pattern.finditer(text):
+                    errors.append(
+                        f"{location}: hardcoded {kind} {match.group(0)!r}; reference a bundle "
+                        "metric identifier (or source.commit / the version single source) instead"
+                    )
+    return errors
+
+
 _AUTO_BLOCK_OPEN = re.compile(r"<!--\s*AUTO:(?P<name>[\w-]+)\s*-->")
 
 
@@ -2420,6 +2477,12 @@ class Validator:
             )
         return profile_ids
 
+    def validate_no_hardcoded_claims(self) -> None:
+        """DOC-400: site contract copy states no count, SHA, CI run, or version literal."""
+        documents = {surface: self.contract.get(key) for surface, key in HARDCODED_CLAIM_SURFACES.items()}
+        for message in hardcoded_site_claim_errors(documents):
+            self.error("no-hardcoded-claims", message)
+
     def validate_public_numeric_claims(self) -> None:
         """Every hand-written count on a governed surface resolves to a contract entry."""
         entries = self.contract["readiness"].get("publicNumericClaims")
@@ -2969,6 +3032,7 @@ class Validator:
                 self.error("predecessor candidate readiness", message)
         self.validate_execution(item_ids)
         self.validate_content(capability_ids, profile_ids)
+        self.validate_no_hardcoded_claims()
         for location, message in validate_assets():
             self.error(location, message)
         for location, message in validate_module_content(REPO_ROOT):

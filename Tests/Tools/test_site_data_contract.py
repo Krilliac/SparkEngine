@@ -2822,6 +2822,90 @@ class PublicNumericClaimTests(ContractTestCase):
         self.assert_rejected(self.mutable, "referenced path does not exist: SparkEngine/Source/DoesNotExist.h")
 
 
+class NoHardcodedClaimsTests(ContractTestCase):
+    """DOC-400: site contract copy names bundle metrics, never mutable literals."""
+
+    CONTENT = "docs/site/content.json"
+    CATALOG = "docs/site/docs-catalog.json"
+
+    @staticmethod
+    def errors_for(texts: list[str]) -> list[str]:
+        return site_data_validate.hardcoded_site_claim_errors({"docs/site/content.json": {"copy": texts}})
+
+    def test_live_site_contract_has_no_hardcoded_claims(self) -> None:
+        documents = {
+            self.CONTENT: self.contract["content"],
+            self.CATALOG: self.contract["docsCatalog"],
+        }
+        self.assertEqual(site_data_validate.hardcoded_site_claim_errors(documents), [])
+
+    def test_validator_scans_both_site_contract_files(self) -> None:
+        self.assertEqual(
+            set(site_data_validate.HARDCODED_CLAIM_SURFACES),
+            {self.CONTENT, self.CATALOG},
+        )
+
+    def test_injected_test_count_is_rejected(self) -> None:
+        overview = self.mutable["content"]["home"]["overview"]
+        overview["copy"] = f"{overview['copy']} It ships 7329 tests."
+        self.assert_rejected(self.mutable, "content.json.home.overview.copy: hardcoded count claim '7329 tests'")
+
+    def test_injected_full_commit_sha_is_rejected(self) -> None:
+        sha = "3f9c2d1e4b5a69788796a5b4c3d2e1f0a9b8c7d6"
+        self.mutable["content"]["links"]["actions"] = f"https://github.com/Krilliac/SparkEngine/commit/{sha}"
+        self.assert_rejected(self.mutable, f"hardcoded commit SHA '{sha}'")
+
+    def test_injected_catalog_literal_is_rejected(self) -> None:
+        section = self.mutable["docsCatalog"]["sections"][0]
+        section["description"] = f"{section['description']} Covers 2,509 files."
+        self.assert_rejected(self.mutable, "docs-catalog.json.sections[0].description: hardcoded count claim")
+
+    def test_a_reviewed_public_numeric_entry_is_not_a_waiver(self) -> None:
+        overview = self.mutable["content"]["home"]["overview"]
+        overview["copy"] = f"{overview['copy']} It has 64 panels."
+        self.mutable["readiness"]["publicNumericClaims"].append(
+            {
+                "surface": self.CONTENT,
+                "text": "64 panels",
+                "classification": "historical",
+                "owner": "docs",
+            }
+        )
+        self.assert_rejected(self.mutable, "hardcoded count claim '64 panels'")
+
+    def test_each_mutable_claim_kind_is_rejected(self) -> None:
+        cases = {
+            "0123abc": "commit SHA",
+            "see https://github.com/o/r/actions/runs/1234567890 for proof": "CI run ID",
+            "run 17654321098 passed": "CI run ID",
+            "SparkEngine 1.4.0 is out": "version string",
+            "1.0.0-rc.1": "version string",
+            "tagged v2.1": "version string",
+            "12 source files": "count claim",
+            "~3,000 lines": "count claim",
+        }
+        for text, kind in cases.items():
+            with self.subTest(text=text):
+                errors = self.errors_for([text])
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(f"hardcoded {kind}", errors[0])
+
+    def test_stable_facts_are_not_mistaken_for_claims(self) -> None:
+        stable = [
+            "CMake 3.25+ \u00b7 C++23 \u00b7 recursive submodules",
+            "D3D11 client on Windows 11 x64",
+            'cmake -G "Visual Studio 17 2022"',
+            "stable-v1",
+            "listen on 127.0.0.1 port 7777",
+            "latest.json under 32 KiB",
+            "a defaced facade",
+            "https://discord.gg/cuJv5uWA5V",
+            "Spark Open License 1.0",
+            "\u00a9 2024\u20132026 Krilliac.",
+        ]
+        self.assertEqual(self.errors_for(stable), [])
+
+
 class PublishedMetricTests(unittest.TestCase):
     """One definition of the public source and test counts, bound to the commit."""
 

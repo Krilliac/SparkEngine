@@ -2622,6 +2622,17 @@ if(Python3_Interpreter_FOUND)
             LABELS "readiness;site-data;unit;python"
             TIMEOUT 180)
 
+        # DOC-400: docs/site/content.json and docs-catalog.json carry no hardcoded
+        # count, commit SHA, CI run ID, or version literal; mutable claims must
+        # reference bundle metric identifiers. validate.py enforces the same rule.
+        add_test(
+            NAME no-hardcoded-claims
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_data_contract.py
+                NoHardcodedClaimsTests)
+        set_tests_properties(no-hardcoded-claims PROPERTIES
+            LABELS "readiness;site-data;unit;python"
+            TIMEOUT 180)
+
         # DOC-400: the reference site runtime verifier (tools/site-data/runtime)
         # checked against a bundle generate.py produces here plus tampered,
         # oversize, malformed, and path-escaping variants, each also fed to

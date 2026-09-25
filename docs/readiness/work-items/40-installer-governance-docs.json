@@ -365,7 +365,7 @@
       "wave": 6,
       "area": "website",
       "owner": "unassigned",
-      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. 2026-09-21 exact-SHA evidence: Repository Site Data succeeded for 37a4bec5, while live runtime consumption, stale-fallback presentation, and the owner-only site deployment remain unproven. 2026-09-24 progress: tools/site-data/runtime adds a dependency-free reference verifier (verifyBundle.mjs: 32 KiB/5 MiB/2 MiB budgets, schemaVersion, WebCrypto SHA-256 per pointer, unsafe-path refusal, displayed SHA bound to latest.source.commit) and a freshness classifier (freshness.mjs: 300 s max-age plus stale-while-revalidate mapped to current/syncing/blocked/stale/unavailable). Its node:test suite runs over a generate.py publication and hash-flip, oversize, malformed, and path-escape variants, feeding each variant to validate_published_bundle so the two validators cannot drift; it runs as the runtime-bundle-validation CTest and the site-runtime-contract job. This is a contract only: the owner-deployed site has not adopted it, so no criterion changes. live-docs-parity and no-hardcoded-claims remain planned.",
+      "rationale": "The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves. 2026-09-05 progress: docs.health now has a producer (docs/.health.json; status current | refresh-pending | skipped, never unknown) and publication is refused unless current; code.totalLines/code.files share the badge corpus. 2026-09-21 exact-SHA evidence: Repository Site Data succeeded for 37a4bec5, while live runtime consumption, stale-fallback presentation, and the owner-only site deployment remain unproven. 2026-09-24 progress: tools/site-data/runtime adds a dependency-free reference verifier (verifyBundle.mjs: 32 KiB/5 MiB/2 MiB budgets, schemaVersion, WebCrypto SHA-256 per pointer, unsafe-path refusal, displayed SHA bound to latest.source.commit) and a freshness classifier (freshness.mjs: 300 s max-age plus stale-while-revalidate mapped to current/syncing/blocked/stale/unavailable). Its node:test suite runs over a generate.py publication and hash-flip, oversize, malformed, and path-escape variants, feeding each variant to validate_published_bundle so the two validators cannot drift; it runs as the runtime-bundle-validation CTest and the site-runtime-contract job. This is a contract only: the owner-deployed site has not adopted it, so no criterion changes. 2026-09-25 progress: validate.py now rejects, by default and with no waiver list (a publicNumericClaims entry does not exempt it), any count-with-unit, 7-64 hex commit SHA, CI run ID, or release version literal in docs/site/content.json and docs/site/docs-catalog.json, so repository site copy must reference bundle metric identifiers; the no-hardcoded-claims CTest runs its fixtures. The external site's own copy is outside this repository and remains unaudited. live-docs-parity remains planned.",
       "dependencies": [
         "RDY-000"
       ],
@@ -460,8 +460,7 @@
       },
       "plannedCiJobs": [],
       "plannedTestSelectors": [
-        "live-docs-parity",
-        "no-hardcoded-claims"
+        "live-docs-parity"
       ]
     }
   ]
