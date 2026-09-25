@@ -1539,6 +1539,32 @@ if(TARGET SparkServerCore)
         TIMEOUT 60)
 endif()
 
+# NET-100: SecureChannel (ChaCha20-Poly1305) transport families run under the
+# network-security label, so `ctest -L network-security` executes the C++ suite and
+# not only the static Python checks. Counts are exact per family: a dropped or
+# renamed case fails its CTest instead of shrinking the evidence. This covers
+# SecureChannel in isolation; it is not evidence of production wiring.
+set(_spark_net100_transport_selectors
+    "Transport_KnownAnswer_=2"
+    "Transport_Tamper_=3"
+    "Transport_Replay_=4"
+    "Transport_Downgrade_=2"
+    "Transport_KeyRotation_=3"
+    "Transport_FuzzPacket_=1"
+    "Transport_Capture_=1"
+    "Transport_KeyGeneration_=1")
+foreach(_spark_net100_selector IN LISTS _spark_net100_transport_selectors)
+    string(REPLACE "=" ";" _spark_net100_parts "${_spark_net100_selector}")
+    list(GET _spark_net100_parts 0 _spark_net100_prefix)
+    list(GET _spark_net100_parts 1 _spark_net100_count)
+    string(REGEX REPLACE "_$" "" _spark_net100_name "${_spark_net100_prefix}")
+    add_test(NAME NetworkSecurity_${_spark_net100_name} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(NetworkSecurity_${_spark_net100_name} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_net100_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_net100_count}"
+        LABELS "network-security;security;unit"
+        TIMEOUT 30)
+endforeach()
+
 # NET-110: IOnlinePlatform conformance (docs/specs/online-services.md 5.1, 6) across
 # every adapter in OnlineServices.h (Null, Steam, Epic, Console) plus the Null
 # adapter's fixed-transcript determinism check. Exact count: a dropped adapter test fails.
