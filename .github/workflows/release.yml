@@ -710,7 +710,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Configure CMake
       run: |

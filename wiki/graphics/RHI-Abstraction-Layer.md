@@ -458,14 +458,25 @@ What has real test coverage today (Lavapipe, see the lane below): frame fencing 
 ### Explicitly unsupported / not-yet-parity-complete features
 
 1. GPU-backed golden images of the engine renderer: no committed baselines, thresholds or hardware row exist.
-2. Production pass execution: no SPIR-V is built for any shipped shader, so the shadow/deferred/post passes cannot run on Vulkan.
-3. Shader toolchain as a hard dependency: DXC/glslang integration is not wired into the build.
+2. Production pass execution: SPIR-V is now built for every shipped shader stage (below), but the Linux engine passes still record unbound draws, so the shadow/deferred/post passes do not render on Vulkan.
+3. Shader toolchain beyond the Linux Vulkan row: glslang is a hard configure-time dependency only for non-Windows builds with the Vulkan backend. DXC HLSL-to-SPIR-V and runtime GLSL compilation remain unintegrated.
 
 These items remain documented here by design and should be removed only when the Vulkan path is verified feature-complete against D3D11.
 
+### Shipped-shader SPIR-V build (RHI-230)
+
+`VulkanDevice::CreateShader` accepts SPIR-V only, so the shipped GLSL is compiled at build time. When the Vulkan backend is compiled in on a non-Windows build, the root `CMakeLists.txt` requires `glslangValidator` (`glslang-tools` on Ubuntu, or `$VULKAN_SDK/bin`) and configure fails without it; `-DENABLE_VULKAN=OFF` is the explicit way to build without Vulkan. Section 9.4 compiles every stage of `Shaders/GLSL/*.glsl` (except the include-only `Utils.glsl`) to `<build>/Shaders/SPIRV/<Name>.<vert|frag>.spv` and the `SparkSpirvShaders` target stages them beside `SparkEngine` in `bin/Shaders/SPIRV/`. Install puts them in `bin/Shaders/SPIRV/`. A `.glsl` file with no stage entry in the list is a configure error, and a GLSL error fails the build.
+
+- Stage selection uses the same `VERTEX_SHADER` / `FRAGMENT_SHADER` macros that `OpenGLDevice` injects. glslang predefines `VULKAN`, which `FullscreenQuad.glsl` uses to read `gl_VertexIndex` and skip the OpenGL texcoord flip.
+- `--shift-texture-binding 14` moves GLSL sampler `binding = N` to descriptor binding `14 + N`. That matches `VulkanDevice`'s fixed layout (bindings 0-13 uniform buffers, 14-29 combined image samplers). Uniform blocks keep their binding numbers.
+- `GraphicsEngine::InitializeBasicShaders` (Linux) registers `Shaders/SPIRV/BasicVS.vert.spv` and `BasicPS.frag.spv` as the SPIR-V slot, so `ShaderCache` hands SPIR-V, not GLSL text, to the Vulkan backend.
+- `VulkanShaderToolchain_ShippedProgramsCreatePipelines` creates a shader module and a graphics pipeline for each of the 11 shipped programs under the validation layer. It also requires the built `.spv` set to match its program table exactly. `VulkanShaderToolchain_ShaderCacheLoadsShippedSpirv` loads the basic pair through `ShaderCache` using the renderer's relative paths, and checks that the GLSL-only fallback is refused.
+
+Only the default variant of each stage is built. Define-selected variants (`BLUR_HORIZONTAL`, `FXAA_PASS`, `TONEMAP_*`, ...) have no SPIR-V yet.
+
 ### Validation-layer lane (RHI-230)
 
-The `VulkanValidation` CTest entry (labels `vulkan`, `vulkan-lavapipe`) runs the 16 `VulkanValidation_*`, `VulkanGolden_*` and `VulkanShaderToolchain_*` tests in `Tests/TestRHI230VulkanValidationReal.cpp` on a real `VulkanDevice` with `VK_LAYER_KHRONOS_validation` and an error-counting messenger. It is registered only on Linux builds with Vulkan available and sets `SPARK_REQUIRE_VULKAN_VALIDATION=1`, so a missing ICD, missing validation layer, or missing `VK_EXT_headless_surface` fails the lane instead of skipping (skips would otherwise satisfy `SPARK_TEST_EXPECT_COUNT=16`). The `build-linux-gcc` and `build-linux-clang` jobs install `mesa-vulkan-drivers` (Lavapipe) and `vulkan-validationlayers` for it. Locally: `ctest --test-dir build/linux-gcc-release -L vulkan --output-on-failure --no-tests=error`. Lavapipe proves API-usage correctness only, not hardware certification.
+The `VulkanValidation` CTest entry (labels `vulkan`, `vulkan-lavapipe`) runs the 18 `VulkanValidation_*`, `VulkanGolden_*` and `VulkanShaderToolchain_*` tests in `Tests/TestRHI230VulkanValidationReal.cpp` on a real `VulkanDevice` with `VK_LAYER_KHRONOS_validation` and an error-counting messenger. It is registered only on Linux builds with Vulkan available and sets `SPARK_REQUIRE_VULKAN_VALIDATION=1`, so a missing ICD, missing validation layer, or missing `VK_EXT_headless_surface` fails the lane instead of skipping (skips would otherwise satisfy `SPARK_TEST_EXPECT_COUNT=18`). The `build-linux-gcc` and `build-linux-clang` jobs install `mesa-vulkan-drivers` (Lavapipe) and `vulkan-validationlayers` for it, and every Linux job that installs `libvulkan-dev` also installs `glslang-tools`. Locally: `ctest --test-dir build/linux-gcc-release -L vulkan --output-on-failure --no-tests=error`. Lavapipe proves API-usage correctness only, not hardware certification.
 
 ---
 

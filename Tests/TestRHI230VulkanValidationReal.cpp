@@ -23,11 +23,16 @@
 
 #ifdef SPARK_VULKAN_SUPPORT
 
+#include "Graphics/RHI/RHIBridge.h"
 #include "Graphics/RHI/Vulkan/VulkanDevice.h"
 
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -520,6 +525,225 @@ TEST(VulkanShaderToolchain_AcceptsValidSpirv)
     EXPECT_TRUE(ps != nullptr);
     v.ExpectClean();
 }
+
+#ifdef SPARK_TEST_SPIRV_DIR
+
+// ============================================================================
+// Shipped shaders: the build compiles every Shaders/GLSL stage to SPIR-V
+// (root CMakeLists.txt section 9.4). Each program must become a pipeline on
+// VulkanDevice's fixed descriptor layout with no validation error, and the
+// renderer's registered relative paths must resolve through ShaderCache.
+// ============================================================================
+
+namespace
+{
+    enum class ShippedVertexLayout
+    {
+        None,             // FullscreenQuad: vertices come from gl_VertexIndex
+        PositionNormalUV, // BasicVS
+        PositionNormal,   // EnvReflection, Phong, Rim
+        PositionUV,       // Water
+    };
+
+    struct ShippedProgram
+    {
+        const char* vertexModule;
+        const char* pixelModule;
+        ShippedVertexLayout layout;
+        uint32_t colorTargets;
+    };
+
+    // Every program the shipped GLSL forms. Post-process passes pair with FullscreenQuad; the forward and
+    // G-buffer surface shaders pair with BasicVS, whose outputs match their inputs location for location.
+    constexpr ShippedProgram kShippedPrograms[] = {
+        {"BasicVS.vert.spv", "BasicPS.frag.spv", ShippedVertexLayout::PositionNormalUV, 1},
+        {"BasicVS.vert.spv", "PBRSurface.frag.spv", ShippedVertexLayout::PositionNormalUV, 3},
+        {"FullscreenQuad.vert.spv", "BloomExtract.frag.spv", ShippedVertexLayout::None, 1},
+        {"FullscreenQuad.vert.spv", "DebugVisualize.frag.spv", ShippedVertexLayout::None, 1},
+        {"FullscreenQuad.vert.spv", "GaussianBlur.frag.spv", ShippedVertexLayout::None, 1},
+        {"FullscreenQuad.vert.spv", "PostProcess.frag.spv", ShippedVertexLayout::None, 1},
+        {"FullscreenQuad.vert.spv", "SSAO.frag.spv", ShippedVertexLayout::None, 1},
+        {"EnvReflection.vert.spv", "EnvReflection.frag.spv", ShippedVertexLayout::PositionNormal, 1},
+        {"Phong.vert.spv", "Phong.frag.spv", ShippedVertexLayout::PositionNormal, 1},
+        {"Rim.vert.spv", "Rim.frag.spv", ShippedVertexLayout::PositionNormal, 1},
+        {"Water.vert.spv", "Water.frag.spv", ShippedVertexLayout::PositionUV, 1},
+    };
+
+    std::vector<uint8_t> ReadShippedModule(const std::string& fileName)
+    {
+        std::ifstream file(std::filesystem::path(SPARK_TEST_SPIRV_DIR) / fileName, std::ios::binary);
+        return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    }
+
+    RHIInputLayoutDesc MakeShippedInputLayout(ShippedVertexLayout layout)
+    {
+        // VulkanDevice assigns attribute location i to element i, matching the GLSL layout(location = i) inputs.
+        auto element = [](RHIVertexFormat format, uint32_t offset)
+        {
+            RHIInputElement e;
+            e.format = format;
+            e.byteOffset = offset;
+            return e;
+        };
+        RHIInputLayoutDesc desc;
+        switch (layout)
+        {
+        case ShippedVertexLayout::None:
+            break;
+        case ShippedVertexLayout::PositionNormalUV:
+            desc.elements = {element(RHIVertexFormat::Float3, 0), element(RHIVertexFormat::Float3, 12),
+                             element(RHIVertexFormat::Float2, 24)};
+            break;
+        case ShippedVertexLayout::PositionNormal:
+            desc.elements = {element(RHIVertexFormat::Float3, 0), element(RHIVertexFormat::Float3, 12)};
+            break;
+        case ShippedVertexLayout::PositionUV:
+            desc.elements = {element(RHIVertexFormat::Float3, 0), element(RHIVertexFormat::Float2, 12)};
+            break;
+        }
+        return desc;
+    }
+
+    /// Restores the working directory on scope exit.
+    struct ScopedWorkingDirectory
+    {
+        std::filesystem::path previous;
+        explicit ScopedWorkingDirectory(const std::filesystem::path& next) : previous(std::filesystem::current_path())
+        {
+            std::filesystem::current_path(next);
+        }
+        ~ScopedWorkingDirectory()
+        {
+            std::error_code ec;
+            std::filesystem::current_path(previous, ec);
+        }
+        ScopedWorkingDirectory(const ScopedWorkingDirectory&) = delete;
+        ScopedWorkingDirectory& operator=(const ScopedWorkingDirectory&) = delete;
+    };
+} // namespace
+
+TEST(VulkanShaderToolchain_ShippedProgramsCreatePipelines)
+{
+    // The build output must hold exactly the modules the program table covers: a stage added to the
+    // SPIR-V build without a pipeline here, or a module the build stopped producing, both fail.
+    std::set<std::string> expected;
+    for (const ShippedProgram& program : kShippedPrograms)
+    {
+        expected.insert(program.vertexModule);
+        expected.insert(program.pixelModule);
+    }
+    std::set<std::string> built;
+    for (const auto& entry : std::filesystem::directory_iterator(SPARK_TEST_SPIRV_DIR))
+    {
+        if (entry.path().extension() == ".spv")
+            built.insert(entry.path().filename().string());
+    }
+    EXPECT_TRUE(built == expected);
+    for (const std::string& name : expected)
+    {
+        if (!built.contains(name))
+            std::cerr << "  missing SPIR-V module: " << name << "\n";
+    }
+    for (const std::string& name : built)
+    {
+        if (!expected.contains(name))
+            std::cerr << "  SPIR-V module with no pipeline test: " << name << "\n";
+    }
+
+    ValidatedDevice v;
+    for (const ShippedProgram& program : kShippedPrograms)
+    {
+        const std::vector<uint8_t> vsCode = ReadShippedModule(program.vertexModule);
+        const std::vector<uint8_t> psCode = ReadShippedModule(program.pixelModule);
+        ASSERT_TRUE(!vsCode.empty() && !psCode.empty());
+
+        RHIShaderDesc shaderDesc;
+        shaderDesc.language = ShaderLanguage::SPIRV;
+        shaderDesc.stage = RHIShaderStage::Vertex;
+        shaderDesc.bytecode = vsCode.data();
+        shaderDesc.bytecodeSize = vsCode.size();
+        shaderDesc.debugName = program.vertexModule;
+        auto vs = v.device.CreateShader(shaderDesc);
+        shaderDesc.stage = RHIShaderStage::Pixel;
+        shaderDesc.bytecode = psCode.data();
+        shaderDesc.bytecodeSize = psCode.size();
+        shaderDesc.debugName = program.pixelModule;
+        auto ps = v.device.CreateShader(shaderDesc);
+        EXPECT_TRUE(vs != nullptr);
+        EXPECT_TRUE(ps != nullptr);
+        if (!vs || !ps)
+        {
+            std::cerr << "  shader module rejected: " << program.vertexModule << " + " << program.pixelModule << "\n";
+            continue;
+        }
+
+        RHIPipelineStateDesc desc;
+        desc.inputLayout = MakeShippedInputLayout(program.layout);
+        desc.numRenderTargets = program.colorTargets;
+        for (uint32_t target = 0; target < program.colorTargets; ++target)
+            desc.renderTargetFormats[target] = PixelFormat::R8G8B8A8_UNORM;
+        if (program.layout == ShippedVertexLayout::None)
+        {
+            desc.depthStencilFormat = PixelFormat::Unknown;
+            desc.depthStencil.depthEnable = false;
+            desc.depthStencil.depthWrite = false;
+        }
+        else
+        {
+            desc.depthStencilFormat = PixelFormat::D32_FLOAT;
+        }
+        desc.debugName = program.pixelModule;
+        auto pipeline = v.device.CreatePipelineState(desc, vs.get(), ps.get());
+        EXPECT_TRUE(pipeline != nullptr);
+        if (!pipeline)
+            std::cerr << "  pipeline creation failed: " << program.vertexModule << " + " << program.pixelModule << "\n";
+        if (v.counter.errors != 0)
+            std::cerr << "  validation error after " << program.vertexModule << " + " << program.pixelModule << "\n";
+    }
+    v.ExpectClean();
+}
+
+// GraphicsEngine::InitializeBasicShaders registers these relative paths; the runtime directory is the
+// one the build stages Shaders/SPIRV into. On Vulkan the cache must pick the SPIR-V slot, not the GLSL.
+TEST(VulkanShaderToolchain_ShaderCacheLoadsShippedSpirv)
+{
+    ValidatedDevice v;
+    const std::filesystem::path runtimeDirectory =
+        std::filesystem::path(SPARK_TEST_SPIRV_DIR).parent_path().parent_path();
+    ScopedWorkingDirectory cwd(runtimeDirectory);
+
+    ShaderCache cache;
+    cache.RegisterShader("basic_vs", {"Shaders/HLSL/BasicVS.hlsl", "Shaders/GLSL/BasicVS.glsl",
+                                      "Shaders/SPIRV/BasicVS.vert.spv", "main", RHIShaderStage::Vertex});
+    cache.RegisterShader("basic_ps", {"Shaders/HLSL/BasicPS.hlsl", "Shaders/GLSL/BasicPS.glsl",
+                                      "Shaders/SPIRV/BasicPS.frag.spv", "main", RHIShaderStage::Pixel});
+    IRHIShader* vs = cache.GetShader("basic_vs", &v.device);
+    IRHIShader* ps = cache.GetShader("basic_ps", &v.device);
+    ASSERT_TRUE(vs != nullptr);
+    ASSERT_TRUE(ps != nullptr);
+
+    RHIPipelineStateDesc desc;
+    desc.inputLayout = MakeShippedInputLayout(ShippedVertexLayout::PositionNormalUV);
+    desc.renderTargetFormats[0] = PixelFormat::R8G8B8A8_UNORM;
+    desc.depthStencilFormat = PixelFormat::D32_FLOAT;
+    desc.debugName = "RHI230BasicShipped";
+    auto pipeline = v.device.CreatePipelineState(desc, vs, ps);
+    EXPECT_TRUE(pipeline != nullptr);
+
+    // Without a SPIR-V path the cache falls back to the GLSL text, which the Vulkan backend refuses. This is
+    // the state the renderer was in before the build produced SPIR-V.
+    const std::string shippedGlsl = std::string(SPARK_TEST_SOURCE_DIR) + "/Shaders/GLSL/BasicVS.glsl";
+    ASSERT_TRUE(std::filesystem::exists(shippedGlsl));
+    cache.RegisterShader("basic_vs_glsl_only",
+                         {"Shaders/HLSL/BasicVS.hlsl", shippedGlsl, "", "main", RHIShaderStage::Vertex});
+    EXPECT_TRUE(cache.GetShader("basic_vs_glsl_only", &v.device) == nullptr);
+
+    pipeline.reset();
+    cache.Clear(&v.device);
+    v.ExpectClean();
+}
+
+#endif // SPARK_TEST_SPIRV_DIR
 
 // ============================================================================
 // Real render + readback: the pixels come from Lavapipe executing the SPIR-V,

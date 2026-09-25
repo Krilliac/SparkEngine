@@ -4979,7 +4979,7 @@ ctest --test-dir build/windows-release -C Release -L d3d12 --output-on-failure -
 **Priority:** P1 · **Status:** in-progress · **Wave:** 5 · **Area:** rendering · **Owner:** unassigned · **Release-blocking:** no
 **Profile applicability:** `stable-v1`=outside
 
-Vulkan does not yet prove GPU-backed goldens of the engine renderer or any production pass variant. 2026-09-25 progress (no promotion): VulkanDevice::GetD3D11ParityMilestones (pass-route, golden-route and CI milestones hard-coded to true) and RenderCanonicalGoldenScene (a CPU-synthesized image its test compared with itself) were deleted along with the three vacuous VulkanParity_* tests, so VulkanParity_* is now a planned selector. The build-linux-gcc Release gate now requires the SPARK_VULKAN_SUPPORT-only VulkanShaderToolchain_RejectsMalformedSpirv and VulkanGolden_FullscreenTriangleReadback tests in the JUnit report instead. Every acceptance criterion keeps its state.
+Vulkan does not yet prove GPU-backed goldens of the engine renderer or any production pass variant. 2026-09-25 progress (no promotion): VulkanDevice::GetD3D11ParityMilestones (pass-route, golden-route and CI milestones hard-coded to true) and RenderCanonicalGoldenScene (a CPU-synthesized image its test compared with itself) were deleted along with the three vacuous VulkanParity_* tests, so VulkanParity_* is now a planned selector. The build-linux-gcc Release gate now requires the SPARK_VULKAN_SUPPORT-only VulkanShaderToolchain_RejectsMalformedSpirv and VulkanGolden_FullscreenTriangleReadback tests in the JUnit report instead. Every acceptance criterion keeps its state. 2026-09-25 progress (no promotion): shipped GLSL is compiled to SPIR-V at build time. On non-Windows builds with the Vulkan backend, configure requires glslangValidator. Section 9.4 of CMakeLists.txt builds every Shaders/GLSL stage into bin/Shaders/SPIRV and installs it there. The Linux basic shader pair registers that SPIR-V, and FullscreenQuad.glsl now compiles for Vulkan. VulkanShaderToolchain_ShippedProgramsCreatePipelines creates all 11 shipped programs under the validation layer on local Lavapipe, and VulkanShaderToolchain_ShaderCacheLoadsShippedSpirv loads the basic pair through ShaderCache. The production passes still record unbound draws.
 
 **Dependency contract**
 
@@ -5013,14 +5013,14 @@ Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/GoldenImages/manifest.json`, `Tests/TestRHI230VulkanValidationReal.cpp`
    - The golden manifest has no entries, so there is no reviewed lavapipe or hardware baseline. Readback tests use hand-written SPIR-V draws, not goldens with thresholds.
 2. **[unmet]** Production pass matrix executes
-   - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`
-   - No SPIR-V is built for shipped shaders, and production shadow/deferred/post passes do not run on Vulkan. There is no pass-matrix parity test.
+   - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`, `SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp`
+   - SPIR-V is now built for every shipped GLSL stage and the Linux basic pair registers it, but the Linux passes record unbound draws, so production shadow/deferred/post passes do not render on Vulkan. There is no pass-matrix parity test.
 3. **[unmet]** Validation is clean
    - Evidence: `Tests/TestRHI230VulkanValidationReal.cpp`
    - The validation lane fails closed but covers only unit-level draws, not production passes. It needs layers plus an ICD, and there is no vulkan-lavapipe job.
 4. **[unmet]** Shader toolchain failures are fatal
-   - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`
-   - The runtime rejects non-SPIR-V, but glslang/DXC are optional at build time. No check makes a missing toolchain fatal for supported builds.
+   - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`, `CMakeLists.txt`, `Tests/TestRHI230VulkanValidationReal.cpp`
+   - Non-Windows Vulkan builds now fail configure without glslangValidator and fail the build on GLSL glslang rejects; the runtime rejects non-SPIR-V. Verified locally only (no hosted run). Windows Vulkan builds build no SPIR-V and DXC stays unintegrated, so the criterion stays open.
 5. **[unmet]** Packaged supported rows pass
    - There is no Vulkan package lane and no lavapipe/hardware CI rows. This needs hosted or hardware execution.
 
@@ -5032,7 +5032,7 @@ ctest --test-dir build/linux-gcc-release -L vulkan --output-on-failure --no-test
 
 **Automated evidence**
 
-- Test selectors: `VulkanParity_*`, `VulkanGolden_*`, `VulkanValidation_*`
+- Test selectors: `VulkanParity_*`, `VulkanGolden_*`, `VulkanValidation_*`, `VulkanShaderToolchain_*`
 - Required CI jobs: `vulkan-lavapipe`, `vulkan-hardware`
 - Performance / reliability budgets:
   - Vulkan budgets from PERF-100

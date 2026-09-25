@@ -1127,6 +1127,28 @@ else()
     message(STATUS "Vulkan backend disabled by option")
 endif()
 
+# --- Vulkan shader toolchain (RHI-230) ---
+# VulkanDevice::CreateShader accepts SPIR-V only, and the non-Windows renderer
+# registers the SPIR-V that section 9.4 builds from Shaders/GLSL. A build that
+# compiles the Vulkan backend in without glslangValidator would ship a backend
+# that cannot load one shipped shader, so configure fails instead.
+if(SPARK_VULKAN_AVAILABLE AND NOT WIN32)
+    find_program(SPARK_GLSLANG_VALIDATOR
+        NAMES glslangValidator
+        HINTS "$ENV{VULKAN_SDK}/bin"
+        DOC "glslangValidator that compiles Shaders/GLSL to SPIR-V for the Vulkan backend")
+    if(NOT SPARK_GLSLANG_VALIDATOR)
+        message(FATAL_ERROR
+            "Vulkan backend enabled but glslangValidator was not found. The Vulkan backend loads only SPIR-V "
+            "compiled from Shaders/GLSL at build time.\n"
+            "  Ubuntu/Debian : sudo apt install glslang-tools\n"
+            "  Fedora        : sudo dnf install glslang\n"
+            "  macOS         : brew install glslang (or the LunarG Vulkan SDK)\n"
+            "Or configure with -DENABLE_VULKAN=OFF to build without the Vulkan backend.")
+    endif()
+    message(STATUS "Vulkan shader toolchain: ${SPARK_GLSLANG_VALIDATOR}")
+endif()
+
 # --- OpenGL ---
 if(ENABLE_OPENGL)
     if(NOT OpenGL_FOUND)
@@ -1832,6 +1854,69 @@ add_custom_target(SparkRuntimeShaders
 )
 add_dependencies(SparkEngine SparkRuntimeShaders)
 unset(_SPARK_SHADER_STAGE_COMMANDS)
+
+# Shipped GLSL -> SPIR-V for the Vulkan backend (RHI-230). One module per stage,
+# named <Source>.<vert|frag>.spv. Multi-stage sources select their stage with the
+# same VERTEX_SHADER / FRAGMENT_SHADER macros OpenGLDevice injects. Sampler
+# bindings shift by 14 into VulkanDevice's combined-image-sampler range
+# (descriptor bindings 14-29 after the 14 uniform-buffer bindings), so GLSL
+# "binding = N" on a sampler means texture slot N on both GL and Vulkan.
+# Utils.glsl is an include-only library with no entry point and is not listed.
+set(SPARK_SPIRV_OUTPUTS "")
+if(SPARK_VULKAN_AVAILABLE AND NOT WIN32)
+    set(_SPARK_SPIRV_STAGES
+        BasicVS:vert BasicPS:frag
+        BloomExtract:frag DebugVisualize:frag GaussianBlur:frag PBRSurface:frag PostProcess:frag SSAO:frag
+        FullscreenQuad:vert
+        EnvReflection:vert EnvReflection:frag
+        Phong:vert Phong:frag
+        Rim:vert Rim:frag
+        Water:vert Water:frag)
+    # A shipped GLSL file missing from the list above would silently never reach
+    # Vulkan, so an unlisted source is a configure error.
+    file(GLOB _spark_glsl_sources RELATIVE "${CMAKE_SOURCE_DIR}/Shaders/GLSL" "${CMAKE_SOURCE_DIR}/Shaders/GLSL/*.glsl")
+    foreach(_spark_glsl_source IN LISTS _spark_glsl_sources)
+        string(REGEX REPLACE "\\.glsl$" "" _spark_glsl_name "${_spark_glsl_source}")
+        if(NOT _spark_glsl_name STREQUAL "Utils" AND NOT "${_SPARK_SPIRV_STAGES}" MATCHES "(^|;)${_spark_glsl_name}:")
+            message(FATAL_ERROR "Shaders/GLSL/${_spark_glsl_source} has no SPIR-V stage entry in CMakeLists.txt")
+        endif()
+    endforeach()
+    set(_SPARK_SPIRV_DIR "${CMAKE_BINARY_DIR}/Shaders/SPIRV")
+    foreach(_spark_spirv_stage IN LISTS _SPARK_SPIRV_STAGES)
+        string(REPLACE ":" ";" _spark_spirv_parts "${_spark_spirv_stage}")
+        list(GET _spark_spirv_parts 0 _spark_spirv_name)
+        list(GET _spark_spirv_parts 1 _spark_spirv_kind)
+        if(_spark_spirv_kind STREQUAL "vert")
+            set(_spark_spirv_macro VERTEX_SHADER)
+        else()
+            set(_spark_spirv_macro FRAGMENT_SHADER)
+        endif()
+        set(_spark_spirv_source "${CMAKE_SOURCE_DIR}/Shaders/GLSL/${_spark_spirv_name}.glsl")
+        set(_spark_spirv_output "${_SPARK_SPIRV_DIR}/${_spark_spirv_name}.${_spark_spirv_kind}.spv")
+        add_custom_command(
+            OUTPUT "${_spark_spirv_output}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_SPARK_SPIRV_DIR}"
+            COMMAND "${SPARK_GLSLANG_VALIDATOR}" --quiet -V -S ${_spark_spirv_kind} -D${_spark_spirv_macro}
+                --shift-texture-binding 14 -o "${_spark_spirv_output}" "${_spark_spirv_source}"
+            DEPENDS "${_spark_spirv_source}"
+            COMMENT "Compiling SPIR-V ${_spark_spirv_name}.${_spark_spirv_kind}.spv"
+            VERBATIM)
+        list(APPEND SPARK_SPIRV_OUTPUTS "${_spark_spirv_output}")
+    endforeach()
+
+    # Stage beside SparkEngine so the relative "Shaders/SPIRV/..." paths the
+    # renderer registers resolve from the runtime directory, as HLSL does above.
+    add_custom_target(SparkSpirvShaders
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkEngine>/Shaders/SPIRV"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SPARK_SPIRV_OUTPUTS}
+            "$<TARGET_FILE_DIR:SparkEngine>/Shaders/SPIRV"
+        DEPENDS ${SPARK_SPIRV_OUTPUTS}
+        COMMENT "Staging SPIR-V shaders into the runtime output directory"
+        VERBATIM)
+    add_dependencies(SparkEngine SparkSpirvShaders)
+    unset(_SPARK_SPIRV_STAGES)
+    unset(_SPARK_SPIRV_DIR)
+endif()
 
 # ---------------------------------------------------------------------
 # 9.5) Build game modules from GameModules/ directory (auto-discovery)
@@ -2943,6 +3028,14 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders")
     )
 endif()
 
+# The SPIR-V built in section 9.4 is what the packaged Vulkan backend loads; not OPTIONAL because
+# configure already fails when the Vulkan backend is compiled in without glslangValidator.
+if(SPARK_SPIRV_OUTPUTS)
+    install(FILES ${SPARK_SPIRV_OUTPUTS}
+        DESTINATION bin/Shaders/SPIRV
+        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME})
+endif()
+
 # The tracked-directory rules above ship source HLSL only. The DXIL/DXBC blobs
 # that dxc and fxc write beside SparkEngine at POST_BUILD live in the build
 # tree, so without these rules a packaged build carried no compiled shader and
@@ -3350,8 +3443,8 @@ if(ENABLE_VULKAN)
             "Impact:  Vulkan renderer unavailable — D3D11 (Windows) or OpenGL (Linux) still work"
             "Install:"
             "  All platforms : https://vulkan.lunarg.com/sdk/home"
-            "  Ubuntu/Debian : sudo apt install libvulkan-dev vulkan-tools"
-            "  Fedora        : sudo dnf install vulkan-devel vulkan-tools"
+            "  Ubuntu/Debian : sudo apt install libvulkan-dev vulkan-tools glslang-tools"
+            "  Fedora        : sudo dnf install vulkan-devel vulkan-tools glslang"
             "  macOS         : brew install vulkan-sdk (MoltenVK)"
             "  Tip: Set VULKAN_SDK env var if installed to a non-standard path"
         )

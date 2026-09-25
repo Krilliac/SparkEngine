@@ -603,7 +603,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -751,7 +751,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -891,7 +891,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
 
     - name: Configure Linux Shipping telemetry tests
       run: |
@@ -991,7 +991,7 @@ jobs:
       id: install-deps
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang clang-18 libclang-rt-18-dev cmake ninja-build ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y clang clang-18 libclang-rt-18-dev cmake ninja-build ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Pin the runner clang to the LLVM series
       id: clang
@@ -2254,7 +2254,7 @@ jobs:
         sudo apt-get update
         # RHI-230: the VulkanValidation CTest entry requires Lavapipe plus the
         # Khronos validation layer (SPARK_REQUIRE_VULKAN_VALIDATION=1) and fails without them.
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -2441,7 +2441,7 @@ jobs:
         sudo apt-get update
         # RHI-230: the VulkanValidation CTest entry requires Lavapipe plus the
         # Khronos validation layer (SPARK_REQUIRE_VULKAN_VALIDATION=1) and fails without them.
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev vulkan-validationlayers
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -3878,7 +3878,7 @@ jobs:
       - name: Install configure dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev
+          sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
 
       - name: Run module evidence adversarial tests
         run: python3 -m unittest Tests.Tools.test_module_evidence -v
@@ -4000,7 +4000,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+          sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
       - name: Setup ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6

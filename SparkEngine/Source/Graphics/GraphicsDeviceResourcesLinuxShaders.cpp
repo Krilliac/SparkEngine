@@ -31,15 +31,16 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
     if (!rhi.initialized)
         return E_FAIL;
 
-    // Register basic shader pairs (HLSL for Windows, GLSL for Linux). Every
-    // path here must name a file that ships: the previous Shaders/Basic.*
-    // names existed nowhere in the repository. There is no SPIR-V variant of
-    // the basic pair, so the SPIR-V slot is left empty rather than pointing at
-    // a .spv that is never produced.
+    // Register basic shader pairs (HLSL for D3D, GLSL for OpenGL, SPIR-V for
+    // Vulkan). Every path here must name a file that ships: the previous
+    // Shaders/Basic.* names existed nowhere in the repository. The SPIR-V
+    // modules are compiled from the GLSL by the root CMakeLists.txt (section
+    // 9.4), which makes glslangValidator a configure-time requirement whenever
+    // the Vulkan backend is built.
     rhi.bridge.RegisterShader("basic_vs", Spark::RHI::RHIShaderStage::Vertex, "Shaders/HLSL/BasicVS.hlsl",
-                              "Shaders/GLSL/BasicVS.glsl", "", "main");
+                              "Shaders/GLSL/BasicVS.glsl", "Shaders/SPIRV/BasicVS.vert.spv", "main");
     rhi.bridge.RegisterShader("basic_ps", Spark::RHI::RHIShaderStage::Pixel, "Shaders/HLSL/BasicPS.hlsl",
-                              "Shaders/GLSL/BasicPS.glsl", "", "main");
+                              "Shaders/GLSL/BasicPS.glsl", "Shaders/SPIRV/BasicPS.frag.spv", "main");
 
     // Verify shaders can be loaded
     Spark::RHI::IRHIShader* vs = rhi.bridge.GetShader("basic_vs");

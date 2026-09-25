@@ -1277,6 +1277,13 @@ endif()
 if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_VULKAN)
 endif()
+# RHI-230: the SPIR-V built from Shaders/GLSL (root CMakeLists.txt section 9.4).
+# TestRHI230VulkanValidationReal.cpp loads every module from here.
+if(TARGET SparkSpirvShaders)
+    add_dependencies(SparkTests SparkSpirvShaders)
+    target_compile_definitions(SparkTests PRIVATE
+        SPARK_TEST_SPIRV_DIR="$<TARGET_FILE_DIR:SparkEngine>/Shaders/SPIRV")
+endif()
 if(SPARK_OPENGL_SUPPORT OR ENABLE_OPENGL)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_OPENGL)
 endif()
@@ -1738,13 +1745,14 @@ endif()
 # Lavapipe proves API-usage correctness only, not hardware certification.
 # SPARK_REQUIRE_VULKAN_VALIDATION turns a missing ICD or validation layer into a
 # failure: SPARK_TEST_EXPECT_COUNT counts skipped tests, so without it the lane
-# would pass with all 16 tests skipped. Linux only, like SparkOpenGLTests: the
-# Linux CI jobs install mesa-vulkan-drivers (Lavapipe) and vulkan-validationlayers.
+# would pass with all 18 tests skipped. Linux only, like SparkOpenGLTests: the
+# Linux CI jobs install mesa-vulkan-drivers (Lavapipe), vulkan-validationlayers
+# and glslang-tools (configure requires glslangValidator with Vulkan enabled).
 if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(NAME VulkanValidation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(VulkanValidation PROPERTIES
         ENVIRONMENT
-            "SPARK_TEST_FILE=TestRHI230VulkanValidationReal.cpp;SPARK_TEST_EXPECT_COUNT=16;SPARK_REQUIRE_VULKAN_VALIDATION=1"
+            "SPARK_TEST_FILE=TestRHI230VulkanValidationReal.cpp;SPARK_TEST_EXPECT_COUNT=18;SPARK_REQUIRE_VULKAN_VALIDATION=1"
         LABELS "vulkan;vulkan-lavapipe;rendering;unit"
         RUN_SERIAL TRUE
         TIMEOUT 120)
