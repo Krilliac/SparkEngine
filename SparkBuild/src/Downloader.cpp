@@ -1,11 +1,14 @@
 #include "Downloader.h"
+#include "ArchiveExtraction.h"
 #include "DownloadSecurity.h"
 #include <fstream>
 #include <filesystem>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <iostream>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -16,11 +19,6 @@
 #endif
 #include <windows.h>
 #include <winhttp.h>
-#include <ole2.h>
-#include <oleauto.h>
-#include <shlobj.h>
-#include <shlwapi.h>
-#include <shldisp.h>
 
 namespace
 {
@@ -46,11 +44,6 @@ namespace
 } // namespace
 
 #pragma comment(lib, "winhttp.lib")
-#pragma comment(lib, "shlwapi.lib")
-#pragma comment(lib, "shell32.lib")
-#pragma comment(lib, "ole32.lib")
-#pragma comment(lib, "oleaut32.lib")
-#pragma comment(lib, "uuid.lib")
 #else
 #include <cerrno>
 #include <fcntl.h>
@@ -74,18 +67,20 @@ namespace SparkBuild
 #endif
         }
 
-        class ScopedTemporaryDownload
+        // Removes a reserved download file or a staging directory tree. remove_all
+        // never follows symlinks, so links planted by an archive are unlinked only.
+        class ScopedTemporaryPath
         {
           public:
-            explicit ScopedTemporaryDownload(std::string path) : m_path(std::move(path)) {}
-            ~ScopedTemporaryDownload()
+            explicit ScopedTemporaryPath(std::filesystem::path path) : m_path(std::move(path)) {}
+            ~ScopedTemporaryPath()
             {
                 std::error_code ignored;
-                std::filesystem::remove(m_path, ignored);
+                std::filesystem::remove_all(m_path, ignored);
             }
 
-            ScopedTemporaryDownload(const ScopedTemporaryDownload&) = delete;
-            ScopedTemporaryDownload& operator=(const ScopedTemporaryDownload&) = delete;
+            ScopedTemporaryPath(const ScopedTemporaryPath&) = delete;
+            ScopedTemporaryPath& operator=(const ScopedTemporaryPath&) = delete;
 
           private:
             std::filesystem::path m_path;
@@ -205,88 +200,42 @@ namespace SparkBuild
         return true;
     }
 
-    bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destDir)
+    // Extract with the in-box bsdtar (System32\tar.exe, Windows 10 1803+),
+    // which reads ZIP natively, runs to completion before we look at the
+    // staging tree, and reports every failure through its exit code. The Shell
+    // Folder::CopyHere path it replaces could return while its copy was still
+    // running and hid per-item errors behind FOF_NOERRORUI.
+    static bool ExtractZipIntoStaging(const std::filesystem::path& zipPath, const std::filesystem::path& stagingDir)
     {
-        const HRESULT comInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-        if (FAILED(comInit) && comInit != RPC_E_CHANGED_MODE)
+        wchar_t systemDirectory[MAX_PATH] = {};
+        const UINT systemLength = GetSystemDirectoryW(systemDirectory, MAX_PATH);
+        if (systemLength == 0 || systemLength >= MAX_PATH)
+            return false;
+        // The absolute System32 path keeps PATH and the working directory out of the lookup.
+        const std::wstring tarExe = std::wstring(systemDirectory, systemLength) + L"\\tar.exe";
+
+        const std::wstring archive = zipPath.wstring();
+        const std::wstring staging = stagingDir.wstring();
+        // Windows paths cannot contain '"'; a trailing backslash would escape the closing quote.
+        const auto quotable = [](const std::wstring& path)
+        { return !path.empty() && path.find(L'"') == std::wstring::npos && path.back() != L'\\'; };
+        if (!quotable(archive) || !quotable(staging))
             return false;
 
-        int zipWLen = MultiByteToWideChar(CP_UTF8, 0, zipPath.c_str(), -1, nullptr, 0);
-        std::wstring zipW(zipWLen, 0);
-        MultiByteToWideChar(CP_UTF8, 0, zipPath.c_str(), -1, zipW.data(), zipWLen);
-
-        int destWLen = MultiByteToWideChar(CP_UTF8, 0, destDir.c_str(), -1, nullptr, 0);
-        std::wstring destW(destWLen, 0);
-        MultiByteToWideChar(CP_UTF8, 0, destDir.c_str(), -1, destW.data(), destWLen);
-
-        std::filesystem::create_directories(destDir);
-
-        IShellDispatch* pShell = nullptr;
-        HRESULT hr = CoCreateInstance(CLSID_Shell, nullptr, CLSCTX_INPROC_SERVER, IID_IShellDispatch, (void**)&pShell);
-        if (FAILED(hr) || !pShell)
+        std::wstring commandLine = L"\"" + tarExe + L"\" -x -f \"" + archive + L"\" -C \"" + staging + L"\"";
+        STARTUPINFOW startup = {};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION process = {};
+        if (!CreateProcessW(tarExe.c_str(), commandLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
+                            nullptr, &startup, &process))
             return false;
+        CloseHandle(process.hThread);
 
-        VARIANT vZip, vDest;
-        VariantInit(&vZip);
-        VariantInit(&vDest);
-        vZip.vt = VT_BSTR;
-        vZip.bstrVal = SysAllocString(zipW.c_str());
-        vDest.vt = VT_BSTR;
-        vDest.bstrVal = SysAllocString(destW.c_str());
-
-        Folder* pZipFolder = nullptr;
-        hr = pShell->NameSpace(vZip, &pZipFolder);
-        if (FAILED(hr) || !pZipFolder)
-        {
-            VariantClear(&vZip);
-            VariantClear(&vDest);
-            pShell->Release();
-            return false;
-        }
-
-        Folder* pDestFolder = nullptr;
-        hr = pShell->NameSpace(vDest, &pDestFolder);
-        if (FAILED(hr) || !pDestFolder)
-        {
-            pZipFolder->Release();
-            VariantClear(&vZip);
-            VariantClear(&vDest);
-            pShell->Release();
-            return false;
-        }
-
-        FolderItems* pItems = nullptr;
-        pZipFolder->Items(&pItems);
-        if (!pItems)
-        {
-            pDestFolder->Release();
-            pZipFolder->Release();
-            VariantClear(&vZip);
-            VariantClear(&vDest);
-            pShell->Release();
-            return false;
-        }
-
-        VARIANT vItems;
-        VariantInit(&vItems);
-        vItems.vt = VT_DISPATCH;
-        vItems.pdispVal = pItems;
-
-        VARIANT vOptions;
-        VariantInit(&vOptions);
-        vOptions.vt = VT_I4;
-        vOptions.lVal = 0x0614; // FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT
-
-        hr = pDestFolder->CopyHere(vItems, vOptions);
-
-        pItems->Release();
-        pDestFolder->Release();
-        pZipFolder->Release();
-        VariantClear(&vZip);
-        VariantClear(&vDest);
-        pShell->Release();
-
-        return SUCCEEDED(hr);
+        DWORD exitCode = 1;
+        const bool finished = WaitForSingleObject(process.hProcess, INFINITE) == WAIT_OBJECT_0 &&
+                              GetExitCodeProcess(process.hProcess, &exitCode) != 0;
+        CloseHandle(process.hProcess);
+        return finished && exitCode == 0;
     }
 
     std::string Downloader::GetTempDir()
@@ -306,7 +255,13 @@ namespace SparkBuild
 
     namespace
     {
-        bool RunProcess(const std::string& executable, const std::vector<std::string>& args)
+        // Upper bound for captured tool output (a tar member listing).
+        constexpr size_t kMaxCapturedOutputBytes = 64u * 1024 * 1024;
+
+        // Run a tool without a shell. stdin is /dev/null so an extractor can
+        // never block on an interactive prompt; stdout is captured on request.
+        bool RunProcess(const std::string& executable, const std::vector<std::string>& args,
+                        std::string* capturedOutput = nullptr)
         {
             std::vector<char*> argv;
             argv.reserve(args.size() + 2);
@@ -315,20 +270,104 @@ namespace SparkBuild
                 argv.push_back(const_cast<char*>(arg.c_str()));
             argv.push_back(nullptr);
 
+            int outputPipe[2] = {-1, -1};
+            if (capturedOutput && pipe(outputPipe) != 0)
+                return false;
+
             pid_t pid = fork();
             if (pid < 0)
+            {
+                if (capturedOutput)
+                {
+                    close(outputPipe[0]);
+                    close(outputPipe[1]);
+                }
                 return false;
+            }
 
             if (pid == 0)
             {
+                const int devNull = open("/dev/null", O_RDONLY);
+                if (devNull >= 0)
+                {
+                    dup2(devNull, STDIN_FILENO);
+                    close(devNull);
+                }
+                if (capturedOutput)
+                {
+                    dup2(outputPipe[1], STDOUT_FILENO);
+                    close(outputPipe[0]);
+                    close(outputPipe[1]);
+                }
                 execvp(executable.c_str(), argv.data());
                 _exit(127);
             }
 
+            bool outputComplete = true;
+            if (capturedOutput)
+            {
+                close(outputPipe[1]);
+                capturedOutput->clear();
+                std::array<char, 4096> buffer{};
+                while (true)
+                {
+                    const ssize_t bytesRead = read(outputPipe[0], buffer.data(), buffer.size());
+                    if (bytesRead < 0 && errno == EINTR)
+                        continue;
+                    if (bytesRead <= 0)
+                    {
+                        outputComplete = outputComplete && bytesRead == 0;
+                        break;
+                    }
+                    // Keep draining past the cap so the child cannot block on a full pipe.
+                    if (capturedOutput->size() + static_cast<size_t>(bytesRead) > kMaxCapturedOutputBytes)
+                        outputComplete = false;
+                    else
+                        capturedOutput->append(buffer.data(), static_cast<size_t>(bytesRead));
+                }
+                close(outputPipe[0]);
+            }
+
             int status = 0;
-            if (waitpid(pid, &status, 0) < 0)
+            while (waitpid(pid, &status, 0) < 0)
+            {
+                if (errno != EINTR)
+                    return false;
+            }
+            return outputComplete && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        }
+
+        // unzip -n never overwrites; staging is fresh, so this only matters for
+        // duplicate member names, which must not replace an earlier member.
+        bool ExtractZipIntoStaging(const std::string& zipPath, const std::string& stagingDir)
+        {
+            return RunProcess("unzip", {"-q", "-n", zipPath, "-d", stagingDir});
+        }
+
+        bool ListTarMembers(const std::string& archivePath, std::vector<std::string>& names, std::string& error)
+        {
+            std::string listing;
+            if (!RunProcess("tar", {"-tzf", archivePath}, &listing))
+            {
+                error = "tar could not list the archive";
                 return false;
-            return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+            }
+            names.clear();
+            size_t start = 0;
+            while (start < listing.size())
+            {
+                size_t end = listing.find('\n', start);
+                if (end == std::string::npos)
+                    end = listing.size();
+                names.emplace_back(listing, start, end - start);
+                start = end + 1;
+            }
+            return true;
+        }
+
+        bool ExtractTarIntoStaging(const std::string& archivePath, const std::string& stagingDir)
+        {
+            return RunProcess("tar", {"--no-same-owner", "-xzf", archivePath, "-C", stagingDir});
         }
     } // namespace
 
@@ -347,25 +386,6 @@ namespace SparkBuild
                            DownloadSecurity::RedirectProtocolPolicy(url), "-o", outputPath, url});
     }
 
-    bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destDir)
-    {
-        std::filesystem::create_directories(destDir);
-
-        // Try unzip first, then python's zipfile module as fallback.
-        if (RunProcess("unzip", {"-o", "-q", zipPath, "-d", destDir}))
-            return true;
-
-        // Fallback: use tar if it's a .tar.gz
-        if (zipPath.find(".tar.gz") != std::string::npos || zipPath.find(".tgz") != std::string::npos)
-        {
-            return RunProcess("tar", {"xzf", zipPath, "-C", destDir});
-        }
-
-        // Fallback: python3
-        return RunProcess("python3", {"-c", "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])",
-                                      zipPath, destDir});
-    }
-
     std::string Downloader::GetTempDir()
     {
         const char* tmpdir = std::getenv("TMPDIR");
@@ -377,6 +397,29 @@ namespace SparkBuild
 #endif
 
     // Common implementation
+    namespace
+    {
+        const char* ArchiveFormatName(ArchiveFormat format)
+        {
+            switch (format)
+            {
+            case ArchiveFormat::Zip:
+                return "ZIP";
+            case ArchiveFormat::GzipTar:
+                return "gzip-compressed tar";
+            case ArchiveFormat::Unknown:
+                break;
+            }
+            return "unrecognised";
+        }
+
+        bool RejectArchive(const std::string& archivePath, const std::string& reason)
+        {
+            std::cerr << "SparkBuild: refusing archive '" << archivePath << "': " << reason << '\n';
+            return false;
+        }
+    } // namespace
+
     std::string Downloader::ReserveTempDownloadPath(const std::string& archiveSuffix)
     {
         if (archiveSuffix != ".zip" && archiveSuffix != ".tar.gz")
@@ -431,30 +474,94 @@ namespace SparkBuild
     }
 
     bool Downloader::ExtractVerifiedArchive(const std::string& archivePath, const std::string& destDir,
-                                            const std::string& expectedSha256)
+                                            const std::string& expectedSha256, ArchiveFormat expectedFormat)
     {
-        std::string verificationError;
-        if (!DownloadSecurity::VerifySha256(archivePath, expectedSha256, verificationError))
-            return false;
-        return ExtractZip(archivePath, destDir);
+        std::string error;
+        if (!DownloadSecurity::VerifySha256(archivePath, expectedSha256, error))
+            return RejectArchive(archivePath, error);
+        if (expectedFormat == ArchiveFormat::Unknown)
+            return RejectArchive(archivePath, "no expected archive format was given");
+
+        // The container is chosen by content; a name or URL only states the expectation.
+        const ArchiveFormat detected = DetectArchiveFormat(archivePath);
+        if (detected != expectedFormat)
+        {
+            return RejectArchive(archivePath, std::string("content is ") + ArchiveFormatName(detected) + ", expected " +
+                                                  ArchiveFormatName(expectedFormat));
+        }
+
+        std::vector<std::string> members;
+        if (detected == ArchiveFormat::Zip)
+        {
+            if (!ArchiveExtraction::ListZipMembers(archivePath, members, error) ||
+                !ArchiveExtraction::ValidateMemberNames(members, ArchiveExtraction::MemberSyntax::Zip, error))
+                return RejectArchive(archivePath, error);
+        }
+        else
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            return RejectArchive(archivePath, "gzip-compressed tar extraction is not supported on Windows");
+#else
+            if (!ListTarMembers(archivePath, members, error) ||
+                !ArchiveExtraction::ValidateMemberNames(members, ArchiveExtraction::MemberSyntax::Tar, error))
+                return RejectArchive(archivePath, error);
+#endif
+        }
+
+        // A destination created only for this extraction is removed again if it fails.
+        std::error_code statusError;
+        const bool destinationExisted =
+            std::filesystem::symlink_status(destDir, statusError).type() != std::filesystem::file_type::not_found;
+
+        bool committed = false;
+        std::filesystem::path staging;
+        if (ArchiveExtraction::CreateStagingDirectory(destDir, staging, error))
+        {
+            const ScopedTemporaryPath stagingCleanup(staging);
+#ifdef SPARK_PLATFORM_WINDOWS
+            const bool extracted = ExtractZipIntoStaging(std::filesystem::path(archivePath), staging);
+#else
+            const bool extracted = detected == ArchiveFormat::Zip
+                                       ? ExtractZipIntoStaging(archivePath, staging.string())
+                                       : ExtractTarIntoStaging(archivePath, staging.string());
+#endif
+            // tar's own exit status covers completeness; the ZIP listing is
+            // parsed in-process, so the staged set can be compared against it.
+            if (!extracted)
+                error = "the extractor reported a failure";
+            else if ((detected != ArchiveFormat::Zip ||
+                      ArchiveExtraction::VerifyStagedMembers(staging, members, error)) &&
+                     ArchiveExtraction::ValidateStagedTree(staging, error))
+                committed = ArchiveExtraction::CommitStagedTree(staging, destDir, error);
+        }
+        if (committed)
+            return true;
+
+        if (!destinationExisted)
+        {
+            std::error_code ignored;
+            std::filesystem::remove(destDir, ignored); // only succeeds while it is still empty
+        }
+        return RejectArchive(archivePath, error);
     }
 
     bool Downloader::DownloadAndExtract(const std::string& url, const std::string& destDir,
                                         const std::string& expectedSha256, DownloadProgressCallback progress)
     {
-        const std::string archiveSuffix =
-            (url.find(".tar.gz") != std::string::npos || url.find(".tgz") != std::string::npos) ? ".tar.gz" : ".zip";
-        const std::string tempPath = ReserveTempDownloadPath(archiveSuffix);
+        const ArchiveFormat expectedFormat = ArchiveFormatFromName(url);
+        if (expectedFormat == ArchiveFormat::Unknown)
+            return false;
+        const std::string tempPath = ReserveTempDownloadPath(expectedFormat == ArchiveFormat::Zip ? ".zip" : ".tar.gz");
         if (tempPath.empty())
             return false;
-        const ScopedTemporaryDownload cleanup(tempPath);
+        const ScopedTemporaryPath cleanup(tempPath);
 
         if (!DownloadFile(url, tempPath, progress))
         {
             return false;
         }
 
-        return ExtractVerifiedArchive(tempPath, destDir, expectedSha256);
+        return ExtractVerifiedArchive(tempPath, destDir, expectedSha256, expectedFormat);
     }
 
 } // namespace SparkBuild

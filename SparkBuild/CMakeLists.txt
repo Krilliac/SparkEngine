@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Supports: Windows, Linux, macOS
 #
 # Split layout:
-#   SparkBuildCore  - reusable static library (Config, Downloader, ProcessRunner, Terminal)
+#   SparkBuildCore  - reusable static library (Config, Downloader, ArchiveExtraction, ProcessRunner, Terminal)
 #                     linked by both the SparkBuild executable and SparkInstaller
 #   SparkBuild      - interactive TUI executable (main.cpp + SparkBuild.cpp on top of core)
 
@@ -27,6 +27,8 @@ set(SPARKBUILDCORE_SOURCES
     src/ProcessRunner.cpp
     src/Downloader.h
     src/Downloader.cpp
+    src/ArchiveExtraction.h
+    src/ArchiveExtraction.cpp
     src/DownloadSecurity.h
     src/DownloadSecurity.cpp
     src/Terminal.h
@@ -43,7 +45,7 @@ if(WIN32)
     target_link_libraries(SparkBuildCore PUBLIC
         winhttp       # HTTP downloads (WinHTTP API)
         shlwapi       # Shell lightweight utility functions
-        shell32       # Shell API (folder dialogs, ZIP extraction)
+        shell32       # Shell API
         ole32         # COM runtime
         oleaut32      # OLE Automation
         uuid          # COM GUIDs

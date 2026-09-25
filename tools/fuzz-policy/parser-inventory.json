@@ -2088,10 +2088,12 @@
     },
     {
       "id": "sparkbuild-archive-download",
-      "description": "SparkBuild HTTP(S) download plus zip/tar.gz extraction of the downloaded archive (Shell CopyHere on Windows, unzip/tar elsewhere).",
+      "description": "SparkBuild HTTP(S) download plus zip/tar.gz extraction of the downloaded archive: magic-byte format detection, in-process ZIP central-directory member listing and name validation, staged extraction inside the destination (System32 tar.exe on Windows, unzip/tar elsewhere), ZIP member-set completeness check, symlink containment walk and no-replace commit.",
       "trust_boundary": "untrusted-network",
       "source_files": [
-        "SparkBuild/src/Downloader.cpp"
+        "SparkBuild/src/Downloader.cpp",
+        "SparkBuild/src/ArchiveExtraction.h",
+        "SparkBuild/src/ArchiveExtraction.cpp"
       ],
       "formats": [
         ".zip",
