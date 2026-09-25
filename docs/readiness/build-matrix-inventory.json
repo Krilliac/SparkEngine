@@ -625,7 +625,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3406,
+      "line": 3412,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1438,7 +1438,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3406,
+      "line": 3412,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2786,8 +2786,8 @@
     {
       "target": "SparkFuzzCrashManifest",
       "kind": "executable",
-      "file": "Tests/Fuzz/CMakeLists.txt",
-      "line": 103,
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 106,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2796,7 +2796,7 @@
     {
       "target": "SparkFuzzJsonUtils",
       "kind": "executable",
-      "file": "Tests/Fuzz/CMakeLists.txt",
+      "file": "FuzzerTests/CMakeLists.txt",
       "line": 10,
       "conditionFrames": [],
       "definitionScope": [],
@@ -2806,7 +2806,7 @@
     {
       "target": "SparkFuzzNeuralWeights",
       "kind": "executable",
-      "file": "Tests/Fuzz/CMakeLists.txt",
+      "file": "FuzzerTests/CMakeLists.txt",
       "line": 48,
       "conditionFrames": [],
       "definitionScope": [],
@@ -2816,8 +2816,8 @@
     {
       "target": "SparkFuzzSceneManifest",
       "kind": "executable",
-      "file": "Tests/Fuzz/CMakeLists.txt",
-      "line": 202,
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 205,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2826,8 +2826,8 @@
     {
       "target": "SparkFuzzTextureStex",
       "kind": "executable",
-      "file": "Tests/Fuzz/CMakeLists.txt",
-      "line": 142,
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 145,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4549,8 +4549,8 @@
       ],
       "declarations": [
         {
-          "file": "Tests/Fuzz/CMakeLists.txt",
-          "line": 103,
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 106,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4567,7 +4567,7 @@
       ],
       "declarations": [
         {
-          "file": "Tests/Fuzz/CMakeLists.txt",
+          "file": "FuzzerTests/CMakeLists.txt",
           "line": 10,
           "kind": "executable",
           "origin": "declaration",
@@ -4585,7 +4585,7 @@
       ],
       "declarations": [
         {
-          "file": "Tests/Fuzz/CMakeLists.txt",
+          "file": "FuzzerTests/CMakeLists.txt",
           "line": 48,
           "kind": "executable",
           "origin": "declaration",
@@ -4603,8 +4603,8 @@
       ],
       "declarations": [
         {
-          "file": "Tests/Fuzz/CMakeLists.txt",
-          "line": 202,
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 205,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4621,8 +4621,8 @@
       ],
       "declarations": [
         {
-          "file": "Tests/Fuzz/CMakeLists.txt",
-          "line": 142,
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 145,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

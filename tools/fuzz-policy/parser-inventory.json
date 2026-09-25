@@ -613,13 +613,13 @@
       ],
       "status": "fuzzed",
       "target": {
-        "harness": "Tests/Fuzz/FuzzSceneManifest.cpp",
-        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "harness": "FuzzerTests/FuzzSceneManifest.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
         "cmake_target": "SparkFuzzSceneManifest",
         "test_selector": "FuzzSceneManifestSmoke",
         "corpus_id": "scene-manifest-corpus",
         "entry_symbol": "Spark::Streaming::SceneManifest::ParseFromString",
-        "binding_source": "Tests/Fuzz/FuzzSceneManifestProduction.cpp",
+        "binding_source": "FuzzerTests/FuzzSceneManifestProduction.cpp",
         "harness_entry_symbol": "SparkFuzzParseSceneManifest"
       }
     },
@@ -709,13 +709,13 @@
       ],
       "status": "fuzzed",
       "target": {
-        "harness": "Tests/Fuzz/FuzzJsonUtils.cpp",
-        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "harness": "FuzzerTests/FuzzJsonUtils.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
         "cmake_target": "SparkFuzzJsonUtils",
         "test_selector": "FuzzJsonUtilsSmoke",
         "corpus_id": "json-utils-corpus",
         "entry_symbol": "Spark::Json::ParseBounded",
-        "binding_source": "Tests/Fuzz/FuzzJsonUtilsProduction.cpp",
+        "binding_source": "FuzzerTests/FuzzJsonUtilsProduction.cpp",
         "harness_entry_symbol": "SparkFuzzParseJson"
       }
     },
@@ -748,13 +748,13 @@
       ],
       "status": "fuzzed",
       "target": {
-        "harness": "Tests/Fuzz/FuzzCrashManifest.cpp",
-        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "harness": "FuzzerTests/FuzzCrashManifest.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
         "cmake_target": "SparkFuzzCrashManifest",
         "test_selector": "FuzzCrashManifestSmoke",
         "corpus_id": "crash-manifest-corpus",
         "entry_symbol": "SparkCrashReporter::ParseManifestJson",
-        "binding_source": "Tests/Fuzz/FuzzCrashManifestProduction.cpp",
+        "binding_source": "FuzzerTests/FuzzCrashManifestProduction.cpp",
         "harness_entry_symbol": "SparkFuzzParseCrashManifest"
       }
     },
@@ -1010,13 +1010,13 @@
       ],
       "status": "fuzzed",
       "target": {
-        "harness": "Tests/Fuzz/FuzzTextureStex.cpp",
-        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "harness": "FuzzerTests/FuzzTextureStex.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
         "cmake_target": "SparkFuzzTextureStex",
         "test_selector": "FuzzTextureStexSmoke",
         "corpus_id": "texture-stex-corpus",
         "entry_symbol": "Spark::Graphics::TextureCompressor::LoadCompressed",
-        "binding_source": "Tests/Fuzz/FuzzTextureStexProduction.cpp",
+        "binding_source": "FuzzerTests/FuzzTextureStexProduction.cpp",
         "harness_entry_symbol": "SparkFuzzLoadStex"
       }
     },
@@ -1066,8 +1066,8 @@
       ],
       "status": "fuzzed",
       "target": {
-        "harness": "Tests/Fuzz/FuzzNeuralWeights.cpp",
-        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "harness": "FuzzerTests/FuzzNeuralWeights.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
         "cmake_target": "SparkFuzzNeuralWeights",
         "test_selector": "FuzzNeuralWeightsSmoke",
         "corpus_id": "neural-weights-nnw-corpus",
@@ -2061,7 +2061,8 @@
       "description": "SparkGameRTS persistence snapshot text decoder for save custom state read from disk.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "GameModules/SparkGameRTS/Source/Core/RTSPersistence.h"
+        "GameModules/SparkGameRTS/Source/Core/RTSPersistence.h",
+        "GameModules/SparkGameRTS/Source/Core/RTSPersistenceCodec.cpp"
       ],
       "formats": [
         "save-custom-state"

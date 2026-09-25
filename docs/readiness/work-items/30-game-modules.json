@@ -1178,9 +1178,7 @@
       "plannedCiJobs": [
         "module-RTS"
       ],
-      "plannedTestSelectors": [
-        "RTSSave_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-380",

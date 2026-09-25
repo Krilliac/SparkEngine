@@ -4,9 +4,9 @@
     {
       "id": "json-utils-corpus",
       "parser_id": "json-utils",
-      "corpus_dir": "Tests/fuzz-corpora/json-utils",
+      "corpus_dir": "FuzzerTests/corpora/json-utils",
       "last_verified": "2026-09-14",
-      "content_digest": "413ded4742cd7b405637dd80d83de7e8e9196c1ec23238b7f79467fdf4510052",
+      "content_digest": "c9a8317ce64055793baa0da29bd6f346bedc163642f087238cbc9624ee4d1b55",
       "budget": {
         "max_input_bytes": 4096,
         "max_parse_time_ms": 1000,
@@ -20,9 +20,9 @@
     {
       "id": "neural-weights-nnw-corpus",
       "parser_id": "neural-weights-nnw",
-      "corpus_dir": "Tests/fuzz-corpora/neural-weights-nnw",
+      "corpus_dir": "FuzzerTests/corpora/neural-weights-nnw",
       "last_verified": "2026-09-20",
-      "content_digest": "215a361e8449b22d6054ec9748d49558b7ccf0ec1a47c6b6883eaf0fb0d6570e",
+      "content_digest": "28efc755da640ddc629106eefcecd05a4b438428f0e425a9befb97058a1457e5",
       "budget": {
         "max_input_bytes": 4096,
         "max_parse_time_ms": 1000,
@@ -36,9 +36,9 @@
     {
       "id": "crash-manifest-corpus",
       "parser_id": "crash-manifest-parser",
-      "corpus_dir": "Tests/fuzz-corpora/crash-manifest",
+      "corpus_dir": "FuzzerTests/corpora/crash-manifest",
       "last_verified": "2026-09-21",
-      "content_digest": "8c678f11cdbfa934dcaec5e5bafd9e1006e10a9965d7482e4e22c72d66a2d074",
+      "content_digest": "acdd36dc74a39858672ab3884251658b202190e116b2bda45f00ba00c2a4c216",
       "budget": {
         "max_input_bytes": 65536,
         "max_parse_time_ms": 1000,
@@ -52,9 +52,9 @@
     {
       "id": "texture-stex-corpus",
       "parser_id": "texture-stex-compressor",
-      "corpus_dir": "Tests/fuzz-corpora/texture-stex",
+      "corpus_dir": "FuzzerTests/corpora/texture-stex",
       "last_verified": "2026-09-23",
-      "content_digest": "0077cb0381400f1a1f0ce3e74b8008630a029449ecbb7ff42f31af89926b3b9c",
+      "content_digest": "fd47c5daa0af506e84cb1e945c2e05aee2da6e53f7e7cf88934c422a1ff3cd07",
       "budget": {
         "max_input_bytes": 65536,
         "max_parse_time_ms": 1000,
@@ -68,9 +68,9 @@
     {
       "id": "scene-manifest-corpus",
       "parser_id": "scene-manifest",
-      "corpus_dir": "Tests/fuzz-corpora/scene-manifest",
+      "corpus_dir": "FuzzerTests/corpora/scene-manifest",
       "last_verified": "2026-09-25",
-      "content_digest": "6651f72dcccfbdea71552fa341f50efb7ac45c38cfa96a841e0fa9d10223e6c3",
+      "content_digest": "7f1209bf4d198c11a80a93b22119deadb7fba01fafcfdbd78e1f2bdfbd5e0611",
       "budget": {
         "max_input_bytes": 65536,
         "max_parse_time_ms": 1000,

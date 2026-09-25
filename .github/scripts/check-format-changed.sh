@@ -23,7 +23,7 @@
 # each of these paths against throwaway repositories.
 set -euo pipefail
 
-FORMAT_ROOTS=(SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests)
+FORMAT_ROOTS=(SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests)
 for root in "${FORMAT_ROOTS[@]}"; do
     if [[ ! -d "$root" ]]; then
         echo "::error::Formatting source root is missing: $root"

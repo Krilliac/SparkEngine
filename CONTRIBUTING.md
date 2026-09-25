@@ -45,7 +45,7 @@ See `.clang-format` for the full style configuration.
    git diff --name-only --diff-filter=ACMR origin/Working -- \
        SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
        SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-       SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+       SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
      | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
      | xargs -r clang-format --dry-run --Werror
 

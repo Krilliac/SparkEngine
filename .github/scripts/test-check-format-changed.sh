@@ -22,7 +22,7 @@ fi
 # The checker must never see the live workflow's base SHA.
 unset FORMAT_BASE_SHA
 
-FORMAT_ROOTS=(SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests)
+FORMAT_ROOTS=(SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests)
 
 passed=0
 failed=0

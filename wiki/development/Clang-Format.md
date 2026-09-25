@@ -19,7 +19,7 @@ The `check-format` job runs `.github/scripts/check-format-changed.sh` (the workf
 ```bash
 SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
 SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests
+SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests
 ```
 
 The script:
@@ -55,7 +55,7 @@ Mirror CI: format-check every C++ file changed from `Working`, committed or not,
 git diff --name-only --diff-filter=ACMR origin/Working -- \
     SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
   | xargs -r clang-format --dry-run --Werror
 ```
@@ -65,7 +65,7 @@ For a whole-tree sweep (which can also surface legacy debt in files you did not 
 ```bash
 find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
      SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
   | xargs clang-format --dry-run --Werror
 ```
@@ -78,7 +78,7 @@ The standalone process roots (`SparkDaemon/src`, `SparkServer/src`, `SparkGatewa
 git diff --name-only --diff-filter=ACMR origin/Working -- \
     SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
   | xargs -r clang-format -i
 ```

@@ -14,8 +14,12 @@
 # abnormal exit or UBSan report, that a committed corpus changed, or (exit 2)
 # that the campaign or a target could not be set up. Download the
 # fuzz-campaign-<run id> artifact, reproduce with the minimized file, fix the
-# parser, and commit the minimized input to Tests/fuzz-corpora/<parser>/ as a
+# parser, and commit the minimized input to FuzzerTests/corpora/<parser>/ as a
 # regression-* seed (updating tools/fuzz-policy/corpus-manifest.json).
+#
+# FuzzerTests/generated/<parser>/ (coverage-minimized units from earlier
+# campaigns) is passed to each target as a read-only second corpus. It is not a
+# seed set: refresh it with libFuzzer -merge=1 (see FuzzerTests/README.md).
 name: Fuzz campaign
 
 on:
@@ -88,8 +92,8 @@ jobs:
     - name: Verify committed corpora are unchanged
       if: always()
       run: |
-        git diff --exit-code -- Tests/fuzz-corpora
-        untracked="$(git status --porcelain --untracked-files=all -- Tests/fuzz-corpora)"
+        git diff --exit-code -- FuzzerTests/corpora FuzzerTests/generated
+        untracked="$(git status --porcelain --untracked-files=all -- FuzzerTests/corpora FuzzerTests/generated)"
         if [ -n "$untracked" ]; then
           echo "::error::the campaign wrote into committed corpora"
           echo "$untracked"

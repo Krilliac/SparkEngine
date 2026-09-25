@@ -16,7 +16,7 @@ crash-free-duration evidence remain absent.
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
 For the recorded source-tree state it reports **135 explicitly inventoried parsers, 5
 fuzzed and 130 blocked**, **5 bound corpora with 37 seeds (30857 bytes)**, **0 deferred
-candidates and 118 OD-21 exemptions**, and **2006 source files scanned across 17
+candidates and 118 OD-21 exemptions**, and **2013 source files scanned across 17
 first-party roots**. Those counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.
@@ -27,7 +27,7 @@ corpus. The texture-stex and scene-manifest CTests replay their eight reviewed s
 same way, and the json-utils CTest replays its seven (`-runs=7`). The json-utils smoke
 previously mutated for `-max_total_time=4` with no `-runs`, so its execution count
 varied run to run (about 300,000) and it wrote several hundred mutated units into the
-tracked `Tests/fuzz-corpora/json-utils/` directory. Every smoke now runs only the empty
+tracked `FuzzerTests/corpora/json-utils/` directory. Every smoke now runs only the empty
 input plus its reviewed seeds. libFuzzer's leak check can still run one seed a second
 time when malloc/free counts differ, so the `Done N runs` line may read one higher. The
 scene-manifest adapter aborts when an accepted asset path climbs out of the
@@ -157,7 +157,7 @@ python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-cl
 python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --emit-json \
   > docs/sec120-fuzz-policy-check.json
 
-python3 -m unittest discover -s Tests/fuzz-policy -p "test_*.py" -v
+python3 -m unittest discover -s FuzzerTests/policy -p "test_*.py" -v
 bash tools/check-fuzz-policy.sh          # also runs via tools/validate-all.sh
 
 # Ubuntu/Debian's compiler-rt libFuzzer archive uses libstdc++. The fuzzer
@@ -181,6 +181,34 @@ failures return nonzero, including JSON emission mode. The CI mode also checks t
 workflow/CMake wiring and requires the committed evidence snapshot to equal the
 freshly computed report.
 
+## FuzzerTests Layout
+
+Fuzzing lives in the top-level `FuzzerTests/` directory, separate from the unit suite in
+`Tests/`. The fuzz targets are added from the root `CMakeLists.txt` when
+`SPARK_ENABLE_FUZZ_TARGETS` is on, not through `Tests/CMakeLists.txt`.
+
+| Path | Contents | Rules |
+|------|----------|-------|
+| `FuzzerTests/*.cpp`, `CMakeLists.txt` | libFuzzer harnesses, production adapters, smoke registration | clang-format root; bound by `parser-inventory.json` |
+| `FuzzerTests/corpora/<parser>/` | Reviewed seeds and `regression-*` reproducers | `corpus-manifest.json` budget and `content_digest`; the blocking smoke replays exactly these |
+| `FuzzerTests/generated/<parser>/` | Coverage-minimized units kept from earlier fuzzing | Read-only second corpus for the scheduled campaign; byte-exact (`-text`); never replayed by the merge gate |
+| `FuzzerTests/policy/` | Adversarial policy and campaign tests (`FuzzPolicyAdversarial`) | Run by the blocking `fuzz-policy` job |
+
+A `generated/` directory is not a seed set, so it is outside the per-corpus seed budget.
+Refresh it only with a coverage merge, never by copying raw campaign output:
+
+```bash
+mkdir /tmp/merged
+build/fuzz-policy/fuzz-targets/SparkFuzzJsonUtils -merge=1 -max_len=4096 -timeout=1 -rss_limit_mb=256 \
+  /tmp/merged FuzzerTests/generated/json-utils <campaign corpus directories>
+# replace FuzzerTests/generated/json-utils with /tmp/merged, minus files identical to a seed
+```
+
+`FuzzerTests/generated/json-utils` was seeded on 2026-09-25 from 1,776 units that an
+earlier time-bounded JSON smoke had written into the seed directory. A `-merge=1` pass
+kept 773 units that add coverage (972 edges); dropping the 3 that duplicate committed
+seeds left 770 files, 57 KB.
+
 ## Scheduled Campaign
 
 `.github/workflows/fuzz-scheduled.yml` (job `fuzz-scheduled`, nightly and
@@ -191,8 +219,10 @@ every CTest test labelled exactly `fuzz` in the configured build, so a new targe
 the campaign when its smoke is registered. For each target it:
 
 - copies the committed corpus into a temporary directory and gives libFuzzer only that
-  copy, then re-hashes the committed corpus and reports `corpus-mutated` if it changed
-  (the workflow also fails on any `git status` change under `Tests/fuzz-corpora`);
+  copy as its writable corpus, adds `FuzzerTests/generated/<parser>` (when present) as a
+  read-only second corpus, then re-hashes both committed directories and reports
+  `corpus-mutated` if either changed (the workflow also fails on any `git status` change
+  under `FuzzerTests/corpora` or `FuzzerTests/generated`);
 - keeps the smoke's `-max_len`/`-timeout`/`-rss_limit_mb`, drops its replay-only
   `-runs`/`-max_total_time`, and mutates for `--seconds` (600 per target by default);
 - caps ASan's quarantine at 32 MB unless `ASAN_OPTIONS` already sets one, so the 256 MB
@@ -222,7 +252,7 @@ that file as a `regression-*` seed with an updated `corpus-manifest.json` digest
 ```bash
 python3 tools/fuzz-policy/run_campaign.py --build-dir build/fuzz-policy \
   --output /tmp/fuzz-campaign --seconds 30
-git status --porcelain -- Tests/fuzz-corpora   # must print nothing
+git status --porcelain -- FuzzerTests/corpora   # must print nothing
 ```
 
 A workflow file proves nothing until a hosted run is recorded; no scheduled-campaign
@@ -241,7 +271,7 @@ history exists yet, so `runtime_evidence.scheduled_campaign` stays `false`.
    its `classification`, a concrete `justification`, and the sorted `detected_by`
    list the scanner reports for it.
 4. For a fuzzed parser, add exactly one entry to `corpus-manifest.json`. The seed tree
-   lives under `Tests/fuzz-corpora/`, must be non-empty, fresh, confined, link-free,
+   lives under `FuzzerTests/corpora/`, must be non-empty, fresh, confined, link-free,
    within every declared limit, and pinned by `content_digest`.
 5. Bind the exact input, timeout, memory, depth, and smoke limits in the harness and the
    CMake registration, then run the commands above under ASan/UBSan.
@@ -260,7 +290,7 @@ change *is* the review record.
   with the highest-risk binary readers (`terrain-sparkterrain`,
   `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
   `fps-terrain-heightmap-bmp`, `asset-media-windows`);
-- commit bounded seed corpora under `Tests/fuzz-corpora/` and minimized regressions;
+- commit bounded seed corpora under `FuzzerTests/corpora/` and minimized regressions;
 - retain the blocking ASan/UBSan smoke now wired for both targets and record hosted
   `fuzz-scheduled` campaign history with its crash-free-duration statistics, then add
   coverage reporting (the `-L fuzz` CI run is required whenever a parser is marked

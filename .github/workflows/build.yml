@@ -58,7 +58,7 @@ jobs:
   # SparkEditor/Source and Spark{ShaderCompiler,Installer,CrashReporter,
   # AssetPipelineCore,Cooker,Worker,Build,Launcher,Console,Daemon,Server,
   # Gateway,Automation}/src, SparkSDK/Include, GameModules — plus
-  # tools/fuzz-policy/**, Tests/fuzz-policy/**, Tests/fuzz-corpora/**,
+  # tools/fuzz-policy/**, FuzzerTests/** (harnesses, policy tests, seed and generated corpora),
   # cmake/SparkFuzzPolicy.cmake and CMakeLists.txt. Do NOT add paths: or
   # paths-ignore: to this workflow without covering all of them: a skipped gate
   # reports the same green as a passing one.

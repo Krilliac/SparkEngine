@@ -50,7 +50,7 @@ CATEGORIES = {
         "SparkWorker",
         "SparkAutomation",
     ),
-    "tests": ("Tests",),
+    "tests": ("Tests", "FuzzerTests"),
     "tools": (
         "SparkConsole",
         "SparkShaderCompiler",

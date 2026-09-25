@@ -14,7 +14,12 @@ target joins the campaign as soon as its smoke test is registered.
 For each target the runner:
 
 * copies the committed seed corpus into a disposable working directory and
-  hands libFuzzer only that copy, so new units never land in the repository;
+  hands libFuzzer that copy as its only writable corpus, so new units never
+  land in the repository;
+* adds the target's committed generated corpus (``FuzzerTests/generated/<name>``
+  beside ``FuzzerTests/corpora/<name>``), coverage-minimized units kept from
+  earlier campaigns, as a read-only second corpus so a campaign resumes from
+  that coverage instead of the seeds alone;
 * keeps the smoke's ``-max_len``/``-timeout``/``-rss_limit_mb`` limits, drops
   its replay-only ``-runs``/``-max_total_time`` and mutates for ``--seconds``;
 * records duration, executed units, crash-free wall time and peak RSS;
@@ -23,8 +28,8 @@ For each target the runner:
   treats any ``runtime error:`` report left in the log as a finding;
 * runs ``-minimize_crash=1`` on every crash/leak/timeout/OOM artifact and
   retains both the raw and minimized reproducer for upload;
-* re-hashes the committed corpus afterwards and treats any change as a
-  finding.
+* re-hashes the committed seed and generated corpora afterwards and treats any
+  change as a finding.
 
 ``campaign-summary.json`` is rewritten after every target (``complete`` is
 false until the last one finishes), so a job cancelled mid-campaign still
@@ -114,6 +119,7 @@ class TargetResult:
     binary: str
     corpus: str
     seed_count: int = 0
+    generated_count: int = 0
     status: str = "not-run"
     exit_code: int | None = None
     duration_seconds: float = 0.0
@@ -132,6 +138,7 @@ class TargetResult:
             "binary": self.binary,
             "corpus": self.corpus,
             "seed_count": self.seed_count,
+            "generated_count": self.generated_count,
             "status": self.status,
             "exit_code": self.exit_code,
             "duration_seconds": round(self.duration_seconds, 3),
@@ -219,6 +226,15 @@ def discover_targets(build_dir: Path, config: str | None) -> list[FuzzTarget]:
     except json.JSONDecodeError as error:
         raise CampaignError(f"ctest JSON output is not valid JSON: {error}") from error
     return parse_ctest_tests(document)
+
+
+def generated_corpus(corpus: Path) -> Path | None:
+    """The committed generated corpus paired with a seed corpus, if there is one.
+
+    ``FuzzerTests/corpora/<name>`` pairs with ``FuzzerTests/generated/<name>``.
+    """
+    candidate = corpus.parent.parent / "generated" / corpus.name
+    return candidate if candidate.is_dir() and not candidate.is_symlink() else None
 
 
 def corpus_snapshot(corpus: Path) -> dict[str, str]:
@@ -356,6 +372,9 @@ def run_target(target: FuzzTarget, seconds: int, minimize_seconds: int, output: 
         return result
     before = corpus_snapshot(target.corpus)
     result.seed_count = len(before)
+    generated = generated_corpus(target.corpus)
+    generated_before = corpus_snapshot(generated) if generated else {}
+    result.generated_count = len(generated_before)
     if not before:
         result.status = "setup-error"
         result.detail = "committed corpus has no seeds"
@@ -370,7 +389,8 @@ def run_target(target: FuzzTarget, seconds: int, minimize_seconds: int, output: 
             f"-max_total_time={seconds}",
             "-print_final_stats=1",
             f"-artifact_prefix={artifacts_dir}/",
-            str(work_corpus),
+            str(work_corpus),  # libFuzzer writes new units only into its first corpus
+            *([str(generated)] if generated else []),
         ]
         started = time.monotonic()
         with log_path.open("wb") as log:
@@ -405,7 +425,8 @@ def run_target(target: FuzzTarget, seconds: int, minimize_seconds: int, output: 
         result.artifacts.append(minimize_artifact(target, artifact, destination, minimize_seconds, log, output))
 
     after = corpus_snapshot(target.corpus)
-    result.corpus_unchanged = after == before
+    generated_after = corpus_snapshot(generated) if generated else {}
+    result.corpus_unchanged = after == before and generated_after == generated_before
 
     if result.exit_code is None:
         result.status = "hang"
@@ -519,8 +540,9 @@ def main(argv: list[str] | None = None) -> int:
                 f"--max-campaign-seconds {args.max_campaign_seconds}"
             )
         for target in targets:
-            if _is_inside(args.output, target.corpus):
-                raise CampaignError(f"output directory lies inside committed corpus {target.corpus}")
+            for committed in (target.corpus, generated_corpus(target.corpus)):
+                if committed is not None and _is_inside(args.output, committed):
+                    raise CampaignError(f"output directory lies inside committed corpus {committed}")
         args.output.mkdir(parents=True)
     except CampaignError as error:
         print(f"run_campaign: {error}", file=sys.stderr)

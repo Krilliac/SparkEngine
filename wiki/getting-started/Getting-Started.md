@@ -507,7 +507,7 @@ sudo dnf install libX11-devel mesa-libGL-devel
 ```bash
 find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
      SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
   | xargs clang-format -i
 ```

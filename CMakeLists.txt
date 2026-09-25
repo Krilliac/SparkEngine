@@ -2576,6 +2576,12 @@ if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
     add_subdirectory(Tests)
 endif()
 
+# libFuzzer targets and their smoke replays live in FuzzerTests/, separate from the unit suite.
+if(SPARK_ENABLE_FUZZ_TARGETS)
+    enable_testing()
+    add_subdirectory(FuzzerTests)
+endif()
+
 # ---------------------------------------------------------------------
 # 17) CMake install rules and find_package support
 # ---------------------------------------------------------------------

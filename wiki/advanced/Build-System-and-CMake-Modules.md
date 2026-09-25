@@ -551,14 +551,14 @@ SparkEngine enforces consistent code style via `.clang-format` (Microsoft-based,
 # Check formatting (dry run)
 find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
      SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
   | xargs clang-format --dry-run --Werror 2>&1
 
 # Fix formatting automatically
 find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
      SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
   | xargs clang-format -i
 ```
