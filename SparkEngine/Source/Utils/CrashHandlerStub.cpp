@@ -32,3 +32,8 @@ void SetAssertCrashBehavior(bool /*shouldCrash*/)
 {
     // No-op without crash handler
 }
+
+void RefreshCrashModuleIdentities()
+{
+    // No crash handler, so no module identity to capture
+}

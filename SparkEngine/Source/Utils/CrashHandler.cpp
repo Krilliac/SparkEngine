@@ -2,6 +2,7 @@
 #include "../Core/Platform.h"
 #include "../Core/RuntimePackage.h"
 #include "Utils/CrashHandlerSupport.h"
+#include "Utils/CrashSymbolication.h"
 #include "Utils/Assert.h"
 #include "Utils/Process.h"
 #include "Utils/SparkError.h"
@@ -9,6 +10,8 @@
 #include "Utils/StackTrace.h"
 #include "Validate.h"
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -56,8 +59,11 @@
 #include <climits>
 #include <cstdlib>
 #ifdef SPARK_PLATFORM_LINUX
+#include <elf.h>
+#include <link.h>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
+#include <ucontext.h>
 #endif
 #ifdef SPARK_PLATFORM_MACOS
 #include <sys/sysctl.h>
@@ -1001,6 +1007,11 @@ void SetAssertCrashBehavior(bool shouldCrash)
     }
 }
 
+void RefreshCrashModuleIdentities()
+{
+    // Minidumps record the loaded-module list (with PDB identity) themselves.
+}
+
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
 {
     HandleCrashInternal(ep, nullptr, CrashReportDelivery::Interactive);
@@ -1742,6 +1753,181 @@ static void WriteStderr(const char* s)
     }
 }
 
+#ifdef SPARK_PLATFORM_LINUX
+// ----------------------------------------------------------------------------
+// Build-id module identity for offline symbolication (tools/ops/symbolicate_crash.py)
+// ----------------------------------------------------------------------------
+
+namespace
+{
+    using Spark::CrashHandlerDetail::CrashModuleIdentity;
+
+    /// Module identity captured outside the signal handler. Two tables, so a
+    /// refresh never rewrites the one a crashing thread may be reading.
+    struct CrashModuleTable
+    {
+        size_t count = 0;
+        std::array<CrashModuleIdentity, Spark::CrashHandlerDetail::kMaxCrashModules> modules{};
+    };
+
+    CrashModuleTable g_crashModuleTables[2];
+    std::atomic<int> g_activeCrashModuleTable{-1};
+    std::mutex g_crashModuleRefreshLock;
+
+    /// Signal-path output buffer; sized for kMaxSymbolicCrashFrames frames and
+    /// one module record per frame, so the section is never truncated.
+    char g_symbolicSectionBuffer[32 * 1024];
+
+    struct CrashModuleScan
+    {
+        CrashModuleTable* table = nullptr;
+        const char* mainProgramName = nullptr;
+    };
+
+    /// Copy a module basename, keeping the record a single whitespace-free token.
+    void CopyCrashModuleName(const char* path, CrashModuleIdentity& module)
+    {
+        const char* base = (path && *path) ? std::strrchr(path, '/') : nullptr;
+        base = base ? base + 1 : ((path && *path) ? path : "unknown");
+        size_t length = 0;
+        for (; base[length] != '\0' && length + 1 < module.name.size(); ++length)
+        {
+            const char character = base[length];
+            const bool safe = (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+                              (character >= '0' && character <= '9') || character == '.' || character == '_' ||
+                              character == '-' || character == '+';
+            module.name[length] = safe ? character : '_';
+        }
+        module.name[length] = '\0';
+    }
+
+    int CollectCrashModuleIdentity(dl_phdr_info* info, size_t /*size*/, void* userData)
+    {
+        auto& scan = *static_cast<CrashModuleScan*>(userData);
+        CrashModuleTable& table = *scan.table;
+        if (table.count >= table.modules.size())
+            return 1;
+
+        CrashModuleIdentity& module = table.modules[table.count];
+        module = CrashModuleIdentity{};
+        module.loadBias = static_cast<std::uintptr_t>(info->dlpi_addr);
+        std::uintptr_t lowest = std::numeric_limits<std::uintptr_t>::max();
+        std::uintptr_t highest = 0;
+        for (ElfW(Half) index = 0; index < info->dlpi_phnum; ++index)
+        {
+            const ElfW(Phdr)& header = info->dlpi_phdr[index];
+            const std::uintptr_t runtimeAddress = module.loadBias + static_cast<std::uintptr_t>(header.p_vaddr);
+            if (header.p_type == PT_LOAD && header.p_memsz > 0)
+            {
+                lowest = std::min(lowest, runtimeAddress);
+                highest = std::max(highest, runtimeAddress + static_cast<std::uintptr_t>(header.p_memsz));
+            }
+            else if (header.p_type == PT_NOTE && module.buildIdSize == 0)
+            {
+                module.buildIdSize =
+                    Spark::CrashHandlerDetail::FindGnuBuildIdNote(reinterpret_cast<const std::uint8_t*>(runtimeAddress),
+                                                                  static_cast<size_t>(header.p_memsz), module.buildId);
+            }
+        }
+        if (lowest >= highest)
+            return 0;
+
+        module.beginAddress = lowest;
+        module.endAddress = highest;
+        // The main program reports an empty dlpi_name.
+        const bool isMainProgram = !info->dlpi_name || info->dlpi_name[0] == '\0';
+        CopyCrashModuleName(isMainProgram ? scan.mainProgramName : info->dlpi_name, module);
+        ++table.count;
+        return 0;
+    }
+
+    /// Exact faulting instruction address from the signal context, or 0.
+    std::uintptr_t ContextProgramCounter(const void* context)
+    {
+        if (!context)
+            return 0;
+        const auto* userContext = static_cast<const ucontext_t*>(context);
+#if defined(__x86_64__)
+        return static_cast<std::uintptr_t>(userContext->uc_mcontext.gregs[REG_RIP]);
+#elif defined(__aarch64__)
+        return static_cast<std::uintptr_t>(userContext->uc_mcontext.pc);
+#else
+        (void)userContext;
+        return 0;
+#endif
+    }
+
+    /// Capture frames for the symbolic section. With a signal context the exact
+    /// faulting PC is frame 0 and the handler/trampoline frames above it are
+    /// dropped; everything else is a return address.
+    size_t CaptureSymbolicFrames(const void* context, std::uintptr_t* frames, bool& firstFrameIsExactPc)
+    {
+        constexpr size_t kMaxFrames = Spark::CrashHandlerDetail::kMaxSymbolicCrashFrames;
+        void* raw[kMaxFrames];
+        const int rawCount = backtrace(raw, static_cast<int>(kMaxFrames));
+        const size_t available = rawCount > 0 ? static_cast<size_t>(rawCount) : 0;
+
+        size_t count = 0;
+        size_t firstReturnFrame = 0;
+        const std::uintptr_t pc = ContextProgramCounter(context);
+        firstFrameIsExactPc = pc != 0;
+        if (firstFrameIsExactPc)
+        {
+            frames[count++] = pc;
+            for (size_t index = 0; index < available; ++index)
+            {
+                if (reinterpret_cast<std::uintptr_t>(raw[index]) == pc)
+                {
+                    firstReturnFrame = index + 1;
+                    break;
+                }
+            }
+        }
+        for (size_t index = firstReturnFrame; index < available && count < kMaxFrames; ++index)
+            frames[count++] = reinterpret_cast<std::uintptr_t>(raw[index]);
+        return count;
+    }
+
+    /// Format the symbolic section into @p buffer using only precomputed module identity.
+    size_t FormatSymbolicSection(const void* context, char* buffer, size_t capacity)
+    {
+        std::uintptr_t frames[Spark::CrashHandlerDetail::kMaxSymbolicCrashFrames];
+        bool firstFrameIsExactPc = false;
+        const size_t frameCount = CaptureSymbolicFrames(context, frames, firstFrameIsExactPc);
+        const int active = g_activeCrashModuleTable.load(std::memory_order_acquire);
+        const CrashModuleTable* table = active >= 0 ? &g_crashModuleTables[active] : nullptr;
+        return Spark::CrashHandlerDetail::FormatSymbolicCrashFrames(table ? table->modules.data() : nullptr,
+                                                                    table ? table->count : 0, frames, frameCount,
+                                                                    firstFrameIsExactPc, buffer, capacity);
+    }
+} // namespace
+
+void RefreshCrashModuleIdentities()
+{
+    std::lock_guard<std::mutex> lock(g_crashModuleRefreshLock);
+    if (g_inSignalHandler)
+        return;
+
+    char executablePath[PATH_MAX] = {};
+    const ssize_t pathLength = readlink("/proc/self/exe", executablePath, sizeof(executablePath) - 1);
+    executablePath[pathLength > 0 ? pathLength : 0] = '\0';
+
+    const int active = g_activeCrashModuleTable.load(std::memory_order_acquire);
+    const int next = active == 0 ? 1 : 0;
+    CrashModuleScan scan;
+    scan.table = &g_crashModuleTables[next];
+    scan.table->count = 0;
+    scan.mainProgramName = executablePath;
+    dl_iterate_phdr(CollectCrashModuleIdentity, &scan);
+    g_activeCrashModuleTable.store(next, std::memory_order_release);
+}
+#else
+void RefreshCrashModuleIdentities()
+{
+    // Build-id capture is ELF-specific; macOS reports keep the backtrace text only.
+}
+#endif
+
 static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
 {
     // Prevent re-entrant crashes (e.g. crash inside the handler itself).
@@ -1828,6 +2014,10 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         log << "\n";
 
         log << CaptureStackTraceString();
+#ifdef SPARK_PLATFORM_LINUX
+        log.write(g_symbolicSectionBuffer, static_cast<std::streamsize>(FormatSymbolicSection(
+                                               context, g_symbolicSectionBuffer, sizeof(g_symbolicSectionBuffer))));
+#endif
         if (g_cfg.captureSystemInfo)
             log << LinuxSystemInfo();
         if (g_cfg.captureAllThreads)
@@ -1892,6 +2082,12 @@ void InstallCrashHandler(const CrashConfig& cfg)
             Spark::LogCategory::Core,
             "CrashHandler: failed to create private crash-artifact directory; filesystem artifacts disabled");
     }
+
+    // Capture module identity now so the signal handler only reads it, and
+    // prime backtrace(): its first call loads the unwinder, which allocates.
+    RefreshCrashModuleIdentities();
+    void* primeFrame[1];
+    (void)backtrace(primeFrame, 1);
 
     // Install signal handlers for common crash signals
     struct sigaction sa;
@@ -1976,6 +2172,13 @@ void TriggerCrashReport(const char* reason)
     }
 
     log << CaptureStackTraceString();
+#ifdef SPARK_PLATFORM_LINUX
+    {
+        std::vector<char> section(sizeof(g_symbolicSectionBuffer));
+        log.write(section.data(),
+                  static_cast<std::streamsize>(FormatSymbolicSection(nullptr, section.data(), section.size())));
+    }
+#endif
     if (g_cfg.captureSystemInfo)
         log << LinuxSystemInfo();
 
@@ -2062,4 +2265,6 @@ void SetAssertCrashBehavior(bool shouldCrash)
 {
     g_triggerCrashOnAssert = shouldCrash;
 }
+
+void RefreshCrashModuleIdentities() {}
 #endif

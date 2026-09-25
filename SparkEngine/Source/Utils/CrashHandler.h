@@ -121,3 +121,19 @@ void TriggerCrashReportUnattended(const char* reason);
  * @param shouldCrash true to generate crash reports on assert, false to only log
  */
 void SetAssertCrashBehavior(bool shouldCrash);
+
+/**
+ * @brief Recapture loaded-module identity for build-id symbolication
+ *
+ * On Linux the crash handler records each loaded ELF module's GNU build-id,
+ * load bias and address range at InstallCrashHandler() time, so the signal
+ * handler can write module-relative frames without parsing anything. Call this
+ * after dlopen() of a module that can crash (game modules, plugins) so frames
+ * in it resolve through tools/ops/symbolicate_crash.py, and after dlclose() so
+ * a reused address range is not attributed to the unloaded module. Libraries
+ * dlopened by other code (GPU drivers, SDL/audio plugins) are only covered if
+ * a refresh runs after they load. Must not be called from
+ * a signal handler. No-op on Windows (minidumps carry the module list) and on
+ * platforms without a crash handler.
+ */
+void RefreshCrashModuleIdentities();

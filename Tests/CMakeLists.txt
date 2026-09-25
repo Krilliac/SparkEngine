@@ -1028,6 +1028,7 @@ target_sources(SparkTests PRIVATE
     TestBuildInfraReal.cpp
     TestConsoleProcessPipeReal.cpp
     TestCrashHandlerGatingReal.cpp
+    TestCrashSymbolication.cpp
     TestEditorCrashHandlerFilterReal.cpp
     TestEditorRecovery.cpp
     TestEngineWiringReal.cpp
@@ -1502,6 +1503,14 @@ set_tests_properties(CrashSettingsCredentials PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=CrashSettings_;SPARK_TEST_EXPECT_COUNT=1"
     LABELS "crash-security;security;unit"
     RUN_SERIAL TRUE
+    TIMEOUT 30)
+
+# OPS-100: signal-path build-id records (bounded ELF note parsing, fixed-buffer
+# SYMBOLIC FRAMES section) that tools/ops/symbolicate_crash.py consumes.
+add_test(NAME CrashSymbolicationRecords COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(CrashSymbolicationRecords PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=CrashSymbolication_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "crash-canary;unit"
     TIMEOUT 30)
 
 # DATA-120 (OD-22): no plaintext password, session token, or database credential
@@ -2383,6 +2392,37 @@ if(NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND AND TARGET SparkCrashReporter)
         LABELS "crash-security;security;integration"
         RUN_SERIAL TRUE
         TIMEOUT 180)
+endif()
+
+# OPS-100: build-id symbolication canary (Linux, local symbol store, no relay).
+# The probe crashes through the production signal handler; it is compiled with
+# -g (RelWithDebInfo-style) and an explicit GNU build-id so its split debug
+# info can be filed in a .build-id store and the fault resolved to file:line.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND
+   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE)
+    add_executable(SparkCrashSymbolicationProbe Fixtures/CrashSymbolicationProbe.cpp)
+    target_compile_features(SparkCrashSymbolicationProbe PRIVATE cxx_std_23)
+    # -fno-lto: an LTO-compiled unit reports its DWARF file as <artificial>.
+    target_compile_options(SparkCrashSymbolicationProbe PRIVATE -g -O2 -fno-lto)
+    target_link_options(SparkCrashSymbolicationProbe PRIVATE -Wl,--build-id=sha1)
+    # Shipping presets strip every link (-s); the probe must keep its DWARF so
+    # the canary can split it into the symbol store.
+    get_target_property(_spark_probe_link_options SparkCrashSymbolicationProbe LINK_OPTIONS)
+    list(FILTER _spark_probe_link_options EXCLUDE REGEX ":-s>$")
+    set_property(TARGET SparkCrashSymbolicationProbe PROPERTY LINK_OPTIONS ${_spark_probe_link_options})
+    target_link_libraries(SparkCrashSymbolicationProbe PRIVATE SparkEngineLib)
+    add_dependencies(SparkTests SparkCrashSymbolicationProbe)
+    add_test(
+        NAME CrashReporter_Symbolication
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/run_crash_symbolication_canary.py
+            --probe $<TARGET_FILE:SparkCrashSymbolicationProbe>
+            --probe-source ${CMAKE_CURRENT_SOURCE_DIR}/Fixtures/CrashSymbolicationProbe.cpp
+            --objcopy ${CMAKE_OBJCOPY}
+            --addr2line ${CMAKE_ADDR2LINE})
+    set_tests_properties(CrashReporter_Symbolication PROPERTIES
+        LABELS "crash-canary;integration"
+        TIMEOUT 300)
 endif()
 
 # CI-110: exercise the shipped SparkCooker binary against real nested assets.

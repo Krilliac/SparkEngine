@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2086,
+      "line": 2095,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1465,7 +1465,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1368,
+      "line": 1369,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2596,6 +2596,24 @@
           "branch": 0,
           "branches": [
             "BUILD_TESTS"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkCrashSymbolicationProbe",
+      "kind": "executable",
+      "file": "Tests/CMakeLists.txt",
+      "line": 2403,
+      "conditionFrames": [
+        {
+          "id": "Tests/CMakeLists.txt:2401",
+          "branch": 0,
+          "branches": [
+            "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
           ]
         }
       ],
@@ -4317,6 +4335,24 @@
         {
           "file": "SparkCrashReporter/CMakeLists.txt",
           "line": 67,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkCrashSymbolicationProbe",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 2403,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7196,7 +7232,7 @@
             "env": [
               "PYTHONDONTWRITEBYTECODE"
             ],
-            "runDigest": "a8d923dd6b90cc34"
+            "runDigest": "a0c4de0bdd49658b"
           },
           {
             "index": 2,

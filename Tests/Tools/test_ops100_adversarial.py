@@ -537,13 +537,15 @@ class CIRegistrationTests(unittest.TestCase):
     def test_all_test_files_exist(self) -> None:
         tests = ROOT / "Tests" / "Tools"
         for name in ("test_ops100_redaction.py", "test_ops100_crash_security.py",
-                      "test_ops100_telemetry_spool.py", "test_ops100_adversarial.py"):
+                      "test_ops100_telemetry_spool.py", "test_ops100_adversarial.py",
+                      "test_ops100_symbolication.py"):
             with self.subTest(name=name):
                 self.assertTrue((tests / name).exists(), f"missing {name}")
 
     def test_all_ops_modules_importable(self) -> None:
         for module_name in ("secret_policy", "redact_secrets", "ops_strict_json",
-                            "fs_security", "validate_crash_package", "validate_telemetry_spool"):
+                            "fs_security", "validate_crash_package", "validate_telemetry_spool",
+                            "symbolicate_crash"):
             with self.subTest(module=module_name):
                 mod = importlib.import_module(module_name)
                 self.assertIsNotNone(mod)
@@ -560,7 +562,8 @@ class CIRegistrationTests(unittest.TestCase):
         build_yml = ROOT / ".github" / "workflows" / "build.yml"
         content = build_yml.read_text(encoding="utf-8")
         for test_file in ("test_ops100_redaction.py", "test_ops100_crash_security.py",
-                          "test_ops100_telemetry_spool.py", "test_ops100_adversarial.py"):
+                          "test_ops100_telemetry_spool.py", "test_ops100_adversarial.py",
+                          "test_ops100_symbolication.py"):
             self.assertIn(test_file, content, f"CI gate must run {test_file}")
 
     def test_ci_gate_covers_tools_ops_path(self) -> None:

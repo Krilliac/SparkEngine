@@ -10,6 +10,7 @@
 #include "IGameModule.h"
 #include "Spark/ModuleABI.h"
 #include "Spark/Version.h"
+#include "Utils/CrashHandler.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/InvalidStateDetector.h"
 #include "Utils/LocalFileCache.h"
@@ -781,6 +782,9 @@ bool ModuleManager::LoadModule(const std::string& path)
 
     const auto failLoad = [&](std::string message)
     {
+        // A rejection after dlopen has already unmapped the image; drop its
+        // recorded range so a later crash never attributes frames to it.
+        RefreshCrashModuleIdentities();
         m_lastLoadError = std::move(message);
         console.LogError(m_lastLoadError);
         return false;
@@ -862,6 +866,9 @@ bool ModuleManager::LoadModule(const std::string& path)
         return failLoad(std::format("Failed to load module '{}' (staged as '{}') with dlopen(RTLD_NOW): {}", path,
                                     loadPath, err ? err : "unknown dynamic-loader error"));
     }
+    // Record the module's build-id before any export is called, so a crash in
+    // it symbolicates from the symbol store (tools/ops/symbolicate_crash.py).
+    RefreshCrashModuleIdentities();
 #endif
 
     // Re-read the in-image descriptor as defense in depth after the sidecar
@@ -2069,6 +2076,9 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
         dlclose(entry.libraryHandle);
 #endif
         entry.libraryHandle = nullptr;
+        // The unmapped range may be reused by a later mapping; forget it so
+        // crash frames there are never resolved against this module.
+        RefreshCrashModuleIdentities();
     }
 
     if (!entry.transientImagePath.empty())

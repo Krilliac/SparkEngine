@@ -454,16 +454,19 @@ jobs:
         PYTHONDONTWRITEBYTECODE: "1"
       run: |
         set -euo pipefail
-        # The four source files are test_ops100_redaction.py,
-        # test_ops100_crash_security.py, test_ops100_telemetry_spool.py, and
-        # test_ops100_adversarial.py; unittest runs their native test classes
-        # without requiring an unpinned third-party pytest installation.
+        # The five source files are test_ops100_redaction.py,
+        # test_ops100_crash_security.py, test_ops100_telemetry_spool.py,
+        # test_ops100_adversarial.py, and test_ops100_symbolication.py (which
+        # compiles a small ELF with the runner's cc/objcopy/addr2line);
+        # unittest runs their native test classes without requiring an
+        # unpinned third-party pytest installation.
         cd Tests/Tools
         python3 -m unittest \
           test_ops100_redaction \
           test_ops100_crash_security \
           test_ops100_telemetry_spool \
           test_ops100_adversarial \
+          test_ops100_symbolication \
           -v 2>&1 | tee ops100-results.log
         echo "OPS-100 validation passed."
 
