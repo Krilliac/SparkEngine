@@ -2612,6 +2612,35 @@ if(Python3_Interpreter_FOUND)
         set_tests_properties(readiness-cross-references PROPERTIES
             LABELS "readiness;site-data;unit;python"
             TIMEOUT 180)
+
+        # DOC-400: the reference site runtime verifier (tools/site-data/runtime)
+        # checked against a bundle generate.py produces here plus tampered,
+        # oversize, malformed, and path-escaping variants, each also fed to
+        # validate.py validate_published_bundle so the two validators cannot
+        # drift. Needs Node.js 20+ (WebCrypto, node:test); the site-runtime-contract
+        # job in site-data.yml is its CI home.
+        find_program(SPARK_NODE_EXECUTABLE NAMES node)
+        if(SPARK_NODE_EXECUTABLE)
+            execute_process(
+                COMMAND ${SPARK_NODE_EXECUTABLE} -p "process.versions.node.split('.')[0]"
+                OUTPUT_VARIABLE _spark_node_major
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                RESULT_VARIABLE _spark_node_result)
+        endif()
+        if(SPARK_NODE_EXECUTABLE AND _spark_node_result EQUAL 0 AND _spark_node_major GREATER_EQUAL 20)
+            add_test(
+                NAME runtime-bundle-validation
+                COMMAND ${SPARK_NODE_EXECUTABLE} --test
+                    test/verifyBundle.test.mjs
+                    test/freshness.test.mjs
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tools/site-data/runtime)
+            set_tests_properties(runtime-bundle-validation PROPERTIES
+                LABELS "readiness;site-data;unit;node"
+                ENVIRONMENT "PYTHON=${Python3_EXECUTABLE}"
+                TIMEOUT 600)
+        else()
+            message(STATUS "runtime-bundle-validation not registered: Node.js 20+ was not found")
+        endif()
     endif()
 
     add_test(

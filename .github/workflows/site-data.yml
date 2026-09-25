@@ -163,6 +163,53 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # DOC-400: the reference runtime verifier and freshness classifier in
+  # tools/site-data/runtime, which the site runtime imports to refuse malformed,
+  # oversize, hash-invalid, or path-escaping publications and to label what it
+  # shows current/syncing/blocked/stale/unavailable. The suite runs over this
+  # commit's generated publication and tampered variants of it, and feeds every
+  # variant to validate.py validate_published_bundle so the two validators
+  # cannot drift. This proves the contract only; live consumption by the
+  # owner-deployed site is outside this repository.
+  site-runtime-contract:
+    name: Site runtime bundle contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      # The runner image's preinstalled Node.js; the module needs WebCrypto and
+      # node:test (package.json engines >=20) and has no dependencies to install.
+      - name: Require Node.js 20 or newer
+        run: |
+          set -euo pipefail
+          node --version
+          node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'
+
+      - name: Generate the exact-commit publication
+        env:
+          SOURCE_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m python3 tools/site-data/generate.py \
+            --output "$RUNNER_TEMP/.site-data" \
+            --source-commit "$GITHUB_SHA" \
+            --source-branch "$SOURCE_BRANCH" \
+            --committed-at "$COMMITTED_AT" \
+            --skip-doc-health
+          python3 tools/site-data/validate.py --published "$RUNNER_TEMP/.site-data"
+
+      - name: Run the runtime verifier and freshness suites
+        env:
+          SPARK_SITE_DATA_DIR: ${{ runner.temp }}/.site-data
+        run: |
+          set -euo pipefail
+          timeout 10m npm test --prefix tools/site-data/runtime
+
   # RDY-020 names `asset-integrity` as a required CI job. No such job existed, so
   # the gate behind it could be neither red nor green. The executable check is
   # tools/site-data/validate.py --assets: every Assets/ package must declare a
