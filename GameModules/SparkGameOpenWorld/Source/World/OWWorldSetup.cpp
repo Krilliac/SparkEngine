@@ -293,6 +293,12 @@ namespace OpenWorld
             manifest.meshPaths.push_back("Assets/Models/ModuleKits/OpenWorld/ancient_waystone_marker.obj");
             manifest.meshPaths.push_back("Assets/Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn.obj");
             manifest.meshPaths.push_back("Assets/Models/ModuleKits/OpenWorld/traveler_camp_firepit.obj");
+            // Blender landmark kit (tools/blender/author_openworld_kit.py): stone-and-pine props tall enough
+            // to navigate by — a watchtower for lookouts, bridge segments for road river crossings and a
+            // ruined arch for ancient waypoints.
+            manifest.meshPaths.push_back("Assets/Models/OpenWorld/Kit/watchtower.obj");
+            manifest.meshPaths.push_back("Assets/Models/OpenWorld/Kit/bridge_segment.obj");
+            manifest.meshPaths.push_back("Assets/Models/OpenWorld/Kit/ruined_arch.obj");
             manifest.texturePaths.push_back(region.terrainAlbedoPath);
             manifest.texturePaths.push_back("Assets/Textures/Default/normal_flat.png");
             manifest.audioPaths.push_back("Assets/Audio/ambient_wind.wav");

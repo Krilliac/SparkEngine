@@ -27,6 +27,9 @@ differs in case, is composed at run time, or disagrees with that record or `Asse
   `Assets/Models/OpenWorld/Ground/<region>_ground.obj`, the three OpenWorld landmark props in
   `Assets/Models/ModuleKits/OpenWorld/`, a terrain albedo from `Assets/Textures/Terrain/`, the flat normal map
   and `Assets/Audio/ambient_wind.wav`. Regions have no scene file; the manifest is the streamed bundle.
+- The manifest also names the Blender landmark kit in `Assets/Models/OpenWorld/Kit/` (`watchtower`,
+  `bridge_segment`, `ruined_arch`; LOD1 and collision variants beside each). `tools/blender/author_openworld_kit.py`
+  authors it; the editable source, provenance record and preview are in `Art/Blender/SparkGameOpenWorld/`.
 - The nine music tracks are `Assets/Audio/OpenWorld/Music/ow_*.wav`.
 - The ground tiles and music loops are repository-original procedural output of
   `tools/generate_default_assets.py` (CC0). They are development content, not authored art or music.

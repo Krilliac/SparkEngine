@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGameOpenWorld",
+  "author_script": {
+    "path": "tools/blender/author_openworld_kit.py",
+    "sha256": "dfa966b88a26ddccbc4e448f3cc2d707509cab64515d040d618ab085d9c040e6"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGameOpenWorld/openworld_kit.blend",
+    "sha256": "7abff1e0306b870ecfeb238010e2d6eb651962fffc457905ecda5f11e82fca6f",
+    "scene_sha256": "8bbc7c5543d92a6bed5902f2becb4c453f26759ee9f8365adf4ac295c154f0a9"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "watchtower",
+      "obj_path": "Assets/Models/OpenWorld/Kit/watchtower.obj",
+      "mtl_path": "Assets/Models/OpenWorld/Kit/watchtower.mtl",
+      "bounds": {
+        "min": [
+          -2.149813,
+          0.0,
+          -1.958776
+        ],
+        "max": [
+          2.066088,
+          8.0,
+          1.828731
+        ]
+      },
+      "triangle_count": 2040,
+      "obj_sha256": "aa64231ce45e865f51c00ec494d3c7c595a888b387f7ccbd21dd07945ef6124f",
+      "mtl_sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+      "triangle_budget": 2800,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/OpenWorld/Kit/watchtower_lod1.obj",
+          "mtl_path": "Assets/Models/OpenWorld/Kit/watchtower_lod1.mtl",
+          "bounds": {
+            "min": [
+              -2.145871,
+              0.008333,
+              -1.950804
+            ],
+            "max": [
+              2.059205,
+              7.995429,
+              1.825966
+            ]
+          },
+          "triangle_count": 734,
+          "obj_sha256": "7385a6021211d46c65b5d87c2b49637ed4107ae2d0f9d360e16dc84069bb113c",
+          "mtl_sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/OpenWorld/Kit/watchtower_collision.obj",
+          "mtl_path": "Assets/Models/OpenWorld/Kit/watchtower_collision.mtl",
+          "bounds": {
+            "min": [
+              -2.149813,
+              0.0,
+              -1.958776
+            ],
+            "max": [
+              2.066088,
+              8.0,
+              1.828731
+            ]
+          },
+          "triangle_count": 108,
+          "obj_sha256": "0ba88def81a644d1aa963d8cb5f0e7fe4b7ef727989174bf8a8a2c067efe9b33",
+          "mtl_sha256": "dffa189e6987ff2b6e12814fa1a981c143cc27934122e3e8a30ce0969d0c8359",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "bridge_segment",
+      "obj_path": "Assets/Models/OpenWorld/Kit/bridge_segment.obj",
+      "mtl_path": "Assets/Models/OpenWorld/Kit/bridge_segment.mtl",
+      "bounds": {
+        "min": [
+          -3.0,
+          0.0,
+          -1.2
+        ],
+        "max": [
+          3.0,
+          2.4,
+          1.2
+        ]
+      },
+      "triangle_count": 1892,
+      "obj_sha256": "9cd02dd2ca2affce80940579d17374ef893731824ab43ae0afb609bc12c8ba68",
+      "mtl_sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+      "triangle_budget": 2000,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/OpenWorld/Kit/bridge_segment_lod1.obj",
+          "mtl_path": "Assets/Models/OpenWorld/Kit/bridge_segment_lod1.mtl",
+          "bounds": {
+            "min": [
+              -2.988462,
+              0.0,
+              -1.191962
+            ],
+            "max": [
+              2.988462,
+              2.391667,
+              1.191962
+            ]
+          },
+          "triangle_count": 680,
+          "obj_sha256": "f6d7b9a2dfe91641db6dbac5da86276edc5743747c9f07e1971141b4e09b0357",
+          "mtl_sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/OpenWorld/Kit/bridge_segment_collision.obj",
+          "mtl_path": "Assets/Models/OpenWorld/Kit/bridge_segment_collision.mtl",
+          "bounds": {
+            "min": [
+              -3.0,
+              0.0,
+              -1.2
+            ],
+            "max": [
+              3.0,
+              2.4,
+              1.2
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "07e544865a87804b0309c7b1e6105f0d21829ee528e99af3b161cb58726ffb7a",
+          "mtl_sha256": "dffa189e6987ff2b6e12814fa1a981c143cc27934122e3e8a30ce0969d0c8359",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "ruined_arch",
+      "obj_path": "Assets/Models/OpenWorld/Kit/ruined_arch.obj",
+      "mtl_path": "Assets/Models/OpenWorld/Kit/ruined_arch.mtl",
+      "bounds": {
+        "min": [
+          -2.501253,
+          0.0,
+          -0.6
+        ],
+        "max": [
+          2.05,
+          5.0,
+          1.560149
+        ]
+      },
+      "triangle_count": 1540,
+      "obj_sha256": "72176a90f8a6ed64aeabc50463b5fc1a6c0eb3963ef057a2d37e6955553c9359",
+      "mtl_sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+      "triangle_budget": 1800,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/OpenWorld/Kit/ruined_arch_lod1.obj",
+          "mtl_path": "Assets/Models/OpenWorld/Kit/ruined_arch_lod1.mtl",
+          "bounds": {
+            "min": [
+              -2.500821,
+              0.0,
+              -0.591962
+            ],
+            "max": [
+              2.038461,
+              4.99,
+              1.554913
+            ]
+          },
+          "triangle_count": 554,
+          "obj_sha256": "0319d425c50902e59fa9894f2b2a739bca1c4356b9c9b0aaeb17f3885815eec3",
+          "mtl_sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/OpenWorld/Kit/ruined_arch_collision.obj",
+          "mtl_path": "Assets/Models/OpenWorld/Kit/ruined_arch_collision.mtl",
+          "bounds": {
+            "min": [
+              -2.501253,
+              0.0,
+              -0.6
+            ],
+            "max": [
+              2.05,
+              5.0,
+              1.560149
+            ]
+          },
+          "triangle_count": 120,
+          "obj_sha256": "f5f36d9a20400f6cf8cbbeb91ac3899adc15c06e4ba8efcf31e7a9a08e4414e0",
+          "mtl_sha256": "dffa189e6987ff2b6e12814fa1a981c143cc27934122e3e8a30ce0969d0c8359",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    }
+  ]
+}

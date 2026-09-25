@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 996,
+  "fileCount": 1014,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -4210,6 +4210,132 @@
       "size": 37613,
       "license": "CC0-1.0",
       "provenance": "Repository-original procedural OpenWorld region ground tiles and music loops emitted by generate_openworld_assets() in tools/generate_default_assets.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound (MOD-360) [openworld-procedural-generator]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/bridge_segment.mtl",
+      "sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+      "size": 994,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json: Blender-authored bridge_segment [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/bridge_segment.obj",
+      "sha256": "9cd02dd2ca2affce80940579d17374ef893731824ab43ae0afb609bc12c8ba68",
+      "size": 158133,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json: Blender-authored bridge_segment [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/bridge_segment_collision.mtl",
+      "sha256": "dffa189e6987ff2b6e12814fa1a981c143cc27934122e3e8a30ce0969d0c8359",
+      "size": 242,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/bridge_segment_collision.obj",
+      "sha256": "07e544865a87804b0309c7b1e6105f0d21829ee528e99af3b161cb58726ffb7a",
+      "size": 1246,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/bridge_segment_lod1.mtl",
+      "sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+      "size": 994,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/bridge_segment_lod1.obj",
+      "sha256": "f6d7b9a2dfe91641db6dbac5da86276edc5743747c9f07e1971141b4e09b0357",
+      "size": 70317,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/ruined_arch.mtl",
+      "sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+      "size": 994,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json: Blender-authored ruined_arch [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/ruined_arch.obj",
+      "sha256": "72176a90f8a6ed64aeabc50463b5fc1a6c0eb3963ef057a2d37e6955553c9359",
+      "size": 138671,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json: Blender-authored ruined_arch [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/ruined_arch_collision.mtl",
+      "sha256": "dffa189e6987ff2b6e12814fa1a981c143cc27934122e3e8a30ce0969d0c8359",
+      "size": 242,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/ruined_arch_collision.obj",
+      "sha256": "f5f36d9a20400f6cf8cbbeb91ac3899adc15c06e4ba8efcf31e7a9a08e4414e0",
+      "size": 9741,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/ruined_arch_lod1.mtl",
+      "sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+      "size": 994,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/ruined_arch_lod1.obj",
+      "sha256": "0319d425c50902e59fa9894f2b2a739bca1c4356b9c9b0aaeb17f3885815eec3",
+      "size": 62353,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/watchtower.mtl",
+      "sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+      "size": 994,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json: Blender-authored watchtower [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/watchtower.obj",
+      "sha256": "aa64231ce45e865f51c00ec494d3c7c595a888b387f7ccbd21dd07945ef6124f",
+      "size": 178793,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json: Blender-authored watchtower [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/watchtower_collision.mtl",
+      "sha256": "dffa189e6987ff2b6e12814fa1a981c143cc27934122e3e8a30ce0969d0c8359",
+      "size": 242,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/watchtower_collision.obj",
+      "sha256": "0ba88def81a644d1aa963d8cb5f0e7fe4b7ef727989174bf8a8a2c067efe9b33",
+      "size": 8942,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/watchtower_lod1.mtl",
+      "sha256": "ed358fcde1d9aef98afd680f172e1d5ebf7eb94a5aa97b1d2ce3ca24ae305fa7",
+      "size": 994,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
+    },
+    {
+      "path": "Models/OpenWorld/Kit/watchtower_lod1.obj",
+      "sha256": "7385a6021211d46c65b5d87c2b49637ed4107ae2d0f9d360e16dc84069bb113c",
+      "size": 81115,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameOpenWorld/openworld_kit.blend via tools/blender/author_openworld_kit.py; hash-bound by Art/Blender/SparkGameOpenWorld/provenance.json [openworld-blender-kit]"
     },
     {
       "path": "Models/Plane.mtl",

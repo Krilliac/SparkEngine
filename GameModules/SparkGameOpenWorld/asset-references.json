@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1,
   "module": "SparkGameOpenWorld",
-  "description": "Every asset path SparkGameOpenWorld source names (area streaming manifests in OWWorldSetup, music tracks in OWEngineSystems), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "description": "Every asset path SparkGameOpenWorld source names (area streaming manifests in OWWorldSetup, including the Blender landmark kit, music tracks in OWEngineSystems), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
   "references": [
     {
       "path": "Assets/Audio/OpenWorld/Music/ow_coast.wav",
@@ -128,6 +128,24 @@
       "sha256": "24f4561949aacb7b60a0bf7824b8f79c57b397543bfe1654840d6727dd34cd0d",
       "kind": "region ground tile (OBJ)",
       "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Kit/bridge_segment.obj",
+      "sha256": "9cd02dd2ca2affce80940579d17374ef893731824ab43ae0afb609bc12c8ba68",
+      "kind": "region landmark kit mesh (OBJ + MTL)",
+      "provenanceRule": "openworld-blender-kit"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Kit/ruined_arch.obj",
+      "sha256": "72176a90f8a6ed64aeabc50463b5fc1a6c0eb3963ef057a2d37e6955553c9359",
+      "kind": "region landmark kit mesh (OBJ + MTL)",
+      "provenanceRule": "openworld-blender-kit"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Kit/watchtower.obj",
+      "sha256": "aa64231ce45e865f51c00ec494d3c7c595a888b387f7ccbd21dd07945ef6124f",
+      "kind": "region landmark kit mesh (OBJ + MTL)",
+      "provenanceRule": "openworld-blender-kit"
     },
     {
       "path": "Assets/Textures/Default/normal_flat.png",
