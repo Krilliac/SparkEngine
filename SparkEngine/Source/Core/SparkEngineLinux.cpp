@@ -39,7 +39,20 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
-#include <tuple>
+
+// LeakSanitizer runs in every ASan build (GCC defines __SANITIZE_ADDRESS__,
+// Clang reports address_sanitizer through __has_feature) and in Clang
+// standalone -fsanitize=leak builds. GCC defines no macro for -fsanitize=leak.
+#if defined(__SANITIZE_ADDRESS__)
+#define SPARK_LSAN_ACTIVE 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(leak_sanitizer)
+#define SPARK_LSAN_ACTIVE 1
+#endif
+#endif
+#ifdef SPARK_LSAN_ACTIVE
+#include <sanitizer/lsan_interface.h>
+#endif
 
 #ifndef SPARK_PLATFORM_WINDOWS
 
@@ -48,6 +61,23 @@ std::atomic<bool> g_shutdownRequested{false};
 static void SignalHandler(int)
 {
     g_shutdownRequested.store(true, std::memory_order_relaxed);
+}
+
+/**
+ * @brief Tell LeakSanitizer that an ownership root was released on purpose at process exit.
+ *
+ * The Linux teardown release()s the module manager, hot-reload manager and
+ * event bus instead of destroying them (see main()). LSan would otherwise see
+ * those unreachable blocks as leaks. Ignored blocks are scanned as roots, so
+ * everything they still own stays reachable, while any allocation that is not
+ * reachable from a live root is still reported. No-op without LSan.
+ */
+static void RetainRootForProcessExit([[maybe_unused]] const void* root)
+{
+#ifdef SPARK_LSAN_ACTIVE
+    if (root)
+        __lsan_ignore_object(root);
+#endif
 }
 
 bool HasLinuxCommandLineFlag(int argc, char* argv[], const char* flag)
@@ -342,9 +372,15 @@ int main(int argc, char* argv[])
                 // Best-effort only during final process teardown.
             }
         }
-        std::ignore = GetEngineRuntime().moduleHotReload.release();
-        std::ignore = GetEngineRuntime().moduleManager.release();
-        std::ignore = GetEngineRuntime().eventBus.release();
+        RetainRootForProcessExit(GetEngineRuntime().moduleHotReload.release());
+        RetainRootForProcessExit(GetEngineRuntime().moduleManager.release());
+        RetainRootForProcessExit(GetEngineRuntime().eventBus.release());
+#ifdef SPARK_LSAN_ACTIVE
+        // std::_Exit skips atexit handlers, and LSan's end-of-process leak
+        // check is one of them. Run it here so sanitizer builds still get a
+        // real leak verdict; a detected leak terminates with LSan's exitcode.
+        __lsan_do_leak_check();
+#endif
         std::_Exit(result);
 #endif
 
@@ -383,8 +419,8 @@ int main(int argc, char* argv[])
             SPARK_LOG_WARN(Spark::LogCategory::Core, "Unknown exception during eventBus cleanup");
         }
     }
-    std::ignore = GetEngineRuntime().eventBus.release();
-    std::ignore = GetEngineRuntime().moduleManager.release();
+    RetainRootForProcessExit(GetEngineRuntime().eventBus.release());
+    RetainRootForProcessExit(GetEngineRuntime().moduleManager.release());
     return 1;
 }
 #endif // !SPARK_PLATFORM_WINDOWS
