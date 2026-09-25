@@ -1044,6 +1044,7 @@ target_sources(SparkTests PRIVATE
     TestTemplateRuntimeReal.cpp
     TestUserDataPathsReal.cpp
     TestHEAD220NullRHILifetimeReal.cpp
+    TestInputFrameEdgesReal.cpp
     TestSceneManagerUnicodeReal.cpp
     TestSceneSaveConfinedReal.cpp
     TestWeaponMechanicsReal.cpp

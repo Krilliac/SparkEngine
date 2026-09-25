@@ -207,20 +207,22 @@ bool InputManager::IsKeyUp(int key) const
     return !IsKeyDown(key);
 }
 
+static bool LookupKeyState(const std::unordered_map<int, bool>& states, int key)
+{
+    auto it = states.find(key);
+    return it != states.end() && it->second;
+}
+
 bool InputManager::WasKeyPressed(int key) const
 {
     SPARK_REQUIRE_MSG(Spark::LogCategory::Input, key >= 0, "WasKeyPressed - invalid key code");
-    bool curr = IsKeyDown(key);
-    bool prev = m_prevKeyStates.count(key) ? m_prevKeyStates.at(key) : false;
-    return curr && !prev;
+    return LookupKeyState(m_frameKeyStates, key) && !LookupKeyState(m_prevKeyStates, key);
 }
 
 bool InputManager::WasKeyReleased(int key) const
 {
     SPARK_REQUIRE_MSG(Spark::LogCategory::Input, key >= 0, "WasKeyReleased - invalid key code");
-    bool curr = IsKeyDown(key);
-    bool prev = m_prevKeyStates.count(key) ? m_prevKeyStates.at(key) : false;
-    return !curr && prev;
+    return !LookupKeyState(m_frameKeyStates, key) && LookupKeyState(m_prevKeyStates, key);
 }
 
 bool InputManager::IsMouseButtonDown(int button) const
@@ -232,13 +234,30 @@ bool InputManager::IsMouseButtonDown(int button) const
 bool InputManager::WasMouseButtonPressed(int button) const
 {
     SPARK_REQUIRE_MSG(Spark::LogCategory::Input, button >= 0 && button < 3, "WasMouseButtonPressed - invalid button");
-    return m_mouseButtons[button] && !m_prevMouseButtons[button];
+    return m_frameMouseButtons[button] && !m_prevMouseButtons[button];
 }
 
 bool InputManager::WasMouseButtonReleased(int button) const
 {
     SPARK_REQUIRE_MSG(Spark::LogCategory::Input, button >= 0 && button < 3, "WasMouseButtonReleased - invalid button");
-    return !m_mouseButtons[button] && m_prevMouseButtons[button];
+    return !m_frameMouseButtons[button] && m_prevMouseButtons[button];
+}
+
+void InputManager::LatchFrameEdges()
+{
+    // Hosts deliver this frame's input messages BEFORE calling Update(), so the
+    // "previous" snapshot must be the one taken by the previous Update(), not a
+    // copy of the live state taken now: that copy already holds this frame's
+    // presses and turned every WasKeyPressed/WasKeyReleased edge into false.
+    m_prevKeyStates = std::move(m_frameKeyStates);
+    memcpy(m_prevMouseButtons, m_frameMouseButtons, sizeof(m_mouseButtons));
+
+    // Due console-simulated releases land in this frame's snapshot, so they
+    // read as a WasKeyReleased edge this frame.
+    ApplyDueTimedKeyReleases();
+
+    m_frameKeyStates = m_keyStates;
+    memcpy(m_frameMouseButtons, m_mouseButtons, sizeof(m_mouseButtons));
 }
 
 MousePoint InputManager::GetMouseDelta() const
@@ -509,8 +528,10 @@ void InputManager::Console_ClearInputStates()
     std::lock_guard<std::mutex> lock(m_inputMutex);
     m_keyStates.clear();
     m_prevKeyStates.clear();
+    m_frameKeyStates.clear();
     memset(m_mouseButtons, 0, sizeof(m_mouseButtons));
     memset(m_prevMouseButtons, 0, sizeof(m_prevMouseButtons));
+    memset(m_frameMouseButtons, 0, sizeof(m_frameMouseButtons));
     m_recentInputEvents.clear();
     m_pendingTimedReleases.clear();
     Spark::SimpleConsole::GetInstance().Log("All input states cleared via console", "SUCCESS");
@@ -668,6 +689,7 @@ InputManager::InputManager()
 {
     ZeroMemory(m_mouseButtons, sizeof(m_mouseButtons));
     ZeroMemory(m_prevMouseButtons, sizeof(m_prevMouseButtons));
+    ZeroMemory(m_frameMouseButtons, sizeof(m_frameMouseButtons));
     m_recentInputEvents.reserve(100);
     SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager constructed (Windows)");
     Spark::SimpleConsole::GetInstance().Log("InputManager constructed with console integration.", "INFO");
@@ -710,16 +732,14 @@ void InputManager::Update()
         firstFrame = false;
     }
 
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Input, m_hwnd != nullptr, "InputManager::Update - hwnd not initialized");
-
-    m_prevKeyStates = m_keyStates;
-    ApplyDueTimedKeyReleases();
-    memcpy(m_prevMouseButtons, m_mouseButtons, sizeof(m_mouseButtons));
+    LatchFrameEdges();
 
     m_prevMouseX = m_mouseX;
     m_prevMouseY = m_mouseY;
 
-    if (m_mouseCaptured)
+    // Cursor capture needs the window; a windowless manager (tests, tools)
+    // still advances key/button edges and uncaptured deltas.
+    if (m_mouseCaptured && m_hwnd)
     {
         // Mouse-look capture only owns the cursor while OUR window is
         // foreground. Recentering an unfocused window's cursor hijacks the
@@ -895,6 +915,7 @@ InputManager::InputManager()
 {
     memset(m_mouseButtons, 0, sizeof(m_mouseButtons));
     memset(m_prevMouseButtons, 0, sizeof(m_prevMouseButtons));
+    memset(m_frameMouseButtons, 0, sizeof(m_frameMouseButtons));
     m_recentInputEvents.reserve(100);
     SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager constructed (Linux/macOS)");
 }
@@ -914,9 +935,7 @@ void InputManager::Initialize(HWND hwnd)
 
 void InputManager::Update()
 {
-    m_prevKeyStates = m_keyStates;
-    ApplyDueTimedKeyReleases();
-    memcpy(m_prevMouseButtons, m_mouseButtons, sizeof(m_mouseButtons));
+    LatchFrameEdges();
     m_mouseDeltaX = m_mouseX - m_prevMouseX;
     m_mouseDeltaY = m_mouseY - m_prevMouseY;
     m_prevMouseX = m_mouseX;

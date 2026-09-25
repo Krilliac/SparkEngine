@@ -414,15 +414,17 @@ TEST(EngineWiring_ConsoleSimulatedKeyReleaseIsAppliedOnTheInputThread)
     EXPECT_TRUE(input.IsKeyDown('A'));
     EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 1u);
 
-#ifndef _WIN32
-    // The frame tick drains due releases too (the Windows Update() needs a window).
-    input.Console_SimulateKeyPress("C", 20);
-    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    // The frame tick drains due releases too. Edges are latched per Update(), so
+    // a frame must observe C down before a later frame can see it released.
+    input.Console_SimulateKeyPress("C", 250);
+    input.Update();
+    EXPECT_TRUE(input.IsKeyDown('C'));
+    EXPECT_TRUE(input.WasKeyPressed('C'));
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
     input.Update();
     EXPECT_FALSE(input.IsKeyDown('C'));
     EXPECT_TRUE(input.WasKeyReleased('C'));
     EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 1u);
-#endif
 
     // Clearing the input states also forgets the pending timed releases.
     input.Console_ClearInputStates();

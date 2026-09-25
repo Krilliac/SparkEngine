@@ -49,11 +49,16 @@
 class InputManager
 {
   private:
-    std::unordered_map<int, bool> m_keyStates;     ///< Current frame keyboard states
-    std::unordered_map<int, bool> m_prevKeyStates; ///< Previous frame keyboard states
+    // Edge queries (WasKeyPressed & co.) compare two snapshots latched by Update():
+    // this frame's and the previous frame's. They never compare against the live
+    // state, because hosts deliver a frame's messages before calling Update().
+    std::unordered_map<int, bool> m_keyStates;      ///< Live keyboard states (written by messages)
+    std::unordered_map<int, bool> m_frameKeyStates; ///< Keyboard states latched by this frame's Update()
+    std::unordered_map<int, bool> m_prevKeyStates;  ///< Keyboard states latched by the previous Update()
 
-    bool m_mouseButtons[3];     ///< Current frame mouse button states [Left, Right, Middle]
-    bool m_prevMouseButtons[3]; ///< Previous frame mouse button states
+    bool m_mouseButtons[3];      ///< Live mouse button states [Left, Right, Middle]
+    bool m_frameMouseButtons[3]; ///< Mouse button states latched by this frame's Update()
+    bool m_prevMouseButtons[3];  ///< Mouse button states latched by the previous Update()
 
     int m_mouseX, m_mouseY;           ///< Current mouse position
     int m_prevMouseX, m_prevMouseY;   ///< Previous frame mouse position
@@ -129,8 +134,10 @@ class InputManager
      * @brief Update input states for the current frame
      * 
      * Processes accumulated input changes and updates state tracking.
-     * Should be called once per frame before querying input states.
-     * Stores current states as previous states for next frame.
+     * Call once per frame, after the frame's input messages were delivered and
+     * before anything queries edges. It latches the key/button states: every
+     * change delivered since the previous Update() reads as a
+     * WasKeyPressed/WasKeyReleased edge for exactly this one frame.
      */
     void Update();
 
@@ -170,8 +177,8 @@ class InputManager
     /**
      * @brief Check if a key was just pressed this frame
      * 
-     * Returns true if the key was released last frame and pressed this frame.
-     * Useful for detecting single key press events.
+     * Returns true if the key was up at the previous Update() and down at this
+     * frame's Update(). Useful for detecting single key press events.
      * 
      * @param key Virtual key code (e.g., VK_SPACE, 'W', VK_ESCAPE)
      * @return true if key was just pressed, false otherwise
@@ -181,8 +188,8 @@ class InputManager
     /**
      * @brief Check if a key was just released this frame
      * 
-     * Returns true if the key was pressed last frame and released this frame.
-     * Useful for detecting single key release events.
+     * Returns true if the key was down at the previous Update() and up at this
+     * frame's Update(). Useful for detecting single key release events.
      * 
      * @param key Virtual key code (e.g., VK_SPACE, 'W', VK_ESCAPE)
      * @return true if key was just released, false otherwise
@@ -202,7 +209,7 @@ class InputManager
     /**
      * @brief Check if a mouse button was just pressed this frame
      * 
-     * Returns true if the button was released last frame and pressed this frame.
+     * Returns true if the button was up at the previous Update() and down at this frame's.
      * 
      * @param button Mouse button index (0=Left, 1=Right, 2=Middle)
      * @return true if mouse button was just pressed, false otherwise
@@ -212,7 +219,7 @@ class InputManager
     /**
      * @brief Check if a mouse button was just released this frame
      * 
-     * Returns true if the button was pressed last frame and released this frame.
+     * Returns true if the button was down at the previous Update() and up at this frame's.
      * 
      * @param button Mouse button index (0=Left, 1=Right, 2=Middle)
      * @return true if mouse button was just released, false otherwise
@@ -502,4 +509,11 @@ class InputManager
      * @return Current input metrics with thread safety
      */
     InputMetrics GetMetricsThreadSafe() const;
+
+    /**
+     * @brief Latch this frame's key/button snapshot and shift the old one to "previous"
+     *
+     * Shared by both platform Update()s. Also applies due console-simulated releases.
+     */
+    void LatchFrameEdges();
 };
