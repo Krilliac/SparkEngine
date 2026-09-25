@@ -1252,7 +1252,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestQuestSystem` | 11 |
 | `TestRHI210D3D11GoldenReal` | 4 |
 | `TestRHI230VulkanValidationReal` | 16 |
-| `TestRHI240OpenGLReal` | 11 |
+| `TestRHI240OpenGLReal` | 13 |
 | `TestRHIBridgeIntegration` | 19 |
 | `TestRHICapabilityParity` | 4 |
 | `TestRHIHandlePool` | 10 |

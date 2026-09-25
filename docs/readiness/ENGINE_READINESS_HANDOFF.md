@@ -5096,8 +5096,8 @@ Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/TestRHI240OpenGLReal.cpp`, `SparkEngine/Source/Graphics/RHI/RHIFactory.cpp`, `Tests/CMakeLists.txt`
    - ShaderTranslation_RHI240_HLSLToGLSLFailsExplicitly calls production CompileShader and requires failure naming SPIRV-Cross. Registered as CTest SparkOpenGLTests; needs no GL context. Keyword-substitution helper still exported.
 3. **[unmet]** Hardware and software rows are separately labeled
-   - Evidence: `Tests/TestRHI240OpenGLReal.cpp`, `SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp`
-   - The lane is only CTest-labelled llvmpipe. Tests never assert the software renderer (GL_RENDERER), and there is no opengl-hardware row.
+   - Evidence: `Tests/TestRHI240OpenGLReal.cpp`, `SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp`, `Tests/CMakeLists.txt`
+   - Software row only. OpenGL_RHI240_DeviceRowMatchesLane classifies GL_RENDERER with its own CPU-rasterizer list (Mesa llvmpipe/softpipe/swrast, GDI Generic, Microsoft Basic Render Driver, Apple Software Renderer) and fails if isSoftwareDevice or SPARK_GL_EXPECT_ROW disagrees. llvmpipe lane: software, EXPECT_COUNT=13; =hardware fails on llvmpipe locally. No opengl-hardware lane or run yet.
 4. **[unmet]** Packaged scenes pass
    - There is no packaged OpenGL scene lane or packaged-scene test.
 

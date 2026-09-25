@@ -1223,9 +1223,10 @@
           "state": "unmet",
           "evidence": [
             "Tests/TestRHI240OpenGLReal.cpp",
-            "SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp"
+            "SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "The lane is only CTest-labelled llvmpipe. Tests never assert the software renderer (GL_RENDERER), and there is no opengl-hardware row."
+          "note": "Software row only. OpenGL_RHI240_DeviceRowMatchesLane classifies GL_RENDERER with its own CPU-rasterizer list (Mesa llvmpipe/softpipe/swrast, GDI Generic, Microsoft Basic Render Driver, Apple Software Renderer) and fails if isSoftwareDevice or SPARK_GL_EXPECT_ROW disagrees. llvmpipe lane: software, EXPECT_COUNT=13; =hardware fails on llvmpipe locally. No opengl-hardware lane or run yet."
         },
         {
           "criterionDigest": "sha256:032eb8523eaf",

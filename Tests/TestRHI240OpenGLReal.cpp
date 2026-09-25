@@ -23,6 +23,7 @@
 #include "Graphics/RHI/RHIFactory.h"
 
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -216,6 +217,91 @@ TEST(OpenGL_RHI240_DebugOutputCountsErrors)
     glEnable(0xDEAD);
     EXPECT_GE(gl.Errors(), 1);
     g_glErrorCount = 0;
+}
+
+// ----------------------------------------------------------------------------
+// Device row: the lane label (software vs hardware) must match the context the
+// tests actually ran on, so a hardware run cannot be reported under the
+// llvmpipe label and vice versa. SPARK_GL_EXPECT_ROW is set by the CTest lane.
+//
+// The row is classified here from the raw GL_RENDERER string with the test's own
+// list of known CPU rasterizers, not from GLDevice's isSoftwareDevice flag, so a
+// product classifier that misses a software renderer fails this test instead of
+// silently labelling it a hardware row.
+// ----------------------------------------------------------------------------
+namespace
+{
+    bool IsKnownSoftwareGLRenderer(std::string renderer)
+    {
+        for (char& c : renderer)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        // Mesa llvmpipe, Mesa softpipe, Mesa swrast/"Software Rasterizer", Windows
+        // OpenGL 1.1 fallback, WARP-backed GL on Windows, Apple's CPU fallback.
+        const std::array<const char*, 7> known = {"llvmpipe",
+                                                  "softpipe",
+                                                  "swrast",
+                                                  "software rasterizer",
+                                                  "gdi generic",
+                                                  "microsoft basic render driver",
+                                                  "apple software renderer"};
+        for (const char* name : known)
+        {
+            if (renderer.find(name) != std::string::npos)
+                return true;
+        }
+        return false;
+    }
+} // namespace
+
+TEST(OpenGL_RHI240_SoftwareRendererClassifierCases)
+{
+    EXPECT_TRUE(IsKnownSoftwareGLRenderer("llvmpipe (LLVM 17.0.6, 256 bits)"));
+    EXPECT_TRUE(IsKnownSoftwareGLRenderer("softpipe"));
+    EXPECT_TRUE(IsKnownSoftwareGLRenderer("Software Rasterizer"));
+    EXPECT_TRUE(IsKnownSoftwareGLRenderer("GDI Generic"));
+    EXPECT_TRUE(IsKnownSoftwareGLRenderer("D3D12 (Microsoft Basic Render Driver)"));
+    EXPECT_TRUE(IsKnownSoftwareGLRenderer("Apple Software Renderer"));
+    EXPECT_FALSE(IsKnownSoftwareGLRenderer("NVIDIA GeForce RTX 4070/PCIe/SSE2"));
+    EXPECT_FALSE(IsKnownSoftwareGLRenderer("AMD Radeon RX 7800 XT (radeonsi, navi32, LLVM 17.0.6, DRM 3.54)"));
+    EXPECT_FALSE(IsKnownSoftwareGLRenderer("Mesa Intel(R) UHD Graphics 630 (CFL GT2)"));
+}
+
+TEST(OpenGL_RHI240_DeviceRowMatchesLane)
+{
+    GLTestDevice gl;
+    RequireGL(gl);
+
+    const RHIDeviceCapabilities& caps = gl.device.GetCapabilities();
+    const char* liveRenderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+    const char* liveVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    ASSERT_TRUE(liveRenderer != nullptr);
+    ASSERT_TRUE(liveVersion != nullptr);
+
+    const bool softwareRenderer = IsKnownSoftwareGLRenderer(liveRenderer);
+    const std::string row = softwareRenderer ? "software" : "hardware";
+    std::printf("[RHI-240 GL DEVICE] GL_RENDERER=\"%s\" GL_VERSION=\"%s\" isSoftwareDevice=%s row=%s\n", liveRenderer,
+                liveVersion, caps.isSoftwareDevice ? "true" : "false", row.c_str());
+
+    // Smoke check only: both sides read glGetString on the same context.
+    EXPECT_EQ(caps.deviceName, std::string(liveRenderer));
+    EXPECT_EQ(caps.apiVersion, std::string(liveVersion));
+
+    // The product's software/hardware flag must agree with the independent classification.
+    if (caps.isSoftwareDevice != softwareRenderer)
+        throw std::runtime_error("GLDevice isSoftwareDevice=" + std::string(caps.isSoftwareDevice ? "true" : "false") +
+                                 " disagrees with GL_RENDERER=\"" + std::string(liveRenderer) + "\" (" + row + ")");
+
+    const char* expected = std::getenv("SPARK_GL_EXPECT_ROW");
+    if (expected != nullptr && expected[0] != '\0')
+    {
+        const std::string expectedRow(expected);
+        if (expectedRow != "software" && expectedRow != "hardware")
+            throw std::runtime_error("SPARK_GL_EXPECT_ROW must be 'software' or 'hardware', got '" + expectedRow + "'");
+        if (expectedRow != row)
+            throw std::runtime_error("SPARK_GL_EXPECT_ROW=" + expectedRow + " but the GL context is a " + row +
+                                     " device (GL_RENDERER=\"" + std::string(liveRenderer) + "\")");
+    }
+    EXPECT_EQ(gl.Errors(), 0);
 }
 
 // ----------------------------------------------------------------------------

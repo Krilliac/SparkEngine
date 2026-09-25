@@ -23,9 +23,12 @@
 #include <SDL2/SDL.h>
 #endif
 #include <algorithm>
+#include <array>
 #include <cassert>
+#include <cctype>
 #include <cstring>
 #include <sstream>
+#include <string_view>
 
 #if defined(__APPLE__)
 #include <dlfcn.h>
@@ -1677,11 +1680,23 @@ namespace Spark
                 m_capabilities.multiDrawIndirectSupport = true; // GL 4.3+ core (GL_ARB_multi_draw_indirect)
                 m_capabilities.maxConstantBuffers = 14;
 
-                // llvmpipe/softpipe renderer strings identify software rasterizers.
-                const std::string rendererLower = m_capabilities.deviceName;
-                const bool isLlvmPipe = rendererLower.find("llvmpipe") != std::string::npos;
-                const bool isSoftPipe = rendererLower.find("softpipe") != std::string::npos;
-                m_capabilities.isSoftwareDevice = isLlvmPipe || isSoftPipe;
+                // GL_RENDERER substrings of the known CPU rasterizers: Mesa llvmpipe/softpipe/swrast
+                // ("Software Rasterizer"), the Windows 1.1 fallback ("GDI Generic"), WARP-backed GL
+                // ("Microsoft Basic Render Driver") and Apple's fallback ("Apple Software Renderer").
+                // Paravirtual GPUs (virgl, SVGA3D) forward to a host GPU and stay hardware rows.
+                std::string rendererLower = m_capabilities.deviceName;
+                std::transform(rendererLower.begin(), rendererLower.end(), rendererLower.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                static constexpr std::array<std::string_view, 7> kSoftwareRenderers = {"llvmpipe",
+                                                                                       "softpipe",
+                                                                                       "swrast",
+                                                                                       "software rasterizer",
+                                                                                       "gdi generic",
+                                                                                       "microsoft basic render driver",
+                                                                                       "apple software renderer"};
+                m_capabilities.isSoftwareDevice =
+                    std::any_of(kSoftwareRenderers.begin(), kSoftwareRenderers.end(),
+                                [&](std::string_view name) { return rendererLower.find(name) != std::string::npos; });
 
                 // OpenGL has no hardware RT pipeline; compute path can still drive SDFGI.
                 m_capabilities.rayTracing.bestBackend = m_capabilities.computeShaderSupport
