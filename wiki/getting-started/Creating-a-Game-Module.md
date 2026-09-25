@@ -73,10 +73,11 @@ The `ModuleInfo` struct provides metadata about your module:
 | `sdkVersion` | `uint32_t` | SDK version this module was built against (`SPARK_SDK_VERSION`) |
 | `loadOrder` | `int` | Initialization priority (lower = earlier, default 1000) |
 
-`SPARK_SDK_VERSION` is **4** (`SparkSDK/include/Spark/Version.h`) after `IEngineContext` gained
-`GetInvalidStateDetector()` and `GetComponentSerializers()`. `IsSDKCompatible` is exact equality, so
-a v3 module is refused by a v4 host and a v4 module by a v3 host — there is no forward or backward
-window. `Spark/IEngineContext.h` pins `EngineContextVirtualCount = 90` with a `static_assert` tying
+`SPARK_SDK_VERSION` is **5** (`SparkSDK/include/Spark/Version.h`) after `IEngineContext` dropped
+`InitializeAll()` and `ShutdownAll()` (owner decision OD-01: `EngineRuntime` owns subsystem lifecycle).
+`IsSDKCompatible` is exact equality, so a v4 module is refused by a v5 host and a v5 module by a v4
+host — there is no forward or backward window; rebuild modules against the current SDK.
+`Spark/IEngineContext.h` pins `EngineContextVirtualCount = 88` with a `static_assert` tying
 it to the version constant: adding or removing a virtual means updating **both** together, or an old
 host will accept a module that calls off the end of its vtable.
 
@@ -580,7 +581,7 @@ Common causes of module load failures:
 |---------|-------|-----|
 | DLL not found | Wrong path in manifest | Check `spark.modules.json` path |
 | `CreateModule` symbol not found | Missing `SPARK_IMPLEMENT_MODULE` macro | Add macro to exactly one .cpp file |
-| `rejected before OS load: SDK ABI version mismatch: field 'sdk_version' host expects 4, module declares 3` | Module built against a different SDK (stable-v1 ABI is exact-match only; N-1 modules are not loaded) | Rebuild module against the host's SDK and toolchain; the named field says which descriptor value differs |
+| `rejected before OS load: SDK ABI version mismatch: field 'sdk_version' host expects 5, module declares 4` | Module built against a different SDK (stable-v1 ABI is exact-match only; N-1 modules are not loaded) | Rebuild module against the host's SDK and toolchain; the named field says which descriptor value differs |
 | `OnLoad()` returns false | Initialization error in module code | Check module logs for details |
 | Missing DLL dependency | Module links against absent library | Use `dumpbin /dependents` (Windows) or `ldd` (Linux) |
 

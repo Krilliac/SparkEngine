@@ -627,6 +627,20 @@ struct RenderStatistics {
 };
 ```
 
+**Linux/RHI counters report recorded work only (RHI-240).** The Linux passes in
+`GraphicsRenderPipelinesLinux.cpp` no longer issue unbound full-screen
+`Draw(3, 0)` calls (lighting resolve, Bloom, SSAO, tone mapping, TAA, motion
+blur) or an unbound Forward+ light-culling `Dispatch`, and they never bump
+`drawCalls` themselves. `drawCalls` comes from the RHI backend's own statistics,
+folded in by `EndFrame`; `postProcessPasses` is the number of
+`PostProcessingPipeline` passes that actually executed, which is 0 on Linux
+today. Expect lower numbers than before on Linux; they are the true ones. Real
+passes will be added one at a time with golden-image evidence.
+`Tests/TestGraphicsEngineLinuxPassTruthReal.cpp` checks this on NullRHI.
+Note that `RenderPipeline.cpp` is compiled on Windows only, so on Linux the
+deferred/Forward+/post-process sub-passes have no production caller today; the
+live Linux frame is `BeginFrame` -> `RenderScene` -> `EndFrame`.
+
 ---
 
 ## ECS Draw Submission

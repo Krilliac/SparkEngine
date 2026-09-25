@@ -1037,8 +1037,6 @@ class GraphicsEngine
 
     std::chrono::high_resolution_clock::time_point m_frameStartTime;
     std::chrono::high_resolution_clock::time_point m_renderStartTime;
-    std::chrono::high_resolution_clock::time_point m_geometryStartTime;
-    std::chrono::high_resolution_clock::time_point m_lightingStartTime;
     std::chrono::high_resolution_clock::time_point m_postProcessStartTime;
 
     // Console diagnostics are requested after Present by the game loop. The
@@ -1262,9 +1260,7 @@ class GraphicsEngine
     void LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix);
     void CullObjects(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
                      std::vector<GameObject*>& visibleObjects); ///< Frustum cull via BVH, output visible set.
-    void RenderGeometryPass();    ///< Draw opaque geometry into G-buffer (Albedo, Normal, Material, Motion).
-    void RenderLightingPass();    ///< Full-screen quad resolving G-buffer with accumulated lighting.
-    void RenderPostProcessing();  ///< HDR tone mapping, bloom, SSAO, SSR, volumetrics.
+    void RenderPostProcessing();                                ///< HDR tone mapping, bloom, SSAO, SSR, volumetrics.
     void RenderTemporalEffects(); ///< TAA jitter resolve and motion-vector-based ghosting reduction.
 
     // Basic shader system methods (fallback pipeline)

@@ -401,14 +401,4 @@ void GraphicsEngine::RenderTemporalEffects()
     }
 }
 
-void GraphicsEngine::RenderGeometryPass()
-{
-    // Windows D3D11: geometry pass handled through RenderForward/RenderDeferred
-}
-
-void GraphicsEngine::RenderLightingPass()
-{
-    // Windows D3D11: lighting pass handled through LightingPass()
-}
-
 #endif // SPARK_PLATFORM_WINDOWS

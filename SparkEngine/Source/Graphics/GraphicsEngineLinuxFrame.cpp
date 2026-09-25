@@ -191,8 +191,9 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
             continue;
 
         visibleCount++;
+        // Draws are counted by the RHI backend when recorded (folded in by
+        // EndFrame); a visible object whose Render records nothing is not a draw.
         obj->Render(viewMatrix, projMatrix);
-        m_statistics.drawCalls++;
     }
 
     m_statistics.visibleObjects = visibleCount;

@@ -176,6 +176,7 @@ add_executable(SparkTests
     TestGraphicsEngine.cpp
     TestGraphicsBenchmarkStats.cpp
     TestProcessDrawListLinux.cpp
+    TestGraphicsEngineLinuxPassTruthReal.cpp
     TestRenderGraph.cpp
     TestTerrainRenderer.cpp
     TestMaterialEffects.cpp
