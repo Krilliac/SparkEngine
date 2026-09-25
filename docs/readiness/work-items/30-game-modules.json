@@ -1152,11 +1152,14 @@
         },
         {
           "criterionDigest": "sha256:abe675a87b56",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp"
+            "Tests/TestMOD340PlatformerProgressReal.cpp",
+            "GameModules/SparkGamePlatformer/Source/Core/PlatformerProgress.cpp",
+            "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "No committed test shows collectible or progress state persisting and reloading."
+          "note": "Levels, collected ids, counters, checkpoints, lives and abilities persist as the bounded SparkGamePlatformer.progress.v1 save entry, validated before the world restore commits. Local tests reload a real SaveSystem save field-for-field into fresh systems and reject corrupt entries unchanged. No hosted module-Platformer CI run yet."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",

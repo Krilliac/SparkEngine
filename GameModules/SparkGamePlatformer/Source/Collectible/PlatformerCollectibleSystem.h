@@ -69,6 +69,16 @@ namespace Platformer
         float powerUpDuration = 0.0f;
     };
 
+    /// @brief Persistent collection state: which items are gone plus the global counters
+    struct CollectionProgress
+    {
+        std::vector<uint32_t> collectedIds; ///< Ids of collected items, ascending
+        int coins = 0;
+        int gems = 0;
+        int stars = 0;
+        int keys = 0;
+    };
+
     /**
      * @brief Manages collectible items across all levels
      *
@@ -101,6 +111,18 @@ namespace Platformer
         /// @brief Check collection for a given player position and magnet state.
         /// @return Newly collected pickups whose gameplay effects must be applied by the module.
         std::vector<CollectedPickup> CheckCollection(float playerX, float playerY, float playerZ, bool magnetActive);
+
+        /// @brief True when an item with @p id is placed (ids are assigned in a fixed build order)
+        bool HasCollectible(uint32_t id) const;
+
+        /// @brief Snapshot the collected ids (ascending) and global counters for a save.
+        CollectionProgress CaptureProgress() const;
+
+        /**
+         * @brief Restore a saved collection state: exactly the listed items are collected.
+         * @return false, leaving every item and counter unchanged, when an id is unknown or a counter is negative
+         */
+        bool RestoreProgress(const CollectionProgress& progress);
 
         /// @brief Reset collectibles for a level reload
         void ResetLevel(uint32_t levelIndex);

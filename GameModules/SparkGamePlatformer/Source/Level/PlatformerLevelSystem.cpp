@@ -295,6 +295,20 @@ namespace Platformer
         return {0.0f, 1.0f, 0.0f};
     }
 
+    uint32_t PlatformerLevelSystem::GetRequiredStarsToUnlock(uint32_t index) const
+    {
+        return index < m_levels.size() ? m_levels[index].requiredStarsToUnlock : 0;
+    }
+
+    bool PlatformerLevelSystem::RestoreProgress(const std::vector<LevelProgress>& progress)
+    {
+        if (progress.size() != m_levels.size())
+            return false;
+
+        m_progress = progress;
+        return true;
+    }
+
     int PlatformerLevelSystem::GetTotalStarsEarned() const
     {
         int total = 0;

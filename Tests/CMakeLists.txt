@@ -599,6 +599,7 @@ add_executable(SparkTests
     TestMOD380VehiclePhysicsReal.cpp
     TestGameModulePlatformerARPG.cpp
     TestMOD340PlatformerCompletionReal.cpp
+    TestMOD340PlatformerProgressReal.cpp
     TestMOD330ARPGDungeonReal.cpp
     TestMOD350RPGQuestSliceReal.cpp
     # TERRAFRONT (SparkGameMMOFPS) — header-only wire protocol, standalone
@@ -1186,6 +1187,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Hazard/PlatformerHazardSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Core/PlatformerLevelFlow.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Core/PlatformerProgress.cpp"
     )
 
     # ARPG module sources

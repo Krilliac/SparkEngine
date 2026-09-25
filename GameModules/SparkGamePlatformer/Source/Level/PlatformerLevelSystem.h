@@ -158,6 +158,21 @@ namespace Platformer
         /// @brief Get the number of defined levels
         size_t GetLevelCount() const { return m_levels.size(); }
 
+        /// @brief Stars required before level @p index unlocks (0 for an out-of-range index)
+        uint32_t GetRequiredStarsToUnlock(uint32_t index) const;
+
+        /// @brief Per-level progress, indexed identically to the level definitions
+        const std::vector<LevelProgress>& GetProgress() const { return m_progress; }
+
+        /**
+         * @brief Replace every level's progress with a saved copy.
+         *
+         * The caller validates the values (PlatformerProgress::Validate); this only refuses a copy whose level
+         * count differs from the defined levels.
+         * @return false, leaving progress unchanged, when @p progress has the wrong size
+         */
+        bool RestoreProgress(const std::vector<LevelProgress>& progress);
+
         /// @brief Get currently active level index
         uint32_t GetCurrentLevelIndex() const { return m_currentLevel; }
 

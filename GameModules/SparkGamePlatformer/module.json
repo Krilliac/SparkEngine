@@ -10,7 +10,8 @@
   "tests": {
     "files": [
       "Tests/TestGameModulePlatformerARPG.cpp",
-      "Tests/TestMOD340PlatformerCompletionReal.cpp"
+      "Tests/TestMOD340PlatformerCompletionReal.cpp",
+      "Tests/TestMOD340PlatformerProgressReal.cpp"
     ],
     "prefixes": [
       {
@@ -19,7 +20,7 @@
       },
       {
         "prefix": "PlatformerCompletion_",
-        "count": 12
+        "count": 14
       }
     ]
   },

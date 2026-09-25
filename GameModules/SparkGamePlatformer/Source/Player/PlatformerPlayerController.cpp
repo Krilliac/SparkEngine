@@ -31,7 +31,7 @@ namespace Platformer
         m_position = {0.0f, 5.0f, 0.0f};
         m_velocity = {0.0f, 0.0f, 0.0f};
         m_state = PlayerState::Falling;
-        m_lives = 3;
+        m_lives = DEFAULT_LIVES;
 
         m_initialized = true;
 
@@ -472,7 +472,7 @@ namespace Platformer
         m_groundPoundRequested = false;
 
         if (m_lives <= 0)
-            m_lives = 3; // Restart with default lives on game over
+            m_lives = DEFAULT_LIVES; // Restart with default lives on game over
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player respawned at (%.0f, %.0f, %.0f)", m_position.x,
                        m_position.y, m_position.z);
     }

@@ -260,7 +260,7 @@
       "directory": "GameModules/SparkGamePlatformer",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGamePlatformer/Source",
-      "sourceFileCount": 21,
+      "sourceFileCount": 23,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,

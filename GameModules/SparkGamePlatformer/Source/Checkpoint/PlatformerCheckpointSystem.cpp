@@ -11,6 +11,7 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
 #include <cmath>
 
 namespace Platformer
@@ -137,6 +138,40 @@ namespace Platformer
                 ++count;
         }
         return count;
+    }
+
+    CheckpointProgress PlatformerCheckpointSystem::CaptureProgress() const
+    {
+        CheckpointProgress progress;
+        for (const auto& cp : m_checkpoints)
+        {
+            if (cp.activated)
+                progress.activatedIds.push_back(cp.id);
+        }
+        std::ranges::sort(progress.activatedIds);
+        progress.lastActivatedId = m_lastActivatedId;
+        return progress;
+    }
+
+    bool PlatformerCheckpointSystem::RestoreProgress(const CheckpointProgress& progress)
+    {
+        const auto isPlaced = [this](uint32_t id)
+        { return std::ranges::any_of(m_checkpoints, [id](const CheckpointData& cp) { return cp.id == id; }); };
+        const auto isActivated = [&progress](uint32_t id)
+        { return std::ranges::find(progress.activatedIds, id) != progress.activatedIds.end(); };
+
+        if (!std::ranges::all_of(progress.activatedIds, isPlaced))
+            return false;
+        if (progress.lastActivatedId != 0 && !isActivated(progress.lastActivatedId))
+            return false;
+
+        for (auto& cp : m_checkpoints)
+        {
+            cp.activated = isActivated(cp.id);
+            cp.animationTimer = cp.activated ? 1.0f : 0.0f; // Restored flags are already fully raised
+        }
+        m_lastActivatedId = progress.lastActivatedId;
+        return true;
     }
 
     void PlatformerCheckpointSystem::ResetLevel(uint32_t levelIndex)

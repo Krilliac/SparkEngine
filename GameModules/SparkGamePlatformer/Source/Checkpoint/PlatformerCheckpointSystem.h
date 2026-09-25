@@ -35,6 +35,13 @@ namespace Platformer
         float animationTimer = 0.0f; ///< Timer for flag raise animation
     };
 
+    /// @brief Persistent checkpoint state: which flags are raised and which one respawns the player
+    struct CheckpointProgress
+    {
+        std::vector<uint32_t> activatedIds; ///< Ids of activated checkpoints, ascending
+        uint32_t lastActivatedId = 0;       ///< Respawn checkpoint, or 0 for the level spawn
+    };
+
     /**
      * @brief Manages checkpoint placement, activation, and respawn positions
      *
@@ -69,6 +76,16 @@ namespace Platformer
 
         /// @brief Get the position of the last activated checkpoint
         PlayerPosition GetLastCheckpointPosition() const;
+
+        /// @brief Snapshot the activated ids (ascending) and the respawn checkpoint for a save.
+        CheckpointProgress CaptureProgress() const;
+
+        /**
+         * @brief Restore a saved checkpoint state: exactly the listed checkpoints are activated.
+         * @return false, leaving every checkpoint unchanged, when an id is unknown or the respawn checkpoint is
+         *         neither 0 nor one of the activated ids
+         */
+        bool RestoreProgress(const CheckpointProgress& progress);
 
         /// @brief Reset all checkpoints for a level reload
         void ResetLevel(uint32_t levelIndex);

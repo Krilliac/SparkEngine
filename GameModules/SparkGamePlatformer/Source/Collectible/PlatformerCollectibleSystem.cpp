@@ -11,6 +11,7 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
 #include <cmath>
 
 namespace Platformer
@@ -186,6 +187,43 @@ namespace Platformer
         }
 
         return collected;
+    }
+
+    bool PlatformerCollectibleSystem::HasCollectible(uint32_t id) const
+    {
+        return std::ranges::any_of(m_collectibles, [id](const CollectibleInstance& item) { return item.id == id; });
+    }
+
+    CollectionProgress PlatformerCollectibleSystem::CaptureProgress() const
+    {
+        CollectionProgress progress;
+        for (const auto& item : m_collectibles)
+        {
+            if (item.collected)
+                progress.collectedIds.push_back(item.id);
+        }
+        std::ranges::sort(progress.collectedIds);
+        progress.coins = m_coinsCollected;
+        progress.gems = m_gemsCollected;
+        progress.stars = m_starsCollected;
+        progress.keys = m_keysCollected;
+        return progress;
+    }
+
+    bool PlatformerCollectibleSystem::RestoreProgress(const CollectionProgress& progress)
+    {
+        if (progress.coins < 0 || progress.gems < 0 || progress.stars < 0 || progress.keys < 0)
+            return false;
+        if (!std::ranges::all_of(progress.collectedIds, [this](uint32_t id) { return HasCollectible(id); }))
+            return false;
+
+        for (auto& item : m_collectibles)
+            item.collected = std::ranges::find(progress.collectedIds, item.id) != progress.collectedIds.end();
+        m_coinsCollected = progress.coins;
+        m_gemsCollected = progress.gems;
+        m_starsCollected = progress.stars;
+        m_keysCollected = progress.keys;
+        return true;
     }
 
     void PlatformerCollectibleSystem::ResetLevel(uint32_t levelIndex)

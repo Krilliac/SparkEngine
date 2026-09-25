@@ -115,7 +115,9 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
 
     // Wire engine subsystems (audio, events, save, destruction, replay, coroutines, localization)
     m_engineSystems = std::make_unique<Platformer::PlatformerEngineSystems>();
-    if (!m_engineSystems->Initialize(context))
+    const Platformer::PlatformerProgressSystems progressSystems{m_levelSystem.get(), m_collectibleSystem.get(),
+                                                                m_checkpointSystem.get(), m_playerController.get()};
+    if (!m_engineSystems->Initialize(context, progressSystems))
     {
         console.LogError("[Platformer] Failed to initialize engine systems");
         return false;

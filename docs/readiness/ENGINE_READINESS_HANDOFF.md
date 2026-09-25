@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **51 in progress**, **5 blocked**, **8 open**
-- Acceptance criteria: **259 total**, **37 implemented** (14%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **38 implemented** (15%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -310,7 +310,7 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 | [`MOD-310`](#mod-310--finish-fps-as-the-installed-single-player-stable-v1-slice) Finish FPS as the installed single-player stable-v1 slice | P1 | **in-progress** | 1/5 · 0/5 | `MOD-290`, `SDK-240`, `RDY-020` | `MOD-300`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-320`](#mod-320--finish-mmo-as-a-secure-persistent-integrated-world) Finish MMO as a secure persistent integrated world | P1 | **open** | 0/4 · 0/4 | `MOD-290`, `NET-100`, `DATA-120`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-330`](#mod-330--finish-arpg-as-a-playable-dungeon-slice) Finish ARPG as a playable dungeon slice | P1 | **in-progress** | 0/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-340`](#mod-340--finish-platformer-as-a-complete-level-slice) Finish Platformer as a complete level slice | P1 | **in-progress** | 1/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-340`](#mod-340--finish-platformer-as-a-complete-level-slice) Finish Platformer as a complete level slice | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-350`](#mod-350--finish-rpg-as-a-quest-party-combat-and-persistence-slice) Finish RPG as a quest, party, combat, and persistence slice | P1 | **in-progress** | 0/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-360`](#mod-360--finish-openworld-as-a-streamed-survivalexploration-slice) Finish OpenWorld as a streamed survival/exploration slice | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-370`](#mod-370--finish-rts-as-a-deterministic-playable-skirmish) Finish RTS as a deterministic playable skirmish | P1 | **in-progress** | 1/3 · 0/3 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-380`, `MOD-390` |
@@ -3733,16 +3733,16 @@ Player input is documentation-only, collision assumes y=0, render/animation path
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Automated three-minute packaged level completion passes
    - No automated three-minute packaged level-completion run exists.
 2. **[implemented]** Death restarts at checkpoint
    - Evidence: `Tests/TestMOD340PlatformerCompletionReal.cpp`, `GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.cpp`, `GameModules/SparkGamePlatformer/Source/Checkpoint/PlatformerCheckpointSystem.cpp`, `Tests/CMakeLists.txt`
    - Registered tests link the real controller and checkpoint sources. The kill plane and zero-lives timer restart the player at the checkpoint with no R key.
-3. **[unmet]** Collectible/progress state persists
-   - Evidence: `GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp`
-   - No committed test shows collectible or progress state persisting and reloading.
+3. **[implemented]** Collectible/progress state persists
+   - Evidence: `Tests/TestMOD340PlatformerProgressReal.cpp`, `GameModules/SparkGamePlatformer/Source/Core/PlatformerProgress.cpp`, `GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp`, `Tests/CMakeLists.txt`
+   - Levels, collected ids, counters, checkpoints, lives and abilities persist as the bounded SparkGamePlatformer.progress.v1 save entry, validated before the world restore commits. Local tests reload a real SaveSystem save field-for-field into fresh systems and reject corrupt entries unchanged. No hosted module-Platformer CI run yet.
 4. **[unmet]** Applicable scores reach 3
    - Needs owner scoring and hosted module-Platformer CI.
 

@@ -56,6 +56,13 @@ namespace Platformer
         bool climb = false;
     };
 
+    /// @brief Persistent player state: lives and permanently unlocked abilities
+    struct PlayerProgress
+    {
+        int lives = 3;
+        AbilityFlags abilities{};
+    };
+
     /**
      * @brief Controls player movement, physics, and state transitions
      *
@@ -67,6 +74,9 @@ namespace Platformer
     class PlatformerPlayerController
     {
       public:
+        static constexpr int DEFAULT_LIVES = 3; ///< Lives at start and after a game-over restart
+        static constexpr int MAX_LIVES = 9;
+
         PlatformerPlayerController() = default;
         ~PlatformerPlayerController() = default;
 
@@ -103,6 +113,20 @@ namespace Platformer
         /// @brief Apply damage to the player (from hazards).
         /// @return true when lives were reduced, false when the hit was rejected or absorbed.
         bool TakeDamage(int amount);
+
+        /// @brief Unlocked abilities
+        const AbilityFlags& GetAbilities() const { return m_abilities; }
+
+        /// @brief Snapshot lives and abilities for a save. A save taken during the game-over delay records the
+        ///        DEFAULT_LIVES the pending restart grants.
+        PlayerProgress CaptureProgress() const { return {m_lives > 0 ? m_lives : DEFAULT_LIVES, m_abilities}; }
+
+        /// @brief Restore saved lives (clamped to [1, MAX_LIVES]) and abilities.
+        void RestoreProgress(const PlayerProgress& progress)
+        {
+            m_lives = progress.lives < 1 ? 1 : (progress.lives > MAX_LIVES ? MAX_LIVES : progress.lives);
+            m_abilities = progress.abilities;
+        }
 
         /// @brief Unlock a movement ability
         void UnlockAbility(PowerUpType type);
@@ -222,8 +246,7 @@ namespace Platformer
         AbilityFlags m_abilities{};
 
         // Lives and invincibility
-        int m_lives{3};
-        static constexpr int MAX_LIVES = 9;
+        int m_lives{DEFAULT_LIVES};
         float m_invincibilityDuration{1.5f};
         float m_invincibilityTimer{0.0f};
         bool m_invincible{false};
