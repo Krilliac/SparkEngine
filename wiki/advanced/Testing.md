@@ -356,6 +356,41 @@ wine64 SparkEngine.exe -test-frames 60                     # Wine
 wine64 SparkEditor.exe --test-mode --test-frames 120       # Wine
 ```
 
+#### Scripted console timelines (`-exec`, `-exec-audit`, `-test-seconds`)
+
+The engine can replay a console timeline on Windows (windowed and headless) and
+on Linux (headless and SDL2 windowed). The shared implementation is
+`SparkEngine/Source/Core/ExecScript.{h,cpp}`:
+
+```bash
+./SparkEngine -headless -game libSparkGameMMOFPS.so -require-game \
+    -exec server.cfg -exec-audit server-audit.log -test-seconds 60
+```
+
+- Script lines are `<frame> <command>` or `t<seconds> <command>`. A line with
+  no prefix runs at frame 0, `#` starts a comment, and CRLF files are accepted.
+  Entries that share a due time run in file order.
+- `-test-seconds N` exits after N wall-clock seconds. The clock starts at the
+  first main-loop tick, so boot time is not counted.
+- By default every executed command is appended to `exec_audit.log` in the
+  working directory, which is the file the package smokes read. Use `-exec-audit <path>`
+  to give each process its own file when several are launched from the same
+  directory. A relative path is resolved against the launch directory.
+- Sensitive console commands, the ones registered with `RegisterSensitiveCommand`
+  (for example `tf_register` and `tf_login`), are written as
+  `<name> <arguments-redacted>` in both the `[exec]` console line and the audit
+  file. The redaction goes through `SimpleConsole::RedactSensitiveArguments`.
+  It fails closed: a command that is neither registered nor a CVar (for example
+  `tf_login` when its module did not load) is also written as
+  `<name> <arguments-redacted>` when it has arguments.
+- On Linux, a `-test-seconds` value that is not a positive finite number
+  (including `nan`, `inf`, `0` and negatives), or an `-exec` script that cannot
+  be read, fails the launch with a non-zero exit code. A Linux build without
+  SDL2 also rejects `-exec` and `-test-seconds` unless `-headless` is given,
+  because its no-window fallback runs a fixed ten ticks and never plays a timeline.
+
+Coverage: `Tests/TestExecScript.cpp` (`SPARK_TEST_FILE=TestExecScript.cpp`).
+
 ## Test Categories and Coverage
 
 The test files cover all major engine subsystems:

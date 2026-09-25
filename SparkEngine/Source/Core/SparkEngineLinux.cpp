@@ -28,6 +28,8 @@
 #include "Utils/CrashHandler.h"
 #include "Utils/MultiISA.h"
 #include <Spark/Version.h>
+#include <charconv>
+#include <cmath>
 #include <csignal>
 #include <cstring>
 #include <atomic>
@@ -48,7 +50,7 @@ static void SignalHandler(int)
     g_shutdownRequested.store(true, std::memory_order_relaxed);
 }
 
-static bool ParseFlag(int argc, char* argv[], const char* flag)
+bool HasLinuxCommandLineFlag(int argc, char* argv[], const char* flag)
 {
     for (int i = 1; i < argc; ++i)
     {
@@ -66,6 +68,71 @@ static int ParseTestFrameLimitArgs(int argc, char* argv[])
             return std::max(0, std::atoi(argv[i + 1]));
     }
     return 0;
+}
+
+/// Value following the exact token @p flag, or nullptr when the flag is absent or last.
+static const char* FindLinuxCommandLineValue(int argc, char* argv[], const char* flag)
+{
+    for (int i = 1; i < argc - 1; ++i)
+    {
+        if (strcmp(argv[i], flag) == 0)
+            return argv[i + 1];
+    }
+    return nullptr;
+}
+
+/**
+ * @brief Configure g_execScript from -exec <file>, -exec-audit <path> and -test-seconds N.
+ *
+ * Unlike the Windows GUI build, a malformed -test-seconds value or an
+ * unreadable -exec script fails the launch: an automated run that silently
+ * dropped its timeline would otherwise report success without doing anything.
+ *
+ * @return false (after printing the reason to stderr) when the options are invalid.
+ */
+static bool ConfigureExecScriptArgs(int argc, char* argv[])
+{
+#ifndef SPARK_SDL2_AVAILABLE
+    // RunNoSDL2Fallback stops after a fixed ten ticks and never plays a
+    // timeline, so these options would be silently ignored there.
+    bool headless = false;
+#ifdef SPARK_HEADLESS_SUPPORT
+    headless = HasLinuxCommandLineFlag(argc, argv, "-headless") || HasLinuxCommandLineFlag(argc, argv, "-dedicated");
+#endif
+    if (!headless &&
+        (HasLinuxCommandLineFlag(argc, argv, "-exec") || HasLinuxCommandLineFlag(argc, argv, "-test-seconds")))
+    {
+        std::fprintf(stderr, "SparkEngine: -exec and -test-seconds need -headless in a build without SDL2\n");
+        return false;
+    }
+#endif
+
+    if (const char* seconds = FindLinuxCommandLineValue(argc, argv, "-test-seconds"))
+    {
+        double limit = 0.0;
+        const char* end = seconds + std::strlen(seconds);
+        const auto [parsedEnd, error] = std::from_chars(seconds, end, limit);
+        // from_chars also accepts "nan", "inf" and negatives; none is a usable limit.
+        if (error != std::errc{} || parsedEnd != end || !std::isfinite(limit) || limit <= 0.0)
+        {
+            std::fprintf(stderr, "SparkEngine: -test-seconds expects a positive number, got '%s'\n", seconds);
+            return false;
+        }
+        g_execScript.SetTestSecondsLimit(limit);
+    }
+
+    if (const char* auditPath = FindLinuxCommandLineValue(argc, argv, "-exec-audit"); auditPath && *auditPath)
+        g_execScript.SetAuditPath(auditPath);
+
+    if (const char* scriptPath = FindLinuxCommandLineValue(argc, argv, "-exec"); scriptPath && *scriptPath)
+    {
+        if (!g_execScript.LoadFile(scriptPath, Spark::SimpleConsole::GetInstance()))
+        {
+            std::fprintf(stderr, "SparkEngine: cannot open -exec script '%s'\n", scriptPath);
+            return false;
+        }
+    }
+    return true;
 }
 
 /**
@@ -120,7 +187,8 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    if (ParseFlag(argc, argv, "--help") || ParseFlag(argc, argv, "-h") || ParseFlag(argc, argv, "-help"))
+    if (HasLinuxCommandLineFlag(argc, argv, "--help") || HasLinuxCommandLineFlag(argc, argv, "-h") ||
+        HasLinuxCommandLineFlag(argc, argv, "-help"))
     {
         std::printf("SparkEngine %d.%d.%d\n"
                     "Usage: SparkEngine [options]\n\n"
@@ -133,11 +201,14 @@ int main(int argc, char* argv[])
                     "  -headless, -dedicated      Run without a graphics window\n"
                     "  -threads <count>           Set the worker-thread limit\n"
                     "  -test-frames <count>       Exit after a fixed frame count\n"
+                    "  -test-seconds <seconds>    Exit after a wall-clock duration\n"
+                    "  -exec <file>               Run a scripted console timeline (frame or t<sec> entries)\n"
+                    "  -exec-audit <path>         Write the -exec audit trail here (default exec_audit.log)\n"
                     "  -window-size <WxH>         Override the initial window size\n",
                     SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR, SPARK_ENGINE_VERSION_PATCH);
         return 0;
     }
-    if (ParseFlag(argc, argv, "--version") || ParseFlag(argc, argv, "-version"))
+    if (HasLinuxCommandLineFlag(argc, argv, "--version") || HasLinuxCommandLineFlag(argc, argv, "-version"))
     {
         std::printf("SparkEngine %d.%d.%d\n", SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR,
                     SPARK_ENGINE_VERSION_PATCH);
@@ -183,13 +254,16 @@ int main(int argc, char* argv[])
     {
         g_testFrameLimit = ParseTestFrameLimitArgs(argc, argv);
         g_maxWorkerThreads = ParseThreadCountArgs(argc, argv);
-        g_noSubprocess = ParseFlag(argc, argv, "-no-subprocess");
-        g_minimalInit = ParseFlag(argc, argv, "-minimal-init");
-        g_noJobSystem = ParseFlag(argc, argv, "-no-jobsystem");
+        g_noSubprocess = HasLinuxCommandLineFlag(argc, argv, "-no-subprocess");
+        g_minimalInit = HasLinuxCommandLineFlag(argc, argv, "-minimal-init");
+        g_noJobSystem = HasLinuxCommandLineFlag(argc, argv, "-no-jobsystem");
         ParseWindowSizeOverrideArgs(argc, argv);
+        if (!ConfigureExecScriptArgs(argc, argv))
+            return EXIT_FAILURE;
 
-        const bool hasExplicitLaunchRoot =
-            ParseFlag(argc, argv, "-game") || ParseFlag(argc, argv, "-manifest") || ParseFlag(argc, argv, "-scene");
+        const bool hasExplicitLaunchRoot = HasLinuxCommandLineFlag(argc, argv, "-game") ||
+                                           HasLinuxCommandLineFlag(argc, argv, "-manifest") ||
+                                           HasLinuxCommandLineFlag(argc, argv, "-scene");
         if (!hasExplicitLaunchRoot)
         {
             std::error_code packageError;
@@ -203,7 +277,8 @@ int main(int argc, char* argv[])
         }
 
 #ifdef SPARK_HEADLESS_SUPPORT
-        bool headless = ParseFlag(argc, argv, "-headless") || ParseFlag(argc, argv, "-dedicated");
+        bool headless =
+            HasLinuxCommandLineFlag(argc, argv, "-headless") || HasLinuxCommandLineFlag(argc, argv, "-dedicated");
         g_headlessMode = headless;
         if (headless)
             return RunHeadlessLinux(argc, argv);

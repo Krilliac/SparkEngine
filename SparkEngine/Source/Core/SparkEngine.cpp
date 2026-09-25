@@ -25,6 +25,7 @@
 // Common includes (shared between all platforms)
 // ============================================================================
 #include "EngineRuntime.h"
+#include "ExecScript.h"
 #include "Engine/ECS/Components.h" // ::World — engine-owned ECS world service
 #include "ModuleManager.h"
 #include "EngineContext.h"
@@ -451,6 +452,10 @@ void ShutdownEngine()
 // Test automation: exit after N frames (0 = run indefinitely).
 // Parsed from -test-frames N on the command line (both platforms).
 int g_testFrameLimit = 0;
+
+// Scripted console playback for automated runs (both platforms): -exec <file>,
+// -exec-audit <path> and -test-seconds N. Driven from the main loop only.
+Spark::ExecScriptPlayer g_execScript;
 
 // JobSystem thread pool size override from command line (-threads N) or
 // SPARK_MAX_WORKER_THREADS env var. 0 = use the default

@@ -11,6 +11,7 @@
 #pragma once
 
 #include "Platform.h"
+#include "ExecScript.h"
 
 #include <cstdint>
 #include <memory>
@@ -43,6 +44,7 @@ extern bool g_minimalInit;
 extern bool g_noJobSystem;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
+extern Spark::ExecScriptPlayer g_execScript; ///< -exec / -exec-audit / -test-seconds playback
 extern void InitPhysics();
 extern bool InitConsole();
 extern void ShutdownPhysics();
@@ -62,8 +64,7 @@ extern std::unique_ptr<Spark::WeatherSystem> g_weatherSystem;
 extern std::unique_ptr<Spark::UI::UISystem> g_uiSystem;
 extern std::unique_ptr<Spark::DialogueSystem> g_dialogueSystem;
 extern std::unique_ptr<Spark::ModSystem> g_modSystem;
-extern std::string g_scenePath;   ///< -scene <path>: reflected-scene JSON rendered when no game module loads
-extern double g_testSecondsLimit; ///< -test-seconds N: exit after N wall seconds
+extern std::string g_scenePath; ///< -scene <path>: reflected-scene JSON rendered when no game module loads
 
 /// @brief Whether an automated windowed run must log fatal startup errors instead of opening a modal dialog.
 bool ShouldShowWindowsFatalDialog();
@@ -73,12 +74,6 @@ void ApplyRuntimeWindowCaption();
 
 /// Bare-launch project selector candidates (defined in SparkEngineWindowsModules.cpp).
 extern std::vector<std::string> g_projectSelectorCandidates;
-
-/// @brief Wall-clock since the first due-check of the main loop (lazy start).
-double ExecElapsedSeconds();
-
-/// @brief Run all -exec scripted commands due at this frame / wall-clock time.
-void RunDueScriptedCommands(int frameCount);
 
 /// @brief Find the module manifest or fall back to the project selector.
 bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine);

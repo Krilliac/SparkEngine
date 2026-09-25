@@ -11,6 +11,7 @@
 #pragma once
 
 #include "Platform.h"
+#include "ExecScript.h"
 
 #include <atomic>
 #include <cstdint>
@@ -27,6 +28,7 @@ extern bool g_minimalInit;
 extern bool g_noJobSystem;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
+extern Spark::ExecScriptPlayer g_execScript; ///< -exec / -exec-audit / -test-seconds playback
 extern void InitPhysics();
 extern bool InitConsole();
 extern void ShutdownPhysics();
@@ -46,6 +48,9 @@ void InitLinuxCoreSubsystems(bool registerGameplay);
 
 /// @brief Load game modules, initialize hot-reload watcher, and register console commands.
 void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio);
+
+/// @brief True when @p flag appears verbatim in argv[1..argc).
+bool HasLinuxCommandLineFlag(int argc, char* argv[], const char* flag);
 
 /// @brief Common shutdown sequence for all Linux startup paths.
 /// @return false when the engine lifecycle teardown was not clean (exit non-zero).

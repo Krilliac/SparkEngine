@@ -126,6 +126,7 @@ add_executable(SparkTests
     TestMMOCredentialSecurity.cpp
     TestSecureRandom.cpp
     TestSparkConsoleConcurrency.cpp
+    TestExecScript.cpp
     TestScopeGuard.cpp
     TestSerializer.cpp
     TestEventBus.cpp

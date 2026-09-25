@@ -166,11 +166,12 @@ int RunHeadlessLinux(int argc, char* argv[])
             g_shutdownRequested.store(false, std::memory_order_relaxed);
         }
 
-        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        if ((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) || g_execScript.TestSecondsLimitReached())
         {
             if (CanShutdownEngine())
             {
-                console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+                console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount,
+                                            g_execScript.ElapsedSeconds()));
                 break;
             }
             console.LogError("[TEST] Exit postponed: a module could not checkpoint for unload");
@@ -212,6 +213,8 @@ int RunHeadlessLinux(int argc, char* argv[])
             console.Update();
         });
 
+        // -exec timeline: same scheduling point as the Windows headless loop.
+        g_execScript.RunDue(frameCount, console);
         if (GetEngineRuntime().headlessRhiBridge)
             GetEngineRuntime().headlessRhiBridge->EndFrame();
         ++frameCount;

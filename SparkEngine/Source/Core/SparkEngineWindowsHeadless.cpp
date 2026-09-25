@@ -362,13 +362,12 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         // Matches the behaviour already present in SparkEngineLinux.cpp's
         // RunHeadlessLinux — without this parity the Windows headless loop
         // runs forever even on -test-frames and CI jobs time out.
-        if ((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) ||
-            (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit))
+        if ((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) || g_execScript.TestSecondsLimitReached())
         {
             if (CanShutdownEngine())
             {
                 console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount,
-                                            ExecElapsedSeconds()));
+                                            g_execScript.ElapsedSeconds()));
                 break;
             }
             console.LogError("[TEST] Exit postponed: a module could not checkpoint for unload");
@@ -413,7 +412,7 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
             console.Update();
         });
 
-        RunDueScriptedCommands(frameCount);
+        g_execScript.RunDue(frameCount, console);
         if (GetEngineRuntime().headlessRhiBridge)
         {
             GetEngineRuntime().headlessRhiBridge->EndFrame();

@@ -192,7 +192,7 @@ static Spark::StartupSplashContext BuildStartupSplashContext()
     }
     context.executableDirectory = Spark::RuntimePackage::GetExecutableDirectory();
     context.headless = g_headlessMode;
-    context.automatedTest = g_testFrameLimit > 0 || g_testSecondsLimit > 0.0;
+    context.automatedTest = g_testFrameLimit > 0 || g_execScript.GetTestSecondsLimit() > 0.0;
     return context;
 }
 
@@ -254,133 +254,21 @@ static bool ParseHeadlessFlag(LPWSTR cmdLine)
 }
 #endif // SPARK_HEADLESS_SUPPORT
 
-/**
- * @brief Scripted console playback: -exec <file>
- *
- * Each non-empty, non-# line is "<frame> <console command>" or
- * "t<seconds> <console command>"; frame entries run once the main loop
- * reaches that frame, t-entries run once that much wall-clock time has
- * elapsed since the loop started. Time entries exist because frame rate
- * varies wildly (vsync + window occlusion), while gameplay (bot travel,
- * capture timers) runs on real dt — wall-clock scheduling keeps automated
- * smokes deterministic. Lines without a prefix run at frame 0. When mixing
- * both forms, ordering assumes 60 fps for the frame entries.
- */
-struct ScriptedCommand
-{
-    int frame = 0;
-    double atSec = -1.0; ///< >= 0: wall-clock scheduled ("t<seconds>" prefix)
-    std::string command;
-};
-static std::vector<ScriptedCommand> g_execScript;
-static size_t g_execScriptNext = 0;
-double g_testSecondsLimit = 0.0; ///< -test-seconds N: exit after N wall seconds
-
 bool ShouldShowWindowsFatalDialog()
 {
-    return g_testFrameLimit <= 0 && g_testSecondsLimit <= 0.0;
+    return g_testFrameLimit <= 0 && g_execScript.GetTestSecondsLimit() <= 0.0;
 }
 
-/// Wall-clock since the first due-check of the main loop (lazy start so boot
-/// time is excluded from both t-entries and -test-seconds).
-double ExecElapsedSeconds()
-{
-    static const auto start = std::chrono::steady_clock::now();
-    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-}
-
+/// -exec <file> and -exec-audit <path>; Core/ExecScript.h documents the script format.
 static void LoadExecScriptFromCmdLine(LPWSTR cmdLine)
 {
-    const auto pathArgument = Spark::Platform::FindWindowsCommandLineUtf8Argument(cmdLine, L"-exec");
-    if (!pathArgument || pathArgument->empty())
-        return;
-    const std::string& path = *pathArgument;
+    const auto auditPath = Spark::Platform::FindWindowsCommandLineUtf8Argument(cmdLine, L"-exec-audit");
+    if (auditPath && !auditPath->empty())
+        g_execScript.SetAuditPath(*auditPath);
 
-    std::ifstream file(std::filesystem::u8path(path));
-    if (!file)
-    {
-        Spark::SimpleConsole::GetInstance().LogError("[exec] cannot open script: " + path);
-        return;
-    }
-    std::string line;
-    while (std::getline(file, line))
-    {
-        while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
-            line.pop_back();
-        if (line.empty() || line[0] == '#')
-            continue;
-        ScriptedCommand sc;
-        size_t idx = 0;
-        if (line[0] == 't' && line.size() > 1 && isdigit(static_cast<unsigned char>(line[1])))
-        {
-            // wall-clock entry: t<seconds> <command>
-            idx = 1;
-            while (idx < line.size() && (isdigit(static_cast<unsigned char>(line[idx])) || line[idx] == '.'))
-                ++idx;
-            if (idx < line.size() && line[idx] == ' ')
-            {
-                sc.atSec = std::stod(line.substr(1, idx - 1));
-                sc.command = line.substr(idx + 1);
-                g_execScript.push_back(sc);
-                continue;
-            }
-            idx = 0; // not "t<num> cmd" after all — fall through as plain command
-        }
-        // optional leading frame number
-        while (idx < line.size() && isdigit(static_cast<unsigned char>(line[idx])))
-            ++idx;
-        if (idx > 0 && idx < line.size() && line[idx] == ' ')
-        {
-            sc.frame = std::stoi(line.substr(0, idx));
-            sc.command = line.substr(idx + 1);
-        }
-        else
-        {
-            sc.command = line;
-        }
-        g_execScript.push_back(sc);
-    }
-    // Unified ordering: t-entries by their time, frame entries at a nominal
-    // 60 fps equivalence (scripts should stick to one form per phase anyway).
-    auto sortKey = [](const ScriptedCommand& c) { return c.atSec >= 0.0 ? c.atSec : c.frame / 60.0; };
-    std::stable_sort(g_execScript.begin(), g_execScript.end(),
-                     [&sortKey](const ScriptedCommand& a, const ScriptedCommand& b)
-                     { return sortKey(a) < sortKey(b); });
-    Spark::SimpleConsole::GetInstance().LogInfo(
-        std::format("[exec] loaded {} scripted commands from {}", g_execScript.size(), path));
-}
-
-void RunDueScriptedCommands(int frameCount)
-{
-    auto& console = Spark::SimpleConsole::GetInstance();
-    const double elapsed = ExecElapsedSeconds();
-    auto isDue = [&](const ScriptedCommand& sc)
-    { return sc.atSec >= 0.0 ? elapsed >= sc.atSec : sc.frame <= frameCount; };
-    while (g_execScriptNext < g_execScript.size() && isDue(g_execScript[g_execScriptNext]))
-    {
-        const std::string& c = g_execScript[g_execScriptNext].command;
-        console.LogInfo(std::format("[exec] frame {} (t={:.1f}s): {}", frameCount, elapsed, c));
-        const bool ok = console.ExecuteCommand(c);
-        // Persist an audit trail for automated smoke runs: the engine has no
-        // stdout and the file logger doesn't carry console traffic.
-        // exec_audit.log (renamed from exec_results.log: that file has a
-        // broken ACL from a force-killed run and can no longer be opened).
-        std::ofstream results("exec_audit.log", std::ios::app);
-        if (results)
-        {
-            results << "frame " << frameCount << " t=" << std::format("{:.1f}", elapsed) << "s | "
-                    << (ok ? "ok " : "ERR") << " | " << c << '\n';
-            // append the command's console output (new entries since execution)
-            const auto& history = console.GetLogHistory();
-            // first scripted command dumps the whole boot history (module
-            // loading diagnostics); later ones append just their own output
-            const size_t window = (g_execScriptNext == 0) ? history.size() : 8;
-            const size_t start = history.size() > window ? history.size() - window : 0;
-            for (size_t i = start; i < history.size(); ++i)
-                results << "    > " << history[i].message << '\n';
-        }
-        ++g_execScriptNext;
-    }
+    const auto scriptPath = Spark::Platform::FindWindowsCommandLineUtf8Argument(cmdLine, L"-exec");
+    if (scriptPath && !scriptPath->empty())
+        g_execScript.LoadFile(*scriptPath, Spark::SimpleConsole::GetInstance());
 }
 
 // ===================================================================================
@@ -502,7 +390,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     // -test-seconds N: wall-clock exit for smokes whose gameplay runs on
     // real dt (frame counts are meaningless when fps varies with vsync).
     if (const auto seconds = Spark::Platform::FindWindowsCommandLineNumber<double>(lpCmdLine, L"-test-seconds"))
-        g_testSecondsLimit = std::max(0.0, *seconds);
+        g_execScript.SetTestSecondsLimit(*seconds);
     g_maxWorkerThreads = ParseThreadCount(lpCmdLine);
     g_noSubprocess = Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-no-subprocess");
     LoadExecScriptFromCmdLine(lpCmdLine);
