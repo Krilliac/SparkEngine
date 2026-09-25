@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Spark/PersistedSchema.h` (public SDK): `ModulePersistedSchema` lets each game module declare the schema version of its save custom state, with the same read-N-and-N-1 rule; SparkGameFPS declares and uses it for its local profile.
 - `tools/release_notes.py` (REL-190) renders the stable release body from the `stable-v1` profile in `docs/site/readiness.json`, this file's single `## [X.Y.Z]` section (a `### Migration` subsection becomes the notes' Migrations section), the frozen `SHA256SUMS`, and fixed checksum, signature, SBOM and provenance verification instructions. It fails closed on a missing or duplicated version section, an empty or inconsistent `SHA256SUMS`, or a missing SBOM or signature control asset; nightly releases keep their short body. No stable release has been published with it.
 
+### Removed
+- `EngineContext::InitializeAll`/`ShutdownAll` and the R1.2 dependency registry that only they used (`RegisterSubsystem`, `DependsOn`, `SubsystemEntry`, `GetInitOrder`, `GetSubsystemCount`, `HasLifecycleFailure`, `EngineSetup::RegisterCoreSubsystems`), per owner decision OD-01: `EngineRuntime` is the single owner of subsystem lifecycle and `LifecycleCompositionRoot` orders it. The two `IEngineContext` virtuals went with them, so `SPARK_SDK_VERSION` is 5 and `EngineContextVirtualCount` is 88; game modules must be rebuilt against the v5 SDK (v4 modules are refused by the exact-match ABI check). The `engine_subsystems` console command no longer prints a registered-entry count, and the `LifecyclePartialInit` CTest (which drove only the removed registry) is gone; `LifecycleCompositionRootFailure` covers partial-init rollback.
+
 ## [0.9.0] - 2026-09-23
 
 This is the reviewed predecessor source candidate for the first fully gated

@@ -72,7 +72,7 @@ sidecar field, the value the host expects, and the value the module declares,
 for example:
 
 ```text
-Module 'libMyGame.so' rejected before OS load: SDK ABI version mismatch: field 'sdk_version' host expects 4, module declares 3; stable-v1 module ABI is exact-match only (N-1 modules are not loaded); rebuild the module against this host's Spark SDK and toolchain
+Module 'libMyGame.so' rejected before OS load: SDK ABI version mismatch: field 'sdk_version' host expects 5, module declares 4; stable-v1 module ABI is exact-match only (N-1 modules are not loaded); rebuild the module against this host's Spark SDK and toolchain
 ```
 
 The checked fields are `struct_size`, `magic`, `format`, `sdk_version`,

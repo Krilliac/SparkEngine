@@ -21,7 +21,9 @@
 //     (four vtable slots). IsSDKCompatible is exact equality, so a module built
 //     against v4 must not be accepted by a v3 host: the host's vtable is shorter
 //     and the call would run off the end of it.
-#define SPARK_SDK_VERSION 4
+// v5: Removed IEngineContext::InitializeAll()/ShutdownAll() (two vtable slots,
+//     OD-01): EngineRuntime owns subsystem lifecycle, so every later slot moved.
+#define SPARK_SDK_VERSION 5
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

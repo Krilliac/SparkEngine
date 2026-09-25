@@ -16,7 +16,7 @@ Historical legend: **DONE** = the 2026-03-26 audit marked an implementation pres
 
 | System | Status | Notes |
 |--------|:------:|-------|
-| Engine initialization (EngineContext) | **DONE** | Service locator; the production init/shutdown order is `LifecycleCompositionRoot` (the `InitDebug` stage, `LifecycleOrder::Diagnostics`, runs first). `EngineContext::InitializeAll`/`ShutdownAll` (R1.2) is **not** the production path -- it is kept only because `Tests/harden/Test_tests_enginecontext_real.cpp` and six other test files exercise it |
+| Engine initialization (EngineContext) | **DONE** | Service locator; the production init/shutdown order is `LifecycleCompositionRoot` (the `InitDebug` stage, `LifecycleOrder::Diagnostics`, runs first). `EngineContext` only locates subsystems; `EngineRuntime` owns them. The R1.2 `EngineContext::InitializeAll`/`ShutdownAll` registry was deleted (OD-01, SDK v5) |
 | Module system (IModule, DLL loading) | **DONE** | Dynamic loading, discovery, load ordering |
 | Error handling (Result, CrashHandler) | **DONE** | Minidump generation, stack traces, HTTP upload |
 | Logging (project logger + SimpleConsole) | **DONE** | Historical audit found the custom logging path present; no spdlog dependency is tracked |

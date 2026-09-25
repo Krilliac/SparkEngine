@@ -321,28 +321,6 @@ namespace Spark
         virtual uint64_t GetFrameNumber() const { return 0; }
 
         // =====================================================================
-        // Subsystem lifecycle
-        // =====================================================================
-
-        /**
-         * @brief Initialize all registered subsystems in dependency order
-         *
-         * Performs a topological sort of subsystems based on declared dependencies
-         * and calls Initialize() on each in the correct order.
-         *
-         * @return true if all subsystems initialized successfully
-         */
-        virtual bool InitializeAll() { return true; }
-
-        /**
-         * @brief Shut down all subsystems in reverse dependency order
-         *
-         * Calls Shutdown() on each subsystem in reverse topological order,
-         * ensuring dependents are shut down before their dependencies.
-         */
-        virtual void ShutdownAll() {}
-
-        // =====================================================================
         // Host-owned registries (appended last to keep earlier vtable slots stable)
         // =====================================================================
 
@@ -377,9 +355,9 @@ namespace Spark
      * count is pinned to the SDK version below. When you add (or remove) a virtual
      * here, update this count *and* bump SPARK_SDK_VERSION in Spark/Version.h.
      */
-    inline constexpr uint32_t EngineContextVirtualCount = 90;
+    inline constexpr uint32_t EngineContextVirtualCount = 88;
 
-    static_assert(EngineContextVirtualCount == 90 && SPARK_SDK_VERSION == 4,
+    static_assert(EngineContextVirtualCount == 88 && SPARK_SDK_VERSION == 5,
                   "IEngineContext's vtable layout changed: bump SPARK_SDK_VERSION and update "
                   "EngineContextVirtualCount together, or an old host will accept a module that "
                   "calls off the end of its vtable.");

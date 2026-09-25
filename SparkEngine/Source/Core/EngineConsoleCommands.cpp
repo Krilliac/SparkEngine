@@ -670,7 +670,6 @@ namespace Spark
                     return "Engine context not available";
                 std::stringstream ss;
                 ss << "=== Engine Subsystems ===\n"
-                   << "  Registered: " << ctx->GetSubsystemCount() << "\n"
                    << "  Graphics:   " << (ctx->GetGraphics() ? "YES" : "NO") << "\n"
                    << "  Input:      " << (ctx->GetInput() ? "YES" : "NO") << "\n"
                    << "  Timer:      " << (ctx->GetTimer() ? "YES" : "NO") << "\n"

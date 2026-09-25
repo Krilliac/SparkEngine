@@ -8,8 +8,10 @@
  * compatibility but delegate to the generic registry internally.
  *
  * R1.1: All named getters/setters now delegate to the generic registry.
- * R1.2: Dependency-aware subsystem initialization via RegisterSubsystem<T>(),
- *        InitializeAll(), and ShutdownAll().
+ *
+ * EngineContext only locates subsystems. It never initializes or shuts them
+ * down: EngineRuntime (Core/EngineRuntime.h) owns every engine-lifetime
+ * subsystem and LifecycleCompositionRoot orders startup and teardown (OD-01).
  */
 
 #pragma once
@@ -69,33 +71,6 @@ template <typename T> TypeId GetTypeId()
 #endif
 
 // ============================================================================
-// Dependency declaration helpers (R1.2)
-// ============================================================================
-
-/**
- * @brief Tag type used to declare subsystem dependencies at registration time
- *
- * Usage: ctx->RegisterSubsystem<MySystem>(&sys, DependsOn<Timer, EventBus>{});
- * An empty DependsOn<>{} means no dependencies.
- */
-template <typename... Deps> struct DependsOn
-{
-};
-
-/**
- * @brief Metadata about a registered subsystem for dependency-aware init
- */
-struct SubsystemEntry
-{
-    TypeId type = nullptr;
-    std::string name;
-    std::vector<TypeId> dependencies;
-    std::function<bool()> initFn;     ///< Called during InitializeAll()
-    std::function<void()> shutdownFn; ///< Called during ShutdownAll()
-    bool initialized = false;
-};
-
-// ============================================================================
 // Hash for TypeId (const void*) to use in unordered containers
 // ============================================================================
 
@@ -116,16 +91,6 @@ struct TypeIdHash
  */
 class EngineContext : public Spark::IEngineContext
 {
-  private:
-    enum class LifecycleState : uint8_t
-    {
-        Idle,
-        Initializing,
-        Initialized,
-        ShuttingDown,
-        Failed
-    };
-
   public:
     EngineContext() = default;
     EngineContext(GraphicsEngine* graphics, InputManager* input, Timer* timer, Spark::EventBus* eventBus = nullptr);
@@ -381,21 +346,6 @@ class EngineContext : public Spark::IEngineContext
     template <typename T> bool RegisterSystem(T* system)
     {
         const TypeId typeId = GetTypeId<T>();
-        std::unique_lock<std::recursive_mutex> lifecycleLock(m_lifecycleMutex, std::try_to_lock);
-        if (!lifecycleLock.owns_lock())
-        {
-            std::fprintf(stderr, "[EngineContext] Refusing registry mutation during a lifecycle transition\n");
-            return false;
-        }
-
-        if (m_lifecycleState.load(std::memory_order_acquire) != LifecycleState::Idle &&
-            IsLifecycleSubsystemType(typeId))
-        {
-            std::fprintf(stderr,
-                         "[EngineContext] Refusing lifecycle-managed registry mutation outside the idle state\n");
-            return false;
-        }
-
         std::unique_lock<std::shared_mutex> lock(m_systemsMutex);
         if (system == nullptr)
         {
@@ -414,12 +364,6 @@ class EngineContext : public Spark::IEngineContext
     template <typename T> T* GetSystem() const
     {
         const TypeId typeId = GetTypeId<T>();
-        if (m_lifecycleState.load(std::memory_order_acquire) == LifecycleState::Failed &&
-            IsLifecycleSubsystemType(typeId))
-        {
-            return nullptr;
-        }
-
         std::shared_lock<std::shared_mutex> lock(m_systemsMutex);
         auto it = m_systems.find(typeId);
         if (it != m_systems.end())
@@ -459,150 +403,14 @@ class EngineContext : public Spark::IEngineContext
         return system;
     }
 
-    // =========================================================================
-    // Dependency-aware subsystem registration and lifecycle (R1.2)
-    // =========================================================================
-
-    /**
-     * @brief Register a subsystem with dependency metadata for ordered init/shutdown
-     *
-     * @tparam T        The subsystem type
-     * @tparam Deps     Types this subsystem depends on (declared via DependsOn<...>)
-     * @param system    Non-owning pointer to the subsystem
-     * @param deps      DependsOn<...> tag (types are extracted at compile time)
-     * @param initFn    Optional initialization callback (called during InitializeAll)
-     * @param shutdownFn Optional shutdown/rollback callback. It is called during
-     *        ShutdownAll and after an init callback has begun but reports failure,
-     *        so it must tolerate a partially initialized subsystem.
-     * @return true when registration was accepted; false when lifecycle state
-     *         makes mutation unsafe or the pointer is null
-     */
-    template <typename T, typename... Deps>
-    bool RegisterSubsystem(T* system, DependsOn<Deps...> /*deps*/, std::function<bool()> initFn = nullptr,
-                           std::function<void()> shutdownFn = nullptr)
-    {
-        std::unique_lock<std::recursive_mutex> lifecycleLock(m_lifecycleMutex, std::try_to_lock);
-        if (!lifecycleLock.owns_lock())
-        {
-            std::fprintf(stderr, "[EngineContext] Refusing lifecycle graph mutation during a transition\n");
-            return false;
-        }
-
-        SPARK_EXPECTS(system != nullptr);
-        if (system == nullptr)
-            return false;
-
-        // The lifecycle graph is snapshotted as pointers into
-        // m_subsystemEntries during InitializeAll(). Mutating it from an init or
-        // shutdown callback could invalidate that snapshot or replace metadata
-        // for a live resource. Generic RegisterSystem<T>() remains available for
-        // intentionally dynamic, non-lifecycle service pointers.
-        if (m_lifecycleState.load(std::memory_order_acquire) != LifecycleState::Idle)
-        {
-            std::fprintf(stderr, "[EngineContext] Refusing lifecycle graph mutation outside the idle state\n");
-            return false;
-        }
-
-        // Store in the generic registry
-        if (!RegisterSystem<T>(system))
-            return false;
-
-        // Build dependency list
-        std::vector<TypeId> depList;
-        (depList.push_back(GetTypeId<Deps>()), ...);
-
-        // Store entry for topological sorting
-        SubsystemEntry entry{GetTypeId<T>(), {}, std::move(depList), std::move(initFn), std::move(shutdownFn), false};
-
-        // Replace existing entry for same type, or append
-        auto it = std::find_if(m_subsystemEntries.begin(), m_subsystemEntries.end(),
-                               [&](const SubsystemEntry& e) { return e.type == GetTypeId<T>(); });
-        if (it != m_subsystemEntries.end())
-        {
-            *it = std::move(entry);
-        }
-        else
-        {
-            m_subsystemEntries.push_back(std::move(entry));
-        }
-        return true;
-    }
-
-    /**
-     * @brief Initialize all registered subsystems in topological (dependency) order
-     *
-     * Performs a topological sort of subsystem entries based on their declared
-     * dependencies. Subsystems with no init callback are silently skipped.
-     *
-     * @return true if all subsystems initialized successfully, false on failure or cycle
-     */
-    bool InitializeAll() override;
-
-    /**
-     * @brief Shut down all initialized subsystems in reverse dependency order
-     *
-     * Iterates the initialization order in reverse, calling each subsystem's
-     * shutdown callback. Subsystems that were not initialized are skipped.
-     */
-    void ShutdownAll() override;
-
-    /**
-     * @brief Get the computed initialization order (for debugging/testing)
-     * @return Vector of TypeId in topological order, empty if not yet computed
-     */
-    const std::vector<TypeId>& GetInitOrder() const { return m_initOrder; }
-
-    /**
-     * @brief Get the number of registered subsystem entries
-     */
-    size_t GetSubsystemCount() const { return m_subsystemEntries.size(); }
-
-    /** Whether cleanup failed and lifecycle-managed pointers are quarantined. */
-    bool HasLifecycleFailure() const noexcept
-    {
-        return m_lifecycleState.load(std::memory_order_acquire) == LifecycleState::Failed;
-    }
-
     uint32_t GetEngineVersion() const override;
     uint32_t GetSDKVersion() const override;
 
   private:
-    /**
-     * @brief Perform topological sort of subsystem entries
-     * @param[out] sorted  Resulting order
-     * @return true if sort succeeded (no cycles), false if a dependency cycle was detected
-     */
-    bool TopologicalSort(std::vector<SubsystemEntry*>& sorted);
-
-    /** Reverse-clean initialized entries, swallowing and reporting callback exceptions. */
-    bool CleanupInitializedSubsystemsNoexcept() noexcept;
-
-    /** Compensate the failed init attempt, then reverse-clean prior successes. */
-    bool RollbackFailedInitializationNoexcept(SubsystemEntry& failedEntry) noexcept;
-
-    /** Whether a type participates in the lifecycle graph. */
-    bool IsLifecycleSubsystemType(TypeId type) const noexcept
-    {
-        return std::any_of(m_subsystemEntries.begin(), m_subsystemEntries.end(),
-                           [type](const SubsystemEntry& entry) { return entry.type == type; });
-    }
-
     // Generic system registry (void* with TypeId key) — single source of truth.
     // Guarded by m_systemsMutex: startup is single-threaded, but module hot-reload
     // can RegisterSystem at runtime while game/render/network threads GetSystem, and
     // a concurrent insert that rehashes during a reader's find() is UB.
     mutable std::unordered_map<TypeId, void*, TypeIdHash> m_systems;
     mutable std::shared_mutex m_systemsMutex;
-
-    // Dependency-aware subsystem entries (R1.2)
-    std::vector<SubsystemEntry> m_subsystemEntries;
-
-    // Cached initialization order (populated by InitializeAll)
-    std::vector<TypeId> m_initOrder;
-
-    // Serializes lifecycle transitions while permitting same-thread callbacks to
-    // reenter and receive an immediate state-based rejection.
-    mutable std::recursive_mutex m_lifecycleMutex;
-
-    std::atomic<LifecycleState> m_lifecycleState{LifecycleState::Idle};
 };

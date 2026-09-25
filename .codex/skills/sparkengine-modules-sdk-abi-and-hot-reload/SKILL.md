@@ -57,7 +57,7 @@ protection each of those steps really gives you.
 - **Injection hook** — an `extern "C" __declspec(dllexport)` function the host resolves via
   `GetProcAddress` right after `LoadLibrary` and calls to point the DLL's per-image globals at
   host-owned objects. Windows-only (`#if defined(_WIN32)`).
-- **SDK version** — `SPARK_SDK_VERSION` (currently **2**) in `SparkSDK/Include/Spark/Version.h`.
+- **SDK version** — `SPARK_SDK_VERSION` (currently **5**) in `SparkSDK/Include/Spark/Version.h`.
   An integer ABI stamp baked into each module at compile time via `ModuleInfo::sdkVersion`.
 - **Game vs Addon** — `Spark::ModuleKind` in `SparkSDK/Include/Spark/IModule.h`. Exactly one
   `Game` module per process (game modules own the simulation); `Addon` modules coexist freely.

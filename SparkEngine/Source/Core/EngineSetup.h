@@ -1,17 +1,10 @@
 /**
  * @file EngineSetup.h
- * @brief Wires architecture components into the engine lifecycle
+ * @brief Engine startup helpers: ECS phase wiring, JobSystem start, bootstrap descriptors
  *
- * Provides helper functions that register all engine subsystems with
- * EngineContext using dependency metadata, and create the EngineBootstrap
- * descriptor list for ordered initialization.
- *
- * Usage:
- * @code
- *   auto* ctx = EngineContext::Get();
- *   Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
- *   ctx->InitializeAll();
- * @endcode
+ * Subsystem ownership and init/shutdown order are not decided here:
+ * EngineRuntime owns every engine-lifetime subsystem and
+ * LifecycleCompositionRoot orders startup and teardown (OD-01).
  */
 
 #pragma once
@@ -26,142 +19,9 @@
 class GraphicsEngine;
 class PhysicsSystem;
 class AudioEngine;
-class InputManager;
-class Timer;
-class SceneManager;
-class AngelScriptEngine;
-
-// Additional forward declarations beyond what IEngineContext.h provides
-namespace Spark
-{
-    // AnimationSystem, NetworkManager, AISystem, UISystem already
-    // forward-declared via IEngineContext.h (included by EngineContext.h)
-    class SaveSystem;
-    class CoroutineScheduler;
-    class WeatherSystem;
-    class DialogueSystem;
-    class ModSystem;
-} // namespace Spark
 
 namespace Spark::EngineSetup
 {
-
-    /**
-     * @brief Register all core engine subsystems with EngineContext dependency metadata.
-     *
-     * Sets up the dependency graph so InitializeAll() initializes them in the right order:
-     *   Timer -> EventBus -> Input -> Graphics -> Physics -> Audio -> Animation -> AI
-     *
-     * Call this after creating the EngineContext and setting all subsystem pointers.
-     */
-    inline void RegisterCoreSubsystems(EngineContext& ctx)
-    {
-        // Timer has no dependencies
-        if (auto* timer = ctx.GetTimer())
-        {
-            ctx.RegisterSubsystem<Timer>(timer, DependsOn<>{});
-        }
-
-        // EventBus depends on nothing
-        if (auto* eventBus = ctx.GetEventBus())
-        {
-            ctx.RegisterSubsystem<Spark::EventBus>(eventBus, DependsOn<>{});
-        }
-
-        // Input depends on Timer
-        if (auto* input = ctx.GetInput())
-        {
-            ctx.RegisterSubsystem<InputManager>(input, DependsOn<Timer>{});
-        }
-
-        // Graphics depends on Timer
-        if (auto* graphics = ctx.GetGraphics())
-        {
-            ctx.RegisterSubsystem<GraphicsEngine>(graphics, DependsOn<Timer>{});
-        }
-
-        // Physics depends on Timer
-        if (auto* physics = ctx.GetPhysics())
-        {
-            ctx.RegisterSubsystem<PhysicsSystem>(physics, DependsOn<Timer>{});
-        }
-
-        // Audio depends on Timer and Graphics (for 3D positioning)
-        if (auto* audio = ctx.GetAudio())
-        {
-            ctx.RegisterSubsystem<AudioEngine>(audio, DependsOn<Timer, GraphicsEngine>{});
-        }
-
-        // Animation depends on Timer
-        if (auto* anim = ctx.GetAnimation())
-        {
-            ctx.RegisterSubsystem<Spark::Animation::AnimationSystem>(anim, DependsOn<Timer>{});
-        }
-
-        // AI depends on Timer and Physics (for navmesh queries)
-        if (auto* ai = ctx.GetAI())
-        {
-            ctx.RegisterSubsystem<Spark::AI::AISystem>(ai, DependsOn<Timer, PhysicsSystem>{});
-        }
-
-        // SaveSystem depends on nothing
-        if (auto* save = ctx.GetSaveSystem())
-        {
-            ctx.RegisterSubsystem<Spark::SaveSystem>(save, DependsOn<>{});
-        }
-
-        // CoroutineScheduler depends on Timer
-        if (auto* coroutines = ctx.GetCoroutineScheduler())
-        {
-            ctx.RegisterSubsystem<Spark::CoroutineScheduler>(coroutines, DependsOn<Timer>{});
-        }
-
-        // SceneManager depends on Graphics and Physics
-        if (auto* scene = ctx.GetSceneManager())
-        {
-            ctx.RegisterSubsystem<SceneManager>(scene, DependsOn<GraphicsEngine, PhysicsSystem>{});
-        }
-
-        // Scripting depends on Timer and EventBus
-        if (auto* script = ctx.GetScriptEngine())
-        {
-            ctx.RegisterSubsystem<AngelScriptEngine>(script, DependsOn<Timer, Spark::EventBus>{});
-        }
-
-        // Networking depends on Timer (DI service + concrete compatibility path)
-        if (auto* networkService = ctx.GetNetworkService())
-        {
-            ctx.RegisterSubsystem<Spark::INetworkService>(networkService, DependsOn<Timer>{});
-        }
-        if (auto* network = ctx.GetNetwork())
-        {
-            ctx.RegisterSubsystem<Spark::NetworkManager>(network, DependsOn<Timer>{});
-        }
-
-        // WeatherSystem depends on Timer (weather transitions are time-based)
-        if (auto* weather = ctx.GetWeather())
-        {
-            ctx.RegisterSubsystem<Spark::WeatherSystem>(weather, DependsOn<Timer>{});
-        }
-
-        // UISystem depends on Timer and EventBus
-        if (auto* ui = ctx.GetUI())
-        {
-            ctx.RegisterSubsystem<Spark::UI::UISystem>(ui, DependsOn<Timer, Spark::EventBus>{});
-        }
-
-        // DialogueSystem depends on Timer and EventBus (fires events, tracks timing)
-        if (auto* dialogue = ctx.GetDialogue())
-        {
-            ctx.RegisterSubsystem<Spark::DialogueSystem>(dialogue, DependsOn<Timer, Spark::EventBus>{});
-        }
-
-        // ModSystem depends on nothing (scans filesystem)
-        if (auto* mods = ctx.GetModSystem())
-        {
-            ctx.RegisterSubsystem<Spark::ModSystem>(mods, DependsOn<>{});
-        }
-    }
 
     /**
      * @brief Create a PhaseSystemManager with all standard systems registered in their correct phases.
@@ -238,8 +98,8 @@ namespace Spark::EngineSetup
     /**
      * @brief Create an EngineBootstrap with standard subsystem descriptors.
      *
-     * The bootstrap provides an alternative to EngineContext::InitializeAll() with
-     * string-named subsystems and richer error reporting.
+     * Descriptors are string-named subsystems with declared dependencies; the
+     * bootstrap orders them and reports which one failed.
      *
      * @return Configured EngineBootstrap (call Initialize() to run).
      */
