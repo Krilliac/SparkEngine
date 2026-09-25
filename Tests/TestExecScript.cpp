@@ -265,6 +265,53 @@ TEST(ExecScript_TestSecondsLimitAndMissingScript)
     EXPECT_EQ(player.GetPendingCount(), size_t{0});
 }
 
+TEST(ExecScript_LoadFileEnforcesSizeBoundAndRejectsDirectories)
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    EXPECT_TRUE(console.Initialize());
+
+    const auto workDir = UniqueTempPath("spark-exec-bound");
+    std::error_code error;
+    std::filesystem::create_directories(workDir, error);
+    ASSERT_FALSE(static_cast<bool>(error));
+
+    // A script of exactly MaxScriptBytes loads; its final line is the last command.
+    const auto atLimit = workDir / "at-limit.cfg";
+    {
+        const std::string head = "0 exec_bound_first\n";
+        const std::string tail = "\n5 exec_bound_last";
+        // One long comment line pads the file to the exact bound.
+        const std::string body =
+            head + std::string(Spark::ExecScriptPlayer::MaxScriptBytes - head.size() - tail.size(), '#') + tail;
+        ASSERT_EQ(body.size(), Spark::ExecScriptPlayer::MaxScriptBytes);
+        std::ofstream(atLimit, std::ios::binary) << body;
+    }
+    Spark::ExecScriptPlayer player;
+    ASSERT_TRUE(player.LoadFile(atLimit.string(), console));
+    ASSERT_EQ(player.GetPendingCount(), size_t{2});
+
+    // One byte more is refused, and the previously loaded schedule is left intact.
+    const auto overLimit = workDir / "over-limit.cfg";
+    std::ofstream(overLimit, std::ios::binary) << std::string(Spark::ExecScriptPlayer::MaxScriptBytes + 1, '#');
+    EXPECT_FALSE(player.LoadFile(overLimit.string(), console));
+    EXPECT_EQ(player.GetPendingCount(), size_t{2});
+
+    // A directory opens on POSIX and reads as empty; it must not load as an empty timeline.
+    EXPECT_FALSE(player.LoadFile(workDir.string(), console));
+    EXPECT_EQ(player.GetPendingCount(), size_t{2});
+
+#if defined(__linux__)
+    // An endless device is refused after the bound instead of being drained.
+    if (std::filesystem::exists("/dev/zero", error))
+    {
+        EXPECT_FALSE(player.LoadFile("/dev/zero", console));
+        EXPECT_EQ(player.GetPendingCount(), size_t{2});
+    }
+#endif
+
+    std::filesystem::remove_all(workDir, error);
+}
+
 #if defined(__linux__)
 
 namespace
@@ -432,7 +479,7 @@ TEST(ExecScript_LinuxRejectsUnreadableScriptAndBadSeconds)
     ASSERT_TRUE(missingScript.has_value());
     const std::string missingOutput = missingScript->ReadAllStdout();
     EXPECT_NE(missingScript->WaitForExit(), 0);
-    EXPECT_STR_CONTAINS(missingOutput, "cannot open -exec script");
+    EXPECT_STR_CONTAINS(missingOutput, "cannot load -exec script");
 
     auto badSeconds = Spark::Process::Builder(engine.string())
                           .Arg("-headless")

@@ -11,6 +11,7 @@
 #include <charconv>
 #include <format>
 #include <fstream>
+#include <sstream>
 
 namespace Spark
 {
@@ -94,13 +95,41 @@ namespace Spark
 
     bool ExecScriptPlayer::LoadFile(const std::string& utf8Path, SimpleConsole& console)
     {
-        std::ifstream file(PathFromUtf8(utf8Path));
+        const auto path = PathFromUtf8(utf8Path);
+        std::error_code error;
+        // A directory opens successfully on POSIX and reads as empty, which would
+        // silently drop the whole timeline.
+        if (std::filesystem::is_directory(path, error))
+        {
+            console.LogError("[exec] script path is a directory: " + utf8Path);
+            return false;
+        }
+        std::ifstream file(path, std::ios::binary);
         if (!file)
         {
             console.LogError("[exec] cannot open script: " + utf8Path);
             return false;
         }
-        Load(ParseExecScript(file));
+
+        // Read at most one byte past the bound, so an endless source (a pipe or
+        // /dev/zero) is refused without being drained.
+        std::string text(MaxScriptBytes + 1, '\0');
+        file.read(text.data(), static_cast<std::streamsize>(text.size()));
+        if (file.bad())
+        {
+            console.LogError("[exec] cannot read script: " + utf8Path);
+            return false;
+        }
+        text.resize(static_cast<size_t>(file.gcount()));
+        if (text.size() > MaxScriptBytes)
+        {
+            console.LogError(
+                std::format("[exec] script exceeds the {} byte limit, refusing: {}", MaxScriptBytes, utf8Path));
+            return false;
+        }
+
+        std::istringstream input(std::move(text));
+        Load(ParseExecScript(input));
         console.LogInfo(std::format("[exec] loaded {} scripted commands from {}", m_commands.size(), utf8Path));
         return true;
     }

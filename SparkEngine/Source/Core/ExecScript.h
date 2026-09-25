@@ -61,9 +61,14 @@ namespace Spark
         /// Audit file used when `-exec-audit` is not given; the package smokes read this name.
         static constexpr const char* DefaultAuditFileName = "exec_audit.log";
 
+        /// Largest script LoadFile accepts. Real timelines are a few KiB; the bound keeps a
+        /// wrong path (a log, a device, a pipe that never ends) from being read into memory.
+        static constexpr size_t MaxScriptBytes = size_t{1} << 20;
+
         /**
          * @brief Load and schedule a script file (UTF-8 path).
-         * @return false (with a console error) when the file cannot be opened.
+         * @return false (with a console error, schedule left unchanged) when the path is a
+         *         directory, cannot be opened or read, or holds more than MaxScriptBytes.
          */
         bool LoadFile(const std::string& utf8Path, SimpleConsole& console);
 

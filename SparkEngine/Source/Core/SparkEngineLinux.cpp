@@ -128,7 +128,7 @@ static bool ConfigureExecScriptArgs(int argc, char* argv[])
     {
         if (!g_execScript.LoadFile(scriptPath, Spark::SimpleConsole::GetInstance()))
         {
-            std::fprintf(stderr, "SparkEngine: cannot open -exec script '%s'\n", scriptPath);
+            std::fprintf(stderr, "SparkEngine: cannot load -exec script '%s'\n", scriptPath);
             return false;
         }
     }
