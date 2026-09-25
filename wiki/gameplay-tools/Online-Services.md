@@ -12,7 +12,7 @@ The default platform is `NullOnlinePlatform`, which works offline and keeps ever
 
 Adding a new platform requires implementing the `IOnlinePlatform` interface and passing it to `OnlineServiceManager::SetPlatform()`. The Steam, Epic, and Console classes are compile-only stubs. They report no capabilities, and every call fails.
 
-**Service boundary (OD-08):** this interface is an integration point, not a hosted service. SparkEngine ships no hosted identity, matchmaking, fleet, entitlement, billing, leaderboard, or cloud-save service. The game or the platform holder provides them. See [Online Service Boundary](../advanced/Online-Service-Boundary.md).
+**Service boundary (OD-08):** this interface is an integration point, not a hosted service. SparkEngine ships no hosted identity, matchmaking, fleet, entitlement, billing, leaderboard, or cloud-save service. The game or the platform holder provides them. See [Online Service Boundary](../advanced/Online-Service-Boundary.md). The normative contract is [`docs/specs/online-services.md`](../../docs/specs/online-services.md). It holds the deployment diagram, every trust boundary, the per-call timeout, retry, and circuit-breaker budgets, the failure semantics that every adapter must follow, and the adapter status register (`NullOnlinePlatform` is local and deterministic, and the Steam, Epic, and Console classes are stubs).
 
 ## Architecture
 
@@ -113,6 +113,7 @@ There are no build options for platform SDKs. The repository does not include or
 ## Related Systems
 
 - [Online Service Boundary](../advanced/Online-Service-Boundary.md) -- what the engine provides and what a product must provide
+- [Online-Services Boundary Specification](../../docs/specs/online-services.md) -- deployment diagram, trust boundaries, call budgets, failure semantics
 - [Networking](../subsystems/Networking.md) -- UDP transport for gameplay networking
 - [Save System](Save-System.md) -- Local save/load persistence
 - [Gameplay Systems](Gameplay-Systems.md) -- Inventory, quests, achievements

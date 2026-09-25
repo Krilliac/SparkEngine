@@ -181,7 +181,6 @@ FUTURE_ACCEPTANCE_PATHS = {
     "Tests/Benchmarks",
     "Tests/ModuleKit",
     "docs/operations/server-runbook.md",
-    "docs/specs/online-services.md",
     "docs/specs/persistence.md",
     "wiki/gameplay-tools/Visual-Scripting.md",
     "wiki/getting-started/Building-from-Source.md",
@@ -309,6 +308,7 @@ def legal_public_wording_errors(
 # public claim surface.
 ONLINE_SERVICE_BOUNDARY_SURFACES = {
     "docs/site/readiness.json",
+    "docs/specs/online-services.md",
     "wiki/advanced/Online-Service-Boundary.md",
     "wiki/gameplay-tools/Online-Services.md",
 }

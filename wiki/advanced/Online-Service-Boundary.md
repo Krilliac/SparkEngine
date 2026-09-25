@@ -65,6 +65,11 @@ interface. They do nothing on their own.
 
 ## Trust boundaries
 
+The full contract, with a Mermaid deployment diagram, the nine named boundaries
+(B1 to B9), per-call budgets, and the adapter status register, is
+[`docs/specs/online-services.md`](../../docs/specs/online-services.md). The
+sketch below is a summary.
+
 ```
  Player client  ──UDP──►  SparkServer / AreaServer   (engine: gameplay authority)
        │                         ▲
@@ -118,9 +123,12 @@ profile ships no online services and no multiplayer support claim.
 
 ## Performance Notes
 
-The engine sets no timeout, retry, or circuit-breaker budget for services it
-does not own. Budgets for product services belong to the product that runs
-them.
+Section 5 of [`docs/specs/online-services.md`](../../docs/specs/online-services.md)
+sets the timeout, retry, and circuit-breaker budgets that apply at each engine
+boundary, such as a 5 ms game-thread limit per `IOnlinePlatform` call and 2 s
+local I/O deadlines on gateway admission and area control. It also says which
+budgets the code does not enforce yet. The internal budgets of a product
+service belong to the product that runs it.
 
 ## Troubleshooting
 
@@ -144,6 +152,7 @@ surface plus this page, the Online Services page, and `docs/site/readiness.json`
 ## Related Pages
 
 - [Online Services](../gameplay-tools/Online-Services.md)
+- [Online-Services Boundary Specification](../../docs/specs/online-services.md)
 - [Networking](../subsystems/Networking.md)
 - [Dedicated Server](../subsystems/Dedicated-Server.md)
 - [Daemon Services Architecture](Daemon-Services-Architecture.md)
