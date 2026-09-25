@@ -3813,8 +3813,8 @@ RPG has broad in-memory models but no integrated input, entities, rendered scene
 Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Automated packaged quest flow completes and reward/state persist after restart
-   - Evidence: `Tests/TestMOD350RPGQuestSliceReal.cpp`
-   - The quest chain completes in-process, but no packaged run or restart persistence test exists.
+   - Evidence: `Tests/TestMOD350RPGQuestSliceReal.cpp`, `GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp`
+   - RPGQuestSlice_* finish the quest chain in-process. RPGPersistence_* save mid-quest via the real SaveSystem, rebuild all RPG systems, restore quest, inventory, area, NPC disposition/patrol and world hour, and keep the quest reward across a second restart. RPGDEMO 2 (N-1) slots migrate to default NPC state; corrupt, truncated, v1 and future-version slots are rejected. No packaged run exists.
 2. **[unmet]** NPCs navigate/interact through runtime systems
    - Evidence: `GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp`
    - NPCs have no NavMesh integration and no test covers NPC navigation through runtime systems.
@@ -3825,6 +3825,7 @@ Progress: 0 of 3 implemented, 0 evidenced at an exact commit.
 
 ```bash
 ctest --test-dir build/windows-release -C Release -R RPGQuestSlice --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R RPGPersistence --output-on-failure --no-tests=error
 ```
 
 **Automated evidence**

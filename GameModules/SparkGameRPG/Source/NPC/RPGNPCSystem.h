@@ -74,6 +74,27 @@ namespace RPG
         std::vector<uint32_t> shopItems; ///< Item IDs available for sale
     };
 
+    /// @brief The mutable, save-worthy part of one NPC (definitions come from RegisterDefaultNPCs)
+    struct NPCPersistentState
+    {
+        uint32_t npcId = 0;
+        int dispositionValue = 50; ///< 0-100; the disposition tier is derived from it on restore
+        NPCBehavior behavior = NPCBehavior::Idle;
+        float posX = 0.0f;
+        float posY = 0.0f;
+        float posZ = 0.0f;
+        int currentWaypointIndex = 0;
+        float waypointWaitTimer = 0.0f;
+    };
+
+    /// @brief World clock plus every registered NPC's mutable state, ordered by NPC id
+    struct NPCSystemSnapshot
+    {
+        float worldTime = 0.0f;
+        float worldHour = 8.0f;
+        std::vector<NPCPersistentState> npcs;
+    };
+
     /**
      * @brief NPC registry, AI behavior, schedules, and disposition tracking
      */
@@ -101,6 +122,29 @@ namespace RPG
 
         // === World time for schedules ===
         float GetWorldHour() const { return m_worldHour; }
+
+        // === Persistence ===
+
+        /** @brief Capture the world clock and every NPC's mutable state, sorted by NPC id */
+        NPCSystemSnapshot CaptureState() const;
+
+        /**
+         * @brief The state a new world starts with: clock at 0 (8:00) and every default NPC as registered
+         * @return Snapshot used to migrate saves written before NPC state was persisted
+         */
+        static NPCSystemSnapshot CaptureDefaultState();
+
+        /**
+         * @brief Check a snapshot against the registered NPCs without applying it
+         * @return true only if it names every registered NPC exactly once with in-range values
+         */
+        bool ValidateState(const NPCSystemSnapshot& snapshot) const;
+
+        /**
+         * @brief Apply a snapshot; nothing changes unless ValidateState() accepts it
+         * @return true if the snapshot was applied
+         */
+        bool RestoreState(const NPCSystemSnapshot& snapshot);
 
       private:
         void RegisterDefaultNPCs();

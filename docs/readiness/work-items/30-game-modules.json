@@ -1256,9 +1256,10 @@
           "criterionDigest": "sha256:7a3b148c732e",
           "state": "unmet",
           "evidence": [
-            "Tests/TestMOD350RPGQuestSliceReal.cpp"
+            "Tests/TestMOD350RPGQuestSliceReal.cpp",
+            "GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.cpp"
           ],
-          "note": "The quest chain completes in-process, but no packaged run or restart persistence test exists."
+          "note": "RPGQuestSlice_* finish the quest chain in-process. RPGPersistence_* save mid-quest via the real SaveSystem, rebuild all RPG systems, restore quest, inventory, area, NPC disposition/patrol and world hour, and keep the quest reward across a second restart. RPGDEMO 2 (N-1) slots migrate to default NPC state; corrupt, truncated, v1 and future-version slots are rejected. No packaged run exists."
         },
         {
           "criterionDigest": "sha256:63d66a74b7a8",
@@ -1276,7 +1277,8 @@
         }
       ],
       "commands": [
-        "ctest --test-dir build/windows-release -C Release -R RPGQuestSlice --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -R RPGQuestSlice --output-on-failure --no-tests=error",
+        "ctest --test-dir build/windows-release -C Release -R RPGPersistence --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "RPGQuestSlice_*",
@@ -1313,9 +1315,7 @@
       "plannedCiJobs": [
         "module-RPG"
       ],
-      "plannedTestSelectors": [
-        "RPGPersistence_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "MOD-360",

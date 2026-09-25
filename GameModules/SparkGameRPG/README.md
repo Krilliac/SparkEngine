@@ -43,3 +43,33 @@ Tests/TestGameModuleRPG.cpp. Tests/TestMOD350RPGQuestSliceReal.cpp drives the
 quest chain (Shadow Wolves, Healing Herbs, The Dark Below) end to end through the
 session API with the real RPGGameplayBridge quest policy installed; run it with
 `ctest --test-dir build/linux-gcc-release -R RPGQuestSlice --output-on-failure`.
+
+## Save and load
+
+rpg_save and rpg_load go through RPGEngineSystems::SaveGame and LoadGame. The ECS
+world is written to a SaveSystem slot (`<slot>.spark_save`, CRC-32 protected), and the
+adventure is stored in the same file as the `SparkGameRPG.demo.v1` custom state. That
+custom state is an `RPGDEMO 3` snapshot. It holds class, level, XP, health, mana, stats,
+area, the current enemy, the pack, equipment and engine QuestSystem progress. It also holds
+the NPC system's world clock and hour and, for every NPC, disposition, behavior, position
+and patrol waypoint and wait timer.
+
+SaveSystem validates the snapshot before it replaces the ECS world. A load is rejected,
+and the world and adventure stay unchanged, if the snapshot is `RPGDEMO 1` or older or
+a version newer than 3, is truncated or has trailing data, leaves out an NPC or names one
+twice or names an unknown one, or holds a value out of range (disposition outside 0-100,
+hour outside [0, 24), a waypoint the NPC's path does not have, a non-finite number). A
+damaged or missing slot file is rejected in the same way.
+
+`RPGDEMO 2` saves from the previous build still load (owner decision OD-03: read N and
+N-1). Version 2 never stored NPCs, so the character, pack, equipment and quests load as
+saved while the NPCs and world clock start from a new world's defaults
+(`RPGNPCSystem::CaptureDefaultState`: 8:00, default dispositions, patrol at waypoint 0).
+The next save writes `RPGDEMO 3`.
+
+Tests/TestMOD350RPGQuestSliceReal.cpp also holds the RPGPersistence_* restart tests.
+They save mid-quest, rebuild every RPG system and the QuestSystem, load the slot, finish
+the quest, and restart once more to check that the reward was kept. A further test loads
+an `RPGDEMO 2` slot and checks the migration to default NPC state. Run them with
+`ctest --test-dir build/linux-gcc-release -R RPGPersistence --output-on-failure`.
+There is no packaged or windows-shipping run of this flow yet.

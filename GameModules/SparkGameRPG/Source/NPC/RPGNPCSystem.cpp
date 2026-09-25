@@ -35,9 +35,8 @@ namespace RPG
 
         // Advance world time
         m_worldTime += deltaTime;
-        m_worldHour += deltaTime / SECONDS_PER_GAME_HOUR;
-        if (m_worldHour >= 24.0f)
-            m_worldHour -= 24.0f;
+        // fmod keeps the hour in [0, 24) even across a frame longer than a game day.
+        m_worldHour = std::fmod(m_worldHour + deltaTime / SECONDS_PER_GAME_HOUR, 24.0f);
 
         UpdateSchedules();
         UpdatePatrols(deltaTime);
@@ -282,6 +281,82 @@ namespace RPG
         if (value < 60)
             return NPCDisposition::Neutral;
         return NPCDisposition::Friendly;
+    }
+
+    // === Persistence ===
+
+    NPCSystemSnapshot RPGNPCSystem::CaptureState() const
+    {
+        NPCSystemSnapshot snapshot;
+        snapshot.worldTime = m_worldTime;
+        snapshot.worldHour = m_worldHour;
+        snapshot.npcs.reserve(m_npcs.size());
+        for (const auto& [id, npc] : m_npcs)
+        {
+            snapshot.npcs.push_back({id, npc.dispositionValue, npc.currentBehavior, npc.posX, npc.posY, npc.posZ,
+                                     npc.currentWaypointIndex, npc.waypointWaitTimer});
+        }
+        // m_npcs is unordered; sort so identical state always serializes identically.
+        std::sort(snapshot.npcs.begin(), snapshot.npcs.end(),
+                  [](const NPCPersistentState& left, const NPCPersistentState& right)
+                  { return left.npcId < right.npcId; });
+        return snapshot;
+    }
+
+    NPCSystemSnapshot RPGNPCSystem::CaptureDefaultState()
+    {
+        // Registering on a private instance yields the defaults without Initialize()'s logging or context.
+        RPGNPCSystem defaults;
+        defaults.RegisterDefaultNPCs();
+        return defaults.CaptureState();
+    }
+
+    bool RPGNPCSystem::ValidateState(const NPCSystemSnapshot& snapshot) const
+    {
+        if (!std::isfinite(snapshot.worldTime) || snapshot.worldTime < 0.0f || !std::isfinite(snapshot.worldHour) ||
+            snapshot.worldHour < 0.0f || snapshot.worldHour >= 24.0f || snapshot.npcs.size() != m_npcs.size())
+            return false;
+
+        std::vector<uint32_t> seen;
+        seen.reserve(snapshot.npcs.size());
+        for (const NPCPersistentState& state : snapshot.npcs)
+        {
+            const auto npc = m_npcs.find(state.npcId);
+            if (npc == m_npcs.end() || std::find(seen.begin(), seen.end(), state.npcId) != seen.end())
+                return false;
+            seen.push_back(state.npcId);
+
+            // A patrol index must address the NPC's own path; NPCs without a path always sit at 0.
+            const int waypointLimit = std::max(1, static_cast<int>(npc->second.patrolPath.size()));
+            if (state.dispositionValue < 0 || state.dispositionValue > 100 || state.behavior >= NPCBehavior::Count ||
+                !std::isfinite(state.posX) || !std::isfinite(state.posY) || !std::isfinite(state.posZ) ||
+                state.currentWaypointIndex < 0 || state.currentWaypointIndex >= waypointLimit ||
+                !std::isfinite(state.waypointWaitTimer) || state.waypointWaitTimer < 0.0f)
+                return false;
+        }
+        return true;
+    }
+
+    bool RPGNPCSystem::RestoreState(const NPCSystemSnapshot& snapshot)
+    {
+        if (!ValidateState(snapshot))
+            return false;
+
+        m_worldTime = snapshot.worldTime;
+        m_worldHour = snapshot.worldHour;
+        for (const NPCPersistentState& state : snapshot.npcs)
+        {
+            NPCData& npc = m_npcs.at(state.npcId);
+            npc.dispositionValue = state.dispositionValue;
+            npc.disposition = GetDispositionTier(state.dispositionValue);
+            npc.currentBehavior = state.behavior;
+            npc.posX = state.posX;
+            npc.posY = state.posY;
+            npc.posZ = state.posZ;
+            npc.currentWaypointIndex = state.currentWaypointIndex;
+            npc.waypointWaitTimer = state.waypointWaitTimer;
+        }
+        return true;
     }
 
     // === Internal updates ===

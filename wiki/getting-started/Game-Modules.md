@@ -61,6 +61,7 @@ The root build enumerates 11 module targets when `BUILD_GAME_MODULES` is enabled
 
 - **Source:** `GameModules/SparkGameRPG/Source/`
 - **Wires:** [Save System](../gameplay-tools/Save-System.md), [Animation](../subsystems/Animation.md), [AI](../subsystems/AI-and-Navigation.md), [Cinematic Sequencer](../gameplay-tools/Cinematic-Sequencer.md), [Dialogue System](../subsystems/Dialogue-System.md), [Gameplay Systems](../gameplay-tools/Gameplay-Systems.md) (quests, abilities, conditions).
+- **Save/load:** `rpg_save`/`rpg_load` store an `RPGDEMO 3` snapshot as `SaveSystem` custom state. It holds character, area, pack, equipment and quest progress, plus the NPC world clock and each NPC's disposition, behavior, position and patrol waypoint. `RPGDEMO 2` saves (N-1, per OD-03) still load: their character, pack and quests are kept and the NPCs and world clock start from a new world's defaults. `RPGDEMO 1` or older, newer versions, truncated or out-of-range snapshots and damaged slots are rejected before the ECS world is replaced. Covered by the `RPGPersistence_*` restart tests in `Tests/TestMOD350RPGQuestSliceReal.cpp`.
 
 ## SparkGameARPG
 

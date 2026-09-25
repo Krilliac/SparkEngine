@@ -21,6 +21,13 @@ namespace RPG
 {
     namespace
     {
+        /// RPGDEMO snapshot format version. 3 added the world clock and per-NPC disposition/patrol state.
+        constexpr int kRPGDemoSnapshotVersion = 3;
+
+        /// Oldest RPGDEMO version still loaded (OD-03: current and N-1). Version 2 has no NPC section and
+        /// migrates to a new world's NPC defaults; anything older or newer is rejected.
+        constexpr int kRPGDemoOldestReadableVersion = kRPGDemoSnapshotVersion - 1;
+
         /// Base damage of the mana-free weapon strike used when the primary ability is unaffordable.
         constexpr float kWeaponStrikeBaseDamage = 12.0f;
 
@@ -65,6 +72,7 @@ namespace RPG
             RPGInventoryData inventory;
             std::array<EquipmentBonus, static_cast<size_t>(ItemSlot::Count)> equipment{};
             std::vector<Spark::Gameplay::QuestProgressSnapshot> quests;
+            NPCSystemSnapshot npcs;
         };
 
         bool IsFinite(const CharacterStats& stats)
@@ -74,10 +82,12 @@ namespace RPG
                    std::isfinite(stats.constitution) && std::isfinite(stats.charisma);
         }
 
+        /// Parse and validate an RPGDEMO 3 snapshot, or migrate an RPGDEMO 2 one. Other versions, truncation and
+        /// trailing data are rejected.
         bool ParseRPGDemoSnapshot(const std::string& serializedState, const RPGInventorySystem* inventorySystem,
-                                  const RPGWorldSetup* world, RPGDemoSnapshot& result)
+                                  const RPGNPCSystem* npcSystem, const RPGWorldSetup* world, RPGDemoSnapshot& result)
         {
-            if (!inventorySystem || !world)
+            if (!inventorySystem || !npcSystem || !world)
                 return false;
 
             std::istringstream snapshot(serializedState);
@@ -92,13 +102,14 @@ namespace RPG
                   result.encounterOrdinal >> result.activeEnemyId >> result.activeEnemyHealth >>
                   std::quoted(result.activeEnemyName) >> result.inventory.maxSlots >> result.inventory.maxWeight >>
                   result.inventory.currency >> slotCount) ||
-                magic != "RPGDEMO" || version != 2 || characterClass < 0 ||
-                characterClass >= static_cast<int>(CharacterClass::Count) || result.level < 1 || result.level > 50 ||
-                result.xpToNextLevel == 0 || !std::isfinite(result.currentHealth) || !std::isfinite(result.maxHealth) ||
-                !std::isfinite(result.currentMana) || !std::isfinite(result.maxMana) || !IsFinite(result.stats) ||
-                result.maxHealth <= 0.0f || result.currentHealth < 0.0f || result.currentHealth > result.maxHealth ||
-                result.maxMana < 0.0f || result.currentMana < 0.0f || result.currentMana > result.maxMana ||
-                result.freeStatPoints < 0 || !world->GetArea(result.areaId) || result.encounterOrdinal > 1000000 ||
+                magic != "RPGDEMO" || version < kRPGDemoOldestReadableVersion || version > kRPGDemoSnapshotVersion ||
+                characterClass < 0 || characterClass >= static_cast<int>(CharacterClass::Count) || result.level < 1 ||
+                result.level > 50 || result.xpToNextLevel == 0 || !std::isfinite(result.currentHealth) ||
+                !std::isfinite(result.maxHealth) || !std::isfinite(result.currentMana) ||
+                !std::isfinite(result.maxMana) || !IsFinite(result.stats) || result.maxHealth <= 0.0f ||
+                result.currentHealth < 0.0f || result.currentHealth > result.maxHealth || result.maxMana < 0.0f ||
+                result.currentMana < 0.0f || result.currentMana > result.maxMana || result.freeStatPoints < 0 ||
+                !world->GetArea(result.areaId) || result.encounterOrdinal > 1000000 ||
                 !std::isfinite(result.activeEnemyHealth) || result.activeEnemyName.size() > 128 ||
                 ((result.activeEnemyId == 0) != result.activeEnemyName.empty()) ||
                 (result.activeEnemyId == 0 ? result.activeEnemyHealth != 0.0f : result.activeEnemyHealth <= 0.0f) ||
@@ -169,8 +180,34 @@ namespace RPG
                 }
                 result.quests.push_back(std::move(quest));
             }
+
+            // World clock and NPC state (added in version 3). A version-2 save ends after the quests and never
+            // recorded NPCs, so it migrates to the state a new world starts with instead of the live NPCs.
+            if (version == kRPGDemoOldestReadableVersion)
+            {
+                result.npcs = RPGNPCSystem::CaptureDefaultState();
+            }
+            else
+            {
+                size_t npcCount = 0;
+                if (!(snapshot >> result.npcs.worldTime >> result.npcs.worldHour >> npcCount) ||
+                    npcCount != npcSystem->GetNPCCount())
+                    return false;
+                result.npcs.npcs.resize(npcCount);
+                for (NPCPersistentState& npc : result.npcs.npcs)
+                {
+                    int behavior = 0;
+                    if (!(snapshot >> npc.npcId >> npc.dispositionValue >> behavior >> npc.posX >> npc.posY >>
+                          npc.posZ >> npc.currentWaypointIndex >> npc.waypointWaitTimer) ||
+                        behavior < 0 || behavior >= static_cast<int>(NPCBehavior::Count))
+                        return false;
+                    npc.behavior = static_cast<NPCBehavior>(behavior);
+                }
+            }
+
             snapshot >> std::ws;
-            return snapshot.eof() && Spark::Gameplay::QuestSystem::GetInstance().ValidateEntityState(result.quests);
+            return snapshot.eof() && npcSystem->ValidateState(result.npcs) &&
+                   Spark::Gameplay::QuestSystem::GetInstance().ValidateEntityState(result.quests);
         }
     } // namespace
 
@@ -624,16 +661,16 @@ namespace RPG
     std::string RPGDemoSession::SerializeState() const
     {
         const CharacterData* character = m_characters ? m_characters->GetCharacter(m_playerCharacterId) : nullptr;
-        if (!character || !m_world || !m_world->GetArea(m_currentAreaId))
+        if (!character || !m_npcs || !m_world || !m_world->GetArea(m_currentAreaId))
             return {};
 
         const auto questState = Spark::Gameplay::QuestSystem::GetInstance().CaptureEntityState(m_playerCharacterId);
         std::ostringstream snapshot;
-        snapshot << std::setprecision(std::numeric_limits<float>::max_digits10) << "RPGDEMO 2 "
-                 << static_cast<int>(character->classId) << ' ' << character->level << ' ' << character->xp << ' '
-                 << character->xpToNextLevel << ' ' << character->currentHealth << ' ' << character->maxHealth << ' '
-                 << character->currentMana << ' ' << character->maxMana << ' ' << character->baseStats.strength << ' '
-                 << character->baseStats.dexterity << ' ' << character->baseStats.intelligence << ' '
+        snapshot << std::setprecision(std::numeric_limits<float>::max_digits10) << "RPGDEMO " << kRPGDemoSnapshotVersion
+                 << ' ' << static_cast<int>(character->classId) << ' ' << character->level << ' ' << character->xp
+                 << ' ' << character->xpToNextLevel << ' ' << character->currentHealth << ' ' << character->maxHealth
+                 << ' ' << character->currentMana << ' ' << character->maxMana << ' ' << character->baseStats.strength
+                 << ' ' << character->baseStats.dexterity << ' ' << character->baseStats.intelligence << ' '
                  << character->baseStats.wisdom << ' ' << character->baseStats.constitution << ' '
                  << character->baseStats.charisma << ' ' << character->freeStatPoints << ' ' << m_currentAreaId << ' '
                  << static_cast<uint64_t>(m_encounterOrdinal) << ' ' << m_activeEnemyId << ' ' << m_activeEnemyHealth
@@ -662,22 +699,32 @@ namespace RPG
             for (uint32_t count : quest.objectiveCounts)
                 snapshot << ' ' << count;
         }
+
+        const NPCSystemSnapshot npcState = m_npcs->CaptureState();
+        snapshot << ' ' << npcState.worldTime << ' ' << npcState.worldHour << ' ' << npcState.npcs.size();
+        for (const NPCPersistentState& npc : npcState.npcs)
+        {
+            snapshot << ' ' << npc.npcId << ' ' << npc.dispositionValue << ' ' << static_cast<int>(npc.behavior) << ' '
+                     << npc.posX << ' ' << npc.posY << ' ' << npc.posZ << ' ' << npc.currentWaypointIndex << ' '
+                     << npc.waypointWaitTimer;
+        }
         return snapshot.str();
     }
 
     bool RPGDemoSession::CanRestoreState(const std::string& serializedState) const
     {
         RPGDemoSnapshot snapshot;
-        return m_characters && m_combat && ParseRPGDemoSnapshot(serializedState, m_inventory, m_world, snapshot);
+        return m_characters && m_combat &&
+               ParseRPGDemoSnapshot(serializedState, m_inventory, m_npcs, m_world, snapshot);
     }
 
     bool RPGDemoSession::RestoreState(const std::string& serializedState)
     {
-        if (!m_characters || !m_combat || !m_inventory || !m_world)
+        if (!m_characters || !m_combat || !m_inventory || !m_npcs || !m_world)
             return false;
 
         RPGDemoSnapshot snapshot;
-        if (!ParseRPGDemoSnapshot(serializedState, m_inventory, m_world, snapshot))
+        if (!ParseRPGDemoSnapshot(serializedState, m_inventory, m_npcs, m_world, snapshot))
             return false;
 
         Reset(snapshot.characterClass);
@@ -710,7 +757,8 @@ namespace RPG
         m_activeEnemyName = std::move(snapshot.activeEnemyName);
         m_activeEnemyHealth = snapshot.activeEnemyHealth;
         m_activeEncounterId = m_activeEnemyId == 0 ? 0 : m_combat->StartEncounter(m_playerCharacterId, m_activeEnemyId);
-        if (m_activeEnemyId != 0 && m_activeEncounterId == 0)
+        // The NPC snapshot was validated during parsing, so this is the last step that can reject it.
+        if ((m_activeEnemyId != 0 && m_activeEncounterId == 0) || !m_npcs->RestoreState(snapshot.npcs))
         {
             Reset(snapshot.characterClass);
             return false;

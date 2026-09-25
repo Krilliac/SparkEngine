@@ -2719,6 +2719,18 @@ if(TARGET imgui)
         RUN_SERIAL TRUE
         TIMEOUT 120)
 
+    # MOD-350: RPGPersistence_* save mid-quest through RPGEngineSystems::SaveGame into the real
+    # SaveSystem, rebuild every RPG system (and the QuestSystem) as a restart would, and require
+    # LoadGame to restore quest, inventory, area, NPC disposition/patrol and world-hour state.
+    # RPGDEMO 2 (N-1) migrates to default NPC state; RPGDEMO 1, future, truncated, non-finite and out-of-range
+    # snapshots and damaged slots leave the session unchanged.
+    add_test(NAME RPGPersistence COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(RPGPersistence PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=RPGPersistence_;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "module;rpg;persistence;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 180)
+
     # MOD-370: RTSSave_* save a scripted skirmish mid-match (codec and the real SaveSystem
     # through RTSEngineSystems::SaveMatch/LoadMatch), load it into rebuilt systems, and
     # require the uninterrupted run's per-tick state hash; v1 and truncated saves are rejected.
