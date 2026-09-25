@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 1014,
+  "fileCount": 1049,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -1151,6 +1151,41 @@
       "size": 176444,
       "license": "CC0-1.0",
       "provenance": "Repository-original procedural OpenWorld region ground tiles and music loops emitted by generate_openworld_assets() in tools/generate_default_assets.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound (MOD-360) [openworld-procedural-generator]"
+    },
+    {
+      "path": "Audio/RPG/Music/rpg_boss.wav",
+      "sha256": "a9fa0b9478fe9378b585360c43fcbe9551faf47db69dca2843ad3250fec5fb0d",
+      "size": 604844,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/RPG/Music/rpg_dungeon.wav",
+      "sha256": "4394267ac3ef463ab3d0236f40866dfebd4b5d3aad06466d812ace0539863f04",
+      "size": 604844,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/RPG/Music/rpg_forest.wav",
+      "sha256": "b904a8b4bd8499ed928835e37b99d27df560815d6d194413ac39c8116f0e64d9",
+      "size": 498114,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/RPG/Music/rpg_victory.wav",
+      "sha256": "4124febe99eb7cad11ab606a46ab3bf88ec6f08078c88f05ebb227366aeae17a",
+      "size": 154394,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
+    },
+    {
+      "path": "Audio/RPG/Music/rpg_village.wav",
+      "sha256": "96fb78264a83a0995ca78bbe301690a0343a0972724c241a36e4ff26cea88d90",
+      "size": 445686,
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural music (mono 16-bit 22050 Hz WAV) composed by tools/audio/compose_module_music.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound [module-music-composer]"
     },
     {
       "path": "Audio/ambient_wind.wav",
@@ -4364,6 +4399,216 @@
       "size": 676,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original starter/module-kit model from Tools/model_pipeline/generate_starter_models.py; hash-bound by Assets/Models/Generated/starter_assets_manifest.json: starter model core_primitives/Pyramid [starter-model-pipeline]"
+    },
+    {
+      "path": "Models/RPG/Kit/barrel.mtl",
+      "sha256": "5cff56642971cbabe5a322a7588923c3e001b2c147bf701f5030e646bb9ebdd6",
+      "size": 600,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json: Blender-authored barrel [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/barrel.obj",
+      "sha256": "23f43652831b889d53016c17ad927e87bbdd95785491dd0e9a52777df9773cd6",
+      "size": 46537,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json: Blender-authored barrel [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/barrel_collision.mtl",
+      "sha256": "d2dbcd18a87ff48e19b5fc4a31712300f766db355f2a0b0766323dcdcec1a42d",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/barrel_collision.obj",
+      "sha256": "4a6478c56b71783ccc64a9707f81031141ded9efeb3ae01973c4a8d856299cb1",
+      "size": 11357,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/barrel_lod1.mtl",
+      "sha256": "5cff56642971cbabe5a322a7588923c3e001b2c147bf701f5030e646bb9ebdd6",
+      "size": 600,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/barrel_lod1.obj",
+      "sha256": "2864334efab74ef9958a665b1e81e6e5f674b17d949cf0293c771dd582e0394f",
+      "size": 21855,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/quest_signpost.mtl",
+      "sha256": "afa6d9b43f00870ace78acffc29135936c09f98d6962308892bc6a558d02e261",
+      "size": 961,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json: Blender-authored quest_signpost [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/quest_signpost.obj",
+      "sha256": "3d41ef0c1873d1843f29405f889ebffab513befd60dc1e12feb62d805bef009c",
+      "size": 55347,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json: Blender-authored quest_signpost [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/quest_signpost_collision.mtl",
+      "sha256": "d2dbcd18a87ff48e19b5fc4a31712300f766db355f2a0b0766323dcdcec1a42d",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/quest_signpost_collision.obj",
+      "sha256": "062d9cb2fd6f14c708ab1a6b38201386ec3a73fcf2a794dc1d6cc50a3e2a4f06",
+      "size": 9117,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/quest_signpost_lod1.mtl",
+      "sha256": "afa6d9b43f00870ace78acffc29135936c09f98d6962308892bc6a558d02e261",
+      "size": 961,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/quest_signpost_lod1.obj",
+      "sha256": "0ccde4416576b729190e9fa93b84a64262c87605c5906a9bfc42589b75c945c2",
+      "size": 24806,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/treasure_chest.mtl",
+      "sha256": "5200fab70c919ce96e08dd9788bda97d8a0af26455a6bb7232cdc20e666496fb",
+      "size": 783,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json: Blender-authored treasure_chest [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/treasure_chest.obj",
+      "sha256": "5a1afcfdb54151952981f49d017a366178c55328854de39ac62d116b737fd320",
+      "size": 68742,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json: Blender-authored treasure_chest [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/treasure_chest_collision.mtl",
+      "sha256": "d2dbcd18a87ff48e19b5fc4a31712300f766db355f2a0b0766323dcdcec1a42d",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/treasure_chest_collision.obj",
+      "sha256": "4cf860cefa46f05ba8ecc1002d6d46a95aea84c53aa378aac2f5d594d81736df",
+      "size": 1240,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/treasure_chest_lod1.mtl",
+      "sha256": "5200fab70c919ce96e08dd9788bda97d8a0af26455a6bb7232cdc20e666496fb",
+      "size": 783,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/treasure_chest_lod1.obj",
+      "sha256": "2b5e168b7517b06b73750638ea4680a4ce56ac31effc67614209608229cfc807",
+      "size": 31547,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/village_well.mtl",
+      "sha256": "5e9695e5e75986b4239fdeea0ad1ac53bc3fa0379846cd039a97b53f5120dfa3",
+      "size": 963,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json: Blender-authored village_well [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/village_well.obj",
+      "sha256": "b8dc4316701976360fa02d66bfbe08611fcacc184d75589cf80480ad466400c0",
+      "size": 153752,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json: Blender-authored village_well [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/village_well_collision.mtl",
+      "sha256": "d2dbcd18a87ff48e19b5fc4a31712300f766db355f2a0b0766323dcdcec1a42d",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/village_well_collision.obj",
+      "sha256": "f27acae17cddecbe9e1f9ed9fd85ab5e99baa7aa87938f2c45a12cce4b8aca2b",
+      "size": 9504,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/village_well_lod1.mtl",
+      "sha256": "5e9695e5e75986b4239fdeea0ad1ac53bc3fa0379846cd039a97b53f5120dfa3",
+      "size": 963,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/village_well_lod1.obj",
+      "sha256": "bf308c06c051ccb60a901bc0906cdbd3b20e244b46e22d961c4da1a5a961eae7",
+      "size": 67958,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/wall_sconce.mtl",
+      "sha256": "ee2af2ebb29fa08dc013a6e18a5ca3d546a2ab5cf7be495cf1fc175ffebb002e",
+      "size": 779,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json: Blender-authored wall_sconce [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/wall_sconce.obj",
+      "sha256": "8b2cc7aad306a971b6a201882054fe111ec5858c2c8a35f704326bbf382d7d43",
+      "size": 31926,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json: Blender-authored wall_sconce [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/wall_sconce_collision.mtl",
+      "sha256": "d2dbcd18a87ff48e19b5fc4a31712300f766db355f2a0b0766323dcdcec1a42d",
+      "size": 236,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/wall_sconce_collision.obj",
+      "sha256": "1c3a5f15ee301357ec3f3f622eb6b12375a8ff2e9c4d9363a9076a5a1d05eb88",
+      "size": 7320,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/wall_sconce_lod1.mtl",
+      "sha256": "ee2af2ebb29fa08dc013a6e18a5ca3d546a2ab5cf7be495cf1fc175ffebb002e",
+      "size": 779,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
+    },
+    {
+      "path": "Models/RPG/Kit/wall_sconce_lod1.obj",
+      "sha256": "415079958df1a4d3044e39a8dd7eab85a2391b05b98ca52b8d49acb0ab1f0e5f",
+      "size": 14165,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original Blender 4.0.2 export (with _lod1 and _collision variants) from Art/Blender/SparkGameRPG/rpg_kit.blend via tools/blender/author_rpg_kit.py; hash-bound by Art/Blender/SparkGameRPG/provenance.json [rpg-blender-kit]"
     },
     {
       "path": "Models/Ramp.mtl",

@@ -4,8 +4,17 @@
   "cmakeTarget": "SparkGameRPG",
   "sourceDirectory": "GameModules/SparkGameRPG/Source",
   "assets": {
-    "state": "none",
-    "reason": "No asset root exists for this module: the Assets/Scenes/RPG scenes and Assets/Audio/Music tracks its sources reference are not in the repository."
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/RPG",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Audio/RPG",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
   },
   "tests": {
     "files": [

@@ -354,17 +354,20 @@ namespace RPG
         using Spark::Audio::MusicTrack;
 
         // Village / exploration
-        music->RegisterTrack({"village_theme", "Assets/Audio/Music/rpg_village.ogg", 95.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"forest_exploration", "Assets/Audio/Music/rpg_forest.ogg", 85.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack({"village_theme", "Assets/Audio/RPG/Music/rpg_village.wav", 95.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"forest_exploration", "Assets/Audio/RPG/Music/rpg_forest.wav", 85.0f, 0.0f, -1.0f, true, ""});
 
         // Dungeon / tension
-        music->RegisterTrack({"dungeon_ambient", "Assets/Audio/Music/rpg_dungeon.ogg", 70.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"dungeon_ambient", "Assets/Audio/RPG/Music/rpg_dungeon.wav", 70.0f, 0.0f, -1.0f, true, ""});
 
         // Combat
-        music->RegisterTrack({"boss_battle", "Assets/Audio/Music/rpg_boss.ogg", 140.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack({"boss_battle", "Assets/Audio/RPG/Music/rpg_boss.wav", 140.0f, 0.0f, -1.0f, true, ""});
 
         // Victory
-        music->RegisterTrack({"victory_fanfare", "Assets/Audio/Music/rpg_victory.ogg", 120.0f, 0.0f, -1.0f, false, ""});
+        music->RegisterTrack(
+            {"victory_fanfare", "Assets/Audio/RPG/Music/rpg_victory.wav", 120.0f, 0.0f, -1.0f, false, ""});
 
         // Set up dynamic music transitions (exploration -> combat based on enemy proximity)
         Spark::Audio::DynamicMusicState dynamicState;

@@ -36,6 +36,15 @@ automated sessions:
 Discovery and engine-integration commands include rpg_areas, rpg_classes,
 rpg_items, rpg_quests, rpg_npcs, rpg_save, rpg_load, rpg_weather, and rpg_time.
 
+## Assets
+
+RPGWorldSetup streams the Blender village and dungeon kit (`Assets/Models/RPG/Kit/`, authored by
+`tools/blender/author_rpg_kit.py`; see `Art/Blender/SparkGameRPG/README.md`) with each area's manifest: the
+village well, quest signpost and barrel in Oakhollow, signposts on the Forest and Swamp trails, and wall
+sconces, treasure chests and barrels in the Shadow Crypt and Thornwall Castle. RPGEngineSystems registers the
+five music cues in `Assets/Audio/RPG/Music/`. `asset-references.json` records every asset path the sources
+name, with its sha256 and provenance rule, for `tools/check-module-asset-refs.py`.
+
 ## Build and test
 
 Build the SparkGameRPG and SparkTests targets. The focused regression source is
