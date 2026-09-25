@@ -636,7 +636,7 @@ TEST(VulkanValidation_HeadlessSwapChainPresentAndResizeClean)
 {
     ValidatedDevice v;
     if (!v.device.SupportsHeadlessSurface())
-        SKIP_TEST("ICD does not expose VK_EXT_headless_surface");
+        SkipOrFail("ICD does not expose VK_EXT_headless_surface");
 
     VkHeadlessSurfaceCreateInfoEXT surfaceInfo = {};
     surfaceInfo.sType = VK_STRUCTURE_TYPE_HEADLESS_SURFACE_CREATE_INFO_EXT;

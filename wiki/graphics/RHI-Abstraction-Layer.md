@@ -460,6 +460,10 @@ Until full Vulkan parity is completed, the following remain explicitly unsupport
 
 These items remain documented here by design and should be removed only when the Vulkan path is verified feature-complete against D3D11.
 
+### Validation-layer lane (RHI-230)
+
+The `VulkanValidation` CTest entry (labels `vulkan`, `vulkan-lavapipe`) runs the 16 `VulkanValidation_*`, `VulkanGolden_*` and `VulkanShaderToolchain_*` tests in `Tests/TestRHI230VulkanValidationReal.cpp` on a real `VulkanDevice` with `VK_LAYER_KHRONOS_validation` and an error-counting messenger. It is registered only on Linux builds with Vulkan available and sets `SPARK_REQUIRE_VULKAN_VALIDATION=1`, so a missing ICD, missing validation layer, or missing `VK_EXT_headless_surface` fails the lane instead of skipping (skips would otherwise satisfy `SPARK_TEST_EXPECT_COUNT=16`). The `build-linux-gcc` and `build-linux-clang` jobs install `mesa-vulkan-drivers` (Lavapipe) and `vulkan-validationlayers` for it. Locally: `ctest --test-dir build/linux-gcc-release -L vulkan --output-on-failure --no-tests=error`. Lavapipe proves API-usage correctness only, not hardware certification.
+
 ---
 
 ## Thread Safety

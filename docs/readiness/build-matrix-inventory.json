@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2095,
+      "line": 2130,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2607,10 +2607,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 2403,
+      "line": 2438,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2401",
+          "id": "Tests/CMakeLists.txt:2436",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4352,7 +4352,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 2403,
+          "line": 2438,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -9210,7 +9210,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "009d7471ba99b4f8"
+            "runDigest": "84fc3219fd0ee973"
           },
           {
             "index": 2,
@@ -9462,7 +9462,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "014400e895d3f109"
+            "runDigest": "14e917eb64646fb6"
           },
           {
             "index": 2,

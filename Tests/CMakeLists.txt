@@ -1589,11 +1589,16 @@ endforeach()
 
 # RHI-230: Vulkan backend under VK_LAYER_KHRONOS_validation (Lavapipe on CI).
 # Lavapipe proves API-usage correctness only, not hardware certification.
-if(SPARK_VULKAN_AVAILABLE)
+# SPARK_REQUIRE_VULKAN_VALIDATION turns a missing ICD or validation layer into a
+# failure: SPARK_TEST_EXPECT_COUNT counts skipped tests, so without it the lane
+# would pass with all 16 tests skipped. Linux only, like SparkOpenGLTests: the
+# Linux CI jobs install mesa-vulkan-drivers (Lavapipe) and vulkan-validationlayers.
+if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(NAME VulkanValidation COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(VulkanValidation PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestRHI230VulkanValidationReal.cpp;SPARK_TEST_EXPECT_COUNT=16"
-        LABELS "vulkan;rendering;unit"
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI230VulkanValidationReal.cpp;SPARK_TEST_EXPECT_COUNT=16;SPARK_REQUIRE_VULKAN_VALIDATION=1"
+        LABELS "vulkan;vulkan-lavapipe;rendering;unit"
         RUN_SERIAL TRUE
         TIMEOUT 120)
 endif()

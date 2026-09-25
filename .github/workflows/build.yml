@@ -2137,7 +2137,9 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        # RHI-230: the VulkanValidation CTest entry requires Lavapipe plus the
+        # Khronos validation layer (SPARK_REQUIRE_VULKAN_VALIDATION=1) and fails without them.
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -2318,7 +2320,9 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
+        # RHI-230: the VulkanValidation CTest entry requires Lavapipe plus the
+        # Khronos validation layer (SPARK_REQUIRE_VULKAN_VALIDATION=1) and fails without them.
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
