@@ -11,26 +11,26 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 326518 |
+| **SparkEngine/Source** | 326551 |
 | **SparkEditor/Source** | 104078 |
 | **GameModules** | 144209 |
 | **External services** | 11305 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 194023 |
+| **Tests** | 194174 |
 | **SparkConsole/src** | 1800 |
 | **SparkShaderCompiler/src** | 691 |
-| **Total C++ (excl. ThirdParty)** | **~799674** |
+| **Total C++ (excl. ThirdParty)** | **~799858** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hh/.hpp/.hxx/.inl) | 1074 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1632 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1633 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 634 |
+| Test-bearing implementation files (.cpp/.mm) | 635 |
 | Wiki pages (.md) | 202 |
 
 ### Largest Top-Level Source Section
@@ -49,7 +49,7 @@ Graphics contains 123488 lines, or 37% of `SparkEngine/Source`. This is a source
 | Core | 30955 | 9.4% |
 | Physics | 10812 | 3.3% |
 | Audio | 6884 | 2.1% |
-| Input | 3997 | 1.2% |
+| Input | 4030 | 1.2% |
 | SceneManager | 3513 | 1.0% |
 | Enums | 1383 | 0.4% |
 | Game | 2937 | 0.8% |
@@ -110,8 +110,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| Test files | 634 |
-| TEST() definitions | 7574 |
+| Test files | 635 |
+| TEST() definitions | 7579 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics

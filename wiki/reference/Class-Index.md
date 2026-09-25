@@ -702,7 +702,7 @@
 | `ColorKey` | struct | SparkEngine | [ParticleSystem.h:L78](../../SparkEngine/Source/Graphics/ParticleSystem.h#L78) | Color gradient keyframe |
 | `ColorRGB` | struct | SparkEngine | [TemporalEffectsTypes.h:L274](../../SparkEngine/Source/Graphics/TemporalEffectsTypes.h#L274) | RGB color for clamping operations |
 | `ColorRGB` | struct | SparkEngine | [TemporalTypes.h:L277](../../SparkEngine/Source/Graphics/TemporalTypes.h#L277) | RGB color for clamping operations |
-| `ColorVertex` | struct | Tests | [TestRHI240OpenGLReal.cpp:L175](../../Tests/TestRHI240OpenGLReal.cpp#L175) |  |
+| `ColorVertex` | struct | Tests | [TestRHI240OpenGLReal.cpp:L186](../../Tests/TestRHI240OpenGLReal.cpp#L186) |  |
 | `ComApartment` | struct | SparkEngine | [GraphicsDeviceResourcesWindowsTextures.cpp:L327](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsTextures.cpp#L327) |  |
 | `CombatEncounter` | struct | GameModules | [RPGCombatSystem.h:L65](../../GameModules/SparkGameRPG/Source/Combat/RPGCombatSystem.h#L65) | Represents an active combat encounter |
 | `CombinerNode` | class | SparkEngine | [FastNoise2SIMD.h:L611](../../SparkEngine/Source/Graphics/FastNoise2SIMD.h#L611) | Combines two child noise nodes with a configurable operation |
@@ -1945,10 +1945,10 @@
 | `InputManager` | class | SparkEngine | [SceneManager.h:L84](../../SparkEngine/Source/SceneManager/SceneManager.h#L84) |  |
 | `InputManager` | class | SparkSDK | [IEngineContext.h:L23](../../SparkSDK/Include/Spark/IEngineContext.h#L23) |  |
 | `InputManager` | class | Tests | [TestInputManagerState.cpp:L47](../../Tests/TestInputManagerState.cpp#L47) |  |
-| `InputMetrics` | struct | SparkEngine | [InputManager.h:L266](../../SparkEngine/Source/Input/InputManager.h#L266) | Input metrics structure for console integration |
+| `InputMetrics` | struct | SparkEngine | [InputManager.h:L273](../../SparkEngine/Source/Input/InputManager.h#L273) | Input metrics structure for console integration |
 | `InputMetrics` | struct | Tests | [TestInputManagerState.cpp:L31](../../Tests/TestInputManagerState.cpp#L31) |  |
 | `InputPreset` | struct | SparkEngine | [InputBindings.h:L98](../../SparkEngine/Source/Input/InputBindings.h#L98) | A named preset containing a full set of input bindings. |
-| `InputSettings` | struct | SparkEngine | [InputManager.h:L286](../../SparkEngine/Source/Input/InputManager.h#L286) | Input settings structure for console control |
+| `InputSettings` | struct | SparkEngine | [InputManager.h:L293](../../SparkEngine/Source/Input/InputManager.h#L293) | Input settings structure for console control |
 | `InputState` | struct | Tests | [TestServerMockClient.cpp:L404](../../Tests/TestServerMockClient.cpp#L404) |  |
 | `InspectorPanel` | class | SparkEditor | [InspectorPanel.h:L39](../../SparkEditor/Source/Panels/InspectorPanel.h#L39) | Inspector panel |
 | `InspectorPendingWorldEdit` | class | SparkEditor | [InspectorPendingWorldEdit.h:L26](../../SparkEditor/Source/Panels/InspectorPendingWorldEdit.h#L26) |  |
@@ -3154,7 +3154,7 @@
 | `ProfilerConfig` | struct | SparkEditor | [ProfilerTypes.h:L252](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L252) | Profiler configuration |
 | `ProfileSample` | struct | SparkEngine | [Profiler.h:L52](../../SparkEngine/Source/Utils/Profiler.h#L52) | Single timing sample |
 | `Prog` | struct | GameModules | [TFProgressionSystem.h:L232](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h#L232) |  |
-| `Program` | struct | Tests | [TestRHI240OpenGLReal.cpp:L622](../../Tests/TestRHI240OpenGLReal.cpp#L622) |  |
+| `Program` | struct | Tests | [TestRHI240OpenGLReal.cpp:L633](../../Tests/TestRHI240OpenGLReal.cpp#L633) |  |
 | `ProgressionCallbacks` | struct | GameModules | [ProgressionSystem.h:L60](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L60) | Callbacks for progression events |
 | `ProgressionSystem` | class | GameModules | [ProgressionSystem.h:L72](../../GameModules/SparkGameFPS/Source/Game/ProgressionSystem.h#L72) | XP and leveling progression system |
 | `ProjectBrowserPanel` | class | SparkEditor | [EditorUI.h:L110](../../SparkEditor/Source/Core/EditorUI.h#L110) |  |
@@ -4721,7 +4721,7 @@
 | `TilemapRenderSystem` | class | SparkEngine | [Systems2D.h:L367](../../SparkEngine/Source/Engine/ECS/Systems/Systems2D.h#L367) | Submits tilemap tile draw commands to the SpriteBatch. |
 | `TilemapSnapshot` | struct | SparkEditor | [TilemapEditorPanel.h:L96](../../SparkEditor/Source/Panels/TilemapEditorPanel.h#L96) |  |
 | `TilesetInfo` | struct | SparkEngine | [Sprite2DComponents.h:L236](../../SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h#L236) |  |
-| `TimedKeyRelease` | struct | SparkEngine | [InputManager.h:L88](../../SparkEngine/Source/Input/InputManager.h#L88) | A console-simulated key press waiting for its release deadline. |
+| `TimedKeyRelease` | struct | SparkEngine | [InputManager.h:L93](../../SparkEngine/Source/Input/InputManager.h#L93) | A console-simulated key press waiting for its release deadline. |
 | `TimeOfDayChangedEvent` | struct | SparkEngine | [EventSystem.h:L105](../../SparkEngine/Source/Engine/Events/EventSystem.h#L105) | Fired when the time of day changes significantly (e.g. dawn, dusk). |
 | `TimeOfDayPanel` | class | SparkEditor | [TimeOfDayPanel.h:L19](../../SparkEditor/Source/Panels/TimeOfDayPanel.h#L19) | Panel for controlling the engine TimeOfDaySystem day/night cycle |
 | `TimeOfDaySettings` | struct | SparkEngine | [EngineSettings.h:L573](../../SparkEngine/Source/Core/EngineSettings.h#L573) |  |
