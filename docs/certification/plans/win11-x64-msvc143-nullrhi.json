@@ -22,6 +22,6 @@
     "upgrade": "Upgrade needs a signed predecessor MSI and receipt (INST-130/REL-110); no static probe exists.",
     "rollback": "Rollback needs a signed predecessor MSI and receipt (INST-130/REL-110); no static probe exists.",
     "uninstall": "Uninstall runs inside the MSI transaction of .github/scripts/qualify-windows-msi.py, which needs per-run arguments; INST-130/REL-100 own a row-level probe.",
-    "dependency_closure": "The closure must be measured from the staged binaries' PE import tables; that measured-closure probe is a separate PLT-200 slice, and dependency_authority.py --check does not inspect the row's binaries."
+    "dependency_closure": "collect_evidence.py --package-root now measures this category from the staged package's PE import and delay-import tables (pe_imports.py), but a plan can only declare the dependencyClosure and firstPartyImages that measurement is compared against once an MSVC v143 windows-shipping package has actually been walked; until then the real import set (including OS DLLs such as kernel32.dll that the dependency authority's platformRuntime does not yet list) is unknown, and any guess would be a typed list rather than evidence. Any third-party DLL that package ships would also need a reviewed imageNames entry in the dependency authority before it can be declared; none exists today, because every vendored library is linked statically into the Windows binaries."
   }
 }

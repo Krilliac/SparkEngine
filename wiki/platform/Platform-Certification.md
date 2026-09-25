@@ -27,6 +27,7 @@ Platform certification (PLT-200, gate G08) proves that a specific commit builds,
 | `docs/certification/evidence/*.json` | Per-row evidence records (one file per row) |
 | `docs/certification/plans/<rowId>.json` | Collector probe plan for each declared row |
 | `Tools/platform-cert/collect_evidence.py` | Runs a plan's probes and writes the measured record |
+| `Tools/platform-cert/pe_imports.py` | Bounded PE32+ import/delay-import reader; measures a staged package's dependency closure |
 | `Tests/Tools/test_platform_certification.py` | 136 adversarial tests |
 
 ## Support Matrix
@@ -90,6 +91,10 @@ The validator rejects a row under any of these conditions:
 | GPU vendor/device/driver/featureLevel mismatch | **FAIL** |
 | Compiler version/toolset mismatch | **FAIL** |
 | Missing dependency closure when required | **FAIL** |
+| `dependency_closure` probe without exactly one PE import graph (`*.imports.json`) | **FAIL** |
+| Measured non-API-set import missing from the closure, or a closure entry nothing imports | **FAIL** |
+| Import resolving neither to the package root nor to an authority `platformRuntime` entry | **FAIL** |
+| Import graph whose API-set/platform classification disagrees with the authority | **FAIL** |
 | Collector identity blank or missing | **FAIL** |
 | Resource limits exceeded (rows, deps, strings, etc.) | **FAIL** |
 
@@ -138,11 +143,57 @@ command that already exists; categories with no implementation are listed under
 
 Uncovered today: `install`/`uninstall`/`upgrade`/`rollback` (the MSI qualifier needs per-run
 arguments and predecessor packages; INST-130, REL-100 and REL-110), `crash` (OPS-100), and
-`dependency_closure` (it must come from the staged binaries' PE import tables). The NullRHI row
+`dependency_closure` (the measurement exists, see below, but no MSVC package has been walked, so
+no plan can yet declare the closure it would be compared against). The NullRHI row
 also leaves out `save`, because the only save/reload proof runs D3D11 WARP. The D3D11 row also
 leaves out `launch` and `renderer`, because every D3D11 test forces WARP, plus `input` and
 `audio`. The validator refuses to certify a row with any category missing, so both rows stay
 uncertified until these gaps close.
+
+### Measured dependency closure
+
+`collect_evidence.py --package-root <staged package>` records `dependency_closure` by running
+`pe_imports.py` as the probe subprocess. It reads the import and delay-import directories of every
+PE32+ (AMD64) image in the package and resolves each DLL name. An `api-ms-win-*`/`ext-ms-*` name is
+an OS API set. A KnownDLL (`KNOWN_DLLS` in `pe_imports.py`, such as `kernel32.dll`) always loads from
+the system directory, so a same-named file in the package never satisfies it. Any other DLL in the
+package root (the application directory) is package-local and hashed. Anything else must be a
+`platformRuntime` entry of `docs/certification/dependency-authority.json`, or it is unresolved. The canonical import graph becomes a content-addressed `*.imports.json`
+artifact, and each declared dependency gets its own evidence file under `dependency_closure/deps/`.
+
+The plan declares only `dependencyClosure` entries (`name`, `version`, `source`) and the product's own
+`firstPartyImages`. Paths, hashes and sizes are always measured, and a plan that declares a closure
+without `--package-root` is refused. The validator re-reads the attested graph and fails the row if
+any of these holds:
+
+- an import is unresolved
+- a measured non-API-set, non-first-party import is missing from the closure
+- a closure entry is imported by nothing
+- an API set is declared
+- the graph's name-only classifications disagree with the authority
+- a package-local DLL, or a `firstPartyImages` entry, has a name the OS owns (an API set, a
+  KnownDLL or a `system`-source `platformRuntime` library)
+- a `firstPartyImages` entry names a `platformRuntime` library or a third-party image
+- a package-local DLL is neither first-party, an app-local `platformRuntime` library (declared under
+  its own name and source, e.g. `msvcp140.dll` from `vcredist`), nor a reviewed third-party image
+
+A package-local third-party DLL is declared under its authority identity, not its file name. The
+graph records file names (`sdl2.dll`) while the authority's `thirdParty` entries are manifest projects
+(`SDL2`), so the link is the entry's reviewed `imageNames` list. That list comes from
+`THIRD_PARTY_PACKAGE_IMAGES` in `dependency_authority.py`. It is empty today because every vendored
+library is linked statically into the Windows binaries (SDL2 is only built off Windows). A Windows
+package that ships a third-party DLL is therefore refused until that DLL is reviewed into the table
+and the authority is regenerated.
+
+Not every classification is re-derived at validation time. Whether a DLL sits in the package root
+depends on the package, which the bundle does not carry. The validator trusts that fact from the
+attested collector run and pins it only to a package-root image of the same name. The plan's
+`firstPartyImages` list is also a declaration. It is checked against OS-owned, runtime and
+third-party names, but not against the build's real targets.
+
+The reader is bounded: 512 MiB per image, 96 sections, 16 data directories, 4096 descriptors per
+directory, and 255-byte names. Truncated headers, an RVA outside every section, PE32 or non-AMD64
+images, and names containing path characters all fail closed.
 
 Plans carry no `provenance` block. Collection therefore has to run under CI with
 `--from-github-env` on the physical host, after
@@ -195,6 +246,17 @@ publisher's 40-hex Authenticode certificate thumbprint; it is not inferred from
 the downloaded MSI or the current release's signer. An absent, malformed, or
 mismatched value blocks qualification. Hosted signed-artifact and supported-host
 execution remain required evidence.
+
+The v0.9.0 bootstrap path (`--bootstrap-repair`) has no predecessor, so it binds
+its evidence to the owner-reviewed baseline instead. It requires
+`--reviewed-baseline-commit`, which `release.yml` reads from
+`predecessorRelease.sourceCommitEvidence.baselineCommit` in
+`docs/site/readiness.json`. Before any Windows Installer command, the source SHA
+must have exactly one parent equal to that baseline. This is the same rule the
+publication job's `verify_v090_source_seal.py` enforces, and the qualifier
+imports it from that script instead of keeping a copy. Both SHAs are
+written to `bootstrap-baseline.json`. While the baseline is unrecorded (empty),
+the v0.9.0 qualification step fails closed.
 
 ## Related Pages
 

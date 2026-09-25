@@ -80,6 +80,15 @@ _SHA1_RE = re.compile(r"\A[0-9a-f]{40}\Z")
 
 _SET_OPEN = "set(SPARK_THIRDPARTY_AUDIT_ENTRIES"
 
+# Reviewed Windows image names of vendored libraries that ship as their own
+# DLL in the application directory, keyed by manifest name.  A package-local
+# DLL can only be tied to a closure identity through this table: the import
+# graph measures file names ("sdl2.dll"), the manifest names projects
+# ("SDL2").  It is empty because every vendored library is linked statically
+# into the Windows binaries today (SDL2 is only built off Windows), so a
+# third-party DLL in a Windows package is refused until it is reviewed here.
+THIRD_PARTY_PACKAGE_IMAGES: dict[str, tuple[str, ...]] = {}
+
 
 class AuthorityError(Exception):
     """The dependency authority cannot be derived or is inconsistent."""
@@ -234,19 +243,23 @@ def build_third_party(repo_root: Path) -> tuple[list[dict[str, Any]], str]:
         if key in seen:
             raise AuthorityError(f"manifest declares {name!r} twice")
         seen.add(key)
-        derived.append(
-            {
-                "name": name,
-                "version": substitute(entry["version"].strip(), resolved),
-                "source": "bundled",
-                "localPath": entry["localPath"].strip(),
-                "severity": entry["severity"],
-                # Vendored third-party code is compiled into the engine
-                # binaries, so it is legitimate to *name* in a closure but is
-                # never a separate runtime file a row must ship.
-                "requiredForRows": [],
-            }
-        )
+        item: dict[str, Any] = {
+            "name": name,
+            "version": substitute(entry["version"].strip(), resolved),
+            "source": "bundled",
+            "localPath": entry["localPath"].strip(),
+            "severity": entry["severity"],
+            # Vendored third-party code is compiled into the engine
+            # binaries, so it is legitimate to *name* in a closure but is
+            # never a separate runtime file a row must ship.
+            "requiredForRows": [],
+        }
+        if name in THIRD_PARTY_PACKAGE_IMAGES:
+            item["imageNames"] = sorted(THIRD_PARTY_PACKAGE_IMAGES[name])
+        derived.append(item)
+    stale = sorted(set(THIRD_PARTY_PACKAGE_IMAGES) - {item["name"] for item in derived})
+    if stale:
+        raise AuthorityError(f"THIRD_PARTY_PACKAGE_IMAGES names no manifest entry: {stale}")
     derived.sort(key=lambda item: item["name"].casefold())
     return derived, manifest_digest(raw)
 
@@ -354,6 +367,8 @@ class Authority:
         self.document = document
         self.by_identity: dict[tuple[str, str], dict[str, Any]] = {}
         self.required_for_row: dict[str, list[tuple[str, str]]] = {}
+        # Package-local DLL file name -> the (name, source) identity it ships.
+        self.package_images: dict[str, tuple[str, str]] = {}
 
         for section in ("thirdParty", "platformRuntime"):
             for entry in document[section]:
@@ -366,6 +381,15 @@ class Authority:
                 self.by_identity[key] = entry
                 for row_id in entry.get("requiredForRows", []):
                     self.required_for_row.setdefault(row_id, []).append(key)
+
+        platform_names = {entry["name"].casefold() for entry in document["platformRuntime"]}
+        for entry in document["thirdParty"]:
+            for image in entry.get("imageNames", []):
+                if image in self.package_images or image in platform_names:
+                    raise AuthorityError(
+                        f"dependency authority maps image {image!r} to more than one dependency"
+                    )
+                self.package_images[image] = (entry["name"], entry["source"])
 
     def names(self) -> set[str]:
         return {name for name, _ in self.by_identity}
@@ -427,14 +451,39 @@ def validate_authority_document(document: Any) -> dict[str, Any]:
 
     for index, entry in enumerate(third_party):
         _validate_entry(entry, f"thirdParty[{index}]", exact_version=True)
+        if "imageNames" in entry:
+            _validate_image_names(entry["imageNames"], f"thirdParty[{index}]")
     for index, entry in enumerate(runtime):
         _validate_entry(entry, f"platformRuntime[{index}]", exact_version=False)
+        _require(
+            "imageNames" not in entry,
+            f"platformRuntime[{index}]: imageNames belongs to thirdParty entries only",
+        )
     return document
+
+
+def _validate_image_names(images: Any, context: str) -> None:
+    """A thirdParty entry's package-local DLL names: bare, case-folded file names."""
+    _require(
+        isinstance(images, list) and 0 < len(images) <= 16,
+        f"{context}: imageNames must be a non-empty list of at most 16 names",
+    )
+    for image in images:
+        _require(
+            isinstance(image, str) and _IMAGE_NAME_RE.match(image) is not None,
+            f"{context}: imageNames entry {image!r} is not a lower-case .dll file name",
+        )
+        _require(
+            not image.startswith(("api-ms-win-", "ext-ms-")),
+            f"{context}: imageNames entry {image!r} is an operating-system API set",
+        )
+    _require(images == sorted(set(images)), f"{context}: imageNames must be sorted and unique")
 
 
 _SHA256_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 _DEP_NAME_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9 ._+/-]{0,259}\Z")
 _ROW_ID_RE = re.compile(r"\A[a-z0-9][a-z0-9._-]{0,63}\Z")
+_IMAGE_NAME_RE = re.compile(r"\A[a-z0-9_][a-z0-9_.+-]{0,250}\.dll\Z")
 VALID_SOURCES = frozenset({"system", "bundled", "vcredist", "directx", "sdk"})
 
 
