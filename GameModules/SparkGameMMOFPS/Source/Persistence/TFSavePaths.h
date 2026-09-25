@@ -15,6 +15,7 @@
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <system_error>
@@ -314,6 +315,28 @@ namespace Terrafront::SavePaths
         return false;
     }
 
+    /** Crash windows inside WriteDurableReplace, in commit order. */
+    enum class DurableCommitStage : uint8_t
+    {
+        StagedAndSynced, ///< staging file complete and flushed; destination still holds the previous commit
+        Renamed,         ///< staging file renamed over the destination; parent directory not yet synced
+    };
+
+    /** Observer called at each DurableCommitStage (`destination` is the path being committed). */
+    using DurableCommitStageObserver = void (*)(DurableCommitStage stage, const std::filesystem::path& destination);
+
+    /**
+     * Crash-drill seam (DATA-120 recovery drill): the observer WriteDurableReplace notifies at each
+     * DurableCommitStage. It is null in production. Tests install one in a spawned child process that
+     * _exit()s at a stage, so the parent can prove the store reopens to its last committed state after a
+     * process dies inside the commit. The observer must not throw (WriteDurableReplace is noexcept).
+     */
+    inline DurableCommitStageObserver& DurableCommitObserver() noexcept
+    {
+        static DurableCommitStageObserver observer = nullptr;
+        return observer;
+    }
+
     /**
      * Durably replace `destination` with `bytes`; the only commit primitive for TERRAFRONT stores.
      *
@@ -387,12 +410,16 @@ namespace Terrafront::SavePaths
             std::filesystem::remove(temporary, removeEc);
             return false;
         }
+        if (const DurableCommitStageObserver observer = DurableCommitObserver())
+            observer(DurableCommitStage::StagedAndSynced, destination);
         if (!::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
         {
             ec = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
             std::filesystem::remove(temporary, removeEc);
             return false;
         }
+        if (const DurableCommitStageObserver observer = DurableCommitObserver())
+            observer(DurableCommitStage::Renamed, destination);
         return true;
 #else
         // A crashed writer can leave a staging file behind; the destination's writer lock is held, so it is
@@ -434,6 +461,8 @@ namespace Terrafront::SavePaths
             return failStaged(errno, true);
         if (::close(fd) != 0)
             return failStaged(errno, false);
+        if (const DurableCommitStageObserver observer = DurableCommitObserver())
+            observer(DurableCommitStage::StagedAndSynced, destination);
 
         std::filesystem::rename(temporary, destination, ec);
         if (ec)
@@ -441,6 +470,8 @@ namespace Terrafront::SavePaths
             std::filesystem::remove(temporary, removeEc);
             return false;
         }
+        if (const DurableCommitStageObserver observer = DurableCommitObserver())
+            observer(DurableCommitStage::Renamed, destination);
 
         // The new bytes are committed and visible from here on, so the result is true whatever happens next;
         // a directory-sync failure only means the rename may not survive power loss.

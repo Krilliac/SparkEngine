@@ -354,7 +354,11 @@ namespace Terrafront
         std::string text;
         if (!ReadAllText(m_path, text))
             return LoadResult::Unreadable;
+        return ParseSnapshot(text, out);
+    }
 
+    TFDatabase::LoadResult TFDatabase::ParseSnapshot(const std::string& text, Snapshot& out) const
+    {
         std::string lexicalError;
         if (!JsonStrict::ValidateLexemes(text, {}, lexicalError))
         {

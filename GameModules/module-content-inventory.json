@@ -167,7 +167,7 @@
       "directory": "GameModules/SparkGameMMOFPS",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameMMOFPS/Source",
-      "sourceFileCount": 310,
+      "sourceFileCount": 311,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,

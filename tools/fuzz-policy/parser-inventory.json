@@ -1458,10 +1458,11 @@
     },
     {
       "id": "tf-account-database",
-      "description": "TerraFront account/character database JSON reader.",
+      "description": "TerraFront account/character database JSON reader, including the backup/restore revision and sidecar-digest readers.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
+        "GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp",
+        "GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseBackup.cpp"
       ],
       "formats": [
         ".json"

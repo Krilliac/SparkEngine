@@ -184,7 +184,6 @@ FUTURE_ACCEPTANCE_PATHS = {
     "Tests/Benchmarks",
     "Tests/ModuleKit",
     "docs/operations/server-runbook.md",
-    "docs/specs/persistence.md",
     "wiki/gameplay-tools/Visual-Scripting.md",
     "wiki/getting-started/Building-from-Source.md",
     "wiki/subsystems/Scripting.md",

@@ -624,9 +624,12 @@ add_executable(SparkTests
     TestTFOnboarding.cpp
     # DATA-120 atomic multi-row character commits + schema versioning (TFDatabase above)
     TestDATA120PersistenceReal.cpp
+    # DATA-120 TFDatabase backup/restore + forced-failure recovery drill
+    TestDATA120BackupRestore.cpp
     # TF-120 transaction-scoped locking: shared TF_SAVE_ROOT across authorities
     TestTF120SharedSaveRoot.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseBackup.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFPlayerMeta.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.cpp"
@@ -1573,6 +1576,29 @@ foreach(_spark_data120_selector IN LISTS _spark_data120_persistence_selectors)
         LABELS "persistence;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)
+endforeach()
+
+# DATA-120: TFDatabase backup/restore and the forced-failure recovery drill run
+# under persistence;recovery-drill, so `ctest -L recovery-drill` rehearses a
+# verified backup, a restore, and reopening after a writer dies inside a commit.
+# The drill cases exec a fresh SparkTests child that _exit()s mid-commit or is
+# SIGKILLed, so they exist only on POSIX; Windows crash recovery needs its own
+# hosted run.
+set(_spark_data120_recovery_selectors "Persistence_BackupRestore_=7")
+if(NOT WIN32)
+    list(APPEND _spark_data120_recovery_selectors "Persistence_RecoveryDrill_=4")
+endif()
+foreach(_spark_data120_selector IN LISTS _spark_data120_recovery_selectors)
+    string(REPLACE "=" ";" _spark_data120_parts "${_spark_data120_selector}")
+    list(GET _spark_data120_parts 0 _spark_data120_prefix)
+    list(GET _spark_data120_parts 1 _spark_data120_count)
+    string(REGEX REPLACE "_$" "" _spark_data120_name "${_spark_data120_prefix}")
+    add_test(NAME ${_spark_data120_name} COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(${_spark_data120_name} PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=${_spark_data120_prefix};SPARK_TEST_EXPECT_COUNT=${_spark_data120_count}"
+        LABELS "persistence;recovery-drill;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
 endforeach()
 
 # OPS-110: SparkServer operator health (build identity, tick percentiles, RSS, drain ordering).
