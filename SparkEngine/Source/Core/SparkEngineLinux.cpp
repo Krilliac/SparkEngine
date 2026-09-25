@@ -136,6 +136,34 @@ static bool ConfigureExecScriptArgs(int argc, char* argv[])
 }
 
 /**
+ * @brief Validate the -scene launch form before any subsystem starts.
+ *
+ * -scene is an engine-only run of one reflected scene. Combining it with
+ * -game or -manifest would let the module own the loop while the named scene
+ * never runs, so that launch is refused instead of silently ignoring either.
+ *
+ * @return false (after printing the reason to stderr) when the options are invalid.
+ */
+static bool ValidateSceneArgs(int argc, char* argv[])
+{
+    if (!HasLinuxCommandLineFlag(argc, argv, "-scene"))
+        return true;
+    const char* scenePath = FindLinuxCommandLineValue(argc, argv, "-scene");
+    if (!scenePath || !*scenePath)
+    {
+        std::fprintf(stderr, "SparkEngine: -scene requires a scene path\n");
+        return false;
+    }
+    if (HasLinuxCommandLineFlag(argc, argv, "-game") || HasLinuxCommandLineFlag(argc, argv, "-manifest"))
+    {
+        std::fprintf(stderr, "SparkEngine: -scene runs without a game module and cannot be combined with -game "
+                             "or -manifest\n");
+        return false;
+    }
+    return true;
+}
+
+/**
  * @brief Parse -threads N from argv, with SPARK_MAX_WORKER_THREADS env
  *        fallback. Command line wins on conflict. See the Windows path's
  *        ParseThreadCount for the full rationale.
@@ -197,7 +225,9 @@ int main(int argc, char* argv[])
                     "  --version                  Show the engine version and exit\n"
                     "  -game <module>             Load a game module\n"
                     "  -manifest <path>           Load a packaged runtime manifest\n"
-                    "  -scene <path>              Load a reflected-scene document\n"
+                    "  -scene <path>              Run a reflected-scene document without a game module\n"
+                    "                             (loaded into the ECS world, not drawn on Linux;\n"
+                    "                             exit 4 when it cannot be loaded)\n"
                     "  -headless, -dedicated      Run without a graphics window\n"
                     "  -threads <count>           Set the worker-thread limit\n"
                     "  -test-frames <count>       Exit after a fixed frame count\n"
@@ -259,6 +289,8 @@ int main(int argc, char* argv[])
         g_noJobSystem = HasLinuxCommandLineFlag(argc, argv, "-no-jobsystem");
         ParseWindowSizeOverrideArgs(argc, argv);
         if (!ConfigureExecScriptArgs(argc, argv))
+            return EXIT_FAILURE;
+        if (!ValidateSceneArgs(argc, argv))
             return EXIT_FAILURE;
 
         const bool hasExplicitLaunchRoot = HasLinuxCommandLineFlag(argc, argv, "-game") ||

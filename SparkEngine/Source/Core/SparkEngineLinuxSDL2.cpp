@@ -496,11 +496,22 @@ int RunSDL2Windowed(int argc, char* argv[])
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "Engine lifecycle failed to initialize; shutting down");
         g_shutdownRequested.store(true, std::memory_order_relaxed);
     }
+
+    // -scene: a scene that cannot load must fail the launch, not run an empty
+    // engine. Leave through the ordinary shutdown preflight.
+    const bool sceneLoadFailed = lifecycleInitialized && !LoadLinuxLaunchScene(argc, argv);
+    if (sceneLoadFailed)
+        g_shutdownRequested.store(true, std::memory_order_relaxed);
     RunSDL2MainLoop(/*pollSdlEvents=*/sdlInitOk);
 
     const bool teardownClean = ShutdownLinuxAfterPreflight();
     releaseSdlResources();
-    return (lifecycleInitialized && teardownClean) ? 0 : EXIT_FAILURE;
+
+    if (!lifecycleInitialized)
+        return EXIT_FAILURE;
+    if (sceneLoadFailed)
+        return kLinuxSceneLoadFailedExitCode;
+    return teardownClean ? 0 : EXIT_FAILURE;
 }
 
 #endif // SPARK_SDL2_AVAILABLE

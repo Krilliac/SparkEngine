@@ -1796,6 +1796,38 @@ if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND
         TIMEOUT 45)
 endif()
 
+# EDT-210: the Linux host runs `-scene <path>` engine-only. An editor-saved
+# reflected scene must load into the engine ECS world (one SPARK_SCENE_LOADED
+# record with the fixture's counts, no game module), and a missing or rejected
+# scene must exit 4 instead of running an empty engine. Loading only: the Linux
+# basic draw path is a no-op, so this is not rendering evidence.
+if(UNIX AND NOT APPLE AND TARGET SparkEngine AND (SPARK_HEADLESS_SUPPORT OR SPARK_PACKAGE_HAS_SDL2))
+    add_dependencies(SparkTests SparkEngine)
+    set(_spark_scene_preview_headless OFF)
+    set(_spark_scene_preview_sdl OFF)
+    if(SPARK_HEADLESS_SUPPORT)
+        set(_spark_scene_preview_headless ON)
+    endif()
+    if(SPARK_PACKAGE_HAS_SDL2)
+        set(_spark_scene_preview_sdl ON)
+    endif()
+    add_test(
+        NAME LinuxScenePreview
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_SCENE_FIXTURE=${CMAKE_SOURCE_DIR}/Tests/Fixtures/EditorScene/Scenes/EditorSeeded.sparkscene"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_SCENE_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/linux-scene-preview"
+            "-DSPARK_CHECK_HEADLESS=${_spark_scene_preview_headless}"
+            "-DSPARK_CHECK_SDL=${_spark_scene_preview_sdl}"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkLinuxScenePreview.cmake
+    )
+    set_tests_properties(LinuxScenePreview PROPERTIES
+        LABELS "editor;scene;linux;integration;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 600)
+endif()
+
 add_test(
     NAME NullRHIWindowsLifecycleParserContract
     COMMAND ${CMAKE_COMMAND}

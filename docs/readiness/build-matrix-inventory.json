@@ -1387,7 +1387,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2320,
+      "line": 2352,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1396,7 +1396,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 2358,
+      "line": 2390,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2616,10 +2616,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 2788,
+      "line": 2820,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2786",
+          "id": "Tests/CMakeLists.txt:2818",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4381,7 +4381,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 2788,
+          "line": 2820,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

@@ -117,7 +117,7 @@ cmake -B build -DENABLE_EDITOR=OFF        # Everything except editor
 | `-game <path>` | Load a specific game module DLL/SO |
 | `-window-size WxH` | Override window resolution (e.g., `1920x1080`) |
 | `-test-frames N` | Run N frames then exit (for benchmarking) |
-| `-scene <path>` | Load a specific scene on startup |
+| `-scene <path>` | Run a reflected scene without a game module (Linux: loaded, not drawn; exits 4 if it cannot load) |
 | `--help` / `-h` | Print the platform host's authoritative option list |
 
 ---

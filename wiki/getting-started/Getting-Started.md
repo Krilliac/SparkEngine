@@ -317,14 +317,15 @@ of them fail. That resilience path is not a certified Linux compatibility claim.
 |--------|-------------|
 | `-headless` | Select the host headless entry path. Current host wiring initializes no RHI; wiring the separate `NullRHIDevice` path remains `HEAD-220`. |
 | `-game <path>` | Load a specific game module DLL |
-| `-scene <path>` | Load a specific scene on startup |
+| `-scene <path>` | Run a reflected-scene document (`.sparkscene`, as saved by SparkEditor) without a game module. Windows loads it only when no game module initializes and draws it with the basic renderer. Linux loads it into the engine ECS world, skips implicit module discovery, prints `SPARK_SCENE_LOADED entities=N renderables=M`, and exits 4 when the scene cannot be loaded. It refuses `-scene` combined with `-game`/`-manifest`. Linux does not draw the scene (its basic draw path is a no-op). |
 | `-window-size <W>x<H>` | Override the initial window size, for example `-window-size 1920x1080` |
 | `-no-subprocess` | Skip the optional standalone `SparkConsole` subprocess; the in-process console remains available |
 
 Example:
 
 ```bash
-./SparkEngine -game MyGame.dll -scene Assets/Scenes/Level01.scene -window-size 1920x1080
+./SparkEngine -game MyGame.dll -window-size 1920x1080
+./SparkEngine -headless -scene MyProject/Scenes/Main.sparkscene -test-frames 5
 ```
 
 **Working-directory anchoring.** The host re-anchors the working directory to the executable

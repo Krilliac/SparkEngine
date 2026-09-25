@@ -144,6 +144,13 @@ int RunHeadlessLinux(int argc, char* argv[])
         g_shutdownRequested.store(true, std::memory_order_relaxed);
         exitCode = 2;
     }
+    // -scene: a scene that cannot load must fail the launch, not run an empty
+    // engine. Leave through the ordinary shutdown preflight like -require-game.
+    if (exitCode == 0 && !LoadLinuxLaunchScene(argc, argv))
+    {
+        g_shutdownRequested.store(true, std::memory_order_relaxed);
+        exitCode = kLinuxSceneLoadFailedExitCode;
+    }
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -302,6 +309,11 @@ int RunNoSDL2Fallback(int argc, char* argv[])
 
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
 
+    // -scene: fail the launch rather than validate an empty engine.
+    const bool sceneLoadFailed = !LoadLinuxLaunchScene(argc, argv);
+    if (sceneLoadFailed)
+        g_shutdownRequested.store(true, std::memory_order_relaxed);
+
     // Minimal loop — process a few ticks to validate initialization, then
     // exit only after every module reaches a safe unload checkpoint.  Keep
     // ticking on a veto so transient persistence failures can be retried;
@@ -328,7 +340,10 @@ int RunNoSDL2Fallback(int argc, char* argv[])
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 
-    return ShutdownLinuxAfterPreflight() ? 0 : 1;
+    const bool teardownClean = ShutdownLinuxAfterPreflight();
+    if (sceneLoadFailed)
+        return kLinuxSceneLoadFailedExitCode;
+    return teardownClean ? 0 : 1;
 }
 #endif // !SPARK_SDL2_AVAILABLE
 

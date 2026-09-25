@@ -49,6 +49,20 @@ void InitLinuxCoreSubsystems(bool registerGameplay);
 /// @brief Load game modules, initialize hot-reload watcher, and register console commands.
 void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio);
 
+/**
+ * @brief Load the reflected scene named by `-scene <path>` into the engine ECS world.
+ *
+ * Call after InitLinuxModulesAndCommands (or instead of it under -minimal-init).
+ * On success prints one `SPARK_SCENE_LOADED entities=N renderables=M` record to
+ * stdout. The caller must fail the launch when this returns false.
+ *
+ * @return true when no -scene was given or the scene loaded; false otherwise.
+ */
+bool LoadLinuxLaunchScene(int argc, char* argv[]);
+
+/// Process exit status when `-scene` names a scene that cannot be loaded.
+inline constexpr int kLinuxSceneLoadFailedExitCode = 4;
+
 /// @brief True when @p flag appears verbatim in argv[1..argc).
 bool HasLinuxCommandLineFlag(int argc, char* argv[], const char* flag);
 
