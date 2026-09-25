@@ -237,7 +237,6 @@ SparkEngine/Source/Graphics/FastNoiseLite.h
 SparkEngine/Source/Graphics/FoliageImpostorBaker.h
 SparkEngine/Source/Graphics/FoliageRenderer.h
 SparkEngine/Source/Graphics/FrustumCulling.h
-SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp
 SparkEngine/Source/Graphics/GPUDebugMarkers.h
 SparkEngine/Source/Graphics/GPUSceneBuffer.h
 SparkEngine/Source/Graphics/GPUTimestampQuery.h

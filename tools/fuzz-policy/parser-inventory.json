@@ -97,11 +97,17 @@
     },
     {
       "id": "mesh-gltf-loader",
-      "description": "glTF and GLB static-mesh loader.",
+      "description": "glTF and GLB static-mesh and skinned-mesh loaders with their shared cgltf parse and bounds validation.",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp",
-        "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.h"
+        "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.h",
+        "SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp",
+        "SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.h",
+        "SparkEngine/Source/Graphics/GLTFSkinSkeleton.cpp",
+        "SparkEngine/Source/Graphics/GLTFSkinSkeleton.h",
+        "SparkEngine/Source/Graphics/GLTFValidation.cpp",
+        "SparkEngine/Source/Graphics/GLTFValidation.h"
       ],
       "formats": [
         ".gltf",

@@ -771,13 +771,30 @@ auto mesh = pipeline.LoadMesh("Assets/Models/weapon.gltf");
 
 The canonical Blender-authored static fixture lives in `Tests/Fixtures/GLTFStaticMesh/BlenderBox/` with an editable compressed `.blend`, reproducible author/export script, GLB, and hash-bound provenance. `GLTFStaticMesh_LoadsBlenderAuthoredStaticBox` exercises the production CPU loader against its nonuniform applied-transform box: exported axis-converted bounds, flat normals, all six faces' geometric-corner/UV associations, triangle winding/area, and indices. This establishes the documented static attribute contract only; D3D11 rendering, scene-node transforms, skeletal data, animation, and packaged-content certification remain separate requirements.
 
+### glTF 2.0 Skins (cgltf, CPU importer)
+
+`LoadGLTFSkinnedMesh()` (`Graphics/GLTFSkinnedMeshLoader.h`) is the fail-closed CPU importer for one glTF skin. It reads `POSITION`, `NORMAL`, optional `TEXCOORD_0`, `JOINTS_0`, and `WEIGHTS_0` into vertices with exactly four influences, plus a `Spark::Animation::Skeleton` whose bones are ordered parent-first (a stable topological order, so joints already listed parent-first keep their indices). Vertex joint indices are remapped to that bone order. `offsetMatrix` is the skin's inverse bind matrix (identity when absent) and `localBindPose` is the joint node's local transform; the root bone also folds in every non-joint ancestor (for example the Blender armature object). Matrices are the glTF column-major array read as DirectXMath row-major, so the translation sits in `_41.._43`.
+
+It rejects, with a diagnostic naming the node, joint, primitive, or vertex:
+
+- `JOINTS_1`/`WEIGHTS_1` (more than four influences) and any attribute outside the five above; a missing `NORMAL`
+- `JOINTS_0` that is not a non-normalized unsigned byte/short `VEC4`, and `WEIGHTS_0` that is not float or normalized unsigned byte/short `VEC4`
+- joint indices outside the skin (including zero-weight slots), negative or non-finite weights, and zero-sum weights
+- weight sums outside `1 +/- kGLTFSkinWeightSumTolerance` (0.01, which covers four quantized UNSIGNED_BYTE weights); sums inside it are renormalized to exactly 1
+- more than `kMaxBonesPerMesh` (256, the GPU skinning palette) joints, duplicate joints or joint names, and anything other than exactly one skin
+- inverse bind matrices that are not a float `MAT4` accessor with one matrix per joint, or that are non-finite, non-affine, or singular
+- cyclic node graphs (detected before cgltf walks any parent chain), joints separated from their parent joint by a non-joint node, joints forming more than one tree, and mesh nodes that do not reference the skin
+- everything the static loader rejects (sparse accessors, morph targets, required extensions, oversized or unaligned buffers)
+
+Animations in the file are not read. Both glTF loaders share `GLTFValidation.h/.cpp` (root-confined reads, size limits, and buffer/view/accessor pre-validation), so the skinned path cannot relax the static loader's limits; the parsers are one entry in the SEC-120 parser inventory. `GLTF_Skinning_*` tests (ctest `GLTFSkinnedMeshImport`, exact count) build every GLB fixture in-test. This is importer coverage only: the loader has no `AssetPipeline`/`MeshAsset` caller yet, nothing uploads its vertices to `GPUSkinning` or a skinned shader, there is no glTF animation clip import, and there is no Blender-authored skinned fixture.
+
 ### Observed Model Data Handoffs
 
 | Format path | Data handed to `MeshAssetData` | Current limit |
 |-------------|--------------------------------|---------------|
 | OBJ | Positions, normals, texture coordinates, and triangle indices | Static geometry path; parser details vary by platform/caller |
 | Native FBX | Geometry on the non-Windows `MeshAsset` path | No Windows `MeshAsset` branch and no `AnimationManager` handoff |
-| cgltf | Static triangle positions, normals, one UV set, and indices | Skins, animations, morph targets, and PBR material graphs are not ingested |
+| cgltf | Static triangle positions, normals, one UV set, and indices | Skins go through the separate CPU-only `LoadGLTFSkinnedMesh()` with no `MeshAssetData` handoff; animations, morph targets, and PBR material graphs are not ingested |
 
 ## Error Handling
 

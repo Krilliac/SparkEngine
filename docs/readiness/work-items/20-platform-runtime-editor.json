@@ -1326,9 +1326,11 @@
           "state": "unmet",
           "evidence": [
             "Tests/TestGLTFStaticMeshLoader.cpp",
-            "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp"
+            "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp",
+            "Tests/TestGLTFSkinnedMeshLoader.cpp",
+            "SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp"
           ],
-          "note": "There is no glTF skin/animation importer; the static loader rejects skins. There are no skinning/animation tests and no D3D11 skinned render proof."
+          "note": "CPU-only fail-closed glTF skin importer (LoadGLTFSkinnedMesh) passes GLTF_Skinning_* 19/19 locally (linux-gcc-release). No AssetPipeline/MeshAsset caller, GPUSkinning or skinned-shader consumer, glTF animation import, GLTF_Animation_* tests, Blender-authored skinned fixture, or D3D11 skinned render proof."
         },
         {
           "criterionDigest": "sha256:60f825cc1ca8",
@@ -1341,9 +1343,10 @@
           "state": "unmet",
           "evidence": [
             "Tests/TestGLTFStaticMeshLoader.cpp",
-            "Tests/TestENG220ObjImportReal.cpp"
+            "Tests/TestENG220ObjImportReal.cpp",
+            "Tests/TestGLTFSkinnedMeshLoader.cpp"
           ],
-          "note": "Static glTF/OBJ rejections are tested. Skinned-content, material/texture and Windows package import diagnostics are missing."
+          "note": "Static glTF/OBJ rejections are tested. CPU skinned-glTF rejections pass locally (GLTF_Skinning_*): JOINTS_1, joint range, bad weights, JOINTS component type, 256-joint cap, cyclic/disconnected joints, singular or non-affine inverse binds. Material/texture and Windows package import diagnostics are missing."
         },
         {
           "criterionDigest": "sha256:99267550fdd7",
@@ -1404,7 +1407,6 @@
         "golden-d3d11"
       ],
       "plannedTestSelectors": [
-        "GLTF_Skinning_*",
         "GLTF_Animation_*",
         "CanonicalScene_*"
       ]

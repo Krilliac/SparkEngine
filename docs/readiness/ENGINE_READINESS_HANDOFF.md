@@ -5168,13 +5168,13 @@ The glTF cgltf path does not show JOINTS_0/WEIGHTS_0 import, limiting the stable
 Progress: 0 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Skinned glTF animates correctly on D3D11
-   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp`
-   - There is no glTF skin/animation importer; the static loader rejects skins. There are no skinning/animation tests and no D3D11 skinned render proof.
+   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`, `SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp`
+   - CPU-only fail-closed glTF skin importer (LoadGLTFSkinnedMesh) passes GLTF_Skinning_* 19/19 locally (linux-gcc-release). No AssetPipeline/MeshAsset caller, GPUSkinning or skinned-shader consumer, glTF animation import, GLTF_Animation_* tests, Blender-authored skinned fixture, or D3D11 skinned render proof.
 2. **[unmet]** Canonical content renders correctly through the packaged primary renderer
    - There are no canonical-scene tests or content. The D3D11 material check was a local Windows run, with no hosted packaged proof.
 3. **[unmet]** Malformed or unsupported content fails actionably
-   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `Tests/TestENG220ObjImportReal.cpp`
-   - Static glTF/OBJ rejections are tested. Skinned-content, material/texture and Windows package import diagnostics are missing.
+   - Evidence: `Tests/TestGLTFStaticMeshLoader.cpp`, `Tests/TestENG220ObjImportReal.cpp`, `Tests/TestGLTFSkinnedMeshLoader.cpp`
+   - Static glTF/OBJ rejections are tested. CPU skinned-glTF rejections pass locally (GLTF_Skinning_*): JOINTS_1, joint range, bad weights, JOINTS component type, 256-joint cap, cyclic/disconnected joints, singular or non-affine inverse binds. Material/texture and Windows package import diagnostics are missing.
 4. **[unmet]** The Windows package retains all dependencies
    - This needs a Windows package run. There is no dependency reference-closure check.
 5. **[unmet]** Experimental backend parity remains owned by RHI-220, RHI-225, RHI-230, and RHI-240

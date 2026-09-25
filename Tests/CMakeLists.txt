@@ -244,6 +244,7 @@ add_executable(SparkTests
     TestJsonStrict.cpp
     TestThirdPartyIntegration.cpp
     TestGLTFStaticMeshLoader.cpp
+    TestGLTFSkinnedMeshLoader.cpp
     TestNetworkStress.cpp
     TestNetworkMMOIntegration.cpp
     TestAnimationStress.cpp
@@ -1926,6 +1927,15 @@ add_test(NAME NullRHIResourceLifetime COMMAND $<TARGET_FILE:SparkTests> --empty-
 set_tests_properties(NullRHIResourceLifetime PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=NullRHI_Lifetime_;SPARK_TEST_EXPECT_COUNT=6"
     LABELS "nullrhi-headless;stable-v1;unit"
+    TIMEOUT 30)
+
+# ENG-220: fail-closed glTF skin import (JOINTS_0/WEIGHTS_0, inverse binds, joint
+# tree, 256-joint GPU palette). CPU importer coverage only: no skinned rendering,
+# animation clips or Blender-authored skinned asset. Exact count: a dropped test fails.
+add_test(NAME GLTFSkinnedMeshImport COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(GLTFSkinnedMeshImport PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=GLTF_Skinning_;SPARK_TEST_EXPECT_COUNT=19"
+    LABELS "assets;gltf;unit"
     TIMEOUT 30)
 
 # PERF-100: the bounded tick work-time histogram both headless hosts feed, then
