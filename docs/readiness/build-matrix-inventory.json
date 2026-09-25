@@ -598,7 +598,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2550,
+      "line": 2583,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -625,7 +625,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3412,
+      "line": 3495,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -649,7 +649,7 @@
     },
     {
       "name": "STRIP_DEBUG_SYMBOLS",
-      "description": "Strip debug symbols from the final binary",
+      "description": "Keep private symbols out of the runtime images (split to the symbols component)",
       "default": "OFF",
       "file": "CMakeLists.txt",
       "line": 196,
@@ -1056,7 +1056,7 @@
     },
     {
       "name": "STRIP_DEBUG_SYMBOLS",
-      "description": "Strip debug symbols from the final binary",
+      "description": "Keep private symbols out of the runtime images (split to the symbols component)",
       "default": false,
       "status": "active",
       "declarationCount": 1,
@@ -1378,7 +1378,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2550,
+      "line": 2583,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1447,7 +1447,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3412,
+      "line": 3495,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1480,7 +1480,7 @@
     },
     {
       "name": "STRIP_DEBUG_SYMBOLS",
-      "description": "Strip debug symbols from the final binary",
+      "description": "Keep private symbols out of the runtime images (split to the symbols component)",
       "default": "OFF",
       "file": "CMakeLists.txt",
       "line": 196,
@@ -2099,10 +2099,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1690,
+      "line": 1723,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1676",
+          "id": "CMakeLists.txt:1709",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2137,24 +2137,24 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1661,
+      "line": 1694,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1564",
+          "id": "CMakeLists.txt:1597",
           "branch": 0,
           "branches": [
             "JOLT_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:1659",
+          "id": "CMakeLists.txt:1692",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1660",
+          "id": "CMakeLists.txt:1693",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2189,31 +2189,31 @@
       "target": "OpenGL::GL",
       "kind": "imported",
       "file": "CMakeLists.txt",
-      "line": 602,
+      "line": 635,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:537",
+          "id": "CMakeLists.txt:570",
           "branch": 0,
           "branches": [
             "NOT WIN32 AND ENABLE_SDL2 AND EXISTS \"${SDL2_SUBMODULE_DIR}/CMakeLists.txt\""
           ]
         },
         {
-          "id": "CMakeLists.txt:541",
+          "id": "CMakeLists.txt:574",
           "branch": 0,
           "branches": [
             "NOT OpenGL_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:556",
+          "id": "CMakeLists.txt:589",
           "branch": 0,
           "branches": [
             "_LIBGL_RUNTIME AND EXISTS \"${_FALLBACK_GL_HEADERS}/GL/gl.h\""
           ]
         },
         {
-          "id": "CMakeLists.txt:601",
+          "id": "CMakeLists.txt:634",
           "branch": 0,
           "branches": [
             "NOT TARGET OpenGL::GL"
@@ -2248,10 +2248,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1678,
+      "line": 1711,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1676",
+          "id": "CMakeLists.txt:1709",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2616,10 +2616,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 2629,
+      "line": 2669,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2627",
+          "id": "Tests/CMakeLists.txt:2667",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2721,10 +2721,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1430,
+      "line": 1463,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1429",
+          "id": "CMakeLists.txt:1462",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2739,10 +2739,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1432,
+      "line": 1465,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1429",
+          "id": "CMakeLists.txt:1462",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2758,10 +2758,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1413,
+      "line": 1446,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1412",
+          "id": "CMakeLists.txt:1445",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2776,7 +2776,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1386,
+      "line": 1419,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3227,7 +3227,7 @@
       "target": "SparkRuntimeShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1795,
+      "line": 1828,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3359,10 +3359,10 @@
       "target": "VulkanMemoryAllocator",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 743,
+      "line": 776,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:742",
+          "id": "CMakeLists.txt:775",
           "branch": 0,
           "branches": [
             "NOT TARGET VulkanMemoryAllocator AND EXISTS \"${VMA_ROOT}/vk_mem_alloc.h\""
@@ -3377,10 +3377,10 @@
       "target": "angelscript",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1004,
+      "line": 1037,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:946",
+          "id": "CMakeLists.txt:979",
           "branch": 0,
           "branches": [
             "ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"
@@ -3395,10 +3395,10 @@
       "target": "cgltf",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 812,
+      "line": 845,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:811",
+          "id": "CMakeLists.txt:844",
           "branch": 0,
           "branches": [
             "NOT TARGET cgltf AND EXISTS \"${CGLTF_DIR}/cgltf.h\""
@@ -3433,17 +3433,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2267,
+      "line": 2300,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2262",
+          "id": "CMakeLists.txt:2295",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2266",
+          "id": "CMakeLists.txt:2299",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -3523,10 +3523,10 @@
       "target": "miniaudio",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 831,
+      "line": 864,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:830",
+          "id": "CMakeLists.txt:863",
           "branch": 0,
           "branches": [
             "NOT TARGET miniaudio AND EXISTS \"${MINIAUDIO_DIR}/miniaudio.h\""
@@ -3541,10 +3541,10 @@
       "target": "miniz",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 694,
+      "line": 727,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:692",
+          "id": "CMakeLists.txt:725",
           "branch": 0,
           "branches": [
             "MINIZ_SOURCES"
@@ -3559,10 +3559,10 @@
       "target": "nlohmann_json",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 857,
+      "line": 890,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:856",
+          "id": "CMakeLists.txt:889",
           "branch": 0,
           "branches": [
             "NOT TARGET nlohmann_json AND EXISTS \"${NLOHMANN_JSON_DIR}/nlohmann_json.h\""
@@ -3667,10 +3667,10 @@
       "target": "stb_image",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 793,
+      "line": 826,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:792",
+          "id": "CMakeLists.txt:825",
           "branch": 0,
           "branches": [
             "NOT TARGET stb_image AND EXISTS \"${STB_DIR}/stb_image.h\""
@@ -3685,10 +3685,10 @@
       "target": "tinyexr",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 870,
+      "line": 903,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:869",
+          "id": "CMakeLists.txt:902",
           "branch": 0,
           "branches": [
             "NOT TARGET tinyexr AND EXISTS \"${TINYEXR_DIR}/tinyexr.h\""
@@ -3703,10 +3703,10 @@
       "target": "tinyobjloader",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 766,
+      "line": 799,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:763",
+          "id": "CMakeLists.txt:796",
           "branch": 0,
           "branches": [
             "TINYOBJLOADER_INCLUDE_DIR"
@@ -3721,10 +3721,10 @@
       "target": "zstd",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 722,
+      "line": 755,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:721",
+          "id": "CMakeLists.txt:754",
           "branch": 0,
           "branches": [
             "NOT TARGET zstd AND EXISTS \"${ZSTD_ROOT}/zstd.h\""
@@ -3795,7 +3795,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1690,
+          "line": 1723,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -3849,7 +3849,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1661,
+          "line": 1694,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -3903,7 +3903,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 602,
+          "line": 635,
           "kind": "imported",
           "origin": "non-build",
           "definitionScope": [],
@@ -3957,7 +3957,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1678,
+          "line": 1711,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4361,7 +4361,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 2629,
+          "line": 2669,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4479,7 +4479,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1430,
+          "line": 1463,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4487,7 +4487,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1432,
+          "line": 1465,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -4505,7 +4505,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1413,
+          "line": 1446,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4523,7 +4523,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1386,
+          "line": 1419,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5203,7 +5203,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1795,
+          "line": 1828,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -5439,7 +5439,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 743,
+          "line": 776,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5457,7 +5457,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1004,
+          "line": 1037,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -5475,7 +5475,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 812,
+          "line": 845,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5513,7 +5513,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2267,
+          "line": 2300,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5557,7 +5557,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 831,
+          "line": 864,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5575,7 +5575,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 694,
+          "line": 727,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5593,7 +5593,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 857,
+          "line": 890,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5773,7 +5773,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 793,
+          "line": 826,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5791,7 +5791,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 870,
+          "line": 903,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5809,7 +5809,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 766,
+          "line": 799,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5827,7 +5827,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 722,
+          "line": 755,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6347,7 +6347,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 58,
+        "stepCount": 59,
         "steps": [
           {
             "index": 0,
@@ -6963,6 +6963,18 @@
           },
           {
             "index": 51,
+            "name": "Test the Shipping private-symbol manifest (BLD-100)",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "bd2a7e36436cde54"
+          },
+          {
+            "index": 52,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "",
             "uses": "",
@@ -6974,7 +6986,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 52,
+            "index": 53,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -6986,7 +6998,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 53,
+            "index": 54,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -6998,7 +7010,7 @@
             "runDigest": ""
           },
           {
-            "index": 54,
+            "index": 55,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -7010,7 +7022,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 55,
+            "index": 56,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -7025,7 +7037,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 56,
+            "index": 57,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -7037,7 +7049,7 @@
             "runDigest": ""
           },
           {
-            "index": 57,
+            "index": 58,
             "name": "Controlled required-job failure probe",
             "id": "",
             "uses": "",
@@ -8707,7 +8719,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 17,
+        "stepCount": 19,
         "steps": [
           {
             "index": 0,
@@ -8759,6 +8771,30 @@
           },
           {
             "index": 4,
+            "name": "Stage and map Shipping private symbols",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "f65bb54896bb762c"
+          },
+          {
+            "index": 5,
+            "name": "Upload Windows Shipping private symbols",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 6,
             "name": "Capture Windows Shipping provenance",
             "id": "",
             "uses": "",
@@ -8770,7 +8806,7 @@
             "runDigest": "eaaff83d3b3b01dd"
           },
           {
-            "index": 5,
+            "index": 7,
             "name": "Install the Windows Shipping SDK for the consumer profile",
             "id": "",
             "uses": "",
@@ -8782,7 +8818,7 @@
             "runDigest": "36f226b69437d456"
           },
           {
-            "index": 6,
+            "index": 8,
             "name": "Configure and build the Windows validation lane",
             "id": "",
             "uses": "",
@@ -8794,7 +8830,7 @@
             "runDigest": "5605dbef17f25623"
           },
           {
-            "index": 7,
+            "index": 9,
             "name": "Capture Windows validation provenance",
             "id": "",
             "uses": "",
@@ -8806,7 +8842,7 @@
             "runDigest": "3460874c75995c44"
           },
           {
-            "index": 8,
+            "index": 10,
             "name": "Configure and build the installed SDK consumer lane",
             "id": "",
             "uses": "",
@@ -8818,7 +8854,7 @@
             "runDigest": "9cd61c1b24e1a4ef"
           },
           {
-            "index": 9,
+            "index": 11,
             "name": "Capture installed SDK consumer provenance",
             "id": "",
             "uses": "",
@@ -8830,7 +8866,7 @@
             "runDigest": "22ba85fa35d4e34d"
           },
           {
-            "index": 10,
+            "index": 12,
             "name": "Generate the configured build-matrix inventory",
             "id": "",
             "uses": "",
@@ -8842,7 +8878,7 @@
             "runDigest": "e3982ce2ce04dc8f"
           },
           {
-            "index": 11,
+            "index": 13,
             "name": "Check the configured build matrix",
             "id": "build-matrix-parity",
             "uses": "",
@@ -8854,7 +8890,7 @@
             "runDigest": "847469c7e07435aa"
           },
           {
-            "index": 12,
+            "index": 14,
             "name": "Package Windows Shipping MSI for package-smoke consumer",
             "id": "",
             "uses": "",
@@ -8866,7 +8902,7 @@
             "runDigest": "9d7b1cdb557b7c1f"
           },
           {
-            "index": 13,
+            "index": 15,
             "name": "Upload exact Windows Shipping MSI for package smoke",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -8878,7 +8914,7 @@
             "runDigest": ""
           },
           {
-            "index": 14,
+            "index": 16,
             "name": "Upload Windows Shipping MSI packaging diagnostics",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -8890,7 +8926,7 @@
             "runDigest": ""
           },
           {
-            "index": 15,
+            "index": 17,
             "name": "Upload build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -8902,7 +8938,7 @@
             "runDigest": ""
           },
           {
-            "index": 16,
+            "index": 18,
             "name": "Record build-matrix evidence",
             "id": "",
             "uses": "",
@@ -12410,8 +12446,52 @@
       },
       {
         "job": "build-windows-shipping",
+        "step": "Stage and map Shipping private symbols",
+        "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "install",
+        "command": "cmake --install build/windows-shipping --config MinSizeRel  --component \"$component\" --prefix build/shipping-runtime-stage",
+        "commandProvenance": "literal",
+        "configuration": "MinSizeRel",
+        "prefix": "build/shipping-runtime-stage",
+        "component": "$component",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Stage and map Shipping private symbols",
+        "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cmake",
+        "kind": "install",
+        "command": "cmake --install build/windows-shipping --config MinSizeRel  --component symbols --prefix build/shipping-symbols",
+        "commandProvenance": "literal",
+        "configuration": "MinSizeRel",
+        "prefix": "build/shipping-symbols",
+        "component": "symbols",
+        "commandIndex": 1
+      },
+      {
+        "job": "build-windows-shipping",
         "step": "Install the Windows Shipping SDK for the consumer profile",
-        "stepIndex": 5,
+        "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -12433,7 +12513,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 6,
+        "stepIndex": 8,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -12454,7 +12534,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 6,
+        "stepIndex": 8,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -12481,7 +12561,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 8,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -12509,7 +12589,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 8,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -12536,7 +12616,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 8,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -12559,7 +12639,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Package Windows Shipping MSI for package-smoke consumer",
-        "stepIndex": 12,
+        "stepIndex": 14,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -14286,7 +14366,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 6,
+        "stepIndex": 8,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -14307,7 +14387,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 8,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -15176,7 +15256,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 6,
+        "stepIndex": 8,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -15203,7 +15283,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 8,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -15909,7 +15989,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 8,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -16342,7 +16422,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 51,
+        "stepIndex": 52,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -16370,7 +16450,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 52,
+        "stepIndex": 53,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -16398,7 +16478,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture Windows Shipping provenance",
-        "stepIndex": 4,
+        "stepIndex": 6,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -16426,7 +16506,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture Windows validation provenance",
-        "stepIndex": 7,
+        "stepIndex": 9,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -16454,7 +16534,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture installed SDK consumer provenance",
-        "stepIndex": 9,
+        "stepIndex": 11,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -16482,7 +16562,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Generate the configured build-matrix inventory",
-        "stepIndex": 10,
+        "stepIndex": 12,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -16514,7 +16594,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Check the configured build matrix",
-        "stepIndex": 11,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -16542,7 +16622,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Check the configured build matrix",
-        "stepIndex": 11,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -16876,7 +16956,7 @@
     {
       "job": "build-windows-shipping",
       "step": "Configure and build the Windows validation lane",
-      "stepIndex": 6,
+      "stepIndex": 8,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "windows",
@@ -16897,7 +16977,7 @@
     {
       "job": "build-windows-shipping",
       "step": "Configure and build the installed SDK consumer lane",
-      "stepIndex": 8,
+      "stepIndex": 10,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "windows",

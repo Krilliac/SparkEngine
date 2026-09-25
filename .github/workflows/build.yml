@@ -289,6 +289,9 @@ jobs:
     - name: Test the stable-v1 x86-64 SSE4.2 CPU floor (OD-04)
       run: python3 Tests/Tools/test_cpu_floor.py
 
+    - name: Test the Shipping private-symbol manifest (BLD-100)
+      run: python3 -B -m unittest Tests.Tools.test_shipping_symbol_manifest -v
+
     - name: Generate and compare the deterministic build-matrix inventory
       run: |
         python3 Tools/buildmatrix/inventory.py \
@@ -1682,6 +1685,37 @@ jobs:
         # contract gains an executable its table does not cover.
         python Tests/Tools/test_rel100_product_versions.py \
           --bin-dir build/windows-shipping/bin/MinSizeRel
+
+    - name: Stage and map Shipping private symbols
+      shell: bash
+      run: |
+        set -euo pipefail
+        # BLD-100: the packaged components and the private "symbols" component
+        # install to separate roots. Every staged EXE/DLL must map by its RSDS
+        # PDB GUID+age to exactly one staged PDB, record a bare PDB file name,
+        # and no PDB may land in the runtime tree.
+        for component in runtime tools samples; do
+          cmake --install build/windows-shipping --config MinSizeRel \
+            --component "$component" --prefix build/shipping-runtime-stage
+        done
+        cmake --install build/windows-shipping --config MinSizeRel \
+          --component symbols --prefix build/shipping-symbols
+        python tools/shipping_symbol_manifest.py \
+          --images build/shipping-runtime-stage \
+          --symbols build/shipping-symbols/symbols \
+          --output build/shipping-symbols/shipping-symbol-manifest.json
+
+    - name: Upload Windows Shipping private symbols
+      # A separate artifact from the MSI: symbols never enter a package. Hosting
+      # them on a symbol server is OPS-100 scope.
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: shipping-symbols-${{ github.sha }}
+        path: |
+          build/shipping-symbols/symbols
+          build/shipping-symbols/shipping-symbol-manifest.json
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
     - name: Capture Windows Shipping provenance
       shell: bash

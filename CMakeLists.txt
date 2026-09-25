@@ -193,7 +193,7 @@ option(ENABLE_AUTOMATION_HOST "Build the standalone automation host" ON)
 # Build profile options — controls what ships in the final binary
 option(ENABLE_CONSOLE_IN_SHIPPING "Include SparkConsole in Shipping builds" OFF)
 option(ENABLE_DEVCOMMANDS_IN_SHIPPING "Include developer commands (god, noclip, etc.) in Shipping builds" OFF)
-option(STRIP_DEBUG_SYMBOLS "Strip debug symbols from the final binary" OFF)
+option(STRIP_DEBUG_SYMBOLS "Keep private symbols out of the runtime images (split to the symbols component)" OFF)
 
 # Third-party manifest audit (single source of truth lives in ThirdParty/dependencies.lock)
 include("${CMAKE_SOURCE_DIR}/cmake/SparkThirdPartyAudit.cmake")
@@ -264,16 +264,16 @@ if(MSVC)
         /wd4267  # size_t conversion warnings
         /wd26495 # Uninitialized member variable warnings (for TinyObjLoader)
     )
-    # /DEBUG linker flag embeds PDB reference in the executable so SymFromAddr
-    # can locate symbols at runtime. Does not affect binary performance.
-    # STRIP_DEBUG_SYMBOLS (windows-shipping) means exactly this: no PDB, and no
-    # PDB reference in the image. Emitting it unconditionally made the option a
-    # no-op and shipped symbol paths in the Shipping product set.
-    if(STRIP_DEBUG_SYMBOLS)
-        message(STATUS "Build    : /DEBUG suppressed (STRIP_DEBUG_SYMBOLS=ON, no PDBs emitted)")
-    else()
-        add_link_options(/DEBUG)
-    endif()
+    # Every image links with /DEBUG, Shipping included (BLD-100): the PDB is the
+    # private symbol file and the image's CodeView (RSDS) record -- PDB GUID and
+    # age -- is the build ID that maps a crash back to it. Outside Debug,
+    # /PDBALTPATH:%_PDB% records only the PDB file name, so no build-machine
+    # path lands in the image. STRIP_DEBUG_SYMBOLS (windows-shipping) keeps the
+    # PDBs out of the runtime package instead of not producing them: they
+    # install only into the "symbols" component (section 17), which CPack never
+    # packages. /DEBUG would switch /OPT:REF and /OPT:ICF off; the Release /
+    # Shipping linker optimizations below restate both outside Debug.
+    add_link_options(/DEBUG $<$<NOT:$<CONFIG:Debug>>:/PDBALTPATH:%_PDB%>)
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS SPARK_PLATFORM_WINDOWS)
 
     # Conformance improvements available in VS 2017+ — enforce __cplusplus macro and
@@ -429,9 +429,44 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
         $<$<NOT:$<CONFIG:Debug>>:-fstrict-aliasing>
     )
 
-    # linux-shipping asks for STRIP_DEBUG_SYMBOLS the same way windows-shipping
-    # does; -s is the ELF equivalent of suppressing /DEBUG.
-    if(STRIP_DEBUG_SYMBOLS AND NOT APPLE)
+    # Every ELF image carries a SHA-1 GNU build-id: the key that maps a crash
+    # (OPS-100 crash logs record it per module) to the image's private symbols.
+    # Explicit because lld, unlike distribution GCC, does not emit one by default.
+    if(CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")
+        add_link_options(-Wl,--build-id=sha1)
+    endif()
+
+    # STRIP_DEBUG_SYMBOLS (linux-shipping) keeps private symbols out of the
+    # runtime images, not out of the build (BLD-100). Every target compiles
+    # with -g: the static libraries (SparkEngineLib above all) hold nearly all
+    # shipped code, so -g on the image targets alone would leave their .debug
+    # files without DWARF. Only the shipped images (SPARK_SHIPPED_IMAGE_TARGETS,
+    # section 17) link through cmake/SparkSplitDebugLink.cmake, which splits
+    # <image>.debug (same build-id) off the linked image and strips the image,
+    # leaving a .gnu_debuglink. Running inside the link step, before any
+    # POST_BUILD command, means module .sparkabi hashes and runtime copies see
+    # the final stripped image. The .debug files install only into the
+    # "symbols" component (section 17). Every other executable and shared
+    # library (SparkTests, test probes) outside Debug links with -g0 and
+    # --strip-all, as before: under LTO, link-time -g0 stops the LTRANS stage
+    # from generating debug info that the strip would discard anyway.
+    # Non-ELF GNU-style targets keep their previous behavior: MinGW PE links
+    # with -s, and Apple has no strip step.
+    set(SPARK_SPLIT_DEBUG_SYMBOLS OFF)
+    if(STRIP_DEBUG_SYMBOLS AND CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")
+        if(NOT CMAKE_OBJCOPY)
+            message(FATAL_ERROR "STRIP_DEBUG_SYMBOLS=ON needs objcopy to split private symbols")
+        endif()
+        add_compile_options(-g)
+        set(_spark_split_debug_launcher
+            "${CMAKE_COMMAND}" "-DSPARK_OBJCOPY=${CMAKE_OBJCOPY}"
+            -P "${CMAKE_SOURCE_DIR}/cmake/SparkSplitDebugLink.cmake" --)
+        set(_spark_unshipped_release_link
+            "$<AND:$<NOT:$<CONFIG:Debug>>,$<NOT:$<BOOL:$<TARGET_PROPERTY:SPARK_PRIVATE_SYMBOLS>>>>")
+        add_link_options("$<${_spark_unshipped_release_link}:-g0>" "$<${_spark_unshipped_release_link}:-Wl,--strip-all>")
+        set(SPARK_SPLIT_DEBUG_SYMBOLS ON)
+        message(STATUS "Build    : private symbols split to <image>.debug (STRIP_DEBUG_SYMBOLS=ON)")
+    elseif(STRIP_DEBUG_SYMBOLS AND NOT APPLE)
         add_link_options($<$<NOT:$<CONFIG:Debug>>:-s>)
     endif()
 
@@ -486,15 +521,13 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
         $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS>
     )
 
-    # Shipping: strip symbols from the final binary
-    if(NOT APPLE)
-        add_link_options(
-            $<$<CONFIG:MinSizeRel>:-Wl,--strip-all>
-        )
-    else()
-        add_link_options(
-            $<$<CONFIG:MinSizeRel>:-Wl,-S>
-        )
+    # Shipping: strip symbols from the final binary. With the private-symbol
+    # split active, the link launcher strips after keeping <image>.debug; a
+    # link-time --strip-all would discard the symbols before it can.
+    if(APPLE)
+        add_link_options($<$<CONFIG:MinSizeRel>:-Wl,-S>)
+    elseif(NOT SPARK_SPLIT_DEBUG_SYMBOLS)
+        add_link_options($<$<CONFIG:MinSizeRel>:-Wl,--strip-all>)
     endif()
 endif()
 
@@ -3011,6 +3044,56 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/GameModules/SparkGame" AND
             "/CMakeLists[.]txt$"
     )
 endif()
+
+# Private symbols (BLD-100). Each shipped executable and shared library has a
+# symbol file that its build ID maps to: the linker PDB on MSVC (RSDS GUID and
+# age), or <image>.debug on ELF when STRIP_DEBUG_SYMBOLS splits it (GNU build-id
+# plus .gnu_debuglink; see section 6). They install only into the "symbols"
+# component. CPACK_COMPONENTS_ALL leaves it out, so no runtime, SDK or MSI
+# package carries symbols; `cmake --install <build> --component symbols` stages
+# them for the private symbol store, and tools/shipping_symbol_manifest.py
+# proves the image-to-symbol mapping. On ELF only these targets link through
+# the split launcher; every other image is stripped outright (section 6). This
+# list must name every image target installed to bin or lib by first-party
+# CMake; Tests/Tools/test_shipping_symbol_manifest.py checks that it does.
+set(SPARK_INSTALL_COMPONENT_SYMBOLS "symbols")
+set(SPARK_SHIPPED_IMAGE_TARGETS
+    SparkEngine SparkEditor SparkConsole SparkServer SparkGateway SparkCrashReporter
+    SparkShaderCompiler SparkDaemon SparkCollabServer SparkOrchestrator SparkCooker
+    SparkWorker SparkAutomation SparkLauncher SparkBuild SparkInstaller SDL2
+    ${_SPARK_GAME_MODULE_NAMES}
+)
+foreach(_spark_symbol_target IN LISTS SPARK_SHIPPED_IMAGE_TARGETS)
+    if(NOT TARGET ${_spark_symbol_target})
+        continue()
+    endif()
+    # An imported image (a system library) is not built here and has no split symbols.
+    get_target_property(_spark_symbol_target_type ${_spark_symbol_target} TYPE)
+    get_target_property(_spark_symbol_target_imported ${_spark_symbol_target} IMPORTED)
+    if(_spark_symbol_target_imported OR
+       NOT _spark_symbol_target_type MATCHES "^(EXECUTABLE|SHARED_LIBRARY|MODULE_LIBRARY)$")
+        continue()
+    endif()
+    if(MSVC)
+        install(FILES "$<TARGET_PDB_FILE:${_spark_symbol_target}>"
+            DESTINATION symbols
+            COMPONENT ${SPARK_INSTALL_COMPONENT_SYMBOLS})
+    elseif(SPARK_SPLIT_DEBUG_SYMBOLS)
+        # A launcher the user configured runs inside ours, as part of the link command.
+        foreach(_spark_symbol_language IN ITEMS C CXX)
+            get_target_property(_spark_user_launcher ${_spark_symbol_target} ${_spark_symbol_language}_LINKER_LAUNCHER)
+            if(NOT _spark_user_launcher)
+                set(_spark_user_launcher "")
+            endif()
+            set_property(TARGET ${_spark_symbol_target} PROPERTY ${_spark_symbol_language}_LINKER_LAUNCHER
+                ${_spark_split_debug_launcher} ${_spark_user_launcher})
+        endforeach()
+        set_property(TARGET ${_spark_symbol_target} PROPERTY SPARK_PRIVATE_SYMBOLS ON)
+        install(FILES "$<TARGET_FILE:${_spark_symbol_target}>.debug"
+            DESTINATION symbols
+            COMPONENT ${SPARK_INSTALL_COMPONENT_SYMBOLS})
+    endif()
+endforeach()
 
 message(STATUS "CMake install rules configured (use 'cmake --install' for find_package support)")
 

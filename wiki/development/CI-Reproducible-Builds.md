@@ -167,6 +167,75 @@ version agrees with the other recorded tools. This is provenance validation,
 not hosted reproducibility evidence: BLD-100 still requires two clean Windows
 Shipping builds and an externally verified comparison.
 
+### Shipping private symbols (BLD-100)
+
+`STRIP_DEBUG_SYMBOLS=ON` (both Shipping presets) keeps private symbols out of
+the runtime package. It no longer stops them from being produced:
+
+- **MSVC**: every image links with `/DEBUG` (objects already compile with
+  `/Z7`), so it carries a CodeView RSDS record, the PDB GUID and age that
+  identify its PDB. Outside Debug, `/PDBALTPATH:%_PDB%` records only the PDB
+  file name. `/OPT:REF` and `/OPT:ICF` are restated for every non-Debug
+  configuration, because `/DEBUG` alone would switch them off.
+- **ELF (GCC/Clang)**: every image links with `-Wl,--build-id=sha1`. With
+  `STRIP_DEBUG_SYMBOLS=ON`, every target compiles with `-g` (the static
+  libraries hold most shipped code), and each shipped image target gets
+  `cmake/SparkSplitDebugLink.cmake` as its C/C++ `LINKER_LAUNCHER`. It runs the
+  link, then writes `<image>.debug` (`objcopy --only-keep-debug`) and strips the
+  image with a `.gnu_debuglink`. It runs inside the link step, so the module
+  `.sparkabi` hash and every `POST_BUILD` copy see the stripped image. Every
+  other image (SparkTests, test probes) links outside Debug with `-g0` and
+  `--strip-all` and gets no `.debug`; under LTO, link-time `-g0` keeps the
+  LTRANS stage from generating debug info (checked with GCC 13). MinGW keeps
+  `-s`, and Apple has no strip step.
+
+The PDBs and `.debug` files of the shipped image targets
+(`SPARK_SHIPPED_IMAGE_TARGETS` in the root `CMakeLists.txt`) install only into
+the `symbols` component. `CPACK_COMPONENTS_ALL` leaves that component out, so no
+package carries symbols:
+
+```bash
+cmake --install <build> --component runtime --prefix stage     # also tools, samples
+cmake --install <build> --component symbols --prefix symbols-stage
+python3 tools/shipping_symbol_manifest.py --images stage \
+    --symbols symbols-stage/symbols --output shipping-symbol-manifest.json
+```
+
+The manifest tool uses only the standard library. It maps each ELF image by
+build-id, `.gnu_debuglink` name and CRC-32 to one DWARF `.debug` file, and each
+PE image by RSDS GUID and age to one PDB: the GUID comes from the PDB info
+stream and the age from the DBI stream. It writes a closed
+`spark.shipping-symbol-manifest/1` JSON and writes nothing (exit 1) when any of
+these hold:
+
+- an image has no build ID, or still has DWARF or `.symtab`;
+- an image has no matching symbol file, or more than one;
+- a debuglink name or CRC does not match;
+- an RSDS record holds a path instead of a bare PDB name;
+- a symbol file sits in the runtime tree;
+- a symbol file maps to no image.
+
+`build-windows-shipping` runs it over the staged runtime/tools/samples
+components and uploads the PDBs and manifest as the separate
+`shipping-symbols-<sha>` artifact. Symbol-server hosting belongs to OPS-100.
+
+CTests: `ShippingManifest_SymbolManifestTool` runs
+`Tests/Tools/test_shipping_symbol_manifest.py`. It builds real gcc fixtures
+through the production launcher, and clang/lld-link PE+PDB fixtures
+cross-checked with `llvm-readobj` and `llvm-pdbutil`. It also checks that
+`SPARK_SHIPPED_IMAGE_TARGETS` names every image target installed by an
+`install(TARGETS)` rule in the root, `Spark*/`, `GameModules/` and `cmake/`
+CMake files, and that no `CPACK_COMPONENTS_ALL` list (root or
+`cmake/SparkCPackOptions.cmake`) names the symbols component.
+`ShippingManifest_PrivateSymbols` is registered only in a `STRIP_DEBUG_SYMBOLS`
+ELF tree with tests enabled; it installs the runtime/tools/samples and symbols
+components to separate roots under `<build>/shipping-symbol-stage` and maps
+every installed image, so it needs every installed target built. The local
+linux-shipping evidence is with `ENABLE_LTO=OFF`; a full LTO (preset default)
+build with `-g`, and its disk, memory and time on hosted runners, has not been
+measured. MSVC PDB output under `/Brepro` and the hosted job have not yet been
+observed.
+
 ## macOS (job `build-macos`, `continue-on-error`)
 
 ```bash

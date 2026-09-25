@@ -2436,6 +2436,46 @@ if(_spark_isa_floor_enforced AND CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")
     endif()
 endif()
 
+# BLD-100: ShippingManifest_SymbolManifestTool proves tools/shipping_symbol_manifest.py
+# on real fixtures: gcc ELF images split by the production link launcher
+# (cmake/SparkSplitDebugLink.cmake) and clang/lld-link PE DLLs with PDBs,
+# cross-checked against llvm-readobj and llvm-pdbutil, and every rejection
+# (missing, mismatched, duplicate or orphaned symbols, unstripped images,
+# absolute PDB paths, symbols in the runtime tree). It also keeps the root
+# SPARK_SHIPPED_IMAGE_TARGETS list in step with the install(TARGETS) rules.
+add_test(
+    NAME ShippingManifest_SymbolManifestTool
+    COMMAND ${Python3_EXECUTABLE} -B -m unittest Tests.Tools.test_shipping_symbol_manifest -v
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(ShippingManifest_SymbolManifestTool PROPERTIES
+    LABELS "build;shipping;unit;python"
+    TIMEOUT 300)
+
+# In a STRIP_DEBUG_SYMBOLS ELF tree the packaged components (runtime, tools,
+# samples) and the private "symbols" component install to separate roots, as
+# a release stages them; every installed image must be stripped and map by
+# build-id to exactly one installed .debug file. Only shipped images are split,
+# so the test installs rather than scanning the output directories, and it
+# needs every installed target built.
+if(SPARK_SPLIT_DEBUG_SYMBOLS)
+    add_test(
+        NAME ShippingManifest_PrivateSymbols
+        COMMAND /bin/sh -c [=[
+set -e
+rm -rf "$1"
+for component in runtime tools samples; do
+    "$2" --install "$3" --config "$4" --component "$component" --prefix "$1/runtime"
+done
+"$2" --install "$3" --config "$4" --component symbols --prefix "$1/private"
+exec "$5" -B "$6" --images "$1/runtime" --symbols "$1/private/symbols" --output "$1/shipping-symbol-manifest.json"
+]=] spark-private-symbols
+            ${CMAKE_BINARY_DIR}/shipping-symbol-stage ${CMAKE_COMMAND} ${CMAKE_BINARY_DIR} $<CONFIG>
+            ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/shipping_symbol_manifest.py)
+    set_tests_properties(ShippingManifest_PrivateSymbols PROPERTIES
+        LABELS "build;shipping;integration"
+        TIMEOUT 600)
+endif()
+
 # RDY-010: ModuleDiscovery_* drive the production ModuleManager and the real ABI
 # fixture DLL. The exact count fails closed if the family stops being compiled
 # in; the contract test keeps the file from regressing to a test-local mirror.

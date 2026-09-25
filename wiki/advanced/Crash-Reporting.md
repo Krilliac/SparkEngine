@@ -56,7 +56,7 @@ python3 tools/ops/symbolicate_crash.py resolve --store <dir> --log <crash.log> [
 
 `ctest -R CrashReporter_Symbolication` (label `crash-canary`) runs the canary: `SparkCrashSymbolicationProbe` (`Tests/Fixtures/CrashSymbolicationProbe.cpp`, built `-g -O2 -Wl,--build-id=sha1`) installs the production handler under an isolated `TMPDIR` and faults. `Tests/Tools/run_crash_symbolication_canary.py` requires death by SIGSEGV, stores the probe's split debug info, and requires frame 0 to resolve to `SparkSymbolicationCanaryCrashSite` at the marked source line. It also requires a return-address frame to resolve to `main`, and it checks that a wrong build-id and a symlinked store entry are both refused. `CrashSymbolicationRecords` (`Tests/TestCrashSymbolication.cpp`) covers the bounded note parser and the section format, including whole-line truncation. `Tests/Tools/test_ops100_symbolication.py` runs in the `validate-ops100` job and covers the tool's grammar, bounds and store policy.
 
-What this does not prove: there is no relay or upload and no private symbol publication. Release and shipping builds are still compiled without `-g`, so a split-debug release build policy is needed before a shipped binary can be symbolicated. Windows PDB/minidump symbolication is not covered, and no `crash-canary` CI job or hosted record exists yet.
+What this does not prove: there is no relay or upload and no private symbol publication. Shipping builds now produce the symbols this store needs (BLD-100): with `STRIP_DEBUG_SYMBOLS=ON` every ELF image is compiled with `-g`, linked with a SHA-1 build-id and split at link time into a stripped image and `<image>.debug`, which installs only into the unpackaged `symbols` component (see [CI Reproducible Builds](../development/CI-Reproducible-Builds.md#shipping-private-symbols-bld-100)). Builds without `STRIP_DEBUG_SYMBOLS` are unchanged. Windows PDB/minidump symbolication is not covered, and no `crash-canary` CI job or hosted record exists yet.
 
 ## Optional automatic GitHub Issues
 
@@ -79,5 +79,5 @@ The automatic Issue is only a signal, not a triage-ready bug report. The playtes
 
 - Controlled relay and scoped ephemeral authorization
 - Explicit upload consent and delivery state machine
-- Private symbol publication, a split-debug release build policy, and a release-crash canary through a relay (the local Linux build-id canary above covers symbolication only)
+- Private symbol publication and a release-crash canary through a relay (Shipping builds produce split symbols and a build-id manifest; the local Linux build-id canary above covers symbolication only)
 - CI jobs and reviewed privacy/retention/runbook evidence
