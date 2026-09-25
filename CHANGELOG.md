@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `Spark/PersistedSchema.h` (public SDK): `ModulePersistedSchema` lets each game module declare the schema version of its save custom state, with the same read-N-and-N-1 rule; SparkGameFPS declares and uses it for its local profile.
+- `tools/release_notes.py` (REL-190) renders the stable release body from the `stable-v1` profile in `docs/site/readiness.json`, this file's single `## [X.Y.Z]` section (a `### Migration` subsection becomes the notes' Migrations section), the frozen `SHA256SUMS`, and fixed checksum, signature, SBOM and provenance verification instructions. It fails closed on a missing or duplicated version section, an empty or inconsistent `SHA256SUMS`, or a missing SBOM or signature control asset; nightly releases keep their short body. No stable release has been published with it.
 
 ## [0.9.0] - 2026-09-23
 

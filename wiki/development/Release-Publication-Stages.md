@@ -168,6 +168,36 @@ asset only after the durable download-counter preflight; the control asset is
 not a distributable or badge-ledger entry. All existing signature, checksum,
 SBOM, scan, exact-CI, source/tag, and package qualification gates still apply.
 
+## Stable release notes
+
+The stable release body is generated, not hand-written. After the signature
+bundle is created and before the draft is staged, the `Render fail-closed stable
+release notes` step runs `tools/release_notes.py` and passes its output to the
+stable staging step as `RELEASE_BODY`. The notes contain:
+
+- the `stable-v1` support matrix, supported hosts, experimental and unsupported
+  capabilities, excluded gates, and limitations, copied from
+  `docs/site/readiness.json` at the release commit (the profile state is printed
+  as recorded, never upgraded);
+- the single `## [X.Y.Z]` section of `CHANGELOG.md`, with a `### Migration`
+  (or `Migrations`, `Migration notes`, `Upgrading`, `Upgrade notes`) subsection
+  surfaced as the Migrations section; without one the notes say that no
+  migration subsection is recorded;
+- the asset list, the `SHA256SUMS` lines, and fixed `sha256sum -c`,
+  `openssl pkey`/`openssl dgst -verify` (with the pinned signer fingerprint),
+  `gh attestation verify`, and `gh release verify` instructions.
+
+The generator exits non-zero, and staging never starts, when the version section
+is missing, duplicated, or empty; `SHA256SUMS` is empty, malformed, lists an
+unexpected asset, or misses a distributable; the SBOM or `SHA256SUMS` is absent
+from the expected asset list; or the signature control asset is missing, is not a
+flat gzip tar with a manifest, public key, and signatures, or carries a key whose
+SPKI SHA-256 differs from `SPARKENGINE_STABLE_SIGNATURE_KEY_FINGERPRINT`. The
+output is deterministic and bounded to 120000 characters, so a resumed draft is
+patched with identical text. Nightly releases keep their short workflow body.
+`ReleaseProfileRehearsal_ReleaseNotes` (`Tests/Tools/test_release_notes.py`)
+covers the renderer and its wiring; it is not the full REL-190 rehearsal.
+
 ## Channel retention and support policy
 
 Owner decision OD-17 ([owner decisions](../../docs/readiness/OWNER-DECISIONS.md),
@@ -336,3 +366,5 @@ rule, and REL-190 substitution (OD-18/OD-19) recorded 2026-09-24 from
 Contract reference rules and the public numeric-claim ledger added 2026-09-24 from
 [`validate.py`](../../tools/site-data/validate.py) and
 [`test_site_data_contract.py`](../../Tests/Tools/test_site_data_contract.py).
+Generated stable release notes (REL-190) added 2026-09-24 from
+[`tools/release_notes.py`](../../tools/release_notes.py).

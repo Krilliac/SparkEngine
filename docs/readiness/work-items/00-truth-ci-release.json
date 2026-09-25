@@ -1046,7 +1046,7 @@
       "wave": 6,
       "area": "release",
       "owner": "unassigned",
-      "rationale": "Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence.",
+      "rationale": "Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence. 2026-09-24 progress: tools/release_notes.py now renders the stable RELEASE_BODY (release.yml step 'Render fail-closed stable release notes', after the signature bundle and before draft staging) from the stable-v1 profile in docs/site/readiness.json (support matrix, supported hosts, experimental/unsupported capabilities, excluded gates, limitations verbatim), the single CHANGELOG.md [X.Y.Z] section and its migration subsection, the frozen SHA256SUMS lines, and fixed sha256sum/openssl/gh attestation verification instructions with the pinned signer fingerprint. It fails closed on a missing or duplicated version section, empty or inconsistent SHA256SUMS, an SBOM or SHA256SUMS absent from the expected asset list, or a missing signature control asset whose public key does not match the pinned fingerprint. ReleaseProfileRehearsal_ReleaseNotes (Tests/Tools/test_release_notes.py, 22 cases) passes locally; it covers only the notes, so the ReleaseProfileRehearsal_Qualification* rehearsal selector stays planned. No hosted stable run has rendered these notes yet.",
       "dependencies": [
         "REL-100", "REL-110", "PLT-200", "RHI-210", "HEAD-220", "EDT-210",
         "SDK-240", "PERF-100", "OPS-100", "GOV-400", "DOC-400", "INST-130",
@@ -1054,7 +1054,7 @@
       ],
       "parallelWith": [],
       "sourceContext": [".github/workflows/release.yml", "docs/site/readiness.json", "CHANGELOG.md", "SECURITY.md"],
-      "entryPoints": [".github/workflows/release.yml", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
+      "entryPoints": [".github/workflows/release.yml", "tools/release_notes.py", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
       "implementationScope": [
         "Freeze the exact release-candidate commit and tag",
         "Run every qualification gate required by each target release profile at the same SHA",
@@ -1071,7 +1071,7 @@
         "Named qualification sign-off is retained; the protected stable-release environment requires Krilliac owner approval with administrative bypass disabled, and independent technical verification remains separate"
       ],
       "commands": ["python3 tools/site-data/validate.py", "sha256sum -c SHA256SUMS"],
-      "testSelectors": ["ReleaseProfileRehearsal_*"],
+      "testSelectors": ["ReleaseProfileRehearsal_ReleaseNotes", "ReleaseProfileRehearsal_Qualification*"],
       "requiredCiJobs": ["profile-required-gates", "release-approval"],
       "performanceBudgets": ["Every budget required by the target profiles passes without unreviewed exception"],
       "documentationUpdates": ["CHANGELOG.md", "SECURITY.md", "wiki/development/Release-Publication-Stages.md", "docs/readiness/ENGINE_READINESS_HANDOFF.md"],
@@ -1082,7 +1082,7 @@
       "definitionOfDone": ["All supported-host rehearsals pass at the candidate SHA", "Qualification sign-off and protected approval evidence are retained", "No planned qualification job or selector remains"],
       "profileApplicability": {"stable-v1": "shared"},
       "plannedCiJobs": ["profile-required-gates", "release-approval"],
-      "plannedTestSelectors": ["ReleaseProfileRehearsal_*"]
+      "plannedTestSelectors": ["ReleaseProfileRehearsal_Qualification*"]
     },
     {
       "id": "REL-200",

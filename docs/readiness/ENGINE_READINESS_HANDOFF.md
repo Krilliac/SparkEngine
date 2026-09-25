@@ -5073,7 +5073,7 @@ ctest --test-dir build/windows-release -C Release -L installer --output-on-failu
 **Priority:** P0 · **Status:** blocked · **Wave:** 6 · **Area:** release · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=shared
 
-Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence.
+Technical rehearsal, qualification sign-off, and release approval must finish before publication. This item retains all former REL-200 prepublication requirements, including their unimplemented jobs/selectors. It is never a publication-finalization exemption. The signed v0.9.0 predecessor and live immutable-channel publication remain unproven; neither can be replaced with synthetic evidence. 2026-09-24 progress: tools/release_notes.py now renders the stable RELEASE_BODY (release.yml step 'Render fail-closed stable release notes', after the signature bundle and before draft staging) from the stable-v1 profile in docs/site/readiness.json (support matrix, supported hosts, experimental/unsupported capabilities, excluded gates, limitations verbatim), the single CHANGELOG.md [X.Y.Z] section and its migration subsection, the frozen SHA256SUMS lines, and fixed sha256sum/openssl/gh attestation verification instructions with the pinned signer fingerprint. It fails closed on a missing or duplicated version section, empty or inconsistent SHA256SUMS, an SBOM or SHA256SUMS absent from the expected asset list, or a missing signature control asset whose public key does not match the pinned fingerprint. ReleaseProfileRehearsal_ReleaseNotes (Tests/Tools/test_release_notes.py, 22 cases) passes locally; it covers only the notes, so the ReleaseProfileRehearsal_Qualification* rehearsal selector stays planned. No hosted stable run has rendered these notes yet.
 
 **Dependency contract**
 
@@ -5090,6 +5090,7 @@ Technical rehearsal, qualification sign-off, and release approval must finish be
 **Entry points**
 
 - `.github/workflows/release.yml`
+- `tools/release_notes.py`
 - `docs/readiness/ENGINE_READINESS_HANDOFF.md`
 
 **Implementation scope**
@@ -5118,7 +5119,7 @@ sha256sum -c SHA256SUMS
 
 **Automated evidence**
 
-- Test selectors: `ReleaseProfileRehearsal_*`
+- Test selectors: `ReleaseProfileRehearsal_ReleaseNotes`, `ReleaseProfileRehearsal_Qualification*`
 - Required CI jobs: `profile-required-gates`, `release-approval`
 - Performance / reliability budgets:
   - Every budget required by the target profiles passes without unreviewed exception

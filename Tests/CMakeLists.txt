@@ -2482,6 +2482,15 @@ if(Python3_Interpreter_FOUND)
                 --name orchestration-process-smoke
                 --executable ${Python3_EXECUTABLE}
                 --working-dir ${CMAKE_SOURCE_DIR}
+        # REL-190: fail-closed stable release notes generator and its
+        # release.yml wiring. This is only the notes check; it does not satisfy
+        # the full ReleaseProfileRehearsal_Qualification* rehearsal selector.
+        add_test(
+            NAME ReleaseProfileRehearsal_ReleaseNotes
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_release_notes.py)
+        set_tests_properties(ReleaseProfileRehearsal_ReleaseNotes PROPERTIES
+            LABELS "release;integrity;python"
+            TIMEOUT 120)
                 --timeout-ms 180000
                 --expected-exit 0
                 --captured-log ${CMAKE_BINARY_DIR}/orchestration-process-smoke.log

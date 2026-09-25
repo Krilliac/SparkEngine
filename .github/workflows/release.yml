@@ -2306,6 +2306,50 @@ jobs:
         fi
         printf 'started_at=%s\n' "$RUN_STARTED_AT" >> "$GITHUB_OUTPUT"
 
+    # REL-190: the immutable stable body is rendered from the stable-v1 profile
+    # in the readiness contract, the single CHANGELOG.md version section, the
+    # frozen SHA256SUMS and expected asset inventory, and the signature control
+    # asset. Any inconsistency fails here, before the draft is staged; the
+    # rendering is deterministic, so a resumed draft receives identical text.
+    # Nightly releases keep their short workflow body.
+    - name: Render fail-closed stable release notes
+      id: stable-notes
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        SIGNATURE_KEY_FINGERPRINT: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_KEY_FINGERPRINT }}
+        SOURCE_COMMIT: ${{ github.sha }}
+        BUILT_AT: ${{ steps.run-start.outputs.started_at }}
+        SERVER_URL: ${{ github.server_url }}
+        TITLE_SUFFIX: ${{ steps.suffix.outputs.label }}
+      run: |
+        set -euo pipefail
+        NOTES="$RUNNER_TEMP/stable-release-notes.md"
+        python3 "$GITHUB_WORKSPACE/tools/release_notes.py" \
+          --version "$RELEASE_VERSION" \
+          --readiness "$GITHUB_WORKSPACE/docs/site/readiness.json" \
+          --changelog "$GITHUB_WORKSPACE/CHANGELOG.md" \
+          --sha256sums "$GITHUB_WORKSPACE/SHA256SUMS" \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --signature-control-asset "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz" \
+          --signer-fingerprint "$SIGNATURE_KEY_FINGERPRINT" \
+          --source-commit "$SOURCE_COMMIT" \
+          --built-at "$BUILT_AT" \
+          --repository "$GITHUB_REPOSITORY" \
+          --server-url "$SERVER_URL" \
+          --title-suffix "$TITLE_SUFFIX" \
+          --output "$NOTES"
+        DELIMITER="SPARK_RELEASE_NOTES_$(openssl rand -hex 16)"
+        if grep -qF -- "$DELIMITER" "$NOTES"; then
+          echo "Rendered release notes collide with the output delimiter." >&2
+          exit 1
+        fi
+        {
+          echo "body<<${DELIMITER}"
+          cat -- "$NOTES"
+          echo "${DELIMITER}"
+        } >> "$GITHUB_OUTPUT"
+
     - name: Reverify frozen asset counts immediately before staging
       id: release-freeze
       env:
@@ -2332,17 +2376,7 @@ jobs:
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         EXPECTED_RELEASE_ID: ${{ steps.release-freeze.outputs.target_release_id }}
         RELEASE_TITLE: "SparkEngine ${{ needs.prepare.outputs.version }} (Stable)${{ steps.suffix.outputs.label }}"
-        RELEASE_BODY: |
-          ## SparkEngine ${{ needs.prepare.outputs.version }} — Stable Release${{ steps.suffix.outputs.label }}
-
-          Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
-          Built on: ${{ steps.run-start.outputs.started_at }}
-
-          > **Stable-v1 releases** contain Windows x64 Shipping packages built with the authoritative `windows-shipping` preset and validated separately in Release. Stable releases and uniquely tagged nightly prereleases are immutable; the historical `nightly` release is never modified.
-
-          ### Downloads
-
-          ${{ steps.assets.outputs.table }}
+        RELEASE_BODY: ${{ steps.stable-notes.outputs.body }}
       run: python3 .github/scripts/stage_release_draft.py
 
     - name: Stage nightly rolling release as draft
