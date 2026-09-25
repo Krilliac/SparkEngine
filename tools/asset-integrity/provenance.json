@@ -68,6 +68,34 @@
       }
     },
     {
+      "id": "openworld-procedural-generator",
+      "license": "CC0-1.0",
+      "provenance": "Repository-original procedural OpenWorld region ground tiles and music loops emitted by generate_openworld_assets() in tools/generate_default_assets.py, which declares its output public domain/CC0; bytes reproduce exactly and are hash-bound (MOD-360)",
+      "evidence": [
+        "tools/generate_default_assets.py",
+        "GameModules/SparkGameOpenWorld/asset-references.json"
+      ],
+      "files": {
+        "Audio/OpenWorld/Music/ow_coast.wav": "35897aad9aa8d2aa228c4d880d7df8c8e2f8c772e5e7eac88eacc92b2a850c94",
+        "Audio/OpenWorld/Music/ow_combat.wav": "59b1e0d60e88eeb02d5f7ac6c7b3ac9ff0d494f48b687952d79bd1fdafc00bac",
+        "Audio/OpenWorld/Music/ow_desert.wav": "93211a7ef94a9e55c2383d55397d69054c158e9b7d643ee3c302c6841a4b3b02",
+        "Audio/OpenWorld/Music/ow_dragon.wav": "be52020ce772973b82bd0e8200309dd522d919d01a228ab693a1af871cedeea6",
+        "Audio/OpenWorld/Music/ow_forest.wav": "1ed2fc47f8b2332a8e2d1de1e17d228745c3d76794b3c7d42515f22f3814adb4",
+        "Audio/OpenWorld/Music/ow_meadow_dawn.wav": "0a03345782e4ea2b2e0286d2d0688e3f3d3de7c81eb7f705aff6f27b9ebec1b9",
+        "Audio/OpenWorld/Music/ow_mountain.wav": "8da821e906bdc4a25d81e375791506882fc0f321d091e735dd1d77bb4ef9795b",
+        "Audio/OpenWorld/Music/ow_tundra.wav": "562d54abffe1b38e29efa8538150cda13f3a0bb37caadef81954d42325aa1837",
+        "Audio/OpenWorld/Music/ow_village.wav": "dc9682d02efef32c1045c5076da283225f7daeaf79a1375c6034d85e3e15f19a",
+        "Models/OpenWorld/Ground/ashwind_desert_ground.obj": "bd727a76dca8b44b605eac5e9f9daf1fbc5c2d3f586e0b97f7726ce60e0392bd",
+        "Models/OpenWorld/Ground/cinderforge_caldera_ground.obj": "c7ea061631554d9ed0d8842ed9df34828b8d3632ac24936926f3fa74fe3000ec",
+        "Models/OpenWorld/Ground/emerald_meadows_ground.obj": "70430ee1e1d001761c86ba292e842808cfc222007f5b7c9044aa425bba4344c8",
+        "Models/OpenWorld/Ground/frosthollow_tundra_ground.obj": "f08e9c4a5ae37d05fd4a8659e187584d692fbd1656a0100c0e381fad3b21a922",
+        "Models/OpenWorld/Ground/ironwood_forest_ground.obj": "2e004603e68038c59edc1030b5f603e16a414e2308bfd02f439559e1dd40becc",
+        "Models/OpenWorld/Ground/mistveil_swamp_ground.obj": "410f9ac55c3b709f65f616f254b8c79218f2a3b8c95f4da75e935d3e717de489",
+        "Models/OpenWorld/Ground/stormcrest_mountains_ground.obj": "1e970039548ae62b111503da51d8ba572194131156088bddbe4805cbd6809069",
+        "Models/OpenWorld/Ground/sunbreak_coast_ground.obj": "24f4561949aacb7b60a0bf7824b8f79c57b397543bfe1654840d6727dd34cd0d"
+      }
+    },
+    {
       "id": "mmo-legacy-generator",
       "license": "CC0-1.0",
       "provenance": "Procedural legacy MMO texture/audio output of tools/generate_mmo_assets.py, which retains CC0 for these outputs; bytes reproduce exactly and are hash-bound",

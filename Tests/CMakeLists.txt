@@ -2512,6 +2512,23 @@ set_tests_properties(PackageAssets_StableV1ExcludesNoAssertion PROPERTIES
     LABELS "stable-v1;asset;packaging;unit;python"
     TIMEOUT 300)
 
+# MOD-360: tools/check-module-asset-refs.py fails closed on a missing, case-altered,
+# run-time-composed or unrecorded asset reference in an enforced module, and every
+# asset SparkGameOpenWorld source names resolves (Tests/Tools/test_check_module_asset_refs.py).
+add_test(
+    NAME OpenWorldAssets_ReferenceCheckFailsClosed
+    COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/Tests/Tools/test_check_module_asset_refs.py)
+set_tests_properties(OpenWorldAssets_ReferenceCheckFailsClosed PROPERTIES
+    LABELS "module;openworld;asset;unit;python"
+    TIMEOUT 60)
+# MOD-360: the real OWEngineSystems music tracks and OWWorldSetup area manifests name existing files.
+add_test(NAME OpenWorldAssets_RegisteredAssetsExist COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(OpenWorldAssets_RegisteredAssetsExist PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME=OpenWorldAssets_;SPARK_TEST_EXPECT_COUNT=1"
+    LABELS "module;openworld;asset;unit"
+    TIMEOUT 60)
+
 # GOV-400 LicenseInventory_*: the staged-package notice-coverage gate
 # (cmake/ValidateStagedPackageNotices.cmake) against fixture packages, and the
 # notices generator's shared rule set, parity with the CMake gate, and the real

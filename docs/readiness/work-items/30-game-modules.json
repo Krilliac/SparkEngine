@@ -1371,7 +1371,7 @@
           "evidence": [
             "GameModules/SparkGameOpenWorld/README.md"
           ],
-          "note": "No OpenWorldTraversal_* test exists, and the README says region scenes and streaming manifests are missing."
+          "note": "No OpenWorldTraversal_* test and no input-driven player controller exist. Region streaming manifests now name existing content (OpenWorldAssets_*), but nothing traverses two regions or completes gather/event/settlement interactions."
         },
         {
           "criterionDigest": "sha256:88b1748c5bdb",
@@ -1385,11 +1385,14 @@
         },
         {
           "criterionDigest": "sha256:786e9a88510e",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
-            "GameModules/SparkGameOpenWorld/README.md"
+            "tools/check-module-asset-refs.py",
+            "Tests/Tools/test_check_module_asset_refs.py",
+            "Tests/TestMOD360OpenWorldPersistenceReal.cpp",
+            "GameModules/SparkGameOpenWorld/asset-references.json"
           ],
-          "note": "The README admits region scenes, manifests and ow_*.ogg music are missing. No reference checker exists."
+          "note": "check-module-asset-refs.py fails closed for OpenWorld and passes: all 27 source asset paths exist and match asset-references.json and assets.integrity.json. OpenWorldAssets_AllRegisteredAssetsExist checks the real registered tracks and area manifests. Ground tiles and music loops are procedural; MusicManager decodes no audio."
         },
         {
           "criterionDigest": "sha256:bd2d7fa4616f",
@@ -1399,11 +1402,13 @@
         }
       ],
       "commands": [
-        "ctest --test-dir build/windows-release -C Release -R OpenWorldTraversal --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -R OpenWorldTraversal --output-on-failure --no-tests=error",
+        "python3 tools/check-module-asset-refs.py --module SparkGameOpenWorld"
       ],
       "testSelectors": [
         "OpenWorldTraversal_*",
-        "OpenWorldPersistence_*"
+        "OpenWorldPersistence_*",
+        "OpenWorldAssets_*"
       ],
       "requiredCiJobs": [
         "module-OpenWorld"

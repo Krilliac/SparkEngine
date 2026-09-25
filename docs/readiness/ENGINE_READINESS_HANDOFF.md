@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **51 in progress**, **5 blocked**, **8 open**
-- Acceptance criteria: **259 total**, **36 implemented** (14%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **37 implemented** (14%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -312,7 +312,7 @@ Build the shared manifest/public-SDK kit, finish the stable-v1 FPS slice, and ke
 | [`MOD-330`](#mod-330--finish-arpg-as-a-playable-dungeon-slice) Finish ARPG as a playable dungeon slice | P1 | **in-progress** | 0/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-340`](#mod-340--finish-platformer-as-a-complete-level-slice) Finish Platformer as a complete level slice | P1 | **in-progress** | 1/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-350`](#mod-350--finish-rpg-as-a-quest-party-combat-and-persistence-slice) Finish RPG as a quest, party, combat, and persistence slice | P1 | **in-progress** | 0/3 · 0/3 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
-| [`MOD-360`](#mod-360--finish-openworld-as-a-streamed-survivalexploration-slice) Finish OpenWorld as a streamed survival/exploration slice | P1 | **in-progress** | 1/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-370`, `MOD-380`, `MOD-390` |
+| [`MOD-360`](#mod-360--finish-openworld-as-a-streamed-survivalexploration-slice) Finish OpenWorld as a streamed survival/exploration slice | P1 | **in-progress** | 2/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-370`, `MOD-380`, `MOD-390` |
 | [`MOD-370`](#mod-370--finish-rts-as-a-deterministic-playable-skirmish) Finish RTS as a deterministic playable skirmish | P1 | **in-progress** | 1/3 · 0/3 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-380`, `MOD-390` |
 | [`MOD-380`](#mod-380--finish-racing-as-a-physics-backed-complete-race) Finish Racing as a physics-backed complete race | P1 | **in-progress** | 0/4 · 0/4 | `MOD-290` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-390` |
 | [`MOD-390`](#mod-390--finish-visualscript-as-a-real-packaged-gameplay-loop) Finish VisualScript as a real packaged gameplay loop | P1 | **blocked** | 1/4 · 0/4 | `MOD-290`, `ENG-200` | `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380` |
@@ -3890,17 +3890,17 @@ Player, wildlife, events, and settlements are internal/prototype structures; sce
 
 **Acceptance criteria**
 
-Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Automated traversal crosses two regions and completes gather/event/settlement interactions
    - Evidence: `GameModules/SparkGameOpenWorld/README.md`
-   - No OpenWorldTraversal_* test exists, and the README says region scenes and streaming manifests are missing.
+   - No OpenWorldTraversal_* test and no input-driven player controller exist. Region streaming manifests now name existing content (OpenWorldAssets_*), but nothing traverses two regions or completes gather/event/settlement interactions.
 2. **[implemented]** Restart restores player/world/event/settlement state
    - Evidence: `Tests/TestMOD360OpenWorldPersistenceReal.cpp`, `GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.cpp`, `GameModules/SparkGameOpenWorld/Source/Persistence/OWPersistence.inl`
    - The registered test saves via the real SaveSystem and the console SaveGame path, rebuilds all systems, then LoadGame restores player, world, event and settlement state.
-3. **[unmet]** No missing asset/music reference
-   - Evidence: `GameModules/SparkGameOpenWorld/README.md`
-   - The README admits region scenes, manifests and ow_*.ogg music are missing. No reference checker exists.
+3. **[implemented]** No missing asset/music reference
+   - Evidence: `tools/check-module-asset-refs.py`, `Tests/Tools/test_check_module_asset_refs.py`, `Tests/TestMOD360OpenWorldPersistenceReal.cpp`, `GameModules/SparkGameOpenWorld/asset-references.json`
+   - check-module-asset-refs.py fails closed for OpenWorld and passes: all 27 source asset paths exist and match asset-references.json and assets.integrity.json. OpenWorldAssets_AllRegisteredAssetsExist checks the real registered tracks and area manifests. Ground tiles and music loops are procedural; MusicManager decodes no audio.
 4. **[unmet]** Applicable scores reach 3
    - Needs owner scoring and hosted module-OpenWorld CI.
 
@@ -3908,11 +3908,12 @@ Progress: 1 of 4 implemented, 0 evidenced at an exact commit.
 
 ```bash
 ctest --test-dir build/windows-release -C Release -R OpenWorldTraversal --output-on-failure --no-tests=error
+python3 tools/check-module-asset-refs.py --module SparkGameOpenWorld
 ```
 
 **Automated evidence**
 
-- Test selectors: `OpenWorldTraversal_*`, `OpenWorldPersistence_*`
+- Test selectors: `OpenWorldTraversal_*`, `OpenWorldPersistence_*`, `OpenWorldAssets_*`
 - Required CI jobs: `module-OpenWorld`
 - Performance / reliability budgets:
   - Streaming/frame/memory budgets

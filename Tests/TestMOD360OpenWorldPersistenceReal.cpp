@@ -9,6 +9,9 @@
  * singleton into an isolated temporary directory, every gameplay system is destroyed and
  * rebuilt as a restarted process would, and LoadGame must reproduce the captured state.
  * Damaged sidecars and a missing engine slot must be rejected without touching live state.
+ *
+ * OpenWorldAssets_* registers the module's real music tracks and area streaming manifests
+ * and requires every file they name to exist in the repository asset tree.
  */
 
 #include "TestFramework.h"
@@ -22,14 +25,19 @@
 #include "../GameModules/SparkGameOpenWorld/Source/Player/OWPlayerSystem.h"
 #include "../GameModules/SparkGameOpenWorld/Source/Settlement/OWSettlementSystem.h"
 #include "../GameModules/SparkGameOpenWorld/Source/Wildlife/OWWildlifeSystem.h"
+#include "../GameModules/SparkGameOpenWorld/Source/World/OWWorldSetup.h"
+#include "Audio/MusicManager.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Engine/Streaming/SeamlessAreaManager.h"
 
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <sstream>
 #include <string>
+#include <vector>
 
 using namespace OpenWorld;
 
@@ -300,6 +308,123 @@ TEST(OpenWorldPersistence_CorruptSidecarLeavesStateUnchanged)
     EXPECT_TRUE(StartsWith(live->engine.LoadGame("../corrupt"), "Invalid save slot name"));
     EXPECT_EQ(live->Snapshot(), liveSnapshot);
     live->engine.Shutdown();
+}
+
+namespace
+{
+    /// Engine context exposing only the host music and area-streaming services.
+    class OpenWorldAssetContext final : public Spark::IEngineContext
+    {
+      public:
+        GraphicsEngine* GetGraphics() override { return nullptr; }
+        const GraphicsEngine* GetGraphics() const override { return nullptr; }
+        InputManager* GetInput() override { return nullptr; }
+        const InputManager* GetInput() const override { return nullptr; }
+        Timer* GetTimer() override { return nullptr; }
+        const Timer* GetTimer() const override { return nullptr; }
+        Spark::EventBus* GetEventBus() override { return nullptr; }
+        const Spark::EventBus* GetEventBus() const override { return nullptr; }
+        ::AudioEngine* GetAudio() override { return nullptr; }
+        const ::AudioEngine* GetAudio() const override { return nullptr; }
+        PhysicsSystem* GetPhysics() override { return nullptr; }
+        const PhysicsSystem* GetPhysics() const override { return nullptr; }
+        ::World* GetWorld() override { return nullptr; }
+        const ::World* GetWorld() const override { return nullptr; }
+        Spark::Streaming::SeamlessAreaManager* GetAreaStreaming() override
+        {
+            return &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        }
+        const Spark::Streaming::SeamlessAreaManager* GetAreaStreaming() const override
+        {
+            return &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        }
+        Spark::Audio::MusicManager* GetMusic() override { return &Spark::Audio::MusicManager::GetInstance(); }
+        const Spark::Audio::MusicManager* GetMusic() const override
+        {
+            return &Spark::Audio::MusicManager::GetInstance();
+        }
+        uint32_t GetEngineVersion() const override { return 0; }
+        uint32_t GetSDKVersion() const override { return 0; }
+    };
+
+    /// Track names from MusicManager's console listing ("  <name> [<bpm> BPM...]" per track).
+    std::vector<std::string> RegisteredMusicTrackNames(const Spark::Audio::MusicManager& music)
+    {
+        std::vector<std::string> names;
+        std::istringstream listing(music.Console_ListTracks());
+        std::string line;
+        while (std::getline(listing, line))
+        {
+            const size_t bracket = line.find(" [");
+            if (line.rfind("  ", 0) == 0 && bracket != std::string::npos)
+                names.push_back(line.substr(2, bracket - 2));
+        }
+        return names;
+    }
+
+    /// True when the repository-relative asset path names an existing regular file.
+    bool OpenWorldAssetExists(const std::string& relativePath)
+    {
+        const std::filesystem::path path = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / relativePath;
+        std::error_code error;
+        return !relativePath.empty() && std::filesystem::is_regular_file(path, error);
+    }
+} // namespace
+
+TEST(OpenWorldAssets_AllRegisteredAssetsExist)
+{
+    auto& music = Spark::Audio::MusicManager::GetInstance();
+    auto& streaming = Spark::Streaming::SeamlessAreaManager::GetInstance();
+
+    // Start from an empty track registry so every listed track is one this module registered.
+    for (const auto& name : RegisteredMusicTrackNames(music))
+        music.UnregisterTrack(name);
+
+    OpenWorldAssetContext context;
+    OWEngineSystems engine;
+    ASSERT_TRUE(engine.Initialize(&context));
+    OWWorldSetup worldSetup;
+    ASSERT_TRUE(worldSetup.Initialize(&context));
+
+    // Every music track the real OWEngineSystems registers names a file that exists.
+    const std::vector<std::string> trackNames = RegisteredMusicTrackNames(music);
+    EXPECT_EQ(trackNames.size(), static_cast<size_t>(9));
+    for (const auto& name : trackNames)
+    {
+        const Spark::Audio::MusicTrack* track = music.GetTrack(name);
+        ASSERT_TRUE(track != nullptr);
+        EXPECT_TRUE(track->filepath.rfind("Assets/", 0) == 0);
+        EXPECT_TRUE(OpenWorldAssetExists(track->filepath));
+    }
+
+    // Every region the real OWWorldSetup streams carries a manifest whose paths all exist.
+    const auto& loader = streaming.GetAssetLoader();
+    EXPECT_EQ(worldSetup.GetRegions().size(), static_cast<size_t>(8));
+    for (const auto& region : worldSetup.GetRegions())
+    {
+        const Spark::Streaming::SceneManifest* manifest = loader.GetManifest(region.regionId);
+        ASSERT_TRUE(manifest != nullptr);
+        EXPECT_EQ(manifest->name, region.name);
+        EXPECT_FALSE(manifest->meshPaths.empty());
+        EXPECT_FALSE(manifest->texturePaths.empty());
+        EXPECT_FALSE(manifest->audioPaths.empty());
+        for (const auto& path : manifest->AllPaths())
+        {
+            EXPECT_TRUE(path.rfind("Assets/", 0) == 0);
+            EXPECT_TRUE(OpenWorldAssetExists(path));
+        }
+    }
+
+    // OWWorldSetup::Shutdown unregisters its areas; the module never removes its tracks.
+    std::vector<Spark::Streaming::AreaID> regionIds;
+    for (const auto& region : worldSetup.GetRegions())
+        regionIds.push_back(region.regionId);
+    worldSetup.Shutdown();
+    for (const auto regionId : regionIds)
+        EXPECT_FALSE(loader.HasManifest(regionId));
+    for (const auto& name : trackNames)
+        music.UnregisterTrack(name);
+    engine.Shutdown();
 }
 
 #endif // SPARK_TEST_HAS_IMGUI

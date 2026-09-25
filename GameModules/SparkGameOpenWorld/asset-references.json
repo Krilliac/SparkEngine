@@ -1,0 +1,169 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGameOpenWorld",
+  "description": "Every asset path SparkGameOpenWorld source names (area streaming manifests in OWWorldSetup, music tracks in OWEngineSystems), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Audio/OpenWorld/Music/ow_coast.wav",
+      "sha256": "35897aad9aa8d2aa228c4d880d7df8c8e2f8c772e5e7eac88eacc92b2a850c94",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Audio/OpenWorld/Music/ow_combat.wav",
+      "sha256": "59b1e0d60e88eeb02d5f7ac6c7b3ac9ff0d494f48b687952d79bd1fdafc00bac",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Audio/OpenWorld/Music/ow_desert.wav",
+      "sha256": "93211a7ef94a9e55c2383d55397d69054c158e9b7d643ee3c302c6841a4b3b02",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Audio/OpenWorld/Music/ow_dragon.wav",
+      "sha256": "be52020ce772973b82bd0e8200309dd522d919d01a228ab693a1af871cedeea6",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Audio/OpenWorld/Music/ow_forest.wav",
+      "sha256": "1ed2fc47f8b2332a8e2d1de1e17d228745c3d76794b3c7d42515f22f3814adb4",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Audio/OpenWorld/Music/ow_meadow_dawn.wav",
+      "sha256": "0a03345782e4ea2b2e0286d2d0688e3f3d3de7c81eb7f705aff6f27b9ebec1b9",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Audio/OpenWorld/Music/ow_mountain.wav",
+      "sha256": "8da821e906bdc4a25d81e375791506882fc0f321d091e735dd1d77bb4ef9795b",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Audio/OpenWorld/Music/ow_tundra.wav",
+      "sha256": "562d54abffe1b38e29efa8538150cda13f3a0bb37caadef81954d42325aa1837",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Audio/OpenWorld/Music/ow_village.wav",
+      "sha256": "dc9682d02efef32c1045c5076da283225f7daeaf79a1375c6034d85e3e15f19a",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Audio/ambient_wind.wav",
+      "sha256": "5bfc870dc202942f781447c5ab999cb29c08ce2018058e12a14582f7652e22b7",
+      "kind": "region ambience loop (WAV)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Models/ModuleKits/OpenWorld/ancient_waystone_marker.obj",
+      "sha256": "19cbe0b4da6a3484175172ea078a3d9dc7714dcfa9f5cf0dadbac628ffb1b6ee",
+      "kind": "region landmark prop mesh (OBJ)",
+      "provenanceRule": "starter-model-pipeline"
+    },
+    {
+      "path": "Assets/Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn.obj",
+      "sha256": "d67b17161e46caca3cf40afa3677eb54fdba010ea05f3415a8932dd7c9f25063",
+      "kind": "region landmark prop mesh (OBJ)",
+      "provenanceRule": "starter-model-pipeline"
+    },
+    {
+      "path": "Assets/Models/ModuleKits/OpenWorld/traveler_camp_firepit.obj",
+      "sha256": "f34123cbe659d806653d2beba9ae691ed8590007964864cecb52f74b2b55df55",
+      "kind": "region landmark prop mesh (OBJ)",
+      "provenanceRule": "starter-model-pipeline"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Ground/ashwind_desert_ground.obj",
+      "sha256": "bd727a76dca8b44b605eac5e9f9daf1fbc5c2d3f586e0b97f7726ce60e0392bd",
+      "kind": "region ground tile (OBJ)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Ground/cinderforge_caldera_ground.obj",
+      "sha256": "c7ea061631554d9ed0d8842ed9df34828b8d3632ac24936926f3fa74fe3000ec",
+      "kind": "region ground tile (OBJ)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Ground/emerald_meadows_ground.obj",
+      "sha256": "70430ee1e1d001761c86ba292e842808cfc222007f5b7c9044aa425bba4344c8",
+      "kind": "region ground tile (OBJ)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Ground/frosthollow_tundra_ground.obj",
+      "sha256": "f08e9c4a5ae37d05fd4a8659e187584d692fbd1656a0100c0e381fad3b21a922",
+      "kind": "region ground tile (OBJ)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Ground/ironwood_forest_ground.obj",
+      "sha256": "2e004603e68038c59edc1030b5f603e16a414e2308bfd02f439559e1dd40becc",
+      "kind": "region ground tile (OBJ)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Ground/mistveil_swamp_ground.obj",
+      "sha256": "410f9ac55c3b709f65f616f254b8c79218f2a3b8c95f4da75e935d3e717de489",
+      "kind": "region ground tile (OBJ)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Ground/stormcrest_mountains_ground.obj",
+      "sha256": "1e970039548ae62b111503da51d8ba572194131156088bddbe4805cbd6809069",
+      "kind": "region ground tile (OBJ)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Models/OpenWorld/Ground/sunbreak_coast_ground.obj",
+      "sha256": "24f4561949aacb7b60a0bf7824b8f79c57b397543bfe1654840d6727dd34cd0d",
+      "kind": "region ground tile (OBJ)",
+      "provenanceRule": "openworld-procedural-generator"
+    },
+    {
+      "path": "Assets/Textures/Default/normal_flat.png",
+      "sha256": "87bbe7914db93a5d76335901d7a8bd3e277f17d52ea75913c92ec55e84b6d005",
+      "kind": "region terrain normal map (PNG)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Textures/Terrain/dirt.png",
+      "sha256": "43cf80db5cc12989f9433a26ea9885af6d2ffd5bec69d886edef07257acf5dfc",
+      "kind": "region terrain albedo (PNG)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Textures/Terrain/grass.png",
+      "sha256": "493195b52ca96ccc07ce904b48d5628c5861dccb471685822fc2f8740d9f04a2",
+      "kind": "region terrain albedo (PNG)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Textures/Terrain/rock.png",
+      "sha256": "693d3447ab8f4d786abb63ce9f7c98313376d59fabd0b78d973d179c5206b800",
+      "kind": "region terrain albedo (PNG)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Textures/Terrain/sand.png",
+      "sha256": "d7f0f9c69ea4e8b97331ba0f695917ef0975058a1be8158909d49cac878fb61d",
+      "kind": "region terrain albedo (PNG)",
+      "provenanceRule": "default-placeholder-generator"
+    },
+    {
+      "path": "Assets/Textures/Terrain/snow.png",
+      "sha256": "88c0ab47b49546c098f65fbeaaa89b906a6c91009ce8af28cc660e08e2e46179",
+      "kind": "region terrain albedo (PNG)",
+      "provenanceRule": "default-placeholder-generator"
+    }
+  ]
+}

@@ -44,6 +44,8 @@ namespace OpenWorld
         std::vector<ResourceType> abundantResources;
         std::vector<AnimalType> nativeWildlife;
         std::vector<uint32_t> connectedRegions; ///< Adjacent biome IDs
+        std::string groundMeshPath;             ///< Region ground tile streamed with the area
+        std::string terrainAlbedoPath;          ///< Region terrain albedo streamed with the area
     };
 
     /// @brief Road or path connecting two regions

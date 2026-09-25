@@ -16,15 +16,36 @@ destination. `OWWorldSetup` registers each region with the engine's seamless are
 (`Source/Persistence`). The `ow_*` console commands (`ow_status`, `ow_explore`, `ow_harvest`, `ow_craft`,
 `ow_tame`, `ow_fast_travel`, and others) drive the systems.
 
+## Assets
+
+Every asset path the source names is a complete literal, and `asset-references.json` records each one with its
+sha256, kind and the `tools/asset-integrity/provenance.json` rule that licenses it.
+`python3 tools/check-module-asset-refs.py --module SparkGameOpenWorld` fails if a referenced file is missing,
+differs in case, is composed at run time, or disagrees with that record or `Assets/assets.integrity.json`.
+
+- Each region's streaming manifest (`OWWorldSetup::RegisterAreasWithStreaming`) names its ground tile
+  `Assets/Models/OpenWorld/Ground/<region>_ground.obj`, the three OpenWorld landmark props in
+  `Assets/Models/ModuleKits/OpenWorld/`, a terrain albedo from `Assets/Textures/Terrain/`, the flat normal map
+  and `Assets/Audio/ambient_wind.wav`. Regions have no scene file; the manifest is the streamed bundle.
+- The nine music tracks are `Assets/Audio/OpenWorld/Music/ow_*.wav`.
+- The ground tiles and music loops are repository-original procedural output of
+  `tools/generate_default_assets.py` (CC0). They are development content, not authored art or music.
+
 ## Known limitations
 
-- There is no content. The region scenes (`Assets/Scenes/OpenWorld/<Region>.scene`), the per-region streaming
-  manifests under `Assets/OpenWorld/<Region>/`, and the `Assets/Audio/Music/ow_*.ogg` tracks that the source
-  registers do not exist in the repository, so streaming and music have nothing to load.
-- The module ships no asset root and has no networking.
+- There is no input-driven player controller; movement happens through `SetPosition`, fast travel and console
+  commands.
+- `MusicManager` does not decode audio files, so registering the tracks does not prove audible playback.
+- The procedural ground tiles and music loops need owner acceptance, or replacement with authored content, before
+  a release-quality claim.
+- The module has no networking.
 
 ## Tests
 
 `Tests/TestOpenWorldModule.cpp` compiles the module's real system sources into SparkTests. `OW_*` tests cover the
 data types; `Gated_OW*` tests (compiled when ImGui is available) cover the player, exploration, gathering,
 wildlife, and persistence systems, including rejection of malformed save payloads.
+`Tests/TestMOD360OpenWorldPersistenceReal.cpp` runs save, restart and load through the real `SaveSystem`
+(`OpenWorldPersistence_*`) and requires every music track and area-manifest path the real systems register to
+exist (`OpenWorldAssets_AllRegisteredAssetsExist`). `Tests/Tools/test_check_module_asset_refs.py`
+(`OpenWorldAssets_ReferenceCheckFailsClosed`) covers the reference checker.

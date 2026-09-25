@@ -56,6 +56,8 @@ namespace OpenWorld
             r.abundantResources = {ResourceType::Herbs, ResourceType::Fiber, ResourceType::Water};
             r.nativeWildlife = {AnimalType::Deer, AnimalType::Rabbit, AnimalType::Horse, AnimalType::Fox};
             r.connectedRegions = {2, 3, 5, 6};
+            r.groundMeshPath = "Assets/Models/OpenWorld/Ground/emerald_meadows_ground.obj";
+            r.terrainAlbedoPath = "Assets/Textures/Terrain/grass.png";
             m_regions.push_back(r);
         }
 
@@ -80,6 +82,8 @@ namespace OpenWorld
             r.nativeWildlife = {AnimalType::Wolf, AnimalType::Bear, AnimalType::Deer, AnimalType::Boar,
                                 AnimalType::Fox};
             r.connectedRegions = {1, 3, 4};
+            r.groundMeshPath = "Assets/Models/OpenWorld/Ground/ironwood_forest_ground.obj";
+            r.terrainAlbedoPath = "Assets/Textures/Terrain/dirt.png";
             m_regions.push_back(r);
         }
 
@@ -103,6 +107,8 @@ namespace OpenWorld
             r.abundantResources = {ResourceType::Stone, ResourceType::Iron, ResourceType::Crystal};
             r.nativeWildlife = {AnimalType::Eagle, AnimalType::MountainLion, AnimalType::Elk};
             r.connectedRegions = {1, 2, 8};
+            r.groundMeshPath = "Assets/Models/OpenWorld/Ground/stormcrest_mountains_ground.obj";
+            r.terrainAlbedoPath = "Assets/Textures/Terrain/rock.png";
             m_regions.push_back(r);
         }
 
@@ -126,6 +132,8 @@ namespace OpenWorld
             r.abundantResources = {ResourceType::Stone, ResourceType::Gold, ResourceType::Clay};
             r.nativeWildlife = {AnimalType::Snake, AnimalType::Eagle};
             r.connectedRegions = {2, 7};
+            r.groundMeshPath = "Assets/Models/OpenWorld/Ground/ashwind_desert_ground.obj";
+            r.terrainAlbedoPath = "Assets/Textures/Terrain/sand.png";
             m_regions.push_back(r);
         }
 
@@ -149,6 +157,8 @@ namespace OpenWorld
             r.abundantResources = {ResourceType::Hide, ResourceType::Stone, ResourceType::Water};
             r.nativeWildlife = {AnimalType::Bison, AnimalType::Wolf, AnimalType::Elk, AnimalType::Bear};
             r.connectedRegions = {1, 8};
+            r.groundMeshPath = "Assets/Models/OpenWorld/Ground/frosthollow_tundra_ground.obj";
+            r.terrainAlbedoPath = "Assets/Textures/Terrain/snow.png";
             m_regions.push_back(r);
         }
 
@@ -172,6 +182,8 @@ namespace OpenWorld
             r.abundantResources = {ResourceType::Herbs, ResourceType::Clay, ResourceType::Fiber};
             r.nativeWildlife = {AnimalType::Snake, AnimalType::Boar, AnimalType::Fox};
             r.connectedRegions = {1, 7};
+            r.groundMeshPath = "Assets/Models/OpenWorld/Ground/mistveil_swamp_ground.obj";
+            r.terrainAlbedoPath = "Assets/Textures/Terrain/dirt.png";
             m_regions.push_back(r);
         }
 
@@ -195,6 +207,8 @@ namespace OpenWorld
             r.abundantResources = {ResourceType::Water, ResourceType::Fiber, ResourceType::Gold};
             r.nativeWildlife = {AnimalType::Eagle, AnimalType::Deer, AnimalType::Rabbit};
             r.connectedRegions = {4, 6};
+            r.groundMeshPath = "Assets/Models/OpenWorld/Ground/sunbreak_coast_ground.obj";
+            r.terrainAlbedoPath = "Assets/Textures/Terrain/sand.png";
             m_regions.push_back(r);
         }
 
@@ -218,6 +232,8 @@ namespace OpenWorld
             r.abundantResources = {ResourceType::Iron, ResourceType::Crystal, ResourceType::Stone};
             r.nativeWildlife = {}; // Too hostile for wildlife
             r.connectedRegions = {3, 5};
+            r.groundMeshPath = "Assets/Models/OpenWorld/Ground/cinderforge_caldera_ground.obj";
+            r.terrainAlbedoPath = "Assets/Textures/Terrain/rock.png";
             m_regions.push_back(r);
         }
 
@@ -264,18 +280,22 @@ namespace OpenWorld
             def.name = region.name;
             def.boundsMin = {region.boundsMinX, region.boundsMinY, region.boundsMinZ};
             def.boundsMax = {region.boundsMaxX, region.boundsMaxY, region.boundsMaxZ};
-            def.scenePath = "Assets/Scenes/OpenWorld/" + region.name + ".scene";
+            // No scenePath: SeamlessAreaManager streams an area from its manifest, and
+            // an open-world region is fully described by the manifest built below.
             def.priority = (region.dangerLevel <= 2) ? 2 : 1;
 
-            // Build a scene manifest for this biome's assets
+            // Every path is a complete literal so tools/check-module-asset-refs.py can
+            // prove it exists; GameModules/SparkGameOpenWorld/asset-references.json
+            // records each file's digest and provenance.
             Spark::Streaming::SceneManifest manifest;
             manifest.name = region.name;
-            std::string basePath = "Assets/OpenWorld/" + region.name + "/";
-            manifest.meshPaths.push_back(basePath + "terrain.mesh");
-            manifest.meshPaths.push_back(basePath + "props.mesh");
-            manifest.texturePaths.push_back(basePath + "terrain_albedo.dds");
-            manifest.texturePaths.push_back(basePath + "terrain_normal.dds");
-            manifest.audioPaths.push_back(basePath + "ambience.wav");
+            manifest.meshPaths.push_back(region.groundMeshPath);
+            manifest.meshPaths.push_back("Assets/Models/ModuleKits/OpenWorld/ancient_waystone_marker.obj");
+            manifest.meshPaths.push_back("Assets/Models/ModuleKits/OpenWorld/ranger_wayfinding_cairn.obj");
+            manifest.meshPaths.push_back("Assets/Models/ModuleKits/OpenWorld/traveler_camp_firepit.obj");
+            manifest.texturePaths.push_back(region.terrainAlbedoPath);
+            manifest.texturePaths.push_back("Assets/Textures/Default/normal_flat.png");
+            manifest.audioPaths.push_back("Assets/Audio/ambient_wind.wav");
 
             streamingMgr->RegisterArea(def, std::move(manifest));
         }

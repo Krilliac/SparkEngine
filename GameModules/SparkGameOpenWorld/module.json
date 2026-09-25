@@ -4,8 +4,17 @@
   "cmakeTarget": "SparkGameOpenWorld",
   "sourceDirectory": "GameModules/SparkGameOpenWorld/Source",
   "assets": {
-    "state": "none",
-    "reason": "No asset root exists for this module: the Assets/Scenes/OpenWorld, Assets/OpenWorld and Assets/Audio/Music paths its sources reference are not in the repository."
+    "state": "declared",
+    "roots": [
+      {
+        "directory": "Assets/Models/OpenWorld",
+        "manifest": "Assets/assets.integrity.json"
+      },
+      {
+        "directory": "Assets/Audio/OpenWorld",
+        "manifest": "Assets/assets.integrity.json"
+      }
+    ]
   },
   "tests": {
     "files": [
