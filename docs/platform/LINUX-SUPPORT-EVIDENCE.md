@@ -128,6 +128,14 @@ Notes:
   the cause is unknown.
 * Audio: the OpenAL Soft backend initialized. There was no audio device and
   no audible output was verified.
+* **Headless NullRHI records (added later, PLT-210).** `RunHeadlessLinux` now
+  prints the same post-teardown `SPARK_HEADLESS_RHI` and
+  `SPARK_HEADLESS_LIFECYCLE` records as the Windows headless host, and exits 3
+  if the NullRHI bridge survives teardown. CTest `NullRHI_Linux_FPSLifecycle`
+  runs the real `SparkGameFPS` module for 8 frames and checks the records with
+  the strict parser in `cmake/RunSparkHeadlessNullRHILifecycle.cmake`: exactly
+  one ready, rhi and lifecycle record, in that order, with `rendered=0` and
+  `faults=0`. This is source-tree evidence only. It does not certify a package.
 
 ## 7. Known broken / not fixed here (with owner)
 

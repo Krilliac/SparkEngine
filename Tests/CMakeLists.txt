@@ -1751,6 +1751,30 @@ set_tests_properties(NullRHIWindowsLifecycleParserContract PROPERTIES
     LABELS "nullrhi-headless;stable-v1;unit"
     TIMEOUT 10)
 
+# PLT-210: the production Linux headless host runs the real SparkGameFPS module
+# on the EngineRuntime-owned NullRHI bridge and must print exactly one
+# SPARK_MODULE_READY, SPARK_HEADLESS_RHI and SPARK_HEADLESS_LIFECYCLE record, in
+# that order, with rendered=0 and faults=0. It reuses the strict parser of
+# NullRHI_Windows_FPSLifecycle so the Linux sanitizer lanes exercise the shared
+# FPS/NullRHI lifecycle. Source-tree evidence only; no packaged certification.
+if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
+   TARGET SparkEngine AND TARGET SparkGameFPS)
+    add_dependencies(SparkTests SparkEngine SparkGameFPS)
+    add_test(
+        NAME NullRHI_Linux_FPSLifecycle
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
+            "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>"
+            "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            -DSPARK_RHI_BACKEND=null
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkHeadlessNullRHILifecycle.cmake
+    )
+    set_tests_properties(NullRHI_Linux_FPSLifecycle PROPERTIES
+        LABELS "nullrhi-headless;linux;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
+
 # RDY-015: real-source lifecycle evidence for every experimental game module.
 # The parser contract is deterministic and runs in every lane; the per-module
 # runs launch the production Linux SDL host with -require-game and carry the

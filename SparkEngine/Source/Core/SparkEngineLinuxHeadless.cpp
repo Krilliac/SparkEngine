@@ -38,6 +38,7 @@
 #include "FixedTimestepAccumulator.h"
 #include "HeadlessTickStats.h"
 #include <chrono>
+#include <cstdio>
 #include <format>
 #include <fstream>
 #include <iterator>
@@ -154,6 +155,7 @@ int RunHeadlessLinux(int argc, char* argv[])
         console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
 
     int frameCount = 0;
+    int nullRhiFrameCount = 0;
     Spark::HeadlessTickStats tickStats;
 
     while (true)
@@ -216,7 +218,10 @@ int RunHeadlessLinux(int argc, char* argv[])
         // -exec timeline: same scheduling point as the Windows headless loop.
         g_execScript.RunDue(frameCount, console);
         if (GetEngineRuntime().headlessRhiBridge)
+        {
             GetEngineRuntime().headlessRhiBridge->EndFrame();
+            ++nullRhiFrameCount;
+        }
         ++frameCount;
 
         // Record work time only: the loop sleeps to a fixed 60 Hz cadence, so
@@ -227,14 +232,34 @@ int RunHeadlessLinux(int argc, char* argv[])
             std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
     }
 
-    if (!ShutdownLinuxAfterPreflight() && exitCode == 0)
-        exitCode = 1;
+    const bool teardownClean = ShutdownLinuxAfterPreflight();
     Spark::SimpleConsole::GetInstance().LogInfo("Headless server shut down cleanly.");
 
+    // Same machine-readable records as RunHeadlessWindows, published only after
+    // ordinary teardown destroyed the ModuleManager and the NullRHI bridge, so
+    // they cover the whole source-host lifetime (parsed strictly by
+    // cmake/RunSparkHeadlessNullRHILifecycle.cmake).
+    const ModuleManager::LifecycleEvidence evidence = ModuleManager::GetLastTeardownLifecycleEvidence();
+    const bool nullRhiShutdown = !GetEngineRuntime().headlessRhiBridge;
+    std::fprintf(stdout, "SPARK_HEADLESS_RHI backend=null initialized=1 frames=%d shutdown=%d\n", nullRhiFrameCount,
+                 nullRhiShutdown ? 1 : 0);
+    std::fprintf(
+        stdout,
+        "SPARK_HEADLESS_LIFECYCLE initialized=%llu updated=%llu fixed=%llu rendered=%llu unloaded=%llu "
+        "faults=%llu\n",
+        static_cast<unsigned long long>(evidence.initialized), static_cast<unsigned long long>(evidence.updated),
+        static_cast<unsigned long long>(evidence.fixedUpdated), static_cast<unsigned long long>(evidence.rendered),
+        static_cast<unsigned long long>(evidence.unloaded), static_cast<unsigned long long>(evidence.faults));
+    std::fflush(stdout);
+    if (!nullRhiShutdown && exitCode == 0)
+        exitCode = 3;
+    if (!teardownClean && exitCode == 0)
+        exitCode = 1;
+
     // One machine-readable record after full teardown, consumed by
-    // tools/perf-budget/collect_headless_result.py. The loop always ran on
-    // NullRHI: startup returns above when the device cannot be established.
-    tickStats.EmitRecord(/*nullRhiActive=*/true, ReadOwnPeakRssKib());
+    // tools/perf-budget/collect_headless_result.py. Every tick ran on NullRHI
+    // unless the bridge disappeared mid-run, which the frame counts expose.
+    tickStats.EmitRecord(/*nullRhiActive=*/nullRhiFrameCount == frameCount, ReadOwnPeakRssKib());
     return exitCode;
 }
 #endif // SPARK_HEADLESS_SUPPORT
