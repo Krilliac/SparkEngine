@@ -10,9 +10,9 @@
 #include "Account/TFCrypto.h"
 #include "Utils/ScopeGuard.h"
 #include "Utils/SecureMemory.h"
+#include "Utils/SecureRandom.h"
 
 #include <chrono>
-#include <random>
 #include <sstream>
 #include <vector>
 
@@ -45,16 +45,6 @@ namespace Terrafront
         constexpr size_t kDkBytes = 32;                // 256-bit derived key
         constexpr const char* kScheme = "pbkdf2-sha256";
 
-        std::vector<uint8_t> RandomBytes(size_t n)
-        {
-            static std::mt19937_64 rng(std::random_device{}());
-            std::uniform_int_distribution<unsigned int> dist(0, 255);
-            std::vector<uint8_t> out(n);
-            for (auto& b : out)
-                b = static_cast<uint8_t>(dist(rng));
-            return out;
-        }
-
         // Splits on '$' with no regex dependency; e.g. "a$b$c" -> {"a","b","c"}.
         std::vector<std::string> SplitScheme(const std::string& s)
         {
@@ -72,9 +62,18 @@ namespace Terrafront
         }
     } // namespace
 
-    std::string TFAccountSystem::GenerateSalt()
+    std::string TFAccountSystem::GenerateSalt(RandomFillFn fill)
     {
-        return Crypto::ToHex(RandomBytes(kSaltBytes));
+        // Salts come from the OS CSPRNG (Spark::SecureRandom), never a seeded
+        // PRNG: a Mersenne Twister state is recoverable from observed output,
+        // which would make future salts predictable. A failed fill yields an
+        // empty string so callers fail closed instead of storing a weak salt.
+        if (!fill)
+            fill = &Spark::SecureRandom::Fill;
+        std::vector<uint8_t> saltBytes(kSaltBytes);
+        if (!fill(saltBytes.data(), saltBytes.size()))
+            return {};
+        return Crypto::ToHex(saltBytes);
     }
 
     std::string TFAccountSystem::HashPassword(const std::string& password, const std::string& salt)
@@ -159,7 +158,14 @@ namespace Terrafront
             return result;
         }
 
-        std::string salt = GenerateSalt();
+        std::string salt = GenerateSalt(m_randomFill);
+        if (salt.empty())
+        {
+            // CSPRNG unavailable: refuse to create the account rather than
+            // persist a hash under a missing or predictable salt.
+            result.err = TFAuthErr::ServerError;
+            return result;
+        }
         std::string hash = HashPassword(password, salt);
 
         TFAccountRecord rec;

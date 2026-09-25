@@ -207,9 +207,10 @@
         "Utils/LogMacros.h",
         "Utils/ScopeGuard.h",
         "Utils/SecureMemory.h",
+        "Utils/SecureRandom.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 30,
+      "privateEngineHeaderCount": 31,
       "copiedInfrastructureFiles": []
     },
     {
