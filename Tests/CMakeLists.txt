@@ -2152,6 +2152,57 @@ if(SPARK_ENABLE_INSTALLED_SDK_TESTS)
         TIMEOUT 3600)
 endif()
 
+# ----------------------------------------------------------------------------
+# ASSET-220 installed-package consumer (Linux, opt-in, local evidence)
+# ----------------------------------------------------------------------------
+# Installs this build into a build-owned prefix, then configures, builds and
+# ctests Tests/PackageSmoke against only that prefix -- the Linux counterpart of
+# build.yml's per-PR Windows installed-SDK consumer step -- and fails if the
+# consumer resolved any header or library from the source or build tree. The
+# engine tree may use any generator; the consumer always uses Unix Makefiles
+# (needs `make`), whose depfiles and link.txt the boundary proof reads.
+# It needs a complete build and takes minutes, so it is off by default:
+#   cmake -B build -DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON
+#   ctest --test-dir build -L package-consumer-linux --no-tests=error
+# Its result is local, non-hosted evidence. The leak detector it relies on is
+# always tested by PackageConsumer_SourceTreeBoundaryDetection below.
+option(SPARK_ENABLE_PACKAGE_CONSUMER_TESTS
+    "Register the slow Linux installed-package consumer test (PackageConsumer_*)" OFF)
+if(SPARK_ENABLE_PACKAGE_CONSUMER_TESTS)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_CROSSCOMPILING)
+        message(FATAL_ERROR
+            "SPARK_ENABLE_PACKAGE_CONSUMER_TESTS registers the native Linux consumer lane only; "
+            "the Windows installed-SDK consumer runs in .github/workflows/build.yml")
+    endif()
+    # A single-config tree configured without CMAKE_BUILD_TYPE has an empty
+    # $<CONFIG>; the consumer then builds as Release. Four stages (install,
+    # configure, build, ctest) each get SPARK_STAGE_TIMEOUT; 4 x 800 s plus
+    # slack stays inside the 3600 s CTest TIMEOUT (the CI-110 policy ceiling),
+    # so a stage limit with its log, not a CTest kill, reports a hang.
+    set(_spark_consumer_config "$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,Release>")
+    set(_spark_consumer_stage_timeout 800)
+    add_test(NAME PackageConsumer_LinuxInstalledSDK
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_CONFIG=${_spark_consumer_config}"
+            "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/package-consumer-linux/${_spark_consumer_config}"
+            "-DSPARK_STAGE_TIMEOUT=${_spark_consumer_stage_timeout}"
+            "-DSPARK_CONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+            "-DSPARK_CONSUMER_CTEST=${CMAKE_CTEST_COMMAND}"
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunInstalledPackageConsumer.cmake")
+    set_tests_properties(PackageConsumer_LinuxInstalledSDK PROPERTIES
+        LABELS "package-consumer-linux"
+        RUN_SERIAL TRUE
+        TIMEOUT 3600)
+endif()
+add_test(NAME PackageConsumer_SourceTreeBoundaryDetection
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/package-consumer-boundary-ctest"
+        -P "${CMAKE_SOURCE_DIR}/cmake/TestPackageConsumerBoundary.cmake")
+set_tests_properties(PackageConsumer_SourceTreeBoundaryDetection PROPERTIES
+    LABELS "package;sdk;unit"
+    TIMEOUT 60)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(

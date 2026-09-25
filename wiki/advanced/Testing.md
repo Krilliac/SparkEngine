@@ -287,6 +287,16 @@ ctest --test-dir build -C Release -R "^SparkSaveCompatibilityTests$" --output-on
 cmake -B build -DSPARK_ENABLE_INSTALLED_SDK_TESTS=ON
 ctest --test-dir build -L installed-sdk --no-tests=error
 
+# Linux installed-package consumer (ASSET-220; local, non-hosted evidence). Installs the
+# complete build into build/package-consumer-linux/<config>/prefix, builds and ctests
+# Tests/PackageSmoke against only that prefix, and fails if the consumer resolved any
+# header or library from the source or build tree. Needs a full build, libgl-dev and
+# `make`: the consumer always uses the Unix Makefiles generator (whatever the engine
+# tree uses) because the boundary proof reads its depfiles and link.txt. An empty
+# build type (single-config tree without CMAKE_BUILD_TYPE) runs the consumer as Release.
+cmake -B build -DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON
+ctest --test-dir build -L package-consumer-linux --no-tests=error --output-on-failure
+
 # Verbose output
 ctest --test-dir build -C Release -V --no-tests=error
 
