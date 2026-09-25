@@ -69,7 +69,14 @@ class GameplayShowcase
     /** @brief Quicksave the current ECS world state */
     std::string DoQuickSave();
 
-    /** @brief Quickload the last saved world state */
+    /**
+     * @brief Quickload the last saved world state
+     *
+     * On success the restored entities tagged "showcase" become the tracked set (ascending entity id),
+     * and an in-flight lifecycle coroutine is stopped, because the save does not record its progress.
+     * On failure the world, the tracked set and the coroutine are left untouched.
+     * @return Status string; on success it reports the number of restored showcase entities
+     */
     std::string DoQuickLoad();
 
     /**

@@ -1692,6 +1692,14 @@ if(TARGET SparkGame AND NOT WIN32)
         LABELS "module;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)
+    # Quickload restores the exact showcase entities (name, Transform, Health, tags), re-tracks
+    # them for status/spawn/shutdown, and cancels the in-flight coroutine.
+    add_test(NAME SparkGameShowcase_QuickLoadRestoresExactState COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(SparkGameShowcase_QuickLoadRestoresExactState PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME=SparkGameShowcase_QuickLoadRestoresExactState;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "module;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
 endif()
 
 # RHI-230: Vulkan backend under VK_LAYER_KHRONOS_validation (Lavapipe on CI).

@@ -462,15 +462,36 @@ std::string GameplayShowcase::DoQuickLoad()
     if (!saveSystem || !world)
         return "Save system or world not available";
 
-    if (saveSystem->QuickLoad(*world))
+    if (!saveSystem->QuickLoad(*world))
+        return "QuickLoad failed — no quicksave found";
+
+    // The snapshot records world state, not the coroutine's progress, and the load renumbered
+    // every entity (including the coroutine target). Resuming the sequence would drive a stale
+    // entity id, and restarting it would spawn into the restored world, so cancel it instead.
+    if (m_coroutineScheduled)
     {
-        // Re-track entities after load (previous entity IDs are invalidated)
-        m_spawnedEntities.clear();
-        m_exhibitEntities.clear();
-        Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] QuickLoad succeeded");
-        return "QuickLoad successful";
+        if (auto* scheduler = m_context->GetCoroutineScheduler())
+            scheduler->StopCoroutine(LifecycleCoroutineName);
+        m_coroutineScheduled = false;
+        m_coroutineStage = "stopped by quickload";
     }
-    return "QuickLoad failed — no quicksave found";
+    m_coroutineTarget.reset();
+
+    // The restored world replaced every entity, so re-track the restored showcase entities.
+    // Ascending entity id is the save file's record order, which is stable for a given save.
+    m_spawnedEntities.clear();
+    for (EntityID entity : world->GetEntitiesWith<TagComponent>())
+    {
+        const auto* tag = world->GetComponent<TagComponent>(entity);
+        if (tag && tag->HasTag("showcase"))
+            m_spawnedEntities.push_back(static_cast<uint32_t>(entity));
+    }
+    std::sort(m_spawnedEntities.begin(), m_spawnedEntities.end());
+    m_exhibitEntities.clear();
+
+    Spark::SimpleConsole::GetInstance().LogInfo(
+        "[Showcase] QuickLoad succeeded — " + std::to_string(m_spawnedEntities.size()) + " showcase entities restored");
+    return "QuickLoad successful (" + std::to_string(m_spawnedEntities.size()) + " showcase entities restored)";
 }
 
 std::string GameplayShowcase::SpawnEntity(const std::string& name)
