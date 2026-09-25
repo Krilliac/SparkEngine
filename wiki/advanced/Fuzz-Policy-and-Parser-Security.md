@@ -6,24 +6,38 @@
 
 ## Current Status
 
-SEC-120 remains open and release-blocking. The repository now has four structurally
+SEC-120 remains open and release-blocking. The repository now has five structurally
 validated production fuzz targets and bounded seed corpora for `json-utils`,
-`crash-manifest-parser`, `texture-stex-compressor`, and `neural-weights-nnw`, but
+`crash-manifest-parser`, `texture-stex-compressor`, `neural-weights-nnw`, and
+`scene-manifest`, but
 exact-SHA hosted sanitizer evidence, scheduled campaigns, coverage, and
 crash-free-duration evidence remain absent.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **135 explicitly inventoried parsers, 4
-fuzzed and 131 blocked**, **4 bound corpora with 29 seeds (1619 bytes)**, **0 deferred
-candidates and 115 OD-21 exemptions**, and **1999 source files scanned across 17
+For the recorded source-tree state it reports **135 explicitly inventoried parsers, 5
+fuzzed and 130 blocked**, **5 bound corpora with 37 seeds (30857 bytes)**, **0 deferred
+candidates and 118 OD-21 exemptions**, and **2006 source files scanned across 17
 first-party roots**. Those counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.
 
 The neural CTest uses `-runs=8` to replay all eight reviewed seeds, and the crash-manifest
 CTest replays its six reviewed seeds, under ASan/UBSan without mutating the tracked
-corpus. These are seed-smoke checks, not mutation campaigns; scheduled campaigns must
-use a disposable writable corpus and retain their results.
+corpus. The texture-stex and scene-manifest CTests replay their eight reviewed seeds the
+same way. The scene-manifest adapter aborts when an accepted asset path climbs out of the
+root under Windows separator semantics (its own lexical walk splits on both `/` and `\`,
+so it does not merely re-run the parser's filter), contains a control byte such as an
+embedded NUL, or fails `IsVirtualPathSafe`, or when the entry cap is exceeded. The
+production `IsVirtualPathSafe` itself treats `\` as a separator on every host, so the
+Linux-hosted target covers Windows separator semantics as well as POSIX ones
+(`SceneManifest_ParseDropsBackslashTraversalOnEveryHost`); other Win32 name quirks such
+as 8.3 short names are not modelled. The 8 MB and 100,000-entry caps sit above its
+64 KiB `-max_len`, so the `SceneManifest_EntryCap*`/`SceneManifest_ByteCap*` unit tests pin those boundaries. These
+are seed-smoke checks, not mutation campaigns; scheduled campaigns must use a disposable
+writable corpus and retain their results. Mutation runs on the larger scene-manifest seeds
+trip `-rss_limit_mb=256` through ASan's default 256 MB quarantine alone, so run campaigns
+with `ASAN_OPTIONS=quarantine_size_mb=32` (a local 180-second campaign then completed
+86,134 executions with no finding).
 
 Two gates, deliberately separate:
 
@@ -150,7 +164,7 @@ CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
   LDFLAGS="-stdlib=libstdc++" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
-cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzNeuralWeights SparkFuzzCrashManifest
+cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
@@ -188,8 +202,8 @@ change *is* the review record.
 ## Remaining Closure Work
 
 - retain exact-SHA sanitizer smoke for json-utils, crash-manifest-parser,
-  texture-stex-compressor, and neural-weights-nnw, then implement production
-  entry-point fuzz targets for the remaining 131 blocked parsers, starting
+  texture-stex-compressor, neural-weights-nnw, and scene-manifest, then implement production
+  entry-point fuzz targets for the remaining 130 blocked parsers, starting
   with the highest-risk binary readers (`terrain-sparkterrain`,
   `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
   `fps-terrain-heightmap-bmp`, `asset-media-windows`);
@@ -208,5 +222,5 @@ change *is* the review record.
 Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocking
 `fuzz-policy` job in `.github/workflows/build.yml`, and the closure step in
 `.github/workflows/release.yml`. The OD-21 classification and the counts above were
-re-verified structurally 2026-09-24 on the release worktree; rerun the CI command for
+re-verified structurally 2026-09-25 on the release worktree; rerun the CI command for
 current counts and exact-SHA runtime evidence.

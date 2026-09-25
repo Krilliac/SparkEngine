@@ -2796,6 +2796,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzSceneManifest",
+      "kind": "executable",
+      "file": "Tests/Fuzz/CMakeLists.txt",
+      "line": 202,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzTextureStex",
       "kind": "executable",
       "file": "Tests/Fuzz/CMakeLists.txt",
@@ -4549,6 +4559,24 @@
       ]
     },
     {
+      "target": "SparkFuzzSceneManifest",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/Fuzz/CMakeLists.txt",
+          "line": 202,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzTextureStex",
       "kind": "executable",
       "buildable": true,
@@ -6218,7 +6246,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "7905637febc73966"
+            "runDigest": "32b8d63d162834ba"
           },
           {
             "index": 5,
@@ -11420,12 +11448,13 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest",
         "commandProvenance": "literal",
         "targets": [
           "SparkFuzzCrashManifest",
           "SparkFuzzJsonUtils",
           "SparkFuzzNeuralWeights",
+          "SparkFuzzSceneManifest",
           "SparkFuzzTextureStex"
         ],
         "configuration": "",
@@ -14577,12 +14606,13 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest",
         "commandProvenance": "literal",
         "targets": [
           "SparkFuzzCrashManifest",
           "SparkFuzzJsonUtils",
           "SparkFuzzNeuralWeights",
+          "SparkFuzzSceneManifest",
           "SparkFuzzTextureStex"
         ],
         "configuration": "",

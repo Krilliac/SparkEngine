@@ -30,15 +30,15 @@
   ],
   "what_this_gate_does_not_prove": [
     "It is a structural contract check. It is not runtime parser safety, fuzz coverage, or crash-freedom evidence.",
-    "json-utils, crash-manifest-parser, texture-stex-compressor, and neural-weights-nnw have production-bound libFuzzer harnesses: fuzzed_count is 4 and 131 of the 135 inventoried parsers remain blocked.",
+    "json-utils, crash-manifest-parser, texture-stex-compressor, neural-weights-nnw, and scene-manifest have production-bound libFuzzer harnesses: fuzzed_count is 5 and 130 of the 135 inventoried parsers remain blocked.",
     "The OD-21 triage on 2026-09-24 classified all 149 previously deferred candidates by reading each file: 28 new blocked parser records (including network and IPC decoders), 3 files added to existing blocked records, and 115 per-file exemptions. The exemptions are a reviewed human judgement recorded in tools/fuzz-policy/parser-inventory.json, not a proof that those files are unreachable from untrusted input; the gate only proves each one is classified, justified, and still matches the detector hits that were reviewed.",
-    "Four bounded seed corpora and runtime resource budgets are structurally bound to those parsers: corpus_count is 4; this is not runtime fuzz evidence.",
-    "json-utils is structurally wired for an active ASan/UBSan smoke, neural-weights-nnw for bounded reviewed-seed replay, and crash-manifest-parser for bounded reviewed-seed replay; no exact-SHA hosted result or scheduled mutation campaign has been recorded yet.",
+    "Five bounded seed corpora and runtime resource budgets are structurally bound to those parsers: corpus_count is 5; this is not runtime fuzz evidence.",
+    "json-utils is structurally wired for an active ASan/UBSan smoke, and neural-weights-nnw, crash-manifest-parser, texture-stex-compressor, and scene-manifest for bounded reviewed-seed replay; no exact-SHA hosted result or scheduled mutation campaign has been recorded yet.",
     "The full inventory report records 28 inventoried source files not matched by any detector pattern: human review found them, the regexes would not have.",
     "Production entry-point behaviour has not been proven safe for malformed input across the remaining parser inventory."
   ],
   "closure_blockers": [
-    "131 inventoried parsers have no fuzz target"
+    "130 inventoried parsers have no fuzz target"
   ],
   "scope_boundaries": {
     "network": "NET-100 behind G12",
@@ -49,7 +49,7 @@
     "GameModules/SparkGameVisualScript (ENG-200) hid zero parser candidates on 2026-08-28 and was removed as stale breadth."
   ],
   "not_completed": [
-    "131 inventoried parsers still have no libFuzzer/AFL harness, including the 28 boundaries recorded by the OD-21 triage.",
+    "130 inventoried parsers still have no libFuzzer/AFL harness, including the 28 boundaries recorded by the OD-21 triage.",
     "The json-utils, neural-weights-nnw, and crash-manifest-parser corpora are structurally bound, but their exact-SHA hosted sanitizer smoke has not yet run.",
     "Exact-SHA ASan/UBSan smoke evidence and scheduled campaigns have not been recorded.",
     "Production entry-point behaviour has not been proven safe for malformed input across the remaining parser inventory."

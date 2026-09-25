@@ -603,19 +603,24 @@
     },
     {
       "id": "scene-manifest",
-      "description": "Streaming scene manifest reader.",
+      "description": "Streaming scene manifest (.sparkscene key = value) reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Engine/Streaming/SceneManifest.h"
       ],
       "formats": [
-        ".manifest",
-        ".json"
+        ".sparkscene"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "Tests/Fuzz/FuzzSceneManifest.cpp",
+        "cmake_file": "Tests/Fuzz/CMakeLists.txt",
+        "cmake_target": "SparkFuzzSceneManifest",
+        "test_selector": "FuzzSceneManifestSmoke",
+        "corpus_id": "scene-manifest-corpus",
+        "entry_symbol": "Spark::Streaming::SceneManifest::ParseFromString",
+        "binding_source": "Tests/Fuzz/FuzzSceneManifestProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseSceneManifest"
       }
     },
     {
@@ -2972,6 +2977,14 @@
       ]
     },
     {
+      "source_file": "SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp",
+      "classification": "not-a-parser",
+      "justification": "The Linux-only headless peak-RSS probe slurps kernel-owned /proc/self/status and hands it to HeadlessTickStats::ParseVmHwmKib; no user, mod, package, or network bytes are decoded.",
+      "detected_by": [
+        "stream-slurp"
+      ]
+    },
+    {
       "source_file": "SparkEngine/Source/Core/SparkPakWriter.cpp",
       "classification": "not-a-parser",
       "justification": "Pack writer: reads each input file as an opaque byte blob and appends it to a new archive without interpreting its structure; the archive reader is the inventoried sparkpak-reader.",
@@ -3517,6 +3530,14 @@
       "justification": "SparkValidatePluginDescriptor checks fields of an in-memory C struct returned by a native plugin that is already mapped and executing in the process; no bytes are decoded.",
       "detected_by": [
         "binary-magic-compare"
+      ]
+    },
+    {
+      "source_file": "SparkServer/src/ServerHealth.cpp",
+      "classification": "not-a-parser",
+      "justification": "The Linux-only fscanf reads kernel-owned /proc/self/statm counters for the server health RSS figure; no user, mod, package, or network bytes are decoded.",
+      "detected_by": [
+        "scanf-parse"
       ]
     }
   ]

@@ -64,6 +64,22 @@
         "max_corpus_bytes": 4096,
         "smoke_seconds": 10
       }
+    },
+    {
+      "id": "scene-manifest-corpus",
+      "parser_id": "scene-manifest",
+      "corpus_dir": "Tests/fuzz-corpora/scene-manifest",
+      "last_verified": "2026-09-25",
+      "content_digest": "6651f72dcccfbdea71552fa341f50efb7ac45c38cfa96a841e0fa9d10223e6c3",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      }
     }
   ]
 }

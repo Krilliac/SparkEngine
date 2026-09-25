@@ -56,14 +56,19 @@ namespace Spark
      *    no matter what directory prefix they carry, so opening one can block the
      *    loading thread on a serial port.
      *
+     * '\\' is treated as a separator on every host, so content validated on Linux
+     * cannot escape the root when it ships to Windows, and control bytes (NUL
+     * included, which c_str() consumers would silently truncate at) are rejected.
+     *
      * This predicate decides containment on the NORMALIZED path, so "a/../../etc"
      * is rejected for the '..' it actually resolves to rather than for the two
      * characters it contains. It is the policy gate for every untrusted path the
      * engine consumes — VFS mounts and .sparkscene manifests alike.
      *
      * @param virtualPath Mount-relative path from untrusted content.
-     * @return true when the path is relative, contains no escaping component, no
-     *         ':' and no reserved device name.
+     * @return true when the path is relative, contains no escaping component
+     *         (with either separator), no ':', no control byte and no reserved
+     *         device name.
      */
     [[nodiscard]] bool IsVirtualPathSafe(const std::string& virtualPath);
 

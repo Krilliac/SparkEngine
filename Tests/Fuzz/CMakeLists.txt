@@ -198,3 +198,59 @@ set_tests_properties(FuzzTextureStexSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+add_executable(SparkFuzzSceneManifest
+    FuzzSceneManifest.cpp
+    FuzzSceneManifestProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+# Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzSceneManifest.cpp
+# use libstdc++; the header-only production parser (compiled into the adapter),
+# the VFS path policy and the logger use libc++ and meet the driver only at the
+# C ABI in FuzzSceneManifestProduction.h.
+set_source_files_properties(
+    FuzzSceneManifestProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp"
+    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzSceneManifest PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzSceneManifest PRIVATE cxx_std_23)
+# Logger.cpp routes warnings/errors through DebugHookManager unless
+# SPARK_SHIPPING compiles the hooks out; the fuzzer links no hook manager.
+target_compile_definitions(SparkFuzzSceneManifest PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzSceneManifest PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzSceneManifest PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzSceneManifest PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzSceneManifestSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzSceneManifest>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/Tests/fuzz-corpora/scene-manifest"
+)
+set_tests_properties(FuzzSceneManifestSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

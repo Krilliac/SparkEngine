@@ -1,0 +1,7 @@
+// Comment lines start with //
+name = TownSquare
+mesh = models/town_square.mesh
+mesh = models/fountain.mesh
+texture = textures/cobblestone.dds
+texture = textures/fountain_diffuse.dds
+audio = audio/town_ambience.wav

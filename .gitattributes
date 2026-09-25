@@ -35,6 +35,9 @@ docs/site/readiness.json text eol=lf
 # Windows autocrlf cannot invalidate the cross-platform content digest.
 Tests/fuzz-corpora/json-utils/*.json text eol=lf
 Tests/fuzz-corpora/crash-manifest/*.json text eol=lf
+# .sparkscene seeds deliberately carry CRLF, lone CR, NUL and non-UTF-8 bytes;
+# store them verbatim so neither normalization nor autocrlf rewrites a seed.
+Tests/fuzz-corpora/scene-manifest/*.sparkscene -text
 # Unified-diff context markers intentionally contain leading spaces before
 # upstream tab indentation. Git-apply separately enforces target whitespace.
 ThirdParty/Scripting/patches/angelscript-packed-bytecode.patch text eol=lf -whitespace
