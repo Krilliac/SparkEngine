@@ -1532,6 +1532,15 @@ if(TARGET SparkServerCore)
         TIMEOUT 60)
 endif()
 
+# NET-110: IOnlinePlatform conformance (docs/specs/online-services.md 5.1, 6) across
+# every adapter in OnlineServices.h (Null, Steam, Epic, Console) plus the Null
+# adapter's fixed-transcript determinism check. Exact count: a dropped adapter test fails.
+add_test(NAME OnlineServicesContract COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(OnlineServicesContract PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=OnlineServices_Contract_;SPARK_TEST_EXPECT_COUNT=5"
+    LABELS "online-services;unit"
+    TIMEOUT 30)
+
 # LIFE-200: the production LifecycleCompositionRoot fails closed on injected
 # stage failures (false return, std::exception, unknown throw, throwing shutdown).
 add_test(NAME LifecycleCompositionRootFailure COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)

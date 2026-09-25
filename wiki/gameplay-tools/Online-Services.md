@@ -106,6 +106,14 @@ public:
 | `SaveToCloud() / LoadFromCloud()` | Cloud-save slots (in memory on the Null platform) |
 | `GetFriendsList() / SetPresence() / InviteToSession()` | Social features |
 
+## Adapter Conformance
+
+Every adapter in `OnlineServices.h` runs the same `OnlineServices_Contract_*` suite in `Tests/TestOnlineServices.cpp` (ctest `OnlineServicesContract`, label `online-services`). A capability an adapter reports as unavailable must fail every call with a non-empty `GetLastError()` and change no observable state. The Steam, Epic, and Console stubs return one constant error string, so for them the suite checks only that the string is present. A capability an adapter reports as available must work and read back where the interface has a getter. Friends and presence have none on the Null platform, so they are checked for success and failure only. On the Null platform each failed call must set its own exact reason and each successful call clears it. The suite also checks that two fresh runs of the Null platform produce one fixed expected transcript. The Null platform keeps its data in ordered containers, so that transcript is the same on every standard library. On the Null platform, `DeleteCloudSave()` of a missing slot fails with an error. `InviteToSession()` needs a friend ID, an active session, and a recipient in the friends list. Offline mode has no friends, so every invite fails with a reason. A new adapter joins the suite before it ships:
+
+```bash
+ctest --test-dir build/linux-gcc-release -L online-services --output-on-failure --no-tests=error
+```
+
 ## Configuration
 
 There are no build options for platform SDKs. The repository does not include or link the Steamworks, EOS, or console SDKs, and CMake has no `ENABLE_STEAM` or `ENABLE_EOS` option. A platform integration is written in the game or an integration layer, against the vendor SDK and backend that the product licenses.

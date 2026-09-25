@@ -40,9 +40,9 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -234,6 +234,7 @@ namespace Spark::OnlineServices
 
         bool CreateSession(const SessionInfo& settings) override
         {
+            m_lastError.clear();
             m_currentSession = settings;
             m_currentSession.sessionId = "local_" + std::to_string(m_nextSessionId++);
             m_sessions.push_back(m_currentSession);
@@ -242,6 +243,7 @@ namespace Spark::OnlineServices
 
         bool JoinSession(const std::string& sessionId) override
         {
+            m_lastError.clear();
             for (auto& s : m_sessions)
             {
                 if (s.sessionId == sessionId)
@@ -261,14 +263,16 @@ namespace Spark::OnlineServices
         {
             SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: SubmitScore '%s' = %lld (offline mode)",
                            boardName.c_str(), static_cast<long long>(score));
+            m_lastError.clear();
             auto& board = m_leaderboards[boardName];
             LeaderboardEntry entry;
             entry.playerId = m_player.playerId;
             entry.playerName = m_player.displayName;
             entry.score = score;
             board.push_back(entry);
-            // Sort by score descending and assign ranks
-            std::sort(board.begin(), board.end(), [](const auto& a, const auto& b) { return a.score > b.score; });
+            // Sort by score descending (ties keep submission order) and assign ranks
+            std::stable_sort(board.begin(), board.end(),
+                             [](const auto& a, const auto& b) { return a.score > b.score; });
             for (uint32_t i = 0; i < board.size(); ++i)
                 board[i].rank = i + 1;
             return true;
@@ -288,12 +292,14 @@ namespace Spark::OnlineServices
         {
             SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: UnlockAchievement '%s' (offline mode)",
                            achievementId.c_str());
+            m_lastError.clear();
             m_achievements[achievementId] = 1.0f;
             return true;
         }
 
         bool SetAchievementProgress(const std::string& id, float progress) override
         {
+            m_lastError.clear();
             m_achievements[id] = std::min(1.0f, std::max(0.0f, progress));
             return true;
         }
@@ -317,23 +323,33 @@ namespace Spark::OnlineServices
         {
             SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: SaveToCloud slot '%s' (%zu bytes, offline mode)",
                            slotName.c_str(), data.size());
+            m_lastError.clear();
             m_cloudSaves[slotName] = data;
             return true;
         }
 
         std::vector<uint8_t> LoadFromCloud(const std::string& slotName) override
         {
+            m_lastError.clear();
             auto it = m_cloudSaves.find(slotName);
             if (it == m_cloudSaves.end())
             {
                 m_lastError = "Cloud slot not found: " + slotName;
                 return {};
             }
-            m_lastError.clear();
             return it->second;
         }
 
-        bool DeleteCloudSave(const std::string& slotName) override { return m_cloudSaves.erase(slotName) > 0; }
+        bool DeleteCloudSave(const std::string& slotName) override
+        {
+            m_lastError.clear();
+            if (m_cloudSaves.erase(slotName) == 0)
+            {
+                m_lastError = "Cannot delete missing cloud slot: " + slotName;
+                return false;
+            }
+            return true;
+        }
 
         std::vector<CloudSaveInfo> ListCloudSaves() override
         {
@@ -347,11 +363,36 @@ namespace Spark::OnlineServices
 
         bool SetPresence(const std::string& statusText) override
         {
+            m_lastError.clear();
             m_presence = statusText;
             return true;
         }
 
-        bool InviteToSession(const std::string& /*friendId*/) override { return true; }
+        bool InviteToSession(const std::string& friendId) override
+        {
+            // An invite needs a known recipient and a session to invite into; reporting
+            // success otherwise would fabricate an outcome the caller cannot observe.
+            // Offline mode has no friends list, so every invite fails with a reason.
+            m_lastError.clear();
+            if (friendId.empty())
+            {
+                m_lastError = "Invite requires a friend ID";
+                return false;
+            }
+            if (m_currentSession.sessionId.empty())
+            {
+                m_lastError = "Invite requires an active session";
+                return false;
+            }
+            const bool isFriend = std::any_of(m_friends.begin(), m_friends.end(),
+                                              [&](const FriendInfo& f) { return f.playerId == friendId; });
+            if (!isFriend)
+            {
+                m_lastError = "Invite recipient is not a friend: " + friendId;
+                return false;
+            }
+            return true;
+        }
 
       private:
         bool m_loggedIn = false;
@@ -360,9 +401,11 @@ namespace Spark::OnlineServices
         SessionInfo m_currentSession;
         std::vector<SessionInfo> m_sessions;
         uint32_t m_nextSessionId = 1;
-        std::unordered_map<std::string, std::vector<LeaderboardEntry>> m_leaderboards;
-        std::unordered_map<std::string, float> m_achievements;
-        std::unordered_map<std::string, std::vector<uint8_t>> m_cloudSaves;
+        // Ordered containers so query and list results come back in the same (sorted-key)
+        // order on every standard library and every run.
+        std::map<std::string, std::vector<LeaderboardEntry>> m_leaderboards;
+        std::map<std::string, float> m_achievements;
+        std::map<std::string, std::vector<uint8_t>> m_cloudSaves;
         std::vector<FriendInfo> m_friends;
         std::string m_presence;
     };

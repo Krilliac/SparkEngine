@@ -145,7 +145,12 @@ The interface is synchronous and is called from the game thread. The contract fo
 | Retries | Idempotent reads (`FindSessions`, `QueryScores`, `QueryAchievements`, `ListCloudSaves`, `LoadFromCloud`, `GetFriendsList`) MAY retry at most **2** times with exponential backoff starting at **500 ms** and capped at **4 s**. Mutations (`Login`, `CreateSession`, `JoinSession`, `SubmitScore`, `UnlockAchievement`, `SetAchievementProgress`, `SaveToCloud`, `DeleteCloudSave`, `SetPresence`, `InviteToSession`) MUST NOT retry automatically unless the backend deduplicates them | Adapter responsibility |
 | Circuit breaker | After **5** consecutive failures of one capability, calls to that capability fail immediately for **30 s**, then one probe call is allowed | No. Planned as `OnlineServices_Degraded` in `OnlineServiceManager` (`NET-110`) |
 
-Failure semantics that every adapter MUST follow. The shipped stubs already follow them:
+Failure semantics that every adapter MUST follow. The `OnlineServices_Contract_*` conformance suite (section 8) checks
+the first three rules on every shipped adapter: fail-closed capabilities, a failure reason that is present and never
+echoes the login token, and `Logout()` / `LeaveSession()` in any state. On the Null adapter it also checks that each
+failed call sets its own exact reason and each successful call clears it. The stubs return one constant
+`GetLastError()` string, so for them the suite checks only that the reason is present. The suite does not test the
+no-throw and no-local-corruption rules:
 
 - A capability that `GetCapabilities()` reports as `false` MUST fail every call. Mutations return `false`, queries
   return an empty value, and no call may fabricate success.
@@ -192,7 +197,7 @@ No adapter in this repository is production. The labels below are the only permi
 
 | Adapter | Boundary | Label | Notes |
 |---|---|---|---|
-| `NullOnlinePlatform` | B1 | **local, deterministic** | In-process memory only. Nothing persists or leaves the process. Accepts any login |
+| `NullOnlinePlatform` | B1 | **local, deterministic** | In-process memory only. Nothing persists or leaves the process. Accepts any login. Results come from ordered containers, so a fixed call sequence gives a fixed result on every standard library. It has no friends list, so `InviteToSession()` always fails with a reason |
 | `SteamPlatform` | B1 | **stub** | Reports no capabilities and fails every call. `GetLastError()` = "Steamworks SDK unavailable in this build" |
 | `EpicPlatform` | B1 | **stub** | Reports no capabilities and fails every call. `GetLastError()` = "EOS SDK unavailable in this build" |
 | `ConsolePlatform` | B1 | **stub** | Reports no capabilities and fails every call. The console SDKs are NDA-gated |
@@ -206,7 +211,7 @@ No adapter in this repository is production. The labels below are the only permi
 A new adapter is labeled **production** only when all of these hold:
 
 1. It lives in a product or integration layer, not in this repository (OD-08).
-2. It passes the `OnlineServices_Contract` conformance suite.
+2. It passes the `OnlineServices_Contract_*` conformance suite.
 3. Its degraded-dependency behaviour is covered by `OnlineServices_Degraded` tests.
 4. Its budgets in section 5 are measured against the real backend.
 
@@ -222,7 +227,7 @@ same change.
 | Requirement | Evidence today | Open |
 |---|---|---|
 | No hosted-service claim on public surfaces | `python3 tools/site-data/validate.py` (`validate_online_service_boundary`) governs this document, the two wiki pages, `docs/site/readiness.json`, and every public claim surface. `Tests/Tools/test_site_data_contract.py` `OnlineServiceBoundaryTests` | none |
-| Null adapter deterministic, stubs fail closed | `Tests/TestOnlineServices.cpp` `OnlineServices_Null*` and stub tests | `OnlineServices_Contract` conformance suite across every adapter under ctest label `online-services` |
+| Null adapter deterministic, stubs fail closed | `Tests/TestOnlineServices.cpp` `OnlineServices_Null*` and stub tests. The `OnlineServices_Contract_*` conformance suite (ctest `OnlineServicesContract`, label `online-services`, exact count 5) runs the section 5.1 failure semantics and the section 6 labels against `NullOnlinePlatform`, `SteamPlatform`, `EpicPlatform` and `ConsolePlatform`, checks `Console_GetStatus()` for each, and compares two fresh runs of the Null adapter against one fixed expected transcript. Friends and presence are checked for success and failure only: the Null adapter has no friends to read back and `SetPresence()` has no getter | A new adapter must be added to the suite before it is shipped |
 | Degraded-dependency budgets (section 5.1 circuit breaker) | none | `OnlineServices_Degraded_*` tests and failure accounting in `OnlineServiceManager` |
 | Versioned client/server compatibility | Gateway protocol constants only | `SessionCompatibility_*` tests after `NET-100` protocol negotiation |
 | Hosted CI | none | `service-contract` and `network-integration` jobs (planned) |
